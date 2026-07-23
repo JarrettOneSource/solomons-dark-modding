@@ -84,6 +84,7 @@ std::uint32_t RememberEnemySpawnSerial(uintptr_t enemy_address) {
     if (spawn_serial == 0) {
         spawn_serial = g_state.next_enemy_spawn_serial++;
     }
+    g_state.lua_enemy_configs_by_address.erase(enemy_address);
     g_state.enemy_spawn_serials_by_address[enemy_address] = spawn_serial;
     return spawn_serial;
 }
@@ -117,6 +118,33 @@ bool LookupEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial
     return true;
 }
 
+void RememberLuaEnemySpawnConfig(
+    uintptr_t enemy_address,
+    const SDModLuaEnemySpawnConfig& config) {
+    if (enemy_address == 0 || config.content_id == 0) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
+    g_state.lua_enemy_configs_by_address[enemy_address] = config;
+}
+
+bool LookupLuaEnemySpawnConfig(
+    uintptr_t enemy_address,
+    SDModLuaEnemySpawnConfig* config) {
+    if (enemy_address == 0 || config == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
+    const auto found = g_state.lua_enemy_configs_by_address.find(enemy_address);
+    if (found == g_state.lua_enemy_configs_by_address.end() ||
+        found->second.content_id == 0) {
+        *config = SDModLuaEnemySpawnConfig{};
+        return false;
+    }
+    *config = found->second;
+    return true;
+}
+
 void ForgetEnemyType(uintptr_t enemy_address) {
     if (enemy_address == 0) {
         return;
@@ -125,16 +153,20 @@ void ForgetEnemyType(uintptr_t enemy_address) {
     std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
     g_state.enemy_types_by_address.erase(enemy_address);
     g_state.enemy_spawn_serials_by_address.erase(enemy_address);
+    g_state.lua_enemy_configs_by_address.erase(enemy_address);
 }
 
 void ClearRememberedEnemyTracking() {
     std::lock_guard<std::mutex> lock(g_state.enemy_type_mutex);
     g_state.enemy_types_by_address.clear();
     g_state.enemy_spawn_serials_by_address.clear();
+    g_state.lua_enemy_configs_by_address.clear();
     g_state.next_enemy_spawn_serial = 1;
 }
 
 void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
+    ResetLuaTimeControlForRun();
+    ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
@@ -163,7 +195,7 @@ void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
         g_last_manual_run_enemy_spawn_result = SDModManualRunEnemySpawnResult{};
         g_have_pending_manual_run_enemy_spawn = false;
         g_have_active_manual_run_enemy_spawn = false;
-        g_queued_replicated_run_enemy_spawns.clear();
+        g_queued_run_enemy_spawns.clear();
         g_frozen_manual_run_enemies.clear();
     }
     if (clear_enemy_tracking) {

@@ -96,6 +96,11 @@ internal static class RuntimeMetadataStageMaterializer
             stagedDataRootPath,
             stagedCacheRootPath,
             stagedTempRootPath,
+            mod.Manifest.Runtime.HotReload,
+            mod.RootPath,
+            mod.RequiresLuaRuntime
+                ? Path.Combine(mod.RootPath, NormalizeRelativePath(mod.Manifest.Runtime.EntryScript))
+                : null,
             mod.RequiresLuaRuntime
                 ? Path.Combine(stagedModRootPath, NormalizeRelativePath(mod.Manifest.Runtime.EntryScript))
                 : null,
@@ -103,7 +108,9 @@ internal static class RuntimeMetadataStageMaterializer
                 ? Path.Combine(stagedModRootPath, NormalizeRelativePath(mod.Manifest.Runtime.EntryDll))
                 : null,
             mod.Manifest.Runtime.RequiredCapabilities.ToArray(),
-            mod.Manifest.Runtime.OptionalCapabilities.ToArray());
+            mod.Manifest.Runtime.OptionalCapabilities.ToArray(),
+            mod.Manifest.Provides.ToArray(),
+            mod.Manifest.Requires.ToArray());
     }
 
     private static string NormalizeRelativePath(string relativePath)
@@ -175,10 +182,15 @@ internal static class RuntimeMetadataStageMaterializer
             builder.Append("data_root_path=").AppendLine(EscapeIniValue(mod.StageDataRootPath));
             builder.Append("cache_root_path=").AppendLine(EscapeIniValue(mod.StageCacheRootPath));
             builder.Append("temp_root_path=").AppendLine(EscapeIniValue(mod.StageTempRootPath));
+            builder.Append("hot_reload=").AppendLine(mod.HotReload ? "true" : "false");
+            builder.Append("source_root_path=").AppendLine(EscapeIniValue(mod.SourceModRootPath));
+            builder.Append("source_entry_script_path=").AppendLine(EscapeIniValue(mod.SourceEntryScriptPath));
             builder.Append("entry_script_path=").AppendLine(EscapeIniValue(mod.StageEntryScriptPath));
             builder.Append("entry_dll_path=").AppendLine(EscapeIniValue(mod.StageEntryDllPath));
             builder.Append("required_capabilities=").AppendLine(EscapeIniValue(string.Join(",", mod.RequiredCapabilities)));
             builder.Append("optional_capabilities=").AppendLine(EscapeIniValue(string.Join(",", mod.OptionalCapabilities)));
+            builder.Append("provides=").AppendLine(EscapeIniValue(string.Join(",", mod.Provides)));
+            builder.Append("requires=").AppendLine(EscapeIniValue(string.Join(",", mod.Requires)));
         }
 
         return builder.ToString();

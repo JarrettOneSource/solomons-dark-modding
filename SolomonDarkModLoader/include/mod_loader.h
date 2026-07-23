@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lua_enemy_ai.h"
 #include "multiplayer_runtime_state.h"
 
 #include <cstdint>
@@ -229,6 +230,7 @@ struct SDModManualRunEnemySpawnResult {
     bool valid = false;
     bool ok = false;
     std::uint64_t request_id = 0;
+    std::uint64_t content_id = 0;
     int type_id = 0;
     uintptr_t actor_address = 0;
     float requested_x = 0.0f;
@@ -241,6 +243,29 @@ struct SDModManualRunEnemySpawnResult {
     DWORD rebind_exception_code = 0;
     std::uint64_t completed_tick_ms = 0;
     std::string error_message;
+};
+
+enum class SDModLuaEnemyLootPolicy : std::uint8_t {
+    Stock = 0,
+    None,
+    Orb,
+    Gold,
+    Item,
+    Powerup,
+    Potion,
+};
+
+struct SDModLuaEnemySpawnConfig {
+    std::uint64_t content_id = 0;
+    bool hp_valid = false;
+    float hp = 0.0f;
+    bool chase_speed_valid = false;
+    float chase_speed = 0.0f;
+    bool attack_speed_valid = false;
+    float attack_speed = 0.0f;
+    bool scale_valid = false;
+    float scale = 1.0f;
+    SDModLuaEnemyLootPolicy loot_policy = SDModLuaEnemyLootPolicy::Stock;
 };
 
 struct SDModSceneState {
@@ -429,136 +454,4 @@ struct SDModHostLootDropDeactivationResult {
 #include "mod_loader_hub_state.inl"
 #include "mod_loader_participant_gameplay_state.inl"
 
-void Initialize(HMODULE module_handle);
-void Shutdown();
-
-std::filesystem::path GetModulePath(HMODULE module_handle);
-std::filesystem::path GetModuleDirectory(HMODULE module_handle);
-std::filesystem::path GetHostProcessPath();
-std::filesystem::path GetHostProcessDirectory();
-std::filesystem::path GetStageRuntimeDirectory();
-std::filesystem::path GetProjectRoot(HMODULE module_handle);
-std::string HexString(uintptr_t value);
-
-bool InitializeGameplayKeyboardInjection(std::string* error_message);
-void ShutdownGameplayKeyboardInjection();
-bool IsGameplayKeyboardInjectionInitialized();
-bool QueueGameplayMouseLeftClick(std::string* error_message);
-bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_message);
-bool QueueGameplayMouseRightClick(std::string* error_message);
-bool QueueGameplayMouseRightHoldFrames(std::uint32_t frames, std::string* error_message);
-bool QueueGameplayMovementHoldFrames(
-    float direction_x,
-    float direction_y,
-    std::uint32_t frames,
-    std::string* error_message);
-bool SetGameplayNativeControlAllowanceFrames(
-    std::uint32_t frames,
-    std::string* error_message);
-bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
-bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
-bool QueueLocalPlayerNativeDispatcherPrimaryCast(
-    uintptr_t actor_address,
-    std::int32_t dispatched_skill_id);
-void ClearQueuedGameplayMouseLeft();
-void ClearQueuedGameplayMouseRight();
-bool ClearLocalPlayerGameplayCastState(std::string* error_message);
-std::uint64_t GetGameplayMouseLeftEdgeSerial();
-std::uint64_t GetGameplayMouseLeftEdgeTickMs();
-bool TryClaimGameplayMouseLeftPrimaryCastEdge(std::uint64_t edge_serial);
-bool IsGameplayMouseLeftDown();
-bool IsGameplayMouseRightDown();
-bool QueueGameplayBindingPress(std::string_view binding_name, std::string* error_message);
-bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
-bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
-bool QueueGameplayStartWaves(std::string* error_message);
-bool QueueGameplayEnableCombatPrelude(std::string* error_message);
-bool QueueHubStartTestrun(std::string* error_message);
-bool QueueHubOpenService(
-    std::string_view service_name,
-    std::string* error_message);
-bool TryGetHubSurfaceState(
-    SDModHubSurfaceState* state,
-    std::string* error_message);
-bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
-bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_message);
-void ClearLocalRunGenerationSeed();
-bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
-bool QueueMultiplayerDampenEffect(
-    std::uint64_t owner_participant_id,
-    std::uint32_t cast_sequence,
-    float position_x,
-    float position_y,
-    std::string* error_message);
-bool QueueLocalPlayerVitalsCorrection(
-    std::uint32_t correction_sequence,
-    std::uint8_t transient_status_flags,
-    std::int32_t poison_remaining_ticks,
-    float poison_damage_per_tick,
-    std::int32_t webbed_remaining_ticks,
-    float webbed_strength,
-    std::uint8_t correction_flags,
-    float magic_shield_absorb_remaining,
-    float magic_shield_absorb_capacity,
-    float magic_shield_explosion_fraction,
-    float magic_shield_hit_flash,
-    std::string* error_message);
-bool QueueNativePoisonBehaviorProbe(
-    std::uint64_t target_participant_id,
-    std::int32_t duration_ticks,
-    float damage_per_tick,
-    std::int8_t source_slot,
-    std::string* error_message);
-bool QueueNativeMagicHitBehaviorProbe(
-    float projectile_damage,
-    float magic_damage,
-    float poison_damage,
-    std::uint32_t attempts,
-    std::uint64_t target_participant_id,
-    std::uint64_t* request_serial,
-    std::string* error_message);
-bool GetNativeMagicHitBehaviorProbeResult(
-    std::uint64_t request_serial,
-    bool* completed,
-    bool* success,
-    float* hp_before,
-    float* hp_after,
-    std::string* error_message);
-bool QueueNativeExperienceGainProbe(
-    float amount,
-    bool apply_native_scaling,
-    std::uint64_t* request_serial,
-    std::string* error_message);
-bool GetNativeExperienceGainProbeResult(
-    std::uint64_t request_serial,
-    bool* completed,
-    bool* success,
-    float* xp_before,
-    float* xp_after,
-    std::uint32_t* exception_code,
-    std::string* error_message);
-bool QueueNativeStaffEffectProbe(
-    uintptr_t source_actor,
-    uintptr_t target_actor,
-    std::uint32_t variant,
-    std::uint64_t* request_serial,
-    std::string* error_message);
-bool GetNativeStaffEffectProbeResult(
-    std::uint64_t request_serial,
-    bool* completed,
-    bool* success,
-    float* hp_before,
-    float* hp_after,
-    std::string* error_message);
-bool QueueParticipantEntitySync(
-    std::uint64_t participant_id,
-    const multiplayer::MultiplayerCharacterProfile& character_profile,
-    const multiplayer::ParticipantSceneIntent& scene_intent,
-    bool has_transform,
-    bool has_heading,
-    float position_x,
-    float position_y,
-    float heading,
-    std::string* error_message);
-bool QueueParticipantDestroy(std::uint64_t participant_id, std::string* error_message);
-#include "mod_loader_gameplay_api.inl"
+#include "mod_loader_public_api.inl"

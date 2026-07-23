@@ -24,7 +24,137 @@ std::uint32_t __fastcall HookBadguyMoveStep(
         return 1;
     }
 
+    LuaEnemyAiCommandRuntime ai_command;
+    if (TryGetLuaEnemyAiCommandForActor(actor_address, &ai_command) &&
+        ai_command.state.move_goal_active) {
+        float actor_x = 0.0f;
+        float actor_y = 0.0f;
+        if (TryReadFiniteFloatField(
+                actor_address,
+                kActorPositionXOffset,
+                &actor_x) &&
+            TryReadFiniteFloatField(
+                actor_address,
+                kActorPositionYOffset,
+                &actor_y)) {
+            const float goal_dx = ai_command.state.move_goal_x - actor_x;
+            const float goal_dy = ai_command.state.move_goal_y - actor_y;
+            const float goal_distance =
+                std::sqrt(goal_dx * goal_dx + goal_dy * goal_dy);
+            const float native_move_magnitude =
+                std::sqrt(move_x * move_x + move_y * move_y);
+            if (std::isfinite(goal_distance) &&
+                goal_distance <=
+                    ai_command.state.move_goal_stop_distance) {
+                return original(movement_context, actor, 0.0f, 0.0f);
+            }
+            if (std::isfinite(goal_distance) && goal_distance > 0.0001f &&
+                std::isfinite(native_move_magnitude) &&
+                native_move_magnitude > 0.0001f) {
+                move_x = goal_dx / goal_distance * native_move_magnitude;
+                move_y = goal_dy / goal_distance * native_move_magnitude;
+            }
+        }
+    }
+
     return original(movement_context, actor, move_x, move_y);
+}
+
+bool WriteLuaEnemyAiNativeTarget(
+    uintptr_t hostile_actor_address,
+    uintptr_t target_actor_address) {
+    if (hostile_actor_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (target_actor_address == 0) {
+        const bool target_write = memory.TryWriteField<uintptr_t>(
+            hostile_actor_address,
+            kActorCurrentTargetActorOffset,
+            0);
+        const bool bucket_write = memory.TryWriteField<std::int32_t>(
+            hostile_actor_address,
+            kHostileTargetBucketDeltaOffset,
+            0);
+        return target_write && bucket_write;
+    }
+
+    if (target_actor_address == hostile_actor_address ||
+        IsActorRuntimeDead(target_actor_address)) {
+        return WriteLuaEnemyAiNativeTarget(hostile_actor_address, 0);
+    }
+
+    uintptr_t hostile_world_address = 0;
+    std::int32_t hostile_actor_slot = -1;
+    std::int32_t hostile_world_slot = -1;
+    uintptr_t target_world_address = 0;
+    std::int32_t target_actor_slot = -1;
+    std::int32_t target_world_slot = -1;
+    if (!TryReadActorWorldTargetSlotState(
+            hostile_actor_address,
+            &hostile_world_address,
+            &hostile_actor_slot,
+            &hostile_world_slot) ||
+        !TryReadActorWorldTargetSlotState(
+            target_actor_address,
+            &target_world_address,
+            &target_actor_slot,
+            &target_world_slot) ||
+        hostile_world_address == 0 ||
+        hostile_world_address != target_world_address ||
+        hostile_actor_slot < 0 || target_actor_slot < 0 ||
+        target_world_slot < 0) {
+        return WriteLuaEnemyAiNativeTarget(hostile_actor_address, 0);
+    }
+    (void)hostile_world_slot;
+
+    const auto bucket_delta =
+        target_actor_slot * kActorWorldBucketStride + target_world_slot -
+        hostile_actor_slot * kActorWorldBucketStride;
+    const bool target_write = memory.TryWriteField(
+        hostile_actor_address,
+        kActorCurrentTargetActorOffset,
+        target_actor_address);
+    const bool bucket_write = memory.TryWriteField(
+        hostile_actor_address,
+        kHostileTargetBucketDeltaOffset,
+        bucket_delta);
+    return target_write && bucket_write;
+}
+
+bool ApplyLuaEnemyAiTargetOverride(uintptr_t hostile_actor_address) {
+    LuaEnemyAiCommandRuntime command;
+    if (!TryGetLuaEnemyAiCommandForActor(
+            hostile_actor_address,
+            &command) ||
+        command.state.target_mode == SDModLuaEnemyAiTargetMode::Stock) {
+        return false;
+    }
+
+    uintptr_t target_actor_address = 0;
+    switch (command.state.target_mode) {
+    case SDModLuaEnemyAiTargetMode::Stock:
+        return false;
+    case SDModLuaEnemyAiTargetMode::Clear:
+        break;
+    case SDModLuaEnemyAiTargetMode::LocalPlayer: {
+        SDModPlayerState player_state;
+        if (TryGetPlayerState(&player_state) && player_state.valid) {
+            target_actor_address = player_state.actor_address;
+        }
+        break;
+    }
+    case SDModLuaEnemyAiTargetMode::Participant:
+        target_actor_address = ResolveReplicatedRunEnemyTargetActor(
+            command.state.target_participant_id);
+        break;
+    }
+
+    (void)WriteLuaEnemyAiNativeTarget(
+        hostile_actor_address,
+        target_actor_address);
+    return true;
 }
 
 bool ClearHostileTargetsForDeadWizardActor(uintptr_t dead_actor_address) {
@@ -127,6 +257,10 @@ void __fastcall HookMonsterPathfindingRefreshTarget(void* self, void* /*unused_e
     }
 
     original(self, nullptr);
+
+    if (ApplyLuaEnemyAiTargetOverride(hostile_actor_address)) {
+        return;
+    }
 
     // The hostile-target widening path is only validated on stock wave-spawned
     // enemies. Pre-wave/manual spawn surfaces have repeatedly shown instability

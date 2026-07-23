@@ -110,6 +110,8 @@ internal sealed class LauncherCliLaunch
     public string StartupCode { get; set; } = string.Empty;
     public string StartupMessage { get; set; } = string.Empty;
     public string? StartupLogPath { get; set; }
+    public string? SavegamesRootPath { get; set; }
+    public bool SavegamesUsesDirectoryMirror { get; set; }
     public LauncherCliMultiplayerSession? MultiplayerSession { get; set; }
 }
 

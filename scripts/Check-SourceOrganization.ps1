@@ -132,6 +132,7 @@ $acceptedLargeFiles = @{
     "src/mod_loader_gameplay/world_snapshot_reconciliation.inl" = "Host-authoritative world reconciliation pipeline pending a behavior-neutral module split."
     "src/multiplayer_local_transport.cpp" = "Local-UDP protocol prototype pending extraction behind the final transport interface."
     "src/run_lifecycle/run_and_enemy_hooks.inl" = "Run lifecycle and enemy authority hooks kept contiguous through multiplayer stress validation."
+    "src/wave_intelligence.cpp" = "Effective schedule parsing and authority/replication accounting form one semantic wave service."
 }
 
 $largeAccepted = [System.Collections.Generic.List[string]]::new()

@@ -34,7 +34,14 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
     sample_manifest = _read("mods/lua_hud_showcase/manifest.json")
     sample = _read("mods/lua_hud_showcase/scripts/main.lua")
     live_verifier = _read("tools/verify_lua_draw.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_draw_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_draw_multiplayer_verifier.py"
+    )
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
         "kLuaDrawMaxCommandsPerMod = 512",
@@ -175,11 +182,52 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
         "projection_generation",
     ):
         assert token in live_verifier, f"live draw verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.hud_showcase"',
+        "CONTRACT_PROBE",
+        "ACTIVATE_PROBE",
+        "DEACTIVATE_PROBE",
+        "STATUS_PROBE",
+        "_setup_probe(",
+        "contract_matches",
+        "status_matches",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua draw multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_contract_requires_exact_local_draw_schema",
+        "test_status_requires_exact_peer_label_and_projection",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_independent_draw_activation_and_release",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua draw multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_draw_multiplayer_verifier"
+        in workflow
+    )
+    for token in (
+        "verify_lua_draw_multiplayer.py --launch-pair",
+        "remain local to each process",
+        "Actual D3D9 output remains a separate rendered-window gate",
+        "does not claim pixel coverage",
+    ):
+        assert token in documentation, (
+            f"Lua draw multiplayer documentation lacks: {token}"
+        )
     assert '"draw": (' in runtime_verifier
     assert "if sd.hud ~= sd.draw then fail('hud_alias_mismatch') end" in runtime_verifier
 
     return (
         "Lua mods own bounded tick-scoped display lists; D3D9 state is restored; "
         "stock bundles, projection, docs, an opt-in sample, namespace checks, "
-        "and pixel-level live acceptance are wired"
+        "exact two-peer local lifecycle, and pixel-level live acceptance are wired"
     )

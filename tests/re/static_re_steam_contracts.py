@@ -36,8 +36,8 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 73;"),
-        (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
+        (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
         (protocol_text, "std::uint16_t fragment_index;"),
@@ -49,7 +49,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
             protocol_text,
             "WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];",
         ),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1264"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1032"),
         (fragmentation_text, "struct CompleteWorldSnapshotPacketState"),
         (fragmentation_text, "struct PendingWorldSnapshotAssembly"),
         (fragmentation_text, "struct PendingWorldSnapshotAssemblies"),
@@ -142,9 +142,9 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     expected_fragments = math.ceil(
         retail_wave_actor_count / actors_per_fragment
     )
-    if expected_fragments != 20:
+    if expected_fragments != 27:
         raise StaticReTestFailure(
-            f"retail 80-enemy generation should be 20 fragments, got {expected_fragments}"
+            f"retail 80-enemy generation should be 27 fragments, got {expected_fragments}"
         )
 
     return (
@@ -391,8 +391,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 73;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 73;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 80;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -482,6 +482,24 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             ", ".join(missing)
         )
 
+    native_protocol = re.search(
+        r"kProtocolVersion\s*=\s*(\d+);",
+        protocol_text,
+    )
+    launcher_protocol = re.search(
+        r"CurrentProtocolVersion\s*=\s*(\d+);",
+        compatibility_materializer_text,
+    )
+    if native_protocol is None or launcher_protocol is None:
+        raise StaticReTestFailure(
+            "could not parse native and launcher protocol versions"
+        )
+    if native_protocol.group(1) != launcher_protocol.group(1):
+        raise StaticReTestFailure(
+            "native/launcher protocol version mismatch: "
+            f"native={native_protocol.group(1)} launcher={launcher_protocol.group(1)}"
+        )
+
     if "ReadToEndAsync" in ui_command_client_text:
         raise StaticReTestFailure(
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
@@ -497,7 +515,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
                 "WPF launcher retains the global Steam status: " + removed_status
             )
     return (
-        "Steam friends-only lobby, authenticated v65 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v80 handshake, idle keepalive, owner-checked gameplay "
         "routing, Solomon Dark AppID launch, x86 runtime staging, and a live launch-token-bound "
         "lobby connection panel are wired"
     )

@@ -26,7 +26,6 @@ from static_re_contract_support import (
     MEMORY_ACCESS_HEADER,
     MEMORY_ACCESS_REGIONS,
     MOD_LOADER_GAMEPLAY,
-    MOD_LOADER_HEADER,
     MULTIPLAYER_HUD_NAMES_VERIFIER,
     PENDING_CAST_PREPARATION,
     PENDING_CAST_PROCESSING,
@@ -42,6 +41,7 @@ from static_re_contract_support import (
     STEAM_FRIEND_ACTIVE_PAIR_VISUALS_VERIFIER,
     STEAM_FRIEND_HUB_VISUALS_VERIFIER,
     StaticReTestFailure,
+    read_mod_loader_header_source,
     read_multiplayer_transport_source,
     read_player_cast_hooks_source,
     read_text,
@@ -538,7 +538,7 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
 
 def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
-    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    mod_loader_header_text = read_mod_loader_header_source()
     player_control_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
@@ -644,7 +644,7 @@ def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events(
 
 def test_water_continuous_primary_is_captured_from_its_native_dispatcher() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
-    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    mod_loader_header_text = read_mod_loader_header_source()
     player_control_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
@@ -707,7 +707,7 @@ def test_water_continuous_primary_is_captured_from_its_native_dispatcher() -> st
 
 def test_earth_primary_is_captured_from_its_native_dispatcher() -> str:
     spell_hook_text = read_text(RUN_LIFECYCLE_SPELL_CAST_HOOKS)
-    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    mod_loader_header_text = read_mod_loader_header_source()
     player_control_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
@@ -855,7 +855,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     )
     overlay_header_text = read_text(DEBUG_UI_OVERLAY_HEADER)
     overlay_public_text = read_text(DEBUG_UI_OVERLAY_PUBLIC_SURFACE)
-    mod_loader_header_text = read_text(MOD_LOADER_HEADER)
+    mod_loader_header_text = read_mod_loader_header_source()
     mod_loader_text = read_text(MOD_LOADER_GAMEPLAY)
     layout_text = read_text(BINARY_LAYOUT)
     animation_text = read_text(ACTOR_ANIMATION_ADVANCE_HOOK)

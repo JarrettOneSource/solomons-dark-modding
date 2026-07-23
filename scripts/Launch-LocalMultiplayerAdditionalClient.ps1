@@ -10,7 +10,9 @@ param(
     [switch]$GodMode,
     [string]$TestSurvivalBoneyardOverride = "",
     [switch]$TestBlankBoneyard,
-    [string]$TestWaveOverride = ""
+    [string]$TestWaveOverride = "",
+    [string]$ProcessIdOutputPath = "",
+    [string]$ExactModIds = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -29,6 +31,14 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+
+if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
+    $exactModIdList = $ExactModIds.Split(',')
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance $Instance `
+        -ModIds $exactModIdList
+}
 
 $resolvedOverride = ""
 if (-not [string]::IsNullOrWhiteSpace($TestSurvivalBoneyardOverride)) {
@@ -85,6 +95,15 @@ $result = Invoke-LauncherWithEnvironment `
     -WorkingDirectory $launcherDir `
     -Environment $environment `
     -Arguments $arguments
+
+if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
+    [System.IO.File]::WriteAllText(
+        $ProcessIdOutputPath,
+        ([pscustomobject]@{
+            processId = [int]$result.launch.processId
+        } | ConvertTo-Json -Compress)
+    )
+}
 
 [pscustomobject]@{
     success = $true

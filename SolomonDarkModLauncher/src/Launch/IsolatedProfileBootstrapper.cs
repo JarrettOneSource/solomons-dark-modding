@@ -11,11 +11,15 @@ internal static class IsolatedProfileBootstrapper
         WorkspacePaths workspace,
         IReadOnlyDictionary<string, string>? existingOverrides = null,
         string? retailGameAppDataPath = null,
-        bool temporaryProfile = false)
+        bool temporaryProfile = false,
+        string? savegamesRootOverride = null)
     {
         var profile = temporaryProfile
             ? PrepareTemporaryProfile(workspace, retailGameAppDataPath)
-            : PreparePersistentProfile(workspace, retailGameAppDataPath);
+            : PreparePersistentProfile(
+                workspace,
+                retailGameAppDataPath,
+                savegamesRootOverride);
 
         var environmentOverrides = new Dictionary<string, string>(
             StringComparer.OrdinalIgnoreCase);
@@ -38,7 +42,8 @@ internal static class IsolatedProfileBootstrapper
 
     private static ResolvedProfilePaths PreparePersistentProfile(
         WorkspacePaths workspace,
-        string? retailGameAppDataPath)
+        string? retailGameAppDataPath,
+        string? savegamesRootOverride)
     {
         Directory.CreateDirectory(workspace.ProfileRootPath);
         Directory.CreateDirectory(workspace.RoamingAppDataPath);
@@ -46,17 +51,17 @@ internal static class IsolatedProfileBootstrapper
 
         if (Directory.Exists(workspace.IsolatedGameAppDataPath))
         {
-            return ResolvedProfilePaths.FromWorkspace(workspace);
+            return ResolvedProfilePaths.FromWorkspace(workspace, savegamesRootOverride);
         }
 
         if (!string.IsNullOrWhiteSpace(retailGameAppDataPath) && Directory.Exists(retailGameAppDataPath))
         {
             CopyDirectory(retailGameAppDataPath, workspace.IsolatedGameAppDataPath);
-            return ResolvedProfilePaths.FromWorkspace(workspace);
+            return ResolvedProfilePaths.FromWorkspace(workspace, savegamesRootOverride);
         }
 
         Directory.CreateDirectory(workspace.IsolatedGameAppDataPath);
-        return ResolvedProfilePaths.FromWorkspace(workspace);
+        return ResolvedProfilePaths.FromWorkspace(workspace, savegamesRootOverride);
     }
 
     private static ResolvedProfilePaths PrepareTemporaryProfile(
@@ -125,12 +130,20 @@ internal static class IsolatedProfileBootstrapper
         string IsolatedGameAppDataPath,
         string SavegamesRootPath)
     {
-        public static ResolvedProfilePaths FromWorkspace(WorkspacePaths workspace) =>
-            new(
+        public static ResolvedProfilePaths FromWorkspace(
+            WorkspacePaths workspace,
+            string? savegamesRootOverride)
+        {
+            var savegamesRootPath = string.IsNullOrWhiteSpace(savegamesRootOverride)
+                ? Path.Combine(workspace.ProfileRootPath, "savegames")
+                : Path.GetFullPath(savegamesRootOverride);
+            Directory.CreateDirectory(savegamesRootPath);
+            return new(
                 workspace.ProfileRootPath,
                 workspace.RoamingAppDataPath,
                 workspace.LocalAppDataPath,
                 workspace.IsolatedGameAppDataPath,
-                Path.Combine(workspace.StageRootPath, "sandbox", "savegames"));
+                savegamesRootPath);
+        }
     }
 }

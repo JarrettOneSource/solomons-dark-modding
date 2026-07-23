@@ -1,0 +1,14 @@
+{
+  "id": "sample.lua.authoring_lab",
+  "name": "Lua Authoring Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "hotReload": true,
+    "requiredCapabilities": [
+      "ui.authoring.native"
+    ]
+  }
+}

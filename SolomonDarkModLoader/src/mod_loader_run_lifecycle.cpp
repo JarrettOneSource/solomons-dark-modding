@@ -1,5 +1,6 @@
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
+#include "lua_time_runtime.h"
 #include "bot_runtime.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
@@ -9,6 +10,7 @@
 #include "mod_loader_internal.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
+#include "wave_intelligence.h"
 #include "x86_hook.h"
 
 #include <intrin.h>
@@ -38,5 +40,6 @@ namespace {
 }  // namespace
 
 #include "run_lifecycle/public_api_and_install.inl"
+#include "run_lifecycle/lua_enemy_spawn_api.inl"
 
 }  // namespace sdmod

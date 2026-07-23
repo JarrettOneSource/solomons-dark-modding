@@ -89,6 +89,7 @@ bool IsLuaDrawRendererStarted();
 
 void BeginLuaDrawFrame(std::string_view mod_id);
 void CommitLuaDrawFrame(std::string_view mod_id);
+void ClearLuaDrawFrameForMod(std::string_view mod_id);
 bool SubmitLuaDrawCommand(
     std::string_view mod_id,
     LuaDrawCommand command,
@@ -101,7 +102,10 @@ bool TryGetLuaDrawSpriteInfo(
     LuaDrawSpriteInfo* info,
     std::string* canonical_atlas,
     std::string* error_message);
-std::filesystem::path GetLuaDrawAtlasImagePath(std::string_view canonical_atlas);
+bool TryGetLuaDrawAtlasSource(
+    std::string_view canonical_atlas,
+    std::filesystem::path* image_path,
+    std::uint64_t* revision);
 
 void CaptureLuaDrawWorldProjection(IDirect3DDevice9* device);
 bool TryProjectLuaDrawWorldPoint(

@@ -45,6 +45,15 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         )
     )
     live_verifier = _read("tools/verify_lua_mod_replication.py")
+    runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    multiplayer_verifier = _read("tools/verify_local_multiplayer_sync.py")
+    pair_launcher = _read("scripts/Launch-LocalMultiplayerPair.ps1")
+    additional_client_launcher = _read(
+        "scripts/Launch-LocalMultiplayerAdditionalClient.ps1"
+    )
+    launcher_process_helpers = _read(
+        "scripts/LocalMultiplayerLauncher.Process.ps1"
+    )
     compatibility = _read(
         "SolomonDarkModLauncher/src/Staging/"
         "MultiplayerCompatibilityMaterializer.cs"
@@ -108,7 +117,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert token in events, f"custom Lua event dispatch lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 73;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "LuaModStream = 21",
         "enum class LuaModStreamMessageKind",
         "struct LuaModStreamPacket",
@@ -117,7 +126,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "IsValidLuaModStreamPacketWireSize(",
     ):
         assert token in protocol, f"Lua mod wire protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 73;" in compatibility
+    assert "CurrentProtocolVersion = 80;" in compatibility
     for capability in (
         '"state.replicated.read"',
         '"state.replicated.write"',
@@ -160,6 +169,68 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "late_join_checkpoint",
     ):
         assert token in live_verifier, f"live Lua replication verifier lacks: {token}"
+    for verifier_name, verifier in (
+        ("replication", live_verifier),
+        ("runtime", runtime_verifier),
+    ):
+        assert "tile_windows=False" in verifier, (
+            f"{verifier_name} verifier may rearrange active desktop windows"
+        )
+        assert "kill_existing=False" in verifier, (
+            f"{verifier_name} verifier does not preserve existing game processes"
+        )
+        assert "stop_game_processes(" in verifier, (
+            f"{verifier_name} verifier does not clean up its exact process IDs"
+        )
+        assert 'ACCEPTANCE_MOD_ID = "sample.lua.authoring_lab"' in verifier, (
+            f"{verifier_name} verifier does not declare its exact Lua mod"
+        )
+        assert "exact_mod_id=ACCEPTANCE_MOD_ID" in verifier, (
+            f"{verifier_name} verifier does not stage its exact Lua mod"
+        )
+        assert "two exact process IDs" in verifier, (
+            f"{verifier_name} verifier accepts an incomplete process ledger"
+        )
+        assert "stop_games(" not in verifier, (
+            f"{verifier_name} verifier still uses machine-wide game cleanup"
+        )
+    for token in (
+        "game_process_ids(",
+        "stop_game_processes(",
+        '"-NoKill"',
+        '"-ProcessIdOutputPath"',
+        "_read_process_id_ledger(",
+    ):
+        assert token in multiplayer_verifier, (
+            f"local multiplayer verifier lacks isolated cleanup support: {token}"
+        )
+    for launcher_name, launcher in (
+        ("pair", pair_launcher),
+        ("additional-client", additional_client_launcher),
+    ):
+        assert "$ProcessIdOutputPath" in launcher, (
+            f"{launcher_name} launcher does not publish exact game process IDs"
+        )
+        assert "[System.IO.File]::WriteAllText(" in launcher, (
+            f"{launcher_name} launcher does not persist process IDs immediately"
+        )
+        assert "$ExactModIds" in launcher, (
+            f"{launcher_name} launcher does not accept exact verifier mods"
+        )
+        assert "Set-ExactMultiplayerModState" in launcher, (
+            f"{launcher_name} launcher does not isolate its enabled mod set"
+        )
+    for token in (
+        "function Set-ExactMultiplayerModState",
+        '"runtime\\instances"',
+        '"mod-manager-state.json"',
+        "foreach ($ModId in $ModIds)",
+        "$mods[$ModId]",
+        "ConvertTo-Json -Depth 4",
+    ):
+        assert token in launcher_process_helpers, (
+            f"exact multiplayer mod-state helper lacks: {token}"
+        )
 
     for token in (
         "## Authority model",

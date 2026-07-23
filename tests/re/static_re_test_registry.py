@@ -10,6 +10,7 @@ from repository_identity_contract import (
 from static_re_boneyard_contracts import (
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
+    test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
@@ -17,17 +18,81 @@ from static_lua_mod_state_contracts import (
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
 )
+from static_lua_sprites_contracts import (
+    test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
+)
+from static_lua_authoring_contracts import (
+    test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
+)
+from static_lua_roadmap_closure_contracts import (
+    test_lua_roadmap_is_closed_under_exact_mod_parity,
+)
 from static_lua_event_filter_contracts import (
     test_lua_damage_filters_are_ordered_owner_side_and_transactional,
 )
 from static_lua_enemy_spawn_filter_contracts import (
     test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,
 )
+from static_lua_drop_roll_filter_contracts import (
+    test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving,
+)
+from static_lua_wave_spawn_filter_contracts import (
+    test_lua_wave_spawn_filters_are_owner_side_transactional_and_stock_preserving,
+)
 from static_lua_spell_cast_filter_contracts import (
     test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt,
 )
 from static_lua_resource_filter_contracts import (
     test_lua_resource_filters_are_native_ordered_and_authoritative,
+)
+from static_lua_storage_contracts import (
+    test_lua_storage_is_scoped_bounded_and_transactional,
+)
+from static_lua_timer_contracts import (
+    test_lua_timers_are_bounded_local_and_tick_driven,
+)
+from static_lua_bus_contracts import (
+    test_lua_bus_is_manifest_resolved_bounded_and_local,
+)
+from static_lua_net_contracts import (
+    test_lua_net_is_fragmented_authenticated_and_host_relayed,
+)
+from static_lua_time_contracts import (
+    test_lua_time_is_authority_owned_replicated_and_coherently_gated,
+)
+from static_lua_content_identity_contracts import (
+    test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
+)
+from static_lua_items_contracts import (
+    test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
+)
+from static_lua_enemies_contracts import (
+    test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
+)
+from static_lua_spells_contracts import (
+    test_lua_spells_register_stable_metadata_and_owned_callbacks,
+)
+from static_lua_ai_contracts import (
+    test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving,
+)
+from static_lua_audio_contracts import (
+    test_lua_audio_is_scoped_bounded_local_and_game_owned,
+)
+from static_lua_camera_contracts import (
+    test_lua_camera_is_native_bounded_owned_and_presentation_local,
+)
+from static_lua_ui_authoring_contracts import (
+    test_lua_ui_authoring_is_native_bounded_and_authority_routed,
+)
+from static_lua_foundations_contracts import (
+    test_lua_nav_is_bounded_read_only_and_native_backed,
+    test_lua_run_seed_is_authority_owned_and_native_applied,
+)
+from static_lua_scene_contracts import (
+    test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+)
+from static_lua_waves_contracts import (
+    test_lua_waves_parse_track_and_replicate_semantic_summaries,
 )
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
@@ -61,16 +126,18 @@ from static_multiplayer_ownership_contracts import (
 )
 from static_multiplayer_platform_contracts import (
     test_active_steam_behavior_harnesses_preserve_fixture_state,
+    test_beta_release_documents_steam_deck_shortcut,
     test_beta_release_smoke_canonicalizes_packaged_steam_path,
     test_defense_probes_follow_host_damage_authority,
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     test_host_run_exit_is_authoritative_and_self_correcting,
     test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
-    test_packaged_ui_accepts_single_file_launcher,
+    test_packaged_ui_uses_proton_compatible_launcher,
     test_packaged_ui_does_not_inherit_test_world_overrides,
     test_pair_launcher_drains_redirected_json_output,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
+    test_proton_contract_runner_avoids_ge11_umu_shim_hang,
     test_proton_input_targets_the_exact_native_game_window,
     test_staff_target_selection_skips_local_only_enemies,
     test_steam_behavior_arena_reset_waits_for_native_spawner,
@@ -239,6 +306,7 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
+    test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     test_remote_progression_preserves_local_concentration_context,
     test_remote_progression_uses_passive_authoritative_hydration,
     test_steam_combat_stat_profiles_isolate_concentration,
@@ -284,6 +352,74 @@ from static_re_binary_tooling_contracts import (
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
     (
+        "Lua run seed is authority-owned and native-applied",
+        test_lua_run_seed_is_authority_owned_and_native_applied,
+    ),
+    (
+        "Lua navigation is bounded, read-only, and native-backed",
+        test_lua_nav_is_bounded_read_only_and_native_backed,
+    ),
+    (
+        "Lua scene control is semantic, authority-owned, and peer-followed",
+        test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+    ),
+    (
+        "Lua wave intelligence is parsed, tracked, and authority-replicated",
+        test_lua_waves_parse_track_and_replicate_semantic_summaries,
+    ),
+    (
+        "Lua bus is manifest-resolved, bounded, and local",
+        test_lua_bus_is_manifest_resolved_bounded_and_local,
+    ),
+    (
+        "Lua net is fragmented, authenticated, and host-relayed",
+        test_lua_net_is_fragmented_authenticated_and_host_relayed,
+    ),
+    (
+        "Lua time is authority-owned, replicated, and coherently gated",
+        test_lua_time_is_authority_owned_replicated_and_coherently_gated,
+    ),
+    (
+        "Lua content IDs are canonical, deterministic, and load-scoped",
+        test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
+    ),
+    (
+        "Lua items register stable identity and resolve peer-local recipes",
+        test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
+    ),
+    (
+        "Lua enemies use exact stock spawning and replicated content identity",
+        test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
+    ),
+    (
+        "Lua spells register stable metadata and owned callbacks",
+        test_lua_spells_register_stable_metadata_and_owned_callbacks,
+    ),
+    (
+        "Lua enemy AI is bounded, authority-owned, and collision-preserving",
+        test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving,
+    ),
+    (
+        "Lua audio is scoped, bounded, local, and game-owned",
+        test_lua_audio_is_scoped_bounded_local_and_game_owned,
+    ),
+    (
+        "Lua camera is native, bounded, owned, and presentation-local",
+        test_lua_camera_is_native_bounded_owned_and_presentation_local,
+    ),
+    (
+        "Lua UI authoring is native, bounded, and authority-routed",
+        test_lua_ui_authoring_is_native_bounded_and_authority_routed,
+    ),
+    (
+        "Lua timers are bounded, local, and tick-driven",
+        test_lua_timers_are_bounded_local_and_tick_driven,
+    ),
+    (
+        "Lua storage is scoped, bounded, and transactional",
+        test_lua_storage_is_scoped_bounded_and_transactional,
+    ),
+    (
         "Lua resource filters are native-ordered and authoritative",
         test_lua_resource_filters_are_native_ordered_and_authoritative,
     ),
@@ -296,12 +432,32 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,
     ),
     (
+        "Lua drop-roll filters are owner-side, transactional, and stock-preserving",
+        test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving,
+    ),
+    (
+        "Lua wave-spawn filters are owner-side, transactional, and stock-preserving",
+        test_lua_wave_spawn_filters_are_owner_side_transactional_and_stock_preserving,
+    ),
+    (
         "Lua damage filters are ordered, owner-side, and transactional",
         test_lua_damage_filters_are_ordered_owner_side_and_transactional,
     ),
     (
         "Lua draw is bounded, local, and backbuffer-verified",
         test_lua_draw_is_bounded_local_and_backbuffer_verified,
+    ),
+    (
+        "Lua sprites are owned, bounded, sandboxed, and revisioned",
+        test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
+    ),
+    (
+        "Lua authoring is generated, reloadable, and safe-thread executed",
+        test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
+    ),
+    (
+        "Lua seam roadmap is closed under exact mod parity",
+        test_lua_roadmap_is_closed_under_exact_mod_parity,
     ),
     (
         "Lua mod state and events are authority-replicated",
@@ -314,6 +470,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Boneyard parser rejects malformed native containers",
         test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    ),
+    (
+        "Multiplayer Boneyard scenery shares the host generation boundary",
+        test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
     ),
     (
         "Repository history uses approved project identities",
@@ -424,8 +584,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_ui_sandbox_retries_unlatched_create_choices,
     ),
     (
-        "packaged desktop UI accepts its single-file launcher",
-        test_packaged_ui_accepts_single_file_launcher,
+        "packaged desktop UI uses its Proton-compatible launcher",
+        test_packaged_ui_uses_proton_compatible_launcher,
+    ),
+    (
+        "beta release documents its Steam Deck shortcut",
+        test_beta_release_documents_steam_deck_shortcut,
+    ),
+    (
+        "Proton contract runner avoids the GE11 UMU shim hang",
+        test_proton_contract_runner_avoids_ge11_umu_shim_hang,
     ),
     (
         "beta package smoke canonicalizes Windows path aliases",
@@ -717,6 +885,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Wine stage savegames uses a directory mirror",
         test_wine_stage_savegames_uses_directory_mirror,
+    ),
+    (
+        "launcher saves are isolated, link-gated, and Proton-persisted",
+        test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     ),
     (
         "WSL Steam stages the test Boneyard before Proton starts",

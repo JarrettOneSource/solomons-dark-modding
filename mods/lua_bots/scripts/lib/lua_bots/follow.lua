@@ -203,7 +203,7 @@ function follow.install(ctx)
   end
 
   local function get_nav_grid_snapshot(now_ms)
-    if type(sd) ~= "table" or type(sd.debug) ~= "table" or type(sd.debug.get_nav_grid) ~= "function" then
+    if type(sd) ~= "table" or type(sd.nav) ~= "table" or type(sd.nav.get_grid) ~= "function" then
       return nil
     end
 
@@ -220,12 +220,8 @@ function follow.install(ctx)
       return state.nav_grid_cache
     end
 
-    local grid = sd.debug.get_nav_grid(config.NAV_GRID_SUBDIVISIONS)
-    if type(grid) ~= "table" or grid.valid == false or type(grid.cells) ~= "table" then
-      return nil
-    end
-    local grid_world_id = ctx.normalize_address_key(grid.world_address or grid.world_id)
-    if grid_world_id == "" or grid_world_id ~= world_id then
+    local grid = sd.nav.get_grid(config.NAV_GRID_SUBDIVISIONS)
+    if type(grid) ~= "table" or type(grid.cells) ~= "table" then
       return nil
     end
 

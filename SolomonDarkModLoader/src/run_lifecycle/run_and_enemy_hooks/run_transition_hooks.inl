@@ -56,6 +56,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     if (!PrepareMultiplayerRunStart("arena_create")) {
         return;
     }
+    ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);
@@ -73,6 +74,11 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     }
     ClearLuaWaveSpawnFilterInstances();
     ClearRememberedEnemyTracking();
+    if (!ReinitializeAppliedRunGenerationSeedForArenaCreate("arena_create_pre_stock")) {
+        g_state.run_active.store(false, std::memory_order_release);
+        Log("Blocked multiplayer Arena_Create because the host Boneyard seed could not be reinitialized.");
+        return;
+    }
     original(self, unused_edx);
     multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();
@@ -84,6 +90,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     if (!PrepareMultiplayerRunStart("start_game")) {
         return;
     }
+    ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);

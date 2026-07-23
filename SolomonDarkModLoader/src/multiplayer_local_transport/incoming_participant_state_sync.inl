@@ -131,6 +131,11 @@ void ApplyRemoteStatePacket(
             packet.shared_gameplay_pause_active != 0,
             packet.shared_gameplay_pause_timed_out != 0,
             now_ms);
+        ApplyAuthoritativeLuaTimeControlSnapshot(
+            packet.authority_participant_id,
+            packet.run_nonce,
+            packet.lua_time_scale_units,
+            packet.lua_time_revision);
     }
 
     if (packet_from_configured_authority) {
@@ -415,6 +420,11 @@ void ApplyRemoteParticipantFramePacket(
             packet.shared_gameplay_pause_active != 0,
             packet.shared_gameplay_pause_timed_out != 0,
             now_ms);
+        ApplyAuthoritativeLuaTimeControlSnapshot(
+            packet.authority_participant_id,
+            packet.run_nonce,
+            packet.lua_time_scale_units,
+            packet.lua_time_revision);
     }
     MultiplayerCharacterProfile profile;
     bool participant_found = false;
@@ -436,7 +446,12 @@ void ApplyRemoteParticipantFramePacket(
         return;
     }
 
+    ApplyAuthorityWaveSummaryFromPacket(
+        packet,
+        packet_from_configured_authority);
+
     MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
+    MaybeQueueClientHostRegionFollow(packet, scene_intent, from, now_ms);
     StageClientHostRunExitFollow(
         packet,
         packet_from_configured_authority,

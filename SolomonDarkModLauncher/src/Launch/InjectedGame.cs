@@ -6,4 +6,6 @@ internal sealed record InjectedGame(
     DateTimeOffset StartedAtUtc,
     string LoaderPath,
     LoaderStartupStatus StartupStatus,
-    MultiplayerSessionStatus? MultiplayerSessionStatus);
+    MultiplayerSessionStatus? MultiplayerSessionStatus,
+    string? SavegamesRootPath,
+    bool SavegamesUsesDirectoryMirror);

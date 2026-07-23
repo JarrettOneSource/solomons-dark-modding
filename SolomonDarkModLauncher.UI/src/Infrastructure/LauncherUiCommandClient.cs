@@ -22,6 +22,7 @@ internal sealed class LauncherUiCommandClient
     };
 
     private readonly LauncherUiSettingsStore settingsStore_ = new();
+    private readonly LocalSaveCatalog saveCatalog_;
     private readonly string? runtimeRoot_;
     private string instanceName_ = "default";
     private bool debugUiEnabled_ = true;
@@ -32,6 +33,7 @@ internal sealed class LauncherUiCommandClient
 
     public LauncherUiCommandClient()
     {
+        saveCatalog_ = new LocalSaveCatalog(settingsStore_);
         var workspaceRoot = WorkspaceRootLocator.FindRootPath(AppContext.BaseDirectory);
         gameDirectory_ = settingsStore_.LoadGameDirectory() ??
             FindDevelopmentGameDirectory(workspaceRoot) ??
@@ -52,6 +54,8 @@ internal sealed class LauncherUiCommandClient
     public string LobbyId => lobbyId_;
 
     public string GameDirectory => gameDirectory_;
+
+    public LocalSaveCatalog SaveCatalog => saveCatalog_;
 
     public void UpdateInstance(string? instanceName)
     {
@@ -223,6 +227,9 @@ internal sealed class LauncherUiCommandClient
             arguments.Add(runtimeRoot_);
         }
 
+        arguments.Add("--savegames-root");
+        arguments.Add(saveCatalog_.Active.SavegamesRootPath);
+
         switch (mode)
         {
             case LauncherUiCommandMode.LaunchSinglePlayer:
@@ -236,6 +243,7 @@ internal sealed class LauncherUiCommandClient
                 arguments.Add(hostOptions?.Privacy ?? "friends");
                 arguments.Add("--directory-url");
                 arguments.Add(directoryUrl_);
+                arguments.Add("--no-invite-dialog");
                 break;
             case LauncherUiCommandMode.JoinSteam:
                 arguments.Add("--multiplayer");

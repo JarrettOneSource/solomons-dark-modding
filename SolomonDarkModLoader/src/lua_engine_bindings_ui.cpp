@@ -256,6 +256,18 @@ int LuaUiActivateAction(lua_State* state) {
 
     std::string error_message;
     std::uint64_t request_id = 0;
+    if (const auto* mod = GetLoadedLuaMod(state);
+        mod != nullptr && TryQueueLuaUiAction(
+            mod->descriptor.id,
+            surface_id != nullptr ? surface_id : "",
+            action_id != nullptr ? action_id : "",
+            &request_id,
+            &error_message)) {
+        lua_pushboolean(state, 1);
+        lua_pushinteger(state, static_cast<lua_Integer>(request_id));
+        return 2;
+    }
+    error_message.clear();
     if (!sdmod::TryActivateDebugUiAction(
             action_id != nullptr ? action_id : "",
             surface_id != nullptr ? surface_id : "",
@@ -435,6 +447,7 @@ int LuaUiGetState(lua_State* state) {
 
 int LuaUiPerform(lua_State* state) {
     sdmod::UiActionRequest request;
+    std::string surface_id;
 
     if (lua_isstring(state, 1)) {
         request.action_id = lua_tostring(state, 1);
@@ -456,6 +469,12 @@ int LuaUiPerform(lua_State* state) {
             request.value = lua_tostring(state, -1);
         }
         lua_pop(state, 1);
+
+        lua_getfield(state, 1, "surface_id");
+        if (lua_isstring(state, -1)) {
+            surface_id = lua_tostring(state, -1);
+        }
+        lua_pop(state, 1);
     } else {
         lua_pushboolean(state, 0);
         lua_pushstring(state, "expected string or table argument");
@@ -463,6 +482,18 @@ int LuaUiPerform(lua_State* state) {
     }
 
     std::string status_message;
+    std::uint64_t request_id = 0;
+    if (const auto* mod = GetLoadedLuaMod(state);
+        mod != nullptr && TryQueueLuaUiAction(
+            mod->descriptor.id,
+            surface_id,
+            request.action_id,
+            &request_id,
+            &status_message)) {
+        lua_pushboolean(state, 1);
+        lua_pushinteger(state, static_cast<lua_Integer>(request_id));
+        return 2;
+    }
     if (sdmod::ExecuteRuntimeUiAction(request, &status_message)) {
         lua_pushboolean(state, 1);
         lua_pushstring(state, status_message.c_str());
@@ -477,7 +508,7 @@ int LuaUiPerform(lua_State* state) {
 }  // namespace
 
 void RegisterLuaUiBindings(lua_State* state) {
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 20);
     RegisterFunction(state, &LuaUiGetSurfaceId, "get_surface_id");
     RegisterFunction(state, &LuaUiGetSnapshot, "get_snapshot");
     RegisterFunction(state, &LuaUiFindElement, "find_element");
@@ -487,6 +518,7 @@ void RegisterLuaUiBindings(lua_State* state) {
     RegisterFunction(state, &LuaUiActivateElement, "activate_element");
     RegisterFunction(state, &LuaUiGetState, "get_state");
     RegisterFunction(state, &LuaUiPerform, "perform");
+    RegisterLuaUiAuthoringBindings(state);
     lua_setfield(state, -2, "ui");
 }
 

@@ -18,6 +18,14 @@
              Link="CrashReportCapture.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\CrashReportArchiveBuilder.cs"
              Link="CrashReportArchiveBuilder.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherUiSettingsStore.cs"
+             Link="LauncherUiSettingsStore.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LocalSaveCatalog.cs"
+             Link="LocalSaveCatalog.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\SaveDirectoryMirror.cs"
+             Link="SaveDirectoryMirror.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\CloudSaveArchive.cs"
+             Link="CloudSaveArchive.cs" />
     <None Include="..\fixtures\boneyards\flat_multiplayer_test.boneyard"
           Link="fixtures\flat_multiplayer_test.boneyard"
           CopyToOutputDirectory="PreserveNewest" />

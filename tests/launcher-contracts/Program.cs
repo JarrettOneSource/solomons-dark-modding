@@ -7,6 +7,7 @@ using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.Workspace;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
@@ -15,11 +16,18 @@ var tests = new (string Name, Func<Task> Run)[]
     ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
+    ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
+    ("strict multiplayer mod parity", TestStrictMultiplayerModParityAsync),
+    ("Lua hot reload bootstrap", TestLuaHotReloadBootstrapAsync),
+    ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
     ("website join URI", TestWebsiteJoinUriAsync),
     ("clean install enables zero mods", TestCleanInstallEnablesZeroModsAsync),
-    ("crash capture archive", TestCrashCaptureArchiveAsync)
+    ("crash capture archive", TestCrashCaptureArchiveAsync),
+    ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
+    ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
+    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync)
 };
 
 var failures = 0;
@@ -38,6 +46,477 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestIsolatedLocalSaveCatalogAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var retailSavegamesRoot = Path.Combine(root, "retail", "savegames");
+        var retailFilePath = Path.Combine(
+            retailSavegamesRoot,
+            "solomondark",
+            "player.sav");
+        Directory.CreateDirectory(Path.GetDirectoryName(retailFilePath)!);
+        File.WriteAllText(retailFilePath, "retail-save");
+
+        var launcherSettingsRoot = Path.Combine(root, "launcher");
+        var settings = new LauncherUiSettingsStore(launcherSettingsRoot);
+        var catalog = new LocalSaveCatalog(settings);
+        Require(catalog.List().Count == LocalSaveCatalog.SlotCount, "launcher did not create eight save slots");
+        Require(catalog.List().All(save => !save.HasLocalData), "retail save data leaked into a launcher slot");
+        Require(
+            Path.GetFullPath(catalog.SavesRoot) ==
+            Path.GetFullPath(Path.Combine(launcherSettingsRoot, "saves")),
+            "launcher saves were not rooted beneath the launcher settings area");
+
+        var imported = catalog.Import(2, retailSavegamesRoot);
+        Require(imported.HasLocalData, "explicit save import did not populate the selected slot");
+        var importedFilePath = Path.Combine(
+            imported.SavegamesRootPath,
+            "solomondark",
+            "player.sav");
+        Require(
+            File.ReadAllText(importedFilePath) == "retail-save",
+            "explicit save import changed the save contents");
+        File.WriteAllText(importedFilePath, "launcher-save");
+        Require(
+            File.ReadAllText(retailFilePath) == "retail-save",
+            "launcher save writes contaminated the retail save");
+
+        catalog.Select(2);
+        catalog.Rename(2, "Steam Deck");
+        catalog.MarkBackedUp(2, new string('a', 64), DateTimeOffset.UtcNow);
+
+        var reloaded = new LocalSaveCatalog(
+            new LauncherUiSettingsStore(launcherSettingsRoot));
+        Require(reloaded.ActiveSlot == 2, "active save selection did not persist");
+        Require(reloaded.Active.Name == "Steam Deck", "save name did not persist");
+        Require(
+            reloaded.Active.LastBackupFingerprint == new string('a', 64),
+            "cloud backup receipt did not persist");
+
+        RequireThrows<InvalidOperationException>(
+            () => catalog.Import(3, Path.Combine(root, "not-a-savegames-folder")),
+            "save import accepted a folder without solomondark");
+        RequireThrows<InvalidOperationException>(
+            () => SaveDirectoryMirror.Replace(
+                imported.SavegamesRootPath,
+                Path.Combine(imported.SavegamesRootPath, "nested")),
+            "save replacement accepted overlapping paths");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestCloudSaveArchiveIntegrityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var catalog = new LocalSaveCatalog(
+            new LauncherUiSettingsStore(Path.Combine(root, "launcher")));
+        catalog.Rename(0, "Wizard One");
+        var playerFilePath = Path.Combine(
+            catalog.Get(0).SavegamesRootPath,
+            "solomondark",
+            "player.sav");
+        var nestedFilePath = Path.Combine(
+            catalog.Get(0).SavegamesRootPath,
+            "solomondark",
+            "profiles",
+            "achievements.dat");
+        Directory.CreateDirectory(Path.GetDirectoryName(playerFilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(nestedFilePath)!);
+        File.WriteAllText(playerFilePath, "player-state");
+        File.WriteAllBytes(nestedFilePath, [0, 1, 2, 3, 4]);
+
+        var first = CloudSaveArchive.Build(catalog.Get(0));
+        var repeated = CloudSaveArchive.Build(catalog.Get(0));
+        Require(
+            first.Bytes.SequenceEqual(repeated.Bytes),
+            "unchanged local saves did not create a deterministic backup");
+        Require(first.FileCount == 2, "cloud backup manifest lost a save file");
+
+        File.WriteAllText(playerFilePath, "newer-local-state");
+        catalog.Rename(0, "Temporary Name");
+        var restoredName = CloudSaveArchive.Restore(catalog, 0, first.Bytes);
+        Require(restoredName == "Wizard One", "cloud restore lost the saved slot name");
+        Require(
+            File.ReadAllText(playerFilePath) == "player-state",
+            "cloud restore did not replace the local snapshot");
+
+        var tamperedBytes = first.Bytes.ToArray();
+        using (var stream = new MemoryStream(tamperedBytes))
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            archive.GetEntry("savegames/solomondark/player.sav")!.Delete();
+            var replacement = archive.CreateEntry(
+                "savegames/solomondark/player.sav",
+                CompressionLevel.Optimal);
+            using var replacementStream = replacement.Open();
+            replacementStream.Write("tampered"u8);
+        }
+        File.WriteAllText(playerFilePath, "preserve-on-rejection");
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, tamperedBytes),
+            "cloud restore accepted a file with a mismatched hash");
+        Require(
+            File.ReadAllText(playerFilePath) == "preserve-on-rejection",
+            "rejected cloud restore changed the local save");
+
+        var traversalArchive = CreateZip(new Dictionary<string, byte[]>
+        {
+            ["manifest.json"] = """
+                {
+                  "schemaVersion": 1,
+                  "slot": 0,
+                  "name": "Unsafe",
+                  "files": [{
+                    "path": "../outside.sav",
+                    "size": 1,
+                    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+                  }]
+                }
+                """u8.ToArray(),
+            ["savegames/../outside.sav"] = "a"u8.ToArray()
+        });
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, traversalArchive),
+            "cloud restore accepted path traversal");
+        Require(!File.Exists(Path.Combine(root, "outside.sav")), "cloud restore escaped its slot");
+
+        var unsafeNameArchive = CreateZip(new Dictionary<string, byte[]>
+        {
+            ["manifest.json"] = """
+                {
+                  "schemaVersion": 1,
+                  "slot": 0,
+                  "name": "unsafe\u0001name",
+                  "files": [{
+                    "path": "solomondark/player.sav",
+                    "size": 1,
+                    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+                  }]
+                }
+                """u8.ToArray(),
+            ["savegames/solomondark/player.sav"] = "a"u8.ToArray()
+        });
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, unsafeNameArchive),
+            "cloud restore accepted a control character in the save name");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestSelectedSaveLaunchRoutingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var selectedSavegamesRoot = Path.Combine(root, "selected", "savegames");
+        var command = LauncherCommandParser.Parse(
+        [
+            "launch",
+            "--savegames-root", selectedSavegamesRoot,
+            "--multiplayer", "host",
+            "--no-invite-dialog"
+        ]);
+        Require(
+            command.SavegamesRootOverride == selectedSavegamesRoot,
+            "launcher parser lost the selected save directory");
+        Require(
+            !command.OpenSteamInviteDialog,
+            "Host Game did not suppress the automatic Steam invite picker");
+
+        var workspace = WorkspacePaths.Create(
+            Path.Combine(root, "workspace"),
+            modsRootOverride: null,
+            runtimeRootOverride: null,
+            stageRootOverride: null);
+        var defaultOptions = IsolatedProfileBootstrapper.CreateLaunchOptions(workspace);
+        Require(
+            defaultOptions.SavegamesRootPath ==
+            Path.Combine(workspace.ProfileRootPath, "savegames"),
+            "headless launcher defaulted saves into the staged retail tree");
+
+        var selectedOptions = IsolatedProfileBootstrapper.CreateLaunchOptions(
+            workspace,
+            savegamesRootOverride: selectedSavegamesRoot);
+        Require(
+            selectedOptions.SavegamesRootPath == Path.GetFullPath(selectedSavegamesRoot),
+            "selected save directory was not preserved in launch options");
+        Require(
+            Directory.Exists(selectedSavegamesRoot),
+            "selected save directory was not prepared before launch");
+
+        var mirrorSource = Path.Combine(root, "proton-stage-savegames");
+        var localDestination = Path.Combine(root, "launcher-savegames");
+        var sourceFile = Path.Combine(mirrorSource, "solomondark", "player.sav");
+        var staleFile = Path.Combine(localDestination, "solomondark", "stale.sav");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(staleFile)!);
+        File.WriteAllText(sourceFile, "proton-updated-save");
+        File.WriteAllText(staleFile, "stale-save");
+        SaveDirectoryMirror.Replace(mirrorSource, localDestination);
+        Require(
+            File.ReadAllText(Path.Combine(localDestination, "solomondark", "player.sav")) ==
+            "proton-updated-save",
+            "Proton stage copy-back lost the updated save");
+        Require(!File.Exists(staleFile), "Proton stage copy-back retained stale local files");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestCanonicalModIdentifiersAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        Directory.CreateDirectory(Path.Combine(modRoot, "scripts"));
+        File.WriteAllText(Path.Combine(modRoot, "scripts", "main.lua"), "return true\n");
+
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "Tests.Uppercase",
+              "name": "Invalid Identity",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+        var uppercaseRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            uppercaseRejected = true;
+        }
+        Require(uppercaseRejected, "manifest accepted a non-canonical mod id");
+
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.canonical",
+              "name": "Invalid Dependency Identity",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "requiredMods": ["Tests.Dependency"]
+            }
+            """);
+        var dependencyRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            dependencyRejected = true;
+        }
+        Require(dependencyRejected, "manifest accepted a non-canonical required mod id");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestStrictMultiplayerModParityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        var scriptPath = Path.Combine(modRoot, "scripts", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+        File.WriteAllText(scriptPath, "return true\n");
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.presentation-parity",
+              "name": "Presentation Parity Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+
+        var mod = ModDiscovery.DiscoverRoot(modRoot);
+        var stageRoot = Path.Combine(root, "stage");
+        var executablePath = Path.Combine(root, "SolomonDark.exe");
+        var layoutPath = Path.Combine(root, "binary-layout.ini");
+        var loaderPath = Path.Combine(root, "SolomonDarkModLoader.dll");
+        File.WriteAllBytes(executablePath, [1, 2, 3]);
+        File.WriteAllText(layoutPath, "[binary]\nname=SolomonDark.exe\n");
+        File.WriteAllBytes(loaderPath, [4, 5, 6]);
+
+        var firstRuntime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var first = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            firstRuntime,
+            [mod],
+            loaderPath);
+
+        File.AppendAllText(scriptPath, "-- presentation-only edit\n");
+        var secondRuntime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var second = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            secondRuntime,
+            [mod],
+            loaderPath);
+        Require(
+            first.FingerprintSha256 != second.FingerprintSha256,
+            "presentation-intended mod content did not change exact session parity");
+        Require(
+            first.EnabledMods.Single().ContentSha256 !=
+                second.EnabledMods.Single().ContentSha256,
+            "presentation-intended mod edit did not change its directory identity");
+
+        var repeated = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            secondRuntime,
+            [mod],
+            loaderPath);
+        Require(
+            repeated.FingerprintSha256 == second.FingerprintSha256,
+            "unchanged exact mod set produced a different session fingerprint");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestLuaHotReloadBootstrapAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        var scriptPath = Path.Combine(modRoot, "scripts", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+        File.WriteAllText(scriptPath, "return true\n");
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.hot-reload",
+              "name": "Hot Reload Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua",
+                "hotReload": true
+              }
+            }
+            """);
+
+        var mod = ModDiscovery.DiscoverRoot(modRoot);
+        var stageRoot = Path.Combine(root, "stage");
+        var runtime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var staged = runtime.StagedRuntimeMods.Single();
+        Require(staged.HotReload, "stage descriptor disabled manifest hot reload");
+        Require(
+            Path.GetFullPath(staged.SourceModRootPath) == Path.GetFullPath(modRoot),
+            "stage descriptor lost the source mod root");
+        Require(
+            Path.GetFullPath(staged.SourceEntryScriptPath!) == Path.GetFullPath(scriptPath),
+            "stage descriptor lost the source Lua entry path");
+        Require(
+            Path.GetFullPath(staged.StageEntryScriptPath!) != Path.GetFullPath(scriptPath),
+            "stage and source Lua entry paths were not isolated");
+
+        var bootstrap = File.ReadAllText(runtime.RuntimeBootstrapPath);
+        Require(
+            bootstrap.Contains("hot_reload=true", StringComparison.Ordinal),
+            "runtime bootstrap disabled manifest hot reload");
+        Require(
+            bootstrap.Contains(
+                $"source_entry_script_path={scriptPath}",
+                StringComparison.Ordinal),
+            "runtime bootstrap omitted the source Lua entry path");
+
+        Directory.CreateDirectory(Path.Combine(modRoot, "native"));
+        File.WriteAllBytes(Path.Combine(modRoot, "native", "mod.dll"), [0]);
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.hot-reload",
+              "name": "Invalid Native Hot Reload Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryDll": "native/mod.dll",
+                "hotReload": true
+              }
+            }
+            """);
+        var nativeRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            nativeRejected = true;
+        }
+        Require(nativeRejected, "manifest accepted hot reload without a Lua entry point");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
 
 static Task TestCleanInstallEnablesZeroModsAsync()
 {
@@ -455,6 +934,96 @@ static Task TestExactManualCatalogAsync()
     return Task.CompletedTask;
 }
 
+static Task TestLuaBusRuntimeContractsAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var providerRoot = Path.Combine(root, "provider");
+        Directory.CreateDirectory(Path.Combine(providerRoot, "scripts"));
+        File.WriteAllText(
+            Path.Combine(providerRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.bus-provider",
+              "name": "Bus Provider",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "provides": ["tests.bus.echo.v1"]
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(providerRoot, "scripts", "main.lua"),
+            "return true\n");
+
+        var consumerRoot = Path.Combine(root, "consumer");
+        Directory.CreateDirectory(Path.Combine(consumerRoot, "scripts"));
+        File.WriteAllText(
+            Path.Combine(consumerRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.bus-consumer",
+              "name": "Bus Consumer",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "requires": ["tests.bus.echo.v1"]
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(consumerRoot, "scripts", "main.lua"),
+            "return true\n");
+
+        var provider = ModDiscovery.DiscoverRoot(providerRoot);
+        var consumer = ModDiscovery.DiscoverRoot(consumerRoot);
+        var catalog = ModCatalog.CreateExact([consumer, provider]);
+        Require(catalog.EnabledMods.Count == 2, "bus contract set did not resolve");
+
+        var stageRoot = Path.Combine(root, "stage");
+        var runtime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            catalog.EnabledMods,
+            RuntimeStageOptions.Default);
+        var bootstrap = File.ReadAllText(runtime.RuntimeBootstrapPath);
+        Require(
+            bootstrap.Contains("provides=tests.bus.echo.v1", StringComparison.Ordinal),
+            "provided bus contract was not staged");
+        Require(
+            bootstrap.Contains("requires=tests.bus.echo.v1", StringComparison.Ordinal),
+            "required bus contract was not staged");
+        Require(
+            runtime.StagedRuntimeMods.Single(mod => mod.Id == provider.Manifest.Id)
+                .Provides.SequenceEqual(["tests.bus.echo.v1"]),
+            "provider stage descriptor lost its contract");
+        Require(
+            runtime.StagedRuntimeMods.Single(mod => mod.Id == consumer.Manifest.Id)
+                .Requires.SequenceEqual(["tests.bus.echo.v1"]),
+            "consumer stage descriptor lost its contract");
+
+        var missingProviderRejected = false;
+        try
+        {
+            ModCatalog.CreateExact([consumer]);
+        }
+        catch (InvalidOperationException)
+        {
+            missingProviderRejected = true;
+        }
+        Require(missingProviderRejected, "catalog accepted an unresolved bus contract");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
 static Task TestInvalidBoneyardRejectionAsync()
 {
     var root = CreateTemporaryDirectory();
@@ -741,6 +1310,20 @@ static void Require(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static void RequireThrows<TException>(Action action, string message)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
 }
 
 file sealed class PackageHandler(byte[] package) : HttpMessageHandler

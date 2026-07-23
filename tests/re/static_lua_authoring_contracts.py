@@ -1,0 +1,331 @@
+"""Contracts for generated Lua editor metadata, hot reload, and exec console."""
+
+from __future__ import annotations
+
+from static_multiplayer_contract_support import _read, _require_in_order
+
+
+def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str:
+    runtime_model = _read(
+        "SolomonDarkModLauncher/src/Mods/RuntimeModDefinition.cs"
+    )
+    validator = _read("SolomonDarkModLauncher/src/Mods/ModManifestValidator.cs")
+    stage_entry = _read(
+        "SolomonDarkModLauncher/src/Staging/RuntimeStageManifestEntry.cs"
+    )
+    materializer = _read(
+        "SolomonDarkModLauncher/src/Staging/RuntimeMetadataStageMaterializer.cs"
+    )
+    bootstrap_header = _read("SolomonDarkModLoader/include/runtime_bootstrap.h")
+    bootstrap_parser = _read("SolomonDarkModLoader/src/runtime_bootstrap.cpp")
+    runtime_bindings = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
+    hot_reload = _read("SolomonDarkModLoader/src/lua_hot_reload.cpp")
+    engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
+    engine_header = _read("SolomonDarkModLoader/include/lua_engine.h")
+    engine_internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
+    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp")
+    pump = _read("SolomonDarkModLoader/src/lua_engine_main_thread_pump.inl")
+    console = _read("SolomonDarkModLoader/src/lua_developer_console.cpp")
+    window_hook = _read("SolomonDarkModLoader/src/background_focus_bypass.cpp")
+    project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
+    filters = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj.filters")
+    generator = _read("tools/generate_lua_api_stubs.py")
+    generated_stub = _read("api/lua/sd.lua")
+    generator_tests = _read("tests/test_lua_api_stub_generator.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
+    luarc = _read(".luarc.json")
+    launcher_tests = _read("tests/launcher-contracts/Program.cs")
+    authoring_manifest = _read("mods/lua_authoring_lab/manifest.json")
+    authoring_sample = _read("mods/lua_authoring_lab/scripts/main.lua")
+    authoring_verifier = _read("tools/verify_lua_authoring.py")
+    authoring_verifier_tests = _read("tests/test_lua_authoring_verifier.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_authoring_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_authoring_multiplayer_verifier.py"
+    )
+    documentation = _read("docs/lua-authoring.md")
+    roadmap = _read("docs/lua-seam-roadmap.md")
+
+    assert "public bool HotReload { get; init; }" in runtime_model
+    assert "manifest.Runtime.HotReload && !manifest.RequiresLuaRuntime" in validator
+    for token in (
+        "bool HotReload",
+        "string SourceModRootPath",
+        "string? SourceEntryScriptPath",
+    ):
+        assert token in stage_entry, f"hot-reload stage descriptor lacks: {token}"
+    _require_in_order(
+        materializer,
+        "FileTreeMirror.Synchronize(mod.RootPath, stagedModRootPath)",
+        "mod.Manifest.Runtime.HotReload",
+        "mod.RootPath",
+        "Path.Combine(stagedModRootPath",
+    )
+    for token in (
+        'builder.Append("hot_reload=")',
+        'builder.Append("source_root_path=")',
+        'builder.Append("source_entry_script_path=")',
+        'builder.Append("entry_script_path=")',
+    ):
+        assert token in materializer, f"runtime bootstrap writer lacks: {token}"
+    for token in (
+        "bool hot_reload = false",
+        "source_root_path",
+        "source_entry_script_path",
+    ):
+        assert token in bootstrap_header, f"native runtime descriptor lacks: {token}"
+    for token in (
+        "TryParseBoolean",
+        '"hot_reload"',
+        '"source_root_path"',
+        '"source_entry_script_path"',
+        "mod.source_entry_script_path =",
+    ):
+        assert token in bootstrap_parser, f"native bootstrap parser lacks: {token}"
+
+    for token in (
+        "kLuaHotReloadPollIntervalMs = 250",
+        "kLuaHotReloadStableIntervalMs = 300",
+        "kLuaHotReloadMaximumSourceBytes = 1024 * 1024",
+        "kFnvOffsetBasis",
+        "TryReadFingerprint",
+        "PreflightLuaSource",
+        "luaL_loadfile(preflight_state",
+        "InitializeLuaHotReloadState",
+        "PollLuaHotReloadsOnLockedThread",
+        "hot reload rejected; existing state preserved",
+        "hot reload execution failed; edit the source to retry",
+    ):
+        assert token in hot_reload, f"hot-reload runtime lacks: {token}"
+    reload_apply = hot_reload.split(
+        "const auto candidate = mod->hot_reload.pending_fingerprint;", 1
+    )[1]
+    _require_in_order(
+        reload_apply,
+        "PreflightLuaSource(*mod, candidate",
+        "CloseLuaStateForMod(mod)",
+        "CreateLuaStateForMod(",
+        "hot reloaded source entry script",
+    )
+    _require_in_order(
+        engine,
+        "ClearLuaEventFilterRegistrationsForMod(mod)",
+        "ClearLuaTimersForMod(mod)",
+        "ClearLuaBusSubscriptionsForMod(mod)",
+        "ClearLuaNetSubscriptionsForMod(mod)",
+        "ClearLuaDrawFrameForMod(mod->descriptor.id)",
+        "ClearLuaSpriteAtlasesForMod(mod->descriptor.id)",
+        "lua_close(mod->state)",
+    )
+    for token in (
+        "IsMultiplayerTransportConfigured",
+        "IsLocalTransportEnabled",
+        "PollLuaHotReloadsOnLockedThread",
+    ):
+        assert token in pump, f"safe-thread hot-reload gate lacks: {token}"
+    assert "participant.transport_connected" not in pump
+    assert "LuaHotReloadState hot_reload" in engine_internal
+    _require_in_order(
+        runtime_bindings,
+        "multiplayer::IsLocalTransportEnabled()",
+        'lua_setfield(state, -2, "transport_enabled")',
+        'lua_setfield(state, -2, "transport_ready")',
+    )
+
+    for token in (
+        "using LuaExecCompletion = std::function<void(LuaExecResult)>;",
+        "QueueLuaExecRequestAsync",
+        "GetLuaExecTargetModId",
+    ):
+        assert token in engine_header, f"async exec contract lacks: {token}"
+    for token in (
+        "LuaExecCompletion completion",
+        "request->completion(result)",
+        "SetPromiseValueSafely",
+    ):
+        assert token in engine, f"shared exec queue lacks: {token}"
+    _require_in_order(
+        pump,
+        "ExecuteLuaCodeOnLockedState(shared_state, request->code)",
+        "lock.unlock()",
+        "FinishLuaExecRequest(request",
+    )
+
+    for token in (
+        "kLuaDeveloperConsoleMaximumInputBytes = 4096",
+        "kLuaDeveloperConsoleMaximumOutputLines = 128",
+        "kLuaDeveloperConsoleMaximumHistoryEntries = 64",
+        "wparam == VK_OEM_3",
+        "IsControlDown()",
+        "QueueLuaExecRequestAsync(code, &CompleteConsoleRequest)",
+        "BeginLuaDrawFrame(kLuaDeveloperConsoleOwner)",
+        "CommitLuaDrawFrame(kLuaDeveloperConsoleOwner)",
+        "ReadClipboardUtf8",
+        "NavigateConsoleHistory",
+    ):
+        assert token in console, f"in-game exec console lacks: {token}"
+    assert '#include "lua.h"' not in console
+    _require_in_order(
+        window_hook,
+        "HandleLuaDeveloperConsoleWindowMessage",
+        "HandleLuaAuthoredUiWindowMessage",
+    )
+    _require_in_order(
+        loader,
+        "StartLuaDrawRenderer(",
+        "StartLuaUiRenderer(",
+        "InitializeLuaDeveloperConsole()",
+    )
+    _require_in_order(
+        loader,
+        'RunShutdownStep("lua exec pipe"',
+        'RunShutdownStep("lua developer console"',
+        'RunShutdownStep("lua engine"',
+    )
+
+    for item in (
+        "include\\lua_developer_console.h",
+        "src\\lua_developer_console.cpp",
+        "src\\lua_hot_reload.cpp",
+        "src\\lua_exec_wait.inl",
+    ):
+        assert item in project, f"native project omits: {item}"
+        assert item in filters, f"native project filters omit: {item}"
+
+    for token in (
+        "_strip_cpp_comments",
+        "discover_bindings",
+        "ROOT_CALL",
+        "RegisterLuaBindings contains no namespace registrations",
+        "duplicate sd namespace",
+        "canonical_by_table",
+        "--check",
+        "difflib.unified_diff",
+    ):
+        assert token in generator, f"Lua API generator lacks: {token}"
+    for token in (
+        "-- Inventory: 29 namespaces, 267 unique functions.",
+        "---@class SdApi",
+        "---@field runtime SdRuntimeApi",
+        "---@field hud SdDrawApi",
+        "function sd_sprites.register(...) end",
+        "function sd_debug.capture_backbuffer(...) end",
+        "hud = sd_draw",
+        "draw = sd_draw",
+    ):
+        assert token in generated_stub, f"generated Lua API stub lacks: {token}"
+    for token in (
+        "test_cpp_comments_cannot_add_generated_bindings",
+        "test_inventory_follows_root_registration_order_and_nested_helpers",
+        "test_draw_and_hud_preserve_the_native_table_alias",
+        "test_checked_in_stub_is_current",
+    ):
+        assert token in generator_tests, f"Lua API generator tests lack: {token}"
+    assert '"workspace.library"' in luarc and '"api/lua"' in luarc
+    assert "python tools/generate_lua_api_stubs.py --check" in workflow
+    assert "python -m unittest tests.test_lua_api_stub_generator" in workflow
+    assert "python -m unittest tests.test_lua_authoring_verifier" in workflow
+    assert (
+        "python -m unittest tests.test_lua_authoring_multiplayer_verifier"
+        in workflow
+    )
+
+    for token in (
+        '"Lua hot reload bootstrap"',
+        '"hotReload": true',
+        "staged.HotReload",
+        "staged.SourceEntryScriptPath",
+        "manifest accepted hot reload without a Lua entry point",
+    ):
+        assert token in launcher_tests, f"launcher hot-reload test lacks: {token}"
+    for token in (
+        '"id": "sample.lua.authoring_lab"',
+        '"enabled": false',
+        '"hotReload": true',
+        '"ui.authoring.native"',
+    ):
+        assert token in authoring_manifest, f"authoring lab manifest lacks: {token}"
+    for token in (
+        'local source_version = "authoring-baseline-0001"',
+        'id = "authoring_reload_probe"',
+        "authoring_lab_version = source_version",
+        "authoring_lab_surface = sd.ui.create_surface",
+    ):
+        assert token in authoring_sample, f"authoring lab script lacks: {token}"
+    for token in (
+        "RELOADED_VERSION = \"authoring-reloaded-0002\"",
+        "_atomic_write",
+        "_wait_for_version",
+        "_assert_version_stays",
+        'values["transport_enabled"]',
+        "syntax-invalid source did not preserve the running Lua state",
+        "authoring verifier did not restore exact source bytes",
+        'choices=("auto", "offline", "deferred")',
+    ):
+        assert token in authoring_verifier, f"authoring live verifier lacks: {token}"
+    for token in (
+        "test_offline_mode_reloads_rejects_syntax_and_restores_source",
+        "test_windows_lua_daemon_wait_reads_redirected_pipe",
+        "test_windows_lua_daemon_wait_times_out_without_select",
+        "test_transport_mode_defers_edits_and_restores_source",
+        "test_failed_verification_still_restores_exact_source",
+    ):
+        assert token in authoring_verifier_tests, (
+            f"authoring verifier regression tests lack: {token}"
+        )
+    for token in (
+        "SNAPSHOT_PROBE",
+        "ACCEPTANCE_MOD_ID = MOD_ID",
+        "_assert_pair_stays(",
+        "_source_versions(",
+        "source_path.read_bytes() != original",
+        "refusing to overwrite it",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"authoring multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_snapshot_requires_transport_pair_and_stable_surface",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_defers_one_edit_on_both_peers_and_restores_source",
+        "test_concurrent_source_change_is_never_overwritten",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"authoring multiplayer verifier tests lack: {token}"
+        )
+    for token in (
+        "## Editor API",
+        "## Entry-script hot reload",
+        "## In-game exec console",
+        "## Live acceptance",
+        "prior state remains live",
+        "automatically deferred",
+        "same capture result as the named pipe",
+        "Windows uses a bounded redirected-pipe reader",
+        "can activate",
+        "does not synthesize global keyboard input or steal focus",
+        "verify_lua_authoring_multiplayer.py --launch-pair",
+        "Both peers are",
+        "observed through the same interval",
+        "refuses to overwrite a concurrent",
+        "source change, never tiles windows",
+    ):
+        assert token in documentation, f"Lua authoring documentation lacks: {token}"
+    assert "**Implemented 2026-07-23.** The checked-in `api/lua/sd.lua`" in roadmap
+
+    return (
+        "Lua authoring derives editor metadata from native registrations, reloads "
+        "opt-in source states only on safe offline pumps, and executes the bounded "
+        "in-game console through the shared async queue with exact two-peer "
+        "transport-deferral acceptance"
+    )

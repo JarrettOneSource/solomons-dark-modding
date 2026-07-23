@@ -27,7 +27,7 @@ def test_secondary_replay_preserves_owner_authored_aim_when_target_resolves() ->
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_cast_packet_sync.inl"
     )
-    hooks = _read(
+    hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )
@@ -117,7 +117,7 @@ def test_cursor_placed_secondaries_replay_owner_world_position() -> str:
         "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
     )
     bot_runtime = _read("SolomonDarkModLoader/include/bot_runtime.h")
-    hooks = _read(
+    hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )
@@ -158,7 +158,7 @@ def test_cursor_placed_secondaries_replay_owner_world_position() -> str:
     )
     layout = _read("config/binary-layout.ini")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 73;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 80;" in protocol
     assert "CastInputFlagCursorWorldPlacement" in protocol
     assert "float cursor_world_x;" in protocol
     assert "float cursor_world_y;" in protocol
@@ -564,7 +564,7 @@ def test_remote_webbed_escape_consumes_owner_movement_intent() -> str:
     live_harness = _read("tools/multiplayer_webbed_status_harness.py")
     live_verifier = _read("tools/verify_multiplayer_webbed_status_sync.py")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 73;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 80;" in protocol
     for source_name, source in (
         ("protocol", protocol),
         ("runtime state", runtime_state),
@@ -870,7 +870,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/"
         "multiplayer_dampen_effect.inl"
     )
-    player_cast_hooks = _read(
+    player_cast_hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )
@@ -1319,7 +1319,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
     for token in (
         "ParticipantTransientStatusFlagPlanewalker = 1 << 2",
         "ParticipantTransientStatusFlagStoneskin = 1 << 3",
-        "constexpr std::uint16_t kProtocolVersion = 73;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
     ):
         assert token in protocol, f"native transient status protocol lacks: {token}"
     for token in (
@@ -2068,7 +2068,7 @@ def test_shared_menu_pause_is_host_authoritative_and_time_bounded() -> str:
     verifier = _read("tools/verify_multiplayer_shared_menu_pause.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 73",
+        "constexpr std::uint16_t kProtocolVersion = 80",
         "local_menu_pause_request_epoch",
         "local_menu_pause_requested",
         "shared_gameplay_pause_active",
@@ -2143,8 +2143,11 @@ def test_shared_menu_pause_is_host_authoritative_and_time_bounded() -> str:
         assert token in incoming, f"incoming shared-pause sync lacks: {token}"
         assert token in pause_sync, f"outgoing shared-pause sync lacks: {token}"
 
-    for hook_source in (actor_world, actor_tick, wave_tick):
+    assert "BeginGameplaySimulationFrame()" in actor_world
+    assert "EndGameplaySimulationFrame()" in actor_world
+    for hook_source in (actor_tick, wave_tick):
         assert "ShouldPauseMultiplayerGameplay()" in hook_source
+    for hook_source in (actor_world, actor_tick, wave_tick):
         assert "ShouldPauseGameplayForLevelUpSelection()" not in hook_source
     assert "shared_gameplay_pause_status" in lua_runtime
 

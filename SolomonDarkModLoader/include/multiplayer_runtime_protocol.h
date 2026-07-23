@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 73;
+constexpr std::uint16_t kProtocolVersion = 80;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -13,7 +13,7 @@ constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
 constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kParticipantHagathaPerkMaxCount = 9;
-constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;
+constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;
 constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kWorldActorStudentBookPaletteMaxEntries = 5;
@@ -25,6 +25,21 @@ constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
 constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
 constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
+constexpr std::uint32_t kLuaNetFragmentPayloadBytes = 1024;
+constexpr std::uint16_t kLuaNetMaxFragments = 64;
+constexpr std::uint64_t kLuaNetMaximumMessageSequence =
+    0x7FFFFFFFFFFFFFFFull;
+constexpr std::uint32_t kLuaTimeProtocolScaleUnitsPerOne = 1'000'000;
+constexpr std::uint32_t kLuaTimeProtocolMaximumStepFrames = 120;
+constexpr std::uint64_t kLuaTimeProtocolMaximumStepSequence =
+    0x7FFFFFFFFFFFFFFFull;
+constexpr std::uint16_t kLuaRegisteredSpellEffectMaxLogicalEffects = 256;
+constexpr std::uint16_t kLuaRegisteredSpellEffectStatesPerFragment = 4;
+constexpr std::uint8_t kLuaRegisteredSpellEffectKeyBytes = 64;
+constexpr std::uint8_t kLuaRegisteredSpellEffectDataBytes = 128;
+constexpr std::uint16_t kWaveSummaryMaxCompositionRows = 20;
+constexpr std::uint16_t kLuaUiModIdPacketBytes = 128;
+constexpr std::uint16_t kLuaUiIdentifierPacketBytes = 65;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -48,6 +63,12 @@ enum class PacketKind : std::uint16_t {
     LevelUpBarrier = 19,
     ParticipantFrame = 20,
     LuaModStream = 21,
+    LuaItemGrant = 22,
+    LuaRegisteredSpellCast = 23,
+    LuaRegisteredSpellEffectSnapshot = 24,
+    LuaUiActionRequest = 25,
+    LuaNetMessage = 26,
+    LuaTimeControl = 27,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -195,6 +216,19 @@ enum WorldActorStatusFlags : std::uint8_t {
     WorldActorStatusFlagTurnUndeadActive = 1 << 1,
 };
 
+enum LuaEnemySpawnSnapshotFlags : std::uint8_t {
+    LuaEnemySpawnSnapshotFlagHp = 1 << 0,
+    LuaEnemySpawnSnapshotFlagChaseSpeed = 1 << 1,
+    LuaEnemySpawnSnapshotFlagAttackSpeed = 1 << 2,
+    LuaEnemySpawnSnapshotFlagScale = 1 << 3,
+};
+
+constexpr std::uint8_t kLuaEnemySpawnSnapshotKnownFlags =
+    LuaEnemySpawnSnapshotFlagHp |
+    LuaEnemySpawnSnapshotFlagChaseSpeed |
+    LuaEnemySpawnSnapshotFlagAttackSpeed |
+    LuaEnemySpawnSnapshotFlagScale;
+
 constexpr std::uint8_t kWorldActorStatusKnownFlags =
     WorldActorStatusFlagTurnUndeadStateValid |
     WorldActorStatusFlagTurnUndeadActive;
@@ -223,6 +257,13 @@ enum LootSnapshotFlags : std::uint8_t {
 enum LootPickupResultFlags : std::uint16_t {
     LootPickupResultFlagItemColorState = 1 << 0,
 };
+
+enum LuaItemGrantFlags : std::uint8_t {
+    LuaItemGrantFlagColorState = 1 << 0,
+};
+
+constexpr std::uint8_t kLuaItemGrantKnownFlags =
+    LuaItemGrantFlagColorState;
 
 enum SpellEffectSnapshotFlags : std::uint16_t {
     SpellEffectSnapshotFlagTruncated = 1 << 0,
@@ -395,6 +436,8 @@ struct StatePacket {
     std::uint8_t shared_gameplay_pause_active;
     std::uint8_t shared_gameplay_pause_timed_out;
     std::uint8_t shared_gameplay_pause_reserved = 0;
+    std::uint32_t lua_time_scale_units;
+    std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t element_id;
     std::int32_t discipline_id;
@@ -494,6 +537,14 @@ struct StatePacket {
     float render_drive_move_blend;
 };
 
+struct WaveCompositionRowPacketState {
+    std::int32_t enemy_type;
+    std::uint16_t planned;
+    std::uint16_t spawned;
+    std::uint16_t alive;
+    std::uint16_t killed;
+};
+
 struct ParticipantFramePacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -513,6 +564,8 @@ struct ParticipantFramePacket {
     std::uint8_t shared_gameplay_pause_active;
     std::uint8_t shared_gameplay_pause_timed_out;
     std::uint8_t shared_gameplay_pause_reserved = 0;
+    std::uint32_t lua_time_scale_units;
+    std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t region_index;
     std::int32_t region_type_id;
@@ -566,6 +619,16 @@ struct ParticipantFramePacket {
     float magic_shield_hit_flash;
     float render_drive_overlay_alpha;
     float render_drive_move_blend;
+    std::uint8_t wave_summary_valid;
+    std::uint8_t wave_summary_phase;
+    std::uint16_t wave_summary_row_count;
+    std::int32_t wave_summary_wave;
+    std::int32_t wave_summary_remaining_to_spawn;
+    std::int32_t wave_summary_spawned;
+    std::int32_t wave_summary_alive;
+    std::int32_t wave_summary_killed;
+    WaveCompositionRowPacketState
+        wave_summary_rows[kWaveSummaryMaxCompositionRows];
 };
 
 struct SessionHelloPacket {
@@ -701,6 +764,93 @@ constexpr bool IsValidLuaModStreamPacketWireSize(
            received_bytes == LuaModStreamPacketWireSize(packet.payload_bytes);
 }
 
+struct LuaNetMessagePacket {
+    PacketHeader header;
+    std::uint64_t transport_participant_id;
+    std::uint64_t source_participant_id;
+    std::uint64_t source_session_nonce;
+    std::uint64_t target_participant_id;
+    std::uint64_t message_sequence;
+    std::uint32_t total_payload_bytes;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t payload_bytes;
+    std::uint8_t reserved[2] = {};
+    std::uint8_t payload[kLuaNetFragmentPayloadBytes];
+};
+
+constexpr std::size_t kLuaNetMessagePacketPrefixBytes =
+    offsetof(LuaNetMessagePacket, payload);
+
+constexpr std::size_t LuaNetMessagePacketWireSize(
+    std::uint16_t payload_bytes) {
+    return kLuaNetMessagePacketPrefixBytes + payload_bytes;
+}
+
+constexpr bool IsValidLuaNetMessagePacketWireSize(
+    std::size_t received_bytes,
+    const LuaNetMessagePacket& packet) {
+    const auto expected_fragment_count = static_cast<std::uint16_t>(
+        (packet.total_payload_bytes + kLuaNetFragmentPayloadBytes - 1u) /
+        kLuaNetFragmentPayloadBytes);
+    const auto fragment_offset =
+        static_cast<std::uint32_t>(packet.fragment_index) *
+        kLuaNetFragmentPayloadBytes;
+    const auto remaining_payload =
+        packet.total_payload_bytes > fragment_offset
+            ? packet.total_payload_bytes - fragment_offset
+            : 0u;
+    const auto expected_payload_bytes = static_cast<std::uint16_t>(
+        remaining_payload > kLuaNetFragmentPayloadBytes
+            ? kLuaNetFragmentPayloadBytes
+            : remaining_payload);
+    return packet.transport_participant_id != 0 &&
+           packet.source_participant_id != 0 &&
+           packet.source_session_nonce != 0 &&
+           packet.message_sequence != 0 &&
+           packet.message_sequence <= kLuaNetMaximumMessageSequence &&
+           packet.total_payload_bytes != 0 &&
+           packet.total_payload_bytes <=
+               kLuaNetFragmentPayloadBytes * kLuaNetMaxFragments &&
+           packet.fragment_count != 0 &&
+           packet.fragment_count <= kLuaNetMaxFragments &&
+           packet.fragment_count == expected_fragment_count &&
+           packet.fragment_index < packet.fragment_count &&
+           packet.payload_bytes == expected_payload_bytes &&
+           received_bytes == LuaNetMessagePacketWireSize(packet.payload_bytes);
+}
+
+enum LuaTimeControlPacketFlag : std::uint32_t {
+    LuaTimeControlPacketFlagStepFrames = 1u << 0,
+};
+
+struct LuaTimeControlPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t authority_session_nonce;
+    std::uint32_t run_nonce;
+    std::uint32_t revision;
+    std::uint32_t scale_units;
+    std::uint32_t flags;
+    std::uint64_t step_sequence;
+    std::uint32_t step_frames;
+};
+
+constexpr bool IsValidLuaTimeControlPacket(
+    const LuaTimeControlPacket& packet) {
+    return packet.authority_participant_id != 0 &&
+           packet.authority_session_nonce != 0 &&
+           packet.run_nonce != 0 && packet.revision != 0 &&
+           packet.scale_units <= kLuaTimeProtocolScaleUnitsPerOne &&
+           (packet.flags & ~LuaTimeControlPacketFlagStepFrames) == 0 &&
+           packet.step_sequence <= kLuaTimeProtocolMaximumStepSequence &&
+           packet.step_frames <= kLuaTimeProtocolMaximumStepFrames &&
+           ((packet.flags & LuaTimeControlPacketFlagStepFrames) != 0
+                ? packet.scale_units == 0 && packet.step_frames != 0 &&
+                    packet.step_sequence >= packet.step_frames
+                : packet.step_frames == 0);
+}
+
 struct LevelUpOfferPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -828,7 +978,13 @@ struct WorldActorSnapshotPacketState {
     std::uint8_t render_selection_byte;
     std::uint8_t render_variant_tertiary;
     std::uint8_t status_flags;
-    std::uint8_t presentation_reserved[2];
+    std::uint8_t lua_enemy_spawn_flags;
+    std::uint8_t presentation_reserved;
+    std::uint64_t lua_content_id;
+    float lua_spawn_hp;
+    float lua_spawn_chase_speed;
+    float lua_spawn_attack_speed;
+    float lua_spawn_scale;
     std::int32_t turn_undead_duration_ticks;
     float turn_undead_flee_heading;
     float turn_undead_activation_scalar;
@@ -1082,6 +1238,94 @@ struct LootPickupRequestPacket {
     std::uint8_t reserved[3] = {};
 };
 
+struct LuaItemGrantPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t target_participant_id;
+    std::uint64_t request_id;
+    std::uint64_t content_id;
+    std::uint8_t flags;
+    std::uint8_t reserved[7] = {};
+    std::uint8_t color_state[kParticipantVisualLinkColorBlockBytes] = {};
+};
+
+struct LuaRegisteredSpellCastPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t owner_participant_id;
+    std::uint64_t request_id;
+    std::uint64_t content_id;
+    std::uint64_t target_network_actor_id;
+    float origin_x;
+    float origin_y;
+    float aim_x;
+    float aim_y;
+    std::uint8_t flags = 0;
+    std::uint8_t reserved[7] = {};
+};
+
+struct LuaUiActionRequestPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint64_t request_id;
+    char mod_id[kLuaUiModIdPacketBytes] = {};
+    char surface_id[kLuaUiIdentifierPacketBytes] = {};
+    char action_id[kLuaUiIdentifierPacketBytes] = {};
+};
+
+struct LuaRegisteredSpellEffectPacketState {
+    std::uint64_t effect_id;
+    std::uint64_t cast_request_id;
+    std::uint64_t content_id;
+    float x;
+    float y;
+    float velocity_x;
+    float velocity_y;
+    float radius;
+    std::uint32_t age_ms;
+    std::uint32_t remaining_ms;
+    std::uint16_t data_size;
+    std::uint8_t key_size;
+    std::uint8_t flags = 0;
+    char key[kLuaRegisteredSpellEffectKeyBytes] = {};
+    std::uint8_t data[kLuaRegisteredSpellEffectDataBytes] = {};
+};
+
+struct LuaRegisteredSpellEffectSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t owner_participant_id;
+    std::uint32_t generation;
+    std::uint32_t run_nonce;
+    std::uint32_t scene_epoch;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t effect_count;
+    std::uint16_t effect_total_count;
+    std::uint8_t flags = 0;
+    std::uint8_t reserved[3] = {};
+    LuaRegisteredSpellEffectPacketState
+        effects[kLuaRegisteredSpellEffectStatesPerFragment];
+};
+
+constexpr std::size_t kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes =
+    offsetof(LuaRegisteredSpellEffectSnapshotPacket, effects);
+
+constexpr std::size_t LuaRegisteredSpellEffectSnapshotPacketWireSize(
+    std::uint16_t effect_count) {
+    return kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes +
+        static_cast<std::size_t>(effect_count) *
+            sizeof(LuaRegisteredSpellEffectPacketState);
+}
+
+constexpr bool IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint16_t effect_count) {
+    return effect_count <= kLuaRegisteredSpellEffectStatesPerFragment &&
+        received_bytes ==
+            LuaRegisteredSpellEffectSnapshotPacketWireSize(effect_count);
+}
+
 struct LootPickupResultPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1169,8 +1413,10 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 4520, "Unexpected state packet size");
-static_assert(sizeof(ParticipantFramePacket) == 298,
+static_assert(sizeof(StatePacket) == 4528, "Unexpected state packet size");
+static_assert(sizeof(WaveCompositionRowPacketState) == 12,
+              "Unexpected wave composition row packet size");
+static_assert(sizeof(ParticipantFramePacket) == 570,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");
@@ -1188,6 +1434,18 @@ static_assert(
     LuaModStreamPacketWireSize(kLuaModStreamFragmentPayloadBytes) ==
         sizeof(LuaModStreamPacket),
     "Full Lua mod stream fragment must consume the packet buffer exactly");
+static_assert(kLuaNetMessagePacketPrefixBytes == 64,
+              "Unexpected Lua net message packet prefix size");
+static_assert(sizeof(LuaNetMessagePacket) == 1088,
+              "Unexpected Lua net message packet size");
+static_assert(LuaNetMessagePacketWireSize(0) == 64,
+              "Empty Lua net message packet prefix size changed");
+static_assert(
+    LuaNetMessagePacketWireSize(kLuaNetFragmentPayloadBytes) ==
+        sizeof(LuaNetMessagePacket),
+    "Full Lua net fragment must consume the packet buffer exactly");
+static_assert(sizeof(LuaTimeControlPacket) == 56,
+              "Unexpected Lua time control packet size");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");
@@ -1199,8 +1457,8 @@ static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
 static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 304, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 1264, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 328, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 1032, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 112, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7200, "Unexpected loot snapshot packet size");
 static_assert(kLootSnapshotPacketPrefixBytes == 32,
@@ -1226,6 +1484,17 @@ static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88, "Unexpected parti
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");
+static_assert(sizeof(LuaItemGrantPacket) == 84, "Unexpected Lua item grant packet size");
+static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76,
+              "Unexpected Lua registered spell cast packet size");
+static_assert(sizeof(LuaUiActionRequestPacket) == 294,
+              "Unexpected Lua UI action request packet size");
+static_assert(sizeof(LuaRegisteredSpellEffectPacketState) == 248,
+              "Unexpected Lua registered spell effect state size");
+static_assert(kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes == 44,
+              "Unexpected Lua registered spell effect packet prefix size");
+static_assert(sizeof(LuaRegisteredSpellEffectSnapshotPacket) == 1036,
+              "Unexpected Lua registered spell effect snapshot packet size");
 static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

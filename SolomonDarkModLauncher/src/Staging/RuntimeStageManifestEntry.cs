@@ -13,7 +13,12 @@ internal sealed record RuntimeStageManifestEntry(
     string StageDataRootPath,
     string StageCacheRootPath,
     string StageTempRootPath,
+    bool HotReload,
+    string SourceModRootPath,
+    string? SourceEntryScriptPath,
     string? StageEntryScriptPath,
     string? StageEntryDllPath,
     IReadOnlyList<string> RequiredCapabilities,
-    IReadOnlyList<string> OptionalCapabilities);
+    IReadOnlyList<string> OptionalCapabilities,
+    IReadOnlyList<string> Provides,
+    IReadOnlyList<string> Requires);

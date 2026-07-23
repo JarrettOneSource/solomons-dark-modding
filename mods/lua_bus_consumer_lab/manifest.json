@@ -1,0 +1,19 @@
+{
+  "id": "sample.lua.bus_consumer_lab",
+  "name": "Lua Bus Consumer Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "requiredMods": [
+    "sample.lua.bus_provider_lab"
+  ],
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "bus.local.contracts"
+    ]
+  },
+  "requires": [
+    "sample.bus.echo.v1"
+  ]
+}

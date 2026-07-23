@@ -309,7 +309,7 @@ int LuaDrawSprite(lua_State* state) {
     if (sprite.rotated) {
         return luaL_error(
             state,
-            "%s does not support rotated stock bundle records",
+            "%s does not support rotated bundle records",
             kApiName);
     }
 

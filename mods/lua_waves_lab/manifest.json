@@ -1,0 +1,14 @@
+{
+  "id": "sample.lua.waves_lab",
+  "name": "Lua Waves Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "waves.read",
+      "waves.schedule.read"
+    ]
+  }
+}

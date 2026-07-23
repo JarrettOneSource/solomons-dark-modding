@@ -238,8 +238,27 @@ bool QueueReplicatedManualRunEnemyMaterialization(
 
     std::string error_message;
     std::uint64_t request_id = 0;
+    SDModLuaEnemySpawnConfig lua_config;
+    lua_config.content_id = authoritative_actor.lua_content_id;
+    lua_config.hp_valid =
+        (authoritative_actor.lua_enemy_spawn_flags &
+         multiplayer::LuaEnemySpawnSnapshotFlagHp) != 0;
+    lua_config.hp = authoritative_actor.lua_spawn_hp;
+    lua_config.chase_speed_valid =
+        (authoritative_actor.lua_enemy_spawn_flags &
+         multiplayer::LuaEnemySpawnSnapshotFlagChaseSpeed) != 0;
+    lua_config.chase_speed = authoritative_actor.lua_spawn_chase_speed;
+    lua_config.attack_speed_valid =
+        (authoritative_actor.lua_enemy_spawn_flags &
+         multiplayer::LuaEnemySpawnSnapshotFlagAttackSpeed) != 0;
+    lua_config.attack_speed = authoritative_actor.lua_spawn_attack_speed;
+    lua_config.scale_valid =
+        (authoritative_actor.lua_enemy_spawn_flags &
+         multiplayer::LuaEnemySpawnSnapshotFlagScale) != 0;
+    lua_config.scale = authoritative_actor.lua_spawn_scale;
     const bool queued = QueueRunLifecycleReplicatedEnemyCatchupSpawn(
         authoritative_actor.network_actor_id,
+        lua_config,
         static_cast<int>(authoritative_actor.native_type_id),
         authoritative_actor.position_x,
         authoritative_actor.position_y,
@@ -252,6 +271,7 @@ bool QueueReplicatedManualRunEnemyMaterialization(
             "world_snapshot: queued replicated manual run enemy materialization. network_actor_id=" +
                 std::to_string(authoritative_actor.network_actor_id) +
                 " request_id=" + std::to_string(request_id) +
+                " content_id=" + std::to_string(lua_config.content_id) +
                 " native_type=" + std::to_string(authoritative_actor.native_type_id) +
                 " pos=(" + std::to_string(authoritative_actor.position_x) + "," +
                 std::to_string(authoritative_actor.position_y) + ")");

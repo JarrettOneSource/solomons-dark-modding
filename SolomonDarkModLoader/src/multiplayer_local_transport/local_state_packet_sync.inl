@@ -450,6 +450,7 @@ void PopulateLocalParticipantFrameFields(
         static_cast<std::uint8_t>(ParticipantControllerKind::Native);
     packet->run_nonce = local.runtime.run_nonce;
     PopulateSharedGameplayPausePacketFields(runtime_state, packet);
+    PopulateLuaTimeControlPacketFields(packet);
     packet->participant_vitals_correction_ack_sequence =
         g_local_transport.last_applied_participant_vitals_correction_sequence;
     packet->level = local.runtime.level;
@@ -555,6 +556,7 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
         WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
     packet.region_index = local->runtime.scene_intent.region_index;
     packet.region_type_id = local->runtime.scene_intent.region_type_id;
+    PopulateAuthorityWaveSummary(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
 }

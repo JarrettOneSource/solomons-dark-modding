@@ -205,6 +205,66 @@ void MaybeQueueClientHostRunStart(
         " sequence=" + std::to_string(packet.header.sequence));
 }
 
+void MaybeQueueClientHostRegionFollow(
+    const ParticipantFramePacket& packet,
+    const ParticipantSceneIntent& scene_intent,
+    const TransportPeerEndpoint& from,
+    std::uint64_t now_ms) {
+    if (!IsLocalTransportClient() ||
+        !IsAuthoritativeHostParticipantPacket(packet, from) ||
+        packet.ready == 0 ||
+        scene_intent.kind == ParticipantSceneIntentKind::Run) {
+        return;
+    }
+
+    int target_region = -1;
+    if (scene_intent.kind == ParticipantSceneIntentKind::SharedHub) {
+        target_region = kClientHostSharedHubRegionIndex;
+    } else if (
+        scene_intent.kind == ParticipantSceneIntentKind::PrivateRegion &&
+        scene_intent.region_index >= 0 &&
+        scene_intent.region_index <= kClientHostMaximumPrivateRegionIndex) {
+        target_region = scene_intent.region_index;
+    }
+    if (target_region < 0) {
+        return;
+    }
+
+    SDModSceneState scene_state;
+    if (!TryGetSceneState(&scene_state) ||
+        !scene_state.valid ||
+        DoesLocalSceneMatchParticipantIntent(scene_intent) ||
+        IsLocalSceneAlreadyRun(scene_state) ||
+        scene_state.kind == "transition" ||
+        scene_state.name == "transition") {
+        return;
+    }
+
+    const auto last_request_ms =
+        g_local_transport.last_client_host_region_request_ms;
+    if (last_request_ms != 0 &&
+        now_ms < last_request_ms + kClientHostRegionFollowRetryMs) {
+        return;
+    }
+
+    std::string error_message;
+    g_local_transport.last_client_host_region_request_ms = now_ms;
+    if (!QueueGameplaySwitchRegion(target_region, &error_message)) {
+        Log(
+            "Multiplayer transport failed to follow host region intent. authority_participant_id=" +
+            std::to_string(packet.participant_id) +
+            " target_region=" + std::to_string(target_region) +
+            " error=" + error_message);
+        return;
+    }
+
+    Log(
+        "Multiplayer transport queued authenticated host region intent. authority_participant_id=" +
+        std::to_string(packet.participant_id) +
+        " target_region=" + std::to_string(target_region) +
+        " sequence=" + std::to_string(packet.header.sequence));
+}
+
 struct NormalizedParticipantFrameState {
     bool transform_valid = false;
     float movement_intent_x = 0.0f;

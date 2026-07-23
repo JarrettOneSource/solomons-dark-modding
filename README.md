@@ -29,7 +29,10 @@ Mods are discovered from `manifest.json`. Each mod may be:
 - **Native** — DLLs under `native/` loaded through `SDModPlugin_Initialize` / `SDModPlugin_Shutdown`.
 - **Hybrid** — any combination of the above.
 
-Sample mods: `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`, `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`, `lua_hud_showcase`, `lua_ui_sandbox_lab`.
+Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
+`wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`,
+`lua_hud_showcase`, `lua_camera_lab`, `lua_sprites_lab`, `lua_ui_sandbox_lab`,
+and the paired Lua bus labs.
 
 Website-distributed packages use the same root-level manifest and may contain
 data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
@@ -64,6 +67,16 @@ enable the same exact mods can therefore join over direct P2P with no website.
 The native multiplayer fingerprint still rejects any mod, loader, game-build,
 or runtime mismatch.
 
+The desktop launcher owns eight local save slots under
+`%LOCALAPPDATA%\SolomonDarkMultiplayerBeta\saves`. They never share the retail
+game's save directory. **Choose Save** selects, renames, opens, or explicitly
+imports a slot. The game always reads and writes the selected local slot.
+Cloud saves are backup snapshots, not a network filesystem: when the active
+Steam account is linked to an SDR website account, changed saves are uploaded
+after local writes settle and again when the game closes. The launcher stores
+no website password or Steam credential. Proton uses a staged directory mirror
+and copies it back to the selected local slot before the final backup.
+
 ## Runtime contract
 
 The launcher stages these files into `runtime/stage/.sdmod/`:
@@ -84,7 +97,7 @@ present. Provide a 32-bit Steamworks runtime at
 
 ## Loader features
 
-- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, immediate drawing/HUD, UI, input, debug, bots).
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, local storage/timers/bus, immediate drawing/HUD, runtime sprites, UI, input, debug, bots), generated editor stubs, opt-in source hot reload, and a bounded in-game exec console (Ctrl plus backtick).
 - Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
@@ -106,6 +119,22 @@ pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
 dotnet run --project ./tests/launcher-contracts/SolomonDarkModLauncher.ContractTests.csproj
 ```
 
+On a Linux or SteamOS compatibility host, run the Windows launcher contracts
+through each installed Proton generation with UMU:
+
+```bash
+SDMOD_UMU_RUN=/path/to/umu-run \
+SDMOD_PROTON_TEST_ROOT=/tmp/solomon-dark-proton-contracts \
+./scripts/Test-ProtonLauncherContracts.sh \
+    "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton10-34" \
+    "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1"
+```
+
+The runner owns isolated compatibility prefixes. It disables Xalia only for
+the headless contract process and uses Proton's in-prefix execution path so
+GE-Proton 11 does not leave UMU's Unix-target shim waiting after a console test
+has exited.
+
 ## Run
 
 CLI (defaults to `../SolomonDarkAbandonware` when present):
@@ -117,6 +146,7 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 ./dist/launcher/SolomonDarkModLauncher.exe stage
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
 ./dist/launcher/SolomonDarkModLauncher.exe launch
+./dist/launcher/SolomonDarkModLauncher.exe launch --savegames-root path\to\launcher-savegames
 ./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll
 ```
 
@@ -184,7 +214,12 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
+- `docs/lua-sprites.md` — mod-owned runtime atlases, bundle authoring, sandboxing, and limits.
+- `docs/lua-authoring.md` — generated LuaLS/EmmyLua stubs, opt-in entry-script hot reload, and the in-game exec console.
+- `docs/lua-rng.md` — authority-owned native run seeds and multiplayer run-nonce behavior.
+- `docs/lua-nav.md` — bounded address-free native grid and path-segment queries.
 - `docs/lua-event-filters.md` — synchronous owner-side damage rewrites, cancellation, ordering, and live acceptance.
+- `docs/reverse-engineering/game-timing-scale.md` — evidence that the timing global is a tick-frequency constant, not a safe speed control.
 - `docs/ui-binary-map.md` — recovered UI seams and coverage.
 - `docs/ui-engine-system-map.md` — higher-level UI engine architecture and hook targets.
 - `docs/ui-automation-inventory.md` — semantic `sd.ui` surface coverage and cutover map.

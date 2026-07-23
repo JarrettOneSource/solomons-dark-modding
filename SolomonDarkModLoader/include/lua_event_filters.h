@@ -50,6 +50,7 @@ inline constexpr std::size_t kLuaDropSelectorCount = 6;
 
 enum class LuaDropForcedKind : std::uint8_t {
     Stock = 0,
+    None,
     Orb,
     Gold,
     Item,

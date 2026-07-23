@@ -17,14 +17,16 @@ from verify_local_multiplayer_sync import (
     HOST_NAME,
     HOST_PIPE,
     disable_bots,
+    game_process_ids,
     launch_pair,
-    stop_games,
+    stop_game_processes,
     wait_for_remote,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "runtime" / "lua_runtime_contract.json"
+ACCEPTANCE_MOD_ID = "sample.lua.authoring_lab"
 
 REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "runtime": (
@@ -47,6 +49,47 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "get_revision",
         "is_authority",
     ),
+    "storage": ("get", "set", "delete", "clear", "snapshot"),
+    "timer": ("after", "every", "sequence", "cancel", "clear"),
+    "bus": ("publish", "subscribe", "unsubscribe", "has", "providers"),
+    "net": ("send", "broadcast", "on", "off", "get_limits"),
+    "time": ("get_scale", "get_state", "set_scale", "step"),
+    "rng": ("get_seed", "set_seed"),
+    "nav": ("get_grid", "test_segment"),
+    "scene": ("get_state", "switch_region"),
+    "waves": ("get_state", "get_schedule"),
+    "spells": (
+        "register",
+        "get",
+        "list",
+        "select",
+        "clear_selection",
+        "get_selection",
+        "cast",
+        "get_effects",
+    ),
+    "items": ("register", "get", "list", "grant"),
+    "enemies": ("register", "get", "list", "spawn"),
+    "ai": (
+        "register",
+        "get_state",
+        "list",
+        "set_target",
+        "set_move_goal",
+        "stop",
+        "clear",
+    ),
+    "audio": (
+        "play_sample",
+        "play_stream",
+        "stop",
+        "set_volume",
+        "get_state",
+        "clear",
+        "is_available",
+    ),
+    "camera": ("get_state", "set_focus", "clear_focus", "shake"),
+    "sprites": ("register", "unregister", "get", "list", "get_limits"),
     "draw": (
         "text",
         "rect",
@@ -88,6 +131,17 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "activate_element",
         "get_state",
         "perform",
+        "create_surface",
+        "create_panel",
+        "create_label",
+        "create_button",
+        "show",
+        "hide",
+        "destroy",
+        "set_text",
+        "set_enabled",
+        "focus",
+        "get_authored_state",
     ),
     "input": (
         "press_key",
@@ -220,7 +274,14 @@ check_call('runtime.get_multiplayer_state', sd.runtime.get_multiplayer_state, {{
 check_call('state.snapshot', sd.state.snapshot, {{'table'}})
 check_call('state.get_revision', sd.state.get_revision, {{'number'}})
 check_call('state.is_authority', sd.state.is_authority, {{'boolean'}})
+check_call('rng.get_seed', sd.rng.get_seed, {{'number', 'nil'}})
+check_call('nav.get_grid', sd.nav.get_grid, {{'table', 'nil'}})
 check_call('draw.get_limits', sd.draw.get_limits, {{'table'}})
+check_call('audio.is_available', sd.audio.is_available, {{'boolean'}})
+check_call('audio.get_state', sd.audio.get_state, {{'table'}})
+check_call('camera.get_state', sd.camera.get_state, {{'table'}})
+check_call('sprites.list', sd.sprites.list, {{'table'}})
+check_call('sprites.get_limits', sd.sprites.get_limits, {{'table'}})
 check_call('draw.get_viewport', sd.draw.get_viewport, {{'table', 'nil'}})
 check_call('draw.get_sprite_info', function()
   return sd.draw.get_sprite_info('Title', 9)
@@ -293,18 +354,32 @@ def base_result(*, launched_pair: bool, steam_friend_pair: bool) -> dict[str, An
 
 def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
     result = base_result(launched_pair=launch, steam_friend_pair=False)
-    if launch:
-        stop_games()
-        launch_pair(god_mode=True)
-        disable_bots()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+    launched_process_ids: list[int] = []
+    try:
+        if launch:
+            result["pair"] = launch_pair(
+                god_mode=True,
+                tile_windows=False,
+                kill_existing=False,
+                exact_mod_id=ACCEPTANCE_MOD_ID,
+            )
+            launched_process_ids.extend(game_process_ids(result["pair"]))
+            if len(set(launched_process_ids)) != 2:
+                raise RuntimeError(
+                    "local pair did not report two exact process IDs: "
+                    f"{launched_process_ids}"
+                )
+            disable_bots()
+            wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
+            wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
 
-    validate_peer_results(
-        result,
-        run_all(clients, build_probe(), timeout=12.0),
-    )
-    return result
+        validate_peer_results(
+            result,
+            run_all(clients, build_probe(), timeout=12.0),
+        )
+        return result
+    finally:
+        stop_game_processes(launched_process_ids)
 
 
 def run_steam_friend_pair() -> dict[str, Any]:
@@ -373,9 +448,6 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - verifier reports structured failure.
         result["error"] = str(exc)
         return_code = 1
-    finally:
-        if args.launch_pair:
-            stop_games()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

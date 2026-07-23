@@ -1,0 +1,19 @@
+{
+  "id": "sample.lua.ai_boss_lab",
+  "name": "Lua AI Boss Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "enemies.register",
+      "enemies.read",
+      "enemies.spawn.authority",
+      "ai.register",
+      "ai.read",
+      "ai.control.authority",
+      "nav.read"
+    ]
+  }
+}

@@ -11,6 +11,11 @@ from pathlib import Path
 from static_multiplayer_contract_support import read_source_unit
 
 ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE_ROOT = (
+    ROOT.parent.parent
+    if ROOT.parent.name == ".codex-worktrees"
+    else ROOT.parent
+)
 TOOLS_DIR = ROOT / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
@@ -212,7 +217,7 @@ DISPATCH_PUMP_LOOP = (
 BINARY_LAYOUT = ROOT / "config/binary-layout.ini"
 STAGED_BINARY_LAYOUT = ROOT / "runtime/stage/.sdmod/config/binary-layout.ini"
 STAGED_BINARY = ROOT / "runtime/stage/SolomonDark.exe"
-ABANDONWARE_BINARY = ROOT.parent / "SolomonDarkAbandonware/SolomonDark.exe"
+ABANDONWARE_BINARY = WORKSPACE_ROOT / "SolomonDarkAbandonware/SolomonDark.exe"
 ALLY_HP_PROGRESS_GHIDRA = ROOT / "runtime/ghidra_ally_hp_progression_paths.txt"
 ALLY_HP_RECOMPUTE_GHIDRA = ROOT / "runtime/ghidra_ally_hp_recompute_candidate.txt"
 PRIMARY_SPELL_BUILDER_GHIDRA = ROOT / "runtime/ghidra_primary_spell_builder_resource_paths.txt"

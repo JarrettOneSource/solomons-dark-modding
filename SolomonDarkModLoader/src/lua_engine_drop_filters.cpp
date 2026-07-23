@@ -36,6 +36,8 @@ const char* DropKindName(LuaDropForcedKind kind) {
     switch (kind) {
     case LuaDropForcedKind::Stock:
         return "stock";
+    case LuaDropForcedKind::None:
+        return "none";
     case LuaDropForcedKind::Orb:
         return "orb";
     case LuaDropForcedKind::Gold:
@@ -56,6 +58,8 @@ bool TryParseDropKind(std::string_view name, LuaDropForcedKind* kind) {
     }
     if (name == "stock") {
         *kind = LuaDropForcedKind::Stock;
+    } else if (name == "none") {
+        *kind = LuaDropForcedKind::None;
     } else if (name == "orb") {
         *kind = LuaDropForcedKind::Orb;
     } else if (name == "gold") {
@@ -205,7 +209,7 @@ bool ParseDropRollFilterTable(
         if (kind_name == nullptr || !TryParseDropKind(kind_name, &kind)) {
             if (error_message != nullptr) {
                 *error_message =
-                    "kind must be stock, orb, gold, item, powerup, or potion";
+                    "kind must be stock, none, orb, gold, item, powerup, or potion";
             }
             lua_pop(state, 1);
             return false;

@@ -1,0 +1,77 @@
+name: Lua authoring contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  generated-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install image test dependency
+        run: python -m pip install Pillow==11.3.0
+      - name: Verify generated Lua editor API
+        run: python tools/generate_lua_api_stubs.py --check
+      - name: Test Lua editor API generator
+        run: python -m unittest tests.test_lua_api_stub_generator
+      - name: Test Lua authoring live verifier
+        run: python -m unittest tests.test_lua_authoring_verifier
+      - name: Test Lua multiplayer authoring verifier
+        run: python -m unittest tests.test_lua_authoring_multiplayer_verifier
+      - name: Test Lua UI authoring verifier
+        run: python -m unittest tests.test_lua_ui_authoring_verifier
+      - name: Test Lua spell picker verifier
+        run: python -m unittest tests.test_lua_spells_verifier
+      - name: Test Lua multiplayer spell verifier
+        run: python -m unittest tests.test_lua_spells_multiplayer_verifier
+      - name: Test launcher/native protocol alignment
+        run: python -m unittest tests.test_protocol_version_alignment
+      - name: Test isolated local multiplayer cleanup
+        run: python -m unittest tests.test_local_multiplayer_process_isolation
+      - name: Test Lua multiplayer net verifier
+        run: python -m unittest tests.test_lua_net_multiplayer_verifier
+      - name: Test Lua multiplayer time verifier
+        run: python -m unittest tests.test_lua_time_multiplayer_verifier
+      - name: Test Lua multiplayer UI verifier
+        run: python -m unittest tests.test_lua_ui_multiplayer_verifier
+      - name: Test Lua multiplayer item verifier
+        run: python -m unittest tests.test_lua_items_multiplayer_verifier
+      - name: Test Lua multiplayer enemy verifier
+        run: python -m unittest tests.test_lua_enemies_multiplayer_verifier
+      - name: Test Lua multiplayer AI verifier
+        run: python -m unittest tests.test_lua_ai_multiplayer_verifier
+      - name: Test Lua multiplayer waves verifier
+        run: python -m unittest tests.test_lua_waves_multiplayer_verifier
+      - name: Test Lua multiplayer RNG verifier
+        run: python -m unittest tests.test_lua_rng_multiplayer_verifier
+      - name: Test Lua multiplayer scene verifier
+        run: python -m unittest tests.test_lua_scene_multiplayer_verifier
+      - name: Test Lua multiplayer navigation verifier
+        run: python -m unittest tests.test_lua_nav_multiplayer_verifier
+      - name: Test Lua multiplayer camera verifier
+        run: python -m unittest tests.test_lua_camera_multiplayer_verifier
+      - name: Test Lua multiplayer sprite verifier
+        run: python -m unittest tests.test_lua_sprites_multiplayer_verifier
+      - name: Test Lua multiplayer storage verifier
+        run: python -m unittest tests.test_lua_storage_multiplayer_verifier
+      - name: Test Lua multiplayer timer verifier
+        run: python -m unittest tests.test_lua_timer_multiplayer_verifier
+      - name: Test Lua multiplayer audio verifier
+        run: python -m unittest tests.test_lua_audio_multiplayer_verifier
+      - name: Test Lua multiplayer bus verifier
+        run: python -m unittest tests.test_lua_bus_multiplayer_verifier
+      - name: Test Lua multiplayer draw verifier
+        run: python -m unittest tests.test_lua_draw_multiplayer_verifier
+      - name: Test Lua multiplayer filter verifier
+        run: python -m unittest tests.test_lua_filters_multiplayer_verifier
+      - name: Verify all static Lua seam contracts
+        run: python tests/re/run_static_re_tests.py --lua-only

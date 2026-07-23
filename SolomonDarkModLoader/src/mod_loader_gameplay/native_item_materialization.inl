@@ -2,6 +2,43 @@ constexpr std::size_t kNativeItemDropCarrierSize = 0x150;
 constexpr std::size_t kNativeItemDropPayloadOffset = 0x14C;
 constexpr int kNativeItemRecipeCatalogMaxEntries = 16384;
 
+bool TryReadNativeItemRecipeNameEquals(
+    uintptr_t recipe_address,
+    std::string_view expected_name) {
+    if (recipe_address == 0 ||
+        expected_name.empty() ||
+        expected_name.size() > 128 ||
+        kItemRecipeDefinitionNameOffset == 0 ||
+        kNativeStringDataOffset == 0 ||
+        kNativeStringLengthOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto string_address = recipe_address + kItemRecipeDefinitionNameOffset;
+    uintptr_t text_address = 0;
+    std::int32_t text_length = 0;
+    if (!memory.TryReadField(
+            string_address,
+            kNativeStringDataOffset,
+            &text_address) ||
+        !memory.TryReadField(
+            string_address,
+            kNativeStringLengthOffset,
+            &text_length) ||
+        text_address == 0 ||
+        text_length != static_cast<std::int32_t>(expected_name.size())) {
+        return false;
+    }
+
+    std::string actual_name;
+    return memory.TryReadCString(
+               text_address,
+               static_cast<std::size_t>(text_length) + 1,
+               &actual_name) &&
+           actual_name == expected_name;
+}
+
 bool CallItemRecipeCloneSafe(
     uintptr_t clone_address,
     uintptr_t recipe_address,
@@ -159,6 +196,98 @@ bool TryResolveNativeItemRecipe(
             " was not present in the stock catalog.";
     }
     return false;
+}
+
+bool TryResolveNativeItemRecipeByNameInternal(
+    std::string_view recipe_name,
+    std::uint32_t expected_item_type_id,
+    std::uint32_t* recipe_uid,
+    std::string* error_message) {
+    if (recipe_uid != nullptr) {
+        *recipe_uid = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (recipe_uid == nullptr ||
+        recipe_name.empty() ||
+        recipe_name.size() > 128 ||
+        expected_item_type_id == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Native item recipe name lookup requires exact name and type identity.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto count_address = memory.ResolveGameAddressOrZero(kItemRecipeCountGlobal);
+    const auto entries_address = memory.ResolveGameAddressOrZero(kItemRecipeEntriesGlobal);
+    std::int32_t recipe_count = 0;
+    uintptr_t recipe_entries = 0;
+    if (count_address == 0 ||
+        entries_address == 0 ||
+        kItemRecipeDefinitionUidOffset == 0 ||
+        kItemRecipeDefinitionNameOffset == 0 ||
+        kItemRecipeDefinitionTypeIdOffset == 0 ||
+        !memory.TryReadValue(count_address, &recipe_count) ||
+        !memory.TryReadValue(entries_address, &recipe_entries) ||
+        recipe_count <= 0 ||
+        recipe_count > kNativeItemRecipeCatalogMaxEntries ||
+        recipe_entries == 0 ||
+        !memory.IsReadableRange(
+            recipe_entries,
+            static_cast<std::size_t>(recipe_count) * sizeof(std::uint32_t))) {
+        if (error_message != nullptr) {
+            *error_message = "The stock item recipe catalog is unavailable.";
+        }
+        return false;
+    }
+
+    std::uint32_t matched_uid = 0;
+    for (std::int32_t index = 0; index < recipe_count; ++index) {
+        std::uint32_t raw_recipe_address = 0;
+        if (!memory.TryReadValue(
+                recipe_entries + static_cast<std::size_t>(index) * sizeof(std::uint32_t),
+                &raw_recipe_address) ||
+            raw_recipe_address == 0) {
+            continue;
+        }
+        const auto candidate = static_cast<uintptr_t>(raw_recipe_address);
+        std::uint32_t candidate_type_id = 0;
+        std::uint32_t candidate_uid = 0;
+        if (!memory.TryReadField(
+                candidate,
+                kItemRecipeDefinitionTypeIdOffset,
+                &candidate_type_id) ||
+            candidate_type_id != expected_item_type_id ||
+            !TryReadNativeItemRecipeNameEquals(candidate, recipe_name) ||
+            !memory.TryReadField(
+                candidate,
+                kItemRecipeDefinitionUidOffset,
+                &candidate_uid) ||
+            candidate_uid == 0) {
+            continue;
+        }
+        if (matched_uid != 0) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "The native item recipe name/type identity is ambiguous: " +
+                    std::string(recipe_name) + ".";
+            }
+            return false;
+        }
+        matched_uid = candidate_uid;
+    }
+
+    if (matched_uid == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The native item recipe is not loaded: " + std::string(recipe_name) + ".";
+        }
+        return false;
+    }
+    *recipe_uid = matched_uid;
+    return true;
 }
 
 void DestroyUnownedNativeItem(uintptr_t item_address, std::string_view reason) {

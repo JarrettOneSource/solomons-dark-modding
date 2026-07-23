@@ -53,6 +53,8 @@ internal static class LauncherJsonConsole
                     RuntimeKind = mod.Manifest.RuntimeKind,
                     OverlayCount = mod.Manifest.Overlays.Count,
                     RequiredMods = mod.Manifest.RequiredMods.ToArray(),
+                    Provides = mod.Manifest.Provides.ToArray(),
+                    Requires = mod.Manifest.Requires.ToArray(),
                     RootPath = mod.RootPath,
                     ManifestPath = mod.ManifestPath,
                     Enabled = execution.Catalog.IsEnabled(mod)
@@ -131,6 +133,9 @@ internal static class LauncherJsonConsole
                     StartupCode = execution.LaunchedGame.StartupStatus.Code,
                     StartupMessage = execution.LaunchedGame.StartupStatus.Message,
                     StartupLogPath = execution.LaunchedGame.StartupStatus.LogPath,
+                    SavegamesRootPath = execution.LaunchedGame.SavegamesRootPath,
+                    SavegamesUsesDirectoryMirror =
+                        execution.LaunchedGame.SavegamesUsesDirectoryMirror,
                     MultiplayerSession = execution.LaunchedGame.MultiplayerSessionStatus is { } session
                         ? new LauncherJsonMultiplayerSession
                         {
@@ -306,6 +311,8 @@ internal static class LauncherJsonConsole
         public required string RuntimeKind { get; init; }
         public required int OverlayCount { get; init; }
         public required IReadOnlyList<string> RequiredMods { get; init; }
+        public required IReadOnlyList<string> Provides { get; init; }
+        public required IReadOnlyList<string> Requires { get; init; }
         public required string RootPath { get; init; }
         public required string ManifestPath { get; init; }
         public required bool Enabled { get; init; }
@@ -338,6 +345,8 @@ internal static class LauncherJsonConsole
         public required string StartupCode { get; init; }
         public required string StartupMessage { get; init; }
         public required string? StartupLogPath { get; init; }
+        public required string? SavegamesRootPath { get; init; }
+        public required bool SavegamesUsesDirectoryMirror { get; init; }
         public required LauncherJsonMultiplayerSession? MultiplayerSession { get; init; }
     }
 

@@ -1,0 +1,18 @@
+{
+  "id": "sample.lua.spells_registry_lab",
+  "name": "Lua Spells Registry Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "spells.register",
+      "spells.read",
+      "spells.cast.owner",
+      "spells.select.local",
+      "ui.authoring.native",
+      "ui.action.presentation"
+    ]
+  }
+}

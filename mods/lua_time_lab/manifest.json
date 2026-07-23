@@ -1,0 +1,14 @@
+{
+  "id": "sample.lua.time_lab",
+  "name": "Lua Shared Time Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "time.shared.scale",
+      "time.shared.frame_step"
+    ]
+  }
+}

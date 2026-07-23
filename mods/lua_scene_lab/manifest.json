@@ -1,0 +1,14 @@
+{
+  "id": "sample.lua.scene_lab",
+  "name": "Lua Scene Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "scene.read",
+      "scene.switch.authority"
+    ]
+  }
+}

@@ -23,7 +23,9 @@ param(
     [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
     [switch]$NoKill,
-    [switch]$AllowFocusSteal
+    [switch]$AllowFocusSteal,
+    [string]$ProcessIdOutputPath = "",
+    [string]$ExactModIds = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -50,6 +52,40 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+
+function Write-LaunchedProcessIds {
+    param(
+        [object]$HostResult = $null,
+        [object]$ClientResult = $null,
+        [object]$ThirdResult = $null
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
+        return
+    }
+
+    $payload = [pscustomobject]@{
+        hostProcessId = if ($null -ne $HostResult) {
+            [int]$HostResult.launch.processId
+        } else {
+            $null
+        }
+        clientProcessId = if ($null -ne $ClientResult) {
+            [int]$ClientResult.launch.processId
+        } else {
+            $null
+        }
+        thirdProcessId = if ($null -ne $ThirdResult) {
+            [int]$ThirdResult.launch.processId
+        } else {
+            $null
+        }
+    }
+    [System.IO.File]::WriteAllText(
+        $ProcessIdOutputPath,
+        ($payload | ConvertTo-Json -Compress)
+    )
+}
 
 $resolvedTestSurvivalBoneyardOverride = ""
 if (-not [string]::IsNullOrWhiteSpace($TestSurvivalBoneyardOverride)) {
@@ -845,6 +881,24 @@ $hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or 
 $clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)
 $thirdWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveThirdPreset) -or ($null -ne $thirdSelection)
 
+if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
+    $exactModIdList = $ExactModIds.Split(',')
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance "local-mp-host" `
+        -ModIds $exactModIdList
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance "local-mp-client" `
+        -ModIds $exactModIdList
+    if ($EnableThird) {
+        Set-ExactMultiplayerModState `
+            -RootPath $root `
+            -Instance "local-mp-third" `
+            -ModIds $exactModIdList
+    }
+}
+
 $hostResult = Start-MultiplayerInstance `
     -Instance "local-mp-host" `
     -InstanceLaunchPreset $hostLaunchPreset `
@@ -854,6 +908,8 @@ $hostResult = Start-MultiplayerInstance `
     -ParticipantId $HostParticipantId `
     -PlayerName $HostName `
     -RemotePlayerName $ClientName
+
+Write-LaunchedProcessIds -HostResult $hostResult
 
 if ($GodMode) {
     Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" | Out-Null
@@ -881,6 +937,10 @@ $clientResult = Start-MultiplayerInstance `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName `
     -RemotePlayerName $HostName
+
+Write-LaunchedProcessIds `
+    -HostResult $hostResult `
+    -ClientResult $clientResult
 
 if ($GodMode) {
     Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client" | Out-Null
@@ -910,6 +970,11 @@ if ($EnableThird) {
         -ParticipantId $ThirdParticipantId `
         -PlayerName $ThirdName `
         -RemotePlayerName $HostName
+
+    Write-LaunchedProcessIds `
+        -HostResult $hostResult `
+        -ClientResult $clientResult `
+        -ThirdResult $thirdResult
 
     if ($GodMode) {
         Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third" | Out-Null

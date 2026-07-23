@@ -125,6 +125,18 @@ bool CloneNativeItemFromRecipe(
     bool wearable_color_state_valid,
     uintptr_t* item_address,
     std::string* error_message);
+enum class LuaItemGrantOutcome;
+LuaItemGrantOutcome ExecuteLuaItemGrantNow(
+    const PendingLuaItemGrant& request,
+    std::string* error_message);
+bool QueueLuaItemGrantToLocalInventoryInternal(
+    std::uint64_t authority_participant_id,
+    std::uint64_t request_id,
+    std::uint64_t content_id,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        color_state,
+    bool color_state_valid,
+    std::string* error_message);
 bool SpawnNativeItemDropFromRecipe(
     const multiplayer::LootDropSnapshot& drop,
     uintptr_t* carrier_address,

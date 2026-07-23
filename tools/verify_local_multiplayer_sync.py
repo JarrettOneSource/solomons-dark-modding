@@ -8,11 +8,15 @@ import base64
 import importlib.util
 import json
 import os
+import queue
+import re
 import select
 import subprocess
 import sys
 import threading
 import time
+import uuid
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +100,79 @@ def stop_games() -> None:
     )
 
 
+def game_process_ids(result: dict[str, object]) -> list[int]:
+    """Return the exact game process IDs reported by a launcher result."""
+    process_ids: set[int] = set()
+    for key in (
+        "hostProcessId",
+        "clientProcessId",
+        "thirdProcessId",
+        "processId",
+    ):
+        value = result.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            process_id = value
+        elif isinstance(value, str) and value.isdigit():
+            process_id = int(value)
+        else:
+            continue
+        if process_id > 0:
+            process_ids.add(process_id)
+    return sorted(process_ids)
+
+
+def stop_game_processes(process_ids: Iterable[int]) -> None:
+    """Stop only the reported Solomon Dark processes, never every game process."""
+    exact_process_ids = sorted(
+        {
+            process_id
+            for process_id in process_ids
+            if isinstance(process_id, int)
+            and not isinstance(process_id, bool)
+            and process_id > 0
+        }
+    )
+    if not exact_process_ids:
+        return
+
+    joined_process_ids = ",".join(str(process_id) for process_id in exact_process_ids)
+    subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            (
+                f"$ids = @({joined_process_ids}); "
+                "Get-Process -Id $ids -ErrorAction SilentlyContinue | "
+                "Where-Object { $_.ProcessName -like 'SolomonDark*' } | "
+                "Stop-Process -Force"
+            ),
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def _read_process_id_ledger(path: Path | None) -> dict[str, object]:
+    if path is None or not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _new_process_id_ledger() -> Path:
+    runtime_root = ROOT / "runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    return runtime_root / f".local-mp-processes-{uuid.uuid4().hex}.json"
+
+
 def extract_json(buffer: str) -> dict[str, object] | None:
     start = buffer.find("{")
     if start < 0:
@@ -109,6 +186,39 @@ def extract_json(buffer: str) -> dict[str, object] | None:
     if not isinstance(value, dict):
         raise VerifyFailure(f"launcher returned non-object JSON: {value!r}")
     return value
+
+
+def _serialize_exact_mod_ids(
+    *,
+    exact_mod_id: str | None,
+    exact_mod_ids: Iterable[str] | None,
+) -> str | None:
+    if exact_mod_id is not None and exact_mod_ids is not None:
+        raise ValueError(
+            "exact_mod_id and exact_mod_ids are mutually exclusive"
+        )
+    if exact_mod_ids is None:
+        if exact_mod_id is None:
+            return None
+        values = [exact_mod_id]
+    else:
+        if isinstance(exact_mod_ids, str):
+            raise TypeError("exact_mod_ids must be an iterable of mod IDs")
+        values = list(exact_mod_ids)
+        if not values:
+            raise ValueError("exact_mod_ids must not be empty")
+
+    seen: set[str] = set()
+    for value in values:
+        if (
+            not isinstance(value, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value) is None
+        ):
+            raise ValueError(f"invalid exact mod id: {value!r}")
+        if value in seen:
+            raise ValueError(f"duplicate exact mod id: {value}")
+        seen.add(value)
+    return ",".join(values)
 
 
 def launch_pair(
@@ -125,7 +235,14 @@ def launch_pair(
     third_player: bool = False,
     third_preset: str | None = None,
     allow_focus_steal: bool = False,
+    kill_existing: bool = True,
+    exact_mod_id: str | None = None,
+    exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
+    serialized_exact_mod_ids = _serialize_exact_mod_ids(
+        exact_mod_id=exact_mod_id,
+        exact_mod_ids=exact_mod_ids,
+    )
     args = [
         "powershell.exe",
         "-NoProfile",
@@ -177,6 +294,18 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
+    if serialized_exact_mod_ids is not None:
+        args.extend(["-ExactModIds", serialized_exact_mod_ids])
+    process_id_ledger: Path | None = None
+    if not kill_existing:
+        args.append("-NoKill")
+        process_id_ledger = _new_process_id_ledger()
+        args.extend(
+            [
+                "-ProcessIdOutputPath",
+                path_for_powershell(process_id_ledger),
+            ]
+        )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -233,59 +362,75 @@ def launch_pair(
     buffer = ""
     last_hub_probe = 0.0
     hub_ready_since: float | None = None
-    while time.monotonic() < deadline:
-        ready, _, _ = select.select([process.stdout], [], [], 0.1)
-        if ready:
-            line = process.stdout.readline()
-            if line:
-                buffer += line
-                parsed = extract_json(buffer)
-                if parsed is not None:
-                    terminate_launcher()
-                    return parsed
-            elif process.poll() is not None:
+    launch_completed = False
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    buffer += line
+                    parsed = extract_json(buffer)
+                    if parsed is not None:
+                        launch_completed = True
+                        return parsed
+                elif process.poll() is not None:
+                    break
+
+            if process.poll() is not None:
+                remainder = process.stdout.read()
+                if remainder:
+                    buffer += remainder
+                    parsed = extract_json(buffer)
+                    if parsed is not None:
+                        launch_completed = True
+                        return parsed
+                if process.returncode != 0:
+                    raise VerifyFailure(
+                        f"pair launcher failed ({process.returncode}):\n{buffer}"
+                    )
                 break
 
-        if process.poll() is not None:
-            remainder = process.stdout.read()
-            if remainder:
-                buffer += remainder
-                parsed = extract_json(buffer)
-                if parsed is not None:
-                    return parsed
-            if process.returncode != 0:
-                raise VerifyFailure(f"pair launcher failed ({process.returncode}):\n{buffer}")
-            break
+            now = time.monotonic()
+            if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
+                last_hub_probe = now
+                if (
+                    query_scene_for_launch(HOST_PIPE) == "hub"
+                    and query_scene_for_launch(CLIENT_PIPE) == "hub"
+                    and (
+                        not third_player
+                        or query_scene_for_launch(THIRD_PIPE) == "hub"
+                    )
+                ):
+                    if hub_ready_since is None:
+                        hub_ready_since = now
+                    elif now - hub_ready_since >= 1.0:
+                        fallback_result = {
+                            "fallbackReady": True,
+                            "hostLuaPipe": HOST_PIPE,
+                            "clientLuaPipe": CLIENT_PIPE,
+                            "thirdLuaPipe": THIRD_PIPE if third_player else None,
+                            "hostName": HOST_NAME,
+                            "clientName": CLIENT_NAME,
+                            "thirdName": THIRD_NAME if third_player else None,
+                        }
+                        fallback_result.update(
+                            _read_process_id_ledger(process_id_ledger)
+                        )
+                        launch_completed = True
+                        return fallback_result
+                else:
+                    hub_ready_since = None
 
-        now = time.monotonic()
-        if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
-            last_hub_probe = now
-            if (
-                query_scene_for_launch(HOST_PIPE) == "hub"
-                and query_scene_for_launch(CLIENT_PIPE) == "hub"
-                and (
-                    not third_player
-                    or query_scene_for_launch(THIRD_PIPE) == "hub"
-                )
-            ):
-                if hub_ready_since is None:
-                    hub_ready_since = now
-                elif now - hub_ready_since >= 1.0:
-                    terminate_launcher()
-                    return {
-                        "fallbackReady": True,
-                        "hostLuaPipe": HOST_PIPE,
-                        "clientLuaPipe": CLIENT_PIPE,
-                        "thirdLuaPipe": THIRD_PIPE if third_player else None,
-                        "hostName": HOST_NAME,
-                        "clientName": CLIENT_NAME,
-                        "thirdName": THIRD_NAME if third_player else None,
-                    }
-            else:
-                hub_ready_since = None
-
-    terminate_launcher()
-    raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
+        raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
+    finally:
+        terminate_launcher()
+        if not launch_completed:
+            stop_game_processes(
+                game_process_ids(_read_process_id_ledger(process_id_ledger))
+            )
+        if process_id_ledger is not None:
+            process_id_ledger.unlink(missing_ok=True)
 
 
 def launch_trio(
@@ -328,6 +473,8 @@ def launch_additional_client(
     test_survival_boneyard_override: Path | None = None,
     test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
+    exact_mod_id: str | None = None,
+    exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
     """Launch one client without stopping or relaunching an existing session."""
     args = [
@@ -352,6 +499,12 @@ def launch_additional_client(
     ]
     if god_mode:
         args.append("-GodMode")
+    serialized_exact_mod_ids = _serialize_exact_mod_ids(
+        exact_mod_id=exact_mod_id,
+        exact_mod_ids=exact_mod_ids,
+    )
+    if serialized_exact_mod_ids is not None:
+        args.extend(["-ExactModIds", serialized_exact_mod_ids])
     if test_survival_boneyard_override is not None:
         args.extend(
             [
@@ -368,6 +521,13 @@ def launch_additional_client(
                 path_for_powershell(test_wave_override),
             ]
         )
+    process_id_ledger = _new_process_id_ledger()
+    args.extend(
+        [
+            "-ProcessIdOutputPath",
+            path_for_powershell(process_id_ledger),
+        ]
+    )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -379,6 +539,7 @@ def launch_additional_client(
     assert process.stdout is not None
     buffer = ""
     deadline = time.monotonic() + 75.0
+    launch_completed = False
     try:
         while time.monotonic() < deadline:
             ready, _, _ = select.select([process.stdout], [], [], 0.1)
@@ -392,6 +553,7 @@ def launch_additional_client(
                             raise VerifyFailure(
                                 f"additional-client launcher reported failure: {parsed}"
                             )
+                        launch_completed = True
                         return parsed
                 elif process.poll() is not None:
                     break
@@ -401,6 +563,7 @@ def launch_additional_client(
                     buffer += remainder
                 parsed = extract_json(buffer)
                 if parsed is not None and parsed.get("success"):
+                    launch_completed = True
                     return parsed
                 break
         raise VerifyFailure(
@@ -413,6 +576,11 @@ def launch_additional_client(
                 process.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
                 process.kill()
+        if not launch_completed:
+            stop_game_processes(
+                game_process_ids(_read_process_id_ledger(process_id_ledger))
+            )
+        process_id_ledger.unlink(missing_ok=True)
 
 
 CREATE_ELEMENT_IDS = {
@@ -623,6 +791,10 @@ _format_lua_response = _lua_exec_module._format_response
 
 _LUA_DAEMONS: dict[str, subprocess.Popen] = {}
 _LUA_DAEMON_LOCKS: dict[str, threading.Lock] = {}
+_LUA_DAEMON_READ_QUEUES: dict[
+    str,
+    queue.Queue[tuple[str, Exception | None]],
+] = {}
 _LUA_DAEMON_REGISTRY_LOCK = threading.Lock()
 
 
@@ -638,7 +810,7 @@ def _lua_daemon_lock(pipe_name: str) -> threading.Lock:
 def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
     env = os.environ.copy()
     env["SDMOD_LUA_EXEC_PIPE_NAME"] = pipe_name
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         [
             "powershell.exe",
             "-NoProfile",
@@ -657,6 +829,33 @@ def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
         encoding="ascii",
         bufsize=1,
     )
+    if os.name == "nt":
+        _start_lua_daemon_reader(pipe_name, proc)
+    return proc
+
+
+def _start_lua_daemon_reader(
+    pipe_name: str,
+    proc: subprocess.Popen,
+) -> None:
+    output: queue.Queue[tuple[str, Exception | None]] = queue.Queue()
+    _LUA_DAEMON_READ_QUEUES[pipe_name] = output
+
+    def read_lines() -> None:
+        if proc.stdout is None:
+            output.put(("", None))
+            return
+        while True:
+            try:
+                line = proc.stdout.readline()
+            except Exception as error:  # noqa: BLE001 - return reader failure to caller.
+                output.put(("", error))
+                return
+            output.put((line, None))
+            if not line:
+                return
+
+    threading.Thread(target=read_lines, daemon=True).start()
 
 
 def _get_lua_daemon(pipe_name: str) -> subprocess.Popen:
@@ -669,6 +868,7 @@ def _get_lua_daemon(pipe_name: str) -> subprocess.Popen:
 
 def _kill_lua_daemon(pipe_name: str) -> None:
     proc = _LUA_DAEMONS.pop(pipe_name, None)
+    _LUA_DAEMON_READ_QUEUES.pop(pipe_name, None)
     if proc is None:
         return
     for closer in (
@@ -695,6 +895,29 @@ def _lua_daemon_exit_detail(proc: subprocess.Popen) -> str:
         return ""
 
 
+def _read_lua_daemon_line(
+    pipe_name: str,
+    proc: subprocess.Popen,
+    timeout: float,
+) -> tuple[bool, str]:
+    if proc.stdout is None:
+        return True, ""
+    if os.name != "nt":
+        ready, _, _ = select.select([proc.stdout], [], [], timeout)
+        return (True, proc.stdout.readline()) if ready else (False, "")
+
+    output = _LUA_DAEMON_READ_QUEUES.get(pipe_name)
+    if output is None:
+        raise ValueError(f"missing Windows Lua daemon reader for {pipe_name}")
+    try:
+        line, error = output.get(timeout=timeout)
+    except queue.Empty:
+        return False, ""
+    if error is not None:
+        raise error
+    return True, line
+
+
 @atexit.register
 def _shutdown_lua_daemons() -> None:
     for pipe_name in list(_LUA_DAEMONS):
@@ -716,7 +939,13 @@ def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
                 f"lua bridge daemon write failed for {pipe_name}: {exc}"
             ) from exc
 
-        ready, _, _ = select.select([proc.stdout], [], [], deadline)
+        try:
+            ready, line = _read_lua_daemon_line(pipe_name, proc, deadline)
+        except (OSError, ValueError) as exc:
+            _kill_lua_daemon(pipe_name)
+            raise VerifyFailure(
+                f"lua bridge daemon read failed for {pipe_name}: {exc}"
+            ) from exc
         if not ready:
             exit_detail = _lua_daemon_exit_detail(proc)
             _kill_lua_daemon(pipe_name)
@@ -727,7 +956,6 @@ def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
             raise VerifyFailure(
                 f"lua bridge daemon timed out after {deadline:.1f}s for {pipe_name}: {code[:120]}"
             )
-        line = proc.stdout.readline()
 
     if not line:
         exit_detail = _lua_daemon_exit_detail(proc)

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using SolomonDarkModLauncher.UI.ViewModels;
@@ -15,6 +16,14 @@ public partial class MainWindow : Window
         {
             MaximizeButton.Content = WindowState == WindowState.Maximized ? "\u2750" : "\u25A1";
         };
+        Activated += (_, _) =>
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.RefreshCloudAccountAfterActivation();
+            }
+        };
+        Closing += MainWindow_Closing;
     }
 
     private void FitToWorkingArea(Rect workingArea)
@@ -56,6 +65,17 @@ public partial class MainWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel ||
+            viewModel.CanCloseLauncher())
+        {
+            return;
+        }
+        e.Cancel = true;
+        WindowState = WindowState.Minimized;
     }
 
     private void HostSetupCreate_Click(object sender, RoutedEventArgs e)

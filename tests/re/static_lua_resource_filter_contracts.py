@@ -30,9 +30,9 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "native_experience_gain_probe.inl"
     )
-    gameplay_pump = _read(
+    native_probe_pump = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
-        "dispatch_and_hooks_pump_loop.inl"
+        "dispatch_and_hooks_native_probe_pump.inl"
     )
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
     documentation = _read("docs/lua-resource-filters.md")
@@ -122,7 +122,7 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
     assert '"queue_native_experience_gain_probe"' in debug_bindings
     assert '"get_native_experience_gain_probe_result"' in debug_bindings
     assert "CallNativeExperienceGainSafe" in xp_probe
-    assert "ExecuteNativeExperienceGainProbe" in gameplay_pump
+    assert "ExecuteNativeExperienceGainProbe" in native_probe_pump
 
     assert '"events.filters.resources"' in capabilities
     assert "lua_engine_resource_filters.cpp" in project

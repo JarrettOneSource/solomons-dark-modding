@@ -21,6 +21,25 @@ void ReleaseRendererResourcesUnlocked() {
     g_lua_draw_renderer.resource_device = nullptr;
 }
 
+void PruneUnavailableAtlasTextures() {
+    for (auto iterator = g_lua_draw_renderer.atlas_textures.begin();
+         iterator != g_lua_draw_renderer.atlas_textures.end();) {
+        std::filesystem::path image_path;
+        std::uint64_t revision = 0;
+        if (TryGetLuaDrawAtlasSource(
+                iterator->first,
+                &image_path,
+                &revision)) {
+            ++iterator;
+            continue;
+        }
+        if (iterator->second.texture != nullptr) {
+            iterator->second.texture->Release();
+        }
+        iterator = g_lua_draw_renderer.atlas_textures.erase(iterator);
+    }
+}
+
 bool InitializeFontAtlas(
     IDirect3DDevice9* device,
     LuaDrawFontAtlas* atlas,
@@ -327,19 +346,34 @@ bool DrawTextCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
 LuaDrawAtlasTexture* GetAtlasTexture(
     IDirect3DDevice9* device,
     const std::string& atlas) {
+    std::filesystem::path image_path;
+    std::uint64_t revision = 0;
+    if (!TryGetLuaDrawAtlasSource(atlas, &image_path, &revision)) {
+        return nullptr;
+    }
     auto& cached = g_lua_draw_renderer.atlas_textures[atlas];
+    if (cached.source_path != image_path || cached.revision != revision) {
+        if (cached.texture != nullptr) {
+            cached.texture->Release();
+        }
+        cached = {};
+        cached.source_path = image_path;
+        cached.revision = revision;
+    }
+    if (cached.source_path.empty() || cached.revision == 0) {
+        return nullptr;
+    }
     if (!cached.load_attempted) {
         cached.load_attempted = true;
-        const auto image_path = GetLuaDrawAtlasImagePath(atlas);
         if (!detail::LoadLuaDrawTexture(
                 device,
-                image_path,
+                cached.source_path,
                 &cached.texture,
                 &cached.width,
                 &cached.height,
                 &cached.error_message)) {
             Log(
-                "Lua draw failed to load stock atlas " + atlas + ". " +
+                "Lua draw failed to load atlas " + atlas + ". " +
                 cached.error_message);
         }
     }

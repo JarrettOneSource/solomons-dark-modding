@@ -1,0 +1,18 @@
+{
+  "id": "sample.lua.filter_acceptance_lab",
+  "name": "Lua Filter Acceptance Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.filters.damage",
+      "events.filters.enemy_spawn",
+      "events.filters.drop_roll",
+      "events.filters.wave_spawn",
+      "events.filters.spell_cast",
+      "events.filters.resources"
+    ]
+  }
+}

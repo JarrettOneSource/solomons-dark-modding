@@ -40,6 +40,7 @@ internal static class StagedGameLauncher
         LauncherConfiguration configuration,
         bool temporaryProfile = false,
         MultiplayerLaunchOptions? multiplayer = null,
+        string? savegamesRootOverride = null,
         LaunchOptions? options = null)
     {
         ApplyTestSurvivalBoneyardOverride(stage);
@@ -48,10 +49,13 @@ internal static class StagedGameLauncher
             configuration.Workspace,
             options?.EnvironmentOverrides,
             TryResolveRetailAppDataPath(),
-            temporaryProfile);
-        if (options.TemporaryProfile && !string.IsNullOrWhiteSpace(options.SavegamesRootPath))
+            temporaryProfile,
+            savegamesRootOverride);
+        var savegamesUsesDirectoryMirror = false;
+        if (!string.IsNullOrWhiteSpace(options.SavegamesRootPath))
         {
-            StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
+            savegamesUsesDirectoryMirror =
+                StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
         }
         options = ApplySandboxEnvironment(configuration, options);
         options = MultiplayerLaunchEnvironment.Apply(
@@ -137,7 +141,9 @@ internal static class StagedGameLauncher
                 startedAtUtc,
                 loaderPath,
                 startupStatus,
-                multiplayerSessionStatus);
+                multiplayerSessionStatus,
+                options.SavegamesRootPath,
+                savegamesUsesDirectoryMirror);
         }
         catch
         {

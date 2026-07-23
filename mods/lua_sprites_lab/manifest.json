@@ -1,0 +1,15 @@
+{
+  "id": "sample.lua.sprites_lab",
+  "name": "Lua Runtime Sprites Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "sprites.local.register",
+      "sprites.local.read",
+      "draw.local.immediate"
+    ]
+  }
+}

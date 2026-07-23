@@ -73,6 +73,49 @@ bool TryReadInjectedBindingCode(uintptr_t absolute_global, std::uint32_t* raw_bi
     return true;
 }
 
+std::int32_t RecordGameplayBeltSlotEdge(std::uint32_t scancode) {
+    for (std::size_t slot = 0; slot < kBeltSlotKeybindingGlobals.size(); ++slot) {
+        std::uint32_t binding_code = 0;
+        if (TryReadInjectedBindingCode(
+                kBeltSlotKeybindingGlobals[slot],
+                &binding_code) &&
+            binding_code == scancode) {
+            g_gameplay_keyboard_injection.last_belt_slot_edge.store(
+                static_cast<std::int32_t>(slot),
+                std::memory_order_release);
+            g_gameplay_keyboard_injection.last_belt_slot_edge_tick_ms.store(
+                static_cast<std::uint64_t>(GetTickCount64()),
+                std::memory_order_release);
+            return static_cast<std::int32_t>(slot);
+        }
+    }
+    return -1;
+}
+
+bool TryGetRecentGameplayBeltSlotEdge(
+    std::uint64_t now_ms,
+    std::uint64_t maximum_age_ms,
+    std::int32_t* belt_slot) {
+    if (belt_slot == nullptr) {
+        return false;
+    }
+    *belt_slot = -1;
+    const auto tick_ms =
+        g_gameplay_keyboard_injection.last_belt_slot_edge_tick_ms.load(
+            std::memory_order_acquire);
+    const auto slot =
+        g_gameplay_keyboard_injection.last_belt_slot_edge.load(
+            std::memory_order_acquire);
+    if (tick_ms == 0 || now_ms < tick_ms ||
+        now_ms - tick_ms > maximum_age_ms ||
+        slot < 0 ||
+        slot >= static_cast<std::int32_t>(kBeltSlotKeybindingGlobals.size())) {
+        return false;
+    }
+    *belt_slot = slot;
+    return true;
+}
+
 bool TryReadResolvedGamePointerAbsolute(uintptr_t absolute_address, uintptr_t* value) {
     if (value == nullptr) {
         return false;
@@ -82,4 +125,3 @@ bool TryReadResolvedGamePointerAbsolute(uintptr_t absolute_address, uintptr_t* v
     const auto resolved = ProcessMemory::Instance().ResolveGameAddressOrZero(absolute_address);
     return resolved != 0 && ProcessMemory::Instance().TryReadValue(resolved, value);
 }
-

@@ -612,7 +612,7 @@ def test_ui_sandbox_retries_unlatched_create_choices() -> str:
     )
 
 
-def test_packaged_ui_accepts_single_file_launcher() -> str:
+def test_packaged_ui_uses_proton_compatible_launcher() -> str:
     resolver = _read(
         "SolomonDarkModLauncher.UI/src/Infrastructure/"
         "LauncherExecutableResolver.cs"
@@ -630,7 +630,30 @@ def test_packaged_ui_accepts_single_file_launcher() -> str:
         assert rejected_token not in resolver, (
             f"packaged launcher resolver still requires {rejected_token}"
         )
-    assert "-p:PublishSingleFile=true" in package
+    launcher_publish = package[
+        package.index("dotnet publish $launcherProject") :
+        package.index('Assert-LastExitCode "Self-contained CLI publish"')
+    ]
+    ui_publish = package[
+        package.index("dotnet publish $launcherUiProject") :
+        package.index(
+            'Assert-LastExitCode "Self-contained desktop launcher publish"'
+        )
+    ]
+    assert "-p:PublishSingleFile=false" in launcher_publish
+    assert "-p:PublishSingleFile=true" not in launcher_publish
+    assert "-p:PublishSingleFile=true" in ui_publish
+    for runtime_file in (
+        "System.Private.CoreLib.dll",
+        "coreclr.dll",
+        "SolomonDarkModLauncher.runtimeconfig.json",
+    ):
+        assert runtime_file in package, (
+            f"beta package does not require Proton CLI runtime file: {runtime_file}"
+        )
+        assert runtime_file in smoke, (
+            f"beta smoke test does not require Proton CLI runtime file: {runtime_file}"
+        )
     for token in (
         '$catalogReady = $visibleText -contains "Ready"',
         "$modSummaryPattern =",
@@ -641,8 +664,59 @@ def test_packaged_ui_accepts_single_file_launcher() -> str:
         assert token in smoke, f"beta package smoke test lacks: {token}"
 
     return (
-        "the packaged desktop UI accepts its single-file CLI and proves a "
-        "catalog command crosses the real UI-to-CLI boundary"
+        "the packaged desktop UI keeps its single-file shell, ships the x86 "
+        "CLI runtime files required by Proton 10, and proves a catalog command "
+        "crosses the real UI-to-CLI boundary"
+    )
+
+
+def test_beta_release_documents_steam_deck_shortcut() -> str:
+    readme = _read("release/README.txt")
+
+    for token in (
+        "STEAM DECK",
+        "Add a Non-Steam Game",
+        "top-level",
+        "SolomonDarkMultiplayerBeta.exe",
+        "Do not select launcher/SolomonDarkModLauncher.exe",
+        "Start In",
+        "leave Launch Options empty",
+        "Proton 10 or Proton 11",
+        "Return to Gaming Mode",
+    ):
+        assert token in readme, f"Steam Deck release instructions lack: {token}"
+
+    return (
+        "the release tells Steam Deck users how to add the real launcher with "
+        "Proton"
+    )
+
+
+def test_proton_contract_runner_avoids_ge11_umu_shim_hang() -> str:
+    runner = _read("scripts/Test-ProtonLauncherContracts.sh")
+    readme = _read("README.md")
+
+    for token in (
+        'PROTON_VERB="runinprefix"',
+        'PROTON_USE_XALIA="0"',
+        'cd "$root"',
+        '"$proton" run "C:\\windows\\system32\\cmd.exe" /c exit 0',
+        'SolomonDarkModLauncher.ContractTests.exe',
+        'grep -Eq "^FAIL "',
+        "Traceback \\(most recent call last\\)",
+        "PermissionError",
+    ):
+        assert token in runner, f"Proton contract runner lacks: {token}"
+    for token in (
+        "Test-ProtonLauncherContracts.sh",
+        "GE-Proton10-34",
+        "GE-Proton11-1",
+    ):
+        assert token in readme, f"Proton contract documentation lacks: {token}"
+
+    return (
+        "the Proton contract runner bypasses the GE11 UMU Unix-target shim, "
+        "isolates Xalia from headless tests, and rejects runtime failures"
     )
 
 

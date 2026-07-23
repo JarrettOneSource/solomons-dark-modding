@@ -9,8 +9,7 @@ std::uint64_t GetLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
 }
 
 void NotifyLocalWorldActorUnregistered(uintptr_t actor_address) {
-    if (!g_local_transport.initialized ||
-        !g_local_transport.is_host ||
+    if (!IsLuaModSimulationAuthority() ||
         actor_address == 0) {
         return;
     }
@@ -249,6 +248,8 @@ void ShutdownLocalTransport() {
         WSACleanup();
     }
     g_local_transport = LocalTransportState{};
+    g_last_lua_time_control_revision_sent = 0;
+    ResetReplicatedLuaTimeControl();
     g_remote_native_progression_reconcile_suppressed_for_test.store(
         0,
         std::memory_order_release);
@@ -267,6 +268,15 @@ void ShutdownLocalTransport() {
         g_queued_local_level_up_choices.clear();
         g_queued_lua_mod_stream_messages.clear();
         g_next_lua_mod_stream_sequence = 1;
+        g_queued_authoritative_lua_item_grants.clear();
+        g_next_lua_item_grant_request_id = 1;
+        g_queued_lua_registered_spell_casts.clear();
+        g_next_lua_registered_spell_cast_request_id = 1;
+        g_queued_lua_ui_action_requests.clear();
+        g_next_lua_ui_action_request_id = 1;
+        g_queued_lua_net_messages.clear();
+        g_next_lua_net_message_sequence = 1;
+        g_queued_lua_net_message_bytes = 0;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
         g_next_local_loot_pickup_request_sequence = 1;
@@ -296,6 +306,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     ProcessPendingHostLevelUpOffers(now_ms);
     ProcessHostLevelUpBarrier(now_ms);
     BroadcastHostLevelUpBarrierState(now_ms, false);
+    SendLuaTimeControlUpdate();
     SendLocalState(now_ms);
     SendLocalParticipantFrame(now_ms);
     SendActiveLocalCastInput(now_ms);
@@ -304,6 +315,11 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendSpellEffectSnapshot(now_ms);
     SendLocalEnemyDamageClaims();
     SendQueuedHostParticipantVitalsCorrections(now_ms);
+    SendQueuedAuthoritativeLuaItemGrants();
+    SendQueuedLuaRegisteredSpellCasts();
+    SendLuaRegisteredSpellEffectSnapshots(now_ms);
+    SendQueuedLuaUiActionRequests();
+    SendQueuedLuaNetMessages();
     SendQueuedLootPickupRequests();
     SendQueuedLevelUpChoices();
     SendLuaModStream(now_ms);
@@ -554,7 +570,7 @@ bool HasAuthoritativeHagathaRuntimeStateChanged(
         target_participant_id);
 }
 
-bool ShouldPauseMultiplayerGameplay() {
+bool ShouldPauseMultiplayerGameplayWithoutLuaTime() {
     if (!g_local_transport.initialized) {
         return false;
     }
@@ -576,6 +592,20 @@ bool ShouldPauseMultiplayerGameplay() {
     }
 
     return ShouldPauseForSharedGameplayMenu();
+}
+
+bool BeginGameplaySimulationFrame() {
+    return BeginLuaTimeSimulationFrame(
+        ShouldPauseMultiplayerGameplayWithoutLuaTime());
+}
+
+void EndGameplaySimulationFrame() {
+    EndLuaTimeSimulationFrame();
+}
+
+bool ShouldPauseMultiplayerGameplay() {
+    return ShouldPauseMultiplayerGameplayWithoutLuaTime() ||
+        ShouldHoldLuaTimeSimulationFrame();
 }
 
 bool HasLocalLevelUpOfferAwaitingNativePresentation() {

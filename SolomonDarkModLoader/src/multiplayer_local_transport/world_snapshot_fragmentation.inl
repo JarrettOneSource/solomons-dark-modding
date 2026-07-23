@@ -55,8 +55,39 @@ bool IsValidWorldSnapshotActorPacketState(
         !std::isfinite(actor.position_y) ||
         !std::isfinite(actor.radius) ||
         actor.radius < 0.0f ||
-        (actor.status_flags & ~kWorldActorStatusKnownFlags) != 0) {
+        (actor.status_flags & ~kWorldActorStatusKnownFlags) != 0 ||
+        (actor.lua_enemy_spawn_flags &
+         ~kLuaEnemySpawnSnapshotKnownFlags) != 0) {
         return false;
+    }
+
+    if (actor.lua_content_id == 0) {
+        if (actor.lua_enemy_spawn_flags != 0) {
+            return false;
+        }
+    } else {
+        if ((actor.flags & WorldActorSnapshotFlagTrackedEnemy) == 0 ||
+            actor.lua_content_id >
+                static_cast<std::uint64_t>(INT64_MAX)) {
+            return false;
+        }
+        if (((actor.lua_enemy_spawn_flags & LuaEnemySpawnSnapshotFlagHp) != 0 &&
+             (!std::isfinite(actor.lua_spawn_hp) || actor.lua_spawn_hp <= 0.0f ||
+              actor.lua_spawn_hp > 1'000'000.0f)) ||
+            ((actor.lua_enemy_spawn_flags & LuaEnemySpawnSnapshotFlagChaseSpeed) != 0 &&
+             (!std::isfinite(actor.lua_spawn_chase_speed) ||
+              actor.lua_spawn_chase_speed < 0.0f ||
+              actor.lua_spawn_chase_speed > 1'000'000.0f)) ||
+            ((actor.lua_enemy_spawn_flags & LuaEnemySpawnSnapshotFlagAttackSpeed) != 0 &&
+             (!std::isfinite(actor.lua_spawn_attack_speed) ||
+              actor.lua_spawn_attack_speed < 0.0f ||
+              actor.lua_spawn_attack_speed > 1'000'000.0f)) ||
+            ((actor.lua_enemy_spawn_flags & LuaEnemySpawnSnapshotFlagScale) != 0 &&
+             (!std::isfinite(actor.lua_spawn_scale) ||
+              actor.lua_spawn_scale < 0.01f ||
+              actor.lua_spawn_scale > 1'000.0f))) {
+            return false;
+        }
     }
 
     const bool turn_undead_state_valid =

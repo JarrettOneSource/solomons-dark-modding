@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="include\lua_enemy_ai.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <Filter Include="Source Files">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;def;odl;idl;hpj;bat;asm;asmx</Extensions>
@@ -152,7 +155,28 @@
     <ClInclude Include="include\lua_event_filters.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\lua_camera_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_developer_console.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_draw_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_net_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_sprite_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_time_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_ui_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lua_content_registry.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\lua_mod_runtime.h">
@@ -170,6 +194,9 @@
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\mod_loader_public_api.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_gameplay_api.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -181,6 +208,27 @@
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_protocol.h">
       <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\wave_intelligence.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_ui_action_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_net_message_codec.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_net_message_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_time_control_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_ui_runtime\input_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.h">
       <Filter>Header Files\Public API</Filter>
@@ -290,6 +338,9 @@
     <ClInclude Include="src\lua_engine_bindings_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_spells_runtime.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_engine_values.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -297,6 +348,15 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_main_thread_pump.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_registered_spell_effect_parsing.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_event_queue.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_exec_wait.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
@@ -830,6 +890,9 @@
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_native_probe_pump.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_participant_vitals_actions.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -881,6 +944,9 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\lua_enemy_ai_runtime.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -891,6 +957,12 @@
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\registered_spell_input.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_secondary_spell_cast_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl">
@@ -914,6 +986,9 @@
     <ClInclude Include="src\mod_loader_gameplay\hub_service_runtime.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\lua_spell_cast_filter.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -929,6 +1004,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_lua_enemy_ai.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -936,6 +1014,12 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_behavior_probes.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_experience_gain_probe.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl">
@@ -968,6 +1052,9 @@
     <ClInclude Include="src\mod_loader_gameplay\replicated_gold_pickup_feedback.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_pickup_feedback.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -983,6 +1070,9 @@
     <ClInclude Include="src\mod_loader_gameplay\native_enemy_death_probe.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_experience_gain_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -990,6 +1080,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\lua_item_grant.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl">
@@ -1079,6 +1172,9 @@
     <ClInclude Include="src\multiplayer_local_transport\client_enemy_damage_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\completed_host_loot_pickups.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1106,10 +1202,16 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_item_grant_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\hagatha_perk_state.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl">
@@ -1145,6 +1247,12 @@
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_cast_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1154,10 +1262,16 @@
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\participant_vitals_correction.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\native_progression_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\native_progression_derived_stats.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl">
@@ -1224,6 +1338,9 @@
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl">
@@ -1300,6 +1417,9 @@
     <ClCompile Include="src\gameplay_seams.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
+    <ClCompile Include="src\wave_intelligence.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
     <ClCompile Include="src\logger_core.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
@@ -1321,6 +1441,33 @@
     <ClCompile Include="src\lua_engine_bindings_state.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_storage.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_timer.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_bus.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_net.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_time.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_foundations.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_scene.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_waves.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_wave_events.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_debug.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1328,6 +1475,48 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_bots.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_items.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_enemies.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_ai.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_enemy_ai.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_audio.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_audio.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_camera.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_camera_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_sprites.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_sprite_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_spells.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_casts.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_selection.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_effects.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_input.cpp">
@@ -1348,7 +1537,19 @@
     <ClCompile Include="src\lua_engine_bindings_ui.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_ui_authoring.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_developer_console.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_hot_reload.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_mod_loading.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_events.cpp">
@@ -1369,6 +1570,9 @@
     <ClCompile Include="src\lua_engine_spell_cast_filters.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_resource_filters.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_custom_events.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1382,6 +1586,15 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_draw_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_ui_renderer.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_ui_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_content_registry.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_draw_texture_loader.cpp">

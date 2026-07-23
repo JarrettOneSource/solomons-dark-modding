@@ -27,6 +27,14 @@ void ResetRemoteParticipantSessionEpoch(
     g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
     g_local_transport.last_participant_frame_sequence_by_participant.erase(
         participant_id);
+    g_local_transport.last_lua_ui_action_request_by_participant.erase(
+        participant_id);
+    ClearLuaNetParticipantTransportState(
+        participant_id,
+        configured_authority_disconnected);
+    if (configured_authority_disconnected) {
+        ResetReplicatedLuaTimeControl(participant_id);
+    }
     if (!preserve_session_nonce_history) {
         g_local_transport.session_nonce_by_participant.erase(participant_id);
         g_local_transport.retired_session_nonces_by_participant.erase(participant_id);
@@ -74,11 +82,28 @@ void ResetRemoteParticipantSessionEpoch(
                     return correction.target_participant_id == participant_id;
                 }),
             g_queued_host_participant_vitals_corrections.end());
+        g_queued_authoritative_lua_item_grants.erase(
+            std::remove_if(
+                g_queued_authoritative_lua_item_grants.begin(),
+                g_queued_authoritative_lua_item_grants.end(),
+                [&](const QueuedAuthoritativeLuaItemGrant& grant) {
+                    return grant.target_participant_id == participant_id;
+                }),
+            g_queued_authoritative_lua_item_grants.end());
+        g_queued_lua_registered_spell_casts.erase(
+            std::remove_if(
+                g_queued_lua_registered_spell_casts.begin(),
+                g_queued_lua_registered_spell_casts.end(),
+                [&](const QueuedLuaRegisteredSpellCast& cast) {
+                    return cast.request.owner_participant_id == participant_id;
+                }),
+            g_queued_lua_registered_spell_casts.end());
         if (configured_authority_disconnected) {
             g_queued_local_cast_events.clear();
             g_queued_local_enemy_damage_claims.clear();
             ClearLocalLootPickupRequestStateLocked();
             g_queued_local_level_up_choices.clear();
+            g_queued_lua_ui_action_requests.clear();
             g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
             g_have_queued_local_air_chain_frame = false;
         }
@@ -86,6 +111,7 @@ void ResetRemoteParticipantSessionEpoch(
 
     if (configured_authority_disconnected) {
         g_local_transport.last_client_host_run_request_ms = 0;
+        g_local_transport.last_client_host_region_request_ms = 0;
         g_local_transport.last_applied_participant_vitals_correction_sequence = 0;
         g_local_transport.active_local_cast_input = ActiveLocalCastInput{};
         g_local_transport.pending_air_chain_terminals.clear();
@@ -95,6 +121,20 @@ void ResetRemoteParticipantSessionEpoch(
         g_local_transport.pending_lua_mod_stream_assemblies.clear();
         g_local_transport.completed_lua_mod_stream_messages.clear();
         g_local_transport.last_lua_mod_stream_applied_sequence = 0;
+        g_local_transport.received_lua_item_grant_request_ids.clear();
+        g_local_transport.received_lua_item_grant_request_order.clear();
+        g_local_transport.received_lua_registered_spell_cast_request_ids.clear();
+        g_local_transport.received_lua_registered_spell_cast_request_order.clear();
+        {
+            std::lock_guard<std::mutex> snapshot_lock(
+                g_lua_registered_spell_effect_snapshot_mutex);
+            g_local_transport
+                .pending_lua_registered_spell_effect_snapshots.erase(
+                    participant_id);
+            g_local_transport
+                .completed_lua_registered_spell_effect_snapshots.erase(
+                    participant_id);
+        }
         ResetLuaModStateStore();
     }
 

@@ -11,6 +11,11 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         memory.TryReadField(self_address, kEnemyDeathHandledOffset, &already_handled_byte);
     int enemy_type = LookupRememberedEnemyType(self_address);
     const bool have_enemy_type = enemy_type >= 0 || TryReadEnemyTypeFromActor(self_address, &enemy_type);
+    SDModLuaEnemySpawnConfig lua_enemy_config;
+    const std::uint64_t content_id =
+        LookupLuaEnemySpawnConfig(self_address, &lua_enemy_config)
+            ? lua_enemy_config.content_id
+            : 0;
     float x = 0.0f;
     float y = 0.0f;
     const bool have_position = TryReadActorPosition(self_address, &x, &y);
@@ -26,6 +31,14 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
     {
         std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
         g_frozen_manual_run_enemies.erase(self_address);
+    }
+    if (!already_handled_before_death &&
+        IsCombatArenaActiveForEnemyTracking()) {
+        const auto wave_update = ObserveAuthorityWaveEnemyDeath(
+            self_address);
+        if (wave_update.completed_wave != 0) {
+            DispatchLuaWaveCompleted(wave_update.completed_wave);
+        }
     }
     if (!have_enemy_type) {
         Log("enemy.death native type unavailable. enemy=" + HexString(self_address));
@@ -52,7 +65,12 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         " result=" + std::to_string(result));
     ForgetEnemyType(self_address);
     if (!already_handled && IsCombatArenaActiveForEnemyTracking()) {
-        DispatchLuaEnemyDeath(enemy_type, x, y, kUnknownKillMethod);
+        DispatchLuaEnemyDeath(
+            enemy_type,
+            x,
+            y,
+            kUnknownKillMethod,
+            content_id);
     }
 
     return result;

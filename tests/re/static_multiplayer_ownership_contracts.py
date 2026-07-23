@@ -24,7 +24,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
     engine_header = _read("SolomonDarkModLoader/include/lua_engine.h")
     pipe = _read("SolomonDarkModLoader/src/lua_exec_pipe.cpp")
     bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
-    events = _read("SolomonDarkModLoader/src/lua_engine_events.cpp")
+    events = read_source_unit("SolomonDarkModLoader/src/lua_engine_events.cpp")
     engine_internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
     lua_main = _read("mods/lua_bots/scripts/main.lua")
     lua_client = _read("tools/lua-exec.py")
@@ -125,10 +125,22 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaHubBindings",
         "RegisterLuaDebugBindings",
         "RegisterLuaStateBindings",
+        "RegisterLuaStorageBindings",
+        "RegisterLuaTimerBindings",
+        "RegisterLuaBusBindings",
+        "RegisterLuaNetBindings",
+        "RegisterLuaTimeBindings",
+        "RegisterLuaRngBindings",
+        "RegisterLuaNavBindings",
+        "RegisterLuaSceneBindings",
+        "RegisterLuaWaveBindings",
+        "RegisterLuaSpellBindings",
+        "RegisterLuaItemBindings",
+        "RegisterLuaEnemyBindings",
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 13);" in bindings
+    assert "lua_createtable(mod->state, 0, 29);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (
@@ -136,7 +148,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "std::deque<PendingLuaEvent> g_pending_lua_events;",
         "pending.swap(g_pending_lua_events);",
         "void DispatchPendingLuaEventsToLuaMods()",
-        "detail::QueueEnemyDeathEvent(enemy_type, x, y, kill_method);",
+        "detail::QueueEnemyDeathEvent(\n        enemy_type,",
         "void StartLuaEventQueue();",
         "void StopLuaEventQueue();",
     ):
@@ -190,8 +202,8 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "pending Lua exec requests are cancelable, stock scene-load stalls fit "
         "inside the hang backstop, pump skips fail by invariant, pipe shutdown "
         "interrupts its wait, hook events are deferred without re-entering the "
-        "Lua VM, handlers remain isolated, and all twelve current sd namespaces "
-        "are registered"
+        "Lua VM, handlers remain isolated, and all current sd namespaces are "
+        "registered"
     )
 
 
@@ -547,7 +559,9 @@ def test_transient_status_correction_ack_waits_for_native_application() -> str:
         "SolomonDarkModLoader/include/multiplayer_local_transport.h"
     )
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
-    mod_loader_header = _read("SolomonDarkModLoader/include/mod_loader.h")
+    mod_loader_header = read_source_unit(
+        "SolomonDarkModLoader/include/mod_loader.h"
+    )
     requests = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
     )
@@ -559,7 +573,7 @@ def test_transient_status_correction_ack_waits_for_native_application() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "dispatch_and_hooks_participant_vitals_actions.inl"
     )
-    authority = _read(
+    authority = read_source_unit(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "participant_vitals_authority.inl"
     )
@@ -1032,7 +1046,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 73;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1043,7 +1057,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 4520",
+        "static_assert(sizeof(StatePacket) == 4528",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 112",
         "static_assert(sizeof(LootSnapshotPacket) == 7200",
         "static_assert(sizeof(LootPickupResultPacket) == 164",
@@ -1205,7 +1219,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 73;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1215,7 +1229,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 4520",
+        "static_assert(sizeof(StatePacket) == 4528",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 

@@ -75,6 +75,7 @@ namespace {
 #include "mod_loader_gameplay/standalone_materialization.inl"
 #include "mod_loader_gameplay/bot_pathfinding.inl"
 #include "mod_loader_gameplay/bot_registry_and_movement.inl"
+#include "mod_loader_gameplay/lua_enemy_ai_runtime.inl"
 #include "mod_loader_gameplay/dispatch_and_hooks.inl"
 
 }  // namespace

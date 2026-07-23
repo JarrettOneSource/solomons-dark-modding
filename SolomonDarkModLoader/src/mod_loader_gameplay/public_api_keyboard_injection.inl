@@ -913,6 +913,12 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial.store(
         0,
         std::memory_order_release);
+    g_gameplay_keyboard_injection.last_belt_slot_edge.store(
+        -1,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_belt_slot_edge_tick_ms.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(0, std::memory_order_release);
@@ -947,6 +953,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
+        g_gameplay_keyboard_injection.pending_lua_item_grants.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();
@@ -1090,6 +1097,12 @@ void ShutdownGameplayKeyboardInjection() {
     g_gameplay_keyboard_injection.claimed_primary_cast_edge_serial.store(
         0,
         std::memory_order_release);
+    g_gameplay_keyboard_injection.last_belt_slot_edge.store(
+        -1,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_belt_slot_edge_tick_ms.store(
+        0,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_edge_events.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_mouse_left_frames.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.last_mouse_left_hold_player_tick_generation.store(0, std::memory_order_release);
@@ -1134,6 +1147,7 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
         g_gameplay_keyboard_injection.pending_local_inventory_equip_requests.clear();
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
+        g_gameplay_keyboard_injection.pending_lua_item_grants.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();

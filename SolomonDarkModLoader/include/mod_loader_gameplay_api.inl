@@ -21,12 +21,55 @@ bool QueueRunLifecycleManualEnemySpawn(
     std::uint64_t* request_id);
 bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
     std::uint64_t network_actor_id,
+    const SDModLuaEnemySpawnConfig& lua_config,
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id);
+bool QueueRunLifecycleLuaEnemySpawn(
+    const SDModLuaEnemySpawnConfig& config,
     int type_id,
     float x,
     float y,
     std::string* error_message,
     std::uint64_t* request_id);
 void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_actor_id);
+bool TryGetRunLifecycleLuaEnemySpawnConfig(
+    uintptr_t enemy_address,
+    SDModLuaEnemySpawnConfig* config);
+bool SetLuaEnemyAiTargetOverride(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    std::uint64_t content_id,
+    std::uint32_t spawn_serial,
+    uintptr_t actor_address,
+    SDModLuaEnemyAiTargetMode target_mode,
+    std::uint64_t target_participant_id,
+    std::string* error_message);
+bool SetLuaEnemyAiMoveGoal(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    std::uint64_t content_id,
+    std::uint32_t spawn_serial,
+    uintptr_t actor_address,
+    float x,
+    float y,
+    float stop_distance,
+    std::string* error_message);
+bool StopLuaEnemyAiMoveGoal(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id);
+bool ClearLuaEnemyAiOverrides(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id);
+bool TryGetLuaEnemyAiCommandState(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    SDModLuaEnemyAiCommandState* state);
+void ClearLuaEnemyAiOverridesForMod(std::string_view owner_mod_id);
+void ResetLuaEnemyAiOverrides();
+void ForgetRunLifecycleEnemyTracking(uintptr_t enemy_address);
 bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message = nullptr);
 bool TryGetRunLifecycleManualEnemySpawnResult(
     SDModManualRunEnemySpawnResult* result,
@@ -42,6 +85,19 @@ bool TakeLocalPlayerManaDeltaObservation(
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
+    std::string* error_message);
+bool TryResolveNativeItemRecipeByName(
+    std::string_view recipe_name,
+    std::uint32_t expected_item_type_id,
+    std::uint32_t* recipe_uid,
+    std::string* error_message);
+bool QueueLuaItemGrantToLocalInventory(
+    std::uint64_t authority_participant_id,
+    std::uint64_t request_id,
+    std::uint64_t content_id,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        color_state,
+    bool color_state_valid,
     std::string* error_message);
 bool QueueNestedSackInventoryFixture(
     std::int32_t potion_slot,

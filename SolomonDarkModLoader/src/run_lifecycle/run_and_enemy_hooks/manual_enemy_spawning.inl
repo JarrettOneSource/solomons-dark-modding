@@ -131,6 +131,7 @@ void CompleteManualRunEnemySpawnFailure(
     result.valid = true;
     result.ok = false;
     result.request_id = request.request_id;
+    result.content_id = request.lua_config.content_id;
     result.type_id = request.type_id;
     result.requested_x = request.x;
     result.requested_y = request.y;
@@ -365,7 +366,7 @@ ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
     {
         std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
         const bool have_any_pending_request =
-            g_have_pending_manual_run_enemy_spawn || !g_queued_replicated_run_enemy_spawns.empty();
+            g_have_pending_manual_run_enemy_spawn || !g_queued_run_enemy_spawns.empty();
         if (!have_any_pending_request || g_have_active_manual_run_enemy_spawn) {
             return ManualRunEnemySpawnerDispatchResult::NoRequest;
         }
@@ -374,8 +375,8 @@ ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
             g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
             g_have_pending_manual_run_enemy_spawn = false;
         } else {
-            request = g_queued_replicated_run_enemy_spawns.front();
-            g_queued_replicated_run_enemy_spawns.pop_front();
+            request = g_queued_run_enemy_spawns.front();
+            g_queued_run_enemy_spawns.pop_front();
         }
         g_active_manual_run_enemy_spawn = request;
         g_have_active_manual_run_enemy_spawn = true;

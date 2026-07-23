@@ -207,6 +207,85 @@ def test_wine_stage_savegames_uses_directory_mirror() -> str:
     return "Wine/Proton stages a real savegames directory and removes malformed junction residue"
 
 
+def test_launcher_saves_are_isolated_link_gated_and_proton_persisted() -> str:
+    command_client_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiCommandClient.cs"
+    )
+    settings_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiSettingsStore.cs"
+    )
+    session_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/SteamWebsiteSessionClient.cs"
+    )
+    cloud_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/CloudSaveClient.cs"
+    )
+    backup_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/Infrastructure/CloudSaveBackupCoordinator.cs"
+    )
+    main_window_text = read_text(
+        ROOT / "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
+    )
+
+    required_pairs = (
+        (settings_text, '"SolomonDarkMultiplayerBeta"'),
+        (settings_text, 'SavesRoot = Path.Combine(SettingsRoot, "saves");'),
+        (command_client_text, 'arguments.Add("--savegames-root");'),
+        (command_client_text, "arguments.Add(saveCatalog_.Active.SavegamesRootPath);"),
+        (command_client_text, 'arguments.Add("--no-invite-dialog");'),
+        (session_text, '"directory-auth"'),
+        (session_text, "SteamLinkedWebsiteAccount? LinkedAccount"),
+        (cloud_text, "if (session.LinkedAccount is null)"),
+        (cloud_text, "CloudBackupDisposition.NotLinked"),
+        (backup_text, "if (usesDirectoryMirror_)"),
+        (backup_text, "SaveDirectoryMirror.Replace("),
+        (backup_text, "await BackupCoreAsync(cancellationToken);"),
+        (main_window_text, "public bool CanCloseLauncher()"),
+        (main_window_text, "The launcher stays open while the game runs"),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "launcher save isolation or cloud backup contract is missing token(s): " +
+            ", ".join(missing))
+
+    save_argument = command_client_text.find('arguments.Add("--savegames-root");')
+    launch_mode_switch = command_client_text.find("switch (mode)", save_argument)
+    if save_argument == -1 or launch_mode_switch == -1 or save_argument > launch_mode_switch:
+        raise StaticReTestFailure(
+            "selected launcher save must be applied before every launch-mode branch")
+
+    host_start = command_client_text.find("case LauncherUiCommandMode.HostSteam:")
+    host_end = command_client_text.find(
+        "case LauncherUiCommandMode.JoinSteam:", host_start)
+    host_body = command_client_text[host_start:host_end]
+    if host_start == -1 or host_end == -1 or '"--no-invite-dialog"' not in host_body:
+        raise StaticReTestFailure(
+            "Host Game must suppress only the automatic Steam invite picker")
+
+    mirror_copyback = backup_text.find("SaveDirectoryMirror.Replace(")
+    final_backup = backup_text.find(
+        "await BackupCoreAsync(cancellationToken);", mirror_copyback)
+    if mirror_copyback == -1 or final_backup == -1 or mirror_copyback > final_backup:
+        raise StaticReTestFailure(
+            "Proton save mirror must copy back locally before cloud backup")
+
+    session_lookup = cloud_text.find(
+        "var session = await sessionClient_.GetAsync(", cloud_text.find("BackupAsync("))
+    link_gate = cloud_text.find(
+        "if (session.LinkedAccount is null)", session_lookup)
+    archive_build = cloud_text.find("CloudSaveArchive.Build(save)", link_gate)
+    upload = cloud_text.find("HttpMethod.Put", link_gate)
+    if not 0 <= session_lookup < link_gate < archive_build < upload:
+        raise StaticReTestFailure(
+            "cloud backup must verify the active Steam account link before snapshot or upload")
+
+    return (
+        "launcher saves remain local and isolated, Host avoids the invite picker, "
+        "Steam linkage gates cloud backup, and Proton mirrors copy back before upload"
+    )
+
+
 def test_wsl_steam_launcher_applies_test_boneyard_before_process_start() -> str:
     launch_text = read_text(ROOT / "scripts/Launch-WslSteamMultiplayerClient.sh")
     required_tokens = (

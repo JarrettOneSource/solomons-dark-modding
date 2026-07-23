@@ -75,7 +75,7 @@ def test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership() -> st
         "ApplyLuaEnemySpawnFilters(&filtered_context)",
         "original(",
         "RestoreLuaEnemySpawnFilterConfig(original_filter_context)",
-        "DispatchLuaEnemySpawned(enemy_type, x, y)",
+        "DispatchLuaEnemySpawned(enemy_type, x, y, spawned_content_id)",
     )
 
     for token in (

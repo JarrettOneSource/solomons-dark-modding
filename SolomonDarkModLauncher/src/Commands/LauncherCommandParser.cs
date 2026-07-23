@@ -16,6 +16,7 @@ internal static class LauncherCommandParser
         string? modsRoot = null;
         string? runtimeRoot = null;
         string? stageRoot = null;
+        string? savegamesRoot = null;
         string? runtimeProfile = null;
         var runtimeFlagOverrides = new List<string>();
         var temporaryProfile = false;
@@ -85,6 +86,12 @@ internal static class LauncherCommandParser
             if (arg == "--runtime-root")
             {
                 runtimeRoot = ReadValue(args, ref index, arg);
+                continue;
+            }
+
+            if (arg == "--savegames-root")
+            {
+                savegamesRoot = ReadValue(args, ref index, arg);
                 continue;
             }
 
@@ -204,6 +211,7 @@ internal static class LauncherCommandParser
             modsRoot,
             runtimeRoot,
             stageRoot,
+            savegamesRoot,
             targetModId,
             runtimeProfile,
             runtimeFlagOverrides,

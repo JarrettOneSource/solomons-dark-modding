@@ -449,7 +449,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 73;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -559,11 +559,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 20"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 4520"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 4528"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 304"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1264"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 328"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1032"),
         (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 112"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 7200"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),

@@ -21,6 +21,10 @@ internal static class LauncherConsole
 
     public static void PrintDirectorySession(SteamDirectorySession session)
     {
-        Console.WriteLine($"Steam directory session ready for {session.SteamId} until {session.ExpiresAtUtc:O}.");
+        var account = session.LinkedAccount is null
+            ? "no linked SDR account"
+            : $"SDR account {session.LinkedAccount.Username}";
+        Console.WriteLine(
+            $"Steam directory session ready for {session.SteamId} ({account}) until {session.ExpiresAtUtc:O}.");
     }
 }

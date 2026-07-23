@@ -269,6 +269,8 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             version,
             "HOW TO PLAY",
             "Host Game",
+            "Choose Save",
+            "Cloud backups are disabled until the Steam account is linked.",
             "Select the host's lobby through Steam",
             "Lobby ID",
             "The launcher does not store or package Steam credentials.",

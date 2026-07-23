@@ -34,6 +34,7 @@ internal static class LauncherOutputFormatter
             "  --runtime-profile <name> Select the staged runtime feature profile. Default: full. Supported: full, bootstrap_only.",
             "  --runtime-flag <k=v>    Override one staged runtime feature flag. May be passed multiple times.",
             "  --temporary-profile     Launch with a fresh temporary APPDATA/LOCALAPPDATA and staged savegames target.",
+            "  --savegames-root <path> Use this launcher-owned directory for game saves.",
             "  --steam-appid <id>      Override steam_appid.txt. Default: 3362180.",
             "  --steam-api-dll <path>  Override the x86 steam_api.dll used when the mirrored game does not already ship one.",
             "  --multiplayer <mode>    Select off, host, or join.",
@@ -137,8 +138,14 @@ internal static class LauncherOutputFormatter
             var runtimeSummary = mod.RequiresRuntime
                 ? $"runtime={mod.Manifest.RuntimeKind}:{mod.Manifest.Runtime.ApiVersion}"
                 : "runtime=-";
+            var providedContracts = mod.Manifest.Provides.Count == 0
+                ? "-"
+                : string.Join(",", mod.Manifest.Provides);
+            var requiredContracts = mod.Manifest.Requires.Count == 0
+                ? "-"
+                : string.Join(",", mod.Manifest.Requires);
             builder.AppendLine(
-                $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requires={requiredMods}");
+                $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requiredMods={requiredMods} provides={providedContracts} requires={requiredContracts}");
         }
 
         builder.AppendLine();

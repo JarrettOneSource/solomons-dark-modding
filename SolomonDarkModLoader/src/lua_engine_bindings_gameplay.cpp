@@ -148,13 +148,31 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 51);
+    lua_createtable(state, 0, 57);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
     lua_setfield(state, -2, "object_type_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.enemy_type));
     lua_setfield(state, -2, "enemy_type");
+    lua_pushinteger(state, static_cast<lua_Integer>(actor.lua_content_id));
+    lua_setfield(state, -2, "content_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(actor.lua_enemy_spawn_flags));
+    lua_setfield(state, -2, "content_spawn_flags");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.lua_spawn_hp));
+    lua_setfield(state, -2, "content_spawn_hp");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(actor.lua_spawn_chase_speed));
+    lua_setfield(state, -2, "content_spawn_speed");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(actor.lua_spawn_attack_speed));
+    lua_setfield(state, -2, "content_spawn_attack_speed");
+    lua_pushnumber(state, static_cast<lua_Number>(actor.lua_spawn_scale));
+    lua_setfield(state, -2, "content_spawn_scale");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.actor_slot));
     lua_setfield(state, -2, "actor_slot");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.world_slot));
@@ -690,13 +708,15 @@ int LuaGameplayGetCombatState(lua_State* state) {
 void PushManualRunEnemySpawnResult(
     lua_State* state,
     const SDModManualRunEnemySpawnResult& result) {
-    lua_createtable(state, 0, 16);
+    lua_createtable(state, 0, 17);
     lua_pushboolean(state, result.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushboolean(state, result.ok ? 1 : 0);
     lua_setfield(state, -2, "ok");
     lua_pushinteger(state, static_cast<lua_Integer>(result.request_id));
     lua_setfield(state, -2, "request_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(result.content_id));
+    lua_setfield(state, -2, "content_id");
     lua_pushinteger(state, static_cast<lua_Integer>(result.type_id));
     lua_setfield(state, -2, "type_id");
     lua_pushinteger(state, static_cast<lua_Integer>(result.actor_address));

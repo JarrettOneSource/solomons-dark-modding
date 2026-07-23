@@ -391,6 +391,12 @@ struct WorldActorSnapshot {
     std::uint8_t render_selection_byte = 0;
     std::uint8_t render_variant_tertiary = 0;
     std::uint8_t status_flags = 0;
+    std::uint8_t lua_enemy_spawn_flags = 0;
+    std::uint64_t lua_content_id = 0;
+    float lua_spawn_hp = 0.0f;
+    float lua_spawn_chase_speed = 0.0f;
+    float lua_spawn_attack_speed = 0.0f;
+    float lua_spawn_scale = 1.0f;
     std::int32_t turn_undead_duration_ticks = 0;
     float turn_undead_flee_heading = 0.0f;
     float turn_undead_activation_scalar = 0.0f;

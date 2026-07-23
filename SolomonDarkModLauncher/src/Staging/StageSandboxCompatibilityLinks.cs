@@ -4,12 +4,12 @@ namespace SolomonDarkModLauncher.Staging;
 
 internal static class StageSandboxCompatibilityLinks
 {
-    public static void Materialize(string stageRootPath)
+    public static bool Materialize(string stageRootPath)
     {
-        Materialize(stageRootPath, Path.Combine(stageRootPath, "sandbox", "savegames"));
+        return Materialize(stageRootPath, Path.Combine(stageRootPath, "sandbox", "savegames"));
     }
 
-    public static void Materialize(string stageRootPath, string savegamesTargetPath)
+    public static bool Materialize(string stageRootPath, string savegamesTargetPath)
     {
         var sandboxSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");
         if (!Directory.Exists(sandboxSavegamesPath))
@@ -22,15 +22,15 @@ internal static class StageSandboxCompatibilityLinks
         }
 
         var stageSavegamesPath = Path.Combine(stageRootPath, "savegames");
-        RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);
+        return RecreateDirectoryJunction(stageSavegamesPath, savegamesTargetPath);
     }
 
-    private static void RecreateDirectoryJunction(string linkPath, string targetPath)
+    private static bool RecreateDirectoryJunction(string linkPath, string targetPath)
     {
         if (IsWineRuntime())
         {
             RecreateDirectoryMirror(linkPath, targetPath);
-            return;
+            return true;
         }
 
         if (Directory.Exists(linkPath) || File.Exists(linkPath))
@@ -41,7 +41,7 @@ internal static class StageSandboxCompatibilityLinks
         if (!OperatingSystem.IsWindows())
         {
             Directory.CreateSymbolicLink(linkPath, targetPath);
-            return;
+            return false;
         }
 
         var startInfo = new ProcessStartInfo
@@ -72,6 +72,7 @@ internal static class StageSandboxCompatibilityLinks
                 standardOutput +
                 standardError);
         }
+        return false;
     }
 
     private static bool IsWineRuntime() =>

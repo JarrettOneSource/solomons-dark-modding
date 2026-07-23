@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -75,6 +76,8 @@ struct LuaDrawAtlasTexture {
     IDirect3DTexture9* texture = nullptr;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    std::filesystem::path source_path;
+    std::uint64_t revision = 0;
     bool load_attempted = false;
     std::string error_message;
 };
@@ -313,12 +316,13 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
         return;
     }
     g_lua_draw_renderer.last_viewport = viewport;
-    if (frames.empty()) {
-        return;
-    }
     if (g_lua_draw_renderer.resource_device != device) {
         ReleaseRendererResourcesUnlocked();
         g_lua_draw_renderer.resource_device = device;
+    }
+    PruneUnavailableAtlasTextures();
+    if (frames.empty()) {
+        return;
     }
 
     IDirect3DStateBlock9* state_block = nullptr;

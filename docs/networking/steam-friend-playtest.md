@@ -10,9 +10,10 @@ credentials.
 
 - A Release host launch initializes Steam under AppID 3362180, creates the selected
   public or friends-only four-player lobby, publishes protocol/build metadata,
-  and reaches `LobbyReady`. The launcher waits for that milestone, returns the
-  real lobby ID, and accurately reports whether the overlay invite dialog
-  opened.
+  and reaches `LobbyReady`. The launcher waits for that milestone and returns
+  the real lobby ID. **Host Game** no longer opens Steam's invite picker
+  automatically; the host can invite through Steam manually after the lobby is
+  ready, share the Lobby ID, or use the website listing.
 - A Release join launch initializes Steam under AppID 3362180, enters the requested
   lobby, and completes the host compatibility handshake. The desktop launcher
   listens for accepted Steam invitations while it is open and launches this
@@ -60,7 +61,7 @@ credentials.
   state; stale item/equipment identities did not leak into the replacement.
 - The explicit flat Boneyard matches on both staged copies and contains no
   scenery, roads, fences, or static collision circles. The embedded Lua runtime
-  contract passes on both peers with 12 namespaces and 106 required functions.
+  contract passes on both peers with 28 namespaces and 188 required functions.
 
 A genuine cross-account Steam peer handshake has been exercised on this
 machine with a Windows host and a WSLg/Proton joiner. The joiner accepted a
@@ -138,6 +139,22 @@ PULSE_SERVER=unix:/dev/null SDL_AUDIODRIVER=dummy ~/.steam/debian-installation/s
 5. Do not begin the run until every player is visible in the shared hub and both
    runtimes report an authenticated peer.
 
+## Saves and cloud backup
+
+**Choose Save** manages eight launcher-owned slots beneath
+`%LOCALAPPDATA%\SolomonDarkMultiplayerBeta\saves`. These slots are separate
+from the retail Solomon Dark saves; importing retail or other save data is
+always an explicit action. Every solo, host, and join launch uses the selected
+local slot.
+
+Cloud backup remains disabled until the active Steam account is linked on the
+SDR website account page. The launcher obtains a short-lived Steam session,
+detects that existing link automatically, and never stores a website password
+or Steam credential. Local disk remains authoritative. A changed save is
+backed up after writes settle and once more when the game exits. Under Proton,
+the launcher keeps its staged save mirror until exit, copies it back to the
+selected local slot, and only then uploads the backup.
+
 ## Direct Lobby ID
 
 The host launcher displays its lobby ID after `LobbyReady`. The CLI reports the
@@ -207,7 +224,7 @@ Each stage writes:
 
 The structured multiplayer status is bound to the same per-launch token as the
 startup status and reports phase, AppID, lobby ID, capacity, authenticated peer
-count, overlay/invite state, SDR route/ping, and any terminal error. Healthy
+count, overlay state, SDR route/ping, and any terminal error. Healthy
 host milestones are `CreatingLobby`, `lobby ready`, then `LobbyReady` (runtime
 status `Ready`).
 Healthy join milestones are `WaitingForInvite`, `JoiningLobby`,

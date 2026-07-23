@@ -34,6 +34,41 @@ bool SteamSpellEffectPacketOwnerMatches(
            packet.owner_participant_id == sender_steam_id;
 }
 
+bool SteamLuaRegisteredSpellEffectPacketOwnerMatches(
+    const void* data,
+    std::size_t size,
+    std::uint64_t sender_steam_id) {
+    if (data == nullptr ||
+        size < kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes ||
+        size > sizeof(LuaRegisteredSpellEffectSnapshotPacket)) {
+        return false;
+    }
+    LuaRegisteredSpellEffectSnapshotPacket packet{};
+    std::memcpy(&packet, data, size);
+    return IsValidHeader(
+               packet.header,
+               PacketKind::LuaRegisteredSpellEffectSnapshot) &&
+        IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+            size,
+            packet.effect_count) &&
+        packet.owner_participant_id == sender_steam_id;
+}
+
+bool SteamLuaNetPacketHopMatches(
+    const void* data,
+    std::size_t size,
+    std::uint64_t sender_steam_id) {
+    if (data == nullptr || size < kLuaNetMessagePacketPrefixBytes ||
+        size > sizeof(LuaNetMessagePacket)) {
+        return false;
+    }
+    LuaNetMessagePacket packet{};
+    std::memcpy(&packet, data, size);
+    return IsValidHeader(packet.header, PacketKind::LuaNetMessage) &&
+        IsValidLuaNetMessagePacketWireSize(size, packet) &&
+        packet.transport_participant_id == sender_steam_id;
+}
+
 bool IsAuthorizedSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,
@@ -83,6 +118,11 @@ bool IsAuthorizedSteamGameplayPacket(
             data,
             size,
             sender_steam_id);
+    case PacketKind::LuaRegisteredSpellEffectSnapshot:
+        return SteamLuaRegisteredSpellEffectPacketOwnerMatches(
+            data,
+            size,
+            sender_steam_id);
     case PacketKind::AirChainSnapshot:
         return SteamPacketOwnerMatches<AirChainSnapshotPacket>(
             data,
@@ -115,6 +155,19 @@ bool IsAuthorizedSteamGameplayPacket(
             [](const LevelUpChoicePacket& packet) {
                 return packet.participant_id;
             });
+    case PacketKind::LuaUiActionRequest:
+        return SteamPacketOwnerMatches<LuaUiActionRequestPacket>(
+            data,
+            size,
+            sender_steam_id,
+            [](const LuaUiActionRequestPacket& packet) {
+                return packet.participant_id;
+            });
+    case PacketKind::LuaNetMessage:
+        return SteamLuaNetPacketHopMatches(
+            data,
+            size,
+            sender_steam_id);
     default:
         return false;
     }
@@ -137,6 +190,57 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::LuaRegisteredSpellEffectSnapshot &&
+            received >= static_cast<int>(
+                kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(
+                sizeof(LuaRegisteredSpellEffectSnapshotPacket))) {
+            LuaRegisteredSpellEffectSnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaRegisteredSpellEffectSnapshot) ||
+                !IsValidLuaRegisteredSpellEffectSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.effect_count)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaRegisteredSpellEffectSnapshotPacket(
+                packet,
+                from,
+                now_ms);
+            continue;
+        }
+        if (kind == PacketKind::LuaRegisteredSpellCast &&
+            received ==
+                static_cast<int>(sizeof(LuaRegisteredSpellCastPacket))) {
+            LuaRegisteredSpellCastPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaRegisteredSpellCast)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaRegisteredSpellCastPacket(packet, from, now_ms);
+            continue;
+        }
+        if (kind == PacketKind::LuaItemGrant &&
+            received == static_cast<int>(sizeof(LuaItemGrantPacket))) {
+            LuaItemGrantPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaItemGrant)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaItemGrantPacket(packet, from, now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::LuaModStream &&
             received >= static_cast<int>(kLuaModStreamPacketPrefixBytes) &&
             received <= static_cast<int>(sizeof(LuaModStreamPacket))) {
@@ -155,6 +259,38 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyLuaModStreamPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LuaNetMessage &&
+            received >= static_cast<int>(kLuaNetMessagePacketPrefixBytes) &&
+            received <= static_cast<int>(sizeof(LuaNetMessagePacket))) {
+            LuaNetMessagePacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(packet.header, PacketKind::LuaNetMessage) ||
+                !IsValidLuaNetMessagePacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaNetMessagePacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LuaTimeControl &&
+            received == static_cast<int>(sizeof(LuaTimeControlPacket))) {
+            LuaTimeControlPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaTimeControl) ||
+                !IsValidLuaTimeControlPacket(packet)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaTimeControlPacket(packet, from);
             continue;
         }
 
@@ -347,6 +483,18 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyLevelUpChoiceResultPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LuaUiActionRequest &&
+            received == static_cast<int>(sizeof(LuaUiActionRequestPacket))) {
+            LuaUiActionRequestPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaUiActionRequest)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaUiActionRequestPacket(packet, from, now_ms);
             continue;
         }
 

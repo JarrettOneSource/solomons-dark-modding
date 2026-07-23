@@ -44,6 +44,18 @@ struct PendingNativeInventoryCredit {
     std::uint64_t next_attempt_ms = 0;
 };
 
+struct PendingLuaItemGrant {
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t request_id = 0;
+    std::uint64_t content_id = 0;
+    bool color_state_valid = false;
+    std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>
+        color_state = {};
+    std::uint32_t attempts = 0;
+    std::uint64_t queued_ms = 0;
+    std::uint64_t next_attempt_ms = 0;
+};
+
 struct PendingLocalInventoryEquipRequest {
     std::uint32_t recipe_uid = 0;
     uintptr_t gameplay_scene_address = 0;
@@ -213,6 +225,8 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> mouse_left_edge_serial{0};
     std::atomic<std::uint64_t> mouse_left_edge_tick_ms{0};
     std::atomic<std::uint64_t> claimed_primary_cast_edge_serial{0};
+    std::atomic<std::int32_t> last_belt_slot_edge{-1};
+    std::atomic<std::uint64_t> last_belt_slot_edge_tick_ms{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
     std::atomic<std::uint64_t> last_mouse_left_hold_player_tick_generation{0};
@@ -256,6 +270,7 @@ struct GameplayKeyboardInjectionState {
         pending_nested_sack_inventory_fixtures;
     std::deque<PendingClientLocalLootSuppressionRequest> pending_client_local_loot_suppression_requests;
     std::deque<PendingNativeInventoryCredit> pending_native_inventory_credits;
+    std::deque<PendingLuaItemGrant> pending_lua_item_grants;
     std::deque<PendingLocalInventoryEquipRequest>
         pending_local_inventory_equip_requests;
     std::unordered_set<std::uint64_t> pending_native_inventory_credit_drop_ids;

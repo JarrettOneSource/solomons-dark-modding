@@ -1,3 +1,56 @@
+bool TryGetActiveControlledEnemySpawnRequest(
+    ManualRunEnemySpawnRequest* request) {
+    if (request == nullptr || !g_manual_run_enemy_spawner_tick_active) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (!g_have_active_manual_run_enemy_spawn) {
+        return false;
+    }
+    *request = g_active_manual_run_enemy_spawn;
+    return true;
+}
+
+void ApplyLuaEnemySpawnConfigToFilterContext(
+    const SDModLuaEnemySpawnConfig& config,
+    LuaEnemySpawnFilterContext* context) {
+    if (context == nullptr || config.content_id == 0) {
+        return;
+    }
+    if (config.hp_valid) {
+        context->hp = config.hp;
+    }
+    if (config.chase_speed_valid) {
+        context->chase_speed = config.chase_speed;
+    }
+    if (config.attack_speed_valid) {
+        context->attack_speed = config.attack_speed;
+    }
+    if (config.scale_valid) {
+        context->scale = config.scale;
+    }
+}
+
+void RememberActiveLuaEnemyEffectiveConfig(
+    std::uint64_t request_id,
+    const LuaEnemySpawnFilterContext& context) {
+    std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
+    if (!g_have_active_manual_run_enemy_spawn ||
+        g_active_manual_run_enemy_spawn.request_id != request_id ||
+        g_active_manual_run_enemy_spawn.lua_config.content_id == 0) {
+        return;
+    }
+    auto& config = g_active_manual_run_enemy_spawn.lua_config;
+    config.hp_valid = true;
+    config.hp = context.hp;
+    config.chase_speed_valid = true;
+    config.chase_speed = context.chase_speed;
+    config.attack_speed_valid = true;
+    config.attack_speed = context.attack_speed;
+    config.scale_valid = true;
+    config.scale = context.scale;
+}
+
 void* __fastcall HookEnemySpawned(
     void* self,
     void* unused_edx,
@@ -14,11 +67,19 @@ void* __fastcall HookEnemySpawned(
 
     const auto config_address = static_cast<uintptr_t>(
         static_cast<std::uint32_t>(enemy_config));
+    ManualRunEnemySpawnRequest controlled_request;
+    const bool have_controlled_request =
+        TryGetActiveControlledEnemySpawnRequest(&controlled_request);
+    const bool registered_enemy_request =
+        have_controlled_request &&
+        controlled_request.lua_config.content_id != 0;
+    const bool apply_owner_filters =
+        HasLuaEnemySpawnFilterHandlers() &&
+        !multiplayer::IsLocalTransportClient() &&
+        (!g_manual_run_enemy_spawner_tick_active || registered_enemy_request);
     LuaEnemySpawnFilterContext original_filter_context;
     bool restore_filter_context = false;
-    if (HasLuaEnemySpawnFilterHandlers() &&
-        !multiplayer::IsLocalTransportClient() &&
-        !g_manual_run_enemy_spawner_tick_active) {
+    if (registered_enemy_request || apply_owner_filters) {
         LuaEnemySpawnFilterContext filtered_context;
         if (!TryCaptureLuaEnemySpawnFilterContext(
                 reinterpret_cast<uintptr_t>(self),
@@ -28,10 +89,32 @@ void* __fastcall HookEnemySpawned(
                 &g_lua_enemy_spawn_filter_capture_log_count,
                 "enemy.spawning skipped because the stock config could not "
                 "be captured. config=" + HexString(config_address));
+            if (registered_enemy_request) {
+                CompleteManualRunEnemySpawnFailure(
+                    controlled_request,
+                    "registered enemy stock config could not be captured.");
+                return CanceledEnemySpawnResult();
+            }
         } else {
             original_filter_context = filtered_context;
-            if (!ApplyLuaEnemySpawnFilters(&filtered_context)) {
+            if (registered_enemy_request) {
+                ApplyLuaEnemySpawnConfigToFilterContext(
+                    controlled_request.lua_config,
+                    &filtered_context);
+            }
+            if (apply_owner_filters &&
+                !ApplyLuaEnemySpawnFilters(&filtered_context)) {
+                if (registered_enemy_request) {
+                    CompleteManualRunEnemySpawnFailure(
+                        controlled_request,
+                        "registered enemy spawn was canceled by enemy.spawning.");
+                }
                 return CanceledEnemySpawnResult();
+            }
+            if (registered_enemy_request) {
+                RememberActiveLuaEnemyEffectiveConfig(
+                    controlled_request.request_id,
+                    filtered_context);
             }
             if (LuaEnemySpawnFilterContextChanged(
                     original_filter_context,
@@ -52,6 +135,17 @@ void* __fastcall HookEnemySpawned(
                                  : "0"));
                     if (write_result ==
                         LuaEnemySpawnConfigWriteResult::RestoreFailed) {
+                        if (registered_enemy_request) {
+                            CompleteManualRunEnemySpawnFailure(
+                                controlled_request,
+                                "registered enemy stock config restore failed.");
+                        }
+                        return CanceledEnemySpawnResult();
+                    }
+                    if (registered_enemy_request) {
+                        CompleteManualRunEnemySpawnFailure(
+                            controlled_request,
+                            "registered enemy stock config rewrite failed.");
                         return CanceledEnemySpawnResult();
                     }
                 }
@@ -102,6 +196,12 @@ void* __fastcall HookEnemySpawned(
         IsArenaCombatActorType(actor_object_type);
     if (arena_combat_actor_type) {
         RememberArenaEnemyWaveSpawner(g_current_wave_spawner_tick_address);
+        if (g_current_wave_number > 0) {
+            ObserveAuthorityWaveEnemySpawn(
+                enemy_address,
+                enemy_type,
+                g_current_wave_number);
+        }
     }
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +
@@ -113,6 +213,7 @@ void* __fastcall HookEnemySpawned(
         " wave_start_tracking=" +
         std::to_string(g_state.wave_start_enemy_tracking.load(std::memory_order_acquire) ? 1 : 0));
 
+    std::uint64_t spawned_content_id = 0;
     if (g_manual_run_enemy_spawner_tick_active && !arena_combat_actor_type) {
         Log(
             "manual run enemy spawn: ignored non-arena stock spawn during controlled exact spawn. actor=" +
@@ -156,6 +257,7 @@ void* __fastcall HookEnemySpawned(
                 actor_object_type == static_cast<std::uint32_t>(request.type_id);
             result.ok = wrote_x && wrote_y && rebind_ok && exact_native_type;
             result.request_id = request.request_id;
+            result.content_id = request.lua_config.content_id;
             result.type_id = enemy_type >= 0 ? enemy_type : request.type_id;
             result.actor_address = enemy_address;
             result.requested_x = request.x;
@@ -178,6 +280,10 @@ void* __fastcall HookEnemySpawned(
             }
             x = final_x;
             y = final_y;
+            if (result.ok && request.lua_config.content_id != 0) {
+                RememberLuaEnemySpawnConfig(enemy_address, request.lua_config);
+                spawned_content_id = request.lua_config.content_id;
+            }
 
             {
                 std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
@@ -188,6 +294,7 @@ void* __fastcall HookEnemySpawned(
                 "manual run enemy spawn: completed through exact stock path. request_id=" +
                 std::to_string(result.request_id) +
                 " requested_type_id=" + std::to_string(request.type_id) +
+                " content_id=" + std::to_string(result.content_id) +
                 " actual_type_id=" + std::to_string(result.type_id) +
                 " actor=" + HexString(enemy_address) +
                 " spawn_serial=" + std::to_string(spawn_serial) +
@@ -208,6 +315,6 @@ void* __fastcall HookEnemySpawned(
         }
     }
 
-    DispatchLuaEnemySpawned(enemy_type, x, y);
+    DispatchLuaEnemySpawned(enemy_type, x, y, spawned_content_id);
     return enemy;
 }

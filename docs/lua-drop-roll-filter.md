@@ -63,7 +63,7 @@ during the callback.
 A handler may return:
 
 - `nil` or `true` to retain the current outcome;
-- `false` or `{cancel = true}` to cancel the roll;
+- `false`, `{cancel = true}`, or `{kind = "none"}` to cancel the roll;
 - `{kind = "orb"}`, `{kind = "gold"}`, `{kind = "item"}`,
   `{kind = "powerup"}`, or `{kind = "potion"}` to force a category;
 - `{kind = "stock"}` to clear an earlier forced category;
@@ -78,6 +78,10 @@ and fail open without discarding earlier valid rewrites.
 Handlers execute in stable mod-load order and registration order. Each later
 handler sees earlier selector and `kind` changes. Cancellation is monotonic:
 later handlers and the native selector do not run.
+
+Registered enemies begin this chain with their per-actor `loot` policy from
+`sd.enemies.register`/`spawn`. A handler can replace that forced category with
+another category or `stock`; a starting `none` policy suppresses the selector.
 
 ## Native safety and ownership
 

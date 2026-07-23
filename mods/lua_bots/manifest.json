@@ -7,6 +7,7 @@
     "entryScript": "scripts/main.lua",
     "requiredCapabilities": [
       "events.runtime.tick",
+      "nav.read",
       "bots.runtime",
       "bots.create",
       "bots.destroy",

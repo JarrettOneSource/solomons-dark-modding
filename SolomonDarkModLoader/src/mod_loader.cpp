@@ -7,7 +7,10 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_camera_runtime.h"
+#include "lua_developer_console.h"
 #include "lua_draw_runtime.h"
+#include "lua_ui_runtime.h"
 #include "lua_engine.h"
 #include "lua_exec_pipe.h"
 #include "memory_access.h"
@@ -139,6 +142,7 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
 
 void ShutdownPartialRuntime() {
     StopLuaExecPipeServer();
+    ShutdownLuaDeveloperConsole();
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
     ShutdownGameplayKeyboardInjection();
@@ -151,6 +155,7 @@ void ShutdownPartialRuntime() {
     multiplayer::ShutdownFoundation();
     ShutdownSteamBootstrap();
     ShutdownLuaEngine();
+    ShutdownLuaCameraRuntime();
     ShutdownDebugUiOverlayConfig();
     ShutdownGameplaySeams();
     ShutdownBinaryLayout();
@@ -269,6 +274,13 @@ void Initialize(HMODULE module_handle) {
             std::string keyboard_injection_error;
             if (!InitializeGameplayKeyboardInjection(&keyboard_injection_error)) {
                 Log("Gameplay keyboard injection unavailable. " + keyboard_injection_error);
+            }
+        }
+
+        {
+            std::string camera_error;
+            if (!InitializeLuaCameraRuntime(&camera_error)) {
+                Log("Lua camera runtime unavailable. " + camera_error);
             }
         }
 
@@ -423,6 +435,18 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("lua-draw-renderer-failed", message);
                 return;
             }
+
+            std::string lua_ui_error;
+            if (!StartLuaUiRenderer(&lua_ui_error)) {
+                const auto message = lua_ui_error.empty()
+                    ? std::string("Lua UI renderer could not resolve its native UI seams.")
+                    : lua_ui_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-ui-renderer-failed", message);
+                return;
+            }
+            InitializeLuaDeveloperConsole();
         }
 
         RefreshStartupStatusSnapshot(&startup_status);
@@ -458,6 +482,7 @@ void Shutdown() {
 
     Log("SolomonDarkModLoader shutting down.");
     RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
+    RunShutdownStep("lua developer console", &ShutdownLuaDeveloperConsole);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
@@ -470,6 +495,7 @@ void Shutdown() {
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);
     RunShutdownStep("steam bootstrap", &ShutdownSteamBootstrap);
     RunShutdownStep("lua engine", &ShutdownLuaEngine);
+    RunShutdownStep("lua camera runtime", &ShutdownLuaCameraRuntime);
     RunShutdownStep("debug ui overlay config", &ShutdownDebugUiOverlayConfig);
     RunShutdownStep("gameplay seams", &ShutdownGameplaySeams);
     RunShutdownStep("binary layout", &ShutdownBinaryLayout);

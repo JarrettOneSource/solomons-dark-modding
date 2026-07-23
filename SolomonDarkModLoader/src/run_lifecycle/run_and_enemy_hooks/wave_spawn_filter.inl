@@ -361,13 +361,13 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
     }
 
     if (multiplayer::ShouldPauseMultiplayerGameplay()) {
-        static std::uint64_t s_last_multiplayer_pause_suppress_log_ms = 0;
+        static std::uint64_t s_last_shared_simulation_hold_log_ms = 0;
         const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        if (now_ms - s_last_multiplayer_pause_suppress_log_ms >= 1000) {
-            s_last_multiplayer_pause_suppress_log_ms = now_ms;
+        if (now_ms - s_last_shared_simulation_hold_log_ms >= 1000) {
+            s_last_shared_simulation_hold_log_ms = now_ms;
             Log(
-                "WaveSpawner_Tick suppressed for synchronized multiplayer "
-                "pause. self=" + HexString(self_address));
+                "WaveSpawner_Tick suppressed for shared simulation control. self=" +
+                HexString(self_address));
         }
         return;
     }
@@ -394,12 +394,71 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
         &filtered_action_record_address,
         &filtered_vtable_address);
 
+    LuaWaveSpawnFilterContext wave_context_before;
+    uintptr_t wave_context_vtable = 0;
+    const bool track_wave_summary =
+        g_state.run_active.load(std::memory_order_acquire) &&
+        TryCaptureLuaWaveSpawnFilterContext(
+            self_address,
+            &wave_context_before,
+            &wave_context_vtable);
+    WaveSummaryUpdate wave_started;
+    if (track_wave_summary) {
+        wave_started = ObserveAuthorityWaveSpawner(
+            self_address,
+            wave_context_before.action_record_address,
+            wave_context_before.count,
+            wave_context_before.wave_index);
+        if (wave_started.summary.valid) {
+            const auto current_wave =
+                g_state.current_wave.load(std::memory_order_acquire);
+            g_state.current_wave.store(
+                (std::max)(current_wave, wave_started.summary.wave),
+                std::memory_order_release);
+        }
+        if (wave_started.started_wave != 0) {
+            DispatchLuaWaveStarted(wave_started.summary);
+        }
+        if (wave_started.completed_wave != 0) {
+            DispatchLuaWaveCompleted(wave_started.completed_wave);
+        }
+    }
+
     const auto previous_current_wave_spawner_tick_address =
         g_current_wave_spawner_tick_address;
+    const auto previous_current_wave_number = g_current_wave_number;
     g_current_wave_spawner_tick_address = self_address;
+    g_current_wave_number = track_wave_summary
+        ? wave_started.summary.wave
+        : 0;
     original(self, unused_edx);
     g_current_wave_spawner_tick_address =
         previous_current_wave_spawner_tick_address;
+    g_current_wave_number = previous_current_wave_number;
+
+    if (track_wave_summary &&
+        g_state.run_active.load(std::memory_order_acquire)) {
+        LuaWaveSpawnFilterContext wave_context_after;
+        uintptr_t wave_context_after_vtable = 0;
+        const bool captured_after = TryCaptureLuaWaveSpawnFilterContext(
+            self_address,
+            &wave_context_after,
+            &wave_context_after_vtable);
+        const auto remaining_after =
+            captured_after &&
+                wave_context_after.action_record_address ==
+                    wave_context_before.action_record_address
+            ? wave_context_after.count
+            : 0;
+        const auto wave_update = ObserveAuthorityWaveSpawner(
+            self_address,
+            wave_context_before.action_record_address,
+            remaining_after,
+            wave_context_before.wave_index);
+        if (wave_update.completed_wave != 0) {
+            DispatchLuaWaveCompleted(wave_update.completed_wave);
+        }
+    }
 
     if (tracked_filter_instance) {
         FinishLuaWaveSpawnFilterTick(
@@ -408,16 +467,4 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
             filtered_vtable_address);
     }
 
-    // Only dispatch wave events while a run is active. The game calls the
-    // spawner once more after Game_OnGameOver.
-    if (!g_state.run_active.load(std::memory_order_acquire)) {
-        return;
-    }
-
-    const auto wave_before =
-        g_state.current_wave.load(std::memory_order_acquire);
-    if (wave_before == 0) {
-        g_state.current_wave.store(1, std::memory_order_release);
-        DispatchLuaWaveStarted(1);
-    }
 }
