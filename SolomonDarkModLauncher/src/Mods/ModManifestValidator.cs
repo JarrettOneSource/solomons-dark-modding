@@ -25,6 +25,7 @@ internal static class ModManifestValidator
         {
             throw new InvalidOperationException($"Manifest missing id: {manifestPath}");
         }
+        ValidateModIdentifier(manifestPath, manifest.Id, "id");
 
         if (string.IsNullOrWhiteSpace(manifest.Name))
         {
@@ -267,6 +268,7 @@ internal static class ModManifestValidator
             {
                 throw new InvalidOperationException($"Blank mod id in requiredMods: {manifestPath}");
             }
+            ValidateModIdentifier(manifestPath, requiredModId, "requiredMods");
 
             if (string.Equals(requiredModId, modId, StringComparison.OrdinalIgnoreCase))
             {
@@ -279,6 +281,24 @@ internal static class ModManifestValidator
                 throw new InvalidOperationException(
                     $"Duplicate mod id '{requiredModId}' in requiredMods: {manifestPath}");
             }
+        }
+    }
+
+    private static void ValidateModIdentifier(
+        string manifestPath,
+        string modId,
+        string propertyName)
+    {
+        if (modId.Length > 128 ||
+            modId[0] is '.' or '_' or '-' ||
+            modId[^1] is '.' or '_' or '-' ||
+            modId.Any(character =>
+                !((character >= 'a' && character <= 'z') ||
+                  (character >= '0' && character <= '9') ||
+                  character is '.' or '_' or '-')))
+        {
+            throw new InvalidOperationException(
+                $"Invalid lowercase mod identifier '{modId}' in {propertyName}: {manifestPath}");
         }
     }
 

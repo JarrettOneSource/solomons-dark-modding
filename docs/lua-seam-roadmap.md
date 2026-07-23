@@ -224,6 +224,12 @@ acceptance verifier. See `lua-state-and-events.md`.
 simulation owner, effect transforms replicate. Work item: a **generic modded-effect
 replication channel** (today's channels are per-native-type: ember, firewalker).
 
+**Identity foundation implemented 2026-07-22.** All three content families share the
+`sd.content.v1` FNV-1a-64 derivation over canonical `(mod_id, key)` strings, mapped into
+a positive 63-bit Lua-integer namespace. Duplicate keys, cross-kind reuse, and hash
+collisions fail instead of probing by load order. Registration is entry-script-only and
+identities are removed with their owning Lua state. See `lua-content-identity.md`.
+
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
 targeting limitation foundationally, replacing the pathfinder-hang dead end), `on_think`

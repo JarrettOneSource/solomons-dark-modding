@@ -39,6 +39,9 @@ from static_lua_timer_contracts import (
 from static_lua_bus_contracts import (
     test_lua_bus_is_manifest_resolved_bounded_and_local,
 )
+from static_lua_content_identity_contracts import (
+    test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
+)
 from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
@@ -322,6 +325,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua bus is manifest-resolved, bounded, and local",
         test_lua_bus_is_manifest_resolved_bounded_and_local,
+    ),
+    (
+        "Lua content IDs are canonical, deterministic, and load-scoped",
+        test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
     ),
     (
         "Lua timers are bounded, local, and tick-driven",

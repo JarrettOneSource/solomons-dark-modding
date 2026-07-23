@@ -15,6 +15,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
+    ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
@@ -39,6 +40,72 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestCanonicalModIdentifiersAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        Directory.CreateDirectory(Path.Combine(modRoot, "scripts"));
+        File.WriteAllText(Path.Combine(modRoot, "scripts", "main.lua"), "return true\n");
+
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "Tests.Uppercase",
+              "name": "Invalid Identity",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+        var uppercaseRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            uppercaseRejected = true;
+        }
+        Require(uppercaseRejected, "manifest accepted a non-canonical mod id");
+
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.canonical",
+              "name": "Invalid Dependency Identity",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              },
+              "requiredMods": ["Tests.Dependency"]
+            }
+            """);
+        var dependencyRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            dependencyRejected = true;
+        }
+        Require(dependencyRejected, "manifest accepted a non-canonical required mod id");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
 
 static Task TestCleanInstallEnablesZeroModsAsync()
 {

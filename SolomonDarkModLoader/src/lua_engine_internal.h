@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bot_runtime.h"
+#include "lua_content_registry.h"
 #include "lua_engine_events.h"
 #include "lua_mod_runtime.h"
 #include "runtime_bootstrap.h"
@@ -66,6 +67,7 @@ struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
     lua_State* state = nullptr;
+    bool content_registration_open = false;
     bool runtime_tick_registered = false;
     bool run_started_registered = false;
     bool run_ended_registered = false;
@@ -100,6 +102,12 @@ bool SupportsLuaModRequiredCapabilities(
 void LoadLuaModsForBootstrap(
     const RuntimeBootstrap& bootstrap,
     const std::vector<std::string>& capabilities);
+bool RegisterLuaContentIdentityForMod(
+    LoadedLuaMod* mod,
+    LuaContentKind kind,
+    std::string_view content_key,
+    LuaContentIdentity* identity,
+    std::string* error_message);
 
 bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message);
 void CloseLuaStateForMod(LoadedLuaMod* mod);

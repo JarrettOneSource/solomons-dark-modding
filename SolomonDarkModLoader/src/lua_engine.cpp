@@ -2,6 +2,7 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_content_registry.h"
 #include "lua_draw_runtime.h"
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
@@ -396,7 +397,10 @@ bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message) {
         return false;
     }
 
-    if (!ExecuteEntryScript(mod, error_message)) {
+    mod->content_registration_open = true;
+    const bool entry_script_loaded = ExecuteEntryScript(mod, error_message);
+    mod->content_registration_open = false;
+    if (!entry_script_loaded) {
         return false;
     }
 
@@ -411,11 +415,13 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaEventFilterRegistrationsForMod(mod);
     ClearLuaTimersForMod(mod);
     ClearLuaBusSubscriptionsForMod(mod);
+    UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);
         mod->state = nullptr;
     }
     mod->runtime_tick_registered = false;
+    mod->content_registration_open = false;
     mod->run_started_registered = false;
     mod->run_ended_registered = false;
     mod->wave_started_registered = false;
@@ -454,6 +460,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     runtime_directory = bootstrap.runtime_root / "lua";
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
+    ResetLuaContentRegistry();
     ResetLuaModStateStore();
     detail::ResetLuaEventFilterRegistrations();
     if (!InitializeWaveIntelligence(bootstrap.stage_root, error_message)) {
@@ -487,6 +494,7 @@ void ShutdownLuaEngine() {
     if (!detail::LuaEngineInitializedFlag()) {
         ShutdownLuaDrawRuntime();
         ShutdownWaveIntelligence();
+        ResetLuaContentRegistry();
         return;
     }
 
@@ -495,6 +503,7 @@ void ShutdownLuaEngine() {
         detail::CloseLuaStateForMod(it->get());
     }
     loaded_mods.clear();
+    ResetLuaContentRegistry();
     ResetLuaModStateStore();
     detail::ResetLuaEventFilterRegistrations();
     ShutdownLuaDrawRuntime();

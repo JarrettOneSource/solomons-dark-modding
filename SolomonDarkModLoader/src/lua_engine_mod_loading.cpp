@@ -11,6 +11,33 @@
 
 namespace sdmod::detail {
 
+bool RegisterLuaContentIdentityForMod(
+    LoadedLuaMod* mod,
+    LuaContentKind kind,
+    std::string_view content_key,
+    LuaContentIdentity* identity,
+    std::string* error_message) {
+    if (error_message == nullptr) {
+        return false;
+    }
+    error_message->clear();
+    if (mod == nullptr) {
+        *error_message = "Lua content registration has no owning mod.";
+        return false;
+    }
+    if (!mod->content_registration_open) {
+        *error_message =
+            "Lua content may be registered only while the owning entry script loads.";
+        return false;
+    }
+    return RegisterLuaContentIdentity(
+        kind,
+        mod->descriptor.id,
+        content_key,
+        identity,
+        error_message);
+}
+
 void LoadLuaModsForBootstrap(
     const RuntimeBootstrap& bootstrap,
     const std::vector<std::string>& capabilities) {
