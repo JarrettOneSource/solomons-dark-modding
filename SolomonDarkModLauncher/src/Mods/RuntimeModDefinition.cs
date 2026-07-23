@@ -5,6 +5,7 @@ internal sealed class RuntimeModDefinition
     public string ApiVersion { get; init; } = string.Empty;
     public string EntryScript { get; init; } = string.Empty;
     public string EntryDll { get; init; } = string.Empty;
+    public bool HotReload { get; init; }
     public List<string> RequiredCapabilities { get; init; } = [];
     public List<string> OptionalCapabilities { get; init; } = [];
 

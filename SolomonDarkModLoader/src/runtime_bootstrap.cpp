@@ -49,6 +49,22 @@ bool TryParseUnsigned(const std::string& raw_value, std::size_t* parsed_value) {
     }
 }
 
+bool TryParseBoolean(const std::string& raw_value, bool* parsed_value) {
+    if (parsed_value == nullptr) {
+        return false;
+    }
+    const auto normalized = ToLower(Trim(raw_value));
+    if (normalized == "true") {
+        *parsed_value = true;
+        return true;
+    }
+    if (normalized == "false") {
+        *parsed_value = false;
+        return true;
+    }
+    return false;
+}
+
 bool ParseIniFile(
     const std::filesystem::path& path,
     std::unordered_map<std::string, IniSection>* sections,
@@ -244,6 +260,9 @@ bool LoadRuntimeBootstrap(
         std::string data_root;
         std::string cache_root;
         std::string temp_root;
+        std::string hot_reload;
+        std::string source_root_path;
+        std::string source_entry_script_path;
         std::string entry_script_path;
         std::string entry_dll_path;
         std::string required_capabilities;
@@ -263,6 +282,21 @@ bool LoadRuntimeBootstrap(
             !TryReadRequiredValue(sections, section_name, "data_root_path", &data_root, error_message, path) ||
             !TryReadRequiredValue(sections, section_name, "cache_root_path", &cache_root, error_message, path) ||
             !TryReadRequiredValue(sections, section_name, "temp_root_path", &temp_root, error_message, path) ||
+            !TryReadRequiredValue(sections, section_name, "hot_reload", &hot_reload, error_message, path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_root_path",
+                &source_root_path,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_entry_script_path",
+                &source_entry_script_path,
+                error_message,
+                path) ||
             !TryReadRequiredValue(
                 sections,
                 section_name,
@@ -308,6 +342,18 @@ bool LoadRuntimeBootstrap(
         mod.data_root_path = std::filesystem::path(data_root);
         mod.cache_root_path = std::filesystem::path(cache_root);
         mod.temp_root_path = std::filesystem::path(temp_root);
+        if (!TryParseBoolean(hot_reload, &mod.hot_reload)) {
+            *error_message =
+                "Runtime bootstrap file contains an invalid hot_reload in section [" +
+                section_name + "]: " + path.string();
+            return false;
+        }
+        if (!source_root_path.empty()) {
+            mod.source_root_path = std::filesystem::path(source_root_path);
+        }
+        if (!source_entry_script_path.empty()) {
+            mod.source_entry_script_path = std::filesystem::path(source_entry_script_path);
+        }
         if (!entry_script_path.empty()) {
             mod.entry_script_path = std::filesystem::path(entry_script_path);
         }

@@ -24,6 +24,7 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "public_memory_forwarders.inl",
         "lua_engine_main_thread_pump.inl",
         "lua_engine_event_queue.inl",
+        "lua_exec_wait.inl",
         "transient_status_participant_reconciliation.inl",
         "native_remote_vitals_and_playback.inl",
         "incoming_participant_state_sync.inl",

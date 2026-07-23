@@ -68,7 +68,8 @@ def test_lua_bus_is_manifest_resolved_bounded_and_local() -> str:
         mod_loading,
         "std::unordered_set<std::string> loaded_contracts",
         "mod->requires.begin()",
-        "CreateLuaStateForMod(live_mod",
+        "CreateLuaStateForMod(",
+        "live_mod->descriptor.entry_script_path",
         "loaded_contracts.insert(mod->provides.begin()",
     )
     assert "unavailable runtime contract" in mod_loading

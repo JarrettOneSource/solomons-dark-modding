@@ -53,6 +53,12 @@ internal static class ModManifestValidator
             ValidateRuntime(manifestPath, manifest);
         }
 
+        if (manifest.Runtime.HotReload && !manifest.RequiresLuaRuntime)
+        {
+            throw new InvalidOperationException(
+                $"runtime.hotReload is available only to Lua runtime mods: {manifestPath}");
+        }
+
         ValidateRequiredMods(manifestPath, manifest.Id, manifest.RequiredMods);
         ValidateRuntimeContracts(manifestPath, manifest);
     }

@@ -152,9 +152,9 @@ shared state; simulation calls auto-route to the owner).
    authored picker still depends on the remaining UI-authoring seam.
 2. **Authored UI remains incomplete** — Lua drawing and local custom audio exist, but
    mods still cannot build native-style surfaces and controls.
-3. **Author DX and presentation parity policy remain incomplete.** Cross-mod contracts now
-   exist, but generated editor stubs, hot reload, and manifest-enforced classification of
-   presentation-only mods remain.
+3. **Presentation parity policy remains incomplete.** Cross-mod contracts and the author
+   workflow now exist, but manifest-enforced classification of presentation-only mods
+   remains an open policy decision.
 
 ### Resolved sharp edges
 
@@ -465,6 +465,15 @@ See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
   `RegisterFunction` tables make it mechanical); hot-reload a mod's `lua_State` on file
   change; in-game exec console (the named pipe already does this externally). Ecosystem
   growth is bounded by author iteration speed as much as API power.
+
+  **Implemented 2026-07-23.** The checked-in `api/lua/sd.lua` inventory is generated
+  directly from root-reachable `RegisterLua*Bindings`, preserves table aliases such as
+  `sd.hud == sd.draw`, and is drift-checked with unit tests in CI. Lua/hybrid manifests
+  may opt into stable, hashed source-entry hot reload; syntax failures preserve the
+  running state, normal unload cleanup precedes replacement, and reload defers while a
+  network peer is connected. Ctrl plus backtick opens a bounded draw-list console that submits to
+  the same gameplay-safe async queue and result capture as the external named pipe. See
+  `lua-authoring.md`.
 
 ---
 

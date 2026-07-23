@@ -58,7 +58,7 @@ def test_lua_content_ids_are_canonical_deterministic_and_load_scoped() -> str:
     _require_in_order(
         engine,
         "mod->content_registration_open = true",
-        "ExecuteEntryScript(mod, error_message)",
+        "ExecuteEntryScript(mod, entry_script_path, error_message)",
         "mod->content_registration_open = false",
     )
     _require_in_order(

@@ -167,7 +167,7 @@ int LuaRuntimeGetMod(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 11);
     lua_pushstring(state, mod->descriptor.id.c_str());
     lua_setfield(state, -2, "id");
     lua_pushstring(state, mod->descriptor.name.c_str());
@@ -184,6 +184,8 @@ int LuaRuntimeGetMod(lua_State* state) {
     lua_setfield(state, -2, "root_path");
     lua_pushstring(state, mod->descriptor.entry_script_path.string().c_str());
     lua_setfield(state, -2, "entry_script_path");
+    lua_pushboolean(state, mod->descriptor.hot_reload ? 1 : 0);
+    lua_setfield(state, -2, "hot_reload");
     lua_pushstring(state, mod->descriptor.data_root_path.string().c_str());
     lua_setfield(state, -2, "data_root_path");
     lua_pushstring(state, mod->descriptor.temp_root_path.string().c_str());

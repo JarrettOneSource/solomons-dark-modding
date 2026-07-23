@@ -190,6 +190,21 @@ struct LuaUiActionRegistration {
     int callback_reference = -2;
 };
 
+struct LuaSourceFingerprint {
+    bool exists = false;
+    std::uint64_t size = 0;
+    std::uint64_t hash = 0;
+};
+
+struct LuaHotReloadState {
+    bool initialized = false;
+    bool read_error_logged = false;
+    LuaSourceFingerprint accepted;
+    bool pending = false;
+    LuaSourceFingerprint pending_fingerprint;
+    std::uint64_t pending_since_ms = 0;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -225,6 +240,7 @@ struct LoadedLuaMod {
     std::vector<LuaAudioPlayback> audio_playbacks;
     std::uint64_t next_audio_playback_id = 1;
     std::vector<LuaUiActionRegistration> ui_actions;
+    LuaHotReloadState hot_reload;
 };
 
 std::mutex& LuaEngineMutex();
@@ -248,8 +264,16 @@ bool RegisterLuaContentIdentityForMod(
     LuaContentIdentity* identity,
     std::string* error_message);
 
-bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message);
+bool CreateLuaStateForMod(
+    LoadedLuaMod* mod,
+    const std::filesystem::path& entry_script_path,
+    std::string* error_message);
 void CloseLuaStateForMod(LoadedLuaMod* mod);
+void InitializeLuaHotReloadState(LoadedLuaMod* mod);
+void ResetLuaHotReloadRuntime();
+void PollLuaHotReloadsOnLockedThread(
+    bool has_connected_remote_participant,
+    std::uint64_t now_ms);
 void ClearLuaUiBindingsForMod(LoadedLuaMod* mod);
 void DispatchPendingLuaUiActions();
 

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -97,6 +98,19 @@ struct LuaExecResult {
     std::vector<std::string> results;
     std::string error;
 };
+
+using LuaExecCompletion = std::function<void(LuaExecResult)>;
+
+// Queue a Lua chunk for execution by the same gameplay-safe pump used by the
+// external exec pipe. The completion runs on that pump thread after execution,
+// or synchronously when admission fails.
+bool QueueLuaExecRequestAsync(
+    const std::string& code,
+    LuaExecCompletion completion);
+
+// Return the mod id targeted by queued exec requests (the first loaded Lua
+// mod), or an empty string when no target is available.
+std::string GetLuaExecTargetModId();
 
 // Queue a Lua chunk for execution on the gameplay thread and block the
 // caller for up to `timeout_ms` waiting for the result. Safe to call from

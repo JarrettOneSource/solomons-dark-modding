@@ -1,0 +1,23 @@
+name: Lua authoring contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  generated-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify generated Lua editor API
+        run: python tools/generate_lua_api_stubs.py --check
+      - name: Test Lua editor API generator
+        run: python -m unittest tests.test_lua_api_stub_generator

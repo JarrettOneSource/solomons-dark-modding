@@ -16,6 +16,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
+    ("Lua hot reload bootstrap", TestLuaHotReloadBootstrapAsync),
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
@@ -98,6 +99,93 @@ static Task TestCanonicalModIdentifiersAsync()
             dependencyRejected = true;
         }
         Require(dependencyRejected, "manifest accepted a non-canonical required mod id");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestLuaHotReloadBootstrapAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        var scriptPath = Path.Combine(modRoot, "scripts", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+        File.WriteAllText(scriptPath, "return true\n");
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.hot-reload",
+              "name": "Hot Reload Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua",
+                "hotReload": true
+              }
+            }
+            """);
+
+        var mod = ModDiscovery.DiscoverRoot(modRoot);
+        var stageRoot = Path.Combine(root, "stage");
+        var runtime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var staged = runtime.StagedRuntimeMods.Single();
+        Require(staged.HotReload, "stage descriptor disabled manifest hot reload");
+        Require(
+            Path.GetFullPath(staged.SourceModRootPath) == Path.GetFullPath(modRoot),
+            "stage descriptor lost the source mod root");
+        Require(
+            Path.GetFullPath(staged.SourceEntryScriptPath!) == Path.GetFullPath(scriptPath),
+            "stage descriptor lost the source Lua entry path");
+        Require(
+            Path.GetFullPath(staged.StageEntryScriptPath!) != Path.GetFullPath(scriptPath),
+            "stage and source Lua entry paths were not isolated");
+
+        var bootstrap = File.ReadAllText(runtime.RuntimeBootstrapPath);
+        Require(
+            bootstrap.Contains("hot_reload=true", StringComparison.Ordinal),
+            "runtime bootstrap disabled manifest hot reload");
+        Require(
+            bootstrap.Contains(
+                $"source_entry_script_path={scriptPath}",
+                StringComparison.Ordinal),
+            "runtime bootstrap omitted the source Lua entry path");
+
+        Directory.CreateDirectory(Path.Combine(modRoot, "native"));
+        File.WriteAllBytes(Path.Combine(modRoot, "native", "mod.dll"), [0]);
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.hot-reload",
+              "name": "Invalid Native Hot Reload Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryDll": "native/mod.dll",
+                "hotReload": true
+              }
+            }
+            """);
+        var nativeRejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(modRoot);
+        }
+        catch (InvalidOperationException)
+        {
+            nativeRejected = true;
+        }
+        Require(nativeRejected, "manifest accepted hot reload without a Lua entry point");
     }
     finally
     {

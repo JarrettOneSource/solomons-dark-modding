@@ -90,7 +90,10 @@ void LoadLuaModsForBootstrap(
             auto* live_mod = loaded_mods.back().get();
 
             std::string load_error;
-            if (!CreateLuaStateForMod(live_mod, &load_error)) {
+            if (!CreateLuaStateForMod(
+                    live_mod,
+                    live_mod->descriptor.entry_script_path,
+                    &load_error)) {
                 CloseLuaStateForMod(live_mod);
                 loaded_mods.pop_back();
                 Log("[lua][" + mod->id + "] failed to load entry script: " + load_error);
@@ -100,6 +103,7 @@ void LoadLuaModsForBootstrap(
             LogLuaMessage(
                 *live_mod,
                 "loaded entry script: " + mod->entry_script_path.string());
+            InitializeLuaHotReloadState(live_mod);
             loaded_contracts.insert(mod->provides.begin(), mod->provides.end());
         }
 

@@ -21,6 +21,9 @@ from static_lua_draw_contracts import (
 from static_lua_sprites_contracts import (
     test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
 )
+from static_lua_authoring_contracts import (
+    test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
+)
 from static_lua_event_filter_contracts import (
     test_lua_damage_filters_are_ordered_owner_side_and_transactional,
 )
@@ -429,6 +432,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua sprites are owned, bounded, sandboxed, and revisioned",
         test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
+    ),
+    (
+        "Lua authoring is generated, reloadable, and safe-thread executed",
+        test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
     ),
     (
         "Lua mod state and events are authority-replicated",

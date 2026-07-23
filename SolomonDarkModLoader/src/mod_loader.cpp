@@ -8,6 +8,7 @@
 #include "bot_runtime.h"
 #include "logger.h"
 #include "lua_camera_runtime.h"
+#include "lua_developer_console.h"
 #include "lua_draw_runtime.h"
 #include "lua_ui_runtime.h"
 #include "lua_engine.h"
@@ -141,6 +142,7 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
 
 void ShutdownPartialRuntime() {
     StopLuaExecPipeServer();
+    ShutdownLuaDeveloperConsole();
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
     ShutdownGameplayKeyboardInjection();
@@ -444,6 +446,7 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("lua-ui-renderer-failed", message);
                 return;
             }
+            InitializeLuaDeveloperConsole();
         }
 
         RefreshStartupStatusSnapshot(&startup_status);
@@ -479,6 +482,7 @@ void Shutdown() {
 
     Log("SolomonDarkModLoader shutting down.");
     RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
+    RunShutdownStep("lua developer console", &ShutdownLuaDeveloperConsole);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);

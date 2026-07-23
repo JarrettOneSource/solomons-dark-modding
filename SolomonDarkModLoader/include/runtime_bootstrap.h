@@ -19,6 +19,9 @@ struct RuntimeModDescriptor {
     std::filesystem::path data_root_path;
     std::filesystem::path cache_root_path;
     std::filesystem::path temp_root_path;
+    bool hot_reload = false;
+    std::filesystem::path source_root_path;
+    std::filesystem::path source_entry_script_path;
     std::filesystem::path entry_script_path;
     std::filesystem::path entry_dll_path;
     std::vector<std::string> required_capabilities;

@@ -19,13 +19,35 @@ void ProcessLuaExecQueueOnMainThread() {
     lua_State* shared_state =
         (mods.empty() || mods.front() == nullptr) ? nullptr : mods.front()->state;
 
+    std::vector<std::pair<std::shared_ptr<PendingLuaExecRequest>, LuaExecResult>>
+        completed;
+    completed.reserve(drained.size());
     for (const auto& request : drained) {
         if (!TryClaimLuaExecRequest(request)) {
             continue;
         }
-        LuaExecResult result = ExecuteLuaCodeOnLockedState(shared_state, request->code);
+        completed.emplace_back(
+            request,
+            ExecuteLuaCodeOnLockedState(shared_state, request->code));
+    }
+
+    lock.unlock();
+    for (auto& [request, result] : completed) {
         FinishLuaExecRequest(request, std::move(result));
     }
+}
+
+bool HasConnectedRemoteNetworkParticipant() {
+    const auto runtime = multiplayer::SnapshotFoundationState();
+    return std::any_of(
+        runtime.participants.begin(),
+        runtime.participants.end(),
+        [](const multiplayer::ParticipantInfo& participant) {
+            return multiplayer::IsRemoteParticipant(participant) &&
+                participant.controller_kind ==
+                    multiplayer::ParticipantControllerKind::Native &&
+                participant.transport_connected;
+        });
 }
 
 }  // namespace
@@ -33,15 +55,26 @@ void ProcessLuaExecQueueOnMainThread() {
 
 void PumpLuaExecQueueOnMainThread() {
     detail::ProcessLuaExecQueueOnMainThread();
+    const bool multiplayer_connected = detail::HasConnectedRemoteNetworkParticipant();
+    std::scoped_lock lock(detail::LuaEngineMutex());
+    if (detail::LuaEngineInitializedFlag()) {
+        detail::PollLuaHotReloadsOnLockedThread(
+            multiplayer_connected,
+            static_cast<std::uint64_t>(GetTickCount64()));
+    }
 }
 
 void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
     detail::ProcessLuaExecQueueOnMainThread();
 
+    const bool multiplayer_connected = detail::HasConnectedRemoteNetworkParticipant();
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }
+    detail::PollLuaHotReloadsOnLockedThread(
+        multiplayer_connected,
+        static_cast<std::uint64_t>(GetTickCount64()));
     detail::DispatchPendingLuaNetMessages();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
@@ -57,10 +90,14 @@ void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
 void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
     detail::ProcessLuaExecQueueOnMainThread();
 
+    const bool multiplayer_connected = detail::HasConnectedRemoteNetworkParticipant();
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }
+    detail::PollLuaHotReloadsOnLockedThread(
+        multiplayer_connected,
+        static_cast<std::uint64_t>(GetTickCount64()));
     detail::DispatchPendingLuaNetMessages();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);

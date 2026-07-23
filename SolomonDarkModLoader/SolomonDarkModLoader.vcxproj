@@ -96,6 +96,7 @@
     <ClInclude Include="include\lua_engine_events.h" />
     <ClInclude Include="include\lua_event_filters.h" />
     <ClInclude Include="include\lua_camera_runtime.h" />
+    <ClInclude Include="include\lua_developer_console.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
     <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_sprite_runtime.h" />
@@ -226,6 +227,7 @@
     <ClInclude Include="src\runtime_debug_internal.h" />
     <ClInclude Include="src\lua_engine_internal.h" />
     <ClInclude Include="src\lua_engine_event_queue.inl" />
+    <ClInclude Include="src\lua_exec_wait.inl" />
     <ClInclude Include="src\lua_engine_main_thread_pump.inl" />
     <ClInclude Include="src\bot_runtime\helpers.inl" />
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
@@ -509,6 +511,8 @@
     <ClCompile Include="src\logger_exception_handlers.cpp" />
     <ClCompile Include="src\logger.cpp" />
     <ClCompile Include="src\lua_engine.cpp" />
+    <ClCompile Include="src\lua_developer_console.cpp" />
+    <ClCompile Include="src\lua_hot_reload.cpp" />
     <ClCompile Include="src\lua_engine_mod_loading.cpp" />
     <ClCompile Include="src\lua_engine_bindings.cpp" />
     <ClCompile Include="src\lua_engine_bindings_draw.cpp" />
