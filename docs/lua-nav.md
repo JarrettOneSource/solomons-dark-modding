@@ -74,3 +74,18 @@ py -3 tools/verify_lua_nav.py
 
 The verifier waits for an exact subdivision-2 refresh, checks the cell/sample shape and raw
 address exclusion, exercises a native segment query, and confirms invalid densities fail.
+
+For the complete multiplayer-local contract, use a disposable pair:
+
+```powershell
+py tools/verify_lua_nav_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The pair verifier stages only `sample.lua.nav_lab`, enters one isolated run, and
+requires exact host/client capability, namespace, authority, participant, scene,
+and recursive address-free schema evidence. Each peer independently rebuilds a
+subdivision-2 native snapshot and executes the local player-sized segment path;
+the verifier requires identical shared grid geometry without requiring dynamic
+local traversal counts to match. Invalid densities and non-finite coordinates
+must fail on both peers. Window tiling and global process cleanup are disabled,
+and only the two process IDs returned by this launch are stopped.

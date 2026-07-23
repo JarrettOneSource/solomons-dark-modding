@@ -156,6 +156,13 @@ def test_lua_nav_is_bounded_read_only_and_native_backed() -> str:
     documentation = _read("docs/lua-nav.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_nav.py")
+    multiplayer_verifier = _read("tools/verify_lua_nav_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_nav_multiplayer_verifier.py"
+    )
+    nav_manifest = _read("mods/lua_nav_lab/manifest.json")
+    nav_sample = _read("mods/lua_nav_lab/scripts/main.lua")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     bot_manifest = _read("mods/lua_bots/manifest.json")
     bot_follow = _read("mods/lua_bots/scripts/lib/lua_bots/follow.lua")
 
@@ -210,8 +217,53 @@ def test_lua_nav_is_bounded_read_only_and_native_backed() -> str:
         "navigation snapshot did not reach subdivision 2",
     ):
         assert token in verifier, f"Lua nav verifier lacks: {token}"
+    for token in (
+        '"id": "sample.lua.nav_lab"',
+        '"enabled": false',
+        '"nav.read"',
+    ):
+        assert token in nav_manifest, f"Lua nav sample manifest lacks: {token}"
+    for token in (
+        'sd.runtime.has_capability("nav.read")',
+        "sd.nav.get_grid(1)",
+    ):
+        assert token in nav_sample, f"Lua nav sample lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.nav_lab"',
+        "NAV_PROBE",
+        "exact_object",
+        "exact_array",
+        "grid_geometry_matches",
+        "infinite_rejected",
+        "nan_rejected",
+        "--confirm-mutation",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua nav multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_state_requires_exact_read_only_native_shape",
+        "test_shared_geometry_requires_equal_grid_not_local_traversal",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua nav multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_nav_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.nav exposes bounded address-free snapshots and finite segment tests "
-        "through the native player-sized path and collision rules"
+        "through the native player-sized path and collision rules with exact "
+        "two-peer acceptance"
     )

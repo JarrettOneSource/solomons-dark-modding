@@ -462,7 +462,10 @@ authority-only stock wave start, identical sorted live summaries, and matching
   **Implemented 2026-07-22.** `sd.nav` provides `get_grid/test_segment` with bounded
   subdivision sampling, asynchronous gameplay-thread snapshots, finite segment tests, and
   no raw process addresses. It reuses the native player-sized collision and path rules and
-  advertises `nav.read`. See `lua-nav.md`.
+  advertises `nav.read`. The opt-in two-peer acceptance independently exercises the native
+  grid and segment path on each peer, requires exact recursive address-free schemas, and
+  compares the shared grid geometry without conflating presentation-local traversal
+  counts. See `lua-nav.md` and the disabled `sample.lua.nav_lab` mod.
 - **`sd.scene`** — region/level switching (`kGameplaySwitchRegion`, transition globals)
   paired with `.boneyard` overlays. *MP:* authority-routed; scene epochs already replicate.
 

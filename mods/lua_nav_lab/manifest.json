@@ -1,0 +1,13 @@
+{
+  "id": "sample.lua.nav_lab",
+  "name": "Lua Navigation Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "nav.read"
+    ]
+  }
+}
