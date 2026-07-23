@@ -12,7 +12,7 @@ param(
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
     [string]$ProcessIdOutputPath = "",
-    [string]$ExactModId = ""
+    [string]$ExactModIds = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -32,11 +32,12 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 
 . $launcherProcessHelpers
 
-if (-not [string]::IsNullOrWhiteSpace($ExactModId)) {
+if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
+    $exactModIdList = $ExactModIds.Split(',')
     Set-ExactMultiplayerModState `
         -RootPath $root `
         -Instance $Instance `
-        -ModId $ExactModId
+        -ModIds $exactModIdList
 }
 
 $resolvedOverride = ""

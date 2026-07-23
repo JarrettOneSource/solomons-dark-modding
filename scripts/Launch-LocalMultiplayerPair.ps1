@@ -25,7 +25,7 @@ param(
     [switch]$NoKill,
     [switch]$AllowFocusSteal,
     [string]$ProcessIdOutputPath = "",
-    [string]$ExactModId = ""
+    [string]$ExactModIds = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -881,20 +881,21 @@ $hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or 
 $clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)
 $thirdWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveThirdPreset) -or ($null -ne $thirdSelection)
 
-if (-not [string]::IsNullOrWhiteSpace($ExactModId)) {
+if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
+    $exactModIdList = $ExactModIds.Split(',')
     Set-ExactMultiplayerModState `
         -RootPath $root `
         -Instance "local-mp-host" `
-        -ModId $ExactModId
+        -ModIds $exactModIdList
     Set-ExactMultiplayerModState `
         -RootPath $root `
         -Instance "local-mp-client" `
-        -ModId $ExactModId
+        -ModIds $exactModIdList
     if ($EnableThird) {
         Set-ExactMultiplayerModState `
             -RootPath $root `
             -Instance "local-mp-third" `
-            -ModId $ExactModId
+            -ModIds $exactModIdList
     }
 }
 

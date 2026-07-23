@@ -208,8 +208,8 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert "[System.IO.File]::WriteAllText(" in launcher, (
             f"{launcher_name} launcher does not persist process IDs immediately"
         )
-        assert "$ExactModId" in launcher, (
-            f"{launcher_name} launcher does not accept an exact verifier mod"
+        assert "$ExactModIds" in launcher, (
+            f"{launcher_name} launcher does not accept exact verifier mods"
         )
         assert "Set-ExactMultiplayerModState" in launcher, (
             f"{launcher_name} launcher does not isolate its enabled mod set"
@@ -218,6 +218,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "function Set-ExactMultiplayerModState",
         '"runtime\\instances"',
         '"mod-manager-state.json"',
+        "foreach ($ModId in $ModIds)",
         "$mods[$ModId]",
         "ConvertTo-Json -Depth 4",
     ):

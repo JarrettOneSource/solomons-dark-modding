@@ -82,3 +82,28 @@ peer, use `sd.events.broadcast`; for durable shared state, use `sd.state`.
 The opt-in `sample.lua.bus_provider_lab` and
 `sample.lua.bus_consumer_lab` mods demonstrate provider-first loading and a
 nested cross-state request/response round trip.
+
+## Verification
+
+The single-process verifier attaches to an already running loader whose exact
+enabled set contains both lab mods:
+
+```powershell
+py tools/verify_lua_bus.py
+```
+
+For the complete multiplayer-local lifecycle, use a disposable pair:
+
+```powershell
+py tools/verify_lua_bus_multiplayer.py --launch-pair
+```
+
+The pair verifier stages the provider and consumer as one ordered exact mod set
+on both peers. It proves provider-first resolution and nested cross-state
+request/response independently in each process, then publishes host-only and
+client-only marker messages to demonstrate that subscriptions and deliveries
+never cross the network boundary. The host also fills the remaining 127 slots
+beside the provider's entry-script subscription, rejects the 129th total
+subscription, releases every temporary handle, and proves the consumer
+round-trip still works. Window tiling and global process cleanup are disabled;
+only the two process IDs returned by this launch are stopped.

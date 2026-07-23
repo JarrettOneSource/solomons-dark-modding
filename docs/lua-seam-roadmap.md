@@ -385,8 +385,10 @@ dispatch; a bus message that must reach all peers is just `sd.events.broadcast`.
 rejects unresolved enabled sets; the loader orders consumers after successfully loaded
 providers and skips them when a real provider is unavailable. Payloads cross isolated Lua
 states through the bounded value codec, subscriptions are snapshot-dispatched and cleaned
-up with their owner, and nested work is capped. It advertises `bus.local.contracts`; see
-`lua-bus.md` and the opt-in provider/consumer lab pair.
+up with their owner, and nested work is capped. The exact two-peer acceptance proves
+provider/consumer loading, nested cross-state dispatch, per-process isolation, capacity,
+and release. It advertises `bus.local.contracts`; see `lua-bus.md` and the opt-in
+provider/consumer lab pair.
 
 **11. `sd.net` — escape hatch.** Raw mod-defined messages between participants for the
 rare mod that outgrows `sd.state`/broadcast (e.g., streaming large payloads). Most mods

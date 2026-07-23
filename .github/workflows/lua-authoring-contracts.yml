@@ -65,5 +65,7 @@ jobs:
         run: python -m unittest tests.test_lua_timer_multiplayer_verifier
       - name: Test Lua multiplayer audio verifier
         run: python -m unittest tests.test_lua_audio_multiplayer_verifier
+      - name: Test Lua multiplayer bus verifier
+        run: python -m unittest tests.test_lua_bus_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

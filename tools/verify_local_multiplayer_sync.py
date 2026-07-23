@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import queue
+import re
 import select
 import subprocess
 import sys
@@ -187,6 +188,39 @@ def extract_json(buffer: str) -> dict[str, object] | None:
     return value
 
 
+def _serialize_exact_mod_ids(
+    *,
+    exact_mod_id: str | None,
+    exact_mod_ids: Iterable[str] | None,
+) -> str | None:
+    if exact_mod_id is not None and exact_mod_ids is not None:
+        raise ValueError(
+            "exact_mod_id and exact_mod_ids are mutually exclusive"
+        )
+    if exact_mod_ids is None:
+        if exact_mod_id is None:
+            return None
+        values = [exact_mod_id]
+    else:
+        if isinstance(exact_mod_ids, str):
+            raise TypeError("exact_mod_ids must be an iterable of mod IDs")
+        values = list(exact_mod_ids)
+        if not values:
+            raise ValueError("exact_mod_ids must not be empty")
+
+    seen: set[str] = set()
+    for value in values:
+        if (
+            not isinstance(value, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value) is None
+        ):
+            raise ValueError(f"invalid exact mod id: {value!r}")
+        if value in seen:
+            raise ValueError(f"duplicate exact mod id: {value}")
+        seen.add(value)
+    return ",".join(values)
+
+
 def launch_pair(
     preset: str = "map_create_fire_mind_hub",
     *,
@@ -203,7 +237,12 @@ def launch_pair(
     allow_focus_steal: bool = False,
     kill_existing: bool = True,
     exact_mod_id: str | None = None,
+    exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
+    serialized_exact_mod_ids = _serialize_exact_mod_ids(
+        exact_mod_id=exact_mod_id,
+        exact_mod_ids=exact_mod_ids,
+    )
     args = [
         "powershell.exe",
         "-NoProfile",
@@ -255,8 +294,8 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
-    if exact_mod_id is not None:
-        args.extend(["-ExactModId", exact_mod_id])
+    if serialized_exact_mod_ids is not None:
+        args.extend(["-ExactModIds", serialized_exact_mod_ids])
     process_id_ledger: Path | None = None
     if not kill_existing:
         args.append("-NoKill")
@@ -435,6 +474,7 @@ def launch_additional_client(
     test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
     exact_mod_id: str | None = None,
+    exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
     """Launch one client without stopping or relaunching an existing session."""
     args = [
@@ -459,8 +499,12 @@ def launch_additional_client(
     ]
     if god_mode:
         args.append("-GodMode")
-    if exact_mod_id is not None:
-        args.extend(["-ExactModId", exact_mod_id])
+    serialized_exact_mod_ids = _serialize_exact_mod_ids(
+        exact_mod_id=exact_mod_id,
+        exact_mod_ids=exact_mod_ids,
+    )
+    if serialized_exact_mod_ids is not None:
+        args.extend(["-ExactModIds", serialized_exact_mod_ids])
     if test_survival_boneyard_override is not None:
         args.extend(
             [

@@ -27,6 +27,18 @@ def test_lua_bus_is_manifest_resolved_bounded_and_local() -> str:
     consumer_manifest = _read("mods/lua_bus_consumer_lab/manifest.json")
     consumer = _read("mods/lua_bus_consumer_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_bus.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_bus_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_bus_multiplayer_verifier.py"
+    )
+    multiplayer_launcher = _read("tools/verify_local_multiplayer_sync.py")
+    pair_launcher = _read("scripts/Launch-LocalMultiplayerPair.ps1")
+    process_helpers = _read(
+        "scripts/LocalMultiplayerLauncher.Process.ps1"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaBusBindings(mod->state)" in bindings
     assert "lua_createtable(mod->state, 0, 29);" in bindings
@@ -119,8 +131,75 @@ def test_lua_bus_is_manifest_resolved_bounded_and_local() -> str:
         "publisher_mod_id",
     ):
         assert token in verifier, f"Lua bus verifier lacks: {token}"
+    for token in (
+        'PROVIDER_MOD_ID = "sample.lua.bus_provider_lab"',
+        'CONSUMER_MOD_ID = "sample.lua.bus_consumer_lab"',
+        "CONTRACT_PROBE",
+        "SETUP_PROBE",
+        "STATE_PROBE",
+        "CAPACITY_PROBE",
+        "contract_matches",
+        "state_matches",
+        "capacity_matches",
+        "exact_mod_ids=ACCEPTANCE_MOD_IDS",
+        "tile_windows=False",
+        "kill_existing=False",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua bus multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_contract_requires_exact_cross_mod_schema",
+        "test_state_requires_exact_process_local_marker",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_cross_mod_dispatch_capacity_and_isolation",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua bus multiplayer verifier tests lack: {token}"
+        )
+    for token in (
+        "def _serialize_exact_mod_ids(",
+        '"-ExactModIds"',
+        "exact_mod_ids: Iterable[str] | None",
+    ):
+        assert token in multiplayer_launcher, (
+            f"local multiplayer launcher lacks exact mod sets: {token}"
+        )
+    for token in (
+        "[string]$ExactModIds",
+        "$ExactModIds.Split(',')",
+        "-ModIds $exactModIdList",
+    ):
+        assert token in pair_launcher, (
+            f"pair launcher lacks exact mod sets: {token}"
+        )
+    for token in (
+        "[string[]]$ModIds",
+        "foreach ($ModId in $ModIds)",
+        "$mods[$ModId]",
+    ):
+        assert token in process_helpers, (
+            f"exact mod-state helper lacks ordered sets: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_bus_multiplayer_verifier"
+        in workflow
+    )
+    for token in (
+        "verify_lua_bus_multiplayer.py --launch-pair",
+        "one ordered exact mod set",
+        "never cross the network boundary",
+        "remaining 127 slots",
+    ):
+        assert token in documentation, (
+            f"Lua bus pair documentation lacks: {token}"
+        )
 
     return (
         "sd.bus resolves manifest contracts against successfully loaded providers, "
-        "copies bounded payloads across isolated states, and dispatches locally"
+        "copies bounded payloads across isolated states, and has exact "
+        "two-peer process-local lifecycle and capacity acceptance"
     )

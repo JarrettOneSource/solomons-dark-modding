@@ -94,7 +94,7 @@ function Set-ExactMultiplayerModState {
         [Parameter(Mandatory = $true)]
         [string]$Instance,
         [Parameter(Mandatory = $true)]
-        [string]$ModId
+        [string[]]$ModIds
     )
 
     if ($Instance.Length -gt 64 -or
@@ -102,8 +102,18 @@ function Set-ExactMultiplayerModState {
         $Instance -notmatch '[A-Za-z0-9]') {
         throw "Invalid exact-mod instance name: $Instance"
     }
-    if ($ModId -notmatch '^[a-z0-9][a-z0-9._-]*$') {
-        throw "Invalid exact mod id: $ModId"
+    if ($ModIds.Count -eq 0) {
+        throw "At least one exact mod id is required."
+    }
+    $seenModIds = @{}
+    foreach ($ModId in $ModIds) {
+        if ($ModId -notmatch '^[a-z0-9][a-z0-9._-]*$') {
+            throw "Invalid exact mod id: $ModId"
+        }
+        if ($seenModIds.ContainsKey($ModId)) {
+            throw "Duplicate exact mod id: $ModId"
+        }
+        $seenModIds[$ModId] = $true
     }
 
     $instancesRoot = [System.IO.Path]::GetFullPath(
@@ -120,7 +130,9 @@ function Set-ExactMultiplayerModState {
 
     [System.IO.Directory]::CreateDirectory($instanceRoot) | Out-Null
     $mods = [ordered]@{}
-    $mods[$ModId] = [ordered]@{ Enabled = $true }
+    foreach ($ModId in $ModIds) {
+        $mods[$ModId] = [ordered]@{ Enabled = $true }
+    }
     $document = [ordered]@{ Mods = $mods }
     [System.IO.File]::WriteAllText(
         (Join-Path $instanceRoot "mod-manager-state.json"),
