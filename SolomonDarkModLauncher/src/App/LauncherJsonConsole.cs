@@ -1,5 +1,7 @@
 using System.Text.Json;
 using SolomonDarkModLauncher.Commands;
+using SolomonDarkModLauncher.Infrastructure;
+using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
 
@@ -65,6 +67,39 @@ internal static class LauncherJsonConsole
                     ReusedManualModCount = execution.LobbyModSync.ReusedManualModCount,
                     ReusedCachedModCount = execution.LobbyModSync.ReusedCachedModCount,
                     DownloadedModCount = execution.LobbyModSync.DownloadedModCount
+                },
+            JoinPreview = execution.JoinPreview is null
+                ? null
+                : new LauncherJsonJoinPreview
+                {
+                    LobbyId = execution.JoinPreview.LobbyId,
+                    UsedWebsite = execution.JoinPreview.UsedWebsite,
+                    Error = execution.JoinPreview.Error,
+                    HostProtocolVersion = execution.JoinPreview.HostBuild?.ProtocolVersion,
+                    HostLoaderVersion = execution.JoinPreview.HostBuild?.LoaderVersion,
+                    HostManifestSha256 = execution.JoinPreview.HostBuild?.ManifestSha256,
+                    LocalProtocolVersion = MultiplayerCompatibilityMaterializer.CurrentProtocolVersion,
+                    LocalLoaderVersion = LauncherVersionInfo.Informational,
+                    InstalledCount = execution.JoinPreview.InstalledCount,
+                    CachedCount = execution.JoinPreview.CachedCount,
+                    DownloadCount = execution.JoinPreview.DownloadCount,
+                    UnavailableCount = execution.JoinPreview.UnavailableCount,
+                    Mods = execution.JoinPreview.Mods.Select(mod => new LauncherJsonJoinPreviewMod
+                    {
+                        Id = mod.Id,
+                        Version = mod.Version,
+                        Name = mod.Name,
+                        State = mod.State switch
+                        {
+                            LobbyJoinPreviewModState.Installed => "installed",
+                            LobbyJoinPreviewModState.Cached => "cached",
+                            LobbyJoinPreviewModState.NeedsDownload => "needsDownload",
+                            LobbyJoinPreviewModState.Unavailable => "unavailable",
+                            _ => "unknown"
+                        },
+                        InstalledVersion = mod.InstalledVersion,
+                        DownloadSizeBytes = mod.DownloadSizeBytes
+                    }).ToArray()
                 },
             Stage = execution.StageResult is null
                 ? null
@@ -157,6 +192,7 @@ internal static class LauncherJsonConsole
             Configuration = null,
             Mods = [],
             LobbyModSync = null,
+            JoinPreview = null,
             Stage = null,
             Launch = null,
             ModStateChange = null
@@ -184,6 +220,7 @@ internal static class LauncherJsonConsole
             LauncherMode.ListMods => "list-mods",
             LauncherMode.EnableMod => "enable-mod",
             LauncherMode.DisableMod => "disable-mod",
+            LauncherMode.JoinPreview => "join-preview",
             _ => throw new InvalidOperationException($"Unsupported mode: {mode}")
         };
     }
@@ -197,6 +234,7 @@ internal static class LauncherJsonConsole
         public required LauncherJsonConfiguration? Configuration { get; init; }
         public required IReadOnlyList<LauncherJsonMod> Mods { get; init; }
         public required LauncherJsonLobbyModSync? LobbyModSync { get; init; }
+        public required LauncherJsonJoinPreview? JoinPreview { get; init; }
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
         public required LauncherJsonModStateChange? ModStateChange { get; init; }
@@ -210,6 +248,33 @@ internal static class LauncherJsonConsole
         public required int ReusedManualModCount { get; init; }
         public required int ReusedCachedModCount { get; init; }
         public required int DownloadedModCount { get; init; }
+    }
+
+    private sealed class LauncherJsonJoinPreview
+    {
+        public required ulong LobbyId { get; init; }
+        public required bool UsedWebsite { get; init; }
+        public required string? Error { get; init; }
+        public required int? HostProtocolVersion { get; init; }
+        public required string? HostLoaderVersion { get; init; }
+        public required string? HostManifestSha256 { get; init; }
+        public required int LocalProtocolVersion { get; init; }
+        public required string LocalLoaderVersion { get; init; }
+        public required int InstalledCount { get; init; }
+        public required int CachedCount { get; init; }
+        public required int DownloadCount { get; init; }
+        public required int UnavailableCount { get; init; }
+        public required IReadOnlyList<LauncherJsonJoinPreviewMod> Mods { get; init; }
+    }
+
+    private sealed class LauncherJsonJoinPreviewMod
+    {
+        public required string Id { get; init; }
+        public required string Version { get; init; }
+        public required string? Name { get; init; }
+        public required string State { get; init; }
+        public required string? InstalledVersion { get; init; }
+        public required long? DownloadSizeBytes { get; init; }
     }
 
     private sealed class LauncherJsonConfiguration

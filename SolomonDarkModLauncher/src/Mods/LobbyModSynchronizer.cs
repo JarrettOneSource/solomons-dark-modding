@@ -17,12 +17,7 @@ internal static class LobbyModSynchronizer
         string? ticket,
         CancellationToken cancellationToken = default)
     {
-        using var client = new HttpClient
-        {
-            BaseAddress = new Uri(directoryBaseUrl.TrimEnd('/') + "/"),
-            Timeout = TimeSpan.FromMinutes(5)
-        };
-
+        using var client = CreateClient(directoryBaseUrl);
         return await SynchronizeAsync(
             localCatalog,
             lobbyId,
@@ -41,7 +36,7 @@ internal static class LobbyModSynchronizer
         CancellationToken cancellationToken = default)
     {
 
-        var manifest = await TryFetchRequiredModsAsync(
+        var manifest = await TryFetchJoinManifestAsync(
             client,
             lobbyId,
             ticket,
@@ -84,18 +79,24 @@ internal static class LobbyModSynchronizer
         if (missing.Length > 0)
         {
             var resolved = await ResolveAsync(client, missing, cancellationToken);
+            var unavailable = missing
+                .Where(requirement => !resolved.ContainsKey(requirement.Id))
+                .ToArray();
+            if (unavailable.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    "Mod list mismatch that cannot be repaired automatically: the host has " +
+                    $"{Describe(unavailable)} enabled, but " +
+                    (unavailable.Length == 1 ? "that exact version is" : "those exact versions are") +
+                    " not installed locally and not available from the website. " +
+                    "Ask the host to publish the missing mods or disable them before you join.");
+            }
+
             foreach (var requirement in missing)
             {
-                if (!resolved.TryGetValue(requirement.Id, out var package))
-                {
-                    throw new InvalidOperationException(
-                        $"Host mod {requirement.Id} {requirement.Version} is not installed locally " +
-                        "and that exact version is not available from the website.");
-                }
-
                 var installed = await WebsiteModPackageInstaller.InstallAsync(
                     client,
-                    package,
+                    resolved[requirement.Id],
                     requirement,
                     cacheRootPath,
                     cancellationToken);
@@ -112,10 +113,147 @@ internal static class LobbyModSynchronizer
             reusedCached,
             downloaded,
             UsedWebsite: true,
-            FallbackReason: null);
+            FallbackReason: null,
+            HostBuild: manifest.Build);
     }
 
-    private static async Task<JoinManifestFetchResult> TryFetchRequiredModsAsync(
+    public static async Task<LobbyJoinPreview> PreviewAsync(
+        LauncherConfiguration configuration,
+        ModCatalog localCatalog,
+        ulong lobbyId,
+        string directoryBaseUrl,
+        string? ticket,
+        CancellationToken cancellationToken = default)
+    {
+        using var client = CreateClient(directoryBaseUrl);
+        return await PreviewAsync(
+            localCatalog,
+            lobbyId,
+            ticket,
+            configuration.Workspace.ModCacheRootPath,
+            client,
+            cancellationToken);
+    }
+
+    internal static async Task<LobbyJoinPreview> PreviewAsync(
+        ModCatalog localCatalog,
+        ulong lobbyId,
+        string? ticket,
+        string cacheRootPath,
+        HttpClient client,
+        CancellationToken cancellationToken = default)
+    {
+        var manifest = await TryFetchJoinManifestAsync(
+            client,
+            lobbyId,
+            ticket,
+            cancellationToken);
+        if (manifest.Mods is null)
+        {
+            return LobbyJoinPreview.Unavailable(lobbyId, manifest.Error!);
+        }
+
+        var classified = new List<LobbyJoinPreviewMod>(manifest.Mods.Count);
+        var missing = new List<MultiplayerModDescriptor>();
+        foreach (var requirement in manifest.Mods)
+        {
+            var installedDifferently = localCatalog.DiscoveredMods.FirstOrDefault(mod =>
+                string.Equals(mod.Manifest.Id, requirement.Id, StringComparison.OrdinalIgnoreCase));
+            var installedVersion = installedDifferently?.Manifest.Version;
+
+            var manual = FindExact(localCatalog.DiscoveredMods, requirement);
+            if (manual is not null)
+            {
+                classified.Add(new LobbyJoinPreviewMod(
+                    requirement.Id,
+                    requirement.Version,
+                    requirement.ContentSha256,
+                    LobbyJoinPreviewModState.Installed,
+                    manual.Manifest.Name,
+                    InstalledVersion: null,
+                    DownloadSizeBytes: null));
+                continue;
+            }
+
+            var cachePath = WebsiteModPackageInstaller.GetCachePath(cacheRootPath, requirement);
+            var cached = WebsiteModPackageInstaller.TryLoadExact(cachePath, requirement);
+            if (cached is not null)
+            {
+                classified.Add(new LobbyJoinPreviewMod(
+                    requirement.Id,
+                    requirement.Version,
+                    requirement.ContentSha256,
+                    LobbyJoinPreviewModState.Cached,
+                    cached.Manifest.Name,
+                    InstalledVersion: null,
+                    DownloadSizeBytes: null));
+                continue;
+            }
+
+            classified.Add(new LobbyJoinPreviewMod(
+                requirement.Id,
+                requirement.Version,
+                requirement.ContentSha256,
+                LobbyJoinPreviewModState.NeedsDownload,
+                installedDifferently?.Manifest.Name,
+                installedVersion,
+                DownloadSizeBytes: null));
+            missing.Add(requirement);
+        }
+
+        if (missing.Count > 0)
+        {
+            IReadOnlyDictionary<string, WebsiteResolvedMod> resolved;
+            try
+            {
+                resolved = await ResolveAsync(client, missing, cancellationToken);
+            }
+            catch (Exception exception) when (exception is
+                HttpRequestException or
+                InvalidDataException or
+                InvalidOperationException or
+                JsonException or
+                TaskCanceledException)
+            {
+                return LobbyJoinPreview.Unavailable(lobbyId, exception.Message);
+            }
+
+            for (var index = 0; index < classified.Count; index++)
+            {
+                var mod = classified[index];
+                if (mod.State != LobbyJoinPreviewModState.NeedsDownload)
+                {
+                    continue;
+                }
+
+                classified[index] = resolved.TryGetValue(mod.Id, out var package)
+                    ? mod with
+                    {
+                        Name = string.IsNullOrWhiteSpace(package.Name) ? mod.Name : package.Name,
+                        DownloadSizeBytes = package.FileSizeBytes
+                    }
+                    : mod with { State = LobbyJoinPreviewModState.Unavailable };
+            }
+        }
+
+        return new LobbyJoinPreview(
+            lobbyId,
+            UsedWebsite: true,
+            Error: null,
+            manifest.Build,
+            classified);
+    }
+
+    private static HttpClient CreateClient(string directoryBaseUrl) => new()
+    {
+        BaseAddress = new Uri(directoryBaseUrl.TrimEnd('/') + "/"),
+        Timeout = TimeSpan.FromMinutes(5)
+    };
+
+    private static string Describe(IReadOnlyList<MultiplayerModDescriptor> mods) =>
+        string.Join(", ", mods.Select(mod => $"{mod.Id} {mod.Version}"));
+
+    private static async Task<JoinManifestFetchResult> TryFetchJoinManifestAsync(
         HttpClient client,
         ulong lobbyId,
         string? ticket,
@@ -125,17 +263,17 @@ internal static class LobbyModSynchronizer
         timeout.CancelAfter(JoinManifestTimeout);
         try
         {
-            var mods = await FetchRequiredModsAsync(
+            return await FetchJoinManifestAsync(
                 client,
                 lobbyId,
                 ticket,
                 timeout.Token);
-            return new JoinManifestFetchResult(mods, Error: null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new JoinManifestFetchResult(
                 Mods: null,
+                Build: null,
                 $"The website did not provide lobby metadata within {JoinManifestTimeout.TotalSeconds:0} seconds.");
         }
         catch (Exception exception) when (exception is
@@ -144,11 +282,11 @@ internal static class LobbyModSynchronizer
             InvalidOperationException or
             JsonException)
         {
-            return new JoinManifestFetchResult(Mods: null, exception.Message);
+            return new JoinManifestFetchResult(Mods: null, Build: null, exception.Message);
         }
     }
 
-    private static async Task<IReadOnlyList<MultiplayerModDescriptor>> FetchRequiredModsAsync(
+    private static async Task<JoinManifestFetchResult> FetchJoinManifestAsync(
         HttpClient client,
         ulong lobbyId,
         string? ticket,
@@ -197,7 +335,18 @@ internal static class LobbyModSynchronizer
                 mod.ContentSha256!.ToLowerInvariant()));
         }
 
-        return required;
+        var build = manifest.Build is null
+            ? null
+            : new LobbyBuildDescriptor(
+                manifest.Build.ProtocolVersion,
+                IsSha256(manifest.Build.ManifestSha256)
+                    ? manifest.Build.ManifestSha256!.ToLowerInvariant()
+                    : null,
+                string.IsNullOrWhiteSpace(manifest.Build.LoaderVersion)
+                    ? null
+                    : manifest.Build.LoaderVersion);
+
+        return new JoinManifestFetchResult(required, build, Error: null);
     }
 
     private static DiscoveredMod? FindExact(
@@ -265,7 +414,9 @@ internal static class LobbyModSynchronizer
                         mod.Version!,
                         mod.ContentSha256!.ToLowerInvariant(),
                         mod.PackageSha256!.ToLowerInvariant(),
-                        mod.DownloadUrl)))
+                        mod.DownloadUrl,
+                        mod.Name,
+                        mod.FileSize)))
             {
                 throw new InvalidDataException("The website returned invalid resolved mod metadata.");
             }
@@ -288,11 +439,19 @@ internal static class LobbyModSynchronizer
         value is { Length: 64 } && value.All(character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');
 
-    private sealed record JoinManifestResponse(string? LobbyId, ApiModDescriptor[]? Mods);
+    private sealed record JoinManifestResponse(
+        string? LobbyId,
+        ApiModDescriptor[]? Mods,
+        ApiBuildDescriptor? Build);
     private sealed record JoinManifestFetchResult(
         IReadOnlyList<MultiplayerModDescriptor>? Mods,
+        LobbyBuildDescriptor? Build,
         string? Error);
     private sealed record ApiModDescriptor(string? Id, string? Version, string? ContentSha256);
+    private sealed record ApiBuildDescriptor(
+        int? ProtocolVersion,
+        string? ManifestSha256,
+        string? LoaderVersion);
     private sealed record ResolveRequest(ResolveModRequest[] Mods);
     private sealed record ResolveModRequest(string Id, string Version, string ContentSha256);
     private sealed record ResolveResponse(ResolvedModResponse[]? Mods, ApiModDescriptor[]? Missing);
@@ -301,5 +460,7 @@ internal static class LobbyModSynchronizer
         string? Version,
         string? ContentSha256,
         string? PackageSha256,
-        string? DownloadUrl);
+        string? DownloadUrl,
+        string? Name,
+        long? FileSize);
 }
