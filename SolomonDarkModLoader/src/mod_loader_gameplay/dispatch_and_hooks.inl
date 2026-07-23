@@ -5,6 +5,7 @@
 #include "host_loot_drop_deactivation.inl"
 #include "native_inventory_reconciliation.inl"
 #include "local_player_native_equipment.inl"
+#include "lua_item_grant.inl"
 #include "test_blank_boneyard_reconciliation.inl"
 #include "world_snapshot_reconciliation.inl"
 #include "spell_effect_reconciliation.inl"

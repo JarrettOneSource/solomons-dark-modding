@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 74;
+constexpr std::uint16_t kProtocolVersion = 75;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -49,6 +49,7 @@ enum class PacketKind : std::uint16_t {
     LevelUpBarrier = 19,
     ParticipantFrame = 20,
     LuaModStream = 21,
+    LuaItemGrant = 22,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -224,6 +225,13 @@ enum LootSnapshotFlags : std::uint8_t {
 enum LootPickupResultFlags : std::uint16_t {
     LootPickupResultFlagItemColorState = 1 << 0,
 };
+
+enum LuaItemGrantFlags : std::uint8_t {
+    LuaItemGrantFlagColorState = 1 << 0,
+};
+
+constexpr std::uint8_t kLuaItemGrantKnownFlags =
+    LuaItemGrantFlagColorState;
 
 enum SpellEffectSnapshotFlags : std::uint16_t {
     SpellEffectSnapshotFlagTruncated = 1 << 0,
@@ -1101,6 +1109,17 @@ struct LootPickupRequestPacket {
     std::uint8_t reserved[3] = {};
 };
 
+struct LuaItemGrantPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t target_participant_id;
+    std::uint64_t request_id;
+    std::uint64_t content_id;
+    std::uint8_t flags;
+    std::uint8_t reserved[7] = {};
+    std::uint8_t color_state[kParticipantVisualLinkColorBlockBytes] = {};
+};
+
 struct LootPickupResultPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1247,6 +1266,7 @@ static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88, "Unexpected parti
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");
+static_assert(sizeof(LuaItemGrantPacket) == 84, "Unexpected Lua item grant packet size");
 static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

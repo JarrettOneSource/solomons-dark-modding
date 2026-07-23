@@ -343,6 +343,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("nav.read");
         capabilities.emplace_back("scene.read");
         capabilities.emplace_back("scene.switch.authority");
+        capabilities.emplace_back("items.grant.authority");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {

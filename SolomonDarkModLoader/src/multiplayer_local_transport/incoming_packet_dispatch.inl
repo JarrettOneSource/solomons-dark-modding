@@ -137,6 +137,18 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::LuaItemGrant &&
+            received == static_cast<int>(sizeof(LuaItemGrantPacket))) {
+            LuaItemGrantPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaItemGrant)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaItemGrantPacket(packet, from, now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::LuaModStream &&
             received >= static_cast<int>(kLuaModStreamPacketPrefixBytes) &&
             received <= static_cast<int>(sizeof(LuaModStreamPacket))) {

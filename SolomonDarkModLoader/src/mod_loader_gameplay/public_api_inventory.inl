@@ -10,6 +10,23 @@ bool TryResolveNativeItemRecipeByName(
         error_message);
 }
 
+bool QueueLuaItemGrantToLocalInventory(
+    std::uint64_t authority_participant_id,
+    std::uint64_t request_id,
+    std::uint64_t content_id,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        color_state,
+    bool color_state_valid,
+    std::string* error_message) {
+    return QueueLuaItemGrantToLocalInventoryInternal(
+        authority_participant_id,
+        request_id,
+        content_id,
+        color_state,
+        color_state_valid,
+        error_message);
+}
+
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
     std::string* error_message) {

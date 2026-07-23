@@ -947,6 +947,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
+        g_gameplay_keyboard_injection.pending_lua_item_grants.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();
@@ -1134,6 +1135,7 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_reward_spawn_requests.clear();
         g_gameplay_keyboard_injection.pending_local_inventory_equip_requests.clear();
         g_gameplay_keyboard_injection.pending_client_local_loot_suppression_requests.clear();
+        g_gameplay_keyboard_injection.pending_lua_item_grants.clear();
         g_gameplay_keyboard_injection.pending_replicated_loot_snapshots.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivations.clear();
         g_gameplay_keyboard_injection.pending_host_loot_drop_deactivation_ids.clear();

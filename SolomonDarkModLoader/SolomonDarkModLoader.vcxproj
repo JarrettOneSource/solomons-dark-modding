@@ -358,6 +358,7 @@
     <ClInclude Include="src\mod_loader_gameplay\native_enemy_death_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\lua_item_grant.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_item_materialization.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_staff_behavior_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
@@ -418,6 +419,7 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_codec.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_public.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_item_grant_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />

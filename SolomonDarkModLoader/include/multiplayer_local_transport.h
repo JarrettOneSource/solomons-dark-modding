@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lua_mod_runtime.h"
+#include "multiplayer_runtime_protocol.h"
 
 #include <array>
 #include <cstddef>
@@ -25,6 +26,17 @@ void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
+bool QueueAuthoritativeLuaItemGrant(
+    std::uint64_t content_id,
+    std::uint64_t requested_target_participant_id,
+    const std::array<
+        std::uint8_t,
+        kParticipantVisualLinkColorBlockBytes>& color_state,
+    bool color_state_valid,
+    std::uint64_t* request_id,
+    std::uint64_t* target_participant_id,
+    bool* local_target,
+    std::string* error_message);
 bool PublishAuthoritativeLuaModStateSet(
     const std::string& mod_id,
     const std::string& key,

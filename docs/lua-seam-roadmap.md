@@ -26,7 +26,7 @@ never see them.
 
 | Class | Examples | Multiplayer behavior |
 |---|---|---|
-| **Simulation** (mutates shared game state) | `sd.enemies.spawn`, `sd.items.grant`, `sd.world.spawn_reward`, filter outcomes | Executes where the affected entity is simulated (authority for run entities; owning peer for that peer's wizard, per the participant ownership rules). Called from a non-owning peer, the call transparently becomes a request to the owner — generalizing the existing `request_loot_pickup` pattern. Results replicate through the existing snapshot channels. Identical mod code on every peer. |
+| **Simulation** (mutates shared game state) | `sd.enemies.spawn`, `sd.items.grant`, `sd.world.spawn_reward`, filter outcomes | Executes where the affected entity is simulated (authority for run entities; owning peer for that peer's wizard, per the participant ownership rules). Owner-routed seams transparently request the owner; authority command seams such as item grants reject client authorship and route the accepted command to the target owner. Results replicate through the existing snapshot channels. |
 | **Presentation** (local output) | `sd.hud.*`, `sd.audio.*`, `sd.camera.*`, `sd.ui` authoring | Always local, never replicated. Inherently MP-safe. |
 | **Meta** (mod runtime) | `sd.storage.*`, `sd.timer.*`, `sd.bus.*`, `sd.runtime.*` | Local, with defined sync points (see `sd.state`). |
 
@@ -217,7 +217,7 @@ acceptance verifier. See `lua-state-and-events.md`.
   Data side is proven by `skill_shock_nova`; the missing piece is scripted behavior.
 - `sd.enemies.spawn(key, {hp, speed, scale, loot})` — fix the `Enemy_Create` call shape;
   stat overrides on top.
-- `sd.items.register` / `sd.items.grant(recipe_uid, color_state)` —
+- `sd.items.register` / `sd.items.grant(key_or_content_id, options)` —
   `kInventoryInsertOrStackItem`, `kItemRecipeClone`, recipe table globals.
 *Unlocks:* new-content packs — the ecosystem's lifeblood.
 *Multiplayer:* content IDs from `hash(mod_id, key)`; spell behaviors run on the
@@ -230,11 +230,13 @@ a positive 63-bit Lua-integer namespace. Duplicate keys, cross-kind reuse, and h
 collisions fail instead of probing by load order. Registration is entry-script-only and
 identities are removed with their owning Lua state. See `lua-content-identity.md`.
 
-**Item registration implemented 2026-07-22.** `sd.items.register`, `get`, and `list`
-bind stable content keys to exact recipe name/type pairs in the effective item catalog.
-Each peer lazily resolves its own runtime recipe UID, so a persisted local counter never
-becomes network identity; descriptors remain address-free. See `lua-items.md`. Item
-granting and its authoritative stable-ID channel remain part of this roadmap item.
+**Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
+`list` bind stable content keys to exact recipe name/type pairs in the effective item
+catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
+participant over protocol 75, and lets that owner resolve its peer-local recipe UID just
+before verified stock inventory insertion. Recipe UIDs and addresses never become wire
+identity; reliable target authentication and request deduplication make the mutation
+multiplayer-safe. See `lua-items.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
@@ -315,7 +317,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 74 carries a bounded validated
+includes planned composition, and protocol 75 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 

@@ -128,7 +128,7 @@ replicate anything.
 
 The packet carries at most 20 sorted composition rows. The parser recognizes
 the eight stock wave-file enemy tokens recovered from the retail schedule; it
-does not infer wave syntax from unrelated native object classes. The protocol version is 74;
+does not infer wave syntax from unrelated native object classes. The protocol version is 75;
 incompatible peers are rejected during the normal handshake.
 
 ## Read-only verification

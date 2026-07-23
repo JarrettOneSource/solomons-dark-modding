@@ -48,6 +48,14 @@ bool TryResolveNativeItemRecipeByName(
     std::uint32_t expected_item_type_id,
     std::uint32_t* recipe_uid,
     std::string* error_message);
+bool QueueLuaItemGrantToLocalInventory(
+    std::uint64_t authority_participant_id,
+    std::uint64_t request_id,
+    std::uint64_t content_id,
+    const std::array<std::uint8_t, multiplayer::kParticipantVisualLinkColorBlockBytes>&
+        color_state,
+    bool color_state_valid,
+    std::string* error_message);
 bool QueueNestedSackInventoryFixture(
     std::int32_t potion_slot,
     std::int32_t stack_count,

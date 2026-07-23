@@ -8,7 +8,8 @@
     "entryScript": "scripts/main.lua",
     "requiredCapabilities": [
       "items.register",
-      "items.read"
+      "items.read",
+      "items.grant.authority"
     ]
   }
 }

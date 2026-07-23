@@ -128,6 +128,8 @@ constexpr std::size_t kBeltButtonTypeOffset = 0xB4;
 constexpr std::size_t kBeltButtonSkillEntryIndexOffset = 0xB8;
 constexpr std::uint32_t kBeltButtonSkillTypeId = 0x1B67;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
+constexpr std::size_t kLuaItemGrantMaximumQueuedRequests = 256;
+constexpr std::size_t kLuaItemGrantMaximumRememberedRequests = 512;
 
 std::uint64_t BandwidthLimitedSnapshotIntervalMs(
     std::size_t wire_size,
@@ -705,6 +707,15 @@ struct QueuedLuaModStreamMessage {
     std::vector<std::uint8_t> payload;
 };
 
+struct QueuedAuthoritativeLuaItemGrant {
+    std::uint64_t request_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t content_id = 0;
+    bool color_state_valid = false;
+    std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes>
+        color_state = {};
+};
+
 struct PendingLuaModStreamAssembly {
     LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
     std::uint64_t authority_participant_id = 0;
@@ -867,6 +878,8 @@ struct LocalTransportState {
         pending_lua_mod_stream_assemblies;
     std::map<std::uint64_t, CompletedLuaModStreamMessage>
         completed_lua_mod_stream_messages;
+    std::unordered_set<std::uint64_t> received_lua_item_grant_request_ids;
+    std::deque<std::uint64_t> received_lua_item_grant_request_order;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -898,6 +911,9 @@ std::vector<QueuedLocalHostPowerupPickup>
 std::vector<QueuedLocalLevelUpChoice> g_queued_local_level_up_choices;
 std::vector<QueuedLuaModStreamMessage> g_queued_lua_mod_stream_messages;
 std::uint64_t g_next_lua_mod_stream_sequence = 1;
+std::vector<QueuedAuthoritativeLuaItemGrant>
+    g_queued_authoritative_lua_item_grants;
+std::uint64_t g_next_lua_item_grant_request_id = 1;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
@@ -1238,6 +1254,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/lua_item_grant_sync.inl"
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
@@ -1426,6 +1443,27 @@ int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* 
 #include "multiplayer_local_transport/level_up_authority.inl"
 #include "multiplayer_local_transport/level_up_debug_authority.inl"
 #include "multiplayer_local_transport/level_up_barrier_authority.inl"
+
+bool QueueAuthoritativeLuaItemGrant(
+    std::uint64_t content_id,
+    std::uint64_t requested_target_participant_id,
+    const std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes>&
+        color_state,
+    bool color_state_valid,
+    std::uint64_t* request_id,
+    std::uint64_t* target_participant_id,
+    bool* local_target,
+    std::string* error_message) {
+    return QueueAuthoritativeLuaItemGrantInternal(
+        content_id,
+        requested_target_participant_id,
+        color_state,
+        color_state_valid,
+        request_id,
+        target_participant_id,
+        local_target,
+        error_message);
+}
 
 bool QueueLocalLevelUpChoice(
     std::uint64_t offer_id,

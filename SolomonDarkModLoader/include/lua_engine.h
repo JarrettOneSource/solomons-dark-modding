@@ -26,6 +26,11 @@ void ShutdownLuaEngine();
 bool IsLuaEngineInitialized();
 std::size_t GetLoadedLuaModCount();
 bool HasLuaRuntimeTickHandlers();
+bool TryResolveLuaItemNativeRecipe(
+    std::uint64_t content_id,
+    std::uint32_t* item_type_id,
+    std::uint32_t* recipe_uid,
+    std::string* error_message);
 
 // Result of a queued Lua exec request serviced on the gameplay thread.
 struct LuaExecResult {
