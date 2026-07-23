@@ -77,6 +77,7 @@ internal static class StagedGameLauncher
         LoaderStartupStatusMonitor.Reset(stage.StageRootPath);
         MultiplayerSessionStatusMonitor.Reset(stage.StageRootPath);
 
+        var startedAtUtc = DateTimeOffset.UtcNow;
         var process = Process.Start(startInfo);
         if (process is null)
         {
@@ -132,6 +133,8 @@ internal static class StagedGameLauncher
 
             return new InjectedGame(
                 process.Id,
+                launchToken,
+                startedAtUtc,
                 loaderPath,
                 startupStatus,
                 multiplayerSessionStatus);

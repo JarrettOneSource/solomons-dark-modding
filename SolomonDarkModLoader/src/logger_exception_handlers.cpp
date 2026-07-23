@@ -386,6 +386,18 @@ void InstallCrashHandler(const std::filesystem::path& crash_log_path) {
         std::filesystem::create_directories(crash_directory);
     }
 
+    const auto crash_log = CreateFileW(
+        crash_log_path.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (crash_log != INVALID_HANDLE_VALUE) {
+        CloseHandle(crash_log);
+    }
+
     if (!g_crash_handler_installed) {
         g_previous_exception_filter = SetUnhandledExceptionFilter(&CrashExceptionFilter);
         g_vectored_exception_handler = AddVectoredExceptionHandler(1, &FirstChanceExceptionLogger);

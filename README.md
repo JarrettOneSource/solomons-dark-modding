@@ -7,6 +7,7 @@ The repository excludes original game files, staged runtime output, and local ed
 The friend-playtest beta is distributed as a self-contained ZIP. Extract it,
 run `SolomonDarkMultiplayerBeta.exe`, and choose the original Solomon Dark
 0.72.5 folder; release users do not need Visual Studio or a .NET installation.
+Bundled sample mods are discovered but start disabled on a clean install.
 
 ## Components
 
@@ -141,6 +142,13 @@ The result is
 `artifacts\SHA256SUMS.txt`. The archive includes the self-contained desktop and
 x86 launchers, loader, config, sample mods, and the x86 Steam runtime; it does
 not include Solomon's Dark or Steam credentials.
+
+After an abnormal game exit, the desktop launcher checks the native crash log,
+minidumps, and process exit code, then asks before submitting anything. Choosing
+`Submit Logs` sends a private, Steam-authenticated ZIP containing only the crash
+diagnostics, launcher/stage metadata, runtime configuration, and enabled-mod
+list. Choosing `Don't Send` makes no request. Save files and Steam credentials
+are never included.
 
 Published GitHub releases attach the authorized standalone original game as
 `Solomons-Dark-0.72.5-Original-Game.zip` with a matching `.sha256` asset. The

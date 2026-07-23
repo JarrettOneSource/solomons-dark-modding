@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
 using SolomonDarkModLauncher.UI.Infrastructure;
@@ -11,8 +13,10 @@ namespace SolomonDarkModLauncher.UI.ViewModels;
 internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly LauncherUiCommandClient client_;
+    private readonly CrashReportSubmissionClient crashReportSubmissionClient_ = new();
     private readonly SteamInviteListenerClient steamInviteListener_ = new();
     private readonly StringBuilder transcriptBuilder_ = new();
+    private readonly CancellationTokenSource lifetimeCancellation_ = new();
     private LauncherCliResponse? lastResponse_;
     private bool isBusy_;
     private bool hasError_;
@@ -41,6 +45,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool hostPrivacyPublic_;
     private ulong? pendingLobbyJoinId_;
     private int activeGameProcessId_;
+    private CrashReportCapture? pendingCrashReport_;
+    private bool isCrashPromptOpen_;
+    private bool isCrashSubmitting_;
+    private string crashReportMessage_ = string.Empty;
+    private string crashSubmissionError_ = string.Empty;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -69,6 +78,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenStageFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.StageRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.StageRoot));
         OpenProfileFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ProfileRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ProfileRoot));
         OpenGameFolderCommand = new RelayCommand(_ => OpenFolder(GameDirectory), _ => CanOpenFolder(GameDirectory));
+        SubmitCrashReportCommand = new RelayCommand(
+            _ => _ = SubmitCrashReportAsync(),
+            _ => IsCrashPromptOpen && !IsCrashSubmitting);
+        DismissCrashReportCommand = new RelayCommand(
+            _ => DismissCrashReport(),
+            _ => IsCrashPromptOpen && !IsCrashSubmitting);
 
         steamInviteListener_.NotificationReceived += OnSteamInviteNotification;
         steamInviteListener_.Start();
@@ -181,6 +196,53 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         get => isHostSetupOpen_;
         private set => SetProperty(ref isHostSetupOpen_, value);
     }
+
+    public bool IsCrashPromptOpen
+    {
+        get => isCrashPromptOpen_;
+        private set
+        {
+            if (SetProperty(ref isCrashPromptOpen_, value))
+            {
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public bool IsCrashSubmitting
+    {
+        get => isCrashSubmitting_;
+        private set
+        {
+            if (SetProperty(ref isCrashSubmitting_, value))
+            {
+                OnPropertyChanged(nameof(CrashSubmitButtonText));
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public string CrashReportMessage
+    {
+        get => crashReportMessage_;
+        private set => SetProperty(ref crashReportMessage_, value);
+    }
+
+    public string CrashSubmissionError
+    {
+        get => crashSubmissionError_;
+        private set
+        {
+            if (SetProperty(ref crashSubmissionError_, value))
+            {
+                OnPropertyChanged(nameof(HasCrashSubmissionError));
+            }
+        }
+    }
+
+    public bool HasCrashSubmissionError => !string.IsNullOrWhiteSpace(CrashSubmissionError);
+
+    public string CrashSubmitButtonText => IsCrashSubmitting ? "Submitting…" : "Submit Logs";
 
     public bool HostPrivacyFriends
     {
@@ -321,8 +383,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand OpenStageFolderCommand { get; }
     public RelayCommand OpenProfileFolderCommand { get; }
     public RelayCommand OpenGameFolderCommand { get; }
+    public RelayCommand SubmitCrashReportCommand { get; }
+    public RelayCommand DismissCrashReportCommand { get; }
 
-    private bool CanInteract() => !IsBusy;
+    private bool CanInteract() => !IsBusy && !IsCrashPromptOpen;
 
     private bool CanLaunch() =>
         CanInteract() && isGameReady_ && activeGameProcessId_ == 0;
@@ -474,7 +538,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             activeGameProcessId_ = processId;
             RaiseCommandStates();
-            _ = MonitorGameProcessExitAsync(processId);
+            _ = MonitorGameProcessExitAsync(invocation.Response);
         }
         StatusText = mode switch
         {
@@ -491,12 +555,38 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         TryLaunchPendingLobbyJoin();
     }
 
-    private async Task MonitorGameProcessExitAsync(int processId)
+    private async Task MonitorGameProcessExitAsync(LauncherCliResponse response)
     {
-        while (IsProcessRunning(processId))
+        var processId = response.Launch?.ProcessId ?? 0;
+        var cancellationToken = lifetimeCancellation_.Token;
+        int? exitCode = null;
+        try
         {
-            await Task.Delay(500);
+            using var process = Process.GetProcessById(processId);
+            await process.WaitForExitAsync(cancellationToken);
+            exitCode = process.ExitCode;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        try
+        {
+            await Task.Delay(200, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var crashReport = CrashReportCapture.TryCreate(response, exitCode, Version);
 
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
@@ -508,8 +598,95 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             activeGameProcessId_ = 0;
             RaiseCommandStates();
             StartSteamInviteListener();
+            if (crashReport is not null)
+            {
+                PresentCrashReport(crashReport);
+            }
             TryLaunchPendingLobbyJoin();
         });
+    }
+
+    private void PresentCrashReport(CrashReportCapture crashReport)
+    {
+        pendingCrashReport_ = crashReport;
+        CrashSubmissionError = string.Empty;
+        var dumpText = crashReport.Metadata.MinidumpCount == 1
+            ? "1 minidump"
+            : $"{crashReport.Metadata.MinidumpCount} minidumps";
+        CrashReportMessage =
+            $"Solomon Dark closed unexpectedly (exit code {crashReport.ExitCodeText}). " +
+            $"The launcher captured {dumpText}, diagnostic logs, runtime configuration, " +
+            "and the enabled-mod list. Submit these diagnostics to the Solomon Dark website? " +
+            "The private report will be tied to your Steam identity.";
+        StatusText = "A game crash was detected.";
+        IsCrashPromptOpen = true;
+
+        if (Application.Current.MainWindow is { } window)
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+            window.Activate();
+        }
+    }
+
+    private async Task SubmitCrashReportAsync()
+    {
+        if (pendingCrashReport_ is not { } report || IsCrashSubmitting)
+        {
+            return;
+        }
+
+        var cancellationToken = lifetimeCancellation_.Token;
+        IsCrashSubmitting = true;
+        CrashSubmissionError = string.Empty;
+        StatusText = "Submitting the crash report…";
+        try
+        {
+            var receipt = await crashReportSubmissionClient_.SubmitAsync(
+                report,
+                DirectoryUrl,
+                cancellationToken);
+            pendingCrashReport_ = null;
+            IsCrashPromptOpen = false;
+            StatusText = $"Crash report {receipt.ReportId} was submitted. Thank you.";
+            TryLaunchPendingLobbyJoin();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex) when (ex is IOException or
+                                   UnauthorizedAccessException or
+                                   InvalidDataException or
+                                   InvalidOperationException or
+                                   HttpRequestException or
+                                   JsonException or
+                                   UriFormatException or
+                                   System.ComponentModel.Win32Exception or
+                                   TaskCanceledException)
+        {
+            CrashSubmissionError = ex.Message;
+            StatusText = "The crash report was not submitted.";
+        }
+        finally
+        {
+            IsCrashSubmitting = false;
+        }
+    }
+
+    private void DismissCrashReport()
+    {
+        if (IsCrashSubmitting)
+        {
+            return;
+        }
+
+        pendingCrashReport_ = null;
+        CrashSubmissionError = string.Empty;
+        IsCrashPromptOpen = false;
+        StatusText = "Crash report not sent.";
+        TryLaunchPendingLobbyJoin();
     }
 
     private void StartSteamSessionMonitoring(
@@ -779,9 +956,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        lifetimeCancellation_.Cancel();
         StopSteamSessionMonitoring(clearStatus: false);
         steamInviteListener_.NotificationReceived -= OnSteamInviteNotification;
         steamInviteListener_.Dispose();
+        lifetimeCancellation_.Dispose();
     }
 
     private static string DescribeLobbyConnection(
@@ -919,6 +1098,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenStageFolderCommand.RaiseCanExecuteChanged();
         OpenProfileFolderCommand.RaiseCanExecuteChanged();
         OpenGameFolderCommand.RaiseCanExecuteChanged();
+        SubmitCrashReportCommand.RaiseCanExecuteChanged();
+        DismissCrashReportCommand.RaiseCanExecuteChanged();
     }
 
     private void UpdateLaunchPreview()

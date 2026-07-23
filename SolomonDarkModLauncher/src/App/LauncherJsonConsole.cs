@@ -90,6 +90,8 @@ internal static class LauncherJsonConsole
                 : new LauncherJsonLaunch
                 {
                     ProcessId = execution.LaunchedGame.ProcessId,
+                    LaunchToken = execution.LaunchedGame.LaunchToken,
+                    StartedAtUtc = execution.LaunchedGame.StartedAtUtc,
                     LoaderPath = execution.LaunchedGame.LoaderPath,
                     StartupCode = execution.LaunchedGame.StartupStatus.Code,
                     StartupMessage = execution.LaunchedGame.StartupStatus.Message,
@@ -265,6 +267,8 @@ internal static class LauncherJsonConsole
     private sealed class LauncherJsonLaunch
     {
         public required int ProcessId { get; init; }
+        public required string LaunchToken { get; init; }
+        public required DateTimeOffset StartedAtUtc { get; init; }
         public required string LoaderPath { get; init; }
         public required string StartupCode { get; init; }
         public required string StartupMessage { get; init; }

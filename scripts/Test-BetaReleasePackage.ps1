@@ -43,6 +43,8 @@ $result = [ordered]@{
     extractionRoot = $extractedRoot
     workspaceRoot = $null
     modCount = 0
+    enabledModCount = 0
+    declaredDefaultEnabledModCount = 0
     stagedExecutable = $null
     steamAppId = $null
     steamApiReady = $false
@@ -122,6 +124,19 @@ try {
         }
     }
 
+    $portableMarkerPath = Join-Path $extractedRoot "solomon-dark-multiplayer.json"
+    if (-not (Test-Path $portableMarkerPath -PathType Leaf)) {
+        throw "Extracted beta is missing its portable release marker."
+    }
+    $portableMarker = Get-Content $portableMarkerPath -Raw | ConvertFrom-Json
+    if ($portableMarker.PSObject.Properties.Name -notcontains "defaultEnabledMods") {
+        throw "The beta release marker does not declare its default enabled-mod set."
+    }
+    $result.declaredDefaultEnabledModCount = @($portableMarker.defaultEnabledMods).Count
+    if ($result.declaredDefaultEnabledModCount -ne 0) {
+        throw "The beta release marker declares enabled mods by default."
+    }
+
     $commonArguments = @(
         "--json",
         "--game-dir", $GameDirectory,
@@ -132,6 +147,10 @@ try {
     $result.modCount = @($catalog.mods).Count
     if ($result.modCount -lt 1) {
         throw "Extracted beta discovered no mods."
+    }
+    $result.enabledModCount = @($catalog.mods | Where-Object { $_.enabled }).Count
+    if ($result.enabledModCount -ne 0) {
+        throw "A clean extracted beta enabled $($result.enabledModCount) mods; releases must start with zero enabled mods."
     }
     if (-not [string]::Equals(
             [System.IO.Path]::GetFullPath($result.workspaceRoot),
@@ -151,6 +170,9 @@ try {
         throw "Packaged launcher did not stage SolomonDark.exe."
     }
     $stageReport = Get-Content $stage.stage.stageReportPath -Raw | ConvertFrom-Json
+    if ([int]$stage.stage.enabledModCount -ne 0 -or [int]$stageReport.enabledModCount -ne 0) {
+        throw "A clean extracted beta staged enabled mods."
+    }
     $result.steamAppId = $stageReport.steamBootstrap.appId
     $result.steamApiReady = [bool]$stageReport.steamBootstrap.readyForInitialization
     $result.steamApiSource = $stageReport.steamBootstrap.steamApiSourcePath
