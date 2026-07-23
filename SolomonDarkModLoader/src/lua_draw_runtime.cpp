@@ -1,6 +1,7 @@
 #include "lua_draw_runtime.h"
 
 #include "lua_draw_internal.h"
+#include "lua_sprite_runtime.h"
 
 #include <algorithm>
 #include <mutex>
@@ -61,6 +62,7 @@ bool InitializeLuaDrawRuntime(
         g_lua_draw_runtime.mod_frames.clear();
         g_lua_draw_runtime.initialized = true;
     }
+    ResetLuaSpriteRegistry();
     detail::ConfigureLuaDrawAssets(stage_root / "images");
     return true;
 }
@@ -68,6 +70,7 @@ bool InitializeLuaDrawRuntime(
 void ShutdownLuaDrawRuntime() {
     detail::ShutdownLuaDrawRenderer();
     detail::ResetLuaDrawAssets();
+    ResetLuaSpriteRegistry();
 
     std::scoped_lock lock(g_lua_draw_runtime.mutex);
     g_lua_draw_runtime.initialized = false;
@@ -113,6 +116,21 @@ void CommitLuaDrawFrame(std::string_view mod_id) {
     frame->second.pending_commands.clear();
     frame->second.pending_text_bytes = 0;
     ++frame->second.generation;
+}
+
+void ClearLuaDrawFrameForMod(std::string_view mod_id) {
+    if (mod_id.empty()) {
+        return;
+    }
+    std::scoped_lock lock(g_lua_draw_runtime.mutex);
+    const std::string owner(mod_id);
+    g_lua_draw_runtime.mod_frames.erase(owner);
+    g_lua_draw_runtime.mod_order.erase(
+        std::remove(
+            g_lua_draw_runtime.mod_order.begin(),
+            g_lua_draw_runtime.mod_order.end(),
+            owner),
+        g_lua_draw_runtime.mod_order.end());
 }
 
 bool SubmitLuaDrawCommand(

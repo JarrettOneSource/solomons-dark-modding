@@ -98,6 +98,7 @@
     <ClInclude Include="include\lua_camera_runtime.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
     <ClInclude Include="include\lua_net_runtime.h" />
+    <ClInclude Include="include\lua_sprite_runtime.h" />
     <ClInclude Include="include\lua_time_runtime.h" />
     <ClInclude Include="include\lua_ui_runtime.h" />
     <ClInclude Include="include\lua_content_registry.h" />
@@ -532,6 +533,8 @@
     <ClCompile Include="src\lua_engine_audio.cpp" />
     <ClCompile Include="src\lua_engine_bindings_camera.cpp" />
     <ClCompile Include="src\lua_camera_runtime.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_sprites.cpp" />
+    <ClCompile Include="src\lua_sprite_runtime.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />

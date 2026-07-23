@@ -7,6 +7,7 @@
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
 #include "lua_mod_runtime.h"
+#include "lua_sprite_runtime.h"
 #include "lua_time_runtime.h"
 #include "lua_ui_runtime.h"
 #include "mod_loader.h"
@@ -304,26 +305,23 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "events.filters.enemy_spawn",
         "events.filters.wave_spawn",
         "events.filters.resources",
-        "draw.local.immediate",
-        "draw.text",
-        "draw.primitives",
-        "draw.stock_sprites",
+        "draw.local.immediate", "draw.text",
+        "draw.primitives", "draw.stock_sprites",
         "draw.world_projection",
+        "sprites.local.register", "sprites.local.read",
         "runtime.mod.info",
         "storage.profile.local",
         "timer.local.scheduler",
         "bus.local.contracts",
         "net.raw.fragmented", "net.participant.unicast", "net.participant.broadcast",
         "time.shared.scale", "time.shared.frame_step",
-        "state.replicated.read",
-        "state.replicated.write",
+        "state.replicated.read", "state.replicated.write",
         "ui.snapshot.read",
         "ui.element.query",
         "ui.action.query",
         "ui.action.activate",
         "ui.authoring.native", "ui.action.presentation", "ui.action.simulation.route",
-        "waves.read",
-        "waves.schedule.read",
+        "waves.read", "waves.schedule.read",
         "spells.register",
         "spells.read",
         "spells.effects.read",
@@ -425,6 +423,8 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaNetSubscriptionsForMod(mod);
     ClearLuaTimeScaleRequest(mod->descriptor.id);
     ClearLuaCameraFocus(mod->descriptor.id);
+    ClearLuaDrawFrameForMod(mod->descriptor.id);
+    ClearLuaSpriteAtlasesForMod(mod->descriptor.id);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);

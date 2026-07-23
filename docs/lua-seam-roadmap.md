@@ -454,6 +454,13 @@ See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 - **`sd.sprites`** — runtime sprite/frame registration using the reversed bundle format,
   so mods add art without clobbering whole atlases. *MP:* local; art parity comes from the
   mod-set handshake.
+
+  **Implemented 2026-07-22.** `sd.sprites` registers bounded mod-root PNG/bundle
+  pairs as revisioned `mod_id:key` atlases consumed directly by `sd.draw`. Path
+  canonicalization, PNG/IHDR and frame geometry validation, atomic replacement,
+  unload cleanup, a JSON bundle builder, and a backbuffer verifier cover the full
+  authoring/runtime lifecycle. Rendering remains presentation-local; the launcher's
+  exact mod-directory hash supplies peer art parity. See `lua-sprites.md`.
 - **Author DX** — generate LuaLS/EmmyLua stubs from the binding registry in CI (the
   `RegisterFunction` tables make it mechanical); hot-reload a mod's `lua_State` on file
   change; in-game exec console (the named pipe already does this externally). Ecosystem

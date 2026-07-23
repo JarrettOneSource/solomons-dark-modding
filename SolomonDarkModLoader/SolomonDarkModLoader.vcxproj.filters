@@ -164,6 +164,9 @@
     <ClInclude Include="include\lua_net_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\lua_sprite_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_time_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1448,6 +1451,12 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_camera_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_sprites.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_sprite_runtime.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_spells.cpp">

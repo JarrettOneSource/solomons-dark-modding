@@ -1,6 +1,7 @@
 #include "lua_draw_runtime.h"
 
 #include "lua_draw_internal.h"
+#include "lua_sprite_runtime.h"
 
 #include <array>
 #include <cmath>
@@ -409,6 +410,13 @@ void ResetLuaDrawAssets() {
     g_lua_draw_atlases.clear();
 }
 
+bool TryParseLuaDrawSpriteBundle(
+    const std::filesystem::path& path,
+    std::vector<LuaDrawSpriteInfo>* sprites,
+    std::string* error_message) {
+    return TryParseBundle(path, sprites, error_message);
+}
+
 }  // namespace detail
 
 bool TryGetLuaDrawSpriteInfo(
@@ -424,8 +432,12 @@ bool TryGetLuaDrawSpriteInfo(
         return false;
     }
     if (!TryCanonicalizeAtlasName(atlas, canonical_atlas)) {
-        *error_message = "atlas must name one of the 28 stock sprite atlases.";
-        return false;
+        return TryGetLuaRegisteredSpriteInfo(
+            atlas,
+            sprite_index,
+            info,
+            canonical_atlas,
+            error_message);
     }
 
     std::scoped_lock lock(g_lua_draw_assets_mutex);
@@ -461,17 +473,29 @@ bool TryGetLuaDrawSpriteInfo(
     return true;
 }
 
-std::filesystem::path GetLuaDrawAtlasImagePath(
-    std::string_view canonical_atlas) {
+bool TryGetLuaDrawAtlasSource(
+    std::string_view canonical_atlas,
+    std::filesystem::path* image_path,
+    std::uint64_t* revision) {
+    if (image_path == nullptr || revision == nullptr) {
+        return false;
+    }
+    image_path->clear();
+    *revision = 0;
     std::string verified_atlas;
     if (!TryCanonicalizeAtlasName(canonical_atlas, &verified_atlas)) {
-        return {};
+        return TryGetLuaRegisteredSpriteSource(
+            canonical_atlas,
+            image_path,
+            revision);
     }
     std::scoped_lock lock(g_lua_draw_assets_mutex);
     if (g_lua_draw_images_directory.empty()) {
-        return {};
+        return false;
     }
-    return g_lua_draw_images_directory / (verified_atlas + ".png");
+    *image_path = g_lua_draw_images_directory / (verified_atlas + ".png");
+    *revision = 1;
+    return true;
 }
 
 }  // namespace sdmod

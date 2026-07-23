@@ -43,7 +43,8 @@ another mod's allowance, and lists are rendered in stable mod-load order.
 - 512 commands per mod per completed runtime tick
 - 16 KiB of text bytes per mod per completed runtime tick
 - 1,024 bytes per text command
-- atlas names are limited to the 28 stock names and 32 bytes
+- stock atlas names are limited to the 28 canonical names and 32 bytes;
+  registered `mod_id:key` IDs are limited to 257 bytes
 
 `sd.draw.get_limits()` returns these public bounds. Invalid arguments and
 limit overruns raise a Lua error in the calling handler. The loader catches
@@ -93,10 +94,11 @@ segment renders as a square with the requested thickness.
 
 ### `sd.draw.sprite(atlas, record, x, y[, options])`
 
-Queues one zero-based record from a stock `.bundle` atlas. The loader parses
-the bundle metadata and uploads the sibling stock PNG into a managed D3D9
-texture on first use. The default size is the record's logical canvas; trimmed
-content retains its native offset within that canvas.
+Queues one zero-based record from a stock `.bundle` atlas or a runtime atlas
+registered through [`sd.sprites`](lua-sprites.md). The loader parses the bundle
+metadata and uploads the sibling PNG into a managed D3D9 texture on first use.
+The default size is the record's logical canvas; trimmed content retains its
+native offset within that canvas.
 
 Options:
 
@@ -113,11 +115,13 @@ Atlas names are ASCII case-insensitive and canonicalize to one of:
 
 All 10,498 records in the retail 0.72.5 bundles are unrotated. A rotated record
 is deliberately rejected rather than rendered with incorrect geometry.
+Registered IDs use their exact case-sensitive `mod_id:key` spelling and are
+also required to contain only unrotated records.
 
 ### `sd.draw.get_sprite_info(atlas, record)`
 
-Returns the decoded metadata table, or `nil, error` for an unknown atlas or
-out-of-range record:
+Returns the decoded metadata table for either a stock or registered atlas, or
+`nil, error` for an unknown atlas or out-of-range record:
 
 ```lua
 {

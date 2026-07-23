@@ -1,0 +1,20 @@
+{
+  "frames": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 16,
+      "height": 16,
+      "logical_width": 16,
+      "logical_height": 16
+    },
+    {
+      "x": 16,
+      "y": 0,
+      "width": 16,
+      "height": 16,
+      "logical_width": 16,
+      "logical_height": 16
+    }
+  ]
+}

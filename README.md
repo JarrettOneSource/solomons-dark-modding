@@ -31,8 +31,8 @@ Mods are discovered from `manifest.json`. Each mod may be:
 
 Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
 `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`,
-`lua_hud_showcase`, `lua_camera_lab`, `lua_ui_sandbox_lab`, and the paired Lua
-bus labs.
+`lua_hud_showcase`, `lua_camera_lab`, `lua_sprites_lab`, `lua_ui_sandbox_lab`,
+and the paired Lua bus labs.
 
 Website-distributed packages use the same root-level manifest and may contain
 data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
@@ -87,7 +87,7 @@ present. Provide a 32-bit Steamworks runtime at
 
 ## Loader features
 
-- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, local storage/timers/bus, immediate drawing/HUD, UI, input, debug, bots).
+- Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, local storage/timers/bus, immediate drawing/HUD, runtime sprites, UI, input, debug, bots).
 - Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
@@ -203,6 +203,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
+- `docs/lua-sprites.md` — mod-owned runtime atlases, bundle authoring, sandboxing, and limits.
 - `docs/lua-rng.md` — authority-owned native run seeds and multiplayer run-nonce behavior.
 - `docs/lua-nav.md` — bounded address-free native grid and path-segment queries.
 - `docs/lua-event-filters.md` — synchronous owner-side damage rewrites, cancellation, ordering, and live acceptance.

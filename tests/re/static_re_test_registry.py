@@ -18,6 +18,9 @@ from static_lua_mod_state_contracts import (
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
 )
+from static_lua_sprites_contracts import (
+    test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
+)
 from static_lua_event_filter_contracts import (
     test_lua_damage_filters_are_ordered_owner_side_and_transactional,
 )
@@ -422,6 +425,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua draw is bounded, local, and backbuffer-verified",
         test_lua_draw_is_bounded_local_and_backbuffer_verified,
+    ),
+    (
+        "Lua sprites are owned, bounded, sandboxed, and revisioned",
+        test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
     ),
     (
         "Lua mod state and events are authority-replicated",
