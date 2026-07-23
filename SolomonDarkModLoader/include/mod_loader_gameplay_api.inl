@@ -151,8 +151,33 @@ bool QueueAcceptedReplicatedGoldPickupFeedback(
     std::int32_t resulting_gold,
     std::uint64_t accepted_ms,
     std::string* error_message);
+bool QueueAcceptedReplicatedOrbPickupFeedback(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t resource_kind,
+    float resource_delta,
+    float resulting_life_current,
+    float resulting_life_max,
+    float resulting_mana_current,
+    float resulting_mana_max,
+    std::uint64_t accepted_ms,
+    std::string* error_message);
+bool QueueAcceptedReplicatedPowerupPickupFeedback(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t powerup_kind,
+    std::int32_t powerup_skill_entry_index,
+    std::uint16_t powerup_skill_resulting_active,
+    std::int32_t damage_x4_remaining_ticks,
+    std::uint64_t accepted_ms,
+    std::string* error_message);
 bool IsApplyingAcceptedReplicatedGoldPickupFeedback();
+void CancelReplicatedLootPickupFeedback(std::uint64_t network_drop_id);
 void CancelReplicatedGoldPickupFeedback(std::uint64_t network_drop_id);
+bool TryGetLastReplicatedLootPickupFeedbackState(
+    SDModReplicatedLootPickupFeedbackState* state);
 bool TryGetLastReplicatedGoldPickupFeedbackState(
     SDModReplicatedGoldPickupFeedbackState* state);
 void SuppressClientLocalLootActors(const char* reason);

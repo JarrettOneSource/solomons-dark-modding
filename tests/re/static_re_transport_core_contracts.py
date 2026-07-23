@@ -140,6 +140,171 @@ def test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts(
 
     return "accepted client gold pickups replay stock popup, sound, particles, and credit exactly once"
 
+
+def test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts() -> str:
+    feedback_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_pickup_feedback.inl"
+    )
+    orb_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/orb_pickup_hook.inl"
+    )
+    item_credit_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_inventory_reconciliation.inl"
+    )
+    powerup_hook_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/powerup_pickup_hook.inl"
+    )
+    transport_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport/loot_pickup_packet_handlers.inl"
+    )
+    gameplay_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    lua_gameplay_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+
+    required_pairs = (
+        (feedback_text, "MarkReplicatedLootPickupAwaitingAuthorityInternal("),
+        (feedback_text, "ShouldHoldReplicatedLootPickupForFeedbackLocked("),
+        (feedback_text, "TryBeginAcceptedReplicatedLootPickupFeedbackForActorInternal("),
+        (feedback_text, "CompleteReplicatedLootPickupFeedbackInternal("),
+        (feedback_text, "CallNativePickupNotificationSafe("),
+        (gameplay_api_text, "QueueAcceptedReplicatedOrbPickupFeedback("),
+        (gameplay_api_text, "QueueAcceptedReplicatedPowerupPickupFeedback("),
+        (transport_text, "QueueAcceptedReplicatedOrbPickupFeedback("),
+        (transport_text, "QueueAcceptedReplicatedPowerupPickupFeedback("),
+        (orb_hook_text, "TryBeginAcceptedReplicatedLootPickupFeedbackForActorInternal("),
+        (orb_hook_text, "original(self);"),
+        (orb_hook_text, "TryWriteLocalPlayerOrbResource("),
+        (orb_hook_text, "pending_remove != 0"),
+        (orb_hook_text, "CompleteReplicatedLootPickupFeedbackInternal("),
+        (item_credit_text, "CallAcceptedItemDropPickupTickSafe("),
+        (item_credit_text, "GetX86HookTrampoline<ItemDropPickupTickFn>"),
+        (item_credit_text, "stock_feedback_applied"),
+        (item_credit_text, "kActorPendingRemoveOffset"),
+        (powerup_hook_text, "kSuppressedPowerupApplyKind"),
+        (powerup_hook_text, "TryBeginAcceptedReplicatedLootPickupFeedbackForActorInternal("),
+        (powerup_hook_text, "original(self);"),
+        (powerup_hook_text, "CallNativePickupNotificationSafe("),
+        (powerup_hook_text, "CompleteReplicatedLootPickupFeedbackInternal("),
+        (lua_gameplay_text, '"last_pickup_feedback"'),
+        (lua_gameplay_text, '"apply_count"'),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "accepted client non-gold pickup feedback missing token(s): "
+            + ", ".join(missing)
+        )
+
+    for hook_text, label in ((orb_hook_text, "orb"), (powerup_hook_text, "powerup")):
+        replay = re.search(
+            r"TryBeginAcceptedReplicatedLootPickupFeedbackForActorInternal\s*\("
+            r"(?P<body>.*?)CompleteReplicatedLootPickupFeedbackInternal\s*\(",
+            hook_text,
+            re.DOTALL,
+        )
+        if replay is None or "original(self);" not in replay.group("body"):
+            raise StaticReTestFailure(
+                f"accepted client {label} pickup must replay its retail tick exactly once"
+            )
+
+    return (
+        "accepted client orbs, items, potions, and powerups replay native feedback "
+        "exactly once while retaining authoritative state"
+    )
+
+
+def test_all_stock_potion_subtypes_replicate_as_native_pickups() -> str:
+    transport_text = read_multiplayer_transport_source()
+    reconciliation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
+    )
+    inventory_credit_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_inventory_reconciliation.inl"
+    )
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_pickup_feedback.py"
+    )
+
+    required_pairs = (
+        (transport_text, "kStockPotionSubtypeMin = 0"),
+        (transport_text, "kStockPotionSubtypeMax = 5"),
+        (reconciliation_text, "kStockPotionSubtypeMin = 0"),
+        (reconciliation_text, "kStockPotionSubtypeMax = 5"),
+        (reconciliation_text, "drop.item_slot <= kStockPotionSubtypeMax"),
+        (inventory_credit_text, "request.item_slot > kStockPotionSubtypeMax"),
+        (verifier_text, "STOCK_POTION_SUBTYPES = (0, 1, 2, 3, 4, 5)"),
+        (verifier_text, '"Health Potion"'),
+        (verifier_text, '"Mana Potion"'),
+        (verifier_text, '"Wizard Chug"'),
+        (verifier_text, '"Antidote"'),
+        (verifier_text, '"Mind Chug"'),
+        (verifier_text, '"Rejuvenation Potion"'),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "stock potion subtype replication missing token(s): " + ", ".join(missing)
+        )
+
+    restricted_sources = (reconciliation_text, inventory_credit_text)
+    stale_limits = [
+        token
+        for token in ("item_slot > 1", "drop.item_slot <= 1", "(std::min)(1, drop.item_slot)")
+        if any(token in text for text in restricted_sources)
+    ]
+    if stale_limits:
+        raise StaticReTestFailure(
+            "stock potion replication is still restricted to health/mana: "
+            + ", ".join(stale_limits)
+        )
+
+    return "all six retail potion subtypes materialize, stack, and replay native pickup feedback"
+
+
+def test_misc_ground_items_replicate_without_recipe_identity() -> str:
+    transport_text = read_multiplayer_transport_source()
+    reconciliation_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
+    )
+    materialization_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_item_materialization.inl"
+    )
+    inventory_credit_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_inventory_reconciliation.inl"
+    )
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_pickup_feedback.py"
+    )
+
+    required_pairs = (
+        (transport_text, "kMiscItemTypeId = 0x1B64"),
+        (transport_text, "IsSupportedNonRecipeLootItem("),
+        (reconciliation_text, "kReplicatedLootMiscItemTypeId = 0x1B64"),
+        (reconciliation_text, "IsSupportedReplicatedNonRecipeItem("),
+        (materialization_text, "BuildNativeItemFromLootSnapshot("),
+        (materialization_text, "CallGameObjectFactorySafe("),
+        (materialization_text, "kInventoryMiscItemTypeId"),
+        (inventory_credit_text, "IsSupportedReplicatedNonRecipeItem("),
+        (verifier_text, "MISC_ITEM_SUBTYPES"),
+        (verifier_text, '"Fabric Dye Kit"'),
+        (verifier_text, '"Wizard Key"'),
+        (verifier_text, '"Book of Skill"'),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "nonrecipe miscellaneous pickup replication missing token(s): "
+            + ", ".join(missing)
+        )
+
+    return (
+        "stock dye, key, and skill-book ground items use exact native factory identity "
+        "without inventing recipe UIDs"
+    )
+
 def test_local_multiplayer_udp_transport_is_wired() -> str:
     protocol_text = read_text(MULTIPLAYER_PROTOCOL)
     runtime_state_text = read_multiplayer_runtime_state_source()

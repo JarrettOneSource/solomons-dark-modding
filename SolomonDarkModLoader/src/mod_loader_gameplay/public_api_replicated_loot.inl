@@ -86,6 +86,58 @@ bool QueueAcceptedReplicatedGoldPickupFeedback(
         error_message);
 }
 
+bool QueueAcceptedReplicatedOrbPickupFeedback(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t resource_kind,
+    float resource_delta,
+    float resulting_life_current,
+    float resulting_life_max,
+    float resulting_mana_current,
+    float resulting_mana_max,
+    std::uint64_t accepted_ms,
+    std::string* error_message) {
+    return QueueAcceptedReplicatedOrbPickupFeedbackInternal(
+        run_nonce,
+        network_drop_id,
+        request_sequence,
+        resource_kind,
+        resource_delta,
+        resulting_life_current,
+        resulting_life_max,
+        resulting_mana_current,
+        resulting_mana_max,
+        accepted_ms,
+        error_message);
+}
+
+bool QueueAcceptedReplicatedPowerupPickupFeedback(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t powerup_kind,
+    std::int32_t powerup_skill_entry_index,
+    std::uint16_t powerup_skill_resulting_active,
+    std::int32_t damage_x4_remaining_ticks,
+    std::uint64_t accepted_ms,
+    std::string* error_message) {
+    return QueueAcceptedReplicatedPowerupPickupFeedbackInternal(
+        run_nonce,
+        network_drop_id,
+        request_sequence,
+        powerup_kind,
+        powerup_skill_entry_index,
+        powerup_skill_resulting_active,
+        damage_x4_remaining_ticks,
+        accepted_ms,
+        error_message);
+}
+
+void CancelReplicatedLootPickupFeedback(std::uint64_t network_drop_id) {
+    CancelReplicatedLootPickupFeedbackInternal(network_drop_id);
+}
+
 void CancelReplicatedGoldPickupFeedback(std::uint64_t network_drop_id) {
     CancelReplicatedGoldPickupFeedbackInternal(network_drop_id);
 }
@@ -93,6 +145,11 @@ void CancelReplicatedGoldPickupFeedback(std::uint64_t network_drop_id) {
 bool TryGetLastReplicatedGoldPickupFeedbackState(
     SDModReplicatedGoldPickupFeedbackState* state) {
     return TryGetLastReplicatedGoldPickupFeedbackStateInternal(state);
+}
+
+bool TryGetLastReplicatedLootPickupFeedbackState(
+    SDModReplicatedLootPickupFeedbackState* state) {
+    return TryGetLastReplicatedLootPickupFeedbackStateInternal(state);
 }
 
 void SuppressClientLocalLootActors(const char* reason) {
@@ -113,5 +170,5 @@ void ClearReplicatedRunEnemyDeathPresentation(std::uint64_t network_actor_id) {
     ClearReplicatedRunEnemyDeathPresentationState(network_actor_id);
 }
 bool IsApplyingAcceptedReplicatedGoldPickupFeedback() {
-    return g_accepted_replicated_gold_feedback_depth != 0;
+    return g_accepted_replicated_loot_feedback_depth != 0;
 }

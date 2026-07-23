@@ -380,7 +380,6 @@ void* __fastcall HookAirLightningChainTarget(
     }
 
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EB, kHookSpellCast3EB)
-SDMOD_DEFINE_SPELL_CAST_HOOK(028, kHookSpellCast028)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EC, kHookSpellCast3EC)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3ED, kHookSpellCast3ED)
 SDMOD_DEFINE_SPELL_CAST_HOOK(3EE, kHookSpellCast3EE)
@@ -443,6 +442,26 @@ void __fastcall HookSpellCast_018(void* self, void* unused_edx) {
 void __fastcall HookSpellCast_020(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<SpellCastFn>(
         g_state.hooks[kHookSpellCast020]);
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto self_address = reinterpret_cast<uintptr_t>(self);
+    int spell_id = 0;
+    const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
+
+    original(self, unused_edx);
+    if (have_spell_id) {
+        (void)QueueLocalPlayerNativeDispatcherPrimaryCast(self_address, spell_id);
+        DispatchSpellCastForSelf(self_address, spell_id);
+    } else {
+        Log("spell.cast native skill id unavailable. actor=" + HexString(self_address));
+    }
+}
+
+void __fastcall HookSpellCast_028(void* self, void* unused_edx) {
+    const auto original = GetX86HookTrampoline<SpellCastFn>(
+        g_state.hooks[kHookSpellCast028]);
     if (original == nullptr) {
         return;
     }

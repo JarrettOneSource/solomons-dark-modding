@@ -820,11 +820,20 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
         native_inventory,
         "ExecuteNativeInventoryCreditNow(",
         "kItemDropHeldItemOffset,",
-        "cleared_held_item_address",
-        "CallInventoryInsertOrStackItemSafe(",
+        "CallAcceptedItemDropPickupTickSafe(",
+        "stock_feedback_applied",
         "expected_quantity_after",
         "MarkLocalInventoryNativeConverged",
     )
+    for token in (
+        "GetX86HookTrampoline<ItemDropPickupTickFn>",
+        "kActorPendingRemoveOffset",
+        "held_item_after == 0",
+        "PublishCompletedReplicatedInventoryPickupFeedbackInternal(",
+    ):
+        assert token in native_inventory, (
+            f"native item pickup replay lacks stock feedback guarantee: {token}"
+        )
     assert "completed_native_inventory_credit_drop_ids" in native_inventory
     assert "IsNativeInventoryCreditCompleted(snapshot.run_nonce" in replicated_loot
     assert "NativeInventoryCreditOutcome::ApplyStateUnknown" in pump
@@ -837,8 +846,9 @@ def test_native_item_pickup_converges_into_stock_inventory() -> str:
     )
 
     return (
-        "accepted remote items and potions transfer through the stock insertion ABI, "
-        "verify exact native inventory growth, deduplicate by run/drop, and release the ledger guard"
+        "accepted remote items and potions replay the stock carrier pickup path, "
+        "verify native feedback and exact inventory growth, deduplicate by run/drop, "
+        "and release the ledger guard"
     )
 
 

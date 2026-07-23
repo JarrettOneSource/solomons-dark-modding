@@ -193,12 +193,22 @@ bool TryPopulateItemLootDropSnapshot(
             &stack_count)) {
         return false;
     }
+    const bool is_potion = item_type_id == kPotionItemTypeId;
+    const bool is_recipe_item = !is_potion && item_recipe_uid != 0;
+    const bool is_supported_nonrecipe_item =
+        IsSupportedNonRecipeLootItem(item_type_id, item_recipe_uid, item_slot);
+    if ((is_potion &&
+         (item_slot < kStockPotionSubtypeMin ||
+          item_slot > kStockPotionSubtypeMax)) ||
+        (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item)) {
+        return false;
+    }
 
     LootDropSnapshotPacketState built{};
     built.network_drop_id = network_drop_id;
     built.native_type_id = actor.object_type_id;
     built.drop_kind = static_cast<std::uint8_t>(
-        item_type_id == kPotionItemTypeId ? LootDropKind::Potion : LootDropKind::Item);
+        is_potion ? LootDropKind::Potion : LootDropKind::Item);
     built.flags = LootDropSnapshotFlagActive;
     if (item_color_state_valid) {
         built.flags |= LootDropSnapshotFlagItemColorState;

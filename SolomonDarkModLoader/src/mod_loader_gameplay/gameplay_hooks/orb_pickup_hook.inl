@@ -2,6 +2,58 @@ constexpr std::uint64_t kReplicatedLootPickupRequestRetryMs = 250;
 
 std::unordered_map<std::uint64_t, std::uint64_t> g_replicated_loot_pickup_request_not_before_ms;
 
+bool TryWriteLocalPlayerOrbResource(
+    std::int32_t resource_kind,
+    float life_current,
+    float life_max,
+    float mana_current,
+    float mana_max) {
+    SDModPlayerState player_state;
+    if ((resource_kind != 0 && resource_kind != 1) ||
+        !TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.progression_address == 0 ||
+        kProgressionHpOffset == 0 ||
+        kProgressionMaxHpOffset == 0 ||
+        kProgressionMpOffset == 0 ||
+        kProgressionMaxMpOffset == 0 ||
+        !std::isfinite(life_current) ||
+        !std::isfinite(life_max) ||
+        !std::isfinite(mana_current) ||
+        !std::isfinite(mana_max)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    if (resource_kind == 0) {
+        if (life_max <= 0.0f) {
+            return false;
+        }
+        const float clamped_life = (std::clamp)(life_current, 0.0f, life_max);
+        return memory.TryWriteField(
+                   player_state.progression_address,
+                   kProgressionMaxHpOffset,
+                   life_max) &&
+               memory.TryWriteField(
+                   player_state.progression_address,
+                   kProgressionHpOffset,
+                   clamped_life);
+    }
+
+    if (mana_max <= 0.0f) {
+        return false;
+    }
+    const float clamped_mana = (std::clamp)(mana_current, 0.0f, mana_max);
+    return memory.TryWriteField(
+               player_state.progression_address,
+               kProgressionMaxMpOffset,
+               mana_max) &&
+           memory.TryWriteField(
+               player_state.progression_address,
+               kProgressionMpOffset,
+               clamped_mana);
+}
+
 bool TryReadActorPositionAndRadius(uintptr_t actor_address, float* x, float* y, float* radius) {
     if (x == nullptr || y == nullptr || radius == nullptr) {
         return false;
@@ -167,9 +219,11 @@ bool TryQueueReplicatedLootPickupRequest(
         (last_result.result_code == multiplayer::LootPickupResultCode::Accepted ||
          last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone)) {
         g_replicated_loot_pickup_request_not_before_ms.erase(presentation.network_drop_id);
-        if (drop_kind == multiplayer::LootDropKind::Gold &&
+        if ((drop_kind == multiplayer::LootDropKind::Gold ||
+             drop_kind == multiplayer::LootDropKind::Orb ||
+             drop_kind == multiplayer::LootDropKind::Powerup) &&
             last_result.result_code == multiplayer::LootPickupResultCode::AlreadyGone) {
-            CancelReplicatedGoldPickupFeedbackInternal(presentation.network_drop_id);
+            CancelReplicatedLootPickupFeedbackInternal(presentation.network_drop_id);
         }
         return true;
     }
@@ -220,12 +274,15 @@ bool TryQueueReplicatedLootPickupRequest(
             &request_sequence,
             &error_message,
             &pickup_capture)) {
-        if (drop_kind == multiplayer::LootDropKind::Gold) {
-            MarkReplicatedGoldPickupAwaitingAuthorityInternal(
+        if (drop_kind == multiplayer::LootDropKind::Gold ||
+            drop_kind == multiplayer::LootDropKind::Orb ||
+            drop_kind == multiplayer::LootDropKind::Powerup) {
+            MarkReplicatedLootPickupAwaitingAuthorityInternal(
                 presentation.run_nonce,
                 presentation.network_drop_id,
                 actor_address,
                 request_sequence,
+                drop_kind,
                 now_ms);
         }
         g_replicated_loot_pickup_request_not_before_ms[presentation.network_drop_id] =
@@ -264,6 +321,124 @@ void __fastcall HookOrbPickupTick(void* self, void* /*unused_edx*/) {
     const auto orb_address = reinterpret_cast<uintptr_t>(self);
     if (multiplayer::IsLocalTransportClient()) {
         if (IsReplicatedLootPresentationActorInternal(orb_address)) {
+            SDModReplicatedLootPickupFeedbackState feedback;
+            if (TryBeginAcceptedReplicatedLootPickupFeedbackForActorInternal(
+                    orb_address,
+                    multiplayer::LootDropKind::Orb,
+                    &feedback)) {
+                auto& memory = ProcessMemory::Instance();
+                SDModPlayerState player_state;
+                float original_x = 0.0f;
+                float original_y = 0.0f;
+                const auto resource_kind = static_cast<std::uint8_t>(feedback.resource_kind);
+                const float presentation_value = feedback.presentation_value;
+                float life_before = feedback.resulting_life_current;
+                float mana_before = feedback.resulting_mana_current;
+                if (feedback.resource_kind == 0) {
+                    life_before = (std::max)(
+                        0.0f,
+                        feedback.resulting_life_current - feedback.resource_delta);
+                } else {
+                    mana_before = (std::max)(
+                        0.0f,
+                        feedback.resulting_mana_current - feedback.resource_delta);
+                }
+
+                const bool position_read =
+                    memory.TryReadField(orb_address, kActorPositionXOffset, &original_x) &&
+                    memory.TryReadField(orb_address, kActorPositionYOffset, &original_y);
+                const bool prepared =
+                    position_read &&
+                    feedback.presentation_value > 0.0f &&
+                    TryGetPlayerState(&player_state) &&
+                    player_state.valid &&
+                    std::isfinite(player_state.x) &&
+                    std::isfinite(player_state.y) &&
+                    memory.TryWriteField(
+                        orb_address,
+                        kActorPositionXOffset,
+                        player_state.x) &&
+                    memory.TryWriteField(
+                        orb_address,
+                        kActorPositionYOffset,
+                        player_state.y) &&
+                    memory.TryWriteField(
+                        orb_address,
+                        kReplicatedOrbResourceKindOffset,
+                        resource_kind) &&
+                    memory.TryWriteField(
+                        orb_address,
+                        kReplicatedOrbValueOffset,
+                        presentation_value) &&
+                    TryWriteLocalPlayerOrbResource(
+                        feedback.resource_kind,
+                        life_before,
+                        feedback.resulting_life_max,
+                        mana_before,
+                        feedback.resulting_mana_max);
+                if (!prepared) {
+                    if (position_read) {
+                        (void)memory.TryWriteField(
+                            orb_address,
+                            kActorPositionXOffset,
+                            original_x);
+                        (void)memory.TryWriteField(
+                            orb_address,
+                            kActorPositionYOffset,
+                            original_y);
+                    }
+                    AbortReplicatedLootPickupFeedbackInternal(
+                        feedback.network_drop_id,
+                        orb_address);
+                    return;
+                }
+
+                ++g_accepted_replicated_loot_feedback_depth;
+                original(self);
+                --g_accepted_replicated_loot_feedback_depth;
+
+                std::uint8_t pending_remove = 0;
+                const bool stock_feedback_applied =
+                    memory.TryReadField(
+                        orb_address,
+                        kActorPendingRemoveOffset,
+                        &pending_remove) &&
+                    pending_remove != 0;
+                const bool authoritative_vitals_applied =
+                    TryWriteLocalPlayerOrbResource(
+                        feedback.resource_kind,
+                        feedback.resulting_life_current,
+                        feedback.resulting_life_max,
+                        feedback.resulting_mana_current,
+                        feedback.resulting_mana_max);
+                if (stock_feedback_applied) {
+                    CompleteReplicatedLootPickupFeedbackInternal(
+                        feedback.network_drop_id,
+                        orb_address,
+                        true,
+                        false,
+                        static_cast<std::uint64_t>(::GetTickCount64()));
+                } else {
+                    (void)memory.TryWriteField(
+                        orb_address,
+                        kActorPositionXOffset,
+                        original_x);
+                    (void)memory.TryWriteField(
+                        orb_address,
+                        kActorPositionYOffset,
+                        original_y);
+                    AbortReplicatedLootPickupFeedbackInternal(
+                        feedback.network_drop_id,
+                        orb_address);
+                }
+                if (!authoritative_vitals_applied) {
+                    Log(
+                        "replicated_loot: stock orb feedback ran but authoritative vitals "
+                        "enforcement failed. network_drop_id=" +
+                        std::to_string(feedback.network_drop_id));
+                }
+                return;
+            }
             (void)TryQueueReplicatedLootPickupRequest(
                 orb_address,
                 multiplayer::LootDropKind::Orb,

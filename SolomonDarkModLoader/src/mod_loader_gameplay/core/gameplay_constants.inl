@@ -97,6 +97,7 @@ constexpr std::uint32_t kStandaloneWizardRobeVisualTypeId = 0x1B5E;
 constexpr std::uint32_t kInventoryPlaceholderItemTypeId = 0x1B58;
 constexpr std::uint32_t kInventoryPotionItemTypeId = 0x1B59;
 constexpr std::uint32_t kInventorySackItemTypeId = 0x1B60;
+constexpr std::uint32_t kInventoryMiscItemTypeId = 0x1B64;
 constexpr int kStandaloneWizardHiddenSelectionState = -2;
 constexpr std::size_t kGameplayRegionStride = 4;
 constexpr std::size_t kGameplayPlayerSlotStride = 4;

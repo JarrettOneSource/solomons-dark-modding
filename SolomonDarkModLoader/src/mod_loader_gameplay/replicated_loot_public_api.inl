@@ -100,75 +100,104 @@ bool QueueAcceptedReplicatedGoldPickupFeedbackInternal(
     std::int32_t resulting_gold,
     std::uint64_t accepted_ms,
     std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    if (!multiplayer::IsLocalTransportClient() ||
-        run_nonce == 0 ||
-        network_drop_id == 0 ||
-        request_sequence == 0 ||
-        amount <= 0 ||
-        resulting_gold < amount) {
+    if (amount <= 0 || resulting_gold < amount) {
         if (error_message != nullptr) {
             *error_message = "Accepted gold feedback payload is invalid.";
         }
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-    auto feedback_it =
-        g_replicated_gold_pickup_feedback_by_drop_id.find(network_drop_id);
-    if (feedback_it != g_replicated_gold_pickup_feedback_by_drop_id.end() &&
-        feedback_it->second.state.run_nonce == run_nonce &&
-        feedback_it->second.state.applied) {
-        return true;
-    }
+    SDModReplicatedLootPickupFeedbackState state;
+    state.drop_kind = multiplayer::LootDropKind::Gold;
+    state.network_drop_id = network_drop_id;
+    state.run_nonce = run_nonce;
+    state.request_sequence = request_sequence;
+    state.amount = amount;
+    state.resulting_gold = resulting_gold;
+    return QueueAcceptedReplicatedLootPickupFeedbackInternal(
+        state,
+        accepted_ms,
+        error_message);
+}
 
-    uintptr_t actor_address = 0;
-    if (feedback_it != g_replicated_gold_pickup_feedback_by_drop_id.end() &&
-        feedback_it->second.state.run_nonce == run_nonce) {
-        actor_address = feedback_it->second.state.actor_address;
-    }
-    if (actor_address == 0) {
-        const auto* binding = FindReplicatedLootPresentationBindingLocked(network_drop_id);
-        if (binding != nullptr && binding->run_nonce == run_nonce) {
-            actor_address = binding->actor_address;
-        }
-    }
-    if (actor_address == 0) {
+bool QueueAcceptedReplicatedOrbPickupFeedbackInternal(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t resource_kind,
+    float resource_delta,
+    float resulting_life_current,
+    float resulting_life_max,
+    float resulting_mana_current,
+    float resulting_mana_max,
+    std::uint64_t accepted_ms,
+    std::string* error_message) {
+    if ((resource_kind != 0 && resource_kind != 1) ||
+        !std::isfinite(resource_delta) || resource_delta <= 0.0f ||
+        !std::isfinite(resulting_life_current) ||
+        !std::isfinite(resulting_life_max) || resulting_life_max <= 0.0f ||
+        !std::isfinite(resulting_mana_current) ||
+        !std::isfinite(resulting_mana_max) || resulting_mana_max <= 0.0f) {
         if (error_message != nullptr) {
-            *error_message = "Accepted gold feedback has no live presentation actor.";
+            *error_message = "Accepted orb feedback payload is invalid.";
         }
         return false;
     }
 
-    auto& entry = g_replicated_gold_pickup_feedback_by_drop_id[network_drop_id];
-    entry = ReplicatedGoldPickupFeedbackEntry{};
-    entry.state.valid = true;
-    entry.state.accepted = true;
-    entry.state.network_drop_id = network_drop_id;
-    entry.state.run_nonce = run_nonce;
-    entry.state.actor_address = actor_address;
-    entry.state.request_sequence = request_sequence;
-    entry.state.amount = amount;
-    entry.state.resulting_gold = resulting_gold;
-    entry.state.accepted_ms = accepted_ms;
-    entry.hold_until_ms = accepted_ms + kReplicatedGoldPickupFeedbackHoldMs;
-    g_last_replicated_gold_pickup_feedback = entry.state;
-    return true;
+    SDModReplicatedLootPickupFeedbackState state;
+    state.drop_kind = multiplayer::LootDropKind::Orb;
+    state.network_drop_id = network_drop_id;
+    state.run_nonce = run_nonce;
+    state.request_sequence = request_sequence;
+    state.resource_kind = resource_kind;
+    state.resource_delta = resource_delta;
+    state.resulting_life_current = resulting_life_current;
+    state.resulting_life_max = resulting_life_max;
+    state.resulting_mana_current = resulting_mana_current;
+    state.resulting_mana_max = resulting_mana_max;
+    return QueueAcceptedReplicatedLootPickupFeedbackInternal(
+        state,
+        accepted_ms,
+        error_message);
+}
+
+bool QueueAcceptedReplicatedPowerupPickupFeedbackInternal(
+    std::uint32_t run_nonce,
+    std::uint64_t network_drop_id,
+    std::uint32_t request_sequence,
+    std::int32_t powerup_kind,
+    std::int32_t powerup_skill_entry_index,
+    std::uint16_t powerup_skill_resulting_active,
+    std::int32_t damage_x4_remaining_ticks,
+    std::uint64_t accepted_ms,
+    std::string* error_message) {
+    if (powerup_kind < static_cast<std::int32_t>(
+            multiplayer::PowerupRewardKind::BonusSkillPoint) ||
+        powerup_kind > static_cast<std::int32_t>(
+            multiplayer::PowerupRewardKind::DamageX4)) {
+        if (error_message != nullptr) {
+            *error_message = "Accepted powerup feedback payload is invalid.";
+        }
+        return false;
+    }
+
+    SDModReplicatedLootPickupFeedbackState state;
+    state.drop_kind = multiplayer::LootDropKind::Powerup;
+    state.network_drop_id = network_drop_id;
+    state.run_nonce = run_nonce;
+    state.request_sequence = request_sequence;
+    state.powerup_kind = powerup_kind;
+    state.powerup_skill_entry_index = powerup_skill_entry_index;
+    state.powerup_skill_resulting_active = powerup_skill_resulting_active;
+    state.damage_x4_remaining_ticks = damage_x4_remaining_ticks;
+    return QueueAcceptedReplicatedLootPickupFeedbackInternal(
+        state,
+        accepted_ms,
+        error_message);
 }
 
 void CancelReplicatedGoldPickupFeedbackInternal(std::uint64_t network_drop_id) {
-    if (network_drop_id == 0) {
-        return;
-    }
-    std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-    const auto feedback_it =
-        g_replicated_gold_pickup_feedback_by_drop_id.find(network_drop_id);
-    if (feedback_it != g_replicated_gold_pickup_feedback_by_drop_id.end() &&
-        !feedback_it->second.state.applied) {
-        g_replicated_gold_pickup_feedback_by_drop_id.erase(feedback_it);
-    }
+    CancelReplicatedLootPickupFeedbackInternal(network_drop_id);
 }
 
 bool TryGetLastReplicatedGoldPickupFeedbackStateInternal(
@@ -176,11 +205,13 @@ bool TryGetLastReplicatedGoldPickupFeedbackStateInternal(
     if (state == nullptr) {
         return false;
     }
-    *state = SDModReplicatedGoldPickupFeedbackState{};
-    std::lock_guard<std::mutex> lock(g_replicated_loot_presentation_mutex);
-    if (!g_last_replicated_gold_pickup_feedback.valid) {
+    SDModReplicatedLootPickupFeedbackState feedback;
+    if (!TryGetLastReplicatedLootPickupFeedbackStateForKindInternal(
+            multiplayer::LootDropKind::Gold,
+            &feedback)) {
+        *state = {};
         return false;
     }
-    *state = g_last_replicated_gold_pickup_feedback;
+    *state = ToReplicatedGoldPickupFeedbackState(feedback);
     return true;
 }

@@ -168,6 +168,21 @@ constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
 constexpr std::uint32_t kItemDropNativeTypeId = 0x07DD;
 constexpr std::uint32_t kPowerupRewardNativeTypeId = 0x07F6;
 constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
+constexpr std::uint32_t kMiscItemTypeId = 0x1B64;
+constexpr std::int32_t kStockPotionSubtypeMin = 0;
+constexpr std::int32_t kStockPotionSubtypeMax = 5;
+constexpr std::int32_t kMiscItemSubtypeMin = 0;
+constexpr std::int32_t kMiscItemSubtypeMax = 3;
+
+bool IsSupportedNonRecipeLootItem(
+    std::uint32_t item_type_id,
+    std::uint32_t item_recipe_uid,
+    std::int32_t item_slot) {
+    return item_type_id == kMiscItemTypeId &&
+           item_recipe_uid == 0 &&
+           item_slot >= kMiscItemSubtypeMin &&
+           item_slot <= kMiscItemSubtypeMax;
+}
 constexpr std::uint32_t kEtherPrimaryNativeTypeId = 0x07D3;
 constexpr std::uint32_t kFireballPrimaryNativeTypeId = 0x07D4;
 constexpr std::uint32_t kWaterPrimaryNativeTypeId = 0x07D5;

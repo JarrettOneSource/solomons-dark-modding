@@ -3,6 +3,11 @@ constexpr std::uint32_t kReplicatedLootGoldNativeTypeId = 0x07DC;
 constexpr std::uint32_t kReplicatedLootItemDropNativeTypeId = 0x07DD;
 constexpr std::uint32_t kReplicatedLootPowerupNativeTypeId = 0x07F6;
 constexpr std::uint32_t kReplicatedLootPotionItemTypeId = 0x1B59;
+constexpr std::uint32_t kReplicatedLootMiscItemTypeId = 0x1B64;
+constexpr std::int32_t kStockPotionSubtypeMin = 0;
+constexpr std::int32_t kStockPotionSubtypeMax = 5;
+constexpr std::int32_t kReplicatedLootMiscItemSubtypeMin = 0;
+constexpr std::int32_t kReplicatedLootMiscItemSubtypeMax = 3;
 constexpr std::size_t kArenaSpawnPotionDropVfuncOffset = 0x148;
 constexpr std::size_t kReplicatedGoldAmountTierOffset = 0x13C;
 constexpr std::size_t kReplicatedGoldAmountOffset = 0x140;
@@ -45,6 +50,8 @@ struct ReplicatedLootPresentationBinding {
     float auxiliary = 0.0f;
     std::uint32_t item_type_id = 0;
     std::uint32_t item_recipe_uid = 0;
+    std::int32_t item_slot = -1;
+    std::int32_t stack_count = 0;
     std::uint8_t presentation_state = 0;
     std::uint64_t last_seen_ms = 0;
 };
@@ -58,6 +65,16 @@ bool IsNativeInventoryCreditCompleted(
     std::uint64_t network_drop_id);
 
 bool IsReplicatedLootPresentationActorInternal(uintptr_t actor_address);
+
+bool IsSupportedReplicatedNonRecipeItem(
+    std::uint32_t item_type_id,
+    std::uint32_t item_recipe_uid,
+    std::int32_t item_slot) {
+    return item_type_id == kReplicatedLootMiscItemTypeId &&
+           item_recipe_uid == 0 &&
+           item_slot >= kReplicatedLootMiscItemSubtypeMin &&
+           item_slot <= kReplicatedLootMiscItemSubtypeMax;
+}
 
 void QueueClientLocalLootSuppressionInternal(const char* reason, std::uint64_t delay_ms) {
     if (!multiplayer::IsLocalTransportClient()) {
@@ -103,15 +120,19 @@ bool IsSupportedReplicatedLootPresentationKind(const multiplayer::LootDropSnapsh
     if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
         return drop.native_type_id == kReplicatedLootItemDropNativeTypeId &&
                drop.item_type_id == kReplicatedLootPotionItemTypeId &&
-               drop.item_slot >= 0 &&
-               drop.item_slot <= 1 &&
+               drop.item_slot >= kStockPotionSubtypeMin &&
+               drop.item_slot <= kStockPotionSubtypeMax &&
                drop.stack_count > 0;
     }
     if (drop.drop_kind == multiplayer::LootDropKind::Item) {
         return drop.native_type_id == kReplicatedLootItemDropNativeTypeId &&
                drop.item_type_id != 0 &&
                drop.item_type_id != kReplicatedLootPotionItemTypeId &&
-               drop.item_recipe_uid != 0;
+               (drop.item_recipe_uid != 0 ||
+                IsSupportedReplicatedNonRecipeItem(
+                    drop.item_type_id,
+                    drop.item_recipe_uid,
+                    drop.item_slot));
     }
     if (drop.drop_kind == multiplayer::LootDropKind::Powerup) {
         return drop.native_type_id == kReplicatedLootPowerupNativeTypeId &&
@@ -225,6 +246,8 @@ ReplicatedLootPresentationBinding ToReplicatedLootPresentationBinding(
     binding.auxiliary = drop.auxiliary;
     binding.item_type_id = drop.item_type_id;
     binding.item_recipe_uid = drop.item_recipe_uid;
+    binding.item_slot = drop.item_slot;
+    binding.stack_count = drop.stack_count;
     binding.presentation_state = drop.presentation_state;
     binding.last_seen_ms = now_ms;
     return binding;
@@ -241,6 +264,7 @@ ReplicatedLootPresentationBinding* FindReplicatedLootPresentationBindingLocked(
     return it == g_replicated_loot_presentations.end() ? nullptr : &*it;
 }
 
+#include "replicated_loot_pickup_feedback.inl"
 #include "replicated_gold_pickup_feedback.inl"
 
 bool TryListSceneActorsByType(
@@ -334,7 +358,9 @@ bool WriteReplicatedLootDropFields(
 
         if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
             const auto potion_slot =
-                static_cast<std::int32_t>((std::max)(0, (std::min)(1, drop.item_slot)));
+                static_cast<std::int32_t>((std::max)(
+                    kStockPotionSubtypeMin,
+                    (std::min)(kStockPotionSubtypeMax, drop.item_slot)));
             const auto stack_count = static_cast<std::int32_t>((std::max)(1, drop.stack_count));
             wrote = memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot) && wrote;
             if (kPotionStackCountOffset != 0) {
@@ -343,7 +369,7 @@ bool WriteReplicatedLootDropFields(
                     kPotionStackCountOffset,
                     stack_count) && wrote;
             }
-        } else {
+        } else if (drop.item_recipe_uid != 0) {
             std::uint32_t held_item_recipe_uid = 0;
             if (kItemInstanceRecipeUidOffset == 0 ||
                 !memory.TryReadField(
@@ -364,6 +390,19 @@ bool WriteReplicatedLootDropFields(
                     drop.item_color_state.data(),
                     drop.item_color_state.size()) && wrote;
             }
+        } else if (IsSupportedReplicatedNonRecipeItem(
+                       drop.item_type_id,
+                       drop.item_recipe_uid,
+                       drop.item_slot)) {
+            wrote = memory.TryWriteField(
+                held_item_address,
+                kItemSlotOffset,
+                drop.item_slot) && wrote;
+        } else {
+            if (error_message != nullptr) {
+                *error_message = "replicated non-recipe item identity is unsupported";
+            }
+            return false;
         }
     } else if (drop.drop_kind == multiplayer::LootDropKind::Powerup) {
         const auto powerup_kind = static_cast<std::uint8_t>(drop.amount_tier);
@@ -494,7 +533,9 @@ bool ExecuteSpawnReplicatedPotionDropNow(
 
     DWORD exception_code = 0;
     const auto potion_slot =
-        static_cast<int>((std::max)(0, (std::min)(1, drop.item_slot)));
+        static_cast<int>((std::max)(
+            kStockPotionSubtypeMin,
+            (std::min)(kStockPotionSubtypeMax, drop.item_slot)));
     if (!CallSpawnPotionDropSafe(
             spawn_function_address,
             arena_address,
@@ -799,12 +840,12 @@ void ReconcileReplicatedLootSnapshotNow(
             const bool missing_from_complete_snapshot =
                 !snapshot.truncated && active_drop_ids.find(it->network_drop_id) == active_drop_ids.end();
             const bool native_actor_gone = !IsSceneActorAddressPresent(it->actor_address);
-            const bool hold_for_gold_feedback =
+            const bool hold_for_pickup_feedback =
                 missing_from_complete_snapshot &&
-                ShouldHoldReplicatedGoldPickupForFeedbackLocked(*it, now_ms);
+                ShouldHoldReplicatedLootPickupForFeedbackLocked(*it, now_ms);
             if (wrong_authority ||
                 wrong_run ||
-                (missing_from_complete_snapshot && !hold_for_gold_feedback) ||
+                (missing_from_complete_snapshot && !hold_for_pickup_feedback) ||
                 native_actor_gone) {
                 if (!native_actor_gone) {
                     stale_bindings.push_back(*it);

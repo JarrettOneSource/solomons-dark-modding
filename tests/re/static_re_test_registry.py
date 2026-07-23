@@ -189,7 +189,10 @@ from static_re_native_movement_contracts import (
     test_smell_source_inventory_is_current,
 )
 from static_re_transport_core_contracts import (
+    test_all_stock_potion_subtypes_replicate_as_native_pickups,
     test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts,
+    test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
+    test_misc_ground_items_replicate_without_recipe_identity,
     test_local_multiplayer_udp_transport_is_wired,
 )
 from static_re_steam_contracts import (
@@ -219,6 +222,8 @@ from static_re_hagatha_perk_contracts import (
     test_native_hagatha_perk_catalog_is_complete,
 )
 from static_re_runtime_cast_contracts import (
+    test_earth_live_verifier_requires_native_boulder_visual_emission,
+    test_earth_primary_is_captured_from_its_native_dispatcher,
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
     test_player_control_brain_requires_published_gameplay_slot,
@@ -672,6 +677,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         "Water live verifier requires native visual emission",
         test_water_live_verifier_requires_native_visual_emission,
     ),
+    (
+        "Earth primary is captured from its native dispatcher",
+        test_earth_primary_is_captured_from_its_native_dispatcher,
+    ),
+    (
+        "Earth live verifier requires native Boulder visual emission",
+        test_earth_live_verifier_requires_native_boulder_visual_emission,
+    ),
     ("multiplayer nameplates render through native scene passes", test_multiplayer_nameplates_render_from_native_scene_passes),
     ("primary build skill mapping has single runtime owner", test_primary_build_skill_mapping_has_single_runtime_owner),
     ("gameplay selection writes preserve stock run-placement vector", test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector),
@@ -819,6 +832,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "accepted client gold pickups replay stock feedback exactly once",
         test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts,
+    ),
+    (
+        "accepted client non-gold pickups replay stock feedback exactly once",
+        test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
+    ),
+    (
+        "all stock potion subtypes replicate as native pickups",
+        test_all_stock_potion_subtypes_replicate_as_native_pickups,
+    ),
+    (
+        "misc ground items replicate without recipe identity",
+        test_misc_ground_items_replicate_without_recipe_identity,
     ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     (
