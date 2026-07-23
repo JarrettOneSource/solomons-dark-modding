@@ -9,7 +9,9 @@ internal sealed record MultiplayerLaunchOptions(
     LobbyHostOptions Host)
 {
     public const int DefaultMaxParticipants = 4;
-    public const int MaximumSupportedParticipants = 4;
+    // The session-hello acknowledgement carries the lobby capacity as a
+    // single byte, so 255 is the transport's own ceiling.
+    public const int MaximumSupportedParticipants = 255;
 
     public static MultiplayerLaunchOptions Create(
         MultiplayerLaunchMode mode,

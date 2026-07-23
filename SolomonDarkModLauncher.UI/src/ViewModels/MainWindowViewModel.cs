@@ -47,6 +47,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool isHostSetupOpen_;
     private bool isHowToPlayOpen_;
     private bool hostPrivacyFriends_ = true;
+    private string hostPlayerCountText_ = "4";
     private bool hostPrivacyPublic_;
     private ulong? pendingLobbyJoinId_;
     private int activeGameProcessId_;
@@ -382,6 +383,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         get => availableLauncherVersion_;
         private set => SetProperty(ref availableLauncherVersion_, value);
     }
+
+    public string HostPlayerCountText
+    {
+        get => hostPlayerCountText_;
+        set => SetProperty(ref hostPlayerCountText_, value);
+    }
+
+    // The hello-ack packet carries lobby capacity as one byte; anything the
+    // user types is folded into the transport's own 2-255 range.
+    public int HostPlayerCount =>
+        int.TryParse(hostPlayerCountText_.Trim(), out var count)
+            ? Math.Clamp(count, 2, 255)
+            : 4;
 
     public bool HostPrivacyFriends
     {
@@ -1324,12 +1338,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         var privacy = HostPrivacyPublic ? "public" : "friends";
+        var maxPlayers = HostPlayerCount;
+        HostPlayerCountText = maxPlayers.ToString();
         IsHostSetupOpen = false;
 
         await ExecuteUiCommandAsync(
             LauncherUiCommandMode.HostSteam,
             "The launcher starts the lobby.",
-            hostOptions: new LauncherHostOptions(privacy));
+            hostOptions: new LauncherHostOptions(privacy, maxPlayers));
     }
 
     private void OnSteamInviteNotification(

@@ -245,6 +245,8 @@ internal sealed class LauncherUiCommandClient
                 arguments.Add("host");
                 arguments.Add("--lobby-privacy");
                 arguments.Add(hostOptions?.Privacy ?? "friends");
+                arguments.Add("--max-players");
+                arguments.Add((hostOptions?.MaxPlayers ?? 4).ToString());
                 arguments.Add("--no-invite-dialog");
                 break;
             case LauncherUiCommandMode.JoinSteam:

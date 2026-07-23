@@ -691,6 +691,19 @@
                         </StackPanel>
                     </RadioButton>
 
+                    <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Player Count"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   FontWeight="SemiBold" />
+                        <TextBox Width="64"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding HostPlayerCountText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="How many wizards the lobby seats. Default 4."
+                                 Style="{StaticResource DarkTextBoxStyle}" />
+                    </StackPanel>
+
                     <TextBlock Margin="0,12,0,0"
                                FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}"
