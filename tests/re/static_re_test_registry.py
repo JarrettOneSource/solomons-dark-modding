@@ -39,6 +39,9 @@ from static_lua_timer_contracts import (
 from static_lua_bus_contracts import (
     test_lua_bus_is_manifest_resolved_bounded_and_local,
 )
+from static_lua_net_contracts import (
+    test_lua_net_is_fragmented_authenticated_and_host_relayed,
+)
 from static_lua_content_identity_contracts import (
     test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
 )
@@ -345,6 +348,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua bus is manifest-resolved, bounded, and local",
         test_lua_bus_is_manifest_resolved_bounded_and_local,
+    ),
+    (
+        "Lua net is fragmented, authenticated, and host-relayed",
+        test_lua_net_is_fragmented_authenticated_and_host_relayed,
     ),
     (
         "Lua content IDs are canonical, deterministic, and load-scoped",

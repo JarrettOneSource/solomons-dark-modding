@@ -232,6 +232,9 @@ bool ConfigureLocalTransport() {
         g_queued_local_level_up_choices.clear();
         g_queued_lua_ui_action_requests.clear();
         g_next_lua_ui_action_request_id = 1;
+        g_queued_lua_net_messages.clear();
+        g_next_lua_net_message_sequence = 1;
+        g_queued_lua_net_message_bytes = 0;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
         ResetAirChainRuntimeState();
@@ -281,6 +284,9 @@ bool ConfigureLocalTransport() {
         g_queued_local_level_up_choices.clear();
         g_queued_lua_ui_action_requests.clear();
         g_next_lua_ui_action_request_id = 1;
+        g_queued_lua_net_messages.clear();
+        g_next_lua_net_message_sequence = 1;
+        g_queued_lua_net_message_bytes = 0;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
     }

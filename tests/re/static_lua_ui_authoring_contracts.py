@@ -155,7 +155,7 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
     assert pump.count("detail::DispatchPendingLuaUiActions();") == 2
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 78;",
+        "constexpr std::uint16_t kProtocolVersion = 79;",
         "LuaUiActionRequest = 25",
         "struct LuaUiActionRequestPacket",
         "participant_session_nonce",

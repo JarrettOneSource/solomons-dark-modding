@@ -13,6 +13,7 @@
 #include "lua_engine.h"
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
+#include "lua_net_runtime.h"
 #include "lua_ui_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -96,6 +97,9 @@ constexpr std::uint64_t kLuaModStateCheckpointIntervalMs = 5000;
 constexpr std::uint64_t kLuaModFragmentAssemblyExpiryMs = 10000;
 constexpr std::size_t kLuaModMaxPendingAssemblies = 64;
 constexpr std::size_t kLuaModMaxCompletedMessages = 128;
+constexpr std::size_t kLuaNetMaxPendingAssemblies = 32;
+constexpr std::size_t kLuaNetMaxPendingAssemblyBytes = 512 * 1024;
+constexpr std::size_t kLuaNetMaxRememberedSequencesPerParticipant = 256;
 constexpr std::size_t kLocalTransportAuxiliarySnapshotBudgetBytesPerSecond =
     48u * 1024u;
 constexpr std::size_t kLocalTransportWorldSnapshotBudgetBytesPerSecond =
@@ -461,6 +465,15 @@ struct QueuedLuaUiActionRequest {
     std::string action_id;
 };
 
+struct QueuedLuaNetMessage {
+    std::uint64_t source_participant_id = 0;
+    std::uint64_t source_session_nonce = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t message_sequence = 0;
+    bool local_delivery_complete = false;
+    std::vector<std::uint8_t> envelope;
+};
+
 struct QueuedHostParticipantVitalsCorrection {
     std::uint64_t target_participant_id = 0;
     float life_current = 0.0f;
@@ -779,6 +792,20 @@ struct CompletedLuaModStreamMessage {
     std::vector<std::uint8_t> payload;
 };
 
+struct PendingLuaNetMessageAssembly {
+    std::uint64_t transport_participant_id = 0;
+    std::uint64_t source_participant_id = 0;
+    std::uint64_t source_session_nonce = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t message_sequence = 0;
+    std::uint32_t total_payload_bytes = 0;
+    std::uint16_t fragment_count = 0;
+    std::uint16_t received_fragment_count = 0;
+    std::uint64_t last_update_ms = 0;
+    std::vector<std::uint8_t> payload;
+    std::vector<std::uint8_t> received_fragments;
+};
+
 struct ClientHostRunAuthorization {
     bool valid = false;
     std::uint64_t authority_participant_id = 0;
@@ -923,6 +950,15 @@ struct LocalTransportState {
         pending_lua_mod_stream_assemblies;
     std::map<std::uint64_t, CompletedLuaModStreamMessage>
         completed_lua_mod_stream_messages;
+    std::map<
+        std::pair<std::uint64_t, std::uint64_t>,
+        PendingLuaNetMessageAssembly> pending_lua_net_message_assemblies;
+    std::unordered_map<std::uint64_t, std::unordered_set<std::uint64_t>>
+        received_lua_net_sequences_by_participant;
+    std::unordered_map<std::uint64_t, std::deque<std::uint64_t>>
+        received_lua_net_sequence_order_by_participant;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        received_lua_net_session_nonce_by_participant;
     std::unordered_set<std::uint64_t> received_lua_item_grant_request_ids;
     std::deque<std::uint64_t> received_lua_item_grant_request_order;
     std::unordered_set<std::uint64_t>
@@ -976,6 +1012,9 @@ std::vector<QueuedLuaRegisteredSpellCast>
 std::uint64_t g_next_lua_registered_spell_cast_request_id = 1;
 std::vector<QueuedLuaUiActionRequest> g_queued_lua_ui_action_requests;
 std::uint64_t g_next_lua_ui_action_request_id = 1;
+std::vector<QueuedLuaNetMessage> g_queued_lua_net_messages;
+std::uint64_t g_next_lua_net_message_sequence = 1;
+std::size_t g_queued_lua_net_message_bytes = 0;
 std::mutex g_lua_registered_spell_effect_snapshot_mutex;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
@@ -1321,6 +1360,8 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_effect_sync.inl"
 #include "multiplayer_local_transport/lua_ui_action_sync.inl"
+#include "multiplayer_local_transport/lua_net_message_codec.inl"
+#include "multiplayer_local_transport/lua_net_message_sync.inl"
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
@@ -1565,6 +1606,24 @@ bool QueueLuaUiSimulationAction(
     std::string* error_message) {
     return QueueLuaUiSimulationActionInternal(
         mod_id, surface_id, action_id, request_id, error_message);
+}
+
+bool QueueLuaNetMessage(
+    std::string_view mod_id,
+    std::string_view channel,
+    std::string_view payload,
+    std::uint64_t target_participant_id,
+    bool broadcast,
+    std::uint64_t* message_sequence,
+    std::string* error_message) {
+    return QueueLuaNetMessageInternal(
+        mod_id,
+        channel,
+        payload,
+        target_participant_id,
+        broadcast,
+        message_sequence,
+        error_message);
 }
 
 std::vector<LuaRegisteredSpellEffectState>

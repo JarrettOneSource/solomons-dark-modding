@@ -186,7 +186,7 @@ def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
         "wire protocol",
         protocol,
         (
-            "constexpr std::uint16_t kProtocolVersion = 78;",
+            "constexpr std::uint16_t kProtocolVersion = 79;",
             "kParticipantHagathaPerkMaxCount = 9",
             "struct ParticipantHagathaPerkPacketState",
             "std::uint32_t hagatha_perk_revision;",

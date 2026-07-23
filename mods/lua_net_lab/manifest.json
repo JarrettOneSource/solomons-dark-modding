@@ -1,0 +1,16 @@
+{
+  "id": "sample.lua.net_lab",
+  "name": "Lua Raw Network Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "net.raw.fragmented",
+      "net.participant.unicast",
+      "net.participant.broadcast"
+    ]
+  }
+}
+

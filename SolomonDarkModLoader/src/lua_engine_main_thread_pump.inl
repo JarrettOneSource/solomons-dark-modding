@@ -42,6 +42,7 @@ void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }
+    detail::DispatchPendingLuaNetMessages();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);
@@ -60,6 +61,7 @@ void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
     if (!detail::LuaEngineInitializedFlag()) {
         return;
     }
+    detail::DispatchPendingLuaNetMessages();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);

@@ -96,6 +96,7 @@
     <ClInclude Include="include\lua_engine_events.h" />
     <ClInclude Include="include\lua_event_filters.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
+    <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_ui_runtime.h" />
     <ClInclude Include="include\lua_content_registry.h" />
     <ClInclude Include="include\lua_mod_runtime.h" />
@@ -111,6 +112,8 @@
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_ui_action_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_net_message_codec.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_net_message_sync.inl" />
     <ClInclude Include="src\lua_ui_runtime\input_helpers.inl" />
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
@@ -509,6 +512,7 @@
     <ClCompile Include="src\lua_engine_bindings_storage.cpp" />
     <ClCompile Include="src\lua_engine_bindings_timer.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bus.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_net.cpp" />
     <ClCompile Include="src\lua_engine_bindings_foundations.cpp" />
     <ClCompile Include="src\lua_engine_bindings_scene.cpp" />
     <ClCompile Include="src\lua_engine_bindings_waves.cpp" />

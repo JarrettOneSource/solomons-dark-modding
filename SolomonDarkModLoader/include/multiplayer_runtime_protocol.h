@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 78;
+constexpr std::uint16_t kProtocolVersion = 79;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -25,6 +25,10 @@ constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
 constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
 constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
+constexpr std::uint32_t kLuaNetFragmentPayloadBytes = 1024;
+constexpr std::uint16_t kLuaNetMaxFragments = 64;
+constexpr std::uint64_t kLuaNetMaximumMessageSequence =
+    0x7FFFFFFFFFFFFFFFull;
 constexpr std::uint16_t kLuaRegisteredSpellEffectMaxLogicalEffects = 256;
 constexpr std::uint16_t kLuaRegisteredSpellEffectStatesPerFragment = 4;
 constexpr std::uint8_t kLuaRegisteredSpellEffectKeyBytes = 64;
@@ -59,6 +63,7 @@ enum class PacketKind : std::uint16_t {
     LuaRegisteredSpellCast = 23,
     LuaRegisteredSpellEffectSnapshot = 24,
     LuaUiActionRequest = 25,
+    LuaNetMessage = 26,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -750,6 +755,62 @@ constexpr bool IsValidLuaModStreamPacketWireSize(
            received_bytes == LuaModStreamPacketWireSize(packet.payload_bytes);
 }
 
+struct LuaNetMessagePacket {
+    PacketHeader header;
+    std::uint64_t transport_participant_id;
+    std::uint64_t source_participant_id;
+    std::uint64_t source_session_nonce;
+    std::uint64_t target_participant_id;
+    std::uint64_t message_sequence;
+    std::uint32_t total_payload_bytes;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t payload_bytes;
+    std::uint8_t reserved[2] = {};
+    std::uint8_t payload[kLuaNetFragmentPayloadBytes];
+};
+
+constexpr std::size_t kLuaNetMessagePacketPrefixBytes =
+    offsetof(LuaNetMessagePacket, payload);
+
+constexpr std::size_t LuaNetMessagePacketWireSize(
+    std::uint16_t payload_bytes) {
+    return kLuaNetMessagePacketPrefixBytes + payload_bytes;
+}
+
+constexpr bool IsValidLuaNetMessagePacketWireSize(
+    std::size_t received_bytes,
+    const LuaNetMessagePacket& packet) {
+    const auto expected_fragment_count = static_cast<std::uint16_t>(
+        (packet.total_payload_bytes + kLuaNetFragmentPayloadBytes - 1u) /
+        kLuaNetFragmentPayloadBytes);
+    const auto fragment_offset =
+        static_cast<std::uint32_t>(packet.fragment_index) *
+        kLuaNetFragmentPayloadBytes;
+    const auto remaining_payload =
+        packet.total_payload_bytes > fragment_offset
+            ? packet.total_payload_bytes - fragment_offset
+            : 0u;
+    const auto expected_payload_bytes = static_cast<std::uint16_t>(
+        remaining_payload > kLuaNetFragmentPayloadBytes
+            ? kLuaNetFragmentPayloadBytes
+            : remaining_payload);
+    return packet.transport_participant_id != 0 &&
+           packet.source_participant_id != 0 &&
+           packet.source_session_nonce != 0 &&
+           packet.message_sequence != 0 &&
+           packet.message_sequence <= kLuaNetMaximumMessageSequence &&
+           packet.total_payload_bytes != 0 &&
+           packet.total_payload_bytes <=
+               kLuaNetFragmentPayloadBytes * kLuaNetMaxFragments &&
+           packet.fragment_count != 0 &&
+           packet.fragment_count <= kLuaNetMaxFragments &&
+           packet.fragment_count == expected_fragment_count &&
+           packet.fragment_index < packet.fragment_count &&
+           packet.payload_bytes == expected_payload_bytes &&
+           received_bytes == LuaNetMessagePacketWireSize(packet.payload_bytes);
+}
+
 struct LevelUpOfferPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1333,6 +1394,16 @@ static_assert(
     LuaModStreamPacketWireSize(kLuaModStreamFragmentPayloadBytes) ==
         sizeof(LuaModStreamPacket),
     "Full Lua mod stream fragment must consume the packet buffer exactly");
+static_assert(kLuaNetMessagePacketPrefixBytes == 64,
+              "Unexpected Lua net message packet prefix size");
+static_assert(sizeof(LuaNetMessagePacket) == 1088,
+              "Unexpected Lua net message packet size");
+static_assert(LuaNetMessagePacketWireSize(0) == 64,
+              "Empty Lua net message packet prefix size changed");
+static_assert(
+    LuaNetMessagePacketWireSize(kLuaNetFragmentPayloadBytes) ==
+        sizeof(LuaNetMessagePacket),
+    "Full Lua net fragment must consume the packet buffer exactly");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");

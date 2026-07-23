@@ -1,5 +1,4 @@
 #include "lua_engine.h"
-
 #include "bot_runtime.h"
 #include "logger.h"
 #include "lua_content_registry.h"
@@ -11,13 +10,11 @@
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
 #include "wave_intelligence.h"
-
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
 }
-
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -29,10 +26,8 @@ extern "C" {
 #include <string>
 #include <utility>
 #include <vector>
-
 #include <Windows.h>
 namespace sdmod {
-
 namespace lua_exec_diag {
 
 std::atomic<std::uint64_t> g_last_endscene_ms{0};
@@ -319,6 +314,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "storage.profile.local",
         "timer.local.scheduler",
         "bus.local.contracts",
+        "net.raw.fragmented", "net.participant.unicast", "net.participant.broadcast",
         "state.replicated.read",
         "state.replicated.write",
         "ui.snapshot.read",
@@ -431,6 +427,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaEventFilterRegistrationsForMod(mod);
     ClearLuaTimersForMod(mod);
     ClearLuaBusSubscriptionsForMod(mod);
+    ClearLuaNetSubscriptionsForMod(mod);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
@@ -456,6 +453,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->profile_storage_values.clear();
     mod->next_timer_id = 1;
     mod->next_bus_subscription_id = 1;
+    mod->next_net_subscription_id = 1;
     mod->spell_definitions.clear();
     mod->spell_effects.clear();
     mod->next_spell_effect_id = 1;
@@ -500,6 +498,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     }
     InitializeLuaUiRuntime(error_message);
     detail::InitializeLuaAudioRuntime();
+    detail::StartLuaNetDeliveryQueue();
     const auto capabilities = detail::BuildLuaCapabilitySet();
     detail::LoadLuaModsForBootstrap(bootstrap, capabilities);
     Log("Lua engine initialized.");
@@ -512,6 +511,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
 }
 
 void ShutdownLuaEngine() {
+    detail::StopLuaNetDeliveryQueue();
     detail::StopLuaEventQueue();
     // Drain any pending pipe-exec requests first so waiters don't
     // deadlock behind the engine mutex while we tear down Lua states.

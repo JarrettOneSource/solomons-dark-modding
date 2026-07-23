@@ -67,6 +67,12 @@ struct LuaBusSubscription {
     int callback_reference = -2;
 };
 
+struct LuaNetSubscription {
+    std::uint64_t id = 0;
+    std::string channel;
+    int callback_reference = -2;
+};
+
 struct LuaItemDefinition {
     LuaContentIdentity identity;
     std::string recipe_name;
@@ -207,6 +213,8 @@ struct LoadedLuaMod {
     std::uint64_t next_timer_id = 1;
     std::vector<LuaBusSubscription> bus_subscriptions;
     std::uint64_t next_bus_subscription_id = 1;
+    std::vector<LuaNetSubscription> net_subscriptions;
+    std::uint64_t next_net_subscription_id = 1;
     std::vector<LuaSpellDefinition> spell_definitions;
     std::vector<LuaSpellEffectInstance> spell_effects;
     std::uint64_t next_spell_effect_id = 1;
@@ -261,6 +269,10 @@ void DispatchLuaTimersToMod(
     const SDModRuntimeTickContext& context);
 void ClearLuaTimersForMod(LoadedLuaMod* mod);
 void ClearLuaBusSubscriptionsForMod(LoadedLuaMod* mod);
+void ClearLuaNetSubscriptionsForMod(LoadedLuaMod* mod);
+void StartLuaNetDeliveryQueue();
+void StopLuaNetDeliveryQueue();
+void DispatchPendingLuaNetMessages();
 void ResetLuaEnemySpawnFilterDiagnostics();
 void ResetLuaDropRollFilterDiagnostics();
 void ResetLuaWaveSpawnFilterDiagnostics();

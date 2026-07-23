@@ -22,7 +22,7 @@ def test_lua_audio_is_scoped_bounded_local_and_game_owned() -> str:
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
 
     assert "RegisterLuaAudioBindings(mod->state);" in binding_root
-    assert "lua_createtable(mod->state, 0, 25);" in binding_root
+    assert "lua_createtable(mod->state, 0, 26);" in binding_root
     for source in (
         "lua_engine_bindings_audio.cpp",
         "lua_engine_audio.cpp",

@@ -28,7 +28,7 @@ never see them.
 |---|---|---|
 | **Simulation** (mutates shared game state) | `sd.enemies.spawn`, `sd.items.grant`, `sd.world.spawn_reward`, filter outcomes | Executes where the affected entity is simulated (authority for run entities; owning peer for that peer's wizard, per the participant ownership rules). Owner-routed seams transparently request the owner; authority command seams such as item grants reject client authorship and route the accepted command to the target owner. Results replicate through the existing snapshot channels. |
 | **Presentation** (local output) | `sd.hud.*`, `sd.audio.*`, `sd.camera.*`, `sd.ui` authoring | Always local, never replicated. Inherently MP-safe. |
-| **Meta** (mod runtime) | `sd.storage.*`, `sd.timer.*`, `sd.bus.*`, `sd.runtime.*` | Local, with defined sync points (see `sd.state`). |
+| **Meta** (mod runtime) | `sd.storage.*`, `sd.timer.*`, `sd.bus.*`, `sd.net.*`, `sd.runtime.*` | Local operations with explicit sync points; `sd.net` is the low-level authenticated participant transport escape hatch. |
 
 ### Rules that make "no shenanigans" true
 
@@ -77,6 +77,8 @@ shared state; simulation calls auto-route to the owner).
   monotonic runtime tick; callbacks and handles are released when the mod unloads.
 - **`sd.bus`** — bounded synchronous local publish/subscribe with manifest-declared
   provider contracts and provider-first Lua load ordering.
+- **`sd.net`** — bounded binary-safe unicast/broadcast between participants through an
+  authenticated host relay, with per-mod subscriptions and game-thread delivery.
 - **`sd.rng`** — authority-owned exact seed selection for the next native arena-generation
   pass, carried to peers through the run nonce.
 - **`sd.nav`** — bounded address-free native grid snapshots and player-sized path-segment
@@ -105,8 +107,8 @@ shared state; simulation calls auto-route to the owner).
   face/face_target`, `cast`, `get_state`, `get_participant_state`, `get_participants`,
   `get_nameplate`, `get_skill_choices/choose_skill`, primary-attack helpers. Per-entity
   stat pools; bots are participants.
-- **`sd.ui`** — semantic read/automation middle layer: `get_state`, `get_snapshot`,
-  `find_element/find_action`, `activate_action/activate_element`, `perform`.
+- **`sd.ui`** — semantic read/automation plus bounded native-authored surfaces, panels,
+  labels, buttons, local presentation callbacks, and authority-routed simulation actions.
 - **`sd.input`** — key/scancode/binding press, normalized clicks, mouse holds, movement
   holds, `queue_local_spell_cast`, `queue_local_enemy_damage_claim`, manual target pin.
 - **`sd.gameplay`** — `start_waves`, `enable_combat_prelude`, manual enemy spawner
@@ -251,7 +253,7 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 78, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 79, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
@@ -261,14 +263,14 @@ multiplayer-safe. See `lua-items.md`.
 Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
 valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
 spawn filters, and attaches per-actor loot policy without mutating shared config.
-Protocol 78 carries the content ID and effective constructor values through world
+Protocol 79 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. See `lua-enemies.md`.
 
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
 `get_selection`, `cast`, and `get_effects` bind deterministic
-identities to bounded immutable config and owner-state callbacks. Protocol 78 routes host
+identities to bounded immutable config and owner-state callbacks. Protocol 79 routes host
 commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
 once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
 protocol fragments and relays complete per-owner effect generations, including explicit
@@ -291,7 +293,7 @@ participant, while point goals rotate the proven hostile move vector without
 bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal`
 belongs to a different actor class, so the implementation composes at
 `MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
-cross-class call. Clients run no mod AI and receive the resulting protocol-78 world
+cross-class call. Clients run no mod AI and receive the resulting protocol-79 world
 snapshots. See `lua-ai.md` and the opt-in `sample.lua.ai_boss_lab` mod.
 
 ### Tier 2 — ecosystem infrastructure
@@ -332,7 +334,7 @@ panels, labels, and buttons while rendering them through the game's native
 strict options, keyboard/mouse focus, and programmatic activation all feed one
 semantic action queue; callbacks run only from the game-thread Lua pump.
 Presentation actions remain local. Simulation-class buttons on clients become
-reliable protocol-78 authority requests authenticated by endpoint, participant
+reliable protocol-79 authority requests authenticated by endpoint, participant
 session nonce, request order, and the host's matching enabled registration.
 See `lua-ui-authoring.md` and the opt-in `sample.lua.ui_authoring_lab` mod.
 
@@ -363,6 +365,16 @@ up with their owner, and nested work is capped. It advertises `bus.local.contrac
 rare mod that outgrows `sd.state`/broadcast (e.g., streaming large payloads). Most mods
 never touch it — its existence keeps the default path honest.
 
+**Implemented 2026-07-23.** `sd.net.send/broadcast/on/off/get_limits` carries
+binary-safe payloads through a bounded protocol-79 fragment envelope. Clients send only
+to the host; the host authenticates endpoint, hop identity, source participant session,
+target, envelope, and replay key before local delivery or relay. Per-mod subscriptions
+dispatch only from the Lua game-thread pump, and disconnect cleanup removes assemblies,
+replay memory, and queued relays. Steam uses reliable no-Nagle fragments; the local UDP
+development backend retains datagram semantics. Transport identity is authenticated but
+payload authority remains the mod's responsibility. See `lua-net.md` and the disabled
+`sample.lua.net_lab` mod.
+
 **12. `sd.waves` — wave intelligence.**
 Consolidated read API over the spawner. `get_state()` returns wave number, spawner phase,
 alive/spawned/killed/remaining-to-spawn counts, and per-type composition
@@ -384,7 +396,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 78 carries a bounded validated
+includes planned composition, and protocol 79 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 

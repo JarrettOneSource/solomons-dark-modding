@@ -29,6 +29,9 @@ void ResetRemoteParticipantSessionEpoch(
         participant_id);
     g_local_transport.last_lua_ui_action_request_by_participant.erase(
         participant_id);
+    ClearLuaNetParticipantTransportState(
+        participant_id,
+        configured_authority_disconnected);
     if (!preserve_session_nonce_history) {
         g_local_transport.session_nonce_by_participant.erase(participant_id);
         g_local_transport.retired_session_nonces_by_participant.erase(participant_id);

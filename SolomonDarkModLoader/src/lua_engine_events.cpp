@@ -462,6 +462,7 @@ bool HasAnyLuaRuntimeTickHandlers() {
             (mod->runtime_tick_registered || HasLuaTimers(mod.get()) ||
              HasLuaEnemyAiRegistrations(mod.get()) ||
              HasLuaAudioPlaybacks(mod.get()) ||
+             !mod->net_subscriptions.empty() ||
              HasLuaUiRegistrationsForMod(mod->descriptor.id))) {
             return true;
         }

@@ -123,7 +123,7 @@ not consult local selection, input cooldowns, or player mana.
 
 `sd.spells.cast(key_or_id, options)` queues `on_cast` on the selected wizard's
 simulation owner. A client may select only itself; the host may also select a
-connected remote participant. Offline casts execute locally. Protocol 78 sends
+connected remote participant. Offline casts execute locally. Protocol 79 sends
 host commands reliably with authority, owner, request, and content identities;
 the receiving owner authenticates the host and deduplicates the request.
 
@@ -170,7 +170,7 @@ mods can use the semantic state to present an effect with `sd.draw`.
 This generic content-ID-based effect snapshot channel is shared by every
 registered definition.
 
-Protocol 78 carries at most 256 logical effects, four effects per fragment,
+Protocol 79 carries at most 256 logical effects, four effects per fragment,
 with deterministic content and owner identities. The owner publishes the
 snapshot; a host authenticates and relays remote-owner fragments. A completed
 generation replaces that owner's previous generation atomically, and an empty

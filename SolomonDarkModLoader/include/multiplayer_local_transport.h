@@ -57,6 +57,14 @@ bool QueueLuaUiSimulationAction(
     std::string_view action_id,
     std::uint64_t* request_id,
     std::string* error_message);
+bool QueueLuaNetMessage(
+    std::string_view mod_id,
+    std::string_view channel,
+    std::string_view payload,
+    std::uint64_t target_participant_id,
+    bool broadcast,
+    std::uint64_t* message_sequence,
+    std::string* error_message);
 std::vector<sdmod::LuaRegisteredSpellEffectState>
 SnapshotReplicatedLuaRegisteredSpellEffects();
 bool PublishAuthoritativeLuaModStateSet(

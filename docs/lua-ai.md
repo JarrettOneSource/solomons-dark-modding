@@ -147,7 +147,7 @@ Enemy AI is simulation-class:
 - Offline play and the multiplayer host create instances and execute Lua.
 - Clients create no controller instances and never invoke `on_think`.
 - Host movement, target fields, health, and death continue through the existing
-  protocol-78 world snapshots. No AI-specific packet or mod-authored netcode is
+  protocol-79 world snapshots. No AI-specific packet or mod-authored netcode is
   needed.
 - The spawn serial produces the same positive semantic network actor ID in
   offline and hosted runs. Clients retain authority-stamped snapshot bindings.

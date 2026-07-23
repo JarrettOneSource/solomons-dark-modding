@@ -108,7 +108,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert token in events, f"custom Lua event dispatch lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 78;",
+        "constexpr std::uint16_t kProtocolVersion = 79;",
         "LuaModStream = 21",
         "enum class LuaModStreamMessageKind",
         "struct LuaModStreamPacket",

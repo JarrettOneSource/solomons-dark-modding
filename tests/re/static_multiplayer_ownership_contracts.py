@@ -128,6 +128,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaStorageBindings",
         "RegisterLuaTimerBindings",
         "RegisterLuaBusBindings",
+        "RegisterLuaNetBindings",
         "RegisterLuaRngBindings",
         "RegisterLuaNavBindings",
         "RegisterLuaSceneBindings",
@@ -138,7 +139,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 25);" in bindings
+    assert "lua_createtable(mod->state, 0, 26);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (
@@ -1042,7 +1043,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 78;",
+        "constexpr std::uint16_t kProtocolVersion = 79;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1215,7 +1216,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 78;",
+        "constexpr std::uint16_t kProtocolVersion = 79;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
