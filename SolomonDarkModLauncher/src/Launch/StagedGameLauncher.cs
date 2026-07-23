@@ -261,7 +261,7 @@ internal static class StagedGameLauncher
         return Directory.Exists(retailPath) ? retailPath : null;
     }
 
-    private static LaunchOptions ApplySteamBootstrap(
+    internal static LaunchOptions ApplySteamBootstrap(
         LauncherConfiguration configuration,
         StageBuildResult stage,
         LaunchOptions options)
@@ -278,6 +278,9 @@ internal static class StagedGameLauncher
         environmentOverrides[SteamBootstrapConfiguration.EnableEnvironmentVariable] = configuration.Steam.Enabled ? "1" : "0";
         environmentOverrides[SteamBootstrapConfiguration.AppIdEnvironmentVariable] = configuration.Steam.AppId;
         environmentOverrides[SteamBootstrapConfiguration.AllowRestartEnvironmentVariable] = configuration.Steam.AllowRestartIfNecessary ? "1" : "0";
+        // Steam non-Steam shortcuts inject their synthetic identity into child processes.
+        environmentOverrides["SteamAppId"] = configuration.Steam.AppId;
+        environmentOverrides["SteamGameId"] = configuration.Steam.AppId;
         environmentOverrides[MultiplayerCompatibilityMaterializer.FingerprintEnvironmentVariable] =
             stage.MultiplayerCompatibility.FingerprintSha256;
 
