@@ -294,7 +294,8 @@ try {
             "Host Game",
             "Join Lobby ID",
             "Play Solo",
-            "How to Play"
+            "How to Play",
+            "Choose Save"
         )
         foreach ($action in $requiredMultiplayerActions) {
             if ($visibleText -notcontains $action) {

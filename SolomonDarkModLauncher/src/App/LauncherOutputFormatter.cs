@@ -33,6 +33,7 @@ internal static class LauncherOutputFormatter
             "  --runtime-profile <name> Select the staged runtime feature profile. Default: full. Supported: full, bootstrap_only.",
             "  --runtime-flag <k=v>    Override one staged runtime feature flag. May be passed multiple times.",
             "  --temporary-profile     Launch with a fresh temporary APPDATA/LOCALAPPDATA and staged savegames target.",
+            "  --savegames-root <path> Use this launcher-owned directory for game saves.",
             "  --steam-appid <id>      Override steam_appid.txt. Default: 3362180.",
             "  --steam-api-dll <path>  Override the x86 steam_api.dll used when the mirrored game does not already ship one.",
             "  --multiplayer <mode>    Select off, host, or join.",

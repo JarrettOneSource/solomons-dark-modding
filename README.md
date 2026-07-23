@@ -67,6 +67,16 @@ enable the same exact mods can therefore join over direct P2P with no website.
 The native multiplayer fingerprint still rejects any mod, loader, game-build,
 or runtime mismatch.
 
+The desktop launcher owns eight local save slots under
+`%LOCALAPPDATA%\SolomonDarkMultiplayerBeta\saves`. They never share the retail
+game's save directory. **Choose Save** selects, renames, opens, or explicitly
+imports a slot. The game always reads and writes the selected local slot.
+Cloud saves are backup snapshots, not a network filesystem: when the active
+Steam account is linked to an SDR website account, changed saves are uploaded
+after local writes settle and again when the game closes. The launcher stores
+no website password or Steam credential. Proton uses a staged directory mirror
+and copies it back to the selected local slot before the final backup.
+
 ## Runtime contract
 
 The launcher stages these files into `runtime/stage/.sdmod/`:
@@ -136,6 +146,7 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 ./dist/launcher/SolomonDarkModLauncher.exe stage
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
 ./dist/launcher/SolomonDarkModLauncher.exe launch
+./dist/launcher/SolomonDarkModLauncher.exe launch --savegames-root path\to\launcher-savegames
 ./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll
 ```
 

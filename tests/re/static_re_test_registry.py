@@ -306,6 +306,7 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
+    test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     test_remote_progression_preserves_local_concentration_context,
     test_remote_progression_uses_passive_authoritative_hydration,
     test_steam_combat_stat_profiles_isolate_concentration,
@@ -884,6 +885,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Wine stage savegames uses a directory mirror",
         test_wine_stage_savegames_uses_directory_mirror,
+    ),
+    (
+        "launcher saves are isolated, link-gated, and Proton-persisted",
+        test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     ),
     (
         "WSL Steam stages the test Boneyard before Proton starts",

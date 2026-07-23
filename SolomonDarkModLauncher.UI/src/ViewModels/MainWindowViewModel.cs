@@ -7,13 +7,17 @@ using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.UI.Views;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
 
 internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly LauncherUiCommandClient client_;
-    private readonly CrashReportSubmissionClient crashReportSubmissionClient_ = new();
+    private readonly SteamWebsiteSessionClient steamWebsiteSessionClient_;
+    private readonly CrashReportSubmissionClient crashReportSubmissionClient_;
+    private readonly CloudSaveClient cloudSaveClient_;
+    private readonly CloudSaveBackupCoordinator cloudSaveBackupCoordinator_;
     private readonly SteamInviteListenerClient steamInviteListener_ = new();
     private readonly StringBuilder transcriptBuilder_ = new();
     private readonly CancellationTokenSource lifetimeCancellation_ = new();
@@ -50,10 +54,26 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool isCrashSubmitting_;
     private string crashReportMessage_ = string.Empty;
     private string crashSubmissionError_ = string.Empty;
+    private string activeSaveName_ = string.Empty;
+    private string activeSaveStatus_ = string.Empty;
+    private string cloudAccountStatus_ = "Checking Steam link…";
+    private bool isCloudLinked_;
+    private string linkedAccountName_ = string.Empty;
+    private DateTimeOffset lastCloudAccountRefreshUtc_;
+    private CloudSaveGameSession? activeSaveSession_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
         client_ = client;
+        steamWebsiteSessionClient_ = new SteamWebsiteSessionClient();
+        crashReportSubmissionClient_ = new CrashReportSubmissionClient(
+            steamWebsiteSessionClient_);
+        cloudSaveClient_ = new CloudSaveClient(
+            steamWebsiteSessionClient_,
+            client_.SaveCatalog);
+        cloudSaveBackupCoordinator_ = new CloudSaveBackupCoordinator(
+            client_.SaveCatalog,
+            cloudSaveClient_);
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
         lobbyId_ = client.LobbyId;
@@ -78,6 +98,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenStageFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.StageRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.StageRoot));
         OpenProfileFolderCommand = new RelayCommand(_ => OpenFolder(lastResponse_?.Configuration?.ProfileRoot), _ => CanOpenFolder(lastResponse_?.Configuration?.ProfileRoot));
         OpenGameFolderCommand = new RelayCommand(_ => OpenFolder(GameDirectory), _ => CanOpenFolder(GameDirectory));
+        ManageSavesCommand = new RelayCommand(_ => OpenSaveManager(), _ => CanManageSaves());
+        OpenWebsiteAccountCommand = new RelayCommand(_ => OpenWebsiteAccount());
         SubmitCrashReportCommand = new RelayCommand(
             _ => _ = SubmitCrashReportAsync(),
             _ => IsCrashPromptOpen && !IsCrashSubmitting);
@@ -89,6 +111,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         steamInviteListener_.Start();
 
         UpdateLaunchPreview();
+        UpdateActiveSaveSummary();
+        _ = RefreshCloudAccountAsync(forceRefresh: false);
         if (string.IsNullOrWhiteSpace(GameDirectory))
         {
             StatusText = "Select your game folder.";
@@ -350,6 +374,42 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public string HostButtonText => IsBusy ? "Wait" : "Host Game";
 
+    public string ActiveSaveName
+    {
+        get => activeSaveName_;
+        private set => SetProperty(ref activeSaveName_, value);
+    }
+
+    public string ActiveSaveStatus
+    {
+        get => activeSaveStatus_;
+        private set => SetProperty(ref activeSaveStatus_, value);
+    }
+
+    public string CloudAccountStatus
+    {
+        get => cloudAccountStatus_;
+        private set => SetProperty(ref cloudAccountStatus_, value);
+    }
+
+    public bool IsCloudLinked
+    {
+        get => isCloudLinked_;
+        private set
+        {
+            if (SetProperty(ref isCloudLinked_, value))
+            {
+                OnPropertyChanged(nameof(AccountButtonText));
+            }
+        }
+    }
+
+    public string AccountButtonText => IsCloudLinked
+        ? $"Account: {linkedAccountName_}"
+        : "Link Account";
+
+    public bool HasActiveGame => activeGameProcessId_ > 0;
+
     public string WorkspaceRoot => lastResponse_?.Configuration?.WorkspaceRoot ?? "(unresolved)";
 
     public string GameDirectory
@@ -383,6 +443,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand OpenStageFolderCommand { get; }
     public RelayCommand OpenProfileFolderCommand { get; }
     public RelayCommand OpenGameFolderCommand { get; }
+    public RelayCommand ManageSavesCommand { get; }
+    public RelayCommand OpenWebsiteAccountCommand { get; }
     public RelayCommand SubmitCrashReportCommand { get; }
     public RelayCommand DismissCrashReportCommand { get; }
 
@@ -390,6 +452,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private bool CanLaunch() =>
         CanInteract() && isGameReady_ && activeGameProcessId_ == 0;
+
+    private bool CanManageSaves() => CanInteract() && activeGameProcessId_ == 0;
 
     private bool CanJoinLobbyId() =>
         CanLaunch() && ulong.TryParse(LobbyId, out var lobbyId) && lobbyId != 0;
@@ -425,6 +489,55 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         isGameReady_ = false;
         RaiseCommandStates();
         _ = RefreshAsync();
+    }
+
+    private void OpenSaveManager()
+    {
+        var viewModel = new SaveManagerViewModel(
+            client_.SaveCatalog,
+            cloudSaveClient_,
+            DirectoryUrl,
+            () =>
+            {
+                UpdateActiveSaveSummary();
+                UpdateLaunchPreview();
+            });
+        var window = new SaveManagerWindow(viewModel)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        window.ShowDialog();
+        UpdateActiveSaveSummary();
+        UpdateLaunchPreview();
+        _ = RefreshCloudAccountAsync(forceRefresh: true);
+    }
+
+    private void OpenWebsiteAccount()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo($"{DirectoryUrl.TrimEnd('/')}/account")
+            {
+                UseShellExecute = true
+            });
+            CloudAccountStatus =
+                "Link Steam on the website, then return to the launcher.";
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or
+            System.ComponentModel.Win32Exception)
+        {
+            SetError($"Could not open the website account page: {exception.Message}");
+        }
+    }
+
+    public void RefreshCloudAccountAfterActivation()
+    {
+        if (DateTimeOffset.UtcNow - lastCloudAccountRefreshUtc_ < TimeSpan.FromSeconds(10))
+        {
+            return;
+        }
+        _ = RefreshCloudAccountAsync(forceRefresh: true);
     }
 
     private async Task RefreshAsync()
@@ -537,7 +650,20 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (launchesGame && processId > 0)
         {
             activeGameProcessId_ = processId;
+            OnPropertyChanged(nameof(HasActiveGame));
             RaiseCommandStates();
+            try
+            {
+                activeSaveSession_ = cloudSaveBackupCoordinator_.Start(
+                    invocation.Response,
+                    DirectoryUrl,
+                    OnCloudSaveBackupStatus);
+            }
+            catch (Exception exception) when (
+                exception is IOException or InvalidOperationException)
+            {
+                SetError(exception.Message);
+            }
             _ = MonitorGameProcessExitAsync(invocation.Response);
         }
         StatusText = mode switch
@@ -586,6 +712,32 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        string? saveCompletionError = null;
+        var saveSession = activeSaveSession_;
+        activeSaveSession_ = null;
+        if (saveSession is not null)
+        {
+            try
+            {
+                await saveSession.CompleteAsync(cancellationToken);
+            }
+            catch (Exception exception) when (
+                exception is IOException or
+                UnauthorizedAccessException or
+                InvalidDataException or
+                InvalidOperationException or
+                HttpRequestException or
+                JsonException or
+                TaskCanceledException)
+            {
+                saveCompletionError = exception.Message;
+            }
+            finally
+            {
+                await saveSession.DisposeAsync();
+            }
+        }
+
         var crashReport = CrashReportCapture.TryCreate(response, exitCode, Version);
 
         await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -596,8 +748,16 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             }
 
             activeGameProcessId_ = 0;
+            OnPropertyChanged(nameof(HasActiveGame));
+            UpdateActiveSaveSummary();
             RaiseCommandStates();
             StartSteamInviteListener();
+            if (!string.IsNullOrWhiteSpace(saveCompletionError))
+            {
+                SetError($"Save finalization needs attention: {saveCompletionError}");
+                CloudAccountStatus =
+                    "The launcher will retry cloud backup after the next save.";
+            }
             if (crashReport is not null)
             {
                 PresentCrashReport(crashReport);
@@ -687,6 +847,74 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         IsCrashPromptOpen = false;
         StatusText = "Crash report not sent.";
         TryLaunchPendingLobbyJoin();
+    }
+
+    private async Task RefreshCloudAccountAsync(bool forceRefresh)
+    {
+        lastCloudAccountRefreshUtc_ = DateTimeOffset.UtcNow;
+        try
+        {
+            var state = await cloudSaveClient_.GetAccountStateAsync(
+                DirectoryUrl,
+                forceRefresh,
+                lifetimeCancellation_.Token);
+            linkedAccountName_ = state.LinkedAccount?.Username ?? string.Empty;
+            IsCloudLinked = state.LinkedAccount is not null;
+            OnPropertyChanged(nameof(AccountButtonText));
+            CloudAccountStatus = state.LinkedAccount is { } account
+                ? $"Cloud backup enabled for {account.Username}."
+                : "Cloud backup is off until this Steam account is linked.";
+        }
+        catch (OperationCanceledException) when (lifetimeCancellation_.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            InvalidOperationException or
+            HttpRequestException or
+            JsonException or
+            TaskCanceledException or
+            System.ComponentModel.Win32Exception)
+        {
+            linkedAccountName_ = string.Empty;
+            IsCloudLinked = false;
+            OnPropertyChanged(nameof(AccountButtonText));
+            CloudAccountStatus =
+                $"Cloud unavailable; local saves still work. {exception.Message}";
+        }
+    }
+
+    private void OnCloudSaveBackupStatus(CloudSaveBackupStatus status)
+    {
+        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            CloudAccountStatus = status.Message;
+            UpdateActiveSaveSummary();
+        });
+    }
+
+    private void UpdateActiveSaveSummary()
+    {
+        var save = client_.SaveCatalog.Active;
+        ActiveSaveName = save.Name;
+        ActiveSaveStatus = save.HasLocalData
+            ? save.LastBackupAtUtc is not { } backup
+                ? "Local · not backed up yet"
+                : save.LastLocalWriteUtc > backup
+                    ? "Local · changes pending cloud backup"
+                    : $"Local · cloud backup {backup.LocalDateTime:g}"
+            : "Empty local save";
+    }
+
+    public bool CanCloseLauncher()
+    {
+        if (!HasActiveGame)
+        {
+            return true;
+        }
+        StatusText =
+            "The launcher stays open while the game runs so local and Proton saves can finish safely.";
+        return false;
     }
 
     private void StartSteamSessionMonitoring(
@@ -957,6 +1185,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         lifetimeCancellation_.Cancel();
+        if (activeSaveSession_ is { } saveSession)
+        {
+            activeSaveSession_ = null;
+            saveSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
         StopSteamSessionMonitoring(clearStatus: false);
         steamInviteListener_.NotificationReceived -= OnSteamInviteNotification;
         steamInviteListener_.Dispose();
@@ -1098,6 +1331,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OpenStageFolderCommand.RaiseCanExecuteChanged();
         OpenProfileFolderCommand.RaiseCanExecuteChanged();
         OpenGameFolderCommand.RaiseCanExecuteChanged();
+        ManageSavesCommand.RaiseCanExecuteChanged();
         SubmitCrashReportCommand.RaiseCanExecuteChanged();
         DismissCrashReportCommand.RaiseCanExecuteChanged();
     }

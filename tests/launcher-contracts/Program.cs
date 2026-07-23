@@ -7,6 +7,7 @@ using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.Workspace;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
@@ -23,7 +24,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
     ("website join URI", TestWebsiteJoinUriAsync),
     ("clean install enables zero mods", TestCleanInstallEnablesZeroModsAsync),
-    ("crash capture archive", TestCrashCaptureArchiveAsync)
+    ("crash capture archive", TestCrashCaptureArchiveAsync),
+    ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
+    ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
+    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync)
 };
 
 var failures = 0;
@@ -42,6 +46,241 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestIsolatedLocalSaveCatalogAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var retailSavegamesRoot = Path.Combine(root, "retail", "savegames");
+        var retailFilePath = Path.Combine(
+            retailSavegamesRoot,
+            "solomondark",
+            "player.sav");
+        Directory.CreateDirectory(Path.GetDirectoryName(retailFilePath)!);
+        File.WriteAllText(retailFilePath, "retail-save");
+
+        var launcherSettingsRoot = Path.Combine(root, "launcher");
+        var settings = new LauncherUiSettingsStore(launcherSettingsRoot);
+        var catalog = new LocalSaveCatalog(settings);
+        Require(catalog.List().Count == LocalSaveCatalog.SlotCount, "launcher did not create eight save slots");
+        Require(catalog.List().All(save => !save.HasLocalData), "retail save data leaked into a launcher slot");
+        Require(
+            Path.GetFullPath(catalog.SavesRoot) ==
+            Path.GetFullPath(Path.Combine(launcherSettingsRoot, "saves")),
+            "launcher saves were not rooted beneath the launcher settings area");
+
+        var imported = catalog.Import(2, retailSavegamesRoot);
+        Require(imported.HasLocalData, "explicit save import did not populate the selected slot");
+        var importedFilePath = Path.Combine(
+            imported.SavegamesRootPath,
+            "solomondark",
+            "player.sav");
+        Require(
+            File.ReadAllText(importedFilePath) == "retail-save",
+            "explicit save import changed the save contents");
+        File.WriteAllText(importedFilePath, "launcher-save");
+        Require(
+            File.ReadAllText(retailFilePath) == "retail-save",
+            "launcher save writes contaminated the retail save");
+
+        catalog.Select(2);
+        catalog.Rename(2, "Steam Deck");
+        catalog.MarkBackedUp(2, new string('a', 64), DateTimeOffset.UtcNow);
+
+        var reloaded = new LocalSaveCatalog(
+            new LauncherUiSettingsStore(launcherSettingsRoot));
+        Require(reloaded.ActiveSlot == 2, "active save selection did not persist");
+        Require(reloaded.Active.Name == "Steam Deck", "save name did not persist");
+        Require(
+            reloaded.Active.LastBackupFingerprint == new string('a', 64),
+            "cloud backup receipt did not persist");
+
+        RequireThrows<InvalidOperationException>(
+            () => catalog.Import(3, Path.Combine(root, "not-a-savegames-folder")),
+            "save import accepted a folder without solomondark");
+        RequireThrows<InvalidOperationException>(
+            () => SaveDirectoryMirror.Replace(
+                imported.SavegamesRootPath,
+                Path.Combine(imported.SavegamesRootPath, "nested")),
+            "save replacement accepted overlapping paths");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestCloudSaveArchiveIntegrityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var catalog = new LocalSaveCatalog(
+            new LauncherUiSettingsStore(Path.Combine(root, "launcher")));
+        catalog.Rename(0, "Wizard One");
+        var playerFilePath = Path.Combine(
+            catalog.Get(0).SavegamesRootPath,
+            "solomondark",
+            "player.sav");
+        var nestedFilePath = Path.Combine(
+            catalog.Get(0).SavegamesRootPath,
+            "solomondark",
+            "profiles",
+            "achievements.dat");
+        Directory.CreateDirectory(Path.GetDirectoryName(playerFilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(nestedFilePath)!);
+        File.WriteAllText(playerFilePath, "player-state");
+        File.WriteAllBytes(nestedFilePath, [0, 1, 2, 3, 4]);
+
+        var first = CloudSaveArchive.Build(catalog.Get(0));
+        var repeated = CloudSaveArchive.Build(catalog.Get(0));
+        Require(
+            first.Bytes.SequenceEqual(repeated.Bytes),
+            "unchanged local saves did not create a deterministic backup");
+        Require(first.FileCount == 2, "cloud backup manifest lost a save file");
+
+        File.WriteAllText(playerFilePath, "newer-local-state");
+        catalog.Rename(0, "Temporary Name");
+        var restoredName = CloudSaveArchive.Restore(catalog, 0, first.Bytes);
+        Require(restoredName == "Wizard One", "cloud restore lost the saved slot name");
+        Require(
+            File.ReadAllText(playerFilePath) == "player-state",
+            "cloud restore did not replace the local snapshot");
+
+        var tamperedBytes = first.Bytes.ToArray();
+        using (var stream = new MemoryStream(tamperedBytes))
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            archive.GetEntry("savegames/solomondark/player.sav")!.Delete();
+            var replacement = archive.CreateEntry(
+                "savegames/solomondark/player.sav",
+                CompressionLevel.Optimal);
+            using var replacementStream = replacement.Open();
+            replacementStream.Write("tampered"u8);
+        }
+        File.WriteAllText(playerFilePath, "preserve-on-rejection");
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, tamperedBytes),
+            "cloud restore accepted a file with a mismatched hash");
+        Require(
+            File.ReadAllText(playerFilePath) == "preserve-on-rejection",
+            "rejected cloud restore changed the local save");
+
+        var traversalArchive = CreateZip(new Dictionary<string, byte[]>
+        {
+            ["manifest.json"] = """
+                {
+                  "schemaVersion": 1,
+                  "slot": 0,
+                  "name": "Unsafe",
+                  "files": [{
+                    "path": "../outside.sav",
+                    "size": 1,
+                    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+                  }]
+                }
+                """u8.ToArray(),
+            ["savegames/../outside.sav"] = "a"u8.ToArray()
+        });
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, traversalArchive),
+            "cloud restore accepted path traversal");
+        Require(!File.Exists(Path.Combine(root, "outside.sav")), "cloud restore escaped its slot");
+
+        var unsafeNameArchive = CreateZip(new Dictionary<string, byte[]>
+        {
+            ["manifest.json"] = """
+                {
+                  "schemaVersion": 1,
+                  "slot": 0,
+                  "name": "unsafe\u0001name",
+                  "files": [{
+                    "path": "solomondark/player.sav",
+                    "size": 1,
+                    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+                  }]
+                }
+                """u8.ToArray(),
+            ["savegames/solomondark/player.sav"] = "a"u8.ToArray()
+        });
+        RequireThrows<InvalidDataException>(
+            () => CloudSaveArchive.Restore(catalog, 0, unsafeNameArchive),
+            "cloud restore accepted a control character in the save name");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestSelectedSaveLaunchRoutingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var selectedSavegamesRoot = Path.Combine(root, "selected", "savegames");
+        var command = LauncherCommandParser.Parse(
+        [
+            "launch",
+            "--savegames-root", selectedSavegamesRoot,
+            "--multiplayer", "host",
+            "--no-invite-dialog"
+        ]);
+        Require(
+            command.SavegamesRootOverride == selectedSavegamesRoot,
+            "launcher parser lost the selected save directory");
+        Require(
+            !command.OpenSteamInviteDialog,
+            "Host Game did not suppress the automatic Steam invite picker");
+
+        var workspace = WorkspacePaths.Create(
+            Path.Combine(root, "workspace"),
+            modsRootOverride: null,
+            runtimeRootOverride: null,
+            stageRootOverride: null);
+        var defaultOptions = IsolatedProfileBootstrapper.CreateLaunchOptions(workspace);
+        Require(
+            defaultOptions.SavegamesRootPath ==
+            Path.Combine(workspace.ProfileRootPath, "savegames"),
+            "headless launcher defaulted saves into the staged retail tree");
+
+        var selectedOptions = IsolatedProfileBootstrapper.CreateLaunchOptions(
+            workspace,
+            savegamesRootOverride: selectedSavegamesRoot);
+        Require(
+            selectedOptions.SavegamesRootPath == Path.GetFullPath(selectedSavegamesRoot),
+            "selected save directory was not preserved in launch options");
+        Require(
+            Directory.Exists(selectedSavegamesRoot),
+            "selected save directory was not prepared before launch");
+
+        var mirrorSource = Path.Combine(root, "proton-stage-savegames");
+        var localDestination = Path.Combine(root, "launcher-savegames");
+        var sourceFile = Path.Combine(mirrorSource, "solomondark", "player.sav");
+        var staleFile = Path.Combine(localDestination, "solomondark", "stale.sav");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(staleFile)!);
+        File.WriteAllText(sourceFile, "proton-updated-save");
+        File.WriteAllText(staleFile, "stale-save");
+        SaveDirectoryMirror.Replace(mirrorSource, localDestination);
+        Require(
+            File.ReadAllText(Path.Combine(localDestination, "solomondark", "player.sav")) ==
+            "proton-updated-save",
+            "Proton stage copy-back lost the updated save");
+        Require(!File.Exists(staleFile), "Proton stage copy-back retained stale local files");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
 
 static Task TestCanonicalModIdentifiersAsync()
 {
@@ -1071,6 +1310,20 @@ static void Require(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static void RequireThrows<TException>(Action action, string message)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
 }
 
 file sealed class PackageHandler(byte[] package) : HttpMessageHandler

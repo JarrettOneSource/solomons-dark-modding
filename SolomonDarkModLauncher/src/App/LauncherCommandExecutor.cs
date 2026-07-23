@@ -94,7 +94,8 @@ internal static class LauncherCommandExecutor
             stageResult,
             configuration,
             command.TemporaryProfile,
-            multiplayer);
+            multiplayer,
+            command.SavegamesRootOverride);
         return new LauncherCommandExecution(
             command,
             configuration,

@@ -22,11 +22,24 @@ HOW TO PLAY
 4. Start SolomonDarkMultiplayerBeta.exe.
 5. Select the folder that contains the original SolomonDark.exe.
    Bundled mods start disabled; enable only the mods you want in the launcher.
-6. The host clicks Host Game and selects Friends Only or Public.
-7. The host goes to the hub.
-8. Select the host's lobby through Steam, or use a Lobby ID.
-9. Wait until every wizard is visible in the hub.
-10. Start a run.
+6. Use Choose Save to select one of the launcher's eight local save slots.
+7. The host clicks Host Game and selects Friends Only or Public.
+   Host Game does not open an invite picker automatically.
+8. The host goes to the hub.
+9. Select the host's lobby through Steam, the website, or use a Lobby ID.
+10. Wait until every wizard is visible in the hub, then start a run.
+
+SAVES
+
+- Launcher saves are separate from the original game's saves.
+- The game always uses the selected local slot on disk.
+- Link Steam on your SDR website account to enable cloud backups. The launcher
+  detects the active linked Steam account automatically.
+- Cloud backups run after local save changes and when the game closes. They do
+  not replace the local save directory.
+- On Steam Deck/Proton, leave the launcher open until the game closes so it can
+  copy the staged save back before backing it up.
+- Cloud backups are disabled until the Steam account is linked.
 
 STEAM DECK
 
@@ -66,6 +79,8 @@ PROBLEM SOLVING
 - After you close both games, start a new lobby.
 - The log files are in:
   %LOCALAPPDATA%\SolomonDarkMultiplayerBeta\runtime
+- Launcher save slots are in:
+  %LOCALAPPDATA%\SolomonDarkMultiplayerBeta\saves
 - If the game crashes, the launcher asks before submitting crash diagnostics.
   Submit Logs sends logs, runtime configuration, the enabled-mod list, and any
   minidump to private website storage under your Steam identity. Don't Send

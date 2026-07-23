@@ -11,6 +11,7 @@ internal sealed record LauncherCommand(
     string? ModsRootOverride,
     string? RuntimeRootOverride,
     string? StageRootOverride,
+    string? SavegamesRootOverride,
     string? TargetModId,
     string? RuntimeProfileOverride,
     IReadOnlyList<string> RuntimeFlagOverrides,

@@ -12,16 +12,21 @@ internal sealed class LauncherUiSettingsStore
 
     private readonly string settingsPath_;
 
-    public LauncherUiSettingsStore()
+    public LauncherUiSettingsStore(string? settingsRootOverride = null)
     {
-        var settingsRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SolomonDarkMultiplayerBeta");
-        settingsPath_ = Path.Combine(settingsRoot, "settings.json");
-        RuntimeRoot = Path.Combine(settingsRoot, "runtime");
+        SettingsRoot = string.IsNullOrWhiteSpace(settingsRootOverride)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SolomonDarkMultiplayerBeta")
+            : Path.GetFullPath(settingsRootOverride);
+        settingsPath_ = Path.Combine(SettingsRoot, "settings.json");
+        RuntimeRoot = Path.Combine(SettingsRoot, "runtime");
+        SavesRoot = Path.Combine(SettingsRoot, "saves");
     }
 
+    public string SettingsRoot { get; }
     public string RuntimeRoot { get; }
+    public string SavesRoot { get; }
 
     public string? LoadGameDirectory()
     {
@@ -50,6 +55,21 @@ internal sealed class LauncherUiSettingsStore
         });
     }
 
+    public int LoadActiveSaveSlot()
+    {
+        var slot = Load().ActiveSaveSlot;
+        return slot is >= 0 and < LocalSaveCatalog.SlotCount ? slot : 0;
+    }
+
+    public void SaveActiveSaveSlot(int slot)
+    {
+        if (slot is < 0 or >= LocalSaveCatalog.SlotCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slot));
+        }
+        Save(Load() with { ActiveSaveSlot = slot });
+    }
+
     private SettingsDocument Load()
     {
         if (!File.Exists(settingsPath_))
@@ -75,5 +95,6 @@ internal sealed class LauncherUiSettingsStore
     {
         public string? GameDirectory { get; init; }
         public string? DirectoryUrl { get; init; }
+        public int ActiveSaveSlot { get; init; }
     }
 }

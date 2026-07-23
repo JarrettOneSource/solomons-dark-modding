@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -18,12 +17,19 @@ internal sealed class CrashReportSubmissionClient
         PropertyNameCaseInsensitive = true
     };
 
+    private readonly SteamWebsiteSessionClient sessionClient_;
+
+    public CrashReportSubmissionClient(SteamWebsiteSessionClient sessionClient)
+    {
+        sessionClient_ = sessionClient;
+    }
+
     public async Task<CrashReportSubmissionResult> SubmitAsync(
         CrashReportCapture capture,
         string directoryUrl,
         CancellationToken cancellationToken = default)
     {
-        var session = await AuthenticateAsync(directoryUrl, cancellationToken);
+        var session = await sessionClient_.GetAsync(directoryUrl, cancellationToken: cancellationToken);
         var archivePath = CrashReportArchiveBuilder.Build(capture);
         try
         {
@@ -70,66 +76,6 @@ internal sealed class CrashReportSubmissionClient
         }
     }
 
-    private static async Task<SteamSessionEnvelope> AuthenticateAsync(
-        string directoryUrl,
-        CancellationToken cancellationToken)
-    {
-        var startInfo = new ProcessStartInfo(LauncherExecutableResolver.Resolve())
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in new[]
-                 {
-                     "directory-auth",
-                     "--json",
-                     "--directory-url",
-                     directoryUrl
-                 })
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        var output = await standardOutput;
-        var error = await standardError;
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                ReadLauncherError(error) ??
-                "Steam authentication failed. Make sure Steam is running and logged in.");
-        }
-
-        var envelope = JsonSerializer.Deserialize<DirectoryAuthenticationResponse>(
-            output,
-            JsonOptions);
-        if (envelope?.Success != true ||
-            string.IsNullOrWhiteSpace(envelope.DirectorySession?.Token))
-        {
-            throw new InvalidOperationException(
-                "The launcher returned an incomplete Steam website session.");
-        }
-        return envelope.DirectorySession;
-    }
-
-    private static string? ReadLauncherError(string payload)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<LauncherErrorResponse>(payload, JsonOptions)?.Error;
-        }
-        catch (JsonException)
-        {
-            return string.IsNullOrWhiteSpace(payload) ? null : payload.Trim();
-        }
-    }
-
     private static async Task<string> ReadErrorAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
@@ -147,22 +93,6 @@ internal sealed class CrashReportSubmissionClient
         {
             return response.ReasonPhrase ?? "request failed";
         }
-    }
-
-    private sealed class DirectoryAuthenticationResponse
-    {
-        public bool Success { get; set; }
-        public SteamSessionEnvelope? DirectorySession { get; set; }
-    }
-
-    private sealed class SteamSessionEnvelope
-    {
-        public string Token { get; set; } = string.Empty;
-    }
-
-    private sealed class LauncherErrorResponse
-    {
-        public string? Error { get; set; }
     }
 
     private sealed class WebsiteErrorResponse

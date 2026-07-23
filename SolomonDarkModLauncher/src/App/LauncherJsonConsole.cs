@@ -98,6 +98,9 @@ internal static class LauncherJsonConsole
                     StartupCode = execution.LaunchedGame.StartupStatus.Code,
                     StartupMessage = execution.LaunchedGame.StartupStatus.Message,
                     StartupLogPath = execution.LaunchedGame.StartupStatus.LogPath,
+                    SavegamesRootPath = execution.LaunchedGame.SavegamesRootPath,
+                    SavegamesUsesDirectoryMirror =
+                        execution.LaunchedGame.SavegamesUsesDirectoryMirror,
                     MultiplayerSession = execution.LaunchedGame.MultiplayerSessionStatus is { } session
                         ? new LauncherJsonMultiplayerSession
                         {
@@ -277,6 +280,8 @@ internal static class LauncherJsonConsole
         public required string StartupCode { get; init; }
         public required string StartupMessage { get; init; }
         public required string? StartupLogPath { get; init; }
+        public required string? SavegamesRootPath { get; init; }
+        public required bool SavegamesUsesDirectoryMirror { get; init; }
         public required LauncherJsonMultiplayerSession? MultiplayerSession { get; init; }
     }
 
