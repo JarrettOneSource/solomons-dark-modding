@@ -17,9 +17,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install image test dependency
+        run: python -m pip install Pillow==11.3.0
       - name: Verify generated Lua editor API
         run: python tools/generate_lua_api_stubs.py --check
       - name: Test Lua editor API generator
         run: python -m unittest tests.test_lua_api_stub_generator
       - name: Test Lua authoring live verifier
         run: python -m unittest tests.test_lua_authoring_verifier
+      - name: Test Lua UI authoring verifier
+        run: python -m unittest tests.test_lua_ui_authoring_verifier

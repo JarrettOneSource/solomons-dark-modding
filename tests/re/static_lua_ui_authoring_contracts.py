@@ -33,6 +33,8 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
     manifest = _read("mods/lua_ui_authoring_lab/manifest.json")
     sample = _read("mods/lua_ui_authoring_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_ui_authoring.py")
+    verifier_tests = _read("tests/test_lua_ui_authoring_verifier.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
 
     for source in (
@@ -219,8 +221,23 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         "foreign_handle_rejected",
         "callback_dispatched",
         "destroyed_state_absent",
+        "capture_game_backbuffer",
+        "inspect_native_ui_pixels",
+        "changed_inside",
+        "changed_outside",
+        "CLEANUP_PROBE",
     ):
         assert token in verifier, f"authored UI verifier lacks: {token}"
+    for token in (
+        "test_localized_surface_change_passes",
+        "test_identical_frames_fail",
+        "test_whole_frame_change_is_not_surface_evidence",
+    ):
+        assert token in verifier_tests, f"authored UI verifier tests lack: {token}"
+    assert (
+        "python -m unittest tests.test_lua_ui_authoring_verifier"
+        in workflow
+    )
     assert '"get_authored_state",' in runtime_verifier
 
     return (

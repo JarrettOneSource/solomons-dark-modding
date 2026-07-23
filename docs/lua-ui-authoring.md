@@ -135,8 +135,17 @@ fault disables further authored rendering for the process.
 
 The seam advertises `ui.authoring.native`, `ui.action.presentation`, and
 `ui.action.simulation.route`. `tools/verify_lua_ui_authoring.py` checks the live
-address-free API and ownership/error contract. The static contract additionally
-checks the native layout, callback lifecycle, input queue, protocol envelope,
-authority validation, docs, and opt-in sample. Live presentation verification
-must be run when the game desktop is available; build/static success alone does
-not prove the native panel and text calls on a rendered frame.
+address-free API and ownership/error contract. It also captures the real D3D9
+backbuffer before and after showing its authored surface and requires localized
+pixel changes inside the surface bounds:
+
+```bash
+py -3 tools/verify_lua_ui_authoring.py --game-path-kind windows
+```
+
+Use `--game-path-kind proton` for a Proton launch. The static contract
+additionally checks the native layout, callback lifecycle, input queue, protocol
+envelope, authority validation, docs, and opt-in sample.
+Live presentation verification must be run when the game desktop is
+available; build/static success alone does not prove the native panel and text
+calls on a rendered frame.
