@@ -36,7 +36,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 77;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 78;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
@@ -391,7 +391,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 77;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 78;"),
         (compatibility_materializer_text, "CurrentProtocolVersion = 77;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),

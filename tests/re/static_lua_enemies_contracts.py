@@ -141,7 +141,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         assert token in drop_hook, f"registered loot policy lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 77;",
+        "constexpr std::uint16_t kProtocolVersion = 78;",
         "std::uint64_t lua_content_id",
         "LuaEnemySpawnSnapshotFlagHp",
         "LuaEnemySpawnSnapshotFlagChaseSpeed",
@@ -197,7 +197,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "semantic stock-class name",
         "offline or host simulation",
         "modifier array",
-        "Protocol 77",
+        "Protocol 78",
         "death tombstones",
         "Raw actor/config",
         "addresses never cross the wire",

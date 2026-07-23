@@ -13,6 +13,7 @@
 #include "lua_engine.h"
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
+#include "lua_ui_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
@@ -453,6 +454,13 @@ struct QueuedLocalCastEvent {
     float cursor_world_y = 0.0f;
 };
 
+struct QueuedLuaUiActionRequest {
+    std::uint64_t request_id = 0;
+    std::string mod_id;
+    std::string surface_id;
+    std::string action_id;
+};
+
 struct QueuedHostParticipantVitalsCorrection {
     std::uint64_t target_participant_id = 0;
     float life_current = 0.0f;
@@ -875,6 +883,8 @@ struct LocalTransportState {
         last_participant_frame_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint64_t>
         session_nonce_by_participant;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        last_lua_ui_action_request_by_participant;
     std::unordered_map<std::uint64_t, std::unordered_set<std::uint64_t>>
         retired_session_nonces_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t> last_cast_sequence_by_participant;
@@ -964,6 +974,8 @@ std::uint64_t g_next_lua_item_grant_request_id = 1;
 std::vector<QueuedLuaRegisteredSpellCast>
     g_queued_lua_registered_spell_casts;
 std::uint64_t g_next_lua_registered_spell_cast_request_id = 1;
+std::vector<QueuedLuaUiActionRequest> g_queued_lua_ui_action_requests;
+std::uint64_t g_next_lua_ui_action_request_id = 1;
 std::mutex g_lua_registered_spell_effect_snapshot_mutex;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
@@ -1308,6 +1320,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_effect_sync.inl"
+#include "multiplayer_local_transport/lua_ui_action_sync.inl"
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
@@ -1542,6 +1555,16 @@ bool QueueOwnerRoutedLuaRegisteredSpellCast(
         owner_participant_id,
         local_owner,
         error_message);
+}
+
+bool QueueLuaUiSimulationAction(
+    std::string_view mod_id,
+    std::string_view surface_id,
+    std::string_view action_id,
+    std::uint64_t* request_id,
+    std::string* error_message) {
+    return QueueLuaUiSimulationActionInternal(
+        mod_id, surface_id, action_id, request_id, error_message);
 }
 
 std::vector<LuaRegisteredSpellEffectState>

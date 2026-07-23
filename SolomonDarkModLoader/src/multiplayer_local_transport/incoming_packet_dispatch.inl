@@ -140,6 +140,14 @@ bool IsAuthorizedSteamGameplayPacket(
             [](const LevelUpChoicePacket& packet) {
                 return packet.participant_id;
             });
+    case PacketKind::LuaUiActionRequest:
+        return SteamPacketOwnerMatches<LuaUiActionRequestPacket>(
+            data,
+            size,
+            sender_steam_id,
+            [](const LuaUiActionRequestPacket& packet) {
+                return packet.participant_id;
+            });
     default:
         return false;
     }
@@ -423,6 +431,18 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyLevelUpChoiceResultPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::LuaUiActionRequest &&
+            received == static_cast<int>(sizeof(LuaUiActionRequestPacket))) {
+            LuaUiActionRequestPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaUiActionRequest)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaUiActionRequestPacket(packet, from, now_ms);
             continue;
         }
 

@@ -230,6 +230,8 @@ bool ConfigureLocalTransport() {
         g_queued_local_enemy_damage_claims.clear();
         ClearLocalLootPickupRequestStateLocked();
         g_queued_local_level_up_choices.clear();
+        g_queued_lua_ui_action_requests.clear();
+        g_next_lua_ui_action_request_id = 1;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
         ResetAirChainRuntimeState();
@@ -277,6 +279,8 @@ bool ConfigureLocalTransport() {
         g_queued_local_enemy_damage_claims.clear();
         ClearLocalLootPickupRequestStateLocked();
         g_queued_local_level_up_choices.clear();
+        g_queued_lua_ui_action_requests.clear();
+        g_next_lua_ui_action_request_id = 1;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
     }

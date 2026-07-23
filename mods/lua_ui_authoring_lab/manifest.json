@@ -1,0 +1,18 @@
+{
+  "id": "sample.lua.ui_authoring_lab",
+  "name": "Lua UI Authoring Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "state.replicated.read",
+      "state.replicated.write",
+      "ui.authoring.native",
+      "ui.action.presentation",
+      "ui.action.simulation.route"
+    ]
+  }
+}

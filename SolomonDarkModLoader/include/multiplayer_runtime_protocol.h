@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 77;
+constexpr std::uint16_t kProtocolVersion = 78;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -30,6 +30,8 @@ constexpr std::uint16_t kLuaRegisteredSpellEffectStatesPerFragment = 4;
 constexpr std::uint8_t kLuaRegisteredSpellEffectKeyBytes = 64;
 constexpr std::uint8_t kLuaRegisteredSpellEffectDataBytes = 128;
 constexpr std::uint16_t kWaveSummaryMaxCompositionRows = 20;
+constexpr std::uint16_t kLuaUiModIdPacketBytes = 128;
+constexpr std::uint16_t kLuaUiIdentifierPacketBytes = 65;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -56,6 +58,7 @@ enum class PacketKind : std::uint16_t {
     LuaItemGrant = 22,
     LuaRegisteredSpellCast = 23,
     LuaRegisteredSpellEffectSnapshot = 24,
+    LuaUiActionRequest = 25,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -1160,6 +1163,16 @@ struct LuaRegisteredSpellCastPacket {
     std::uint8_t reserved[7] = {};
 };
 
+struct LuaUiActionRequestPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint64_t request_id;
+    char mod_id[kLuaUiModIdPacketBytes] = {};
+    char surface_id[kLuaUiIdentifierPacketBytes] = {};
+    char action_id[kLuaUiIdentifierPacketBytes] = {};
+};
+
 struct LuaRegisteredSpellEffectPacketState {
     std::uint64_t effect_id;
     std::uint64_t cast_request_id;
@@ -1361,6 +1374,8 @@ static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup req
 static_assert(sizeof(LuaItemGrantPacket) == 84, "Unexpected Lua item grant packet size");
 static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76,
               "Unexpected Lua registered spell cast packet size");
+static_assert(sizeof(LuaUiActionRequestPacket) == 294,
+              "Unexpected Lua UI action request packet size");
 static_assert(sizeof(LuaRegisteredSpellEffectPacketState) == 248,
               "Unexpected Lua registered spell effect state size");
 static_assert(kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes == 44,

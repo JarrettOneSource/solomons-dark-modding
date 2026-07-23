@@ -57,6 +57,9 @@ from static_lua_ai_contracts import (
 from static_lua_audio_contracts import (
     test_lua_audio_is_scoped_bounded_local_and_game_owned,
 )
+from static_lua_ui_authoring_contracts import (
+    test_lua_ui_authoring_is_native_bounded_and_authority_routed,
+)
 from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
@@ -366,6 +369,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua audio is scoped, bounded, local, and game-owned",
         test_lua_audio_is_scoped_bounded_local_and_game_owned,
+    ),
+    (
+        "Lua UI authoring is native, bounded, and authority-routed",
+        test_lua_ui_authoring_is_native_bounded_and_authority_routed,
     ),
     (
         "Lua timers are bounded, local, and tick-driven",

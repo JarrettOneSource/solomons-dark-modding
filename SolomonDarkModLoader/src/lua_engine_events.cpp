@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "lua_draw_runtime.h"
+#include "lua_ui_runtime.h"
 
 extern "C" {
 #include "lua.h"
@@ -460,7 +461,8 @@ bool HasAnyLuaRuntimeTickHandlers() {
         if (mod != nullptr &&
             (mod->runtime_tick_registered || HasLuaTimers(mod.get()) ||
              HasLuaEnemyAiRegistrations(mod.get()) ||
-             HasLuaAudioPlaybacks(mod.get()))) {
+             HasLuaAudioPlaybacks(mod.get()) ||
+             HasLuaUiRegistrationsForMod(mod->descriptor.id))) {
             return true;
         }
     }

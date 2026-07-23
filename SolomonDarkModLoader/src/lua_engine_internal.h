@@ -4,6 +4,7 @@
 #include "lua_content_registry.h"
 #include "lua_engine_events.h"
 #include "lua_mod_runtime.h"
+#include "lua_ui_runtime.h"
 #include "runtime_bootstrap.h"
 #include "sdmod_plugin_api.h"
 
@@ -174,6 +175,15 @@ struct LuaEnemyAiInstance {
     LuaModValue blackboard;
 };
 
+struct LuaUiActionRegistration {
+    std::uint64_t surface_handle = 0;
+    std::uint64_t element_handle = 0;
+    std::string surface_id;
+    std::string action_id;
+    LuaUiActionClass action_class = LuaUiActionClass::Presentation;
+    int callback_reference = -2;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -206,6 +216,7 @@ struct LoadedLuaMod {
     std::vector<LuaEnemyAiInstance> enemy_ai_instances;
     std::vector<LuaAudioPlayback> audio_playbacks;
     std::uint64_t next_audio_playback_id = 1;
+    std::vector<LuaUiActionRegistration> ui_actions;
 };
 
 std::mutex& LuaEngineMutex();
@@ -231,6 +242,8 @@ bool RegisterLuaContentIdentityForMod(
 
 bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message);
 void CloseLuaStateForMod(LoadedLuaMod* mod);
+void ClearLuaUiBindingsForMod(LoadedLuaMod* mod);
+void DispatchPendingLuaUiActions();
 
 bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message);
 void PushWaveStartedPayload(lua_State* state, const WaveSummary& summary);

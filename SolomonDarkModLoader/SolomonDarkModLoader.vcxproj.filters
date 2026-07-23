@@ -158,6 +158,9 @@
     <ClInclude Include="include\lua_draw_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\lua_ui_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_content_registry.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -193,6 +196,12 @@
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl">
       <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_ui_action_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_ui_runtime\input_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.h">
       <Filter>Header Files\Public API</Filter>
@@ -1441,6 +1450,9 @@
     <ClCompile Include="src\lua_engine_bindings_ui.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_ui_authoring.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1478,6 +1490,12 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_draw_runtime.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_ui_renderer.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_ui_runtime.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_content_registry.cpp">

@@ -8,6 +8,7 @@
 #include "bot_runtime.h"
 #include "logger.h"
 #include "lua_draw_runtime.h"
+#include "lua_ui_runtime.h"
 #include "lua_engine.h"
 #include "lua_exec_pipe.h"
 #include "memory_access.h"
@@ -421,6 +422,17 @@ void Initialize(HMODULE module_handle) {
                 Log(message);
                 ShutdownPartialRuntime();
                 write_failed_status("lua-draw-renderer-failed", message);
+                return;
+            }
+
+            std::string lua_ui_error;
+            if (!StartLuaUiRenderer(&lua_ui_error)) {
+                const auto message = lua_ui_error.empty()
+                    ? std::string("Lua UI renderer could not resolve its native UI seams.")
+                    : lua_ui_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-ui-renderer-failed", message);
                 return;
             }
         }

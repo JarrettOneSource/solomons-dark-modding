@@ -3,6 +3,7 @@
 #include "mod_loader.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
+#include "lua_ui_runtime.h"
 #include "mod_loader_internal.h"
 #include "x86_hook.h"
 
@@ -407,6 +408,10 @@ LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, L
     auto* const original = g_background_focus_bypass_state.original_window_proc;
     if (original == nullptr) {
         return DefWindowProcA(hwnd, message, wparam, lparam);
+    }
+
+    if (HandleLuaAuthoredUiWindowMessage(hwnd, message, wparam, lparam)) {
+        return 0;
     }
 
     if (message == WM_ACTIVATEAPP && wparam == FALSE) {

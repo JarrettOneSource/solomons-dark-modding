@@ -251,7 +251,7 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 77, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 78, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
@@ -261,14 +261,14 @@ multiplayer-safe. See `lua-items.md`.
 Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
 valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
 spawn filters, and attaches per-actor loot policy without mutating shared config.
-Protocol 77 carries the content ID and effective constructor values through world
+Protocol 78 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. See `lua-enemies.md`.
 
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
 `get_selection`, `cast`, and `get_effects` bind deterministic
-identities to bounded immutable config and owner-state callbacks. Protocol 77 routes host
+identities to bounded immutable config and owner-state callbacks. Protocol 78 routes host
 commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
 once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
 protocol fragments and relays complete per-owner effect generations, including explicit
@@ -291,7 +291,7 @@ participant, while point goals rotate the proven hostile move vector without
 bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal`
 belongs to a different actor class, so the implementation composes at
 `MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
-cross-class call. Clients run no mod AI and receive the resulting protocol-77 world
+cross-class call. Clients run no mod AI and receive the resulting protocol-78 world
 snapshots. See `lua-ai.md` and the opt-in `sample.lua.ai_boss_lab` mod.
 
 ### Tier 2 — ecosystem infrastructure
@@ -325,6 +325,16 @@ See `lua-audio.md` and the opt-in `sample.lua.audio_lab` mod.
 engine (`ui-engine-system-map.md`); reuse the semantic action layer for input. *Unlocks:*
 mod settings screens, dialogue choices, custom shops, quest logs. *MP:* presentation-local;
 action handlers that mutate shared state are simulation-class and auto-route.
+
+**Implemented 2026-07-23.** Authored `sd.ui` surfaces retain bounded mod-owned
+panels, labels, and buttons while rendering them through the game's native
+`UiPanel_Render` and exact-text helpers. Normalized layout, opaque ownership,
+strict options, keyboard/mouse focus, and programmatic activation all feed one
+semantic action queue; callbacks run only from the game-thread Lua pump.
+Presentation actions remain local. Simulation-class buttons on clients become
+reliable protocol-78 authority requests authenticated by endpoint, participant
+session nonce, request order, and the host's matching enabled registration.
+See `lua-ui-authoring.md` and the opt-in `sample.lua.ui_authoring_lab` mod.
 
 **9. `sd.timer` + coroutine scheduler.** `after(ms, fn)`, `every(ms, fn)`, `sequence{}`
 sugar over `runtime.tick` (every mod hand-rolls this today). *MP:* local; docs steer
@@ -374,7 +384,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 77 carries a bounded validated
+includes planned composition, and protocol 78 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 

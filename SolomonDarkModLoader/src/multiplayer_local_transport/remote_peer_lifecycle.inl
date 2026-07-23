@@ -27,6 +27,8 @@ void ResetRemoteParticipantSessionEpoch(
     g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
     g_local_transport.last_participant_frame_sequence_by_participant.erase(
         participant_id);
+    g_local_transport.last_lua_ui_action_request_by_participant.erase(
+        participant_id);
     if (!preserve_session_nonce_history) {
         g_local_transport.session_nonce_by_participant.erase(participant_id);
         g_local_transport.retired_session_nonces_by_participant.erase(participant_id);
@@ -95,6 +97,7 @@ void ResetRemoteParticipantSessionEpoch(
             g_queued_local_enemy_damage_claims.clear();
             ClearLocalLootPickupRequestStateLocked();
             g_queued_local_level_up_choices.clear();
+            g_queued_lua_ui_action_requests.clear();
             g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
             g_have_queued_local_air_chain_frame = false;
         }

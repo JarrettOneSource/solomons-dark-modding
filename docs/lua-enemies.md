@@ -93,7 +93,7 @@ do not execute the authority loot policy.
 
 ## Multiplayer identity and events
 
-Protocol 77 carries the positive 63-bit content ID and the effective common spawn
+Protocol 78 carries the positive 63-bit content ID and the effective common spawn
 config to each registered enemy's world snapshot. A client materializes the
 same semantic stock class through the same exact-spawn path, applies the
 authority's effective constructor values, and then follows normal snapshot

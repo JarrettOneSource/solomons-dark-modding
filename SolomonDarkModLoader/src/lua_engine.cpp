@@ -7,6 +7,7 @@
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
 #include "lua_mod_runtime.h"
+#include "lua_ui_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
 #include "wave_intelligence.h"
@@ -30,7 +31,6 @@ extern "C" {
 #include <vector>
 
 #include <Windows.h>
-
 namespace sdmod {
 
 namespace lua_exec_diag {
@@ -325,6 +325,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ui.element.query",
         "ui.action.query",
         "ui.action.activate",
+        "ui.authoring.native", "ui.action.presentation", "ui.action.simulation.route",
         "waves.read",
         "waves.schedule.read",
         "spells.register",
@@ -433,6 +434,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
+    ClearLuaUiBindingsForMod(mod);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);
@@ -462,7 +464,6 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->enemy_ai_registrations.clear();
     mod->enemy_ai_instances.clear();
 }
-
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {
     Log("[lua][" + mod.descriptor.id + "] " + message);
 }
@@ -497,11 +498,10 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
         ShutdownWaveIntelligence();
         return false;
     }
+    InitializeLuaUiRuntime(error_message);
     detail::InitializeLuaAudioRuntime();
-
     const auto capabilities = detail::BuildLuaCapabilitySet();
     detail::LoadLuaModsForBootstrap(bootstrap, capabilities);
-
     Log("Lua engine initialized.");
     Log("Lua runtime directory: " + runtime_directory.string());
     Log("Lua bootstrap manifest root: " + bootstrap.runtime_root.string());
@@ -517,10 +517,10 @@ void ShutdownLuaEngine() {
     // deadlock behind the engine mutex while we tear down Lua states.
     auto drained = detail::DrainLuaExecQueue();
     detail::ResolveDrainedAsError(drained, "Lua engine is shutting down.");
-
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         detail::ShutdownLuaAudioRuntime();
+        ShutdownLuaUiRuntime();
         ShutdownLuaDrawRuntime();
         ShutdownWaveIntelligence();
         ResetLuaContentRegistry();
@@ -538,12 +538,12 @@ void ShutdownLuaEngine() {
     detail::ResetLuaEnemyAiRuntime();
     detail::ResetLuaEventFilterRegistrations();
     detail::ShutdownLuaAudioRuntime();
+    ShutdownLuaUiRuntime();
     ShutdownLuaDrawRuntime();
     ShutdownWaveIntelligence();
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};
     detail::LuaEngineInitializedFlag() = false;
-
     // A request could have been enqueued between the first drain and
     // acquiring the engine mutex; flush again before returning.
     auto late_drained = detail::DrainLuaExecQueue();

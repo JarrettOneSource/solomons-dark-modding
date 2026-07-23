@@ -51,6 +51,12 @@ bool QueueOwnerRoutedLuaRegisteredSpellCast(
     std::uint64_t* owner_participant_id,
     bool* local_owner,
     std::string* error_message);
+bool QueueLuaUiSimulationAction(
+    std::string_view mod_id,
+    std::string_view surface_id,
+    std::string_view action_id,
+    std::uint64_t* request_id,
+    std::string* error_message);
 std::vector<sdmod::LuaRegisteredSpellEffectState>
 SnapshotReplicatedLuaRegisteredSpellEffects();
 bool PublishAuthoritativeLuaModStateSet(

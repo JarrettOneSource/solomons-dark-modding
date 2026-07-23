@@ -270,6 +270,8 @@ void ShutdownLocalTransport() {
         g_next_lua_item_grant_request_id = 1;
         g_queued_lua_registered_spell_casts.clear();
         g_next_lua_registered_spell_cast_request_id = 1;
+        g_queued_lua_ui_action_requests.clear();
+        g_next_lua_ui_action_request_id = 1;
         g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
         g_have_queued_local_air_chain_frame = false;
         g_next_local_loot_pickup_request_sequence = 1;
@@ -310,6 +312,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendQueuedAuthoritativeLuaItemGrants();
     SendQueuedLuaRegisteredSpellCasts();
     SendLuaRegisteredSpellEffectSnapshots(now_ms);
+    SendQueuedLuaUiActionRequests();
     SendQueuedLootPickupRequests();
     SendQueuedLevelUpChoices();
     SendLuaModStream(now_ms);
