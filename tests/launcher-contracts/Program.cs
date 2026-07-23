@@ -22,6 +22,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("downloaded package traversal rejection", TestDownloadedPackageTraversalAsync),
     ("downloaded package contract", TestDownloadedPackageContractAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
+    ("lobby join preview classification", TestJoinPreviewClassificationAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
     ("strict multiplayer mod parity", TestStrictMultiplayerModParityAsync),
@@ -1525,6 +1526,151 @@ static async Task TestWebsiteLobbyPreflightAsync()
     }
 }
 
+static async Task TestJoinPreviewClassificationAsync()
+{
+    var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+    {
+        ["manifest.json"] = Encoding.UTF8.GetBytes(
+            """
+            {
+              "id": "tests.preview",
+              "name": "Preview Test",
+              "version": "2.0.0",
+              "overlays": [{
+                "target": "data/levels/survival.boneyard",
+                "source": "files/survival.boneyard"
+              }]
+            }
+            """),
+        ["files/survival.boneyard"] = BoneyardFixture()
+    };
+    var package = CreateZip(entries);
+    var required = new MultiplayerModDescriptor(
+        "tests.preview",
+        "2.0.0",
+        ComputeContentHash(entries));
+    var packageSha256 = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var emptyCatalog = ModCatalog.CreateExact([]);
+        var handler = new LobbyDirectoryHandler(package, required, packageSha256);
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+
+        var downloadPreview = await LobbyModSynchronizer.PreviewAsync(
+            emptyCatalog,
+            42,
+            ticket: null,
+            Path.Combine(root, "cache"),
+            client);
+        Require(downloadPreview.UsedWebsite, "preview did not use the available website");
+        Require(downloadPreview.Error is null, "preview reported an unexpected error");
+        Require(
+            downloadPreview.HostBuild is
+            {
+                ProtocolVersion: LobbyDirectoryHandler.HostProtocolVersion,
+                ManifestSha256: LobbyDirectoryHandler.HostManifestSha256,
+                LoaderVersion: LobbyDirectoryHandler.HostLoaderVersion
+            },
+            "preview did not parse the host build descriptor");
+        Require(
+            downloadPreview.DownloadCount == 1 &&
+            downloadPreview.InstalledCount == 0 &&
+            downloadPreview.UnavailableCount == 0,
+            "missing website mod was not classified as needing download");
+        Require(
+            downloadPreview.Mods.Single() is
+            {
+                State: LobbyJoinPreviewModState.NeedsDownload,
+                Name: LobbyDirectoryHandler.WebsiteModName,
+                DownloadSizeBytes: 4096
+            },
+            "download preview did not carry website name and size");
+        Require(
+            handler.DownloadRequests == 0,
+            "preview downloaded a package instead of only classifying it");
+
+        var localRoot = Path.Combine(root, "local");
+        Directory.CreateDirectory(Path.Combine(localRoot, "files"));
+        File.WriteAllBytes(
+            Path.Combine(localRoot, "manifest.json"),
+            entries["manifest.json"]);
+        File.WriteAllBytes(
+            Path.Combine(localRoot, "files", "survival.boneyard"),
+            entries["files/survival.boneyard"]);
+        var localCatalog = ModCatalog.CreateExact([ModDiscovery.DiscoverRoot(localRoot)]);
+        var installedPreview = await LobbyModSynchronizer.PreviewAsync(
+            localCatalog,
+            42,
+            ticket: null,
+            Path.Combine(root, "cache-installed"),
+            client);
+        Require(
+            installedPreview.InstalledCount == 1 && installedPreview.DownloadCount == 0,
+            "exact local mod was not classified as installed");
+
+        var unavailableHandler = new LobbyDirectoryHandler(
+            package,
+            required,
+            packageSha256,
+            resolveReportsMissing: true);
+        using var unavailableClient = new HttpClient(unavailableHandler)
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+        var unavailablePreview = await LobbyModSynchronizer.PreviewAsync(
+            emptyCatalog,
+            42,
+            ticket: null,
+            Path.Combine(root, "cache-unavailable"),
+            unavailableClient);
+        Require(
+            unavailablePreview.UnavailableCount == 1 &&
+            unavailablePreview.DownloadCount == 0,
+            "unresolvable host mod was not classified as unavailable");
+
+        using var offlineClient = new HttpClient(new OfflineDirectoryHandler())
+        {
+            BaseAddress = new Uri("https://offline.example.test/")
+        };
+        var offlinePreview = await LobbyModSynchronizer.PreviewAsync(
+            emptyCatalog,
+            42,
+            ticket: null,
+            Path.Combine(root, "cache-offline"),
+            offlineClient);
+        Require(
+            !offlinePreview.UsedWebsite && offlinePreview.Error is not null,
+            "offline preview did not report an error");
+
+        var mismatchThrown = false;
+        try
+        {
+            await LobbyModSynchronizer.SynchronizeAsync(
+                emptyCatalog,
+                42,
+                ticket: null,
+                Path.Combine(root, "cache-sync"),
+                unavailableClient);
+        }
+        catch (InvalidOperationException exception)
+        {
+            mismatchThrown = true;
+            Require(
+                exception.Message.Contains("Mod list mismatch", StringComparison.Ordinal),
+                "unrepairable sync did not raise a mod list mismatch message");
+        }
+        Require(mismatchThrown, "unrepairable sync did not throw");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static Task TestWebsiteJoinUriAsync()
 {
     var valid =
@@ -1846,8 +1992,15 @@ file sealed class LobbyDirectoryHandler(
     byte[] package,
     MultiplayerModDescriptor required,
     string packageSha256,
-    bool rejectResolution = false) : HttpMessageHandler
+    bool rejectResolution = false,
+    bool resolveReportsMissing = false) : HttpMessageHandler
 {
+    public const string WebsiteModName = "Preflight Test";
+    public const string HostLoaderVersion = "9.9.9-test";
+    public const int HostProtocolVersion = 80;
+    public const string HostManifestSha256 =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
     public int JoinManifestRequests { get; private set; }
     public int ResolveRequests { get; private set; }
     public int DownloadRequests { get; private set; }
@@ -1863,7 +2016,7 @@ file sealed class LobbyDirectoryHandler(
             JoinManifestRequests++;
             return Json(
                 $$"""
-                {"lobbyId":"42","mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}"}]}
+                {"lobbyId":"42","build":{"appId":3362180,"protocolVersion":{{HostProtocolVersion}},"manifestSha256":"{{HostManifestSha256}}","loaderVersion":"{{HostLoaderVersion}}"},"mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}"}]}
                 """);
         }
 
@@ -1874,9 +2027,16 @@ file sealed class LobbyDirectoryHandler(
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
             }
+            if (resolveReportsMissing)
+            {
+                return Json(
+                    $$"""
+                    {"mods":[],"missing":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}"}]}
+                    """);
+            }
             return Json(
                 $$"""
-                {"mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}","packageSha256":"{{packageSha256}}","downloadUrl":"api/mods/tests/versions/1/download"}],"missing":[]}
+                {"mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}","packageSha256":"{{packageSha256}}","name":"{{WebsiteModName}}","fileSize":4096,"downloadUrl":"api/mods/tests/versions/1/download"}],"missing":[]}
                 """);
         }
 

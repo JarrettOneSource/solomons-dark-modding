@@ -7,7 +7,7 @@ namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed class LauncherUiCommandClient
 {
-    private const string DefaultDirectoryUrl = "https://solomon.genericproject.xyz";
+    private const string DefaultDirectoryUrl = "https://solomondarker.com";
 
     private static readonly string[] TestOnlyChildEnvironmentVariables =
     {
@@ -260,6 +260,17 @@ internal sealed class LauncherUiCommandClient
                     arguments.Add(lobbyTicket_);
                 }
                 break;
+            case LauncherUiCommandMode.JoinPreview:
+                arguments.Add("--lobby-id");
+                arguments.Add(lobbyId_);
+                arguments.Add("--directory-url");
+                arguments.Add(directoryUrl_);
+                if (!string.IsNullOrWhiteSpace(lobbyTicket_))
+                {
+                    arguments.Add("--lobby-ticket");
+                    arguments.Add(lobbyTicket_);
+                }
+                break;
         }
 
         return arguments;
@@ -272,6 +283,7 @@ internal sealed class LauncherUiCommandClient
             LauncherUiCommandMode.LaunchSinglePlayer => "launch",
             LauncherUiCommandMode.HostSteam => "launch",
             LauncherUiCommandMode.JoinSteam => "launch",
+            LauncherUiCommandMode.JoinPreview => "join-preview",
             LauncherUiCommandMode.Stage => "stage",
             LauncherUiCommandMode.ListMods => "list-mods",
             LauncherUiCommandMode.EnableMod => "enable-mod",

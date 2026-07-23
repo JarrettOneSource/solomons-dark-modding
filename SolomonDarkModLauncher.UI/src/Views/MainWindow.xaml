@@ -103,7 +103,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -211,6 +210,11 @@
                                 MinWidth="128"
                                 Margin="5,4"
                                 Style="{StaticResource OutlineButtonStyle}" />
+                        <Button Command="{Binding OpenSettingsCommand}"
+                                Content="Settings"
+                                MinWidth="118"
+                                Margin="5,4"
+                                Style="{StaticResource OutlineButtonStyle}" />
                     </WrapPanel>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
@@ -228,49 +232,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="3"
-                    Margin="0,14,0,0"
-                    Padding="18,14"
-                    Style="{StaticResource CardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                        <TextBlock Text="Save"
-                                   Style="{StaticResource FieldLabelStyle}" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Text="{Binding ActiveSaveName}"
-                                   FontSize="15"
-                                   FontWeight="SemiBold" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Text="{Binding ActiveSaveStatus}"
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Margin="0,3,0,0"
-                                   Text="{Binding CloudAccountStatus}"
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
-                    <WrapPanel Grid.Column="1"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center">
-                        <Button Content="{Binding AccountButtonText}"
-                                Command="{Binding OpenWebsiteAccountCommand}"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Margin="0,0,8,0" />
-                        <Button Content="Choose Save"
-                                Command="{Binding ManageSavesCommand}"
-                                Style="{StaticResource OutlineButtonStyle}"
-                                Padding="16,8" />
-                    </WrapPanel>
-                </Grid>
-            </Border>
-
             <!-- Lobby: who's in the session; boneyard + mod list fill in when the lobby shares them -->
-            <Border Grid.Row="4"
+            <Border Grid.Row="3"
                     Margin="0,14,0,0"
                     Padding="20,16">
                 <Border.Style>
@@ -416,7 +379,7 @@
                 </StackPanel>
             </Border>
 
-            <DockPanel Grid.Row="5" Margin="0,18,0,10">
+            <DockPanel Grid.Row="4" Margin="0,18,0,10">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{Binding ModSummaryText}"
                                Margin="0,0,14,0"
@@ -438,7 +401,7 @@
                            FontWeight="SemiBold" />
             </DockPanel>
 
-            <Grid Grid.Row="6" MinHeight="160" MaxHeight="344">
+            <Grid Grid.Row="5" MinHeight="160" MaxHeight="344">
                 <Border Style="{StaticResource CardStyle}" />
 
                 <ListBox ItemsSource="{Binding Mods}"
@@ -560,7 +523,7 @@
                 </StackPanel>
             </Grid>
 
-            <Expander Grid.Row="7"
+            <Expander Grid.Row="6"
                       Margin="0,12,0,0"
                       Header="Advanced"
                       Style="{StaticResource AdvancedExpanderStyle}">
@@ -932,6 +895,227 @@
                         <Button Content="{Binding CrashSubmitButtonText}"
                                 Command="{Binding SubmitCrashReportCommand}"
                                 Margin="10,0,0,0"
+                                Padding="20,9"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Settings -->
+        <Grid Grid.RowSpan="4" Panel.ZIndex="65">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Rectangle Fill="#C9000000" MouseLeftButtonDown="SettingsScrim_MouseLeftButtonDown" />
+
+            <Border MaxWidth="520"
+                    Margin="24"
+                    Padding="26,22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CardStyle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock FontSize="16"
+                               FontWeight="SemiBold"
+                               Text="Settings" />
+
+                    <TextBlock Margin="0,16,0,2"
+                               Style="{StaticResource FieldLabelStyle}"
+                               Text="Save" />
+                    <Border Padding="14,12"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                <TextBlock Text="{Binding ActiveSaveName}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Margin="0,4,0,0"
+                                           Text="{Binding ActiveSaveStatus}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="Choose Save"
+                                    Command="{Binding ManageSavesCommand}"
+                                    Style="{StaticResource OutlineButtonStyle}"
+                                    VerticalAlignment="Center"
+                                    Padding="16,8" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Margin="0,16,0,2"
+                               Style="{StaticResource FieldLabelStyle}"
+                               Text="Cloud Account" />
+                    <Border Padding="14,12"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="{Binding LinkedAccountDetailText}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Text="{Binding CloudAccountStatus}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       TextWrapping="Wrap" />
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="{Binding AccountButtonText}"
+                                        Command="{Binding OpenWebsiteAccountCommand}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Margin="0,0,8,0" />
+                                <Button Content="Refresh"
+                                        Command="{Binding RefreshAccountCommand}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Margin="0,0,8,0" />
+                                <Button Content="Unlink"
+                                        Command="{Binding UnlinkAccountCommand}"
+                                        Margin="0">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource OutlineButtonStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCloudLinked}" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Margin="0,16,0,2"
+                               Style="{StaticResource FieldLabelStyle}"
+                               Text="Diagnostics" />
+                    <Border Padding="14,12"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="{Binding DiagnosticsStatusText}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       TextWrapping="Wrap" />
+                            <Button Content="{Binding SendLogsButtonText}"
+                                    Command="{Binding SendLogsCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Button Margin="0,18,0,0"
+                            Padding="22,9"
+                            HorizontalAlignment="Right"
+                            Click="SettingsClose_Click"
+                            Content="Close"
+                            Style="{StaticResource PrimaryButtonStyle}" />
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- Host mod download consent -->
+        <Grid Grid.RowSpan="4" Panel.ZIndex="85">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsModDownloadPromptOpen}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Rectangle Fill="#D9000000" />
+
+            <Border MaxWidth="480"
+                    Margin="24"
+                    Padding="26,22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock FontSize="16"
+                               FontWeight="SemiBold"
+                               Text="The host has mods" />
+                    <TextBlock Margin="0,8,0,0"
+                               FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Text="{Binding ModDownloadPromptText}"
+                               TextWrapping="Wrap" />
+
+                    <Border Margin="0,12,0,0"
+                            Padding="12,10"
+                            MaxHeight="200"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ModDownloadItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                                            <TextBlock Margin="0,0,8,0"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="9"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       Text="&#x25C6;" />
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       Text="{Binding}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <TextBlock Margin="0,10,0,0"
+                               FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Text="Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session."
+                               TextWrapping="Wrap" />
+
+                    <StackPanel Margin="0,16,0,0"
+                                HorizontalAlignment="Right"
+                                Orientation="Horizontal">
+                        <Button Content="No"
+                                Command="{Binding DeclineModDownloadCommand}"
+                                Margin="0"
+                                MinWidth="86"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button Content="Yes"
+                                Command="{Binding ConfirmModDownloadCommand}"
+                                Margin="10,0,0,0"
+                                MinWidth="86"
                                 Padding="20,9"
                                 Style="{StaticResource PrimaryButtonStyle}" />
                     </StackPanel>

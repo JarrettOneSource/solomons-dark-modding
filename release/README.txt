@@ -24,11 +24,15 @@ HOW TO PLAY
    available, the launcher asks before downloading it and restarting.
 5. Select the folder that contains the original SolomonDark.exe.
    Bundled mods start disabled; enable only the mods you want in the launcher.
-6. Use Choose Save to select one of the launcher's eight local save slots.
+6. Open Settings and use Choose Save to select one of the launcher's eight
+   local save slots. Settings also holds the cloud account link and a
+   Send Logs to Cloud button for support.
 7. The host clicks Host Game and selects Friends Only or Public.
    Host Game does not open an invite picker automatically.
 8. The host goes to the hub.
 9. Select the host's lobby through Steam, the website, or use a Lobby ID.
+   If the host has mods you do not have, the launcher lists them and asks
+   before downloading them from the website.
 10. Wait until every wizard is visible in the hub, then start a run.
 
 SAVES

@@ -912,12 +912,20 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         "LobbyModSynchronizer.SynchronizeAsync(",
     )
     for token in (
-        "TryFetchRequiredModsAsync",
+        "TryFetchJoinManifestAsync",
         "LobbyModSyncResult.Offline(localCatalog",
     ):
         assert token in _read(
             "SolomonDarkModLauncher/src/Mods/LobbyModSynchronizer.cs"
         ), f"automatic P2P mod sync lacks offline fallback: {token}"
+    for token in (
+        "preservePendingLobbyMods: mode == LauncherUiCommandMode.JoinSteam",
+        "if (!preservePendingLobbyMods)",
+    ):
+        assert token in view_model, (
+            "joining clears the previewed mod list before the Lobby Mods card can use it: "
+            + token
+        )
     process_exit_monitor = view_model[
         view_model.index("private async Task MonitorGameProcessExitAsync") :
         view_model.index("private void StartSteamSessionMonitoring")

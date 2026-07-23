@@ -9,6 +9,8 @@ internal sealed class LauncherCliResponse
     public LauncherCliConfiguration? Configuration { get; set; }
     public List<LauncherCliMod> Mods { get; set; } = [];
     public LauncherCliModUpdate? ModUpdate { get; set; }
+    public LauncherCliLobbyModSync? LobbyModSync { get; set; }
+    public LauncherCliJoinPreview? JoinPreview { get; set; }
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
@@ -27,6 +29,45 @@ internal sealed class LauncherCliUpdatedMod
     public string Id { get; set; } = string.Empty;
     public string PreviousVersion { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
+}
+
+internal sealed class LauncherCliLobbyModSync
+{
+    public bool UsedWebsite { get; set; }
+    public string? FallbackReason { get; set; }
+    public int RequiredModCount { get; set; }
+    public int ReusedManualModCount { get; set; }
+    public int ReusedCachedModCount { get; set; }
+    public int DownloadedModCount { get; set; }
+}
+
+internal sealed class LauncherCliJoinPreview
+{
+    public ulong LobbyId { get; set; }
+    public bool UsedWebsite { get; set; }
+    public string? Error { get; set; }
+    public int? HostProtocolVersion { get; set; }
+    public string? HostLoaderVersion { get; set; }
+    public string? HostManifestSha256 { get; set; }
+    public int LocalProtocolVersion { get; set; }
+    public string LocalLoaderVersion { get; set; } = string.Empty;
+    public int InstalledCount { get; set; }
+    public int CachedCount { get; set; }
+    public int DownloadCount { get; set; }
+    public int UnavailableCount { get; set; }
+    public List<LauncherCliJoinPreviewMod> Mods { get; set; } = [];
+}
+
+internal sealed class LauncherCliJoinPreviewMod
+{
+    public string Id { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string State { get; set; } = string.Empty;
+    public string? InstalledVersion { get; set; }
+    public long? DownloadSizeBytes { get; set; }
+
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Id : Name!;
 }
 
 internal sealed class LauncherCliConfiguration

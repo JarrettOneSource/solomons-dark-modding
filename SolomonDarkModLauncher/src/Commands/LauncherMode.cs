@@ -7,5 +7,6 @@ internal enum LauncherMode
     ListMods,
     EnableMod,
     DisableMod,
-    AuthenticateDirectory
+    AuthenticateDirectory,
+    JoinPreview
 }
