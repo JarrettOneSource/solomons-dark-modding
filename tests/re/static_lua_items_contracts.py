@@ -184,7 +184,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         "stable `id` and resolve the receiving peer's UID",
         "Descriptors never include recipe pointers",
         "Only the offline or host simulation authority may grant an item",
-        "Protocol 80",
+        "Protocol 81",
         "recipe UIDs and native addresses never cross the wire",
         "exactly 32 integer bytes",
     ):

@@ -93,7 +93,7 @@ do not execute the authority loot policy.
 
 ## Multiplayer identity and events
 
-Protocol 80 carries the positive 63-bit content ID and the effective common spawn
+Protocol 81 carries the positive 63-bit content ID and the effective common spawn
 config to each registered enemy's world snapshot. A client materializes the
 same semantic stock class through the same exact-spawn path, applies the
 authority's effective constructor values, and then follows normal snapshot
@@ -119,7 +119,7 @@ py tools/verify_lua_enemies_multiplayer.py --launch-pair --confirm-mutation
 The verifier stages only the enemy registry lab and primes the retail wave
 spawner in an isolated zero-enemy combat mode. It proves that the client cannot
 author a spawn; the host constructs exactly one registered enemy with the
-requested HP, speed, and scale; protocol 80 preserves its content ID and
+requested HP, speed, and scale; protocol 81 preserves its content ID and
 effective constructor values; and the client binds a peer-local actor of the
 same stock class. It then kills that actor through the native death path and
 requires one matching `enemy.spawned` and `enemy.death` notification on each

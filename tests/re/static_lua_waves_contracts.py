@@ -143,7 +143,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "authenticated participant frame",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "current protocol version is 80",
+        "current protocol version is 81",
         "verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation",
         "same sorted aggregate and per-type live summary",
         "stops only the two process IDs",

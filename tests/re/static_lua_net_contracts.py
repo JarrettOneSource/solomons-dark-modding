@@ -167,7 +167,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
         "payload trusted game authority",
         "Steam fragments use reliable",
         "local UDP backend",
-        "Protocol 80",
+        "Protocol 81",
     ):
         assert token in documentation, f"Lua net docs lack: {token}"
     assert "**Implemented 2026-07-23.** `sd.net.send" in roadmap

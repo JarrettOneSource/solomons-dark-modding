@@ -236,7 +236,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "semantic stock-class name",
         "offline or host simulation",
         "modifier array",
-        "Protocol 80",
+        "Protocol 81",
         "death tombstones",
         "Raw actor/config",
         "addresses never cross the wire",

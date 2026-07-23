@@ -151,7 +151,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "copied into the loader's bounded Lua value representation",
         "no Lua registry index",
         "Owner-routed casting",
-        "Protocol 80",
+        "Protocol 81",
         "once for that actor",
         "generic content-ID-based effect snapshot channel",
         "four effects per fragment",

@@ -167,7 +167,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "fixed-point",
         "minimum active",
         "take precedence",
-        "Protocol 80",
+        "Protocol 81",
         "reliable no-Nagle",
         "kGameTimingScaleGlobal",
         "cannot synthesize extra",
