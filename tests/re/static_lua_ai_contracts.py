@@ -29,6 +29,11 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
     manifest = _read("mods/lua_ai_boss_lab/manifest.json")
     sample = _read("mods/lua_ai_boss_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_ai.py")
+    multiplayer_verifier = _read("tools/verify_lua_ai_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_ai_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaAiBindings(mod->state)" in root_bindings
     for source in (
@@ -142,6 +147,11 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "protocol-80 world snapshots",
         "4096 bytes",
         "64 due callbacks",
+        "verify_lua_ai_multiplayer.py --launch-pair --confirm-mutation",
+        "nav-validated clear lane",
+        "zero AI instances",
+        "retirement on both peers",
+        "stops only the exact processes",
     ):
         assert token in documentation, f"Lua AI documentation lacks: {token}"
     assert "**Implemented 2026-07-23.** `sd.ai.register`" in roadmap
@@ -171,6 +181,39 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "6758053804871806748",
     ):
         assert token in verifier, f"Lua AI verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.ai_boss_lab"',
+        "NAV_CANDIDATE",
+        "CLIENT_ID",
+        "blackboard_step",
+        "goal_axis_aligned",
+        "target_authoritative",
+        "MINIMUM_MOVEMENT_DISTANCE",
+        "_movement_segment_probe",
+        "_client_mutation_rejection_probe",
+        "--confirm-mutation",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua AI multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_spawn_result_requires_registered_native_actor",
+        "test_host_ai_requires_exact_blackboard_target_and_movement",
+        "test_client_snapshot_has_no_controller_and_tracks_authority",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua AI multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_ai_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.ai runs bounded per-enemy blackboards only on authority and "

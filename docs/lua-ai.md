@@ -159,3 +159,19 @@ registration, nearest-participant targeting, a per-instance blackboard, and a
 four-point orbit goal. `tools/verify_lua_ai.py` validates the registration and
 address-free public contract against an already-running loader; it does not
 launch the game.
+
+For the full two-peer simulation acceptance, use a disposable local pair:
+
+```powershell
+py tools/verify_lua_ai_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The pair verifier stages only `sample.lua.ai_boss_lab`, chooses a native
+nav-validated clear lane, and spawns one registered Grave Oracle through the
+retail exact-group spawner. It requires the host-only controller's think count
+and per-spawn blackboard to advance together, a semantic participant target and
+four-point move goal, collision-valid native displacement, and the same
+authority-owned target and motion on the client's peer-local actor. The client
+must retain zero AI instances and reject imperative target and movement
+commands. Finally, the verifier kills the exact actor, requires controller
+retirement on both peers, and stops only the exact processes it launched.

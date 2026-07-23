@@ -312,7 +312,10 @@ bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal
 belongs to a different actor class, so the implementation composes at
 `MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
 cross-class call. Clients run no mod AI and receive the resulting protocol-80 world
-snapshots. See `lua-ai.md` and the opt-in `sample.lua.ai_boss_lab` mod.
+snapshots. The opt-in two-peer acceptance covers host-only controller execution,
+blackboard/target/move-goal decisions, collision-valid replicated motion, client mutation
+rejection, and per-actor retirement. See `lua-ai.md` and the opt-in
+`sample.lua.ai_boss_lab` mod.
 
 ### Tier 2 — ecosystem infrastructure
 
