@@ -24,7 +24,8 @@ param(
     [switch]$NoTileWindows,
     [switch]$NoKill,
     [switch]$AllowFocusSteal,
-    [string]$ProcessIdOutputPath = ""
+    [string]$ProcessIdOutputPath = "",
+    [string]$ExactModId = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -879,6 +880,23 @@ if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
 $hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or ($null -ne $hostSelection)
 $clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)
 $thirdWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveThirdPreset) -or ($null -ne $thirdSelection)
+
+if (-not [string]::IsNullOrWhiteSpace($ExactModId)) {
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance "local-mp-host" `
+        -ModId $ExactModId
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance "local-mp-client" `
+        -ModId $ExactModId
+    if ($EnableThird) {
+        Set-ExactMultiplayerModState `
+            -RootPath $root `
+            -Instance "local-mp-third" `
+            -ModId $ExactModId
+    }
+}
 
 $hostResult = Start-MultiplayerInstance `
     -Instance "local-mp-host" `

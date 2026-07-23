@@ -11,7 +11,8 @@ param(
     [string]$TestSurvivalBoneyardOverride = "",
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
-    [string]$ProcessIdOutputPath = ""
+    [string]$ProcessIdOutputPath = "",
+    [string]$ExactModId = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -30,6 +31,13 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+
+if (-not [string]::IsNullOrWhiteSpace($ExactModId)) {
+    Set-ExactMultiplayerModState `
+        -RootPath $root `
+        -Instance $Instance `
+        -ModId $ExactModId
+}
 
 $resolvedOverride = ""
 if (-not [string]::IsNullOrWhiteSpace($TestSurvivalBoneyardOverride)) {

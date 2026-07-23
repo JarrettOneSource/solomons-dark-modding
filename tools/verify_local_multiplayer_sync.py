@@ -202,6 +202,7 @@ def launch_pair(
     third_preset: str | None = None,
     allow_focus_steal: bool = False,
     kill_existing: bool = True,
+    exact_mod_id: str | None = None,
 ) -> dict[str, object]:
     args = [
         "powershell.exe",
@@ -254,6 +255,8 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
+    if exact_mod_id is not None:
+        args.extend(["-ExactModId", exact_mod_id])
     process_id_ledger: Path | None = None
     if not kill_existing:
         args.append("-NoKill")
@@ -431,6 +434,7 @@ def launch_additional_client(
     test_survival_boneyard_override: Path | None = None,
     test_blank_boneyard: bool = False,
     test_wave_override: Path | None = None,
+    exact_mod_id: str | None = None,
 ) -> dict[str, object]:
     """Launch one client without stopping or relaunching an existing session."""
     args = [
@@ -455,6 +459,8 @@ def launch_additional_client(
     ]
     if god_mode:
         args.append("-GodMode")
+    if exact_mod_id is not None:
+        args.extend(["-ExactModId", exact_mod_id])
     if test_survival_boneyard_override is not None:
         args.extend(
             [

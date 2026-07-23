@@ -87,6 +87,47 @@ function ConvertFrom-MultiplayerLauncherJson {
     return $null
 }
 
+function Set-ExactMultiplayerModState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Instance,
+        [Parameter(Mandatory = $true)]
+        [string]$ModId
+    )
+
+    if ($Instance.Length -gt 64 -or
+        $Instance -notmatch '^[A-Za-z0-9._-]+$' -or
+        $Instance -notmatch '[A-Za-z0-9]') {
+        throw "Invalid exact-mod instance name: $Instance"
+    }
+    if ($ModId -notmatch '^[a-z0-9][a-z0-9._-]*$') {
+        throw "Invalid exact mod id: $ModId"
+    }
+
+    $instancesRoot = [System.IO.Path]::GetFullPath(
+        (Join-Path $RootPath "runtime\instances"))
+    $normalizedInstance = $Instance.ToLowerInvariant()
+    $instanceRoot = [System.IO.Path]::GetFullPath(
+        (Join-Path $instancesRoot $normalizedInstance))
+    $requiredPrefix = $instancesRoot.TrimEnd('\') + '\'
+    if (-not $instanceRoot.StartsWith(
+        $requiredPrefix,
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Exact-mod instance escaped the runtime root: $Instance"
+    }
+
+    [System.IO.Directory]::CreateDirectory($instanceRoot) | Out-Null
+    $mods = [ordered]@{}
+    $mods[$ModId] = [ordered]@{ Enabled = $true }
+    $document = [ordered]@{ Mods = $mods }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $instanceRoot "mod-manager-state.json"),
+        ($document | ConvertTo-Json -Depth 4)
+    )
+}
+
 function Read-MultiplayerProcessOutput {
     param([string]$Path)
 

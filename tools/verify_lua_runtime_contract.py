@@ -26,6 +26,7 @@ from verify_local_multiplayer_sync import (
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "runtime" / "lua_runtime_contract.json"
+ACCEPTANCE_MOD_ID = "sample.lua.authoring_lab"
 
 REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "runtime": (
@@ -359,6 +360,7 @@ def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
             result["pair"] = launch_pair(
                 god_mode=True,
                 kill_existing=False,
+                exact_mod_id=ACCEPTANCE_MOD_ID,
             )
             launched_process_ids.extend(game_process_ids(result["pair"]))
             disable_bots()

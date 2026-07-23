@@ -39,6 +39,7 @@ from verify_local_multiplayer_sync import (
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "runtime" / "lua_mod_replication_acceptance.json"
 EVENT_NAME = "acceptance.lua_mod_stream"
+ACCEPTANCE_MOD_ID = "sample.lua.authoring_lab"
 
 REGISTER_HANDLER = f"""
 _G.__lua_mod_acceptance_events = {{}}
@@ -176,6 +177,7 @@ def run(
             result["pair"] = launch_pair(
                 god_mode=True,
                 kill_existing=False,
+                exact_mod_id=ACCEPTANCE_MOD_ID,
             )
             launched_process_ids.extend(game_process_ids(result["pair"]))
             disable_bots()
@@ -219,6 +221,7 @@ def run(
             result["late_join_launch"] = launch_additional_client(
                 preset="create_manual",
                 god_mode=True,
+                exact_mod_id=ACCEPTANCE_MOD_ID,
             )
             launched_process_ids.extend(
                 game_process_ids(result["late_join_launch"])

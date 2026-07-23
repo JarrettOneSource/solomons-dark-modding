@@ -51,6 +51,9 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
     additional_client_launcher = _read(
         "scripts/Launch-LocalMultiplayerAdditionalClient.ps1"
     )
+    launcher_process_helpers = _read(
+        "scripts/LocalMultiplayerLauncher.Process.ps1"
+    )
     compatibility = _read(
         "SolomonDarkModLauncher/src/Staging/"
         "MultiplayerCompatibilityMaterializer.cs"
@@ -176,6 +179,12 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert "stop_game_processes(" in verifier, (
             f"{verifier_name} verifier does not clean up its exact process IDs"
         )
+        assert 'ACCEPTANCE_MOD_ID = "sample.lua.authoring_lab"' in verifier, (
+            f"{verifier_name} verifier does not declare its exact Lua mod"
+        )
+        assert "exact_mod_id=ACCEPTANCE_MOD_ID" in verifier, (
+            f"{verifier_name} verifier does not stage its exact Lua mod"
+        )
         assert "stop_games(" not in verifier, (
             f"{verifier_name} verifier still uses machine-wide game cleanup"
         )
@@ -198,6 +207,22 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         )
         assert "[System.IO.File]::WriteAllText(" in launcher, (
             f"{launcher_name} launcher does not persist process IDs immediately"
+        )
+        assert "$ExactModId" in launcher, (
+            f"{launcher_name} launcher does not accept an exact verifier mod"
+        )
+        assert "Set-ExactMultiplayerModState" in launcher, (
+            f"{launcher_name} launcher does not isolate its enabled mod set"
+        )
+    for token in (
+        "function Set-ExactMultiplayerModState",
+        '"runtime\\instances"',
+        '"mod-manager-state.json"',
+        "$mods[$ModId]",
+        "ConvertTo-Json -Depth 4",
+    ):
+        assert token in launcher_process_helpers, (
+            f"exact multiplayer mod-state helper lacks: {token}"
         )
 
     for token in (
