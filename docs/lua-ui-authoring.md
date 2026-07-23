@@ -146,6 +146,15 @@ py -3 tools/verify_lua_ui_authoring.py --game-path-kind windows
 Use `--game-path-kind proton` for a Proton launch. The static contract
 additionally checks the native layout, callback lifecycle, input queue, protocol
 envelope, authority validation, docs, and opt-in sample.
+
+`tools/verify_lua_ui_multiplayer.py --launch-pair` stages the exact UI authoring
+lab on an isolated host/client pair. It proves that presentation callbacks stay
+on the activating client, a client simulation action runs exactly once on the
+authority with the routed client participant identity, the resulting
+`sd.state` mutation converges back to the client, and a host simulation action
+runs locally with the host identity. Cleanup destroys both verifier surfaces
+and stops only the exact processes launched by the verifier.
+
 Live presentation verification must be run when the game desktop is
 available; build/static success alone does not prove the native panel and text
 calls on a rendered frame.

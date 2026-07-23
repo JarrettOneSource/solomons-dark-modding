@@ -34,6 +34,10 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
     sample = _read("mods/lua_ui_authoring_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_ui_authoring.py")
     verifier_tests = _read("tests/test_lua_ui_authoring_verifier.py")
+    multiplayer_verifier = _read("tools/verify_lua_ui_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_ui_multiplayer_verifier.py"
+    )
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
 
@@ -234,13 +238,53 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         "test_whole_frame_change_is_not_surface_evidence",
     ):
         assert token in verifier_tests, f"authored UI verifier tests lack: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.ui_authoring_lab"',
+        'execution = "presentation"',
+        'execution = "simulation"',
+        "presentation_participant_id=CLIENT_ID",
+        "simulation_participant_id=CLIENT_ID",
+        "simulation_routed=True",
+        "simulation_participant_id=HOST_ID",
+        "simulation_routed=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"authored UI multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_snapshot_matches_local_and_routed_action_metadata",
+        "test_snapshot_rejects_wrong_routed_participant",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"authored UI multiplayer verifier tests lack: {token}"
+        )
+    normalized_documentation = " ".join(documentation.split())
+    for token in (
+        "verify_lua_ui_multiplayer.py --launch-pair",
+        "presentation callbacks stay on the activating client",
+        "runs exactly once on the authority",
+        "routed client participant identity",
+        "`sd.state` mutation converges back to the client",
+        "stops only the exact processes",
+    ):
+        assert token in normalized_documentation, (
+            f"authored UI multiplayer docs lack: {token}"
+        )
     assert (
         "python -m unittest tests.test_lua_ui_authoring_verifier"
+        in workflow
+    )
+    assert (
+        "python -m unittest tests.test_lua_ui_multiplayer_verifier"
         in workflow
     )
     assert '"get_authored_state",' in runtime_verifier
 
     return (
         "sd.ui authors bounded native panels/text with one semantic input queue "
-        "and authenticated authority routing for simulation callbacks"
+        "and exact two-peer authority routing for simulation callbacks"
     )
