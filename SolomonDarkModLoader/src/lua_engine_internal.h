@@ -272,7 +272,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod);
 void InitializeLuaHotReloadState(LoadedLuaMod* mod);
 void ResetLuaHotReloadRuntime();
 void PollLuaHotReloadsOnLockedThread(
-    bool has_connected_remote_participant,
+    bool multiplayer_transport_enabled,
     std::uint64_t now_ms);
 void ClearLuaUiBindingsForMod(LoadedLuaMod* mod);
 void DispatchPendingLuaUiActions();

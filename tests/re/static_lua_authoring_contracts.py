@@ -109,13 +109,12 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         "lua_close(mod->state)",
     )
     for token in (
-        "HasConnectedRemoteNetworkParticipant",
-        "ParticipantControllerKind::Native",
-        "participant.transport_connected",
+        "IsMultiplayerTransportConfigured",
+        "IsLocalTransportEnabled",
         "PollLuaHotReloadsOnLockedThread",
     ):
         assert token in pump, f"safe-thread hot-reload gate lacks: {token}"
-    assert "ParticipantControllerKind::LuaBrain" not in pump
+    assert "participant.transport_connected" not in pump
     assert "LuaHotReloadState hot_reload" in engine_internal
 
     for token in (

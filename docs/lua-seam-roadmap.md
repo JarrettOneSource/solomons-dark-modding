@@ -1,6 +1,7 @@
 # Lua Seam Roadmap — Growing a Lua-Only Modding Ecosystem
 
-Status: brainstorm / design record (2026-07-21)
+Status: numbered seam roadmap implemented (2026-07-23). Section 6 retains
+research and distribution follow-ups that are outside the executable seam list.
 
 Goal: Solomon Dark should live and thrive on Lua mods alone, with this framework as the
 bootstrap. Mod authors should never need native code for gameplay, content, UI, or
@@ -9,7 +10,7 @@ solo run and in a Steam session with zero netcode or special-casing by the mod a
 
 This doc records: the current `sd.*` surface, the multiplayer-native design principle, a
 tiered roadmap of new seams (each annotated with its multiplayer behavior), flagship mod
-concepts with a supported-today assessment, and a suggested build order.
+concepts with a current support assessment, and the completed build order.
 
 ---
 
@@ -47,10 +48,11 @@ never see them.
 4. **Deterministic content IDs.** Registered content (spells, enemies, items) gets its
    network ID from `hash(mod_id, content_key)` — never author-chosen numerics — so
    replicated references resolve identically on every peer.
-5. **Mod parity handshake.** Session join exchanges the enabled mod set (`manifest.json`
-   id + version). Mismatch → surfaced in the lobby card (the lobby browser already renders
-   member state) and blocked or downgraded per-mod (presentation-only mods may be allowed
-   to differ). Framework-level; authors do nothing.
+5. **Exact mod parity handshake.** Session join compares a fingerprint over the game,
+   loader, binary layout, runtime flags, and every enabled mod's id, version, and complete
+   directory hash. Any mismatch is rejected. Presentation-only divergence is not accepted:
+   a self-declared class cannot prove that a script or overlay is simulation-inert, so the
+   framework keeps one enforceable policy and authors do nothing.
 6. **Every new seam ships with a multiplayer acceptance test.** The local transport
    (`multiplayer_local_transport`) enables two-instance testing on one machine; the kill
    stress harness is the template.
@@ -101,6 +103,10 @@ shared state; simulation calls auto-route to the owner).
   sprites, viewport reads, and world projection on the D3D9 backbuffer.
 - **`sd.audio`** — mod-root samples and streams through the game-owned BASS device,
   with opaque local handles, volume, state, stop, and deterministic cleanup.
+- **`sd.camera`** — bounded local camera state, world-focus ownership, cleanup, and
+  the stock shake path.
+- **`sd.sprites`** — bounded mod-root PNG/bundle atlas registration consumed by
+  `sd.draw`, with revisioned replacement and lifecycle cleanup.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -135,26 +141,29 @@ shared state; simulation calls auto-route to the owner).
   scale, glyph/text draw, keybinding globals, …).
 - D3D9 EndScene hook + debug overlay + backbuffer capture.
 - Named-pipe Lua exec server (external processes can run code in the live runtime).
+- Generated LuaLS/EmmyLua API inventory, opt-in offline source hot reload, and a bounded
+  in-game exec console over the same gameplay-safe queue.
 - Full data-overlay surface: `data/wizardskills/*.cfg` (60+ skills), `data/wave.txt`,
   `data/items.cfg`, `data/levels/*.boneyard`, `data/dialogue/*`, `magenames.txt`,
   `images/*.bundle` sprite atlases (format reversed; extractor in `tools/`), sounds/music.
 - Sample mods prove overlay + Lua patterns: `skill_shock_nova` (new data-driven skill),
   `wave_fast_start`, `story_custom_intro`, `item_gold_focus`, `lua_bots`,
   `lua_ui_sandbox_lab`, `lua_dark_cloud_sort_bootstrap`.
-- Mods get the full Lua stdlib (`luaL_openlibs`) — raw `io.*` persistence is technically
-  possible today, but unscoped.
+- Lua states begin with the standard libraries, then remove `debug`, `dofile`, `io`,
+  `loadfile`, `os`, `package`, and `require`. Scoped persistence belongs in `sd.storage`.
 
-### Structural gaps (why mods can't thrive yet)
+### Roadmap closure
 
-1. **Scripted spell presentation remains** — deterministic spell metadata, owner-routed
-   callback execution, bounded effects, and generic effect snapshots now join registered
-   items and stock-archetype enemies, and direct primary/belt input is integrated; an
-   authored picker still depends on the remaining UI-authoring seam.
-2. **Authored UI remains incomplete** — Lua drawing and local custom audio exist, but
-   mods still cannot build native-style surfaces and controls.
-3. **Presentation parity policy remains incomplete.** Cross-mod contracts and the author
-   workflow now exist, but manifest-enforced classification of presentation-only mods
-   remains an open policy decision.
+No executable Lua seam gaps remain in this document. Scripted spells have deterministic
+owner-routed behavior, replicated semantic effects, direct primary/belt selection, and a
+native-authored `sd.ui` picker example. Authored UI, local draw/audio/camera/sprites,
+cross-mod contracts, and the author workflow are implemented. Multiplayer uses strict
+exact parity for every enabled mod; there is no unverified presentation-only exception.
+
+The remaining partial flagship concepts need product-specific work outside this seam list,
+such as Website leaderboard submission, level-authoring tools, specialized native effect
+primitives, NPC quest control, or replay input capture. Section 6 records longer-horizon
+runtime and distribution research.
 
 ### Resolved sharp edges
 
@@ -229,12 +238,13 @@ delivery; periodic and first-peer state checkpoints; and a three-peer late-join
 acceptance verifier. See `lua-state-and-events.md`.
 
 **4. Content registration.**
-- `sd.spells.register{key, cfg, on_cast, on_tick, on_hit}` — allocate an ID, integrate an
-  authored runtime picker (`spell-picker-re.md` explains why the stock acquisition dialog
-  is not that picker), route cast dispatch into Lua, compose
+- `sd.spells.register{key, cfg, on_cast, on_tick, on_hit}` — allocate an ID, compose an
+  authored runtime picker from `sd.ui` (`spell-picker-re.md` explains why the stock
+  acquisition dialog is not that picker), route cast dispatch into Lua, compose
   native effect primitives (`kFireEmberCtor`, `kSpellActionBuilder`/`kSpellBuilderReset`/
   `kSpellBuilderFinalize`, projectile-group gates already patched for bot casting).
-  Data side is proven by `skill_shock_nova`; the missing piece is scripted behavior.
+  At plan time, `skill_shock_nova` proved the data side and scripted behavior was the
+  remaining piece.
 - `sd.enemies.spawn(key, {hp, speed, scale, loot})` — fix the `Enemy_Create` call shape;
   stat overrides on top.
 - `sd.items.register` / `sd.items.grant(key_or_content_id, options)` —
@@ -276,7 +286,8 @@ once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle.
 protocol fragments and relays complete per-owner effect generations, including explicit
 empty retirement snapshots. Selected primary and exact live belt inputs suppress stock
 dispatch, charge native mana transactionally, enforce local cooldowns, and enter that same
-owner route. The player-facing authored picker remains with `sd.ui`. See `lua-spells.md`.
+owner route. The disabled spell lab composes a player-facing native-authored picker from
+`sd.ui` and the local selection API. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
@@ -470,34 +481,37 @@ See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
   directly from root-reachable `RegisterLua*Bindings`, preserves table aliases such as
   `sd.hud == sd.draw`, and is drift-checked with unit tests in CI. Lua/hybrid manifests
   may opt into stable, hashed source-entry hot reload; syntax failures preserve the
-  running state, normal unload cleanup precedes replacement, and reload defers while a
-  network peer is connected. Ctrl plus backtick opens a bounded draw-list console that submits to
-  the same gameplay-safe async queue and result capture as the external named pipe. See
-  `lua-authoring.md`.
+  running state, normal unload cleanup precedes replacement, and reload is disabled for
+  multiplayer transport launches so the staged parity hash remains authoritative.
+  `Ctrl+Backtick` opens a bounded draw-list console that submits to the same gameplay-safe
+  async queue and result capture as the external named pipe. See `lua-authoring.md`.
 
 ---
 
 ## 4. Flagship mod concepts — support assessment
 
-"Today" = with the current framework. "Needs" = the seams above that close the gap.
-Multiplayer column = how it behaves once built on the MP-native contract.
+"Roadmap support" reflects the completed seams above. "Remaining product work" is not an
+unimplemented item from section 3.
 
-| Mod | Concept | Today | Needs | Multiplayer story |
+| Mod | Concept | Roadmap support | Remaining product work | Multiplayer story |
 |---|---|---|---|---|
-| **Balance Workshop** | Full numbers overhaul + conditional effects (glass cannon, thorns) | ~85% | damage filters for conditional parts | Filters run owner-side; identical rules for all peers via mod parity |
-| **Streamer Mode** | Twitch chat spawns enemies / heals / curses via channel points (external bot → exec pipe works now) | ~70% | HUD toasts, audio stingers | Spawn calls auto-route to authority; toasts via broadcast → every peer sees chat chaos |
-| **The Director** | L4D-style adaptive difficulty: watches DPS/health/economy, reshapes waves live | ~60% | `wave.spawning` filter, `sd.waves` reads, per-hit damage events, HUD | Runs entirely authority-side; intensity in `sd.state` for client HUDs |
-| **Solomon's Trials** | Daily seeded challenge + leaderboard on the existing Website backend | ~80% | Website submit contract (offer control exists: `choose_level_up_option`) | Authority seeds the run; co-op daily boards become possible |
-| **Cartographer** | Custom arena/campaign packs with narration | ~50% (static overlays work now) | level tooling, `sd.scene`, per-level hooks | Scene switches authority-routed; epochs already replicate |
-| **Boneyard Together+** | Custom co-op modes: wave race, shared-fate, trading | ~45% | `sd.state`/broadcast, HUD, damage-share filters | The showcase — entire mod is `sd.state` + filters + HUD |
-| **Boneyard Bosses** | Multi-phase scripted bosses, telegraphs, enrage, unique loot | ~40% | `sd.ai`, spawn fix, HUD telegraphs, audio, drop injection | Boss brain on authority; phase in `sd.state`; telegraphs drawn locally per peer |
-| **Arcanum Forge** | 10 new Lua-behavior spells: gravity well, chrono field (time-scale global), mirror image (`WizardCloneFromSourceActor`), ember turret | ~35% (primitives provably drivable — bots cast, clone, spawn embers) | `sd.spells.register`, generic effect replication | Deterministic spell IDs; behavior on owner; effects replicate like native ones |
-| **College Nights** | Hub quest campaign: NPC quests, dialogue, reputation, rewards | ~30% | UI authoring, `sd.items.grant`, `sd.storage`, NPC control | Quest state in `sd.state` for shared-hub sessions; progress in `sd.storage` per player |
-| **Replay & Ghost** | Record runs, race your ghost | ~25% | determinism (rng + input capture), ghost puppet (clone seam helps), storage | Ghost is presentation-only — replays cleanly beside live MP |
+| **Balance Workshop** | Full numbers overhaul + conditional effects (glass cannon, thorns) | Ready | Author the balance rules and UX | Filters run owner-side; exact mod parity gives every peer identical rules |
+| **Streamer Mode** | Twitch chat spawns enemies / heals / curses via channel points | Ready | Twitch integration and content design | Authority commands mutate simulation; broadcast events drive local HUD/audio |
+| **The Director** | Adaptive difficulty that reads health/economy and reshapes waves | Ready | Director policy and tuning | Runs authority-side; intensity lives in `sd.state` for client HUDs |
+| **Solomon's Trials** | Daily seeded challenge plus Website leaderboard | Partial | Website submission, authentication, and leaderboard product contract | Authority seeds the run; shared state can publish challenge progress |
+| **Cartographer** | Custom arena/campaign packs with narration | Partial | Level-authoring tooling and richer per-level content hooks | Scene switches are authority-routed and epochs replicate |
+| **Boneyard Together+** | Wave races, shared fate, and trading | Ready | Mode rules and trading UX | Composes `sd.state`, filters, items, UI, and HUD without custom transport |
+| **Boneyard Bosses** | Multi-phase bosses, telegraphs, enrage, and unique loot | Ready | Encounter content and tuning | Boss brains run on authority; phase replicates; presentation renders locally |
+| **Arcanum Forge** | New Lua-behavior spell pack | Partial | Specialized blessed primitives for clone, force, and native projectile variants | IDs and casts are owner-routed; generic semantic effects replicate |
+| **College Nights** | Hub quests, dialogue, reputation, and rewards | Partial | NPC quest-control and campaign content | Shared quest state uses `sd.state`; profile progress uses `sd.storage` |
+| **Replay & Ghost** | Record runs and race a ghost | Partial | Input capture, replay format, and a blessed ghost puppet | Exact seeds and local storage exist; ghost presentation stays local |
 
 ---
 
-## 5. Suggested build order
+## 5. Completed build order
+
+All items in this sequence are implemented; the ordering is retained as an execution
+record and as guidance for future API families.
 
 1. **`sd.state` + `sd.events.broadcast`** — the multiplayer-native backbone. Building it
    first means every subsequent seam is born MP-native instead of retrofitted.
@@ -513,15 +527,19 @@ Multiplayer column = how it behaves once built on the MP-native contract.
    **DX** (stub generation, hot reload) whenever a breather is needed — they're cheap and
    compound author velocity.
 
-## 6. Open questions
+## 6. Open research and distribution questions
 
 - **Authority migration:** if the authority peer leaves mid-run, does mod simulation state
   (`sd.state`, filter ownership, AI brains) migrate? Punt (end run) vs. handoff protocol.
 - **Determinism audit scope:** what native systems consume `kNativeGlobalRngStateGlobal`
   outside runs (menu shuffles?) — matters for Trials/Replay fidelity.
-- **Trust tiers:** `has_capability` exists; when distribution arrives, which classes gate
-  on capabilities (raw `sd.debug` memory writes vs. blessed simulation APIs), and does the
-  full `luaL_openlibs` surface narrow for untrusted mods?
-- **Presentation divergence policy:** may peers run different presentation-only mods in
-  the same session (likely yes), and how does the parity handshake classify a mod as
-  presentation-only (manifest declaration + API-class enforcement)?
+- **Trust tiers:** `has_capability` exists and unsafe standard-library globals are removed;
+  when distribution arrives, which capabilities gate raw `sd.debug` access versus blessed
+  simulation APIs, and what review/signing policy grants them?
+
+### Resolved policy: exact multiplayer parity
+
+Peers may not run different presentation-only mods in the same session. The handshake
+compares the exact enabled content fingerprint and rejects mismatch. A future relaxation
+would require framework-enforced call and overlay classification; a manifest declaration
+alone is not a trustworthy boundary.

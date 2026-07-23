@@ -56,8 +56,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         '"spells.register"',
         '"spells.read"',
         '"spells.cast.owner"',
-        '"spells.effects.read"',
         '"spells.select.local"',
+        '"ui.authoring.native"',
+        '"ui.action.presentation"',
+        '"spells.effects.read"',
     ):
         assert capability in engine, f"spell capability lacks: {capability}"
     for token in (
@@ -116,6 +118,9 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         '"spells.register"',
         '"spells.read"',
         '"spells.cast.owner"',
+        '"spells.select.local"',
+        '"ui.authoring.native"',
+        '"ui.action.presentation"',
     ):
         assert token in manifest, f"spell sample manifest lacks: {token}"
     for token in (
@@ -127,6 +132,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         'key = "gravity_well_field"',
         "lifetime_ms = context.cfg.duration_ms",
         "8348995147374483494",
+        'id = "spell_picker"',
+        'sd.spells.select(spell.id, 1)',
+        'sd.spells.clear_selection("secondary", 1)',
+        "sd.ui.show(picker)",
     ):
         assert token in sample, f"spell sample lacks: {token}"
     assert "8348995147374483494ull" in native_test
@@ -146,7 +155,9 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "Local selection and native input",
         "never writes stock unlock bytes",
         "native player mana writer",
-        "does not yet render a player-facing catalog chooser",
+        "Mods build their visual catalog",
+        "There is deliberately no fixed framework catalog widget",
+        "native-authored local picker",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
     for token in (

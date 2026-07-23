@@ -189,7 +189,7 @@ void ResetLuaHotReloadRuntime() {
 }
 
 void PollLuaHotReloadsOnLockedThread(
-    bool has_connected_remote_participant,
+    bool multiplayer_transport_enabled,
     std::uint64_t now_ms) {
     if (now_ms < NextLuaHotReloadPollMs()) {
         return;
@@ -199,18 +199,18 @@ void PollLuaHotReloadsOnLockedThread(
         return;
     }
 
-    if (has_connected_remote_participant) {
+    if (multiplayer_transport_enabled) {
         for (const auto& mod : LoadedLuaModsStorage()) {
             ResetPendingCandidate(mod.get());
         }
         if (!LuaHotReloadDeferredLogEmitted()) {
-            Log("[lua] hot reload deferred while a remote multiplayer participant is connected.");
+            Log("[lua] hot reload deferred for this multiplayer transport session.");
             LuaHotReloadDeferredLogEmitted() = true;
         }
         return;
     }
     if (LuaHotReloadDeferredLogEmitted()) {
-        Log("[lua] hot reload resumed after the multiplayer session disconnected.");
+        Log("[lua] hot reload resumed after the multiplayer transport stopped.");
         LuaHotReloadDeferredLogEmitted() = false;
     }
 

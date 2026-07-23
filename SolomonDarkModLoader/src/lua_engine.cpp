@@ -12,6 +12,7 @@
 #include "lua_ui_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
+#include "multiplayer_local_transport.h"
 #include "wave_intelligence.h"
 extern "C" {
 #include "lauxlib.h"

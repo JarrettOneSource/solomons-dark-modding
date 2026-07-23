@@ -66,10 +66,11 @@ source version is attempted once, preventing an error loop every poll.
 Only the entry script is watched and executed. Art, bundles, overlays, and
 other resources remain the staged launch snapshot; re-stage to update them.
 Hot reload is capped at a 1 MiB source entry. It is automatically deferred while
-a transport-connected native remote participant is present (Steam or local
-UDP), then resumes after disconnect. Local Lua bots do not trigger that gate.
-This prevents an authoring edit from silently changing one peer's simulation
-mid-session.
+a Steam or local-UDP gameplay transport is configured, including a host lobby
+that does not have a connected peer yet. Relaunch without a multiplayer
+transport to reload source. Local Lua bots do not trigger that gate. This keeps
+the running code covered by the exact staged manifest hash that every peer
+compares during its session handshake.
 
 `sd.runtime.get_mod().hot_reload` reports whether the current mod opted in.
 

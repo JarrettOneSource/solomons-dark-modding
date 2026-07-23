@@ -2,8 +2,8 @@
 
 `sd.spells` owns deterministic identities, immutable metadata, local input
 selection, owner-routed casting, and bounded replicated scripted effect
-lifecycles for primary and secondary spells. The visual authored picker remains
-part of the `sd.ui` authoring seam.
+lifecycles for primary and secondary spells. Mods build their visual catalog
+picker from the native-authored `sd.ui` controls.
 
 ## Registration
 
@@ -184,16 +184,20 @@ the network. `on_cast`, `on_tick`, and `on_hit` callbacks continue to run only
 on the simulation owner; remote peers consume presentation state and never
 replay gameplay behavior.
 
-## Current boundary
+## Authored picker and native boundary
 
-Registered definitions are selectable and bound to native primary/belt input,
-but the framework does not yet render a player-facing catalog chooser. The
-stock `SellSpell` surface headed `Select a Spell` is an acquisition dialog for
-eight fixed native unlock flags, not a runtime loadout picker; reusing it would
-couple mod content to permanent stock progression. Its verified boundary is
-documented in `spell-picker-re.md`. The authored-UI tier will provide the visual
-chooser over `list`, `select`, and `get_selection` without native IDs.
+Registered definitions are selectable and bound to native primary/belt input.
+There is deliberately no fixed framework catalog widget: a mod enumerates
+`list()`, creates local `sd.ui` buttons, and calls `select()` or
+`clear_selection()` from presentation callbacks. The disabled sample implements
+that complete picker path for Gravity Well.
+
+The stock `SellSpell` surface headed `Select a Spell` remains an acquisition
+dialog for eight fixed native unlock flags, not a runtime loadout picker;
+reusing it would couple mod content to permanent stock progression. Its verified
+boundary is documented in `spell-picker-re.md`.
 
 The disabled-by-default `sample.lua.spells_registry_lab` mod registers a
-`gravity_well` definition and its bounded field lifecycle. It never casts on
-its own.
+`gravity_well` definition and its bounded field lifecycle, then presents a
+native-authored local picker that equips or clears belt slot 1. It never casts
+on its own.

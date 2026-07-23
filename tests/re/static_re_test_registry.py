@@ -24,6 +24,9 @@ from static_lua_sprites_contracts import (
 from static_lua_authoring_contracts import (
     test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
 )
+from static_lua_roadmap_closure_contracts import (
+    test_lua_roadmap_is_closed_under_exact_mod_parity,
+)
 from static_lua_event_filter_contracts import (
     test_lua_damage_filters_are_ordered_owner_side_and_transactional,
 )
@@ -436,6 +439,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua authoring is generated, reloadable, and safe-thread executed",
         test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
+    ),
+    (
+        "Lua seam roadmap is closed under exact mod parity",
+        test_lua_roadmap_is_closed_under_exact_mod_parity,
     ),
     (
         "Lua mod state and events are authority-replicated",

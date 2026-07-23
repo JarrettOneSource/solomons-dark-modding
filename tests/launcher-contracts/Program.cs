@@ -16,6 +16,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
+    ("strict multiplayer mod parity", TestStrictMultiplayerModParityAsync),
     ("Lua hot reload bootstrap", TestLuaHotReloadBootstrapAsync),
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
@@ -99,6 +100,89 @@ static Task TestCanonicalModIdentifiersAsync()
             dependencyRejected = true;
         }
         Require(dependencyRejected, "manifest accepted a non-canonical required mod id");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestStrictMultiplayerModParityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        var scriptPath = Path.Combine(modRoot, "scripts", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+        File.WriteAllText(scriptPath, "return true\n");
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.presentation-parity",
+              "name": "Presentation Parity Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+
+        var mod = ModDiscovery.DiscoverRoot(modRoot);
+        var stageRoot = Path.Combine(root, "stage");
+        var executablePath = Path.Combine(root, "SolomonDark.exe");
+        var layoutPath = Path.Combine(root, "binary-layout.ini");
+        var loaderPath = Path.Combine(root, "SolomonDarkModLoader.dll");
+        File.WriteAllBytes(executablePath, [1, 2, 3]);
+        File.WriteAllText(layoutPath, "[binary]\nname=SolomonDark.exe\n");
+        File.WriteAllBytes(loaderPath, [4, 5, 6]);
+
+        var firstRuntime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var first = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            firstRuntime,
+            [mod],
+            loaderPath);
+
+        File.AppendAllText(scriptPath, "-- presentation-only edit\n");
+        var secondRuntime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [mod],
+            RuntimeStageOptions.Default);
+        var second = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            secondRuntime,
+            [mod],
+            loaderPath);
+        Require(
+            first.FingerprintSha256 != second.FingerprintSha256,
+            "presentation-intended mod content did not change exact session parity");
+        Require(
+            first.EnabledMods.Single().ContentSha256 !=
+                second.EnabledMods.Single().ContentSha256,
+            "presentation-intended mod edit did not change its directory identity");
+
+        var repeated = MultiplayerCompatibilityMaterializer.Materialize(
+            stageRoot,
+            executablePath,
+            layoutPath,
+            secondRuntime,
+            [mod],
+            loaderPath);
+        Require(
+            repeated.FingerprintSha256 == second.FingerprintSha256,
+            "unchanged exact mod set produced a different session fingerprint");
     }
     finally
     {
