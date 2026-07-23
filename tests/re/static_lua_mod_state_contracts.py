@@ -45,6 +45,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         )
     )
     live_verifier = _read("tools/verify_lua_mod_replication.py")
+    runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
     compatibility = _read(
         "SolomonDarkModLauncher/src/Staging/"
         "MultiplayerCompatibilityMaterializer.cs"
@@ -160,6 +161,19 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "late_join_checkpoint",
     ):
         assert token in live_verifier, f"live Lua replication verifier lacks: {token}"
+    for verifier_name, verifier in (
+        ("replication", live_verifier),
+        ("runtime", runtime_verifier),
+    ):
+        assert "kill_existing=False" in verifier, (
+            f"{verifier_name} verifier does not preserve existing game processes"
+        )
+        assert "stop_game_processes(" in verifier, (
+            f"{verifier_name} verifier does not clean up its exact process IDs"
+        )
+        assert "stop_games(" not in verifier, (
+            f"{verifier_name} verifier still uses machine-wide game cleanup"
+        )
 
     for token in (
         "## Authority model",

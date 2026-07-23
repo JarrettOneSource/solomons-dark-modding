@@ -28,9 +28,10 @@ from verify_local_multiplayer_sync import (
     THIRD_PIPE,
     complete_native_create,
     disable_bots,
+    game_process_ids,
     launch_additional_client,
     launch_pair,
-    stop_games,
+    stop_game_processes,
     wait_for_remote,
 )
 
@@ -169,69 +170,80 @@ def run(
         "host": host[0],
         "client": client[0],
     }
+    launched_process_ids: list[int] = []
+    try:
+        if launch:
+            result["pair"] = launch_pair(
+                god_mode=True,
+                kill_existing=False,
+            )
+            launched_process_ids.extend(game_process_ids(result["pair"]))
+            disable_bots()
+            wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
+            wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
 
-    if launch:
-        stop_games()
-        result["pair"] = launch_pair(god_mode=True)
-        disable_bots()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+        registrations = run_all(clients[:2], REGISTER_HANDLER, timeout=12.0)
+        result["registrations"] = registrations
+        failures = [_failed_exec(peer) for peer in registrations]
+        failures = [failure for failure in failures if failure]
+        if failures:
+            raise RuntimeError("; ".join(failures))
+        roles = [peer.get("values", {}).get("authority") for peer in registrations]
+        if roles != ["true", "false"]:
+            raise RuntimeError(f"unexpected authority roles: {roles}")
 
-    registrations = run_all(clients[:2], REGISTER_HANDLER, timeout=12.0)
-    result["registrations"] = registrations
-    failures = [_failed_exec(peer) for peer in registrations]
-    failures = [failure for failure in failures if failure]
-    if failures:
-        raise RuntimeError("; ".join(failures))
-    roles = [peer.get("values", {}).get("authority") for peer in registrations]
-    if roles != ["true", "false"]:
-        raise RuntimeError(f"unexpected authority roles: {roles}")
+        publication = run_lua_client(host[0], host[1], PUBLISH, timeout=12.0)
+        result["publication"] = publication
+        publication_failure = _failed_exec(publication)
+        if publication_failure:
+            raise RuntimeError(publication_failure)
+        published = publication.get("values", {})
+        if not (
+            int(published.get("revision", "0")) > 0
+            and int(published.get("first_sequence", "0")) > 0
+            and int(published.get("second_sequence", "0"))
+            == int(published.get("first_sequence", "0")) + 1
+        ):
+            raise RuntimeError(
+                f"publisher returned invalid revisions/sequences: {published}"
+            )
 
-    publication = run_lua_client(host[0], host[1], PUBLISH, timeout=12.0)
-    result["publication"] = publication
-    publication_failure = _failed_exec(publication)
-    if publication_failure:
-        raise RuntimeError(publication_failure)
-    published = publication.get("values", {})
-    if not (
-        int(published.get("revision", "0")) > 0
-        and int(published.get("first_sequence", "0")) > 0
-        and int(published.get("second_sequence", "0"))
-        == int(published.get("first_sequence", "0")) + 1
-    ):
-        raise RuntimeError(f"publisher returned invalid revisions/sequences: {published}")
-
-    result["client_convergence"] = _poll(
-        client,
-        READ_CONVERGENCE,
-        _is_converged,
-        timeout,
-    )
-
-    if launch:
-        result["late_join_launch"] = launch_additional_client(
-            preset="create_manual",
-            god_mode=True,
-        )
-        result["late_join_create"] = complete_native_create(
-            THIRD_PIPE,
-            element="fire",
-            discipline="mind",
-            timeout=timeout,
-        )
-        wait_for_remote(HOST_PIPE, THIRD_ID, THIRD_NAME, "hub")
-        wait_for_remote(THIRD_PIPE, HOST_ID, HOST_NAME, "hub")
-        result["late_join_checkpoint"] = _poll(
-            ("late_join", THIRD_PIPE),
-            READ_LATE_JOIN,
-            _has_checkpoint,
+        result["client_convergence"] = _poll(
+            client,
+            READ_CONVERGENCE,
+            _is_converged,
             timeout,
         )
-    else:
-        result["late_join_checkpoint"] = {"skipped": True}
 
-    result["ok"] = True
-    return result
+        if launch:
+            result["late_join_launch"] = launch_additional_client(
+                preset="create_manual",
+                god_mode=True,
+            )
+            launched_process_ids.extend(
+                game_process_ids(result["late_join_launch"])
+            )
+            result["late_join_create"] = complete_native_create(
+                THIRD_PIPE,
+                element="fire",
+                discipline="mind",
+                timeout=timeout,
+            )
+            wait_for_remote(HOST_PIPE, THIRD_ID, THIRD_NAME, "hub")
+            wait_for_remote(THIRD_PIPE, HOST_ID, HOST_NAME, "hub")
+            result["late_join_checkpoint"] = _poll(
+                ("late_join", THIRD_PIPE),
+                READ_LATE_JOIN,
+                _has_checkpoint,
+                timeout,
+            )
+        else:
+            result["late_join_checkpoint"] = {"skipped": True}
+
+        result["ok"] = True
+        return result
+    finally:
+        stop_game_processes(launched_process_ids)
 
 
 def main() -> int:
@@ -262,9 +274,6 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - preserve verifier evidence.
         result["error"] = str(exc)
         return_code = 1
-    finally:
-        if args.launch_pair:
-            stop_games()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

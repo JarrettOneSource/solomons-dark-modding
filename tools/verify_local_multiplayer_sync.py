@@ -14,6 +14,8 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +99,73 @@ def stop_games() -> None:
     )
 
 
+def game_process_ids(result: dict[str, object]) -> list[int]:
+    """Return the exact game process IDs reported by a launcher result."""
+    process_ids: set[int] = set()
+    for key in (
+        "hostProcessId",
+        "clientProcessId",
+        "thirdProcessId",
+        "processId",
+    ):
+        value = result.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            process_id = value
+        elif isinstance(value, str) and value.isdigit():
+            process_id = int(value)
+        else:
+            continue
+        if process_id > 0:
+            process_ids.add(process_id)
+    return sorted(process_ids)
+
+
+def stop_game_processes(process_ids: Iterable[int]) -> None:
+    """Stop only the reported Solomon Dark processes, never every game process."""
+    exact_process_ids = sorted(
+        {
+            process_id
+            for process_id in process_ids
+            if isinstance(process_id, int)
+            and not isinstance(process_id, bool)
+            and process_id > 0
+        }
+    )
+    if not exact_process_ids:
+        return
+
+    joined_process_ids = ",".join(str(process_id) for process_id in exact_process_ids)
+    subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            (
+                f"$ids = @({joined_process_ids}); "
+                "Get-Process -Id $ids -ErrorAction SilentlyContinue | "
+                "Where-Object { $_.ProcessName -like 'SolomonDark*' } | "
+                "Stop-Process -Force"
+            ),
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def _read_process_id_ledger(path: Path | None) -> dict[str, object]:
+    if path is None or not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def extract_json(buffer: str) -> dict[str, object] | None:
     start = buffer.find("{")
     if start < 0:
@@ -126,6 +195,7 @@ def launch_pair(
     third_player: bool = False,
     third_preset: str | None = None,
     allow_focus_steal: bool = False,
+    kill_existing: bool = True,
 ) -> dict[str, object]:
     args = [
         "powershell.exe",
@@ -178,6 +248,20 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
+    process_id_ledger: Path | None = None
+    if not kill_existing:
+        args.append("-NoKill")
+        runtime_root = ROOT / "runtime"
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        process_id_ledger = (
+            runtime_root / f".local-mp-processes-{uuid.uuid4().hex}.json"
+        )
+        args.extend(
+            [
+                "-ProcessIdOutputPath",
+                path_for_powershell(process_id_ledger),
+            ]
+        )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -234,59 +318,75 @@ def launch_pair(
     buffer = ""
     last_hub_probe = 0.0
     hub_ready_since: float | None = None
-    while time.monotonic() < deadline:
-        ready, _, _ = select.select([process.stdout], [], [], 0.1)
-        if ready:
-            line = process.stdout.readline()
-            if line:
-                buffer += line
-                parsed = extract_json(buffer)
-                if parsed is not None:
-                    terminate_launcher()
-                    return parsed
-            elif process.poll() is not None:
+    launch_completed = False
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    buffer += line
+                    parsed = extract_json(buffer)
+                    if parsed is not None:
+                        launch_completed = True
+                        return parsed
+                elif process.poll() is not None:
+                    break
+
+            if process.poll() is not None:
+                remainder = process.stdout.read()
+                if remainder:
+                    buffer += remainder
+                    parsed = extract_json(buffer)
+                    if parsed is not None:
+                        launch_completed = True
+                        return parsed
+                if process.returncode != 0:
+                    raise VerifyFailure(
+                        f"pair launcher failed ({process.returncode}):\n{buffer}"
+                    )
                 break
 
-        if process.poll() is not None:
-            remainder = process.stdout.read()
-            if remainder:
-                buffer += remainder
-                parsed = extract_json(buffer)
-                if parsed is not None:
-                    return parsed
-            if process.returncode != 0:
-                raise VerifyFailure(f"pair launcher failed ({process.returncode}):\n{buffer}")
-            break
+            now = time.monotonic()
+            if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
+                last_hub_probe = now
+                if (
+                    query_scene_for_launch(HOST_PIPE) == "hub"
+                    and query_scene_for_launch(CLIENT_PIPE) == "hub"
+                    and (
+                        not third_player
+                        or query_scene_for_launch(THIRD_PIPE) == "hub"
+                    )
+                ):
+                    if hub_ready_since is None:
+                        hub_ready_since = now
+                    elif now - hub_ready_since >= 1.0:
+                        fallback_result = {
+                            "fallbackReady": True,
+                            "hostLuaPipe": HOST_PIPE,
+                            "clientLuaPipe": CLIENT_PIPE,
+                            "thirdLuaPipe": THIRD_PIPE if third_player else None,
+                            "hostName": HOST_NAME,
+                            "clientName": CLIENT_NAME,
+                            "thirdName": THIRD_NAME if third_player else None,
+                        }
+                        fallback_result.update(
+                            _read_process_id_ledger(process_id_ledger)
+                        )
+                        launch_completed = True
+                        return fallback_result
+                else:
+                    hub_ready_since = None
 
-        now = time.monotonic()
-        if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
-            last_hub_probe = now
-            if (
-                query_scene_for_launch(HOST_PIPE) == "hub"
-                and query_scene_for_launch(CLIENT_PIPE) == "hub"
-                and (
-                    not third_player
-                    or query_scene_for_launch(THIRD_PIPE) == "hub"
-                )
-            ):
-                if hub_ready_since is None:
-                    hub_ready_since = now
-                elif now - hub_ready_since >= 1.0:
-                    terminate_launcher()
-                    return {
-                        "fallbackReady": True,
-                        "hostLuaPipe": HOST_PIPE,
-                        "clientLuaPipe": CLIENT_PIPE,
-                        "thirdLuaPipe": THIRD_PIPE if third_player else None,
-                        "hostName": HOST_NAME,
-                        "clientName": CLIENT_NAME,
-                        "thirdName": THIRD_NAME if third_player else None,
-                    }
-            else:
-                hub_ready_since = None
-
-    terminate_launcher()
-    raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
+        raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
+    finally:
+        terminate_launcher()
+        if not launch_completed:
+            stop_game_processes(
+                game_process_ids(_read_process_id_ledger(process_id_ledger))
+            )
+        if process_id_ledger is not None:
+            process_id_ledger.unlink(missing_ok=True)
 
 
 def launch_trio(

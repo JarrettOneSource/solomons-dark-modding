@@ -31,5 +31,7 @@ jobs:
         run: python -m unittest tests.test_lua_spells_verifier
       - name: Test launcher/native protocol alignment
         run: python -m unittest tests.test_protocol_version_alignment
+      - name: Test isolated local multiplayer cleanup
+        run: python -m unittest tests.test_local_multiplayer_process_isolation
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

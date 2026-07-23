@@ -17,8 +17,9 @@ from verify_local_multiplayer_sync import (
     HOST_NAME,
     HOST_PIPE,
     disable_bots,
+    game_process_ids,
     launch_pair,
-    stop_games,
+    stop_game_processes,
     wait_for_remote,
 )
 
@@ -352,18 +353,25 @@ def base_result(*, launched_pair: bool, steam_friend_pair: bool) -> dict[str, An
 
 def run(clients: list[tuple[str, str]], launch: bool) -> dict[str, Any]:
     result = base_result(launched_pair=launch, steam_friend_pair=False)
-    if launch:
-        stop_games()
-        launch_pair(god_mode=True)
-        disable_bots()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+    launched_process_ids: list[int] = []
+    try:
+        if launch:
+            result["pair"] = launch_pair(
+                god_mode=True,
+                kill_existing=False,
+            )
+            launched_process_ids.extend(game_process_ids(result["pair"]))
+            disable_bots()
+            wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
+            wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
 
-    validate_peer_results(
-        result,
-        run_all(clients, build_probe(), timeout=12.0),
-    )
-    return result
+        validate_peer_results(
+            result,
+            run_all(clients, build_probe(), timeout=12.0),
+        )
+        return result
+    finally:
+        stop_game_processes(launched_process_ids)
 
 
 def run_steam_friend_pair() -> dict[str, Any]:
@@ -432,9 +440,6 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - verifier reports structured failure.
         result["error"] = str(exc)
         return_code = 1
-    finally:
-        if args.launch_pair:
-            stop_games()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
