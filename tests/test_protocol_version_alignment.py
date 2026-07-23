@@ -18,6 +18,7 @@ LAUNCHER_COMPATIBILITY = (
     "MultiplayerCompatibilityMaterializer.cs"
 )
 WAVE_DOCUMENTATION = ROOT / "docs/lua-waves.md"
+LUA_SEAM_ROADMAP = ROOT / "docs/lua-seam-roadmap.md"
 
 
 def _read_version(path: Path, pattern: str) -> int:
@@ -51,6 +52,18 @@ class ProtocolVersionAlignmentTests(unittest.TestCase):
         )
 
         self.assertEqual(native, documentation)
+
+    def test_lua_seam_roadmap_matches_native_wire_protocol(self) -> None:
+        native = _read_version(
+            NATIVE_PROTOCOL,
+            r"kProtocolVersion\s*=\s*(\d+);",
+        )
+        roadmap = _read_version(
+            LUA_SEAM_ROADMAP,
+            r"\*\*Implemented 2026-07-22\.\*\* Protocol (\d+) provides",
+        )
+
+        self.assertEqual(native, roadmap)
 
 
 if __name__ == "__main__":

@@ -232,7 +232,7 @@ mod-defined events delivered to all peers in stream order.
 multiplayer-native contract. Build it early so Tier-1 seams are born MP-native.
 *Multiplayer:* this *is* the multiplayer story.
 
-**Implemented 2026-07-22.** Protocol 72 provides a bounded, deterministic Lua value
+**Implemented 2026-07-22.** Protocol 80 provides a bounded, deterministic Lua value
 codec; per-mod authority-owned state; ordered custom events; fragmented reliable Steam
 delivery; periodic and first-peer state checkpoints; and a three-peer late-join
 acceptance verifier. See `lua-state-and-events.md`.
