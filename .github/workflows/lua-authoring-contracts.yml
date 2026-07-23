@@ -51,5 +51,7 @@ jobs:
         run: python -m unittest tests.test_lua_waves_multiplayer_verifier
       - name: Test Lua multiplayer RNG verifier
         run: python -m unittest tests.test_lua_rng_multiplayer_verifier
+      - name: Test Lua multiplayer scene verifier
+        run: python -m unittest tests.test_lua_scene_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

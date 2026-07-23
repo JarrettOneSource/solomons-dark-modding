@@ -59,3 +59,21 @@ Lua-controlled participants receive the queued target intent at the same time, s
 materialization follows the new world. A client cannot invoke `switch_region`, and a client
 never follows a raw region request out of an arena; the existing synchronized Leave Game
 flow owns that transition.
+
+## Two-peer acceptance
+
+Use a disposable local pair for the full authority and scene-follow matrix:
+
+```powershell
+py tools/verify_lua_scene_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The verifier stages only `sample.lua.scene_lab`, suppresses window tiling, and
+does not kill or attach to unrelated Solomon Dark processes. It proves the
+exact host/client authority flags in the shared hub, rejects a client-authored
+switch, and follows one host-authored transition to private region 2 and back
+to the shared hub. It then enters region 5 through `sd.scene.switch_region`,
+requires both peers and the authenticated host participant intent to converge
+on the arena, and proves that the host receives the stock Leave Game guard
+while the client remains authority-rejected. Only the two process IDs returned
+by the verifier's own launch are stopped.

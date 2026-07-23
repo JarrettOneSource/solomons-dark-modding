@@ -470,7 +470,9 @@ authority-only stock wave start, identical sorted live summaries, and matching
   Only the offline/host simulation authority can switch; arena entry reuses the seeded
   shared-hub run path, while authenticated participant frames make clients follow host
   hub/private-region intent. Raw arena exits remain owned by the stock synchronized Leave
-  Game flow. See `lua-scene.md`.
+  Game flow. The opt-in two-peer acceptance covers client rejection, private-region and
+  shared-hub follow, `sd.scene` arena entry, participant-intent convergence, and the raw
+  arena-exit guard. See `lua-scene.md` and the disabled `sample.lua.scene_lab` mod.
 - **`sd.camera`** — cutscenes, boss intros, shake. *MP:* presentation-local.
 
   **Implemented 2026-07-22.** `sd.camera` provides bounded local view inspection,
