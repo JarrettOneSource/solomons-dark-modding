@@ -148,7 +148,7 @@ shared state; simulation calls auto-route to the owner).
   `images/*.bundle` sprite atlases (format reversed; extractor in `tools/`), sounds/music.
 - Sample mods prove overlay + Lua patterns: `skill_shock_nova` (new data-driven skill),
   `wave_fast_start`, `story_custom_intro`, `item_gold_focus`, `lua_bots`,
-  `lua_ui_sandbox_lab`, `lua_dark_cloud_sort_bootstrap`.
+  `lua_ui_sandbox_lab`, `lua_authoring_lab`, `lua_dark_cloud_sort_bootstrap`.
 - Lua states begin with the standard libraries, then remove `debug`, `dofile`, `io`,
   `loadfile`, `os`, `package`, and `require`. Scoped persistence belongs in `sd.storage`.
 
@@ -487,7 +487,9 @@ See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
   running state, normal unload cleanup precedes replacement, and reload is disabled for
   multiplayer transport launches so the staged parity hash remains authoritative.
   `Ctrl+Backtick` opens a bounded draw-list console that submits to the same gameplay-safe
-  async queue and result capture as the external named pipe. See `lua-authoring.md`.
+  async queue and result capture as the external named pipe. A disabled invisible lab and
+  source-restoring verifier cover offline reload, syntax preservation, and whole-transport
+  deferral without synthesizing desktop input. See `lua-authoring.md`.
 
 ---
 

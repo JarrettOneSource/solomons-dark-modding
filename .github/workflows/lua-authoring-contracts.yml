@@ -21,3 +21,5 @@ jobs:
         run: python tools/generate_lua_api_stubs.py --check
       - name: Test Lua editor API generator
         run: python -m unittest tests.test_lua_api_stub_generator
+      - name: Test Lua authoring live verifier
+        run: python -m unittest tests.test_lua_authoring_verifier

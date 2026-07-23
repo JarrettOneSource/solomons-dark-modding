@@ -18,6 +18,9 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     )
     bootstrap_header = _read("SolomonDarkModLoader/include/runtime_bootstrap.h")
     bootstrap_parser = _read("SolomonDarkModLoader/src/runtime_bootstrap.cpp")
+    runtime_bindings = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
     hot_reload = _read("SolomonDarkModLoader/src/lua_hot_reload.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
     engine_header = _read("SolomonDarkModLoader/include/lua_engine.h")
@@ -34,6 +37,10 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     luarc = _read(".luarc.json")
     launcher_tests = _read("tests/launcher-contracts/Program.cs")
+    authoring_manifest = _read("mods/lua_authoring_lab/manifest.json")
+    authoring_sample = _read("mods/lua_authoring_lab/scripts/main.lua")
+    authoring_verifier = _read("tools/verify_lua_authoring.py")
+    authoring_verifier_tests = _read("tests/test_lua_authoring_verifier.py")
     documentation = _read("docs/lua-authoring.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
 
@@ -116,6 +123,12 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         assert token in pump, f"safe-thread hot-reload gate lacks: {token}"
     assert "participant.transport_connected" not in pump
     assert "LuaHotReloadState hot_reload" in engine_internal
+    _require_in_order(
+        runtime_bindings,
+        "multiplayer::IsLocalTransportEnabled()",
+        'lua_setfield(state, -2, "transport_enabled")',
+        'lua_setfield(state, -2, "transport_ready")',
+    )
 
     for token in (
         "using LuaExecCompletion = std::function<void(LuaExecResult)>;",
@@ -209,6 +222,7 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     assert '"workspace.library"' in luarc and '"api/lua"' in luarc
     assert "python tools/generate_lua_api_stubs.py --check" in workflow
     assert "python -m unittest tests.test_lua_api_stub_generator" in workflow
+    assert "python -m unittest tests.test_lua_authoring_verifier" in workflow
 
     for token in (
         '"Lua hot reload bootstrap"',
@@ -219,12 +233,47 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     ):
         assert token in launcher_tests, f"launcher hot-reload test lacks: {token}"
     for token in (
+        '"id": "sample.lua.authoring_lab"',
+        '"enabled": false',
+        '"hotReload": true',
+        '"ui.authoring.native"',
+    ):
+        assert token in authoring_manifest, f"authoring lab manifest lacks: {token}"
+    for token in (
+        'local source_version = "authoring-baseline-0001"',
+        'id = "authoring_reload_probe"',
+        "authoring_lab_version = source_version",
+        "authoring_lab_surface = sd.ui.create_surface",
+    ):
+        assert token in authoring_sample, f"authoring lab script lacks: {token}"
+    for token in (
+        "RELOADED_VERSION = \"authoring-reloaded-0002\"",
+        "_atomic_write",
+        "_wait_for_version",
+        "_assert_version_stays",
+        'values["transport_enabled"]',
+        "syntax-invalid source did not preserve the running Lua state",
+        "authoring verifier did not restore exact source bytes",
+        'choices=("auto", "offline", "deferred")',
+    ):
+        assert token in authoring_verifier, f"authoring live verifier lacks: {token}"
+    for token in (
+        "test_offline_mode_reloads_rejects_syntax_and_restores_source",
+        "test_transport_mode_defers_edits_and_restores_source",
+        "test_failed_verification_still_restores_exact_source",
+    ):
+        assert token in authoring_verifier_tests, (
+            f"authoring verifier regression tests lack: {token}"
+        )
+    for token in (
         "## Editor API",
         "## Entry-script hot reload",
         "## In-game exec console",
+        "## Live acceptance",
         "prior state remains live",
         "automatically deferred",
         "same capture result as the named pipe",
+        "does not synthesize global keyboard input or steal focus",
     ):
         assert token in documentation, f"Lua authoring documentation lacks: {token}"
     assert "**Implemented 2026-07-23.** The checked-in `api/lua/sd.lua`" in roadmap

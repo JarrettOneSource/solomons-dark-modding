@@ -100,3 +100,28 @@ queued requests through the normal engine lifecycle.
 
 The console is a developer surface, not a multiplayer command channel. Lua API
 authority checks still apply to every submitted call.
+
+## Live acceptance
+
+Enable only the disabled `sample.lua.authoring_lab` mod and launch through the
+normal staged launcher. The lab owns an invisible native UI surface so a reload
+must release and recreate a real mod-owned resource. From this repository run:
+
+```bash
+python tools/verify_lua_authoring.py
+```
+
+On an offline launch, the verifier applies one valid source edit, confirms a new
+Lua state and UI handle, injects a syntax error and confirms that the prior state
+survives, then restores the original source and confirms a final reload. On a
+Steam or local-UDP transport launch, auto mode instead confirms that the edit is
+deferred for the entire observation window, even when no remote participant is
+connected. It reads the same `transport_enabled` runtime predicate as the native
+reload gate, rather than waiting for the transport to report ready. Every path
+restores the entry script's exact original bytes.
+
+The in-game console remains a visual/input acceptance gate: open it with
+<kbd>Ctrl</kbd>+<kbd>`</kbd>, submit `return authoring_lab_version`, and confirm
+that both the command and `authoring-baseline-0001` result render in the panel.
+This check intentionally requires a user-controlled game window; the verifier
+does not synthesize global keyboard input or steal focus.

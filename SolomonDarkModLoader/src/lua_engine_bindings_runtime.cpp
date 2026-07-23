@@ -525,9 +525,11 @@ void PushSharedGameplayPauseRuntimeInfo(
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 17);
+    lua_createtable(state, 0, 18);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
+    lua_pushboolean(state, multiplayer::IsLocalTransportEnabled() ? 1 : 0);
+    lua_setfield(state, -2, "transport_enabled");
     lua_pushboolean(state, runtime.transport_ready ? 1 : 0);
     lua_setfield(state, -2, "transport_ready");
     lua_pushstring(state, multiplayer::SessionStatusLabel(runtime.session_status));
