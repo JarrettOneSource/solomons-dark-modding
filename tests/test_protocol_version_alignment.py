@@ -17,6 +17,7 @@ LAUNCHER_COMPATIBILITY = (
     / "SolomonDarkModLauncher/src/Staging/"
     "MultiplayerCompatibilityMaterializer.cs"
 )
+WAVE_DOCUMENTATION = ROOT / "docs/lua-waves.md"
 
 
 def _read_version(path: Path, pattern: str) -> int:
@@ -38,6 +39,18 @@ class ProtocolVersionAlignmentTests(unittest.TestCase):
         )
 
         self.assertEqual(native, launcher)
+
+    def test_wave_documentation_matches_native_wire_protocol(self) -> None:
+        native = _read_version(
+            NATIVE_PROTOCOL,
+            r"kProtocolVersion\s*=\s*(\d+);",
+        )
+        documentation = _read_version(
+            WAVE_DOCUMENTATION,
+            r"current\s+protocol\s+version\s+is\s+(\d+);",
+        )
+
+        self.assertEqual(native, documentation)
 
 
 if __name__ == "__main__":

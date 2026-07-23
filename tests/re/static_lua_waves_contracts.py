@@ -135,7 +135,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "authenticated participant frame",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "protocol version is 78",
+        "current protocol version is 80",
     ):
         assert token in documentation, f"Lua wave documentation lacks: {token}"
     assert "**Implemented 2026-07-22.** `sd.waves.get_state()`" in roadmap
