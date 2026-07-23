@@ -10,6 +10,7 @@ from repository_identity_contract import (
 from static_re_boneyard_contracts import (
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
+    test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
@@ -347,6 +348,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Boneyard parser rejects malformed native containers",
         test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    ),
+    (
+        "Multiplayer Boneyard scenery shares the host generation boundary",
+        test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
     ),
     (
         "Repository history uses approved project identities",

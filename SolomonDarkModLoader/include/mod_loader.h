@@ -482,6 +482,7 @@ bool TryGetHubSurfaceState(
     std::string* error_message);
 bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message);
 bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_message);
+bool ReinitializeAppliedRunGenerationSeedForArenaCreate(const char* source);
 void ClearLocalRunGenerationSeed();
 bool QueueGameplaySwitchRegion(int region_index, std::string* error_message);
 bool QueueMultiplayerDampenEffect(

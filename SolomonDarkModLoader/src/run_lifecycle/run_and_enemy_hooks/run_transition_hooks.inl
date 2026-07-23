@@ -73,6 +73,11 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     }
     ClearLuaWaveSpawnFilterInstances();
     ClearRememberedEnemyTracking();
+    if (!ReinitializeAppliedRunGenerationSeedForArenaCreate("arena_create_pre_stock")) {
+        g_state.run_active.store(false, std::memory_order_release);
+        Log("Blocked multiplayer Arena_Create because the host Boneyard seed could not be reinitialized.");
+        return;
+    }
     original(self, unused_edx);
     multiplayer::NotifyLocalRunStarted();
     DispatchLuaRunStarted();

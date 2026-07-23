@@ -113,11 +113,16 @@ Steam playtest flow and the remaining external verification boundary.
   host-authored run generation seed, sends it as `run_nonce`, and both host and
   client call the stock native RNG initializer (`0x00401120`) on the RNG state
   referenced by the native global (`0x00818B08`) inside the
-  `GameplaySwitchRegion` hook before stock arena generation runs. The seed
-  aligns the static-generation shape set, but host snapshots still explicitly
-  carry the recovered run-static prop families (`0x1391`, `0x1392`) so trees,
-  tombstones, and their movement blockers converge to the host instead of
-  depending on global-RNG lockstep.
+  `GameplaySwitchRegion` hook. After peer-specific scene teardown completes,
+  the loader reinitializes that same applied seed at the narrower
+  `Arena_Create` boundary immediately before stock Boneyard generation. This
+  keeps the complete materialized scenery graph aligned even when host and
+  client cleanup consumed different amounts of native RNG state.
+  Boneyard Tree 2001 and its materialized replacement Scrub 2062 remain stock
+  RegionLayout scenery generated locally from the host-authored seed. They are
+  distinct from the host-snapshotted run-static prop families `0x1391`
+  (`Solomon_Dig`) and `0x1392` (`Lantern`); those two actor families do not
+  stand in for trees or tombstones.
   The stock Boneyard generator can produce an empty local candidate list for
   some seeds. Its original count check at `0x0063D78F` then synthesizes a null
   candidate and dereferences `candidate + 0x1C` at `0x0063D7C3`. The loader
@@ -126,7 +131,8 @@ Steam playtest flow and the remaining external verification boundary.
   outer-loop continuation at `0x0063DA59`. The patch is restored on loader
   shutdown.
   `tools/verify_run_static_layout_sync.py` compares the resulting movement
-  circle/shape/static-actor digests across the two local clients. The host also
+  circle, shape, complete Boneyard scenery, Tree/Scrub presentation, and
+  run-static actor digests across the two local clients. The host also
   sends an empty Run
   `WorldSnapshot` before wave enemies exist so clients clear any stale hub
   world snapshot immediately; clients use that authority marker plus the

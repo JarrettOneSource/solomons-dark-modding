@@ -34,6 +34,8 @@ local function hx(v) return string.format("0x%08X", tonumber(v) or 0) end
 local function read_ptr(address) return tonumber(sd.debug.read_ptr(address)) or 0 end
 local function read_u32(address) return tonumber(sd.debug.read_u32(address)) or 0 end
 local function read_i32(address) return tonumber(sd.debug.read_i32(address)) or 0 end
+local function read_i16(address) return tonumber(sd.debug.read_i16(address)) or 0 end
+local function read_u8(address) return tonumber(sd.debug.read_u8(address)) or 0 end
 local function read_f(address) return tonumber(sd.debug.read_float(address)) or 0 end
 local function off(name) return tonumber(sd.debug.layout_offset(name)) or 0 end
 local function qf(v) return math.floor((tonumber(v) or 0) * 10.0 + 0.5) end
@@ -211,6 +213,87 @@ for index, actor in ipairs(static_actors) do
   emit("static." .. index .. ".anim_drive_state", actor[6])
 end
 
+-- Boneyard scenery is owned by RegionLayout's native PointerList rather than
+-- the transient actor lane above. First compare the complete materialized
+-- scenery graph by type/geometry. Then compare Tree/Scrub art selectors while
+-- deliberately excluding their independently ticking sway values.
+local TREE_TYPE_ID = 2001
+local SCRUB_TYPE_ID = 2062
+local scenery_list = world_address + off("actor_world_scenery_object_list")
+local scenery_count = read_i32(scenery_list + off("pointer_list_count"))
+local scenery_items = read_ptr(scenery_list + off("pointer_list_items"))
+local scenery_rows = {}
+local boneyard_trees = {}
+local max_scenery = scenery_items ~= 0
+  and math.min(math.max(scenery_count, 0), 4096)
+  or 0
+for index = 0, max_scenery - 1 do
+  local scenery = read_ptr(scenery_items + (index * 4))
+  if scenery ~= 0 then
+    local type_id = read_u32(scenery + off("game_object_type_id"))
+    local x = qf(read_f(scenery + off("actor_position_x")))
+    local y = qf(read_f(scenery + off("actor_position_y")))
+    local radius = qf(read_f(scenery + off("actor_collision_radius")))
+    local materialization_key =
+      read_i32(scenery + off("boneyard_scenery_materialization_key"))
+    table.insert(scenery_rows, {type_id, x, y, radius, materialization_key})
+
+    if type_id == TREE_TYPE_ID or type_id == SCRUB_TYPE_ID then
+      local variant = type_id == TREE_TYPE_ID
+        and read_i16(scenery + off("boneyard_tree_variant"))
+        or read_i32(scenery + off("boneyard_scrub_variant"))
+      local overlay_variant = type_id == TREE_TYPE_ID
+        and read_i16(scenery + off("boneyard_tree_overlay_variant"))
+        or 0
+      local overlay_enabled = type_id == TREE_TYPE_ID
+        and read_u8(scenery + off("boneyard_tree_overlay_enabled"))
+        or 0
+      table.insert(boneyard_trees, {
+        type_id,
+        x,
+        y,
+        radius,
+        materialization_key,
+        variant,
+        overlay_variant,
+        overlay_enabled,
+      })
+    end
+  end
+end
+local function sort_rows(rows, field_count)
+  table.sort(rows, function(a, b)
+    for index = 1, field_count do
+      if a[index] ~= b[index] then return a[index] < b[index] end
+    end
+    return false
+  end)
+end
+local function digest_rows(rows, prefix)
+  local values = prefix
+  for _, row in ipairs(rows) do
+    for _, value in ipairs(row) do table.insert(values, value) end
+  end
+  return digest_values(values)
+end
+sort_rows(scenery_rows, 5)
+sort_rows(boneyard_trees, 8)
+emit("boneyard_scenery_count", scenery_count)
+emit("boneyard_scenery_digest", hx(
+  digest_rows(scenery_rows, {scenery_count, #scenery_rows})))
+emit("boneyard_tree_count", #boneyard_trees)
+emit("boneyard_tree_digest", hx(digest_rows(boneyard_trees, {#boneyard_trees})))
+for index, tree in ipairs(boneyard_trees) do
+  emit("boneyard_tree." .. index .. ".type_id", tree[1])
+  emit("boneyard_tree." .. index .. ".x_q10", tree[2])
+  emit("boneyard_tree." .. index .. ".y_q10", tree[3])
+  emit("boneyard_tree." .. index .. ".radius_q10", tree[4])
+  emit("boneyard_tree." .. index .. ".materialization_key", tree[5])
+  emit("boneyard_tree." .. index .. ".variant", tree[6])
+  emit("boneyard_tree." .. index .. ".overlay_variant", tree[7])
+  emit("boneyard_tree." .. index .. ".overlay_enabled", tree[8])
+end
+
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
 local replicated_run_static_count = 0
 if replicated and replicated.actors then
@@ -244,6 +327,10 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         "shape_digest",
         "static_actor_count",
         "static_actor_digest",
+        "boneyard_scenery_count",
+        "boneyard_scenery_digest",
+        "boneyard_tree_count",
+        "boneyard_tree_digest",
     ]
     return (
         host.get("scene") == "testrun"
@@ -252,6 +339,8 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         and client.get("local_run_nonce") == host.get("local_run_nonce")
         and integer(host, "circle_count") > 0
         and integer(host, "circle_mask4_count") > 0
+        and integer(host, "boneyard_scenery_count") > 0
+        and integer(host, "boneyard_tree_count") > 0
         and integer(client, "replicated_run_static_count") >= integer(host, "static_actor_count")
         and integer(client, "replicated_matched_actor_count") >= integer(host, "static_actor_count")
         and all(host.get(key) == client.get(key) for key in required_equal)

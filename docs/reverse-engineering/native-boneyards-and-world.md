@@ -253,8 +253,9 @@ Both blank-looking samples carry hundreds of timeline events.
 
 The post-load/materialization pass is `0x006531B0`. Its order matters:
 
-1. assign a random value at each stored scenery object's `+0x10` and call its
-   virtual `+0x48` setup hook;
+1. convert each stored scenery object's Y coordinate at `+0x1C` to an integer,
+   multiply it by 100, store that deterministic materialization key at `+0x10`,
+   and call its virtual `+0x48` setup hook;
 2. expand every abstract `Fence` record with `0x0064AC90`;
 3. assign the RegionLayout owner at scenery `+0x58`;
 4. call virtual hooks `+0x44`, `+0x64`, and `+0x04` to finish world,
@@ -602,7 +603,7 @@ These are recovered constraints, not the website/download implementation:
   or the loader must add an explicit indirection outside stock behavior.
 - Fence records are recipes for derived objects. Deterministic multiplayer
   state must account for the materialized posts, leaves, walls, rails,
-  collision geometry, and post-load random fields, not only the 3005 records.
+  collision geometry, and post-load class fields, not only the 3005 records.
 - Generator output depends on native random choices and collision rejection.
   Peers need identical already-materialized content or an identical generation
   seed/state path before play.

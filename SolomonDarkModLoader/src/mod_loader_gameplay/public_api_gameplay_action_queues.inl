@@ -158,6 +158,25 @@ bool PrepareArenaRunGenerationSeed(const char* source, std::string* error_messag
     return true;
 }
 
+bool ReinitializeAppliedRunGenerationSeedForArenaCreate(const char* source) {
+    if (!multiplayer::IsLocalTransportEnabled()) {
+        return true;
+    }
+
+    const auto seed = g_gameplay_keyboard_injection.applied_run_generation_seed.load(
+        std::memory_order_acquire);
+    if (seed == 0) {
+        Log(
+            "Could not reinitialize the host-authoritative Boneyard generation RNG "
+            "because no applied run seed exists. source=" +
+            std::string(source != nullptr ? source : "unknown"));
+        return false;
+    }
+
+    PublishLocalRunNonce(seed);
+    return InitializeNativeGlobalRngForRunGeneration(seed, source);
+}
+
 void ClearLocalRunGenerationSeed() {
     g_gameplay_keyboard_injection.pending_run_generation_seed.store(
         0,
