@@ -43,6 +43,9 @@ from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
 )
+from static_lua_scene_contracts import (
+    test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -304,6 +307,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua navigation is bounded, read-only, and native-backed",
         test_lua_nav_is_bounded_read_only_and_native_backed,
+    ),
+    (
+        "Lua scene control is semantic, authority-owned, and peer-followed",
+        test_lua_scene_is_address_free_authority_owned_and_peer_followed,
     ),
     (
         "Lua bus is manifest-resolved, bounded, and local",

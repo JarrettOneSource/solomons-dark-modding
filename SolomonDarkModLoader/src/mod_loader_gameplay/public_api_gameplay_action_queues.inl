@@ -235,15 +235,23 @@ bool QueueGameplaySwitchRegion(int region_index, std::string* error_message) {
     request.region_index = region_index;
     request.next_attempt_ms = static_cast<std::uint64_t>(GetTickCount64());
 
-    std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
-    if (g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.size() >= kQueuedGameplayWorldActionLimit) {
-        if (error_message != nullptr) {
-            *error_message = "The gameplay region switch queue is full.";
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
+        if (g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.size() >= kQueuedGameplayWorldActionLimit) {
+            if (error_message != nullptr) {
+                *error_message = "The gameplay region switch queue is full.";
+            }
+            return false;
         }
-        return false;
-    }
 
-    g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.push_back(request);
+        g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.push_back(request);
+    }
+    if (region_index == kHubRegionIndex) {
+        multiplayer::SetAllBotSceneIntentsToSharedHub();
+    } else if (region_index != kArenaRegionIndex) {
+        multiplayer::SetAllBotSceneIntentsToPrivateRegion(region_index);
+    }
     Log("gameplay.switch_region: queued region=" + std::to_string(region_index));
     return true;
 }

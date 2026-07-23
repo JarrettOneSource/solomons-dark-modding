@@ -81,6 +81,8 @@ shared state; simulation calls auto-route to the owner).
   pass, carried to peers through the run nonce.
 - **`sd.nav`** — bounded address-free native grid snapshots and player-sized path-segment
   tests.
+- **`sd.scene`** — semantic address-free scene state plus authority-owned region switches;
+  authenticated host intent moves connected clients and Lua-controlled participants.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -323,6 +325,12 @@ wave summary, so `get_state()` answers identically on every peer.
   advertises `nav.read`. See `lua-nav.md`.
 - **`sd.scene`** — region/level switching (`kGameplaySwitchRegion`, transition globals)
   paired with `.boneyard` overlays. *MP:* authority-routed; scene epochs already replicate.
+
+  **Implemented 2026-07-22.** `sd.scene` provides address-free `get_state/switch_region`.
+  Only the offline/host simulation authority can switch; arena entry reuses the seeded
+  shared-hub run path, while authenticated participant frames make clients follow host
+  hub/private-region intent. Raw arena exits remain owned by the stock synchronized Leave
+  Game flow. See `lua-scene.md`.
 - **`sd.camera`** — cutscenes, boss intros, shake. Only major seam with **no RE done yet**.
   *MP:* presentation-local.
 - **`sd.sprites`** — runtime sprite/frame registration using the reversed bundle format,

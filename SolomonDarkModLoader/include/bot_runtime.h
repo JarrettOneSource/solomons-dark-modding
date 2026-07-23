@@ -365,6 +365,7 @@ bool ApplyLocalPlayerSkillChoiceOption(
 std::size_t GetPendingBotCastCount();
 void SetAllBotSceneIntentsToRun();
 void SetAllBotSceneIntentsToSharedHub();
+void SetAllBotSceneIntentsToPrivateRegion(int region_index);
 const char* BotControllerStateLabel(BotControllerState state);
 
 }  // namespace sdmod::multiplayer

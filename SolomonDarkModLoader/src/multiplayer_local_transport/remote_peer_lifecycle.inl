@@ -86,6 +86,7 @@ void ResetRemoteParticipantSessionEpoch(
 
     if (configured_authority_disconnected) {
         g_local_transport.last_client_host_run_request_ms = 0;
+        g_local_transport.last_client_host_region_request_ms = 0;
         g_local_transport.last_applied_participant_vitals_correction_sequence = 0;
         g_local_transport.active_local_cast_input = ActiveLocalCastInput{};
         g_local_transport.pending_air_chain_terminals.clear();

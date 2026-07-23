@@ -335,6 +335,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("events.filters.spell_cast");
         capabilities.emplace_back("rng.run.seed");
         capabilities.emplace_back("nav.read");
+        capabilities.emplace_back("scene.read");
+        capabilities.emplace_back("scene.switch.authority");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {

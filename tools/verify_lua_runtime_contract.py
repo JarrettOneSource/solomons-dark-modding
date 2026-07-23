@@ -52,6 +52,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "bus": ("publish", "subscribe", "unsubscribe", "has", "providers"),
     "rng": ("get_seed", "set_seed"),
     "nav": ("get_grid", "test_segment"),
+    "scene": ("get_state", "switch_region"),
     "draw": (
         "text",
         "rect",

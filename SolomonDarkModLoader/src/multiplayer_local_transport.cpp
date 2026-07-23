@@ -110,6 +110,9 @@ constexpr std::uint64_t kLocalSpellEffectTombstoneHoldMs = 4000;
 constexpr std::uint64_t kRecentLocalCastAssociationWindowMs = 3000;
 constexpr std::uint64_t kLocalCastInputUpdateIntervalMs = 50;
 constexpr std::uint64_t kClientHostRunFollowRetryMs = 1000;
+constexpr std::uint64_t kClientHostRegionFollowRetryMs = 1000;
+constexpr int kClientHostSharedHubRegionIndex = 0;
+constexpr int kClientHostMaximumPrivateRegionIndex = 4;
 constexpr std::uint64_t kClientHostRunAuthorizationFreshnessMs = 3000;
 constexpr std::uint64_t kClientHostRunExitFollowExpiryMs = 15000;
 constexpr std::uint64_t kClientHostRunExitMenuRetryMs = 2500;
@@ -775,6 +778,7 @@ struct LocalTransportState {
     std::uint64_t last_lua_mod_stream_applied_sequence = 0;
     std::uint32_t next_lua_mod_message_id = 1;
     std::uint64_t last_client_host_run_request_ms = 0;
+    std::uint64_t last_client_host_region_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
     bool local_menu_pause_requested = false;
     std::uint32_t local_menu_pause_request_epoch = 0;

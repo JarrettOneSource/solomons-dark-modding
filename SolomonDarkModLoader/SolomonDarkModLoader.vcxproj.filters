@@ -1333,6 +1333,9 @@
     <ClCompile Include="src\lua_engine_bindings_foundations.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_scene.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_debug.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
