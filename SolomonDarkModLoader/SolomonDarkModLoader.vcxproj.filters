@@ -203,6 +203,9 @@
     <ClInclude Include="include\multiplayer_foundation.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\multiplayer_join_flow.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_local_transport.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -257,9 +260,6 @@
     <ClInclude Include="include\multiplayer_service_loop.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
-    <ClInclude Include="include\native_mods.h">
-      <Filter>Header Files\Public API</Filter>
-    </ClInclude>
     <ClInclude Include="include\runtime_bootstrap.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -273,9 +273,6 @@
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\runtime_tick_service.h">
-      <Filter>Header Files\Public API</Filter>
-    </ClInclude>
-    <ClInclude Include="include\sdmod_plugin_api.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\startup_status.h">
@@ -1630,6 +1627,9 @@
     <ClCompile Include="src\multiplayer_foundation.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
+    <ClCompile Include="src\multiplayer_join_flow.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
     <ClCompile Include="src\multiplayer_local_transport.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
@@ -1652,9 +1652,6 @@
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="src\native_spell_stats.cpp">
-      <Filter>Source Files\Support</Filter>
-    </ClCompile>
-    <ClCompile Include="src\native_mods.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\runtime_bootstrap.cpp">

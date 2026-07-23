@@ -253,7 +253,7 @@ void ResetLuaRegisteredSpellRuntime() {
 }
 
 void DispatchPendingLuaRegisteredSpellCasts(
-    const SDModRuntimeTickContext& context) {
+    const RuntimeTickContext& context) {
     auto requests = DrainRegisteredSpellCastQueue();
     for (const auto& request : requests) {
         DispatchRegisteredSpellCast(request, context.monotonic_milliseconds);

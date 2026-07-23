@@ -169,8 +169,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         const auto previous_allow = g_allow_gameplay_action_pump_in_gameplay;
         g_allow_gameplay_action_pump_in_gameplay = true;
         PumpQueuedGameplayActions();
-        const SDModRuntimeTickContext lua_tick_context = {
-            sizeof(SDModRuntimeTickContext),
+        const RuntimeTickContext lua_tick_context = {
             GetRuntimeTickServiceIntervalMs(),
             0,
             static_cast<std::uint64_t>(GetTickCount64()),

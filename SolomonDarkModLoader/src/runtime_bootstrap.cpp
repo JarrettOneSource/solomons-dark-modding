@@ -264,7 +264,6 @@ bool LoadRuntimeBootstrap(
         std::string source_root_path;
         std::string source_entry_script_path;
         std::string entry_script_path;
-        std::string entry_dll_path;
         std::string required_capabilities;
         std::string optional_capabilities;
         std::string provides;
@@ -304,7 +303,6 @@ bool LoadRuntimeBootstrap(
                 &entry_script_path,
                 error_message,
                 path) ||
-            !TryReadRequiredValue(sections, section_name, "entry_dll_path", &entry_dll_path, error_message, path) ||
             !TryReadRequiredValue(
                 sections,
                 section_name,
@@ -357,9 +355,6 @@ bool LoadRuntimeBootstrap(
         if (!entry_script_path.empty()) {
             mod.entry_script_path = std::filesystem::path(entry_script_path);
         }
-        if (!entry_dll_path.empty()) {
-            mod.entry_dll_path = std::filesystem::path(entry_dll_path);
-        }
 
         mod.required_capabilities = SplitCapabilities(required_capabilities);
         mod.optional_capabilities = SplitCapabilities(optional_capabilities);
@@ -377,13 +372,9 @@ std::filesystem::path GetRuntimeBootstrapPath(const std::filesystem::path& stage
 
 std::string DescribeRuntimeBootstrap(const RuntimeBootstrap& bootstrap) {
     std::size_t lua_mod_count = 0;
-    std::size_t native_mod_count = 0;
     for (const auto& mod : bootstrap.mods) {
         if (mod.HasLuaEntry()) {
             ++lua_mod_count;
-        }
-        if (mod.HasNativeEntry()) {
-            ++native_mod_count;
         }
     }
 
@@ -391,7 +382,6 @@ std::string DescribeRuntimeBootstrap(const RuntimeBootstrap& bootstrap) {
     stream << "api_version=" << bootstrap.api_version
            << " mods=" << bootstrap.mods.size()
            << " lua=" << lua_mod_count
-           << " native=" << native_mod_count
            << " runtime_root=" << bootstrap.runtime_root.string();
     return stream.str();
 }

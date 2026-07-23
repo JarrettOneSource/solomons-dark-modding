@@ -5,7 +5,6 @@ namespace SolomonDarkModLauncher.Staging;
 internal sealed class RuntimeStageFlags
 {
     public const string LoaderLuaEngineKey = "loader.lua_engine";
-    public const string LoaderNativeModsKey = "loader.native_mods";
     public const string LoaderRuntimeTickServiceKey = "loader.runtime_tick_service";
     public const string LoaderDebugUiKey = "loader.debug_ui";
     public const string MultiplayerSteamBootstrapKey = "multiplayer.steam_bootstrap";
@@ -15,7 +14,6 @@ internal sealed class RuntimeStageFlags
     private static readonly HashSet<string> KnownFlagKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         LoaderLuaEngineKey,
-        LoaderNativeModsKey,
         LoaderRuntimeTickServiceKey,
         LoaderDebugUiKey,
         MultiplayerSteamBootstrapKey,
@@ -30,8 +28,6 @@ internal sealed class RuntimeStageFlags
     public RuntimeStageProfile Profile { get; private init; }
 
     public bool LoaderLuaEngine { get; private set; }
-
-    public bool LoaderNativeMods { get; private set; }
 
     public bool LoaderRuntimeTickService { get; private set; }
 
@@ -96,8 +92,7 @@ internal sealed class RuntimeStageFlags
             return false;
         }
 
-        return (mod.RequiresLuaRuntime && LoaderLuaEngine) ||
-               (mod.RequiresNativeRuntime && LoaderNativeMods);
+        return mod.RequiresLuaRuntime && LoaderLuaEngine;
     }
 
     public IReadOnlyDictionary<string, bool> AsDictionary()
@@ -105,7 +100,6 @@ internal sealed class RuntimeStageFlags
         return new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
         {
             [LoaderLuaEngineKey] = LoaderLuaEngine,
-            [LoaderNativeModsKey] = LoaderNativeMods,
             [LoaderRuntimeTickServiceKey] = LoaderRuntimeTickService,
             [LoaderDebugUiKey] = LoaderDebugUi,
             [MultiplayerSteamBootstrapKey] = MultiplayerSteamBootstrap,
@@ -120,7 +114,6 @@ internal sealed class RuntimeStageFlags
         {
             Profile = RuntimeStageProfile.Full,
             LoaderLuaEngine = true,
-            LoaderNativeMods = true,
             LoaderRuntimeTickService = true,
             LoaderDebugUi = true,
             MultiplayerSteamBootstrap = true,
@@ -135,7 +128,6 @@ internal sealed class RuntimeStageFlags
         {
             Profile = RuntimeStageProfile.BootstrapOnly,
             LoaderLuaEngine = false,
-            LoaderNativeMods = false,
             LoaderRuntimeTickService = false,
             LoaderDebugUi = false,
             MultiplayerSteamBootstrap = true,
@@ -149,12 +141,6 @@ internal sealed class RuntimeStageFlags
         if (key.Equals(LoaderLuaEngineKey, StringComparison.OrdinalIgnoreCase))
         {
             LoaderLuaEngine = value;
-            return;
-        }
-
-        if (key.Equals(LoaderNativeModsKey, StringComparison.OrdinalIgnoreCase))
-        {
-            LoaderNativeMods = value;
             return;
         }
 
@@ -190,11 +176,6 @@ internal sealed class RuntimeStageFlags
 
     private void Normalize()
     {
-        if (!LoaderNativeMods)
-        {
-            LoaderRuntimeTickService = false;
-        }
-
         if (!MultiplayerFoundation)
         {
             MultiplayerServiceLoop = false;

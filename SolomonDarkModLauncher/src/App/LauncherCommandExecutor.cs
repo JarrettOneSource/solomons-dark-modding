@@ -27,6 +27,21 @@ internal static class LauncherCommandExecutor
 
         var manager = new ModManagerService(configuration);
         var catalog = manager.LoadCatalog();
+        WebsiteModUpdateResult? modUpdate = null;
+        if (command.Mode is LauncherMode.ListMods or LauncherMode.Stage or LauncherMode.Launch)
+        {
+            modUpdate = WebsiteModUpdater.UpdateAsync(
+                    configuration,
+                    catalog,
+                    command.LobbyHost.DirectoryBaseUrl)
+                .GetAwaiter()
+                .GetResult();
+            if (modUpdate.UpdatedModCount > 0)
+            {
+                catalog = manager.LoadCatalog();
+            }
+        }
+
         LobbyModSyncResult? lobbyModSync = null;
         if (command.Mode == LauncherMode.Launch &&
             command.MultiplayerMode == MultiplayerLaunchMode.Join &&
@@ -45,12 +60,17 @@ internal static class LauncherCommandExecutor
 
         return command.Mode switch
         {
-            LauncherMode.ListMods => new LauncherCommandExecution(command, configuration, catalog),
-            LauncherMode.Stage => ExecuteStage(command, configuration, catalog),
+            LauncherMode.ListMods => new LauncherCommandExecution(
+                command,
+                configuration,
+                catalog,
+                modUpdate),
+            LauncherMode.Stage => ExecuteStage(command, configuration, catalog, modUpdate),
             LauncherMode.Launch => ExecuteLaunch(
                 command,
                 configuration,
                 catalog,
+                modUpdate,
                 lobbyModSync),
             LauncherMode.EnableMod => ExecuteSetEnabled(command, configuration, manager, enabled: true),
             LauncherMode.DisableMod => ExecuteSetEnabled(command, configuration, manager, enabled: false),
@@ -80,16 +100,23 @@ internal static class LauncherCommandExecutor
     private static LauncherCommandExecution ExecuteStage(
         LauncherCommand command,
         LauncherConfiguration configuration,
-        ModCatalog catalog)
+        ModCatalog catalog,
+        WebsiteModUpdateResult? modUpdate)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
-        return new LauncherCommandExecution(command, configuration, catalog, StageResult: stageResult);
+        return new LauncherCommandExecution(
+            command,
+            configuration,
+            catalog,
+            modUpdate,
+            StageResult: stageResult);
     }
 
     private static LauncherCommandExecution ExecuteLaunch(
         LauncherCommand command,
         LauncherConfiguration configuration,
         ModCatalog catalog,
+        WebsiteModUpdateResult? modUpdate,
         LobbyModSyncResult? lobbyModSync)
     {
         var stageResult = StageBuilder.Build(configuration, catalog);
@@ -121,6 +148,7 @@ internal static class LauncherCommandExecutor
             command,
             configuration,
             catalog,
+            modUpdate,
             LobbyModSync: lobbyModSync,
             StageResult: stageResult,
             LaunchedGame: launchedGame);

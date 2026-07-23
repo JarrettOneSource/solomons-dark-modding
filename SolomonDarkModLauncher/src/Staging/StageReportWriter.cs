@@ -74,7 +74,6 @@ internal static class StageReportWriter
                 runtimeFlags = runtimeMetadata.FlagValues,
                 stagedRuntimeModCount = runtimeMetadata.StagedRuntimeModCount,
                 stagedLuaModCount = runtimeMetadata.StagedLuaModCount,
-                stagedNativeModCount = runtimeMetadata.StagedNativeModCount,
                 stagedRuntimeMods = runtimeMetadata.StagedRuntimeMods.Select(mod => new
                 {
                     mod.Id,
@@ -85,7 +84,6 @@ internal static class StageReportWriter
                     mod.StageManifestPath,
                     mod.StageSandboxRootPath,
                     mod.StageEntryScriptPath,
-                    mod.StageEntryDllPath,
                     mod.RequiredCapabilities,
                     mod.OptionalCapabilities,
                     mod.Provides,
@@ -108,7 +106,6 @@ internal static class StageReportWriter
                     {
                         mod.Manifest.Runtime.ApiVersion,
                         mod.Manifest.Runtime.EntryScript,
-                        mod.Manifest.Runtime.EntryDll,
                         mod.Manifest.Runtime.RequiredCapabilities,
                         mod.Manifest.Runtime.OptionalCapabilities
                     }

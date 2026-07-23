@@ -14,6 +14,5 @@ internal sealed class ModManifest
 
     public bool RequiresRuntime => Runtime.RequiresRuntime;
     public bool RequiresLuaRuntime => Runtime.RequiresLuaRuntime;
-    public bool RequiresNativeRuntime => Runtime.RequiresNativeRuntime;
     public string RuntimeKind => Runtime.RuntimeKind;
 }

@@ -35,6 +35,8 @@ $smokeRoot = Join-Path $env:TEMP "SolomonDarkMultiplayerBeta-Smoke-$version"
 $extractedRoot = Join-Path $smokeRoot $releaseName
 $runtimeRoot = Join-Path $smokeRoot "runtime"
 $uiExecutable = Join-Path $extractedRoot "SolomonDarkMultiplayerBeta.exe"
+$updaterExecutable = Join-Path $extractedRoot "SolomonDarkLauncherUpdater.exe"
+$distributionFilesManifest = Join-Path $extractedRoot ".distribution-files.json"
 $launcherExecutable = Join-Path $extractedRoot "launcher/SolomonDarkModLauncher.exe"
 $launcherCoreClr = Join-Path $extractedRoot "launcher/coreclr.dll"
 $launcherPrivateCoreLib = Join-Path $extractedRoot "launcher/System.Private.CoreLib.dll"
@@ -42,7 +44,6 @@ $launcherRuntimeConfig = Join-Path $extractedRoot "launcher/SolomonDarkModLaunch
 $result = [ordered]@{
     ok = $false
     archive = $ArchivePath
-    archiveSha256 = (Get-FileHash $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     extractionRoot = $extractedRoot
     workspaceRoot = $null
     modCount = 0
@@ -54,6 +55,7 @@ $result = [ordered]@{
     steamApiSource = $null
     uiWindowTitle = $null
     uiCatalogStatus = $null
+    uiDisplayedModVersion = $null
     uiMultiplayerActions = @()
     uiProtocolHandler = $null
     uiSingleInstanceForwarding = $false
@@ -123,6 +125,8 @@ try {
     Expand-Archive -Path $ArchivePath -DestinationPath $smokeRoot -Force
     foreach ($requiredPath in @(
             $uiExecutable,
+            $updaterExecutable,
+            $distributionFilesManifest,
             $launcherExecutable,
             $launcherCoreClr,
             $launcherPrivateCoreLib,
@@ -157,6 +161,7 @@ try {
     if ($result.modCount -lt 1) {
         throw "Extracted beta discovered no mods."
     }
+    $expectedDisplayedModVersion = "v$($catalog.mods[0].version)"
     $result.enabledModCount = @($catalog.mods | Where-Object { $_.enabled }).Count
     if ($result.enabledModCount -ne 0) {
         throw "A clean extracted beta enabled $($result.enabledModCount) mods; releases must start with zero enabled mods."
@@ -289,6 +294,10 @@ try {
                 Select-Object -Unique) -join "; "
             throw "Packaged desktop launcher did not refresh its mod catalog. $diagnostics"
         }
+        if ($visibleText -notcontains $expectedDisplayedModVersion) {
+            throw "Packaged desktop launcher did not show mod version $expectedDisplayedModVersion."
+        }
+        $result.uiDisplayedModVersion = $expectedDisplayedModVersion
 
         $requiredMultiplayerActions = @(
             "Host Game",

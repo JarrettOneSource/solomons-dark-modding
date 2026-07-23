@@ -6,6 +6,7 @@
 #include "lua_developer_console.h"
 #include "lua_ui_runtime.h"
 #include "mod_loader_internal.h"
+#include "multiplayer_join_flow.h"
 #include "x86_hook.h"
 
 #include <Windows.h>
@@ -458,6 +459,7 @@ void __fastcall DetourAppMainTick(void* app, void* edx) {
     // Native UI callbacks normally run on the same update thread that owns
     // CPU/menu lifetimes. The work pump can queue a semantic action, so dispatch
     // it immediately afterward and before the stock loop.
+    TickMultiplayerJoinFlow();
     DispatchPendingDebugUiActionOnAppTick();
 
     const auto app_address = reinterpret_cast<uintptr_t>(app);

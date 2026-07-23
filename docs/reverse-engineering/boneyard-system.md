@@ -267,8 +267,8 @@ the file is copied outside the `sandbox` tree that `0x004237D0` reads.
 
 The launcher now validates the native container before discovering either a
 manual or downloaded Boneyard mod. The website performs the same validation
-before publication. Website packages may contain Boneyards, Lua, or both; a
-website download may not contain native DLL entry points.
+before publication. Website packages contain Boneyards, Lua, art assets, or
+any combination of those three.
 
 The website remains an acquisition path, not a runtime dependency. Join
 preflight uses the host's exact mod ID, version, and content hash, prefers an

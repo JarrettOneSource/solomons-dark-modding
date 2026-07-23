@@ -59,6 +59,7 @@ void __fastcall HookCreateArena(void* self, void* unused_edx) {
     ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
+    NotifyMultiplayerJoinFlowRunStart();
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
     g_state.last_wave_spawner_tick_ms.store(0, std::memory_order_release);
@@ -93,6 +94,7 @@ void __fastcall HookStartGame(void* self, void* unused_edx) {
     ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.run_active.store(true, std::memory_order_release);
+    NotifyMultiplayerJoinFlowRunStart();
     g_state.last_wave_spawner.store(0, std::memory_order_release);
     g_state.last_wave_spawner_vtable.store(0, std::memory_order_release);
     g_state.last_wave_spawner_tick_ms.store(0, std::memory_order_release);

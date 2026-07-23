@@ -371,12 +371,6 @@ internal static class WebsiteModPackageInstaller
                 $"Downloaded mod manifest identity does not match {required.Id} {required.Version}.");
         }
 
-        if (mod.RequiresNativeRuntime)
-        {
-            throw new InvalidDataException(
-                "Website-downloaded mods may not contain native runtime entry points.");
-        }
-
         var downloadedDll = Directory.EnumerateFiles(
                 mod.RootPath,
                 "*",
@@ -385,7 +379,7 @@ internal static class WebsiteModPackageInstaller
         if (downloadedDll is not null)
         {
             throw new InvalidDataException(
-                "Website-downloaded mods may not contain DLL files.");
+                "The downloaded archive contains a file type outside the mod package contract.");
         }
 
         if (mod.RequiresLuaRuntime)
@@ -410,15 +404,17 @@ internal static class WebsiteModPackageInstaller
             }
 
             var target = overlay.Target;
-            var allowedDataTarget = target.StartsWith("data/", StringComparison.Ordinal);
+            var allowedStockBoneyard =
+                target.StartsWith("data/levels/", StringComparison.Ordinal) &&
+                target.EndsWith(".boneyard", StringComparison.Ordinal);
             var allowedImageTarget = target.StartsWith("images/", StringComparison.Ordinal);
             var allowedCustomBoneyard =
                 target.StartsWith("sandbox/DarkCloud/mylevels/", StringComparison.Ordinal) &&
                 target.EndsWith(".boneyard", StringComparison.Ordinal);
-            if (!allowedDataTarget && !allowedImageTarget && !allowedCustomBoneyard)
+            if (!allowedStockBoneyard && !allowedImageTarget && !allowedCustomBoneyard)
             {
                 throw new InvalidDataException(
-                    $"Website-downloaded overlay target is not allowed: {overlay.Target}");
+                    $"Downloaded overlays must target Boneyards under data/levels/ or sandbox/DarkCloud/mylevels/, or art under images/: {overlay.Target}");
             }
         }
     }

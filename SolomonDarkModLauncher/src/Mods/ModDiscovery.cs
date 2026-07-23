@@ -11,6 +11,10 @@ internal static class ModDiscovery
         var mods = new List<DiscoveredMod>();
         foreach (var directoryPath in Directory.EnumerateDirectories(modsRootPath))
         {
+            if (Path.GetFileName(directoryPath).StartsWith(".sdmod-", StringComparison.Ordinal))
+            {
+                continue;
+            }
             var mod = TryDiscover(directoryPath);
             if (mod is null)
             {

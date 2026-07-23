@@ -127,7 +127,7 @@ void PushVec2Field(lua_State* state, const char* field_name, float x, float y) {
     lua_setfield(state, -2, field_name);
 }
 
-void PushRuntimeTickPayload(lua_State* state, const SDModRuntimeTickContext& context) {
+void PushRuntimeTickPayload(lua_State* state, const RuntimeTickContext& context) {
     lua_createtable(state, 0, 3);
 
     lua_pushinteger(state, static_cast<lua_Integer>(context.tick_count));
@@ -306,7 +306,7 @@ void DispatchEventToMod(
     lua_pop(mod->state, 2);
 }
 
-void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const SDModRuntimeTickContext& context) {
+void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const RuntimeTickContext& context) {
     if (mod == nullptr || mod->state == nullptr ||
         (!mod->runtime_tick_registered && !HasLuaTimers(mod))) {
         return;
@@ -450,7 +450,7 @@ void DispatchLevelUpToMod(LoadedLuaMod* mod, int level, int xp) {
 
 }  // namespace
 
-void DispatchRuntimeTickToLuaMods(const SDModRuntimeTickContext& context) {
+void DispatchRuntimeTickToLuaMods(const RuntimeTickContext& context) {
     for (const auto& mod : LoadedLuaModsStorage()) {
         DispatchRuntimeTickToMod(mod.get(), context);
     }

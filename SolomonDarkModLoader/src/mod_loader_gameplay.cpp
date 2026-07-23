@@ -16,7 +16,6 @@
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
 #include "runtime_tick_service.h"
-#include "sdmod_plugin_api.h"
 #include "x86_hook.h"
 
 #include <Windows.h>

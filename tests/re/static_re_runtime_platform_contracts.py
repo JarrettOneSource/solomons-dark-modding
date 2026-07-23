@@ -19,6 +19,176 @@ from static_re_contract_support import (
     read_text,
 )
 
+
+def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> str:
+    launch_environment_text = read_text(
+        ROOT
+        / "SolomonDarkModLauncher/src/Launch/MultiplayerLaunchEnvironment.cs"
+    )
+    flow_header_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/include/multiplayer_join_flow.h"
+    )
+    flow_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
+    )
+    loader_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader.cpp")
+    app_tick_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
+    )
+    render_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_surface_registry_and_frame_render.inl"
+    )
+    run_hooks_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "run_transition_hooks.inl"
+    )
+    project_text = read_text(
+        ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
+    )
+
+    required_pairs = (
+        (
+            launch_environment_text,
+            'QuickStartVariable = "SDMOD_MULTIPLAYER_QUICK_START"',
+        ),
+        (launch_environment_text, "environment[QuickStartVariable] = \"1\";"),
+        (
+            launch_environment_text,
+            "environment[QuickStartVariable] = string.Empty;",
+        ),
+        (flow_header_text, "void TickMultiplayerJoinFlow();"),
+        (flow_header_text, "void NotifyMultiplayerJoinFlowRunStart();"),
+        (flow_text, "kMainMenuDialogWindowMs = 1000"),
+        (flow_text, "kTransitionPresentationMinimumMs = 750"),
+        (flow_text, '"dialog.primary"'),
+        (flow_text, '"main_menu.play"'),
+        (flow_text, '"main_menu.new_game"'),
+        (flow_text, "JoinFlowPhase::SelectingLoadout"),
+        (flow_text, "return {true, \"Connecting to match\"};"),
+        (flow_text, "return {true, \"Loading Boneyard\"};"),
+        (flow_text, "scene.world_address != 0"),
+        (flow_text, "scene.arena_address != 0"),
+        (flow_text, "runtime.transport_ready"),
+        (flow_text, "multiplayer::SessionStatus::Ready"),
+        (flow_text, "multiplayer::ParticipantSceneIntentKind::Run"),
+        (loader_text, "InitializeMultiplayerJoinFlow();"),
+        (loader_text, "!multiplayer_join_flow_enabled"),
+        (loader_text, "InitializeDebugUiOverlay(diagnostic_ui_enabled)"),
+        (app_tick_text, "TickMultiplayerJoinFlow();"),
+        (app_tick_text, "DispatchPendingDebugUiActionOnAppTick();"),
+        (render_text, "GetMultiplayerJoinFlowPresentation();"),
+        (render_text, "D3DCOLOR_ARGB(255, 0, 0, 0)"),
+        (render_text, "DrawMultiplayerJoinFlowPresentation("),
+        (run_hooks_text, "NotifyMultiplayerJoinFlowRunStart();"),
+        (
+            project_text,
+            'ClInclude Include="include\\multiplayer_join_flow.h"',
+        ),
+        (
+            project_text,
+            'ClCompile Include="src\\multiplayer_join_flow.cpp"',
+        ),
+    )
+    missing = [token for text, token in required_pairs if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "multiplayer quick-start contract is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    flow_tick = app_tick_text.find("TickMultiplayerJoinFlow();")
+    semantic_dispatch = app_tick_text.find(
+        "DispatchPendingDebugUiActionOnAppTick();", flow_tick
+    )
+    stock_tick = app_tick_text.find("original(app, edx);", semantic_dispatch)
+    if not 0 <= flow_tick < semantic_dispatch < stock_tick:
+        raise StaticReTestFailure(
+            "quick-start navigation must queue before semantic UI dispatch and the stock app tick"
+        )
+
+    tick_start = flow_text.find("void TickMultiplayerJoinFlow()")
+    connecting_phase = flow_text.find(
+        "case JoinFlowPhase::Connecting:", tick_start
+    )
+    hub_phase = flow_text.find(
+        "case JoinFlowPhase::Hub:", connecting_phase
+    )
+    connecting_body = flow_text[connecting_phase:hub_phase]
+    readiness_order = (
+        connecting_body.find("hub_ready"),
+        connecting_body.find("runtime.transport_ready"),
+        connecting_body.find("multiplayer::SessionStatus::Ready"),
+        connecting_body.find("SetPhaseUnlocked(JoinFlowPhase::Hub)"),
+    )
+    if any(position == -1 for position in readiness_order) or list(
+        readiness_order
+    ) != sorted(readiness_order):
+        raise StaticReTestFailure(
+            "Connecting to match must remain until both the live hub and Steam session are ready"
+        )
+    if (
+        flow_text.count(
+            "g_join_flow.phase_entered_ms +\n"
+            "                kTransitionPresentationMinimumMs"
+        )
+        != 2
+    ):
+        raise StaticReTestFailure(
+            "Connecting and Loading Boneyard must remain visible long enough to read"
+        )
+
+    loading_phase = flow_text.find(
+        "case JoinFlowPhase::LoadingBoneyard:", tick_start
+    )
+    run_phase = flow_text.find(
+        "case JoinFlowPhase::Run:", loading_phase
+    )
+    loading_body = flow_text[loading_phase:run_phase]
+    if (
+        loading_body.find("boneyard_ready") == -1
+        or loading_body.find("SetPhaseUnlocked(JoinFlowPhase::Run)")
+        < loading_body.find("boneyard_ready")
+    ):
+        raise StaticReTestFailure(
+            "Loading Boneyard must remain until the native arena is ready"
+        )
+
+    render_start = render_text.find(
+        "const auto join_flow_presentation"
+    )
+    draw_black = render_text.find(
+        "DrawMultiplayerJoinFlowPresentation(", render_start
+    )
+    transition_return = render_text.find("return;", draw_black)
+    diagnostics = render_text.find(
+        "if (!diagnostic_visuals_enabled)", transition_return
+    )
+    if not 0 <= render_start < draw_black < transition_return < diagnostics:
+        raise StaticReTestFailure(
+            "join-flow presentation must cover the frame before optional diagnostics render"
+        )
+
+    hook_start = run_hooks_text.find("void __fastcall HookStartGame(")
+    hook_end = run_hooks_text.find("\n}", hook_start)
+    hook_body = run_hooks_text[hook_start:hook_end]
+    notify = hook_body.find("NotifyMultiplayerJoinFlowRunStart();")
+    stock_start = hook_body.find("original(self, unused_edx);")
+    if not 0 <= notify < stock_start:
+        raise StaticReTestFailure(
+            "Host Start Game must blacken the screen before the stock transition begins"
+        )
+
+    return (
+        "Host and Join skip to native loadout selection, then gate the "
+        "Connecting and Loading Boneyard covers on live Steam and scene readiness"
+    )
+
+
 def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
     transport_header_text = read_text(
         ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"

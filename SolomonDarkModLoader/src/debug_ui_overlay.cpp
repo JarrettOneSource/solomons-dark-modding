@@ -8,6 +8,7 @@
 #include "lua_engine_events.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_join_flow.h"
 #include "multiplayer_local_transport.h"
 #include "x86_hook.h"
 
@@ -448,6 +449,7 @@ constexpr ULONGLONG kTrackedDarkCloudBrowserModalMaximumIdleMs = 250;
 
 struct DebugUiOverlayState {
     bool initialized = false;
+    bool diagnostic_visuals_enabled = false;
     bool first_frame_logged = false;
     bool first_d3d_frame_logged = false;
     bool first_font_atlas_ready_logged = false;

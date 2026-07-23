@@ -6,7 +6,7 @@
 #include "lua_mod_runtime.h"
 #include "lua_ui_runtime.h"
 #include "runtime_bootstrap.h"
-#include "sdmod_plugin_api.h"
+#include "runtime_tick_service.h"
 
 #include <filesystem>
 #include <cstdint>
@@ -290,7 +290,7 @@ void ClearLuaEventFilterRegistrationsForMod(LoadedLuaMod* mod);
 bool HasLuaTimers(const LoadedLuaMod* mod);
 void DispatchLuaTimersToMod(
     LoadedLuaMod* mod,
-    const SDModRuntimeTickContext& context);
+    const RuntimeTickContext& context);
 void ClearLuaTimersForMod(LoadedLuaMod* mod);
 void ClearLuaBusSubscriptionsForMod(LoadedLuaMod* mod);
 void ClearLuaNetSubscriptionsForMod(LoadedLuaMod* mod);
@@ -313,12 +313,12 @@ bool ClearLuaRegisteredSpellInputSelection(
     std::int32_t secondary_slot);
 void ClearLuaRegisteredSpellInputSelectionsForMod(std::string_view mod_id);
 void DispatchPendingLuaRegisteredSpellCasts(
-    const SDModRuntimeTickContext& context);
+    const RuntimeTickContext& context);
 void TickLuaRegisteredSpellEffects(
-    const SDModRuntimeTickContext& context);
+    const RuntimeTickContext& context);
 bool HasLuaEnemyAiRegistrations(const LoadedLuaMod* mod);
 void DispatchLuaEnemyAiThink(
-    const SDModRuntimeTickContext& context);
+    const RuntimeTickContext& context);
 void ResetLuaEnemyAiRuntime();
 void ClearLuaEnemyAiRuntimeForMod(LoadedLuaMod* mod);
 void InitializeLuaAudioRuntime();

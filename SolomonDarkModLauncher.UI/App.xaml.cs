@@ -8,6 +8,8 @@ namespace SolomonDarkModLauncher.UI;
 public partial class App : Application
 {
     private LauncherActivationBroker? activationBroker_;
+    private LauncherRelease? pendingLauncherUpdate_;
+    private string activationArgument_ = string.Empty;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -26,6 +28,7 @@ public partial class App : Application
 
         activationBroker_ = new LauncherActivationBroker();
         var activationArgument = e.Args.Length == 1 ? e.Args[0] : string.Empty;
+        activationArgument_ = activationArgument;
         if (!activationBroker_.IsPrimary)
         {
             if (!activationBroker_.ForwardActivation(activationArgument))
@@ -64,14 +67,20 @@ public partial class App : Application
             DataContext = viewModel
         };
         window.Closed += (_, _) => viewModel.Dispose();
+        viewModel.LauncherUpdateAccepted += (_, _) =>
+            _ = InstallLauncherUpdateAsync(viewModel);
 
         MainWindow = window;
         window.Show();
 
         activationBroker_.StartListening(argument =>
             _ = Dispatcher.InvokeAsync(() =>
-                Activate(window, viewModel, argument)));
+            {
+                activationArgument_ = argument;
+                Activate(window, viewModel, argument);
+            }));
         Activate(window, viewModel, activationArgument);
+        _ = CheckForLauncherUpdateAsync(viewModel);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -108,5 +117,41 @@ public partial class App : Application
         }
 
         viewModel.QueueWebsiteLobbyJoin(activation);
+    }
+
+    private async Task CheckForLauncherUpdateAsync(
+        MainWindowViewModel viewModel)
+    {
+        var release = await LauncherSelfUpdater.CheckAsync(viewModel.Version);
+        if (release is null)
+        {
+            return;
+        }
+
+        pendingLauncherUpdate_ = release;
+        viewModel.OfferLauncherUpdate(release.Version.Value);
+    }
+
+    private async Task InstallLauncherUpdateAsync(
+        MainWindowViewModel viewModel)
+    {
+        if (pendingLauncherUpdate_ is not { } release)
+        {
+            return;
+        }
+
+        pendingLauncherUpdate_ = null;
+        viewModel.BeginLauncherUpdate(release.Version.Value);
+        try
+        {
+            await LauncherSelfUpdater.StartUpdateAsync(
+                release,
+                activationArgument_);
+            Shutdown();
+        }
+        catch (Exception exception)
+        {
+            viewModel.ReportLauncherUpdateFailure(exception.Message);
+        }
     }
 }

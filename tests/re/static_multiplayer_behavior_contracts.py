@@ -1916,8 +1916,7 @@ def test_run_reentry_audits_only_logs_written_during_the_test() -> str:
     return "run reentry scans only bounded log content appended during its own run"
 
 
-def test_beta_artifact_verifier_streams_large_zip_members() -> str:
-    import hashlib
+def test_beta_artifact_verifier_reads_bounded_zip_headers() -> str:
     import struct
     import zipfile
     from pathlib import Path
@@ -1930,7 +1929,6 @@ def test_beta_artifact_verifier_streams_large_zip_members() -> str:
     struct.pack_into("<I", payload, 0x3C, 0x80)
     payload[0x80:0x84] = b"PE\0\0"
     struct.pack_into("<H", payload, 0x84, artifact.PE_I386)
-    expected_digest = hashlib.sha256(payload).hexdigest()
     with TemporaryDirectory() as directory:
         archive_path = Path(directory) / "large-member.zip"
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as output:
@@ -1940,12 +1938,11 @@ def test_beta_artifact_verifier_streams_large_zip_members() -> str:
             archive.read = lambda *args, **kwargs: (_ for _ in ()).throw(
                 AssertionError("whole-member buffering is forbidden")
             )
-            assert artifact.sha256_zip_member(archive, member) == expected_digest
             assert (
                 artifact.pe_machine_zip_member(archive, member, "large.exe")
                 == artifact.PE_I386
             )
-    return "beta artifact verification streams hashes and bounded PE headers"
+    return "beta artifact verification reads bounded PE headers"
 
 
 def test_beta_package_smoke_forwards_a_valid_website_lobby_uri() -> str:

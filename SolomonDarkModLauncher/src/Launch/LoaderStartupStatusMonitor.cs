@@ -18,8 +18,6 @@ internal sealed record LoaderStartupStatus(
     public bool MultiplayerFoundationReady { get; init; }
     public bool LuaEngineEnabled { get; init; }
     public bool LuaEngineInitialized { get; init; }
-    public bool NativeModsEnabled { get; init; }
-    public int NativeModCount { get; init; }
     public bool RuntimeTickServiceEnabled { get; init; }
     public bool RuntimeTickServiceRunning { get; init; }
 }

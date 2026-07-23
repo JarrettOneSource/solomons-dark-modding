@@ -104,9 +104,6 @@ internal static class RuntimeMetadataStageMaterializer
             mod.RequiresLuaRuntime
                 ? Path.Combine(stagedModRootPath, NormalizeRelativePath(mod.Manifest.Runtime.EntryScript))
                 : null,
-            mod.RequiresNativeRuntime
-                ? Path.Combine(stagedModRootPath, NormalizeRelativePath(mod.Manifest.Runtime.EntryDll))
-                : null,
             mod.Manifest.Runtime.RequiredCapabilities.ToArray(),
             mod.Manifest.Runtime.OptionalCapabilities.ToArray(),
             mod.Manifest.Provides.ToArray(),
@@ -186,7 +183,6 @@ internal static class RuntimeMetadataStageMaterializer
             builder.Append("source_root_path=").AppendLine(EscapeIniValue(mod.SourceModRootPath));
             builder.Append("source_entry_script_path=").AppendLine(EscapeIniValue(mod.SourceEntryScriptPath));
             builder.Append("entry_script_path=").AppendLine(EscapeIniValue(mod.StageEntryScriptPath));
-            builder.Append("entry_dll_path=").AppendLine(EscapeIniValue(mod.StageEntryDllPath));
             builder.Append("required_capabilities=").AppendLine(EscapeIniValue(string.Join(",", mod.RequiredCapabilities)));
             builder.Append("optional_capabilities=").AppendLine(EscapeIniValue(string.Join(",", mod.OptionalCapabilities)));
             builder.Append("provides=").AppendLine(EscapeIniValue(string.Join(",", mod.Provides)));

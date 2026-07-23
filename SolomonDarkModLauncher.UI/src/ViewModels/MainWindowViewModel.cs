@@ -63,6 +63,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string steamIdText_ = string.Empty;
     private DateTimeOffset lastCloudAccountRefreshUtc_;
     private CloudSaveGameSession? activeSaveSession_;
+    private bool isLauncherUpdatePromptOpen_;
+    private string availableLauncherVersion_ = string.Empty;
     private bool isSettingsOpen_;
     private bool isAccountBusy_;
     private bool isSendingLogs_;
@@ -136,6 +138,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DismissCrashReportCommand = new RelayCommand(
             _ => DismissCrashReport(),
             _ => IsCrashPromptOpen && !IsCrashSubmitting);
+        InstallLauncherUpdateCommand = new RelayCommand(
+            _ => AcceptLauncherUpdate(),
+            _ => IsLauncherUpdatePromptOpen && !IsBusy);
+        DismissLauncherUpdateCommand = new RelayCommand(
+            _ => DismissLauncherUpdate(),
+            _ => IsLauncherUpdatePromptOpen && !IsBusy);
 
         steamInviteListener_.NotificationReceived += OnSteamInviteNotification;
         steamInviteListener_.Start();
@@ -357,6 +365,24 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public string CrashSubmitButtonText => IsCrashSubmitting ? "Submitting…" : "Submit Logs";
 
+    public bool IsLauncherUpdatePromptOpen
+    {
+        get => isLauncherUpdatePromptOpen_;
+        private set
+        {
+            if (SetProperty(ref isLauncherUpdatePromptOpen_, value))
+            {
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    public string AvailableLauncherVersion
+    {
+        get => availableLauncherVersion_;
+        private set => SetProperty(ref availableLauncherVersion_, value);
+    }
+
     public bool HostPrivacyFriends
     {
         get => hostPrivacyFriends_;
@@ -542,9 +568,16 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand DeclineModDownloadCommand { get; }
     public RelayCommand SubmitCrashReportCommand { get; }
     public RelayCommand DismissCrashReportCommand { get; }
+    public RelayCommand InstallLauncherUpdateCommand { get; }
+    public RelayCommand DismissLauncherUpdateCommand { get; }
+
+    public event EventHandler? LauncherUpdateAccepted;
 
     private bool CanInteractInSettings() =>
-        !IsBusy && !IsCrashPromptOpen && !IsModDownloadPromptOpen;
+        !IsBusy &&
+        !IsCrashPromptOpen &&
+        !IsModDownloadPromptOpen &&
+        !IsLauncherUpdatePromptOpen;
 
     private bool CanInteract() => CanInteractInSettings() && !IsSettingsOpen;
 
@@ -867,6 +900,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
         StatusText = mode switch
         {
+            LauncherUiCommandMode.ListMods when
+                invocation.Response.ModUpdate?.UpdatedModCount > 0 =>
+                invocation.Response.ModUpdate.UpdatedModCount == 1
+                    ? "1 mod updated"
+                    : $"{invocation.Response.ModUpdate.UpdatedModCount} mods updated",
             LauncherUiCommandMode.ListMods => "Ready",
             LauncherUiCommandMode.Stage => "Stage ready",
             LauncherUiCommandMode.LaunchSinglePlayer => "Game started",
@@ -1333,6 +1371,51 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         TryLaunchPendingLobbyJoin();
     }
 
+    public void OfferLauncherUpdate(string version)
+    {
+        AvailableLauncherVersion = $"v{version}";
+        IsLauncherUpdatePromptOpen = true;
+    }
+
+    private void AcceptLauncherUpdate()
+    {
+        if (!IsLauncherUpdatePromptOpen || IsBusy)
+        {
+            return;
+        }
+
+        IsLauncherUpdatePromptOpen = false;
+        LauncherUpdateAccepted?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void DismissLauncherUpdate()
+    {
+        if (!IsLauncherUpdatePromptOpen || IsBusy)
+        {
+            return;
+        }
+
+        IsLauncherUpdatePromptOpen = false;
+        StatusText = "Launcher update postponed.";
+        TryLaunchPendingLobbyJoin();
+    }
+
+    public void BeginLauncherUpdate(string version)
+    {
+        IsLauncherUpdatePromptOpen = false;
+        ClearError();
+        IsBusy = true;
+        StatusText = $"Downloading launcher v{version}…";
+    }
+
+    public void ReportLauncherUpdateFailure(string message)
+    {
+        SetError(message);
+        IsBusy = false;
+        StatusText = "The launcher update failed. You can keep using this version.";
+        TryLaunchPendingLobbyJoin();
+    }
+
     private void JoinLobbyDirect()
     {
         client_.UseDirectLobbyJoin();
@@ -1693,6 +1776,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DeclineModDownloadCommand.RaiseCanExecuteChanged();
         SubmitCrashReportCommand.RaiseCanExecuteChanged();
         DismissCrashReportCommand.RaiseCanExecuteChanged();
+        InstallLauncherUpdateCommand.RaiseCanExecuteChanged();
+        DismissLauncherUpdateCommand.RaiseCanExecuteChanged();
     }
 
     private void UpdateLaunchPreview()

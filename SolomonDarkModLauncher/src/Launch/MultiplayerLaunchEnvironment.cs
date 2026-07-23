@@ -10,6 +10,7 @@ internal static class MultiplayerLaunchEnvironment
     public const string OpenInviteVariable = "SDMOD_STEAM_OPEN_INVITE";
     public const string InviteSteamIdVariable = "SDMOD_STEAM_INVITE_STEAM_ID";
     public const string LobbyPrivacyVariable = "SDMOD_STEAM_LOBBY_PRIVACY";
+    public const string QuickStartVariable = "SDMOD_MULTIPLAYER_QUICK_START";
 
     public static LaunchOptions Apply(
         LaunchOptions options,
@@ -37,6 +38,7 @@ internal static class MultiplayerLaunchEnvironment
             environment[LobbyIdVariable] = string.Empty;
             environment[InviteSteamIdVariable] = string.Empty;
             environment[LobbyPrivacyVariable] = string.Empty;
+            environment[QuickStartVariable] = string.Empty;
             return options with { EnvironmentOverrides = environment };
         }
 
@@ -50,6 +52,7 @@ internal static class MultiplayerLaunchEnvironment
         environment[InviteSteamIdVariable] = multiplayer.InviteSteamId?.ToString() ?? string.Empty;
         environment[LobbyPrivacyVariable] =
             MultiplayerLobbyPrivacyTokens.ToLauncherToken(multiplayer.Host.Privacy);
+        environment[QuickStartVariable] = "1";
         return options with { EnvironmentOverrides = environment };
     }
 }

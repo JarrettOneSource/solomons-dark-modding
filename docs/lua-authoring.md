@@ -31,8 +31,8 @@ cannot merge with a stale checked-in editor inventory.
 
 ## Entry-script hot reload
 
-Hot reload is explicit and disabled by default. Enable it for a Lua or hybrid
-development mod:
+Hot reload is explicit and disabled by default. Enable it for a Lua development
+mod:
 
 ```json
 {

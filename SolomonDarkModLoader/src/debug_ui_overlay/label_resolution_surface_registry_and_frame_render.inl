@@ -43,6 +43,52 @@ struct SurfaceRegistryInitializer {
 };
 static SurfaceRegistryInitializer s_surface_registry_initializer;
 
+void DrawMultiplayerJoinFlowPresentation(
+    IDirect3DDevice9* device,
+    const MultiplayerJoinFlowPresentation& presentation) {
+    D3DVIEWPORT9 viewport = {};
+    if (device == nullptr ||
+        FAILED(device->GetViewport(&viewport))) {
+        return;
+    }
+
+    const auto left = static_cast<float>(viewport.X);
+    const auto top = static_cast<float>(viewport.Y);
+    const auto right = left + static_cast<float>(viewport.Width);
+    const auto bottom = top + static_cast<float>(viewport.Height);
+    DrawFilledRect(
+        device,
+        left,
+        top,
+        right,
+        bottom,
+        D3DCOLOR_ARGB(255, 0, 0, 0));
+
+    if (presentation.message.empty()) {
+        return;
+    }
+
+    const auto text_width = static_cast<float>(
+        MeasureLabelWidth(
+            g_debug_ui_overlay_state.font_atlas,
+            presentation.message));
+    const auto text_left =
+        left + (static_cast<float>(viewport.Width) - text_width) * 0.5f;
+    const auto text_top =
+        top +
+        (static_cast<float>(viewport.Height) -
+         static_cast<float>(
+             g_debug_ui_overlay_state.font_atlas.line_height)) *
+            0.5f;
+    DrawLabelText(
+        device,
+        g_debug_ui_overlay_state.font_atlas,
+        text_left,
+        text_top,
+        presentation.message,
+        kLabelTextColor);
+}
+
 void RenderOverlayFrame(IDirect3DDevice9* device) {
     auto raw_elements = TakeObservedFrameElements();
     auto exact_text_elements = TakeExactTextFrameElements();
@@ -153,9 +199,45 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         }
     }
 
+    bool diagnostic_visuals_enabled = false;
+    const auto observed_surface_id = render_elements.empty()
+        ? std::string{}
+        : GetOverlaySurfaceRootId(
+              render_elements.front().surface_id);
+    ObserveMultiplayerJoinFlowSurface(observed_surface_id);
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
         StoreLatestSurfaceSnapshotUnlocked(&g_debug_ui_overlay_state, render_elements);
+        diagnostic_visuals_enabled =
+            g_debug_ui_overlay_state.diagnostic_visuals_enabled;
+    }
+
+    const auto join_flow_presentation =
+        GetMultiplayerJoinFlowPresentation();
+    if (join_flow_presentation.visible) {
+        IDirect3DStateBlock9* state_block = nullptr;
+        if (SUCCEEDED(
+                device->CreateStateBlock(
+                    D3DSBT_ALL,
+                    &state_block)) &&
+            state_block != nullptr) {
+            state_block->Capture();
+        }
+
+        ConfigureOverlayRenderState(device);
+        DrawMultiplayerJoinFlowPresentation(
+            device,
+            join_flow_presentation);
+
+        if (state_block != nullptr) {
+            state_block->Apply();
+            state_block->Release();
+        }
+        return;
+    }
+
+    if (!diagnostic_visuals_enabled) {
+        return;
     }
 
     if (render_elements.empty() && gameplay_health_bars.empty() &&

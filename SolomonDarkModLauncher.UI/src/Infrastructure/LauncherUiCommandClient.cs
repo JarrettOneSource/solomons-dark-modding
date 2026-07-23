@@ -230,6 +230,9 @@ internal sealed class LauncherUiCommandClient
         arguments.Add("--savegames-root");
         arguments.Add(saveCatalog_.Active.SavegamesRootPath);
 
+        arguments.Add("--directory-url");
+        arguments.Add(directoryUrl_);
+
         switch (mode)
         {
             case LauncherUiCommandMode.LaunchSinglePlayer:
@@ -241,8 +244,6 @@ internal sealed class LauncherUiCommandClient
                 arguments.Add("host");
                 arguments.Add("--lobby-privacy");
                 arguments.Add(hostOptions?.Privacy ?? "friends");
-                arguments.Add("--directory-url");
-                arguments.Add(directoryUrl_);
                 arguments.Add("--no-invite-dialog");
                 break;
             case LauncherUiCommandMode.JoinSteam:
@@ -253,8 +254,6 @@ internal sealed class LauncherUiCommandClient
                     arguments.Add("--lobby-id");
                     arguments.Add(lobbyId_);
                 }
-                arguments.Add("--directory-url");
-                arguments.Add(directoryUrl_);
                 if (!string.IsNullOrWhiteSpace(lobbyTicket_))
                 {
                     arguments.Add("--lobby-ticket");

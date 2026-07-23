@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Verify the portable Solomon Dark multiplayer beta ZIP and its checksums."""
+"""Verify the portable Solomon Dark multiplayer beta ZIP."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import struct
@@ -17,7 +16,6 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_PROPS = ROOT / "Directory.Build.props"
 PROTOCOL_HEADER = ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
-GAME_INSTALLATION = ROOT / "SolomonDarkModLauncher/src/Target/GameInstallation.cs"
 DEFAULT_OUTPUT = ROOT / "runtime/beta_release_artifact.json"
 PACKAGE_PREFIX = "SolomonDarkMultiplayerBeta-v"
 EXPECTED_PRODUCT = "Solomon Dark Multiplayer Beta"
@@ -29,25 +27,6 @@ PE_AMD64 = 0x8664
 
 class ArtifactFailure(RuntimeError):
     pass
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def sha256_zip_member(
-    archive: zipfile.ZipFile,
-    member: zipfile.ZipInfo,
-) -> str:
-    digest = hashlib.sha256()
-    with archive.open(member) as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def read_match(path: Path, pattern: str, description: str) -> str:
@@ -71,14 +50,6 @@ def expected_protocol_version() -> int:
     )
 
 
-def expected_game_hash() -> str:
-    return read_match(
-        GAME_INSTALLATION,
-        r'SupportedExecutableSha256\s*=\s*\n?\s*"([0-9a-fA-F]{64})"',
-        "supported game hash",
-    ).lower()
-
-
 def pe_machine_zip_member(
     archive: zipfile.ZipFile,
     member: zipfile.ZipInfo,
@@ -98,25 +69,6 @@ def pe_machine_zip_member(
         return struct.unpack_from("<H", pe_header, 4)[0]
 
 
-def parse_checksum_manifest(data: bytes) -> dict[str, str]:
-    checksums: dict[str, str] = {}
-    for line_number, raw_line in enumerate(
-        data.decode("utf-8-sig").splitlines(), start=1
-    ):
-        if not raw_line.strip():
-            continue
-        match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+)", raw_line)
-        if match is None:
-            raise ArtifactFailure(
-                f"checksums.txt line {line_number} has invalid syntax"
-            )
-        digest, relative_path = match.groups()
-        if relative_path in checksums:
-            raise ArtifactFailure(f"checksums.txt repeats {relative_path}")
-        checksums[relative_path] = digest
-    return checksums
-
-
 def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
     if not archive_path.is_file():
         raise ArtifactFailure(f"beta archive does not exist: {archive_path}")
@@ -127,8 +79,9 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         "SolomonDarkMultiplayerBeta.exe",
         "README.txt",
         "THIRD-PARTY-NOTICES.txt",
+        ".distribution-files.json",
         "solomon-dark-multiplayer.json",
-        "checksums.txt",
+        "SolomonDarkLauncherUpdater.exe",
         "launcher/SolomonDarkModLauncher.exe",
         "launcher/SolomonDarkModLoader.dll",
         "launcher/assets/steam/README.txt",
@@ -152,6 +105,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             raise ArtifactFailure(f"ZIP CRC check failed for {bad_zip_member}")
 
         file_members: dict[str, zipfile.ZipInfo] = {}
+        file_members_casefolded: set[str] = set()
         for info in archive.infolist():
             normalized = info.filename.replace("\\", "/")
             pure_path = PurePosixPath(normalized)
@@ -168,7 +122,12 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
                 raise ArtifactFailure(f"invalid empty ZIP member: {info.filename}")
             if relative in file_members:
                 raise ArtifactFailure(f"duplicate ZIP member: {relative}")
+            if relative.casefold() in file_members_casefolded:
+                raise ArtifactFailure(
+                    f"case-colliding ZIP member: {relative}"
+                )
             file_members[relative] = info
+            file_members_casefolded.add(relative.casefold())
 
         missing = sorted(required_files - file_members.keys())
         if missing:
@@ -196,13 +155,13 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             )
         )
         expected_marker = {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "product": EXPECTED_PRODUCT,
             "version": version,
             "protocolVersion": expected_protocol_version(),
             "supportedGameVersion": EXPECTED_GAME_VERSION,
-            "supportedExecutableSha256": expected_game_hash(),
             "steamAppId": EXPECTED_STEAM_APP_ID,
+            "defaultEnabledMods": [],
         }
         marker_mismatches = {
             key: {"actual": marker.get(key), "expected": expected}
@@ -214,30 +173,31 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
                 f"portable marker mismatches: {marker_mismatches}"
             )
 
-        manifest = parse_checksum_manifest(
-            archive.read(file_members["checksums.txt"])
-        )
-        expected_manifest_paths = set(file_members) - {"checksums.txt"}
-        if set(manifest) != expected_manifest_paths:
-            missing_checksums = sorted(expected_manifest_paths - set(manifest))
-            extra_checksums = sorted(set(manifest) - expected_manifest_paths)
-            raise ArtifactFailure(
-                "content checksum coverage mismatch: "
-                f"missing={missing_checksums} extra={extra_checksums}"
+        distribution_manifest = json.loads(
+            archive.read(file_members[".distribution-files.json"]).decode(
+                "utf-8-sig"
             )
-
-        checksum_mismatches: list[str] = []
-        for relative, expected_digest in manifest.items():
-            actual_digest = sha256_zip_member(archive, file_members[relative])
-            if actual_digest != expected_digest:
-                checksum_mismatches.append(relative)
-        if checksum_mismatches:
+        )
+        distribution_files = distribution_manifest.get("files")
+        if (
+            distribution_manifest.get("schemaVersion") != 1
+            or not isinstance(distribution_files, list)
+            or not all(isinstance(path, str) for path in distribution_files)
+            or len({path.casefold() for path in distribution_files})
+            != len(distribution_files)
+        ):
+            raise ArtifactFailure("distribution file manifest is invalid")
+        if set(distribution_files) != set(file_members):
+            missing_files = sorted(set(file_members) - set(distribution_files))
+            extra_files = sorted(set(distribution_files) - set(file_members))
             raise ArtifactFailure(
-                f"content checksum mismatches: {sorted(checksum_mismatches)}"
+                "distribution file coverage mismatch: "
+                f"missing={missing_files} extra={extra_files}"
             )
 
         binary_machines = {
             "SolomonDarkMultiplayerBeta.exe": PE_AMD64,
+            "SolomonDarkLauncherUpdater.exe": PE_AMD64,
             "launcher/SolomonDarkModLauncher.exe": PE_I386,
             "launcher/SolomonDarkModLoader.dll": PE_I386,
             "launcher/assets/steam/win32/steam_api.dll": PE_I386,
@@ -255,15 +215,6 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
                     f"{relative} machine is 0x{machine:04x}, expected 0x{expected_machine:04x}"
                 )
 
-        steam_api_digest = sha256_zip_member(
-            archive,
-            file_members["launcher/assets/steam/win32/steam_api.dll"],
-        )
-        if marker.get("steamApiSha256") != steam_api_digest:
-            raise ArtifactFailure(
-                "portable marker Steam API digest does not match the bundled DLL"
-            )
-
         readme = archive.read(file_members["README.txt"]).decode("utf-8-sig")
         for required_text in (
             version,
@@ -280,7 +231,6 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         for removed_text in (
             "Join Friend FIRST",
             "Host & Invite Friends",
-            expected_game_hash(),
             "SHA-256",
             "Rush",
         ):
@@ -294,28 +244,13 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             "version": version,
             "release_name": release_name,
             "archive": str(archive_path.resolve()),
-            "archive_sha256": sha256_file(archive_path),
             "archive_size": archive_path.stat().st_size,
             "file_count": len(file_members),
-            "content_checksums_verified": len(manifest),
+            "distribution_files_verified": len(distribution_files),
             "binary_machines": actual_machines,
             "marker": marker,
             "forbidden_artifacts": [],
         }
-
-
-def validate_outer_checksum(archive_path: Path, result: dict[str, Any]) -> None:
-    checksum_path = archive_path.parent / "SHA256SUMS.txt"
-    if not checksum_path.is_file():
-        raise ArtifactFailure(f"release checksum file is missing: {checksum_path}")
-    expected_line = f"{result['archive_sha256']}  {archive_path.name}"
-    lines = [line.strip() for line in checksum_path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
-    if expected_line not in lines:
-        raise ArtifactFailure(
-            f"SHA256SUMS.txt does not contain the archive digest: {expected_line}"
-        )
-    result["outer_checksum"] = str(checksum_path.resolve())
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -331,7 +266,6 @@ def main() -> int:
     return_code = 1
     try:
         result = validate_archive(archive_path, args.version)
-        validate_outer_checksum(archive_path, result)
         return_code = 0
     except (ArtifactFailure, OSError, ValueError, zipfile.BadZipFile) as exc:
         result["error"] = str(exc)

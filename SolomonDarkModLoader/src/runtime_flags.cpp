@@ -57,10 +57,6 @@ void NormalizeRuntimeFeatureFlags(RuntimeFeatureFlags* flags) {
         return;
     }
 
-    if (!flags->loader.native_mods) {
-        flags->loader.runtime_tick_service = false;
-    }
-
     if (!flags->multiplayer.foundation) {
         flags->multiplayer.service_loop = false;
     }
@@ -74,10 +70,6 @@ bool ApplyFlagOverride(RuntimeFeatureFlags* flags, const std::string& raw_key, b
     const auto key = ToLower(Trim(raw_key));
     if (key == "loader.lua_engine") {
         flags->loader.lua_engine = value;
-        return true;
-    }
-    if (key == "loader.native_mods") {
-        flags->loader.native_mods = value;
         return true;
     }
     if (key == "loader.runtime_tick_service") {
@@ -116,7 +108,6 @@ RuntimeFeatureFlags BootstrapOnlyRuntimeFeatureFlags() {
     RuntimeFeatureFlags flags;
     flags.profile = RuntimeProfile::BootstrapOnly;
     flags.loader.lua_engine = false;
-    flags.loader.native_mods = false;
     flags.loader.runtime_tick_service = false;
     flags.loader.debug_ui = false;
     NormalizeRuntimeFeatureFlags(&flags);
@@ -215,7 +206,6 @@ const RuntimeFeatureFlags& GetActiveRuntimeFeatureFlags() {
 bool RuntimeFeatureFlagsEqual(const RuntimeFeatureFlags& left, const RuntimeFeatureFlags& right) {
     return left.profile == right.profile &&
            left.loader.lua_engine == right.loader.lua_engine &&
-           left.loader.native_mods == right.loader.native_mods &&
            left.loader.runtime_tick_service == right.loader.runtime_tick_service &&
            left.loader.debug_ui == right.loader.debug_ui &&
            left.multiplayer.steam_bootstrap == right.multiplayer.steam_bootstrap &&
@@ -237,7 +227,6 @@ std::string DescribeRuntimeFeatureFlags(const RuntimeFeatureFlags& flags) {
     std::ostringstream stream;
     stream << "profile=" << RuntimeProfileName(flags.profile)
            << " loader{lua_engine=" << (flags.loader.lua_engine ? 1 : 0)
-           << ",native_mods=" << (flags.loader.native_mods ? 1 : 0)
            << ",runtime_tick_service=" << (flags.loader.runtime_tick_service ? 1 : 0)
            << ",debug_ui=" << (flags.loader.debug_ui ? 1 : 0)
            << "} multiplayer{steam_bootstrap=" << (flags.multiplayer.steam_bootstrap ? 1 : 0)

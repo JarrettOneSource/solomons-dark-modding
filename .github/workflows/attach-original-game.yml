@@ -23,10 +23,8 @@ jobs:
       SOURCE_RELEASE_TAG: v0.1.0-beta.8
       TARGET_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}
       ORIGINAL_GAME_ARCHIVE: Solomons-Dark-0.72.5-Original-Game.zip
-      ORIGINAL_GAME_CHECKSUM: Solomons-Dark-0.72.5-Original-Game.zip.sha256
-      ORIGINAL_GAME_SHA256: 4947e8e1a820e384e2811e5e4a018cda63e1d169734fe075acab0a50121a4177
     steps:
-      - name: Download and verify the canonical original game
+      - name: Download the canonical original game
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -40,14 +38,6 @@ jobs:
             --pattern "$ORIGINAL_GAME_ARCHIVE" \
             --dir "$asset_dir"
 
-          printf '%s  %s\n' \
-            "$ORIGINAL_GAME_SHA256" \
-            "$ORIGINAL_GAME_ARCHIVE" \
-            > "$asset_dir/$ORIGINAL_GAME_CHECKSUM"
-
-          cd "$asset_dir"
-          sha256sum --check "$ORIGINAL_GAME_CHECKSUM"
-
       - name: Attach the original game to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,6 +47,5 @@ jobs:
           asset_dir="$RUNNER_TEMP/original-game"
           gh release upload "$TARGET_RELEASE_TAG" \
             "$asset_dir/$ORIGINAL_GAME_ARCHIVE#Original game - Solomon's Dark 0.72.5" \
-            "$asset_dir/$ORIGINAL_GAME_CHECKSUM#SHA-256 checksum for the original game" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber

@@ -15,7 +15,7 @@
 #include "lua_exec_pipe.h"
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
-#include "native_mods.h"
+#include "multiplayer_join_flow.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
 #include "runtime_flags.h"
@@ -136,7 +136,6 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
     snapshot->lua_engine_initialized = IsLuaEngineInitialized();
     snapshot->lua_loaded_mod_count = static_cast<int>(GetLoadedLuaModCount());
     snapshot->bot_runtime_initialized = multiplayer::IsBotRuntimeInitialized();
-    snapshot->native_mod_count = static_cast<int>(GetLoadedNativeModCount());
     snapshot->runtime_tick_service_running = IsRuntimeTickServiceRunning();
 }
 
@@ -149,8 +148,8 @@ void ShutdownPartialRuntime() {
     ShutdownRunLifecycleHooks();
     StopRuntimeTickService();
     RuntimeDebug_Shutdown();
+    ShutdownMultiplayerJoinFlow();
     ShutdownDebugUiOverlay();
-    ShutdownNativeMods();
     multiplayer::ShutdownBotRuntime();
     multiplayer::ShutdownFoundation();
     ShutdownSteamBootstrap();
@@ -244,9 +243,9 @@ void Initialize(HMODULE module_handle) {
 
         startup_status.runtime_bootstrap_path = GetRuntimeBootstrapPath(stage_runtime_directory);
         Log("Runtime bootstrap: " + DescribeRuntimeBootstrap(runtime_bootstrap));
-        if (runtime_bootstrap.api_version != SDMOD_RUNTIME_API_VERSION) {
+        if (runtime_bootstrap.api_version != kRuntimeApiVersion) {
             const auto message =
-                "Runtime bootstrap apiVersion mismatch. loader=" + std::string(SDMOD_RUNTIME_API_VERSION) +
+                "Runtime bootstrap apiVersion mismatch. loader=" + std::string(kRuntimeApiVersion) +
                 " bootstrap=" + runtime_bootstrap.api_version;
             Log(message);
             write_failed_status("runtime-api-version-mismatch", message);
@@ -376,24 +375,8 @@ void Initialize(HMODULE module_handle) {
             Log("Lua engine disabled by runtime flags.");
         }
 
-        startup_status.native_mods_enabled = runtime_flags.loader.native_mods;
-        if (runtime_flags.loader.native_mods) {
-            std::string native_mods_error;
-            if (!InitializeNativeMods(runtime_bootstrap, &native_mods_error)) {
-                const auto message = native_mods_error.empty()
-                    ? std::string("Native mod host failed to initialize.")
-                    : native_mods_error;
-                Log(message);
-                ShutdownPartialRuntime();
-                write_failed_status("native-mod-host-failed", message);
-                return;
-            }
-        } else {
-            Log("Native mod host disabled by runtime flags.");
-        }
-
         startup_status.runtime_tick_service_enabled = runtime_flags.loader.runtime_tick_service;
-        if (runtime_flags.loader.runtime_tick_service && (HasLoadedNativeMods() || HasLuaRuntimeTickHandlers())) {
+        if (runtime_flags.loader.runtime_tick_service && HasLuaRuntimeTickHandlers()) {
             if (!StartRuntimeTickService()) {
                 const std::string message = "Runtime tick service failed to start.";
                 Log(message);
@@ -407,14 +390,31 @@ void Initialize(HMODULE module_handle) {
             Log("Runtime tick service not started because no runtime tick handlers were loaded.");
         }
 
-        if (runtime_flags.loader.debug_ui) {
-            if (!InitializeDebugUiOverlay() && IsDebugUiOverlayConfigLoaded()) {
-                if (const auto* debug_ui_config = TryGetDebugUiOverlayConfig();
-                    debug_ui_config != nullptr && debug_ui_config->enabled) {
-                    Log("Debug UI overlay requested but failed to initialize.");
+        const bool multiplayer_join_flow_enabled =
+            InitializeMultiplayerJoinFlow();
+        const auto* join_flow_ui_config =
+            TryGetDebugUiOverlayConfig();
+        const bool diagnostic_ui_enabled =
+            runtime_flags.loader.debug_ui &&
+            !multiplayer_join_flow_enabled &&
+            join_flow_ui_config != nullptr &&
+            join_flow_ui_config->enabled;
+        if (diagnostic_ui_enabled ||
+            multiplayer_join_flow_enabled) {
+            if (!InitializeDebugUiOverlay(diagnostic_ui_enabled)) {
+                if (multiplayer_join_flow_enabled) {
+                    const std::string message =
+                        "Multiplayer quick start could not initialize its native UI bridge.";
+                    Log(message);
+                    ShutdownPartialRuntime();
+                    write_failed_status(
+                        "multiplayer-quick-start-failed",
+                        message);
+                    return;
                 }
+                Log("Debug UI overlay requested but failed to initialize.");
             }
-        } else {
+        } else if (!runtime_flags.loader.debug_ui) {
             Log("Debug UI overlay disabled by runtime flags.");
         }
 
@@ -458,7 +458,6 @@ void Initialize(HMODULE module_handle) {
                         << " bot_runtime=" << (startup_status.bot_runtime_initialized ? 1 : 0)
                         << " lua_engine=" << (startup_status.lua_engine_initialized ? 1 : 0)
                         << " lua_mods=" << startup_status.lua_loaded_mod_count
-                        << " native_mods=" << startup_status.native_mod_count
                         << " runtime_tick_service=" << (startup_status.runtime_tick_service_running ? 1 : 0);
         Log(startup_summary.str());
         write_success_status(startup_summary.str());
@@ -489,8 +488,8 @@ void Shutdown() {
     RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);
     RunShutdownStep("runtime tick service", &StopRuntimeTickService);
     RunShutdownStep("runtime debug", &RuntimeDebug_Shutdown);
+    RunShutdownStep("multiplayer join flow", &ShutdownMultiplayerJoinFlow);
     RunShutdownStep("debug ui overlay", &ShutdownDebugUiOverlay);
-    RunShutdownStep("native mods", &ShutdownNativeMods);
     RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);
     RunShutdownStep("steam bootstrap", &ShutdownSteamBootstrap);

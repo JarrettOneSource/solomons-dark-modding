@@ -54,7 +54,7 @@ internal static class LauncherOutputFormatter
             "  x86 native loader injection on launch",
             "  public or friends-only Steam lobbies, invite/lobby-ID join flow, compatibility handshake, and Steam Networking Messages transport",
             "  optional website discovery that never carries gameplay traffic",
-            "  staged runtime flags, runtime bootstrap manifests, and native-mod host plumbing",
+            "  staged runtime flags and Lua bootstrap manifests",
             "  embedded Lua runtime with sd.runtime, sd.events, sd.ui, sd.input, sd.hub, and sd.bots APIs",
             "  in-process memory-access layer and D3D9 overlay backbone for UI automation"
         ]);
@@ -68,15 +68,18 @@ internal static class LauncherOutputFormatter
         {
             case LauncherMode.ListMods:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendModList(builder, execution.Catalog);
                 break;
             case LauncherMode.Stage:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
                 break;
             case LauncherMode.Launch:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendLobbyModSync(builder, execution.LobbyModSync);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
@@ -148,6 +151,37 @@ internal static class LauncherOutputFormatter
                 $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requiredMods={requiredMods} provides={providedContracts} requires={requiredContracts}");
         }
 
+        builder.AppendLine();
+    }
+
+    private static void AppendModUpdates(
+        StringBuilder builder,
+        WebsiteModUpdateResult? result)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        if (result.Error is not null)
+        {
+            builder.AppendLine($"Mod update check skipped: {result.Error}");
+            builder.AppendLine();
+            return;
+        }
+
+        if (result.UpdatedModCount == 0)
+        {
+            builder.AppendLine("Installed Website mods are current.");
+            builder.AppendLine();
+            return;
+        }
+
+        foreach (var update in result.Updates)
+        {
+            builder.AppendLine(
+                $"Updated {update.Id}: v{update.PreviousVersion} -> v{update.Version}");
+        }
         builder.AppendLine();
     }
 
@@ -232,7 +266,7 @@ internal static class LauncherOutputFormatter
             $"{result.HudLabels.Width}x{result.HudLabels.Height}");
         builder.AppendLine(
             $"Staged runtime mods: total={result.RuntimeMetadata.StagedRuntimeModCount} " +
-            $"lua={result.RuntimeMetadata.StagedLuaModCount} native={result.RuntimeMetadata.StagedNativeModCount} " +
+            $"lua={result.RuntimeMetadata.StagedLuaModCount} " +
             $"profile={result.RuntimeMetadata.RuntimeProfileName}");
         builder.AppendLine($"Steam appid file: {result.SteamBootstrap.StageAppIdPath ?? "missing"}");
         builder.AppendLine($"Steam API dll: {result.SteamBootstrap.StageApiDllPath ?? "missing"}");

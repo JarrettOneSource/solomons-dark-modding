@@ -896,12 +896,12 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         "TryLaunchPendingLobbyJoin();",
     ):
         assert token in view_model, f"unified pending lobby join lacks: {token}"
-    join_arguments = command_client[
-        command_client.index("case LauncherUiCommandMode.JoinSteam:") :
-        command_client.index("return arguments;")
-    ]
-    for token in ('arguments.Add("--directory-url")', "arguments.Add(directoryUrl_)"):
-        assert token in join_arguments, f"P2P joins do not attempt website mod sync: {token}"
+    _require_in_order(
+        command_client,
+        'arguments.Add("--directory-url")',
+        "arguments.Add(directoryUrl_)",
+        "switch (mode)",
+    )
     assert "--sync-lobby-mods" not in command_client, (
         "website mod sync is still opt-in instead of automatic for P2P joins"
     )

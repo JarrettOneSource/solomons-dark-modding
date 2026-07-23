@@ -2,7 +2,6 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
-#include "native_mods.h"
 #include "runtime_debug.h"
 
 #include <Windows.h>
@@ -24,14 +23,12 @@ void RuntimeTickThreadMain() {
     std::uint64_t tick_count = 0;
     while (g_runtime_tick_running.load(std::memory_order_acquire)) {
         ++tick_count;
-        const SDModRuntimeTickContext context = {
-            sizeof(SDModRuntimeTickContext),
+        const RuntimeTickContext context = {
             kRuntimeTickIntervalMs,
             tick_count,
             GetTickCount64(),
         };
         multiplayer::TickBotRuntime(context.monotonic_milliseconds);
-        DispatchNativeModRuntimeTick(context);
         RuntimeDebug_Tick();
 
         if (WaitForSingleObject(g_runtime_tick_stop_event, kRuntimeTickIntervalMs) == WAIT_OBJECT_0) {

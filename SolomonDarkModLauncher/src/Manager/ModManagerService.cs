@@ -16,6 +16,7 @@ internal sealed class ModManagerService
 
     public ModCatalog LoadCatalog()
     {
+        WebsiteModUpdater.RecoverTransactions(configuration_.Workspace.ModsRootPath);
         return ModCatalog.Load(
             configuration_.Workspace.ModsRootPath,
             ModStateStore.Load(configuration_.Workspace.ModStatePath));

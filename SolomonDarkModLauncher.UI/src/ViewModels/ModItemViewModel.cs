@@ -8,8 +8,6 @@ internal sealed class ModItemViewModel : ViewModelBase
 {
     private static readonly Brush LuaChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x2C, 0x38)));
     private static readonly Brush LuaChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0x7F, 0xB4, 0xD9)));
-    private static readonly Brush NativeChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x26, 0x1A)));
-    private static readonly Brush NativeChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xDF, 0xA9, 0x6B)));
     private static readonly Brush DefaultChipBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x2A, 0x28, 0x30)));
     private static readonly Brush DefaultChipForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xB9, 0xB4, 0xA8)));
 
@@ -45,21 +43,18 @@ internal sealed class ModItemViewModel : ViewModelBase
 
     public string RuntimeChipText => RuntimeKind switch
     {
-        "native" => "Native",
         "lua" => "Lua",
-        _ => "Data"
+        _ => "Assets"
     };
 
     public Brush RuntimeChipBackground => RuntimeKind switch
     {
-        "native" => NativeChipBackground,
         "lua" => LuaChipBackground,
         _ => DefaultChipBackground
     };
 
     public Brush RuntimeChipForeground => RuntimeKind switch
     {
-        "native" => NativeChipForeground,
         "lua" => LuaChipForeground,
         _ => DefaultChipForeground
     };

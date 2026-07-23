@@ -111,6 +111,7 @@
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\multiplayer_foundation.h" />
+    <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
@@ -129,12 +130,10 @@
     <ClInclude Include="include\native_enemy_lifecycle.h" />
     <ClInclude Include="include\native_spell_stats.h" />
     <ClInclude Include="include\multiplayer_service_loop.h" />
-    <ClInclude Include="include\native_mods.h" />
     <ClInclude Include="include\runtime_bootstrap.h" />
     <ClInclude Include="include\runtime_debug.h" />
     <ClInclude Include="include\runtime_flags.h" />
     <ClInclude Include="include\runtime_tick_service.h" />
-    <ClInclude Include="include\sdmod_plugin_api.h" />
     <ClInclude Include="include\startup_status.h" />
     <ClInclude Include="include\steam_bootstrap.h" />
     <ClInclude Include="include\steam_bootstrap_internal.h" />
@@ -590,6 +589,7 @@
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
     <ClCompile Include="src\multiplayer_foundation.cpp" />
+    <ClCompile Include="src\multiplayer_join_flow.cpp" />
     <ClCompile Include="src\multiplayer_local_transport.cpp" />
     <ClCompile Include="src\multiplayer_runtime_labels.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
@@ -598,7 +598,6 @@
     <ClCompile Include="src\multiplayer_steam_session.cpp" />
     <ClCompile Include="src\native_enemy_lifecycle.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />
-    <ClCompile Include="src\native_mods.cpp" />
     <ClCompile Include="src\runtime_bootstrap.cpp" />
     <ClCompile Include="src\runtime_debug_core.cpp" />
     <ClCompile Include="src\runtime_debug.cpp" />

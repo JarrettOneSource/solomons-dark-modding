@@ -167,7 +167,7 @@ from static_multiplayer_progression_contracts import (
 )
 from static_multiplayer_behavior_contracts import (
     test_animated_loot_comparison_bounds_snapshot_phase_skew,
-    test_beta_artifact_verifier_streams_large_zip_members,
+    test_beta_artifact_verifier_reads_bounded_zip_headers,
     test_beta_package_smoke_forwards_a_valid_website_lobby_uri,
     test_cursor_placed_secondaries_replay_owner_world_position,
     test_health_up_contract_composes_with_life_charm,
@@ -310,6 +310,7 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
+    test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness,
     test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     test_remote_progression_preserves_local_concentration_context,
     test_remote_progression_uses_passive_authoritative_hydration,
@@ -760,8 +761,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_run_reentry_audits_only_logs_written_during_the_test,
     ),
     (
-        "beta artifact verifier streams large ZIP members",
-        test_beta_artifact_verifier_streams_large_zip_members,
+        "beta artifact verifier reads bounded ZIP headers",
+        test_beta_artifact_verifier_reads_bounded_zip_headers,
     ),
     (
         "beta package smoke forwards a valid website lobby URI",
@@ -885,6 +886,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "client run switch requires fresh authenticated host intent",
         test_client_run_switch_requires_fresh_authenticated_host_intent,
+    ),
+    (
+        "launcher multiplayer quick start uses live UI and scene readiness",
+        test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness,
     ),
     (
         "Wine stage savegames uses a directory mirror",

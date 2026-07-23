@@ -322,7 +322,6 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   - `sd.debug` mutators (write_*, write_field_*, copy_bytes, call_*, nav-grid copy)
   - Debug-UI mutation paths (`activate_action`, `activate_element`, `perform`, `direct_write`)
   - `sd.hub.start_testrun`, `sd.gameplay.start_waves`, `sd.world.spawn_*`, `sd.input.*`
-  - Native-DLL mod host arbitrary loading → manifest allowlist
   - On non-host clients: `sd.bots.*` and all gameplay-mutating Lua surface except host-intent RPCs
 - Generic `ReadParticipantSnapshot` + controller-source interface keyed by `participant_id`
 - `RemoteParticipant + Native` supported at actor creation (pre-materialization swap only; no hot-swap)
