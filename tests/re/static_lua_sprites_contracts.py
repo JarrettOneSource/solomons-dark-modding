@@ -37,10 +37,16 @@ def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
     sample = _read("mods/lua_sprites_lab/scripts/main.lua")
     descriptor = _read("mods/lua_sprites_lab/sprites/atlas.example.json")
     sample_readme = _read("mods/lua_sprites_lab/sprites/README.md")
+    fixture = _read("mods/lua_sprites_lab/sprites/lab.png.base64")
     builder = _read("tools/build_lua_sprite_bundle.py")
     verifier = _read("tools/verify_lua_sprites.py")
+    multiplayer_verifier = _read("tools/verify_lua_sprites_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_sprites_multiplayer_verifier.py"
+    )
     tool_tests = _read("tests/test_lua_sprite_tools.py")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
         "kLuaSpriteMaximumAtlasesPerMod = 32",
@@ -200,6 +206,7 @@ def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
         assert token in sample, f"sprite sample lacks: {token}"
     assert '"frames"' in descriptor
     assert "build_lua_sprite_bundle.py" in sample_readme
+    assert fixture.startswith("iVBORw0KGgo")
 
     for token in (
         'struct.pack(\n            "<ffffiIffffBI"',
@@ -232,9 +239,45 @@ def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
         'mock.patch.object(bundle_builder, "MAX_BUNDLE_BYTES", 44)',
     ):
         assert token in tool_tests, f"sprite tool regression tests lack: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.sprites_lab"',
+        "FIXTURE_IMAGE_SHA256",
+        "_materialize_fixture_assets",
+        "REGISTER_PROBE",
+        "ATLAS_STATE_PROBE",
+        "REPLACE_PROBE",
+        "UNREGISTER_PROBE",
+        "atlas_descriptors_match",
+        "raw_internals_absent",
+        "--confirm-mutation",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua sprite multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_registered_state_requires_exact_owned_descriptor",
+        "test_descriptor_comparison_ignores_only_local_revision",
+        "test_fixture_materialization_is_reproducible_and_cleans_up",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_registration_revision_and_release_isolation",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua sprite multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_sprites_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "Lua mods own bounded, sandboxed, revisioned PNG/bundle atlases; draw-cache "
         "replacement, lifecycle cleanup, exact mod hashing, author tooling, docs, "
-        "and live backbuffer acceptance are wired"
+        "live backbuffer acceptance, and exact two-peer lifecycle isolation are wired"
     )

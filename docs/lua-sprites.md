@@ -141,7 +141,9 @@ py -3 tools/build_lua_sprite_bundle.py `
 `content_width`, `content_height`, center offsets, and points are optional in
 the descriptor. Content dimensions default to the packed rectangle; offsets
 default to zero. The disabled `sample.lua.sprites_lab` mod contains a two-frame
-descriptor and manual register/draw helpers but deliberately ships no art.
+descriptor, manual register/draw helpers, and a base64-encoded deterministic
+acceptance image. The pair verifier materializes the PNG and bundle only while
+staging; normal authors replace those fixtures with their own art.
 
 ## Multiplayer and verification
 
@@ -167,3 +169,19 @@ Frame zero should contain visible pixels that are not magenta. The verifier
 registers and re-registers the atlas, exercises rejection paths, draws it over
 a magenta acceptance panel, captures the live D3D9 backbuffer, checks the
 pixels, and unregisters the temporary key.
+
+For the complete multiplayer-local lifecycle, use a disposable pair:
+
+```powershell
+py tools/verify_lua_sprites_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The pair verifier decodes the checked-in fixture and builds its bundle only
+for the staging window, so the exact mod fingerprint covers identical real
+asset bytes on both peers. It proves host-only registration is invisible to
+the client, then registers and independently replaces the same semantic atlas
+on both peers. Exact descriptor, limit, frame, sandbox, address-exclusion,
+draw-lookup, revision-isolation, and unregister behavior are required. The
+generated PNG/bundle are removed even on failure. Window tiling and global
+process cleanup are disabled, and only the two returned process IDs are
+stopped.

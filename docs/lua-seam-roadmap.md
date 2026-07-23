@@ -494,7 +494,9 @@ authority-only stock wave start, identical sorted live summaries, and matching
   canonicalization, PNG/IHDR and frame geometry validation, atomic replacement,
   unload cleanup, a JSON bundle builder, and a backbuffer verifier cover the full
   authoring/runtime lifecycle. Rendering remains presentation-local; the launcher's
-  exact mod-directory hash supplies peer art parity. See `lua-sprites.md`.
+  exact mod-directory hash supplies peer art parity. The opt-in two-peer acceptance
+  stages deterministic real asset bytes and proves local registration, revision, draw
+  lookup, and release isolation. See `lua-sprites.md`.
 - **Author DX** — generate LuaLS/EmmyLua stubs from the binding registry in CI (the
   `RegisterFunction` tables make it mechanical); hot-reload a mod's `lua_State` on file
   change; in-game exec console (the named pipe already does this externally). Ecosystem
