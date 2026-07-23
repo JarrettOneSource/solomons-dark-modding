@@ -2,16 +2,23 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using SolomonDarkModding.Versioning;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.Workspace;
+using SolomonDarkLauncherUpdater;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("website package install and cache", TestWebsitePackageInstallAsync),
+    ("automatic mod updates", TestAutomaticModUpdatesAsync),
+    ("semantic version ordering", TestSemanticVersionOrderingAsync),
+    ("launcher release selection", TestLauncherReleaseSelectionAsync),
+    ("launcher update installation", TestLauncherUpdateInstallationAsync),
     ("downloaded package traversal rejection", TestDownloadedPackageTraversalAsync),
     ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
@@ -748,6 +755,212 @@ static async Task TestWebsitePackageInstallAsync()
     }
 }
 
+static async Task TestAutomaticModUpdatesAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modsRoot = Path.Combine(root, "mods");
+        var currentRoot = Path.Combine(modsRoot, "auto-update");
+        Directory.CreateDirectory(Path.Combine(currentRoot, "files"));
+        File.WriteAllText(
+            Path.Combine(currentRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.auto-update",
+              "name": "Automatic Update Test",
+              "version": "1.0.0",
+              "overlays": [{
+                "target": "data/update.txt",
+                "source": "files/update.txt"
+              }]
+            }
+            """);
+        File.WriteAllText(Path.Combine(currentRoot, "files", "update.txt"), "old");
+        File.WriteAllText(Path.Combine(currentRoot, "user-edit.txt"), "remove with old edition");
+
+        var nativeRoot = Path.Combine(modsRoot, "native");
+        Directory.CreateDirectory(Path.Combine(nativeRoot, "native"));
+        File.WriteAllBytes(Path.Combine(nativeRoot, "native", "mod.dll"), [0]);
+        File.WriteAllText(
+            Path.Combine(nativeRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.manual-native",
+              "name": "Manual Native Test",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryDll": "native/mod.dll"
+              }
+            }
+            """);
+
+        var updateEntries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                """
+                {
+                  "id": "tests.auto-update",
+                  "name": "Automatic Update Test",
+                  "version": "1.1.0",
+                  "overlays": [{
+                    "target": "data/update.txt",
+                    "source": "files/update.txt"
+                  }]
+                }
+                """),
+            ["files/update.txt"] = Encoding.UTF8.GetBytes("new")
+        };
+        var package = CreateZip(updateEntries);
+        var required = new MultiplayerModDescriptor(
+            "tests.auto-update",
+            "1.1.0",
+            ComputeContentHash(updateEntries));
+        var packageSha256 = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
+        var catalog = ModCatalog.CreateExact(
+            [
+                ModDiscovery.DiscoverRoot(currentRoot),
+                ModDiscovery.DiscoverRoot(nativeRoot)
+            ]);
+        var cacheRoot = Path.Combine(root, "cache");
+        var handler = new ModUpdateHandler(package, required, packageSha256);
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+
+        var result = await WebsiteModUpdater.UpdateAsync(
+            catalog,
+            modsRoot,
+            cacheRoot,
+            client);
+        Require(result.Error is null, $"automatic update failed: {result.Error}");
+        Require(result.UpdatedModCount == 1, "website update did not replace one mod");
+        Require(
+            handler.RequestedIds.SequenceEqual(["tests.auto-update"]),
+            "native manual mod was sent to the website updater");
+        var updated = ModDiscovery.DiscoverRoot(currentRoot);
+        Require(updated.Manifest.Version == "1.1.0", "installed manifest version did not advance");
+        Require(
+            File.ReadAllText(Path.Combine(currentRoot, "files", "update.txt")) == "new",
+            "installed mod content did not advance");
+        Require(
+            !File.Exists(Path.Combine(currentRoot, "user-edit.txt")),
+            "old edition files survived package replacement");
+        Require(
+            ModDiscovery.DiscoverRoot(nativeRoot).Manifest.Version == "1.0.0",
+            "manual native mod changed during website updates");
+
+        using var offlineClient = new HttpClient(new OfflineDirectoryHandler())
+        {
+            BaseAddress = new Uri("https://offline.example.test/")
+        };
+        var reloaded = ModCatalog.CreateExact(
+            ModDiscovery.Discover(modsRoot).ToArray());
+        var offline = await WebsiteModUpdater.UpdateAsync(
+            reloaded,
+            modsRoot,
+            cacheRoot,
+            offlineClient);
+        Require(offline.Error is not null, "offline update check did not report its skip reason");
+        Require(
+            ModDiscovery.DiscoverRoot(currentRoot).Manifest.Version == "1.1.0",
+            "offline update check changed the installed mod");
+
+        var invalidEntries = new Dictionary<string, byte[]>(updateEntries, StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                """
+                {
+                  "id": "tests.auto-update",
+                  "name": "Automatic Update Test",
+                  "version": "1.2.0",
+                  "overlays": [{
+                    "target": "data/update.txt",
+                    "source": "files/update.txt"
+                  }]
+                }
+                """)
+        };
+        var expectedPackage = CreateZip(invalidEntries);
+        var invalidRequired = new MultiplayerModDescriptor(
+            "tests.auto-update",
+            "1.2.0",
+            ComputeContentHash(invalidEntries));
+        var invalidHandler = new ModUpdateHandler(
+            package,
+            invalidRequired,
+            Convert.ToHexString(SHA256.HashData(expectedPackage)).ToLowerInvariant());
+        using var invalidClient = new HttpClient(invalidHandler)
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+        var rejected = await WebsiteModUpdater.UpdateAsync(
+            reloaded,
+            modsRoot,
+            Path.Combine(root, "invalid-cache"),
+            invalidClient);
+        Require(rejected.Error is not null, "tampered update package was accepted");
+        Require(
+            ModDiscovery.DiscoverRoot(currentRoot).Manifest.Version == "1.1.0",
+            "rejected update damaged the installed mod");
+
+        var backupPath = Path.Combine(modsRoot, ".sdmod-backup-recovered");
+        Directory.CreateDirectory(Path.Combine(backupPath, "files"));
+        File.WriteAllText(
+            Path.Combine(backupPath, "manifest.json"),
+            """
+            {
+              "id": "tests.recovered",
+              "name": "Recovered Update",
+              "version": "1.0.0",
+              "overlays": [{
+                "target": "data/recovered.txt",
+                "source": "files/recovered.txt"
+              }]
+            }
+            """);
+        File.WriteAllText(Path.Combine(backupPath, "files", "recovered.txt"), "recovered");
+        var abandonedPath = Path.Combine(modsRoot, ".sdmod-update-abandoned");
+        Directory.CreateDirectory(abandonedPath);
+        WebsiteModUpdater.RecoverTransactions(modsRoot);
+        Require(
+            ModDiscovery.DiscoverRoot(Path.Combine(modsRoot, "recovered")).Manifest.Id ==
+            "tests.recovered",
+            "interrupted update backup was not restored");
+        Require(!Directory.Exists(abandonedPath), "abandoned update staging directory survived recovery");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static Task TestSemanticVersionOrderingAsync()
+{
+    Require(SemanticVersion.TryParse("1.0.0-beta.2", out var beta2), "beta.2 was rejected");
+    Require(SemanticVersion.TryParse("1.0.0-beta.10", out var beta10), "beta.10 was rejected");
+    Require(
+        SemanticVersion.TryParse("1.0.0-beta.2147483648", out var largePrerelease),
+        "large numeric prerelease identifier was rejected");
+    Require(
+        SemanticVersion.TryParse("2147483648.0.0", out var largeCore),
+        "large core version identifier was rejected");
+    Require(SemanticVersion.TryParse("1.0.0", out var stable), "stable version was rejected");
+    Require(beta10!.CompareTo(beta2) > 0, "numeric prerelease identifiers sorted lexically");
+    Require(
+        largePrerelease!.CompareTo(beta10) > 0,
+        "large numeric prerelease identifier sorted incorrectly");
+    Require(stable!.CompareTo(beta10) > 0, "stable release did not sort after prerelease");
+    Require(largeCore!.CompareTo(stable) > 0, "large core version sorted incorrectly");
+    Require(
+        !SemanticVersion.TryParse("1.0", out _) &&
+        !SemanticVersion.TryParse("1.0.0-beta.01", out _),
+        "invalid semantic versions were accepted");
+    return Task.CompletedTask;
+}
+
 static async Task TestDownloadedPackageTraversalAsync()
 {
     var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
@@ -1265,6 +1478,207 @@ static Task TestWebsiteJoinUriAsync()
     return Task.CompletedTask;
 }
 
+static Task TestLauncherReleaseSelectionAsync()
+{
+    Require(
+        SemanticVersion.TryParse("0.1.0-beta.11", out var currentVersion),
+        "current launcher version did not parse");
+    var release = LauncherSelfUpdater.SelectUpdate(
+        """
+        [
+          {
+            "tag_name": "v0.1.0-beta.14",
+            "draft": true,
+            "assets": [
+              {
+                "name": "SolomonDarkMultiplayerBeta-v0.1.0-beta.14.zip",
+                "browser_download_url": "https://example.test/beta14.zip"
+              }
+            ]
+          },
+          {
+            "tag_name": "v0.1.0-beta.13",
+            "draft": false,
+            "assets": [
+              {
+                "name": "source.zip",
+                "browser_download_url": "https://example.test/source.zip"
+              }
+            ]
+          },
+          {
+            "tag_name": "v0.1.0-beta.12",
+            "draft": false,
+            "assets": [
+              {
+                "name": "SolomonDarkMultiplayerBeta-v0.1.0-beta.12.zip",
+                "browser_download_url": "https://example.test/beta12.zip"
+              }
+            ]
+          }
+        ]
+        """,
+        currentVersion!);
+
+    Require(release is not null, "new launcher release was not selected");
+    Require(
+        release!.Version.Value == "0.1.0-beta.12",
+        "launcher selected a draft or a release without its package");
+    Require(
+        release.AssetName == "SolomonDarkMultiplayerBeta-v0.1.0-beta.12.zip",
+        "launcher selected the wrong release asset");
+    return Task.CompletedTask;
+}
+
+static Task TestLauncherUpdateInstallationAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var target = Path.Combine(root, "installed");
+        WriteDistribution(
+            target,
+            new Dictionary<string, string>
+            {
+                ["SolomonDarkMultiplayerBeta.exe"] = "old launcher",
+                ["SolomonDarkLauncherUpdater.exe"] = "old updater",
+                ["solomon-dark-multiplayer.json"] = """{"version":"0.1.0-beta.11"}""",
+                ["launcher/old-runtime.txt"] = "old runtime"
+            });
+        var userModPath = Path.Combine(target, "mods", "my-mod", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(userModPath)!);
+        File.WriteAllText(userModPath, "return 'mine'\n");
+
+        var sourceRoot = Path.Combine(
+            root,
+            "source",
+            "SolomonDarkMultiplayerBeta-v0.1.0-beta.12");
+        WriteDistribution(
+            sourceRoot,
+            new Dictionary<string, string>
+            {
+                ["SolomonDarkMultiplayerBeta.exe"] = "new launcher",
+                ["SolomonDarkLauncherUpdater.exe"] = "new updater",
+                ["solomon-dark-multiplayer.json"] = """{"version":"0.1.0-beta.12"}""",
+                ["launcher/new-runtime.txt"] = "new runtime"
+            });
+        var archivePath = Path.Combine(root, "update.zip");
+        ZipFile.CreateFromDirectory(
+            sourceRoot,
+            archivePath,
+            CompressionLevel.Optimal,
+            includeBaseDirectory: true);
+
+        LauncherUpdateInstaller.Install(archivePath, target);
+        Require(
+            File.ReadAllText(Path.Combine(target, "SolomonDarkMultiplayerBeta.exe")) ==
+                "new launcher",
+            "launcher update did not install the new launcher");
+        Require(
+            File.Exists(Path.Combine(target, "launcher", "new-runtime.txt")),
+            "launcher update did not install the new package");
+        Require(
+            !File.Exists(Path.Combine(target, "launcher", "old-runtime.txt")),
+            "launcher update retained an obsolete package file");
+        Require(
+            File.ReadAllText(userModPath) == "return 'mine'\n",
+            "launcher update did not preserve a user-installed mod");
+
+        var nextSourceRoot = Path.Combine(
+            root,
+            "next-source",
+            "SolomonDarkMultiplayerBeta-v0.1.0-beta.13");
+        WriteDistribution(
+            nextSourceRoot,
+            new Dictionary<string, string>
+            {
+                ["SolomonDarkMultiplayerBeta.exe"] = "replacement launcher",
+                ["SolomonDarkLauncherUpdater.exe"] = "replacement updater",
+                ["solomon-dark-multiplayer.json"] = """{"version":"0.1.0-beta.13"}""",
+                ["launcher/replacement-runtime.txt"] = "replacement runtime"
+            });
+        var nextArchivePath = Path.Combine(root, "next-update.zip");
+        ZipFile.CreateFromDirectory(
+            nextSourceRoot,
+            nextArchivePath,
+            CompressionLevel.Optimal,
+            includeBaseDirectory: true);
+        using (File.Open(userModPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var installFailed = false;
+            try
+            {
+                LauncherUpdateInstaller.Install(nextArchivePath, target);
+            }
+            catch (IOException)
+            {
+                installFailed = true;
+            }
+            Require(installFailed, "locked user data did not fail launcher replacement");
+            Require(
+                File.ReadAllText(Path.Combine(target, "SolomonDarkMultiplayerBeta.exe")) ==
+                    "new launcher",
+                "failed launcher replacement did not roll back");
+        }
+
+        var invalidArchivePath = Path.Combine(root, "invalid-update.zip");
+        using (var archive = ZipFile.Open(
+                   invalidArchivePath,
+                   ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry(
+                "SolomonDarkMultiplayerBeta-v0.1.0-beta.13/../outside.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("unsafe");
+        }
+
+        var rejected = false;
+        try
+        {
+            LauncherUpdateInstaller.Install(invalidArchivePath, target);
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+        Require(rejected, "launcher update accepted an unsafe archive path");
+        Require(
+            File.ReadAllText(Path.Combine(target, "SolomonDarkMultiplayerBeta.exe")) ==
+                "new launcher",
+            "rejected launcher update changed the installed launcher");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+    return Task.CompletedTask;
+}
+
+static void WriteDistribution(
+    string root,
+    IReadOnlyDictionary<string, string> files)
+{
+    Directory.CreateDirectory(root);
+    foreach (var pair in files)
+    {
+        var path = Path.Combine(root, pair.Key.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, pair.Value);
+    }
+
+    var ownedFiles = files.Keys
+        .Append(".distribution-files.json")
+        .OrderBy(path => path, StringComparer.Ordinal)
+        .ToArray();
+    File.WriteAllText(
+        Path.Combine(root, ".distribution-files.json"),
+        JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            files = ownedFiles
+        }));
+}
+
 static byte[] CreateZip(IReadOnlyDictionary<string, byte[]> entries)
 {
     using var buffer = new MemoryStream();
@@ -1410,4 +1824,50 @@ file sealed class LobbyDirectoryHandler(
         {
             Content = new StringContent(value, Encoding.UTF8, "application/json")
         });
+}
+
+file sealed class ModUpdateHandler(
+    byte[] package,
+    MultiplayerModDescriptor required,
+    string packageSha256) : HttpMessageHandler
+{
+    public IReadOnlyList<string> RequestedIds { get; private set; } = [];
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var path = request.RequestUri?.AbsolutePath;
+        if (request.Method == HttpMethod.Post && path == "/community/api/mods/updates")
+        {
+            var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(payload);
+            RequestedIds = document.RootElement
+                .GetProperty("mods")
+                .EnumerateArray()
+                .Select(mod => mod.GetProperty("id").GetString()!)
+                .ToArray();
+            return Json(
+                $$"""
+                {"updates":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}","packageSha256":"{{packageSha256}}","downloadUrl":"api/mods/tests/versions/2/download"}]}
+                """);
+        }
+
+        if (request.Method == HttpMethod.Get &&
+            path == "/community/api/mods/tests/versions/2/download")
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(package)
+            };
+        }
+
+        return new HttpResponseMessage(HttpStatusCode.NotFound);
+    }
+
+    private static HttpResponseMessage Json(string value) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(value, Encoding.UTF8, "application/json")
+        };
 }

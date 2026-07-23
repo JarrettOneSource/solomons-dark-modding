@@ -10,6 +10,7 @@ internal sealed record LauncherCommandExecution(
     LauncherCommand Command,
     LauncherConfiguration Configuration,
     ModCatalog Catalog,
+    WebsiteModUpdateResult? ModUpdate = null,
     LauncherModStateChange? ModStateChange = null,
     LobbyModSyncResult? LobbyModSync = null,
     StageBuildResult? StageResult = null,

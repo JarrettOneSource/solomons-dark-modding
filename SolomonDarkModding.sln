@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolomonDarkModLauncher", "S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolomonDarkModLauncher.UI", "SolomonDarkModLauncher.UI\SolomonDarkModLauncher.UI.csproj", "{92D349A9-E052-40B6-93B4-A3AAD798517E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolomonDarkLauncherUpdater", "SolomonDarkLauncherUpdater\SolomonDarkLauncherUpdater.csproj", "{4B599BB6-19C6-4766-B912-973394811D43}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -26,6 +28,10 @@ Global
 		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Debug|Win32.Build.0 = Debug|Any CPU
 		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Release|Win32.ActiveCfg = Release|Any CPU
 		{92D349A9-E052-40B6-93B4-A3AAD798517E}.Release|Win32.Build.0 = Release|Any CPU
+		{4B599BB6-19C6-4766-B912-973394811D43}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{4B599BB6-19C6-4766-B912-973394811D43}.Debug|Win32.Build.0 = Debug|Any CPU
+		{4B599BB6-19C6-4766-B912-973394811D43}.Release|Win32.ActiveCfg = Release|Any CPU
+		{4B599BB6-19C6-4766-B912-973394811D43}.Release|Win32.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -35,6 +35,8 @@ $smokeRoot = Join-Path $env:TEMP "SolomonDarkMultiplayerBeta-Smoke-$version"
 $extractedRoot = Join-Path $smokeRoot $releaseName
 $runtimeRoot = Join-Path $smokeRoot "runtime"
 $uiExecutable = Join-Path $extractedRoot "SolomonDarkMultiplayerBeta.exe"
+$updaterExecutable = Join-Path $extractedRoot "SolomonDarkLauncherUpdater.exe"
+$distributionFilesManifest = Join-Path $extractedRoot ".distribution-files.json"
 $launcherExecutable = Join-Path $extractedRoot "launcher/SolomonDarkModLauncher.exe"
 $launcherCoreClr = Join-Path $extractedRoot "launcher/coreclr.dll"
 $launcherPrivateCoreLib = Join-Path $extractedRoot "launcher/System.Private.CoreLib.dll"
@@ -42,7 +44,6 @@ $launcherRuntimeConfig = Join-Path $extractedRoot "launcher/SolomonDarkModLaunch
 $result = [ordered]@{
     ok = $false
     archive = $ArchivePath
-    archiveSha256 = (Get-FileHash $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     extractionRoot = $extractedRoot
     workspaceRoot = $null
     modCount = 0
@@ -123,6 +124,8 @@ try {
     Expand-Archive -Path $ArchivePath -DestinationPath $smokeRoot -Force
     foreach ($requiredPath in @(
             $uiExecutable,
+            $updaterExecutable,
+            $distributionFilesManifest,
             $launcherExecutable,
             $launcherCoreClr,
             $launcherPrivateCoreLib,

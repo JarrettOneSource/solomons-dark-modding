@@ -8,9 +8,25 @@ internal sealed class LauncherCliResponse
     public string? Error { get; set; }
     public LauncherCliConfiguration? Configuration { get; set; }
     public List<LauncherCliMod> Mods { get; set; } = [];
+    public LauncherCliModUpdate? ModUpdate { get; set; }
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
+}
+
+internal sealed class LauncherCliModUpdate
+{
+    public int CheckedModCount { get; set; }
+    public int UpdatedModCount { get; set; }
+    public string? Error { get; set; }
+    public List<LauncherCliUpdatedMod> Updates { get; set; } = [];
+}
+
+internal sealed class LauncherCliUpdatedMod
+{
+    public string Id { get; set; } = string.Empty;
+    public string PreviousVersion { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
 }
 
 internal sealed class LauncherCliConfiguration

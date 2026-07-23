@@ -167,11 +167,10 @@ Build and verify the portable prerelease artifact:
 py -3 .\tools\verify_beta_release_artifact.py
 ```
 
-The result is
-`artifacts\SolomonDarkMultiplayerBeta-v<version>.zip` plus
-`artifacts\SHA256SUMS.txt`. The archive includes the self-contained desktop and
-x86 launchers, loader, config, sample mods, and the x86 Steam runtime; it does
-not include Solomon's Dark or Steam credentials.
+The result is `artifacts\SolomonDarkMultiplayerBeta-v<version>.zip`. The archive
+includes the self-contained desktop launcher, updater, x86 launcher, loader,
+config, sample mods, and x86 Steam runtime; it does not include Solomon's Dark
+or Steam credentials.
 
 After an abnormal game exit, the desktop launcher checks the native crash log,
 minidumps, and process exit code, then asks before submitting anything. Choosing
@@ -181,10 +180,9 @@ list. Choosing `Don't Send` makes no request. Save files and Steam credentials
 are never included.
 
 Published GitHub releases attach the authorized standalone original game as
-`Solomons-Dark-0.72.5-Original-Game.zip` with a matching `.sha256` asset. The
-release workflow copies the canonical, hash-pinned game archive from
-`v0.1.0-beta.8`; it never packages a developer's local game directory or save
-data.
+`Solomons-Dark-0.72.5-Original-Game.zip`. The release workflow copies the
+canonical archive from `v0.1.0-beta.8`; it never packages a developer's local
+game directory or save data.
 
 See
 `docs/networking/steam-friend-playtest.md` for the host/join sequence and

@@ -57,6 +57,21 @@ internal static class LauncherJsonConsole
                     ManifestPath = mod.ManifestPath,
                     Enabled = execution.Catalog.IsEnabled(mod)
                 }).ToArray(),
+            ModUpdate = execution.ModUpdate is null
+                ? null
+                : new LauncherJsonModUpdate
+                {
+                    CheckedModCount = execution.ModUpdate.CheckedModCount,
+                    UpdatedModCount = execution.ModUpdate.UpdatedModCount,
+                    Error = execution.ModUpdate.Error,
+                    Updates = execution.ModUpdate.Updates.Select(update =>
+                        new LauncherJsonUpdatedMod
+                        {
+                            Id = update.Id,
+                            PreviousVersion = update.PreviousVersion,
+                            Version = update.Version
+                        }).ToArray()
+                },
             LobbyModSync = execution.LobbyModSync is null
                 ? null
                 : new LauncherJsonLobbyModSync
@@ -161,6 +176,7 @@ internal static class LauncherJsonConsole
             Error = ex.Message,
             Configuration = null,
             Mods = [],
+            ModUpdate = null,
             LobbyModSync = null,
             Stage = null,
             Launch = null,
@@ -201,6 +217,7 @@ internal static class LauncherJsonConsole
         public required string? Error { get; init; }
         public required LauncherJsonConfiguration? Configuration { get; init; }
         public required IReadOnlyList<LauncherJsonMod> Mods { get; init; }
+        public required LauncherJsonModUpdate? ModUpdate { get; init; }
         public required LauncherJsonLobbyModSync? LobbyModSync { get; init; }
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
@@ -215,6 +232,21 @@ internal static class LauncherJsonConsole
         public required int ReusedManualModCount { get; init; }
         public required int ReusedCachedModCount { get; init; }
         public required int DownloadedModCount { get; init; }
+    }
+
+    private sealed class LauncherJsonModUpdate
+    {
+        public required int CheckedModCount { get; init; }
+        public required int UpdatedModCount { get; init; }
+        public required string? Error { get; init; }
+        public required IReadOnlyList<LauncherJsonUpdatedMod> Updates { get; init; }
+    }
+
+    private sealed class LauncherJsonUpdatedMod
+    {
+        public required string Id { get; init; }
+        public required string PreviousVersion { get; init; }
+        public required string Version { get; init; }
     }
 
     private sealed class LauncherJsonConfiguration

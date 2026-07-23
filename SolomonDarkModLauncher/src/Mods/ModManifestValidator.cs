@@ -1,3 +1,5 @@
+using SolomonDarkModding.Versioning;
+
 namespace SolomonDarkModLauncher.Mods;
 
 internal static class ModManifestValidator
@@ -32,9 +34,10 @@ internal static class ModManifestValidator
             throw new InvalidOperationException($"Manifest missing name: {manifestPath}");
         }
 
-        if (string.IsNullOrWhiteSpace(manifest.Version))
+        if (!SemanticVersion.TryParse(manifest.Version, out _))
         {
-            throw new InvalidOperationException($"Manifest missing version: {manifestPath}");
+            throw new InvalidOperationException(
+                $"Manifest version must use semantic versioning: {manifestPath}");
         }
 
         if (manifest.Overlays.Count == 0 && !manifest.RequiresRuntime)

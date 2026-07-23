@@ -20,6 +20,8 @@ HOW TO PLAY
 2. Start Steam.
 3. Make sure that your Steam account is active.
 4. Start SolomonDarkMultiplayerBeta.exe.
+   The launcher and website mods update automatically when new versions are
+   available.
 5. Select the folder that contains the original SolomonDark.exe.
    Bundled mods start disabled; enable only the mods you want in the launcher.
 6. Use Choose Save to select one of the launcher's eight local save slots.

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\DistributionLayout.cs" Link="Shared\DistributionLayout.cs" />
+    <Compile Include="..\Shared\SemanticVersion.cs" Link="Shared\SemanticVersion.cs" />
     <ProjectReference Include="..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj"
                       Condition="'$(RuntimeIdentifier)' == ''"
                       ReferenceOutputAssembly="false"

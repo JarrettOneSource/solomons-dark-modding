@@ -72,6 +72,7 @@ public partial class App : Application
             _ = Dispatcher.InvokeAsync(() =>
                 Activate(window, viewModel, argument)));
         Activate(window, viewModel, activationArgument);
+        _ = CheckForLauncherUpdateAsync(viewModel, activationArgument);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -108,5 +109,26 @@ public partial class App : Application
         }
 
         viewModel.QueueWebsiteLobbyJoin(activation);
+    }
+
+    private async Task CheckForLauncherUpdateAsync(
+        MainWindowViewModel viewModel,
+        string activationArgument)
+    {
+        try
+        {
+            var started = await LauncherSelfUpdater.CheckAndStartAsync(
+                viewModel.Version,
+                activationArgument,
+                viewModel.BeginLauncherUpdate);
+            if (started)
+            {
+                Shutdown();
+            }
+        }
+        catch (Exception exception)
+        {
+            viewModel.ReportLauncherUpdateFailure(exception.Message);
+        }
     }
 }

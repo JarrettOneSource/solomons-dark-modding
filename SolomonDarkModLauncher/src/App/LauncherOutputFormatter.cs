@@ -67,15 +67,18 @@ internal static class LauncherOutputFormatter
         {
             case LauncherMode.ListMods:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendModList(builder, execution.Catalog);
                 break;
             case LauncherMode.Stage:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
                 break;
             case LauncherMode.Launch:
                 AppendConfiguration(builder, execution.Configuration);
+                AppendModUpdates(builder, execution.ModUpdate);
                 AppendLobbyModSync(builder, execution.LobbyModSync);
                 AppendModList(builder, execution.Catalog);
                 AppendStageResult(builder, execution.StageResult!);
@@ -144,6 +147,37 @@ internal static class LauncherOutputFormatter
                 $"- {mod.Manifest.Id} [{state}] priority={mod.Manifest.Priority} overlays={mod.Manifest.Overlays.Count} {runtimeSummary} requiredMods={requiredMods} provides={providedContracts} requires={requiredContracts}");
         }
 
+        builder.AppendLine();
+    }
+
+    private static void AppendModUpdates(
+        StringBuilder builder,
+        WebsiteModUpdateResult? result)
+    {
+        if (result is null)
+        {
+            return;
+        }
+
+        if (result.Error is not null)
+        {
+            builder.AppendLine($"Mod update check skipped: {result.Error}");
+            builder.AppendLine();
+            return;
+        }
+
+        if (result.UpdatedModCount == 0)
+        {
+            builder.AppendLine("Installed Website mods are current.");
+            builder.AppendLine();
+            return;
+        }
+
+        foreach (var update in result.Updates)
+        {
+            builder.AppendLine(
+                $"Updated {update.Id}: v{update.PreviousVersion} -> v{update.Version}");
+        }
         builder.AppendLine();
     }
 

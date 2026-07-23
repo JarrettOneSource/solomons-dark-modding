@@ -668,6 +668,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
         StatusText = mode switch
         {
+            LauncherUiCommandMode.ListMods when
+                invocation.Response.ModUpdate?.UpdatedModCount > 0 =>
+                invocation.Response.ModUpdate.UpdatedModCount == 1
+                    ? "1 mod updated"
+                    : $"{invocation.Response.ModUpdate.UpdatedModCount} mods updated",
             LauncherUiCommandMode.ListMods => "Ready",
             LauncherUiCommandMode.Stage => "Stage ready",
             LauncherUiCommandMode.LaunchSinglePlayer => "Game started",
@@ -1116,6 +1121,20 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         client_.UseWebsiteLobbyJoin(activation.DirectoryBaseUrl, activation.Ticket);
         pendingLobbyJoinId_ = activation.LobbyId;
         TryLaunchPendingLobbyJoin();
+    }
+
+    public void BeginLauncherUpdate(string version)
+    {
+        ClearError();
+        IsBusy = true;
+        StatusText = $"Downloading launcher {version}…";
+    }
+
+    public void ReportLauncherUpdateFailure(string message)
+    {
+        SetError(message);
+        IsBusy = false;
+        StatusText = "The launcher update failed. You can keep using this version.";
     }
 
     private void JoinLobbyDirect()

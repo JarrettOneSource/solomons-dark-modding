@@ -8,9 +8,11 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $root "SolomonDarkModLauncher/SolomonDarkModLauncher.csproj"
 $launcherUi = Join-Path $root "SolomonDarkModLauncher.UI/SolomonDarkModLauncher.UI.csproj"
+$launcherUpdater = Join-Path $root "SolomonDarkLauncherUpdater/SolomonDarkLauncherUpdater.csproj"
 $loader = Join-Path $root "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
 $dist = Join-Path $root "dist/launcher"
 $uiDist = Join-Path $root "dist/ui"
+$updaterDist = Join-Path $root "dist/updater"
 $loaderOutputDirectory = Join-Path $root "bin/$Configuration/Win32"
 $loaderOutput = Join-Path $loaderOutputDirectory "SolomonDarkModLoader.dll"
 $uiExecutableName = "SolomonDarkMultiplayerBeta.exe"
@@ -48,6 +50,10 @@ if (Test-Path $uiDist) {
     Remove-Item $uiDist -Recurse -Force
 }
 
+if (Test-Path $updaterDist) {
+    Remove-Item $updaterDist -Recurse -Force
+}
+
 $msbuild = Resolve-MSBuild
 
 & $msbuild $loader /t:Rebuild /m /nologo /p:Configuration=$Configuration /p:Platform=Win32
@@ -66,6 +72,12 @@ dotnet publish $launcherUi `
     -o $uiDist
 Assert-LastExitCode "SolomonDarkModLauncher.UI publish"
 
+dotnet publish $launcherUpdater `
+    -c $Configuration `
+    --self-contained false `
+    -o $updaterDist
+Assert-LastExitCode "SolomonDarkLauncherUpdater publish"
+
 if (Test-Path $loaderOutput) {
     Copy-Item $loaderOutput $dist -Force
 }
@@ -78,6 +90,7 @@ if (-not (Test-Path $launcherExecutable)) {
 Write-Host "Build completed."
 Write-Host "Launcher: $launcherExecutable"
 Write-Host "Launcher UI: $(Join-Path $uiDist $uiExecutableName)"
+Write-Host "Launcher updater: $(Join-Path $updaterDist 'SolomonDarkLauncherUpdater.exe')"
 if (Test-Path $loaderOutput) {
     Write-Host "Loader: $loaderOutput"
 }
