@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
@@ -39,6 +41,21 @@ def test_lua_roadmap_is_closed_under_exact_mod_parity() -> str:
         "raw `io.*` persistence is technically possible today",
     ):
         assert stale not in roadmap, f"roadmap retained stale gap: {stale}"
+
+    numbered_seams = list(re.finditer(r"^\*\*(\d+)\.[^\n]+\*\*", roadmap, re.MULTILINE))
+    assert [match.group(1) for match in numbered_seams] == [
+        str(number) for number in range(1, 13)
+    ], "roadmap no longer contains exactly the numbered seams 1 through 12"
+    for index, match in enumerate(numbered_seams):
+        next_start = (
+            numbered_seams[index + 1].start()
+            if index + 1 < len(numbered_seams)
+            else roadmap.index("\n## 4.", match.end())
+        )
+        block = roadmap[match.start():next_start]
+        assert "**Implemented " in block, (
+            f"roadmap seam {match.group(1)} lacks an implementation marker"
+        )
 
     for token in (
         'id = "spell_picker"',

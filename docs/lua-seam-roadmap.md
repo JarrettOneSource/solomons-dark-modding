@@ -254,6 +254,9 @@ acceptance verifier. See `lua-state-and-events.md`.
 simulation owner, while the implemented generic modded-effect channel fragments,
 authenticates, relays, retires, and exposes semantic effect snapshots on every peer.
 
+**Implemented 2026-07-22.** Content registration is complete across one shared identity
+foundation and the item, enemy, and spell families described below.
+
 **Identity foundation implemented 2026-07-22.** All three content families share the
 `sd.content.v1` FNV-1a-64 derivation over canonical `(mod_id, key)` strings, mapped into
 a positive 63-bit Lua-integer namespace. Duplicate keys, cross-kind reuse, and hash
