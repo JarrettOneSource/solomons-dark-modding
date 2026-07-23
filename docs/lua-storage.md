@@ -54,3 +54,21 @@ py -3 tools/verify_lua_storage.py --phase write --token acceptance-1
 py -3 tools/verify_lua_storage.py --phase read --token acceptance-1
 py -3 tools/verify_lua_storage.py --phase clear
 ```
+
+For the complete multiplayer-local lifecycle, use a disposable pair:
+
+```powershell
+py tools/verify_lua_storage_multiplayer.py `
+  --launch-pair `
+  --confirm-profile-mutation
+```
+
+The pair verifier preserves any existing storage files for both named launcher
+instances before staging. It starts from empty acceptance profiles, writes
+different nested values on host and client, proves that neither mutation,
+delete, nor clear crosses to the other peer, and restarts both processes to
+prove independent durable reads. It also exercises invalid keys, cyclic,
+sparse, mixed, nil, NaN, and infinite values without changing the accepted
+snapshot. Generated files are removed and any original bytes are atomically
+restored after both exact process IDs stop. Window tiling and global process
+cleanup are disabled.

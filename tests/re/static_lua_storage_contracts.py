@@ -16,6 +16,13 @@ def test_lua_storage_is_scoped_bounded_and_transactional() -> str:
     manifest = _read("mods/lua_storage_lab/manifest.json")
     sample = _read("mods/lua_storage_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_storage.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_storage_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_storage_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaStorageBindings(mod->state)" in bindings
     assert "lua_createtable(mod->state, 0, 29);" in bindings
@@ -69,8 +76,46 @@ def test_lua_storage_is_scoped_bounded_and_transactional() -> str:
         "sd.storage.clear()",
     ):
         assert token in verifier, f"Lua storage verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.storage_lab"',
+        "_preserve_profile_storage",
+        "_atomic_restore",
+        "STATE_PROBE",
+        "CLEAR_PROBE",
+        "DELETE_PROBE",
+        "_write_probe",
+        "storage_state_matches",
+        "_storage_file_evidence",
+        "--confirm-profile-mutation",
+        "temporary_host_profile=True",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua storage multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_state_matcher_requires_exact_local_value",
+        "test_profile_files_are_preserved_and_generated_files_removed",
+        "test_durable_file_evidence_requires_distinct_bounded_files",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_local_persistence_and_restores_profiles",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua storage multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_storage_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.storage isolates bounded values per mod and launcher profile, "
-        "publishes writes transactionally, and stays local in multiplayer"
+        "publishes writes transactionally, and has exact restart-persistent "
+        "two-peer isolation acceptance"
     )

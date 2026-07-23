@@ -328,8 +328,10 @@ tiers when distribution arrives. *MP:* local (per player). Shared-run state belo
 `get/set/delete/clear/snapshot` operations over the launcher-isolated per-mod data root.
 Writes encode a complete candidate and replace the durable file before changing the
 live snapshot; malformed, oversized, cyclic, or foreign data fails visibly. The store is
-strictly local and advertises `storage.profile.local`. See `lua-storage.md` and the
-opt-in `sample.lua.storage_lab` mod.
+strictly local and advertises `storage.profile.local`. The opt-in two-peer acceptance
+proves distinct host/client values, transactional rejection, process-restart durability,
+delete/clear isolation, and exact restoration of pre-existing profile bytes. See
+`lua-storage.md` and the opt-in `sample.lua.storage_lab` mod.
 
 **7. `sd.audio` — BASS bindings.** The game ships `bass.dll`; bind sample/stream
 play/stop/volume. *Unlocks:* stingers, custom music, voice packs. *MP:* presentation-local;
