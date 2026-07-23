@@ -7,6 +7,7 @@
 
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_camera_runtime.h"
 #include "lua_draw_runtime.h"
 #include "lua_ui_runtime.h"
 #include "lua_engine.h"
@@ -152,6 +153,7 @@ void ShutdownPartialRuntime() {
     multiplayer::ShutdownFoundation();
     ShutdownSteamBootstrap();
     ShutdownLuaEngine();
+    ShutdownLuaCameraRuntime();
     ShutdownDebugUiOverlayConfig();
     ShutdownGameplaySeams();
     ShutdownBinaryLayout();
@@ -270,6 +272,13 @@ void Initialize(HMODULE module_handle) {
             std::string keyboard_injection_error;
             if (!InitializeGameplayKeyboardInjection(&keyboard_injection_error)) {
                 Log("Gameplay keyboard injection unavailable. " + keyboard_injection_error);
+            }
+        }
+
+        {
+            std::string camera_error;
+            if (!InitializeLuaCameraRuntime(&camera_error)) {
+                Log("Lua camera runtime unavailable. " + camera_error);
             }
         }
 
@@ -482,6 +491,7 @@ void Shutdown() {
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);
     RunShutdownStep("steam bootstrap", &ShutdownSteamBootstrap);
     RunShutdownStep("lua engine", &ShutdownLuaEngine);
+    RunShutdownStep("lua camera runtime", &ShutdownLuaCameraRuntime);
     RunShutdownStep("debug ui overlay config", &ShutdownDebugUiOverlayConfig);
     RunShutdownStep("gameplay seams", &ShutdownGameplaySeams);
     RunShutdownStep("binary layout", &ShutdownBinaryLayout);

@@ -1,6 +1,7 @@
 #include "lua_engine.h"
 #include "bot_runtime.h"
 #include "logger.h"
+#include "lua_camera_runtime.h"
 #include "lua_content_registry.h"
 #include "lua_draw_runtime.h"
 #include "lua_engine_bindings_internal.h"
@@ -30,18 +31,15 @@ extern "C" {
 #include <Windows.h>
 namespace sdmod {
 namespace lua_exec_diag {
-
 std::atomic<std::uint64_t> g_last_endscene_ms{0};
 std::atomic<std::uint64_t> g_endscene_generation{0};
 std::atomic<std::uint64_t> g_last_pump_enter_ms{0};
 std::atomic<std::uint64_t> g_last_pump_locked_ms{0};
 std::atomic<std::uint64_t> g_last_lua_locked_ms{0};
-
 }  // namespace lua_exec_diag
 
 namespace detail {
 namespace {
-
 enum class LuaExecRequestState {
     Pending,
     Executing,
@@ -338,6 +336,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ai.read",
     };
     AppendLuaAudioCapabilities(&capabilities);
+    AppendLuaCameraCapabilities(&capabilities);
     if (multiplayer::IsFoundationInitialized()) {
         capabilities.emplace_back("multiplayer.foundation");
     }
@@ -425,6 +424,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaBusSubscriptionsForMod(mod);
     ClearLuaNetSubscriptionsForMod(mod);
     ClearLuaTimeScaleRequest(mod->descriptor.id);
+    ClearLuaCameraFocus(mod->descriptor.id);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);

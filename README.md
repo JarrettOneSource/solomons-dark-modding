@@ -31,7 +31,8 @@ Mods are discovered from `manifest.json`. Each mod may be:
 
 Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
 `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`,
-`lua_hud_showcase`, `lua_ui_sandbox_lab`, and the paired Lua bus labs.
+`lua_hud_showcase`, `lua_camera_lab`, `lua_ui_sandbox_lab`, and the paired Lua
+bus labs.
 
 Website-distributed packages use the same root-level manifest and may contain
 data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any

@@ -63,6 +63,9 @@ from static_lua_ai_contracts import (
 from static_lua_audio_contracts import (
     test_lua_audio_is_scoped_bounded_local_and_game_owned,
 )
+from static_lua_camera_contracts import (
+    test_lua_camera_is_native_bounded_owned_and_presentation_local,
+)
 from static_lua_ui_authoring_contracts import (
     test_lua_ui_authoring_is_native_bounded_and_authority_routed,
 )
@@ -383,6 +386,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua audio is scoped, bounded, local, and game-owned",
         test_lua_audio_is_scoped_bounded_local_and_game_owned,
+    ),
+    (
+        "Lua camera is native, bounded, owned, and presentation-local",
+        test_lua_camera_is_native_bounded_owned_and_presentation_local,
     ),
     (
         "Lua UI authoring is native, bounded, and authority-routed",

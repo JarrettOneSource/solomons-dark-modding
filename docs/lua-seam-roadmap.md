@@ -444,8 +444,13 @@ See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
   shared-hub run path, while authenticated participant frames make clients follow host
   hub/private-region intent. Raw arena exits remain owned by the stock synchronized Leave
   Game flow. See `lua-scene.md`.
-- **`sd.camera`** — cutscenes, boss intros, shake. Only major seam with **no RE done yet**.
-  *MP:* presentation-local.
+- **`sd.camera`** — cutscenes, boss intros, shake. *MP:* presentation-local.
+
+  **Implemented 2026-07-22.** `sd.camera` provides bounded local view inspection,
+  per-mod world-focus ownership, automatic lifecycle cleanup, and the stock native
+  shake path. Six post-Region-tick hooks translate the primary, expanded, and culling
+  view origins together without exposing pointers or changing simulation state. See
+  `lua-camera.md` and `reverse-engineering/native-camera-control.md`.
 - **`sd.sprites`** — runtime sprite/frame registration using the reversed bundle format,
   so mods add art without clobbering whole atlases. *MP:* local; art parity comes from the
   mod-set handshake.

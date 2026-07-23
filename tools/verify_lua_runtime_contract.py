@@ -86,6 +86,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "clear",
         "is_available",
     ),
+    "camera": ("get_state", "set_focus", "clear_focus", "shake"),
     "draw": (
         "text",
         "rect",
@@ -275,6 +276,7 @@ check_call('nav.get_grid', sd.nav.get_grid, {{'table', 'nil'}})
 check_call('draw.get_limits', sd.draw.get_limits, {{'table'}})
 check_call('audio.is_available', sd.audio.is_available, {{'boolean'}})
 check_call('audio.get_state', sd.audio.get_state, {{'table'}})
+check_call('camera.get_state', sd.camera.get_state, {{'table'}})
 check_call('draw.get_viewport', sd.draw.get_viewport, {{'table', 'nil'}})
 check_call('draw.get_sprite_info', function()
   return sd.draw.get_sprite_info('Title', 9)

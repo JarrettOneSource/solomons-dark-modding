@@ -140,7 +140,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 27);" in bindings
+    assert "lua_createtable(mod->state, 0, 28);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (

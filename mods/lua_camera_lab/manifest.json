@@ -1,0 +1,15 @@
+{
+  "id": "sample.lua.camera_lab",
+  "name": "Lua Camera Lab",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "camera.local.read",
+      "camera.local.focus",
+      "camera.local.shake"
+    ]
+  }
+}
