@@ -120,6 +120,17 @@ connected. It reads the same `transport_enabled` runtime predicate as the native
 reload gate, rather than waiting for the transport to report ready. Every path
 restores the entry script's exact original bytes.
 
+The offline matrix was live-confirmed on 0.72.5 on 2026-07-23: the authored
+surface handle changed from `1` to `4` on the valid edit, the syntax-invalid
+candidate preserved handle `4`, the restored baseline recreated handle `7`, and
+the source bytes matched exactly afterward. The verifier works from WSL or
+Windows Python; Windows uses a bounded redirected-pipe reader because
+`select()` cannot wait on a Win32 anonymous pipe.
+
+This remains a normal rendered-game acceptance run. Do not start it unattended
+while someone is actively using the Windows desktop: Solomon Dark can activate
+its game window even when its process receives a hidden startup window style.
+
 The in-game console remains a visual/input acceptance gate: open it with
 <kbd>Ctrl</kbd>+<kbd>`</kbd>, submit `return authoring_lab_version`, and confirm
 that both the command and `authoring-baseline-0001` result render in the panel.

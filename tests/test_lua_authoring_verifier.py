@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import io
+import queue
 import sys
 import tempfile
 import unittest
@@ -16,6 +18,7 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 import verify_lua_authoring as verifier  # noqa: E402
+import verify_local_multiplayer_sync as multiplayer_sync  # noqa: E402
 
 
 class FakeAuthoringRuntime:
@@ -97,6 +100,47 @@ class LuaAuthoringVerifierTests(unittest.TestCase):
         )
         self.assertTrue(evidence["source_restored"])
         self.assertEqual(self.source.read_bytes(), self.original)
+
+    def test_windows_lua_daemon_wait_reads_redirected_pipe(self) -> None:
+        process = mock.Mock()
+        process.stdout = io.StringIO("encoded-frame\n")
+        try:
+            with mock.patch.object(multiplayer_sync.os, "name", "nt"):
+                multiplayer_sync._start_lua_daemon_reader("test-pipe", process)
+                ready, line = multiplayer_sync._read_lua_daemon_line(
+                    "test-pipe",
+                    process,
+                    timeout=0.25,
+                )
+        finally:
+            multiplayer_sync._LUA_DAEMON_READ_QUEUES.pop("test-pipe", None)
+
+        self.assertTrue(ready)
+        self.assertEqual(line, "encoded-frame\n")
+
+    def test_windows_lua_daemon_wait_times_out_without_select(self) -> None:
+        process = mock.Mock()
+        process.stdout = mock.Mock()
+        multiplayer_sync._LUA_DAEMON_READ_QUEUES["test-pipe"] = queue.Queue()
+        try:
+            with (
+                mock.patch.object(multiplayer_sync.os, "name", "nt"),
+                mock.patch.object(
+                    multiplayer_sync.select,
+                    "select",
+                    side_effect=AssertionError("select must not read Windows pipes"),
+                ),
+            ):
+                ready, line = multiplayer_sync._read_lua_daemon_line(
+                    "test-pipe",
+                    process,
+                    timeout=0.01,
+                )
+        finally:
+            multiplayer_sync._LUA_DAEMON_READ_QUEUES.pop("test-pipe", None)
+
+        self.assertFalse(ready)
+        self.assertEqual(line, "")
 
     def test_transport_mode_defers_edits_and_restores_source(self) -> None:
         runtime = FakeAuthoringRuntime(

@@ -259,6 +259,8 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         assert token in authoring_verifier, f"authoring live verifier lacks: {token}"
     for token in (
         "test_offline_mode_reloads_rejects_syntax_and_restores_source",
+        "test_windows_lua_daemon_wait_reads_redirected_pipe",
+        "test_windows_lua_daemon_wait_times_out_without_select",
         "test_transport_mode_defers_edits_and_restores_source",
         "test_failed_verification_still_restores_exact_source",
     ):
@@ -273,6 +275,8 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         "prior state remains live",
         "automatically deferred",
         "same capture result as the named pipe",
+        "Windows uses a bounded redirected-pipe reader",
+        "can activate",
         "does not synthesize global keyboard input or steal focus",
     ):
         assert token in documentation, f"Lua authoring documentation lacks: {token}"

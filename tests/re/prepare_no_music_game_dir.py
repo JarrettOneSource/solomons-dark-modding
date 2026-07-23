@@ -47,11 +47,20 @@ def to_windows_path(path: Path) -> str:
     return result.stdout.strip()
 
 
-def prepare(instance: str) -> dict[str, object]:
+def prepare(instance: str, game_dir: Path | None = None) -> dict[str, object]:
     if not LAUNCHER.exists():
         raise PrepareNoMusicFailure(f"Launcher is missing: {LAUNCHER}")
 
-    stage = run_command([str(LAUNCHER), "stage", "--json", "--instance", instance], timeout=120.0)
+    arguments = [str(LAUNCHER), "stage", "--json", "--instance", instance]
+    if game_dir is not None:
+        game_dir = game_dir.resolve()
+        if not (game_dir / "SolomonDark.exe").is_file():
+            raise PrepareNoMusicFailure(
+                f"game directory does not contain SolomonDark.exe: {game_dir}"
+            )
+        arguments.extend(["--game-dir", to_windows_path(game_dir)])
+
+    stage = run_command(arguments, timeout=120.0)
     stage_output = stage.stdout.strip() or stage.stderr.strip()
     if stage.returncode != 0:
         raise PrepareNoMusicFailure(
@@ -77,17 +86,19 @@ def prepare(instance: str) -> dict[str, object]:
         "game_dir_windows": to_windows_path(stage_root),
         "music_list": str(music_list),
         "stage_success": bool(stage_payload.get("success")),
+        "source_game_dir": str(game_dir) if game_dir is not None else None,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--instance", default=DEFAULT_INSTANCE)
+    parser.add_argument("--game-dir", type=Path)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     try:
-        result = prepare(args.instance)
+        result = prepare(args.instance, args.game_dir)
     except Exception as exc:
         if args.json:
             print(json.dumps({"success": False, "error": str(exc)}, indent=2))

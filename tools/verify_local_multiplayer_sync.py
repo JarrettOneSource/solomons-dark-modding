@@ -8,6 +8,7 @@ import base64
 import importlib.util
 import json
 import os
+import queue
 import select
 import subprocess
 import sys
@@ -623,6 +624,10 @@ _format_lua_response = _lua_exec_module._format_response
 
 _LUA_DAEMONS: dict[str, subprocess.Popen] = {}
 _LUA_DAEMON_LOCKS: dict[str, threading.Lock] = {}
+_LUA_DAEMON_READ_QUEUES: dict[
+    str,
+    queue.Queue[tuple[str, Exception | None]],
+] = {}
 _LUA_DAEMON_REGISTRY_LOCK = threading.Lock()
 
 
@@ -638,7 +643,7 @@ def _lua_daemon_lock(pipe_name: str) -> threading.Lock:
 def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
     env = os.environ.copy()
     env["SDMOD_LUA_EXEC_PIPE_NAME"] = pipe_name
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         [
             "powershell.exe",
             "-NoProfile",
@@ -657,6 +662,33 @@ def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
         encoding="ascii",
         bufsize=1,
     )
+    if os.name == "nt":
+        _start_lua_daemon_reader(pipe_name, proc)
+    return proc
+
+
+def _start_lua_daemon_reader(
+    pipe_name: str,
+    proc: subprocess.Popen,
+) -> None:
+    output: queue.Queue[tuple[str, Exception | None]] = queue.Queue()
+    _LUA_DAEMON_READ_QUEUES[pipe_name] = output
+
+    def read_lines() -> None:
+        if proc.stdout is None:
+            output.put(("", None))
+            return
+        while True:
+            try:
+                line = proc.stdout.readline()
+            except Exception as error:  # noqa: BLE001 - return reader failure to caller.
+                output.put(("", error))
+                return
+            output.put((line, None))
+            if not line:
+                return
+
+    threading.Thread(target=read_lines, daemon=True).start()
 
 
 def _get_lua_daemon(pipe_name: str) -> subprocess.Popen:
@@ -669,6 +701,7 @@ def _get_lua_daemon(pipe_name: str) -> subprocess.Popen:
 
 def _kill_lua_daemon(pipe_name: str) -> None:
     proc = _LUA_DAEMONS.pop(pipe_name, None)
+    _LUA_DAEMON_READ_QUEUES.pop(pipe_name, None)
     if proc is None:
         return
     for closer in (
@@ -695,6 +728,29 @@ def _lua_daemon_exit_detail(proc: subprocess.Popen) -> str:
         return ""
 
 
+def _read_lua_daemon_line(
+    pipe_name: str,
+    proc: subprocess.Popen,
+    timeout: float,
+) -> tuple[bool, str]:
+    if proc.stdout is None:
+        return True, ""
+    if os.name != "nt":
+        ready, _, _ = select.select([proc.stdout], [], [], timeout)
+        return (True, proc.stdout.readline()) if ready else (False, "")
+
+    output = _LUA_DAEMON_READ_QUEUES.get(pipe_name)
+    if output is None:
+        raise ValueError(f"missing Windows Lua daemon reader for {pipe_name}")
+    try:
+        line, error = output.get(timeout=timeout)
+    except queue.Empty:
+        return False, ""
+    if error is not None:
+        raise error
+    return True, line
+
+
 @atexit.register
 def _shutdown_lua_daemons() -> None:
     for pipe_name in list(_LUA_DAEMONS):
@@ -716,7 +772,13 @@ def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
                 f"lua bridge daemon write failed for {pipe_name}: {exc}"
             ) from exc
 
-        ready, _, _ = select.select([proc.stdout], [], [], deadline)
+        try:
+            ready, line = _read_lua_daemon_line(pipe_name, proc, deadline)
+        except (OSError, ValueError) as exc:
+            _kill_lua_daemon(pipe_name)
+            raise VerifyFailure(
+                f"lua bridge daemon read failed for {pipe_name}: {exc}"
+            ) from exc
         if not ready:
             exit_detail = _lua_daemon_exit_detail(proc)
             _kill_lua_daemon(pipe_name)
@@ -727,7 +789,6 @@ def lua(pipe_name: str, code: str, timeout: float = 10.0) -> str:
             raise VerifyFailure(
                 f"lua bridge daemon timed out after {deadline:.1f}s for {pipe_name}: {code[:120]}"
             )
-        line = proc.stdout.readline()
 
     if not line:
         exit_detail = _lua_daemon_exit_detail(proc)
