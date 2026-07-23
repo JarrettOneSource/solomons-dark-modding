@@ -61,5 +61,7 @@ jobs:
         run: python -m unittest tests.test_lua_sprites_multiplayer_verifier
       - name: Test Lua multiplayer storage verifier
         run: python -m unittest tests.test_lua_storage_multiplayer_verifier
+      - name: Test Lua multiplayer timer verifier
+        run: python -m unittest tests.test_lua_timer_multiplayer_verifier
       - name: Verify all static Lua seam contracts
         run: python tests/re/run_static_re_tests.py --lua-only

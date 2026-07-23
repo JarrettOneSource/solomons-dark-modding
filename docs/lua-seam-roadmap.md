@@ -369,7 +369,9 @@ simulation decisions into filters/authority hooks.
 callbacks plus a single-handle ordered `sequence` scheduler. It uses the runtime's
 monotonic game-thread tick, bounds retained callbacks and per-tick work, cancels failing
 callbacks, and tears down every registry reference with the owning mod. It advertises
-`timer.local.scheduler`; see `lua-timer.md` and the opt-in `sample.lua.timer_lab` mod.
+`timer.local.scheduler`. The opt-in two-peer acceptance proves independent callback
+results, validation, cancellation, error retirement, full per-mod capacity, and release
+isolation; see `lua-timer.md` and the opt-in `sample.lua.timer_lab` mod.
 
 **10. `sd.bus` — cross-mod contracts.** Publish/subscribe across loaded mods plus
 `provides`/`requires` in `manifest.json`. *Unlocks:* framework mods (quest engine, UI kit)

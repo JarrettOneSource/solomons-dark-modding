@@ -17,6 +17,13 @@ def test_lua_timers_are_bounded_local_and_tick_driven() -> str:
     manifest = _read("mods/lua_timer_lab/manifest.json")
     sample = _read("mods/lua_timer_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_timers.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_timer_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_timer_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaTimerBindings(mod->state)" in bindings
     assert "lua_createtable(mod->state, 0, 29);" in bindings
@@ -78,8 +85,44 @@ def test_lua_timers_are_bounded_local_and_tick_driven() -> str:
         "sequence order mismatch",
     ):
         assert token in verifier, f"Lua timer verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.timer_lab"',
+        "STATE_PROBE",
+        "RESET_PROBE",
+        "RELEASE_PROBE",
+        "CAPACITY_PROBE",
+        "_setup_probe",
+        "timer_state_matches",
+        "setup_matches",
+        "capacity_matches",
+        "--confirm-scheduling",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua timer multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_state_matcher_requires_exact_peer_local_result",
+        "test_setup_and_capacity_require_exact_limits",
+        "test_scheduling_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_timer_completion_capacity_and_isolation",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua timer multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_timer_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.timer provides bounded per-mod after/every/sequence scheduling, "
-        "runs from monotonic runtime ticks, and stays local in multiplayer"
+        "runs from monotonic runtime ticks, and has exact two-peer local "
+        "capacity and lifecycle acceptance"
     )

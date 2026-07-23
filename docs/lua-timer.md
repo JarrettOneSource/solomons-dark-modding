@@ -57,3 +57,20 @@ or trigger an authority-side filter/event and let its result replicate.
 
 The opt-in `sample.lua.timer_lab` mod demonstrates one-shot, repeating, and
 sequenced callbacks.
+
+For the complete multiplayer-local lifecycle, use a disposable pair:
+
+```powershell
+py tools/verify_lua_timer_multiplayer.py `
+  --launch-pair `
+  --confirm-scheduling
+```
+
+The pair verifier first removes the sample's startup timers, then schedules
+different labeled suites on host and client. It proves one-shot, repeating,
+sequence, callback-created, canceled, and callback-error behavior without
+cross-peer state, followed by independent `clear` results. The host also fills
+all 256 callback slots while the client retains its own timer, rejects the
+257th callback, and releases the full local capacity. Invalid delay, callback,
+sequence, and handle shapes are rejected. Window tiling and global process
+cleanup are disabled, and only the two returned process IDs are stopped.
