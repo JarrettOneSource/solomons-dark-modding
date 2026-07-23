@@ -208,6 +208,7 @@
     <ClInclude Include="src\lua_draw_internal.h" />
     <ClInclude Include="src\lua_draw_renderer\rendering_helpers.inl" />
     <ClInclude Include="src\lua_engine_bindings_internal.h" />
+    <ClInclude Include="src\lua_engine_bindings_spells_runtime.inl" />
     <ClInclude Include="src\lua_engine_values.h" />
     <ClInclude Include="src\lua_engine_parsers_internal.h" />
     <ClInclude Include="src\mod_loader_internal.h" />
@@ -347,6 +348,8 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\registered_spell_input.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_secondary_spell_cast_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\poison_authority_hook.inl" />
@@ -505,6 +508,7 @@
     <ClCompile Include="src\lua_engine_bindings_waves.cpp" />
     <ClCompile Include="src\lua_engine_bindings_spells.cpp" />
     <ClCompile Include="src\lua_engine_registered_spell_casts.cpp" />
+    <ClCompile Include="src\lua_engine_registered_spell_selection.cpp" />
     <ClCompile Include="src\lua_engine_registered_spell_effects.cpp" />
     <ClCompile Include="src\lua_engine_bindings_items.cpp" />
     <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />

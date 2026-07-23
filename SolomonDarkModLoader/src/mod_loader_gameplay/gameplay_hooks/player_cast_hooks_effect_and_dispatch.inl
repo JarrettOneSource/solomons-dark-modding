@@ -269,6 +269,10 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (TryDispatchSelectedLuaRegisteredPrimarySpell(actor_address) !=
+        LuaRegisteredSpellInputDispatchResult::NotSelected) {
+        return;
+    }
     if (IsActorCurrentLocalPlayerSlotZero(actor_address)) {
         std::int32_t skill_id = 0;
         if (TryResolveLocalPlayerPrimarySpellFilterSkillId(

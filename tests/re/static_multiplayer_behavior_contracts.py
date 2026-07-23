@@ -27,7 +27,7 @@ def test_secondary_replay_preserves_owner_authored_aim_when_target_resolves() ->
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_cast_packet_sync.inl"
     )
-    hooks = _read(
+    hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )
@@ -117,7 +117,7 @@ def test_cursor_placed_secondaries_replay_owner_world_position() -> str:
         "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
     )
     bot_runtime = _read("SolomonDarkModLoader/include/bot_runtime.h")
-    hooks = _read(
+    hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )
@@ -870,7 +870,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/"
         "multiplayer_dampen_effect.inl"
     )
-    player_cast_hooks = _read(
+    player_cast_hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )

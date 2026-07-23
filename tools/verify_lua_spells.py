@@ -22,8 +22,12 @@ assert(sd.runtime.has_capability("spells.register"))
 assert(sd.runtime.has_capability("spells.read"))
 assert(sd.runtime.has_capability("spells.cast.owner"))
 assert(sd.runtime.has_capability("spells.effects.read"))
+assert(sd.runtime.has_capability("spells.select.local"))
 assert(type(sd.spells.cast) == "function")
 assert(type(sd.spells.get_effects) == "function")
+assert(type(sd.spells.select) == "function")
+assert(type(sd.spells.clear_selection) == "function")
+assert(type(sd.spells.get_selection) == "function")
 local expected_id = 8348995147374483494
 local found = nil
 for _, spell in ipairs(sd.spells.list()) do
@@ -45,6 +49,23 @@ local by_id = assert(sd.spells.get(expected_id), "content-id lookup failed")
 assert(by_id.cfg.name == "Gravity Well", "descriptor mutation changed registration")
 assert(by_id.id == found.id and by_id.key == found.key, "lookup differs")
 assert(sd.spells.get(4611686018427387904) == nil, "unknown content id resolved")
+
+local selected = sd.spells.select(expected_id, 8)
+assert(selected.id == expected_id and selected.selected == true,
+    "selected descriptor differs")
+assert(selected.belt_slot == 8, "selected belt slot differs")
+local selection = sd.spells.get_selection()
+assert(selection.primary == nil, "unexpected registered primary selection")
+assert(selection.secondary[8] and
+    selection.secondary[8].id == expected_id and
+    selection.secondary[8].belt_slot == 8,
+    "secondary selection snapshot differs")
+assert(sd.spells.clear_selection("secondary", 8) == true,
+    "selected secondary was not cleared")
+assert(sd.spells.get_selection().secondary[8] == nil,
+    "cleared secondary selection remained visible")
+local missing_belt_ok = pcall(sd.spells.select, expected_id)
+local invalid_belt_ok = pcall(sd.spells.select, expected_id, 9)
 
 local forbidden = {
   "address", "actor_address", "config_address", "native_skill_id",
@@ -86,6 +107,9 @@ print("raw_internals_absent=" .. tostring(raw_internals_absent))
 print("zero_rejected=" .. tostring(not zero_ok))
 print("fraction_rejected=" .. tostring(not fraction_ok))
 print("late_registration_rejected=" .. tostring(not late_register_ok))
+print("selection_round_trip=" .. tostring(
+    not missing_belt_ok and not invalid_belt_ok and
+    sd.spells.get_selection().secondary[8] == nil))
 '''
 
 
@@ -98,6 +122,7 @@ def run(pipe_name: str) -> dict[str, Any]:
         "zero_rejected",
         "fraction_rejected",
         "late_registration_rejected",
+        "selection_round_trip",
     ):
         if values.get(field) != "true":
             raise VerifyFailure(f"spell registry contract failed {field}: {values}")

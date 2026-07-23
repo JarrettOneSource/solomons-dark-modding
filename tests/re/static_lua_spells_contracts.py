@@ -2,16 +2,32 @@
 
 from __future__ import annotations
 
-from static_multiplayer_contract_support import _read, _require_in_order
+from static_multiplayer_contract_support import (
+    _read,
+    _require_in_order,
+    read_source_unit,
+)
 
 
 def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
-    bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_spells.cpp")
+    bindings = read_source_unit(
+        "SolomonDarkModLoader/src/lua_engine_bindings_spells.cpp"
+    )
     root_bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
     internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
     casts = _read("SolomonDarkModLoader/src/lua_engine_registered_spell_casts.cpp")
+    selection = _read(
+        "SolomonDarkModLoader/src/lua_engine_registered_spell_selection.cpp"
+    )
     effects = _read("SolomonDarkModLoader/src/lua_engine_registered_spell_effects.cpp")
+    player_cast_hooks = read_source_unit(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_cast_hooks.inl"
+    )
+    input_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/input_hooks.inl"
+    )
     transport = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "lua_registered_spell_cast_sync.inl"
@@ -29,6 +45,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     manifest = _read("mods/lua_spells_registry_lab/manifest.json")
     sample = _read("mods/lua_spells_registry_lab/scripts/main.lua")
     documentation = _read("docs/lua-spells.md")
+    picker_documentation = _read("docs/spell-picker-re.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_spells.py")
     native_test = _read("tests/native/lua_content_registry_tests.cpp")
@@ -40,6 +57,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         '"spells.read"',
         '"spells.cast.owner"',
         '"spells.effects.read"',
+        '"spells.select.local"',
     ):
         assert capability in engine, f"spell capability lacks: {capability}"
     for token in (
@@ -61,6 +79,9 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         'RegisterFunction(state, &LuaSpellsRegister, "register")',
         'RegisterFunction(state, &LuaSpellsGet, "get")',
         'RegisterFunction(state, &LuaSpellsList, "list")',
+        'RegisterFunction(state, &LuaSpellsSelect, "select")',
+        'RegisterFunction(state, &LuaSpellsClearSelection, "clear_selection")',
+        'RegisterFunction(state, &LuaSpellsGetSelection, "get_selection")',
         'RegisterFunction(state, &LuaSpellsCast, "cast")',
         'RegisterFunction(state, &LuaSpellsGetEffects, "get_effects")',
         "RegisterLuaContentIdentityForMod(",
@@ -122,8 +143,21 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "retirement snapshot removes",
         "callbacks continue to run only",
         "simulation owner; remote peers",
+        "Local selection and native input",
+        "never writes stock unlock bytes",
+        "native player mana writer",
+        "does not yet render a player-facing catalog chooser",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
+    for token in (
+        "0x004F8480",
+        "0x004F90C0",
+        "0x00B3BDD8..0x00B3BDDF",
+        "acquisition dialog, not a runtime loadout picker",
+    ):
+        assert token in picker_documentation, (
+            f"native spell-picker boundary lacks: {token}"
+        )
     for token in (
         "QueueLuaRegisteredSpellCastRequest",
         "kLuaRegisteredSpellMaximumRememberedCasts = 1024",
@@ -143,6 +177,33 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "SnapshotLocalLuaRegisteredSpellEffects",
     ):
         assert token in effects, f"Lua spell effect lifecycle lacks: {token}"
+    for token in (
+        "struct RegisteredSpellInputSelectionState",
+        "kLuaRegisteredSpellSecondaryInputSlotCount",
+        "SelectLuaRegisteredSpellForInput",
+        "ClearLuaRegisteredSpellInputSelection",
+        "ClearLuaRegisteredSpellInputSelectionsForMod",
+        "TryGetSelectedLuaRegisteredPrimarySpell",
+        "TryGetSelectedLuaRegisteredSecondarySpell",
+        "TryGetLuaRegisteredSpellInputCooldownRemaining",
+        "CommitLuaRegisteredSpellInputCast",
+        'ReadConfigNumber(definition.config, "mana_cost", 0.0)',
+        'ReadConfigNumber(definition.config, "cooldown_ms", 0.0)',
+    ):
+        assert token in selection, f"Lua spell input selection lacks: {token}"
+    for token in (
+        "TryDispatchSelectedLuaRegisteredPrimarySpell",
+        "TryDispatchSelectedLuaRegisteredSecondarySpell",
+        "TrySpendLocalRegisteredSpellMana",
+        "QueueOwnerRoutedLuaRegisteredSpellCast",
+        "CommitLuaRegisteredSpellInputCast",
+        "GetLocalRunEnemyNetworkActorId",
+    ):
+        assert token in player_cast_hooks, (
+            f"Lua spell native input routing lacks: {token}"
+        )
+    assert "TryDispatchSelectedLuaRegisteredSecondaryBeltInput" in input_hooks
+    assert "lua_engine_registered_spell_selection.cpp" in project
     for token in (
         "QueueOwnerRoutedLuaRegisteredSpellCastInternal",
         "SendQueuedLuaRegisteredSpellCasts",
@@ -193,8 +254,8 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     assert "ApplyLuaRegisteredSpellCastPacket(packet, from, now_ms)" in dispatch
     assert "ApplyLuaRegisteredSpellEffectSnapshotPacket(" in dispatch
     assert (
-        "**Spell catalog, owner runtime, and generic effect replication "
-        "implemented 2026-07-22.**" in roadmap
+        "**Spell catalog, input selection, owner runtime, and generic effect replication implemented\n"
+        "2026-07-22.**" in roadmap
     )
     for token in (
         "sd.spells.list",
@@ -205,6 +266,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "descriptor_copy_isolated",
         "raw_internals_absent",
         "late_registration_rejected",
+        "selection_round_trip",
     ):
         assert token in verifier, f"spell verifier lacks: {token}"
 

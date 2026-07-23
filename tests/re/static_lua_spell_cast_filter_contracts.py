@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from static_multiplayer_contract_support import _read, _require_in_order
+from static_multiplayer_contract_support import (
+    _read,
+    _require_in_order,
+    read_source_unit,
+)
 
 
 def test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt() -> str:
     public_api = _read("SolomonDarkModLoader/include/lua_event_filters.h")
     filters = _read("SolomonDarkModLoader/src/lua_engine_spell_cast_filters.cpp")
     registration = _read("SolomonDarkModLoader/src/lua_engine_filters.cpp")
-    player_hooks = _read(
+    player_hooks = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "player_cast_hooks.inl"
     )

@@ -225,6 +225,8 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint64_t> mouse_left_edge_serial{0};
     std::atomic<std::uint64_t> mouse_left_edge_tick_ms{0};
     std::atomic<std::uint64_t> claimed_primary_cast_edge_serial{0};
+    std::atomic<std::int32_t> last_belt_slot_edge{-1};
+    std::atomic<std::uint64_t> last_belt_slot_edge_tick_ms{0};
     std::atomic<std::uint32_t> pending_mouse_left_edge_events{0};
     std::atomic<std::uint32_t> pending_mouse_left_frames{0};
     std::atomic<std::uint64_t> last_mouse_left_hold_player_tick_generation{0};

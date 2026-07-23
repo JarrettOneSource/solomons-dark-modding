@@ -61,11 +61,34 @@ struct LuaRegisteredSpellEffectState {
     LuaModValue data;
 };
 
+inline constexpr std::size_t kLuaRegisteredSpellSecondaryInputSlotCount = 8;
+
+struct LuaRegisteredSpellInputSelection {
+    std::uint64_t content_id = 0;
+    bool primary = false;
+    std::int32_t secondary_slot = -1;
+    float mana_cost = 0.0f;
+    std::uint32_t cooldown_ms = 0;
+    float cast_range = 100.0f;
+};
+
 bool QueueLuaRegisteredSpellCastRequest(
     const LuaRegisteredSpellCastRequest& request,
     std::string* error_message);
 std::vector<LuaRegisteredSpellEffectState>
 SnapshotLocalLuaRegisteredSpellEffects();
+bool TryGetSelectedLuaRegisteredPrimarySpell(
+    LuaRegisteredSpellInputSelection* selection);
+bool TryGetSelectedLuaRegisteredSecondarySpell(
+    std::size_t secondary_slot,
+    LuaRegisteredSpellInputSelection* selection);
+bool TryGetLuaRegisteredSpellInputCooldownRemaining(
+    std::uint64_t content_id,
+    std::uint64_t now_ms,
+    std::uint32_t* remaining_ms);
+void CommitLuaRegisteredSpellInputCast(
+    std::uint64_t content_id,
+    std::uint64_t now_ms);
 
 // Result of a queued Lua exec request serviced on the gameplay thread.
 struct LuaExecResult {

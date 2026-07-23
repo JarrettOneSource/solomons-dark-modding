@@ -12,6 +12,12 @@ std::uint8_t __fastcall HookGameplayKeyboardEdge(void* self, void* /*unused_edx*
                     "Consumed queued gameplay keyboard edge. scancode=" +
                     std::to_string(scancode) +
                     " remaining=" + std::to_string(available - 1));
+                const auto belt_slot = RecordGameplayBeltSlotEdge(scancode);
+                if (TryDispatchSelectedLuaRegisteredSecondaryBeltInput(
+                        belt_slot) !=
+                    LuaRegisteredSpellInputDispatchResult::NotSelected) {
+                    return 0;
+                }
                 return 1;
             }
         }
@@ -19,5 +25,15 @@ std::uint8_t __fastcall HookGameplayKeyboardEdge(void* self, void* /*unused_edx*
 
     const auto original =
         GetX86HookTrampoline<GameplayKeyboardEdgeFn>(g_gameplay_keyboard_injection.edge_hook);
-    return original != nullptr ? original(self, scancode) : 0;
+    const std::uint8_t result =
+        original != nullptr ? original(self, scancode) : 0;
+    if (result != 0) {
+        const auto belt_slot = RecordGameplayBeltSlotEdge(scancode);
+        if (TryDispatchSelectedLuaRegisteredSecondaryBeltInput(
+                belt_slot) !=
+            LuaRegisteredSpellInputDispatchResult::NotSelected) {
+            return 0;
+        }
+    }
+    return result;
 }

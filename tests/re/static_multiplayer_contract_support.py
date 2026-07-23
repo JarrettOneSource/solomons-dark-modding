@@ -48,6 +48,9 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "enemy_death_reward_level_up_hooks.inl",
         "mod_loader_hub_state.inl",
         "public_api_combat_control_queues.inl",
+        "lua_engine_bindings_spells_runtime.inl",
+        "registered_spell_input.inl",
+        "player_secondary_spell_cast_hook.inl",
     }
 )
 

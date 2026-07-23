@@ -1124,6 +1124,10 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     if (ShouldSuppressManualSpawnerTestLocalPurePrimary(actor_address)) {
         return;
     }
+    if (TryDispatchSelectedLuaRegisteredPrimarySpell(actor_address) !=
+        LuaRegisteredSpellInputDispatchResult::NotSelected) {
+        return;
+    }
 
     auto& memory = ProcessMemory::Instance();
     if (IsRunLifecycleManualEnemySpawnerTestModeEnabled() &&

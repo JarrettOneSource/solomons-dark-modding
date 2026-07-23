@@ -218,8 +218,9 @@ delivery; periodic and first-peer state checkpoints; and a three-peer late-join
 acceptance verifier. See `lua-state-and-events.md`.
 
 **4. Content registration.**
-- `sd.spells.register{key, cfg, on_cast, on_tick, on_hit}` — allocate an ID, integrate the
-  skill picker (`skill-picker-re.md` maps the UI), route cast dispatch into Lua, compose
+- `sd.spells.register{key, cfg, on_cast, on_tick, on_hit}` — allocate an ID, integrate an
+  authored runtime picker (`spell-picker-re.md` explains why the stock acquisition dialog
+  is not that picker), route cast dispatch into Lua, compose
   native effect primitives (`kFireEmberCtor`, `kSpellActionBuilder`/`kSpellBuilderReset`/
   `kSpellBuilderFinalize`, projectile-group gates already patched for bot casting).
   Data side is proven by `skill_shock_nova`; the missing piece is scripted behavior.
@@ -255,13 +256,16 @@ Protocol 77 carries the content ID and effective constructor values through worl
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. See `lua-enemies.md`.
 
-**Spell catalog, owner runtime, and generic effect replication implemented 2026-07-22.**
-`sd.spells.register`, `get`, `list`, `cast`, and `get_effects` bind deterministic
+**Spell catalog, input selection, owner runtime, and generic effect replication implemented
+2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
+`get_selection`, `cast`, and `get_effects` bind deterministic
 identities to bounded immutable config and owner-state callbacks. Protocol 77 routes host
 commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
 once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
 protocol fragments and relays complete per-owner effect generations, including explicit
-empty retirement snapshots. Native picker/input integration remains. See `lua-spells.md`.
+empty retirement snapshots. Selected primary and exact live belt inputs suppress stock
+dispatch, charge native mana transactionally, enforce local cooldowns, and enter that same
+owner route. The player-facing authored picker remains with `sd.ui`. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3

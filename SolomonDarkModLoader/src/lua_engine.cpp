@@ -330,6 +330,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "spells.register",
         "spells.read",
         "spells.effects.read",
+        "spells.select.local",
         "items.register",
         "items.read",
         "enemies.register",
@@ -425,6 +426,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaEventFilterRegistrationsForMod(mod);
     ClearLuaTimersForMod(mod);
     ClearLuaBusSubscriptionsForMod(mod);
+    ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);

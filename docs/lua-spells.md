@@ -1,9 +1,9 @@
 # Lua scripted spells
 
-`sd.spells` owns deterministic identities, immutable metadata, owner-routed
-casting, and bounded replicated scripted effect lifecycles for primary and
-secondary spells. Native picker and player-input integration remain separate
-work.
+`sd.spells` owns deterministic identities, immutable metadata, local input
+selection, owner-routed casting, and bounded replicated scripted effect
+lifecycles for primary and secondary spells. The visual authored picker remains
+part of the `sd.ui` authoring seam.
 
 ## Registration
 
@@ -74,7 +74,50 @@ local all = sd.spells.list()
 Descriptors contain `id`, `mod_id`, `key`, `slot`, a fresh `cfg` copy, and
 `has_on_cast`/`has_on_tick`/`has_on_hit`. They contain no Lua registry index,
 native skill ID, config address, actor address, or function value. The
-capabilities are `spells.register`, `spells.read`, and `spells.effects.read`.
+capabilities are `spells.register`, `spells.read`, `spells.effects.read`, and
+`spells.select.local`.
+
+## Local selection and native input
+
+Selection is a peer-local input preference. It never writes stock unlock bytes,
+skill rows, or belt contents:
+
+```lua
+sd.spells.select("custom_primary")
+sd.spells.select("gravity_well", 3) -- belt slot 3
+
+local selected = sd.spells.get_selection()
+print(selected.primary and selected.primary.cfg.name)
+print(selected.secondary[3] and selected.secondary[3].cfg.name)
+
+sd.spells.clear_selection("primary")
+sd.spells.clear_selection("secondary", 3)
+```
+
+A primary definition accepts no belt slot. A secondary definition requires a
+one-based slot from 1 through 8. String keys resolve only within the calling
+mod; a positive content ID may select any loaded registered definition so a
+shared picker can operate on the complete catalog. `get_selection()` returns a
+primary descriptor when selected and a sparse `secondary` array keyed by belt
+slot. Selection disappears when its owning mod unloads.
+
+While selected, the loader consumes the stock primary click or exact live belt
+binding before stock dispatch. It captures the local actor's semantic origin,
+aim, and target, then queues the registered cast through the same owner-routed
+path as `sd.spells.cast`. A rejected cast does not fall through to the stock
+spell hidden beneath that input slot.
+
+Player-input casts enforce `cfg.cooldown_ms` locally and spend
+`cfg.mana_cost` through the native player mana writer. Insufficient mana or an
+active cooldown consumes the input without casting. If owner routing rejects
+the request after mana was spent, the loader refunds the observed native
+delta. `cfg.range` supplies the forward aim distance when neither a semantic
+target nor cursor-world placement is available.
+
+The selection itself is not replicated. Every participant selects its own
+input bindings, and the resulting cast runs on that participant's simulation
+owner. Direct `sd.spells.cast` calls are explicit simulation commands and do
+not consult local selection, input cooldowns, or player mana.
 
 ## Owner-routed casting
 
@@ -124,6 +167,8 @@ the latest complete snapshots from remote owners. Every row contains
 `y`, `velocity_x`, `velocity_y`, `radius`, `age_ms`, `remaining_ms`, `data`,
 and `local_owner`. The API is address-free and does not create a native actor;
 mods can use the semantic state to present an effect with `sd.draw`.
+This generic content-ID-based effect snapshot channel is shared by every
+registered definition.
 
 Protocol 77 carries at most 256 logical effects, four effects per fragment,
 with deterministic content and owner identities. The owner publishes the
@@ -141,9 +186,13 @@ replay gameplay behavior.
 
 ## Current boundary
 
-The definition is callable from Lua and its generic content-ID-based effect snapshot channel
-is available to every peer, but it is not yet selectable in the native skill
-picker or bound to native player input.
+Registered definitions are selectable and bound to native primary/belt input,
+but the framework does not yet render a player-facing catalog chooser. The
+stock `SellSpell` surface headed `Select a Spell` is an acquisition dialog for
+eight fixed native unlock flags, not a runtime loadout picker; reusing it would
+couple mod content to permanent stock progression. Its verified boundary is
+documented in `spell-picker-re.md`. The authored-UI tier will provide the visual
+chooser over `list`, `select`, and `get_selection` without native IDs.
 
 The disabled-by-default `sample.lua.spells_registry_lab` mod registers a
 `gravity_well` definition and its bounded field lifecycle. It never casts on

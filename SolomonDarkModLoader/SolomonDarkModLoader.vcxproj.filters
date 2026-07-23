@@ -299,6 +299,9 @@
     <ClInclude Include="src\lua_engine_bindings_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_spells_runtime.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_engine_values.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -905,6 +908,12 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\registered_spell_input.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_secondary_spell_cast_hook.inl">
+      <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -1385,6 +1394,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_registered_spell_casts.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_selection.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_registered_spell_effects.cpp">

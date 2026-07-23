@@ -3,6 +3,10 @@
 This note captures the recovered native level-up and skill-picker seams used by
 Lua-controlled participants.
 
+This is the level-up option picker. It is not the `Select a Spell` acquisition
+dialog and it does not assign runtime primary or belt inputs. See
+`spell-picker-re.md` for that separate native surface boundary.
+
 ## Level-Up Gate
 
 `0x0067C250` is the native level-up routine. It updates:

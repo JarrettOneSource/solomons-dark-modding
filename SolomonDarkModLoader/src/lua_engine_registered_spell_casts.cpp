@@ -244,9 +244,12 @@ void DispatchRegisteredSpellCast(
 }  // namespace
 
 void ResetLuaRegisteredSpellRuntime() {
-    std::lock_guard<std::mutex> lock(RegisteredSpellCastQueueMutex());
-    RegisteredSpellCastQueue().clear();
-    RememberedSpellCastRequests().clear();
+    {
+        std::lock_guard<std::mutex> lock(RegisteredSpellCastQueueMutex());
+        RegisteredSpellCastQueue().clear();
+        RememberedSpellCastRequests().clear();
+    }
+    ResetLuaRegisteredSpellInputSelections();
 }
 
 void DispatchPendingLuaRegisteredSpellCasts(

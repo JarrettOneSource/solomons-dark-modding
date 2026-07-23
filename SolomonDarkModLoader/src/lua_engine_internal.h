@@ -206,6 +206,15 @@ void ResetLuaWaveSpawnFilterDiagnostics();
 void ResetLuaSpellCastFilterDiagnostics();
 void ResetLuaResourceFilterDiagnostics();
 void ResetLuaRegisteredSpellRuntime();
+void ResetLuaRegisteredSpellInputSelections();
+bool SelectLuaRegisteredSpellForInput(
+    const LuaSpellDefinition& definition,
+    std::int32_t secondary_slot,
+    std::string* error_message);
+bool ClearLuaRegisteredSpellInputSelection(
+    LuaSpellSlot slot,
+    std::int32_t secondary_slot);
+void ClearLuaRegisteredSpellInputSelectionsForMod(std::string_view mod_id);
 void DispatchPendingLuaRegisteredSpellCasts(
     const SDModRuntimeTickContext& context);
 void TickLuaRegisteredSpellEffects(
