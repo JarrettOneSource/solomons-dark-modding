@@ -49,6 +49,10 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_spells.py")
     verifier_tests = _read("tests/test_lua_spells_verifier.py")
+    multiplayer_verifier = _read("tools/verify_lua_spells_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_spells_multiplayer_verifier.py"
+    )
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     native_test = _read("tests/native/lua_content_registry_tests.cpp")
 
@@ -164,6 +168,11 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "py -3 tools/verify_lua_spells.py",
         "first loaded Lua mod",
         "leaves belt slot 1 clear",
+        "verify_lua_spells_multiplayer.py --launch-pair --confirm-mutation",
+        "selection remains peer-local",
+        "host command for the client",
+        "explicit empty retirement snapshot",
+        "stops only the exact processes",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
     for token in (
@@ -299,7 +308,38 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "test_failed_picker_action_still_clears_slot_one",
     ):
         assert token in verifier_tests, f"spell verifier tests lack: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.spells_registry_lab"',
+        "CLIENT_REMOTE_REJECTION",
+        "MAX_REMOTE_RETIREMENT_SECONDS = 1.0",
+        "sd.spells.get_effects()",
+        "command_is_local_owner",
+        "observer_effect_near_retirement",
+        "effect_absent",
+        "--confirm-mutation",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"spell multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_cast_result_requires_exact_owner_route",
+        "test_effect_requires_exact_identity_owner_and_callback_state",
+        "test_near_retirement_witness_precedes_bounded_empty_snapshot",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"spell multiplayer verifier tests lack: {token}"
+        )
     assert "python -m unittest tests.test_lua_spells_verifier" in workflow
+    assert (
+        "python -m unittest tests.test_lua_spells_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.spells owner-routes deterministic casts, runs bounded owner-side "

@@ -292,7 +292,9 @@ protocol fragments and relays complete per-owner effect generations, including e
 empty retirement snapshots. Selected primary and exact live belt inputs suppress stock
 dispatch, charge native mana transactionally, enforce local cooldowns, and enter that same
 owner route. The disabled spell lab composes a player-facing native-authored picker from
-`sd.ui` and the local selection API. See `lua-spells.md`.
+`sd.ui` and the local selection API. The opt-in two-peer acceptance covers local-selection
+isolation, both owner directions, client route rejection, semantic effect convergence, and
+explicit pre-expiry retirement. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
