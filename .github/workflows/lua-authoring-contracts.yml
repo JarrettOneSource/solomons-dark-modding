@@ -29,3 +29,5 @@ jobs:
         run: python -m unittest tests.test_lua_ui_authoring_verifier
       - name: Test Lua spell picker verifier
         run: python -m unittest tests.test_lua_spells_verifier
+      - name: Test launcher/native protocol alignment
+        run: python -m unittest tests.test_protocol_version_alignment

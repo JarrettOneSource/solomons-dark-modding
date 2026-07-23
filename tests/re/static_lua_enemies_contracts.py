@@ -151,7 +151,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "sizeof(WorldSnapshotPacket) == 1032",
     ):
         assert token in protocol, f"enemy snapshot protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 77;" in compatibility
+    assert "CurrentProtocolVersion = 80;" in compatibility
     for token in (
         "TryGetRunLifecycleLuaEnemySpawnConfig",
         "snapshot.lua_content_id = lua_enemy_config.content_id",

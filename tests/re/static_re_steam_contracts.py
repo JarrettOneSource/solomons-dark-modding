@@ -392,7 +392,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
 
     required_pairs = (
         (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 77;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 80;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -482,6 +482,24 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
             ", ".join(missing)
         )
 
+    native_protocol = re.search(
+        r"kProtocolVersion\s*=\s*(\d+);",
+        protocol_text,
+    )
+    launcher_protocol = re.search(
+        r"CurrentProtocolVersion\s*=\s*(\d+);",
+        compatibility_materializer_text,
+    )
+    if native_protocol is None or launcher_protocol is None:
+        raise StaticReTestFailure(
+            "could not parse native and launcher protocol versions"
+        )
+    if native_protocol.group(1) != launcher_protocol.group(1):
+        raise StaticReTestFailure(
+            "native/launcher protocol version mismatch: "
+            f"native={native_protocol.group(1)} launcher={launcher_protocol.group(1)}"
+        )
+
     if "ReadToEndAsync" in ui_command_client_text:
         raise StaticReTestFailure(
             "WPF launcher still waits for inherited game pipe EOF instead of the CLI JSON response"
@@ -497,7 +515,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
                 "WPF launcher retains the global Steam status: " + removed_status
             )
     return (
-        "Steam friends-only lobby, authenticated v65 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v80 handshake, idle keepalive, owner-checked gameplay "
         "routing, Solomon Dark AppID launch, x86 runtime staging, and a live launch-token-bound "
         "lobby connection panel are wired"
     )

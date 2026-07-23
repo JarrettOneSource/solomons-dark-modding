@@ -117,7 +117,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "IsValidLuaModStreamPacketWireSize(",
     ):
         assert token in protocol, f"Lua mod wire protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 77;" in compatibility
+    assert "CurrentProtocolVersion = 80;" in compatibility
     for capability in (
         '"state.replicated.read"',
         '"state.replicated.write"',

@@ -116,7 +116,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         assert token in protocol, f"item grant protocol lacks: {token}"
     grant_packet = protocol.split("struct LuaItemGrantPacket", 1)[1].split("};", 1)[0]
     assert "recipe_uid" not in grant_packet
-    assert "CurrentProtocolVersion = 77;" in compatibility
+    assert "CurrentProtocolVersion = 80;" in compatibility
     for token in (
         "SendQueuedAuthoritativeLuaItemGrants",
         "SendPacketToParticipantOrPeers(packet, grant.target_participant_id)",
