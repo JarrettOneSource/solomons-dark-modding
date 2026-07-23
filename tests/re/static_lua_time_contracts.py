@@ -207,6 +207,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (

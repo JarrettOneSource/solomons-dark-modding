@@ -274,6 +274,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (

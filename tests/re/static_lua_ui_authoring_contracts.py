@@ -250,6 +250,7 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (

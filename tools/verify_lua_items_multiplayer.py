@@ -243,6 +243,11 @@ def run(
                 exact_mod_id=ACCEPTANCE_MOD_ID,
             )
             launched_process_ids.extend(game_process_ids(result["pair"]))
+            if len(set(launched_process_ids)) != 2:
+                raise RuntimeError(
+                    "local pair did not report two exact process IDs: "
+                    f"{launched_process_ids}"
+                )
             disable_bots()
             wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
             wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")

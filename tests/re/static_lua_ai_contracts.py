@@ -195,6 +195,7 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (

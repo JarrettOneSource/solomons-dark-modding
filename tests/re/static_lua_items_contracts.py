@@ -218,6 +218,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (

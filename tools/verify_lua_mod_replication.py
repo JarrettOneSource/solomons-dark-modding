@@ -181,6 +181,11 @@ def run(
                 exact_mod_id=ACCEPTANCE_MOD_ID,
             )
             launched_process_ids.extend(game_process_ids(result["pair"]))
+            if len(set(launched_process_ids)) != 2:
+                raise RuntimeError(
+                    "local pair did not report two exact process IDs: "
+                    f"{launched_process_ids}"
+                )
             disable_bots()
             wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
             wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
@@ -224,9 +229,18 @@ def run(
                 god_mode=True,
                 exact_mod_id=ACCEPTANCE_MOD_ID,
             )
-            launched_process_ids.extend(
-                game_process_ids(result["late_join_launch"])
+            late_join_process_ids = game_process_ids(
+                result["late_join_launch"]
             )
+            launched_process_ids.extend(late_join_process_ids)
+            if (
+                len(late_join_process_ids) != 1
+                or len(set(launched_process_ids)) != 3
+            ):
+                raise RuntimeError(
+                    "late join did not report one new exact process ID: "
+                    f"{launched_process_ids}"
+                )
             result["late_join_create"] = complete_native_create(
                 THIRD_PIPE,
                 element="fire",

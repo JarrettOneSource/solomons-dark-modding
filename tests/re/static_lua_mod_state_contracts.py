@@ -188,6 +188,9 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert "exact_mod_id=ACCEPTANCE_MOD_ID" in verifier, (
             f"{verifier_name} verifier does not stage its exact Lua mod"
         )
+        assert "two exact process IDs" in verifier, (
+            f"{verifier_name} verifier accepts an incomplete process ledger"
+        )
         assert "stop_games(" not in verifier, (
             f"{verifier_name} verifier still uses machine-wide game cleanup"
         )

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import inspect
 import sys
 import unittest
 from pathlib import Path
@@ -25,7 +27,8 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         verifier_paths = sorted(TOOLS_ROOT.glob("verify_lua_*.py"))
         launch_call_count = 0
         for path in verifier_paths:
-            tree = ast.parse(path.read_text(encoding="utf-8"), path.name)
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, path.name)
             launch_calls = [
                 node
                 for node in ast.walk(tree)
@@ -34,6 +37,9 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
                 and node.func.id == "launch_pair"
             ]
             launch_call_count += len(launch_calls)
+            if launch_calls:
+                with self.subTest(verifier=path.name, invariant="ledger"):
+                    self.assertIn("two exact process IDs", source)
             for call in launch_calls:
                 keywords = {
                     keyword.arg: keyword.value
@@ -55,6 +61,48 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
                         )
 
         self.assertGreater(launch_call_count, 0)
+
+    def test_incomplete_lua_pair_ledgers_stop_only_owned_processes(
+        self,
+    ) -> None:
+        module_names = (
+            "verify_lua_ai_multiplayer",
+            "verify_lua_enemies_multiplayer",
+            "verify_lua_items_multiplayer",
+            "verify_lua_mod_replication",
+            "verify_lua_net_multiplayer",
+            "verify_lua_runtime_contract",
+            "verify_lua_spells_multiplayer",
+            "verify_lua_time_multiplayer",
+            "verify_lua_ui_multiplayer",
+        )
+        clients = [("host", "host-pipe"), ("client", "client-pipe")]
+        for module_name in module_names:
+            module = importlib.import_module(module_name)
+            parameters = inspect.signature(module.run).parameters
+            arguments: dict[str, object] = {"launch": True}
+            if "timeout" in parameters:
+                arguments["timeout"] = 1.0
+            with (
+                self.subTest(verifier=module_name),
+                mock.patch.object(
+                    module,
+                    "launch_pair",
+                    return_value={"hostProcessId": 61},
+                ),
+                mock.patch.object(module, "disable_bots") as disable_bots,
+                mock.patch.object(module, "wait_for_remote") as wait_remote,
+                mock.patch.object(module, "stop_game_processes") as stop,
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "two exact process IDs",
+                ),
+            ):
+                module.run(clients, **arguments)
+
+            disable_bots.assert_not_called()
+            wait_remote.assert_not_called()
+            stop.assert_called_once_with([61])
 
     def test_exact_mod_ids_serialize_in_declared_order(self) -> None:
         self.assertEqual(

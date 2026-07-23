@@ -320,6 +320,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "two exact process IDs",
         "stop_game_processes(launched_process_ids)",
     ):
         assert token in multiplayer_verifier, (
