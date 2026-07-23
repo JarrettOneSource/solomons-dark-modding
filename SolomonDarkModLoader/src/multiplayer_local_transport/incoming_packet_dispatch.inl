@@ -281,6 +281,19 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (kind == PacketKind::LuaTimeControl &&
+            received == static_cast<int>(sizeof(LuaTimeControlPacket))) {
+            LuaTimeControlPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(packet.header, PacketKind::LuaTimeControl) ||
+                !IsValidLuaTimeControlPacket(packet)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaTimeControlPacket(packet, from);
+            continue;
+        }
+
         if (kind == PacketKind::State && received == static_cast<int>(sizeof(StatePacket))) {
             StatePacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));

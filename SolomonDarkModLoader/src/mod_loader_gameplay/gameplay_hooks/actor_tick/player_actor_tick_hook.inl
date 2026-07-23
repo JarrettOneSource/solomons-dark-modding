@@ -195,14 +195,14 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     RepairInvalidNativeMeditationTransientState(actor_address);
 
     if (multiplayer::ShouldPauseMultiplayerGameplay()) {
-        static std::uint64_t s_last_multiplayer_pause_log_ms = 0;
+        static std::uint64_t s_last_shared_simulation_hold_log_ms = 0;
         const auto pause_now_ms = static_cast<std::uint64_t>(::GetTickCount64());
-        if (pause_now_ms - s_last_multiplayer_pause_log_ms >= 1000) {
-            s_last_multiplayer_pause_log_ms = pause_now_ms;
+        if (pause_now_ms - s_last_shared_simulation_hold_log_ms >= 1000) {
+            s_last_shared_simulation_hold_log_ms = pause_now_ms;
             std::string wait_text;
             (void)multiplayer::TryBuildLevelUpWaitStatusText(&wait_text);
             Log(
-                "Synchronized multiplayer pause suppressing actor tick. actor=" +
+                "Shared simulation control suppressing actor tick. actor=" +
                 HexString(actor_address) +
                 " local_player=" + std::to_string(local_player_actor ? 1 : 0) +
                 " status=\"" + wait_text + "\"");

@@ -42,6 +42,9 @@ from static_lua_bus_contracts import (
 from static_lua_net_contracts import (
     test_lua_net_is_fragmented_authenticated_and_host_relayed,
 )
+from static_lua_time_contracts import (
+    test_lua_time_is_authority_owned_replicated_and_coherently_gated,
+)
 from static_lua_content_identity_contracts import (
     test_lua_content_ids_are_canonical_deterministic_and_load_scoped,
 )
@@ -352,6 +355,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua net is fragmented, authenticated, and host-relayed",
         test_lua_net_is_fragmented_authenticated_and_host_relayed,
+    ),
+    (
+        "Lua time is authority-owned, replicated, and coherently gated",
+        test_lua_time_is_authority_owned_replicated_and_coherently_gated,
     ),
     (
         "Lua content IDs are canonical, deterministic, and load-scoped",

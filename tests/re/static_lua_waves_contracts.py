@@ -107,11 +107,11 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 79;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "WaveCompositionRowPacketState",
         "wave_summary_remaining_to_spawn",
         "wave_summary_rows[kWaveSummaryMaxCompositionRows]",
-        "static_assert(sizeof(ParticipantFramePacket) == 562",
+        "static_assert(sizeof(ParticipantFramePacket) == 570",
     ):
         assert token in protocol, f"wave packet contract lacks: {token}"
     assert "PopulateAuthorityWaveSummary(&packet)" in outgoing

@@ -248,6 +248,8 @@ void ShutdownLocalTransport() {
         WSACleanup();
     }
     g_local_transport = LocalTransportState{};
+    g_last_lua_time_control_revision_sent = 0;
+    ResetReplicatedLuaTimeControl();
     g_remote_native_progression_reconcile_suppressed_for_test.store(
         0,
         std::memory_order_release);
@@ -304,6 +306,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     ProcessPendingHostLevelUpOffers(now_ms);
     ProcessHostLevelUpBarrier(now_ms);
     BroadcastHostLevelUpBarrierState(now_ms, false);
+    SendLuaTimeControlUpdate();
     SendLocalState(now_ms);
     SendLocalParticipantFrame(now_ms);
     SendActiveLocalCastInput(now_ms);
@@ -567,7 +570,7 @@ bool HasAuthoritativeHagathaRuntimeStateChanged(
         target_participant_id);
 }
 
-bool ShouldPauseMultiplayerGameplay() {
+bool ShouldPauseMultiplayerGameplayWithoutLuaTime() {
     if (!g_local_transport.initialized) {
         return false;
     }
@@ -589,6 +592,20 @@ bool ShouldPauseMultiplayerGameplay() {
     }
 
     return ShouldPauseForSharedGameplayMenu();
+}
+
+bool BeginGameplaySimulationFrame() {
+    return BeginLuaTimeSimulationFrame(
+        ShouldPauseMultiplayerGameplayWithoutLuaTime());
+}
+
+void EndGameplaySimulationFrame() {
+    EndLuaTimeSimulationFrame();
+}
+
+bool ShouldPauseMultiplayerGameplay() {
+    return ShouldPauseMultiplayerGameplayWithoutLuaTime() ||
+        ShouldHoldLuaTimeSimulationFrame();
 }
 
 bool HasLocalLevelUpOfferAwaitingNativePresentation() {

@@ -161,6 +161,9 @@
     <ClInclude Include="include\lua_net_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\lua_time_runtime.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_ui_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -207,6 +210,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\lua_net_message_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_time_control_sync.inl">
       <Filter>Source Files\Multiplayer</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_ui_runtime\input_helpers.inl">
@@ -1391,6 +1397,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_net.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_time.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_foundations.cpp">

@@ -107,7 +107,7 @@ safeguards rather than values a mod can tune.
 - replay memory: 256 completed sequences per participant session.
 
 Assemblies expire after ten seconds. Disconnect and session-epoch teardown
-remove affected assemblies, remembered sequences, and queued relays. Protocol 79
+remove affected assemblies, remembered sequences, and queued relays. Protocol 80
 makes the new packet shape an explicit compatibility boundary.
 
 ## Capabilities and verification

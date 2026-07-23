@@ -51,6 +51,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "timer": ("after", "every", "sequence", "cancel", "clear"),
     "bus": ("publish", "subscribe", "unsubscribe", "has", "providers"),
     "net": ("send", "broadcast", "on", "off", "get_limits"),
+    "time": ("get_scale", "get_state", "set_scale", "step"),
     "rng": ("get_seed", "set_seed"),
     "nav": ("get_grid", "test_segment"),
     "scene": ("get_state", "switch_region"),

@@ -24,6 +24,7 @@ void RegisterLuaStorageBindings(lua_State* state);
 void RegisterLuaTimerBindings(lua_State* state);
 void RegisterLuaBusBindings(lua_State* state);
 void RegisterLuaNetBindings(lua_State* state);
+void RegisterLuaTimeBindings(lua_State* state);
 void RegisterLuaRngBindings(lua_State* state);
 void RegisterLuaNavBindings(lua_State* state);
 void RegisterLuaSceneBindings(lua_State* state);

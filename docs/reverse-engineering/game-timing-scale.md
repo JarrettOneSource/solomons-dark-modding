@@ -40,7 +40,7 @@ control. Setting it to zero would introduce divide-by-zero behavior throughout u
 systems. Changing it to another value would alter duration/rate conversions inconsistently
 with already-created counters and cannot provide a trustworthy pause or frame step.
 
-A correct future `sd.time` seam must gate coherent world frames at the existing actor-world,
-player-actor, and wave-spawner tick boundaries, compose with the multiplayer menu/level-up
-pause predicate, and replicate authority-owned state. The resolved global must not be the
-implementation shortcut.
+The implemented `sd.time` seam gates coherent world frames at the existing actor-world,
+player-actor, and wave-spawner tick boundaries, composes with the multiplayer menu/level-up
+pause predicate, and replicates authority-owned state. The resolved global is not used as
+an implementation shortcut; see `../lua-time.md` for the public contract.

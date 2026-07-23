@@ -361,13 +361,13 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
     }
 
     if (multiplayer::ShouldPauseMultiplayerGameplay()) {
-        static std::uint64_t s_last_multiplayer_pause_suppress_log_ms = 0;
+        static std::uint64_t s_last_shared_simulation_hold_log_ms = 0;
         const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        if (now_ms - s_last_multiplayer_pause_suppress_log_ms >= 1000) {
-            s_last_multiplayer_pause_suppress_log_ms = now_ms;
+        if (now_ms - s_last_shared_simulation_hold_log_ms >= 1000) {
+            s_last_shared_simulation_hold_log_ms = now_ms;
             Log(
-                "WaveSpawner_Tick suppressed for synchronized multiplayer "
-                "pause. self=" + HexString(self_address));
+                "WaveSpawner_Tick suppressed for shared simulation control. self=" +
+                HexString(self_address));
         }
         return;
     }

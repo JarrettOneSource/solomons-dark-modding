@@ -6,6 +6,7 @@
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
 #include "lua_mod_runtime.h"
+#include "lua_time_runtime.h"
 #include "lua_ui_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
@@ -315,6 +316,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "timer.local.scheduler",
         "bus.local.contracts",
         "net.raw.fragmented", "net.participant.unicast", "net.participant.broadcast",
+        "time.shared.scale", "time.shared.frame_step",
         "state.replicated.read",
         "state.replicated.write",
         "ui.snapshot.read",
@@ -335,12 +337,10 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ai.register",
         "ai.read",
     };
-
     AppendLuaAudioCapabilities(&capabilities);
     if (multiplayer::IsFoundationInitialized()) {
         capabilities.emplace_back("multiplayer.foundation");
     }
-
     if (IsGameplayKeyboardInjectionInitialized()) {
         capabilities.emplace_back("input.keyboard.inject");
         capabilities.emplace_back("events.filters.damage");
@@ -354,7 +354,6 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("ai.control.authority");
         capabilities.emplace_back("spells.cast.owner");
     }
-
     if (multiplayer::IsBotRuntimeInitialized()) {
         capabilities.emplace_back("bots.runtime");
         capabilities.emplace_back("bots.state.read");
@@ -376,7 +375,6 @@ bool SupportsLuaModRequiredCapabilities(
     if (missing_capability != nullptr) {
         missing_capability->clear();
     }
-
     for (const auto& required_capability : mod.required_capabilities) {
         const auto found = std::find(capabilities.begin(), capabilities.end(), required_capability);
         if (found == capabilities.end()) {
@@ -386,7 +384,6 @@ bool SupportsLuaModRequiredCapabilities(
             return false;
         }
     }
-
     return true;
 }
 
@@ -394,7 +391,6 @@ bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message) {
     if (mod == nullptr || error_message == nullptr) {
         return false;
     }
-
     mod->state = luaL_newstate();
     if (mod->state == nullptr) {
         *error_message = "luaL_newstate failed.";
@@ -428,6 +424,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaTimersForMod(mod);
     ClearLuaBusSubscriptionsForMod(mod);
     ClearLuaNetSubscriptionsForMod(mod);
+    ClearLuaTimeScaleRequest(mod->descriptor.id);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
@@ -499,6 +496,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     InitializeLuaUiRuntime(error_message);
     detail::InitializeLuaAudioRuntime();
     detail::StartLuaNetDeliveryQueue();
+    InitializeLuaTimeRuntime();
     const auto capabilities = detail::BuildLuaCapabilitySet();
     detail::LoadLuaModsForBootstrap(bootstrap, capabilities);
     Log("Lua engine initialized.");
@@ -519,6 +517,7 @@ void ShutdownLuaEngine() {
     detail::ResolveDrainedAsError(drained, "Lua engine is shutting down.");
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
+        ShutdownLuaTimeRuntime();
         detail::ShutdownLuaAudioRuntime();
         ShutdownLuaUiRuntime();
         ShutdownLuaDrawRuntime();
@@ -537,6 +536,7 @@ void ShutdownLuaEngine() {
     detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEnemyAiRuntime();
     detail::ResetLuaEventFilterRegistrations();
+    ShutdownLuaTimeRuntime();
     detail::ShutdownLuaAudioRuntime();
     ShutdownLuaUiRuntime();
     ShutdownLuaDrawRuntime();

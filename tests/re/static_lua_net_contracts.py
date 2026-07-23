@@ -102,7 +102,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
     assert pump.count("detail::DispatchPendingLuaNetMessages();") == 2
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 79;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "LuaNetMessage = 26",
         "struct LuaNetMessagePacket",
         "transport_participant_id",
@@ -166,7 +166,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
         "payload trusted game authority",
         "Steam fragments use reliable",
         "local UDP backend",
-        "Protocol 79",
+        "Protocol 80",
     ):
         assert token in documentation, f"Lua net docs lack: {token}"
     assert "**Implemented 2026-07-23.** `sd.net.send" in roadmap

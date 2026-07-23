@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 79;
+constexpr std::uint16_t kProtocolVersion = 80;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -28,6 +28,10 @@ constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
 constexpr std::uint32_t kLuaNetFragmentPayloadBytes = 1024;
 constexpr std::uint16_t kLuaNetMaxFragments = 64;
 constexpr std::uint64_t kLuaNetMaximumMessageSequence =
+    0x7FFFFFFFFFFFFFFFull;
+constexpr std::uint32_t kLuaTimeProtocolScaleUnitsPerOne = 1'000'000;
+constexpr std::uint32_t kLuaTimeProtocolMaximumStepFrames = 120;
+constexpr std::uint64_t kLuaTimeProtocolMaximumStepSequence =
     0x7FFFFFFFFFFFFFFFull;
 constexpr std::uint16_t kLuaRegisteredSpellEffectMaxLogicalEffects = 256;
 constexpr std::uint16_t kLuaRegisteredSpellEffectStatesPerFragment = 4;
@@ -64,6 +68,7 @@ enum class PacketKind : std::uint16_t {
     LuaRegisteredSpellEffectSnapshot = 24,
     LuaUiActionRequest = 25,
     LuaNetMessage = 26,
+    LuaTimeControl = 27,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -431,6 +436,8 @@ struct StatePacket {
     std::uint8_t shared_gameplay_pause_active;
     std::uint8_t shared_gameplay_pause_timed_out;
     std::uint8_t shared_gameplay_pause_reserved = 0;
+    std::uint32_t lua_time_scale_units;
+    std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t element_id;
     std::int32_t discipline_id;
@@ -557,6 +564,8 @@ struct ParticipantFramePacket {
     std::uint8_t shared_gameplay_pause_active;
     std::uint8_t shared_gameplay_pause_timed_out;
     std::uint8_t shared_gameplay_pause_reserved = 0;
+    std::uint32_t lua_time_scale_units;
+    std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
     std::int32_t region_index;
     std::int32_t region_type_id;
@@ -809,6 +818,37 @@ constexpr bool IsValidLuaNetMessagePacketWireSize(
            packet.fragment_index < packet.fragment_count &&
            packet.payload_bytes == expected_payload_bytes &&
            received_bytes == LuaNetMessagePacketWireSize(packet.payload_bytes);
+}
+
+enum LuaTimeControlPacketFlag : std::uint32_t {
+    LuaTimeControlPacketFlagStepFrames = 1u << 0,
+};
+
+struct LuaTimeControlPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t authority_session_nonce;
+    std::uint32_t run_nonce;
+    std::uint32_t revision;
+    std::uint32_t scale_units;
+    std::uint32_t flags;
+    std::uint64_t step_sequence;
+    std::uint32_t step_frames;
+};
+
+constexpr bool IsValidLuaTimeControlPacket(
+    const LuaTimeControlPacket& packet) {
+    return packet.authority_participant_id != 0 &&
+           packet.authority_session_nonce != 0 &&
+           packet.run_nonce != 0 && packet.revision != 0 &&
+           packet.scale_units <= kLuaTimeProtocolScaleUnitsPerOne &&
+           (packet.flags & ~LuaTimeControlPacketFlagStepFrames) == 0 &&
+           packet.step_sequence <= kLuaTimeProtocolMaximumStepSequence &&
+           packet.step_frames <= kLuaTimeProtocolMaximumStepFrames &&
+           ((packet.flags & LuaTimeControlPacketFlagStepFrames) != 0
+                ? packet.scale_units == 0 && packet.step_frames != 0 &&
+                    packet.step_sequence >= packet.step_frames
+                : packet.step_frames == 0);
 }
 
 struct LevelUpOfferPacket {
@@ -1373,10 +1413,10 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 4520, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4528, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
-static_assert(sizeof(ParticipantFramePacket) == 562,
+static_assert(sizeof(ParticipantFramePacket) == 570,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");
@@ -1404,6 +1444,8 @@ static_assert(
     LuaNetMessagePacketWireSize(kLuaNetFragmentPayloadBytes) ==
         sizeof(LuaNetMessagePacket),
     "Full Lua net fragment must consume the packet buffer exactly");
+static_assert(sizeof(LuaTimeControlPacket) == 56,
+              "Unexpected Lua time control packet size");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");

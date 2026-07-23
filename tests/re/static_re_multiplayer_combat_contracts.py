@@ -631,7 +631,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
             "Lightning Chaining verifier still competes with the permanent target hook")
 
     required_network_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 79;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
         (protocol_text, "AirChainSnapshot = 15"),
         (protocol_text, "kAirChainSnapshotMaxTargets = 8"),
         (protocol_text, "struct AirChainTargetPacketState"),

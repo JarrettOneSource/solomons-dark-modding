@@ -14,6 +14,7 @@
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
 #include "lua_net_runtime.h"
+#include "lua_time_runtime.h"
 #include "lua_ui_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -1015,6 +1016,7 @@ std::uint64_t g_next_lua_ui_action_request_id = 1;
 std::vector<QueuedLuaNetMessage> g_queued_lua_net_messages;
 std::uint64_t g_next_lua_net_message_sequence = 1;
 std::size_t g_queued_lua_net_message_bytes = 0;
+std::uint32_t g_last_lua_time_control_revision_sent = 0;
 std::mutex g_lua_registered_spell_effect_snapshot_mutex;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
@@ -1289,6 +1291,13 @@ void PopulateSharedGameplayPausePacketFields(
 void PopulateSharedGameplayPausePacketFields(
     const RuntimeState& runtime_state,
     ParticipantFramePacket* packet);
+void PopulateLuaTimeControlPacketFields(StatePacket* packet);
+void PopulateLuaTimeControlPacketFields(ParticipantFramePacket* packet);
+void ApplyAuthoritativeLuaTimeControlSnapshot(
+    std::uint64_t authority_participant_id,
+    std::uint32_t run_nonce,
+    std::uint32_t scale_units,
+    std::uint32_t revision);
 void ApplyHostMenuPauseRequest(
     std::uint64_t participant_id,
     std::uint32_t run_nonce,
@@ -1365,6 +1374,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
+#include "multiplayer_local_transport/lua_time_control_sync.inl"
 #include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_dispatch.inl"

@@ -5,7 +5,16 @@ void __fastcall HookActorWorldTick(void* self, void* unused_edx) {
         return;
     }
 
-    if (!multiplayer::ShouldPauseMultiplayerGameplay()) {
+    struct ScopedGameplaySimulationFrame {
+        ScopedGameplaySimulationFrame()
+            : should_advance(multiplayer::BeginGameplaySimulationFrame()) {}
+        ~ScopedGameplaySimulationFrame() {
+            multiplayer::EndGameplaySimulationFrame();
+        }
+        bool should_advance = true;
+    } frame;
+
+    if (frame.should_advance) {
         original(self, unused_edx);
         return;
     }
@@ -35,7 +44,7 @@ void __fastcall HookActorWorldTick(void* self, void* unused_edx) {
         if (now_ms - s_last_invalid_actor_world_pause_log_ms >= 1000) {
             s_last_invalid_actor_world_pause_log_ms = now_ms;
             Log(
-                "ActorWorld_Tick held for synchronized multiplayer pause, but the "
+                "ActorWorld_Tick held for shared simulation control, but the "
                 "player-only actor list could not be read. world=" +
                 HexString(world_address) +
                 " count=" + std::to_string(actor_count) +
@@ -123,7 +132,7 @@ void __fastcall HookActorWorldTick(void* self, void* unused_edx) {
     if (now_ms - s_last_actor_world_pause_log_ms >= 1000) {
         s_last_actor_world_pause_log_ms = now_ms;
         Log(
-            "ActorWorld_Tick held for synchronized multiplayer pause. player_ticks=" +
+            "ActorWorld_Tick held for shared simulation control. player_ticks=" +
             std::to_string(player_actor_tick_count) +
             " non_player_actors_held=" +
             std::to_string(held_non_player_actor_count));

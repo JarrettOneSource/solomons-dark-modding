@@ -165,6 +165,7 @@ void ClearRememberedEnemyTracking() {
 }
 
 void ResetRunLifecycleBookkeeping(bool clear_enemy_tracking = true) {
+    ResetLuaTimeControlForRun();
     ResetWaveIntelligenceRun();
     g_state.current_wave.store(0, std::memory_order_release);
     g_state.last_wave_spawner.store(0, std::memory_order_release);

@@ -225,6 +225,8 @@ bool ConfigureLocalTransport() {
     const bool steam_requested = IsSteamTransportRequested();
     if (!local_udp_requested && !steam_requested) {
         g_local_transport = LocalTransportState{};
+        g_last_lua_time_control_revision_sent = 0;
+        ResetReplicatedLuaTimeControl();
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
@@ -255,6 +257,8 @@ bool ConfigureLocalTransport() {
     }
 
     g_local_transport = LocalTransportState{};
+    g_last_lua_time_control_revision_sent = 0;
+    ResetReplicatedLuaTimeControl();
     g_local_transport.configured = true;
     g_local_transport.is_host = is_host;
     g_local_transport.backend = steam_requested

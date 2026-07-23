@@ -281,7 +281,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 79;",
+        "constexpr std::uint16_t kProtocolVersion = 80;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",
@@ -610,7 +610,9 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         level_hook.index("void __fastcall HookWaveSpawnerTick(")
     ]
     for token in (
-        "multiplayer::ShouldPauseMultiplayerGameplay()",
+        "multiplayer::BeginGameplaySimulationFrame()",
+        "multiplayer::EndGameplaySimulationFrame()",
+        "if (frame.should_advance)",
         "resolved_player_actor_tick",
         "actor_tick_address != resolved_player_actor_tick",
         "actor_initialize(actor);",
@@ -619,7 +621,8 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         assert token in actor_world_hook, f"actor-world level-up pause lacks: {token}"
     _require_in_order(
         actor_world_hook,
-        "if (!multiplayer::ShouldPauseMultiplayerGameplay())",
+        "multiplayer::BeginGameplaySimulationFrame()",
+        "if (frame.should_advance)",
         "original(self, unused_edx);",
         "actor_tick_address != resolved_player_actor_tick",
         "actor_tick(actor);",

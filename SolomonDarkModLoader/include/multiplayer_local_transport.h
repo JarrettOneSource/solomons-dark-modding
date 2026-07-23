@@ -303,6 +303,8 @@ bool QueueLocalLevelUpChoice(
     std::string* error_message);
 void ReconcileLocalLevelUpOfferPresentation(std::uint64_t now_ms, bool allow_native_create = true);
 bool HasLocalLevelUpOfferAwaitingNativePresentation();
+bool BeginGameplaySimulationFrame();
+void EndGameplaySimulationFrame();
 bool ShouldPauseMultiplayerGameplay();
 bool TryBuildLevelUpWaitStatusText(std::string* text);
 
