@@ -98,6 +98,7 @@ from static_multiplayer_platform_contracts import (
     test_packaged_ui_does_not_inherit_test_world_overrides,
     test_pair_launcher_drains_redirected_json_output,
     test_progression_matrices_prearm_quiet_spawning_before_run_entry,
+    test_proton_contract_runner_avoids_ge11_umu_shim_hang,
     test_proton_input_targets_the_exact_native_game_window,
     test_staff_target_selection_skips_local_only_enemies,
     test_steam_behavior_arena_reset_waits_for_native_spawner,
@@ -497,6 +498,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "beta release documents its Steam Deck shortcut",
         test_beta_release_documents_steam_deck_shortcut,
+    ),
+    (
+        "Proton contract runner avoids the GE11 UMU shim hang",
+        test_proton_contract_runner_avoids_ge11_umu_shim_hang,
     ),
     (
         "beta package smoke canonicalizes Windows path aliases",

@@ -108,6 +108,22 @@ pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
 dotnet run --project ./tests/launcher-contracts/SolomonDarkModLauncher.ContractTests.csproj
 ```
 
+On a Linux or SteamOS compatibility host, run the Windows launcher contracts
+through each installed Proton generation with UMU:
+
+```bash
+SDMOD_UMU_RUN=/path/to/umu-run \
+SDMOD_PROTON_TEST_ROOT=/tmp/solomon-dark-proton-contracts \
+./scripts/Test-ProtonLauncherContracts.sh \
+    "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton10-34" \
+    "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-1"
+```
+
+The runner owns isolated compatibility prefixes. It disables Xalia only for
+the headless contract process and uses Proton's in-prefix execution path so
+GE-Proton 11 does not leave UMU's Unix-target shim waiting after a console test
+has exited.
+
 ## Run
 
 CLI (defaults to `../SolomonDarkAbandonware` when present):

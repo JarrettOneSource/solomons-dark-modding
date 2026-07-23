@@ -692,6 +692,34 @@ def test_beta_release_documents_steam_deck_shortcut() -> str:
     )
 
 
+def test_proton_contract_runner_avoids_ge11_umu_shim_hang() -> str:
+    runner = _read("scripts/Test-ProtonLauncherContracts.sh")
+    readme = _read("README.md")
+
+    for token in (
+        'PROTON_VERB="runinprefix"',
+        'PROTON_USE_XALIA="0"',
+        'cd "$root"',
+        '"$proton" run "C:\\windows\\system32\\cmd.exe" /c exit 0',
+        'SolomonDarkModLauncher.ContractTests.exe',
+        'grep -Eq "^FAIL "',
+        "Traceback \\(most recent call last\\)",
+        "PermissionError",
+    ):
+        assert token in runner, f"Proton contract runner lacks: {token}"
+    for token in (
+        "Test-ProtonLauncherContracts.sh",
+        "GE-Proton10-34",
+        "GE-Proton11-1",
+    ):
+        assert token in readme, f"Proton contract documentation lacks: {token}"
+
+    return (
+        "the Proton contract runner bypasses the GE11 UMU Unix-target shim, "
+        "isolates Xalia from headless tests, and rejects runtime failures"
+    )
+
+
 def test_beta_release_smoke_canonicalizes_packaged_steam_path() -> str:
     smoke = _read("scripts/Test-BetaReleasePackage.ps1")
 
