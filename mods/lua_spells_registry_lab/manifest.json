@@ -8,7 +8,8 @@
     "entryScript": "scripts/main.lua",
     "requiredCapabilities": [
       "spells.register",
-      "spells.read"
+      "spells.read",
+      "spells.cast.owner"
     ]
   }
 }

@@ -108,7 +108,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert token in events, f"custom Lua event dispatch lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 76;",
+        "constexpr std::uint16_t kProtocolVersion = 77;",
         "LuaModStream = 21",
         "enum class LuaModStreamMessageKind",
         "struct LuaModStreamPacket",
@@ -117,7 +117,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "IsValidLuaModStreamPacketWireSize(",
     ):
         assert token in protocol, f"Lua mod wire protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 76;" in compatibility
+    assert "CurrentProtocolVersion = 77;" in compatibility
     for capability in (
         '"state.replicated.read"',
         '"state.replicated.write"',

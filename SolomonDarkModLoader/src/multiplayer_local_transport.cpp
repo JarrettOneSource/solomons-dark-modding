@@ -10,6 +10,7 @@
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
+#include "lua_engine.h"
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
 #include "memory_access.h"
@@ -130,6 +131,8 @@ constexpr std::uint32_t kBeltButtonSkillTypeId = 0x1B67;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
 constexpr std::size_t kLuaItemGrantMaximumQueuedRequests = 256;
 constexpr std::size_t kLuaItemGrantMaximumRememberedRequests = 512;
+constexpr std::size_t kLuaRegisteredSpellMaximumQueuedCasts = 256;
+constexpr std::size_t kLuaRegisteredSpellMaximumRememberedCasts = 512;
 
 std::uint64_t BandwidthLimitedSnapshotIntervalMs(
     std::size_t wire_size,
@@ -717,6 +720,10 @@ struct QueuedAuthoritativeLuaItemGrant {
         color_state = {};
 };
 
+struct QueuedLuaRegisteredSpellCast {
+    LuaRegisteredSpellCastRequest request;
+};
+
 struct PendingLuaModStreamAssembly {
     LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
     std::uint64_t authority_participant_id = 0;
@@ -881,6 +888,10 @@ struct LocalTransportState {
         completed_lua_mod_stream_messages;
     std::unordered_set<std::uint64_t> received_lua_item_grant_request_ids;
     std::deque<std::uint64_t> received_lua_item_grant_request_order;
+    std::unordered_set<std::uint64_t>
+        received_lua_registered_spell_cast_request_ids;
+    std::deque<std::uint64_t>
+        received_lua_registered_spell_cast_request_order;
     ActiveLocalCastInput active_local_cast_input;
     std::vector<PendingAirChainTerminal> pending_air_chain_terminals;
     std::uint32_t next_hub_world_actor_serial = 1;
@@ -915,6 +926,9 @@ std::uint64_t g_next_lua_mod_stream_sequence = 1;
 std::vector<QueuedAuthoritativeLuaItemGrant>
     g_queued_authoritative_lua_item_grants;
 std::uint64_t g_next_lua_item_grant_request_id = 1;
+std::vector<QueuedLuaRegisteredSpellCast>
+    g_queued_lua_registered_spell_casts;
+std::uint64_t g_next_lua_registered_spell_cast_request_id = 1;
 QueuedLocalAirChainFrame g_queued_local_air_chain_frame;
 bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
@@ -1256,6 +1270,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
+#include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
 #include "multiplayer_local_transport/lua_mod_stream_codec.inl"
 #include "multiplayer_local_transport/lua_mod_stream_sync.inl"
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
@@ -1463,6 +1478,32 @@ bool QueueAuthoritativeLuaItemGrant(
         request_id,
         target_participant_id,
         local_target,
+        error_message);
+}
+
+bool QueueOwnerRoutedLuaRegisteredSpellCast(
+    std::uint64_t content_id,
+    std::uint64_t requested_owner_participant_id,
+    std::uint64_t target_network_actor_id,
+    float origin_x,
+    float origin_y,
+    float aim_x,
+    float aim_y,
+    std::uint64_t* request_id,
+    std::uint64_t* owner_participant_id,
+    bool* local_owner,
+    std::string* error_message) {
+    return QueueOwnerRoutedLuaRegisteredSpellCastInternal(
+        content_id,
+        requested_owner_participant_id,
+        target_network_actor_id,
+        origin_x,
+        origin_y,
+        aim_x,
+        aim_y,
+        request_id,
+        owner_participant_id,
+        local_owner,
         error_message);
 }
 

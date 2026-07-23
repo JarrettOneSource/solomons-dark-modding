@@ -82,6 +82,14 @@ void ResetRemoteParticipantSessionEpoch(
                     return grant.target_participant_id == participant_id;
                 }),
             g_queued_authoritative_lua_item_grants.end());
+        g_queued_lua_registered_spell_casts.erase(
+            std::remove_if(
+                g_queued_lua_registered_spell_casts.begin(),
+                g_queued_lua_registered_spell_casts.end(),
+                [&](const QueuedLuaRegisteredSpellCast& cast) {
+                    return cast.request.owner_participant_id == participant_id;
+                }),
+            g_queued_lua_registered_spell_casts.end());
         if (configured_authority_disconnected) {
             g_queued_local_cast_events.clear();
             g_queued_local_enemy_damage_claims.clear();
@@ -106,6 +114,8 @@ void ResetRemoteParticipantSessionEpoch(
         g_local_transport.last_lua_mod_stream_applied_sequence = 0;
         g_local_transport.received_lua_item_grant_request_ids.clear();
         g_local_transport.received_lua_item_grant_request_order.clear();
+        g_local_transport.received_lua_registered_spell_cast_request_ids.clear();
+        g_local_transport.received_lua_registered_spell_cast_request_order.clear();
         ResetLuaModStateStore();
     }
 

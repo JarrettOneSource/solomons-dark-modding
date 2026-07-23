@@ -13,11 +13,14 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 struct lua_State;
 
 namespace sdmod {
+struct LuaRegisteredSpellCastRequest;
+
 namespace detail {
 
 inline constexpr char kLuaLoadedModRegistryKey[] = "sdmod.loaded_mod";
@@ -84,6 +87,26 @@ struct LuaSpellDefinition {
     int on_hit_reference = -2;
 };
 
+struct LuaSpellEffectInstance {
+    std::uint64_t effect_id = 0;
+    std::uint64_t cast_request_id = 0;
+    std::uint64_t content_id = 0;
+    std::uint64_t owner_participant_id = 0;
+    std::string key;
+    float x = 0.0f;
+    float y = 0.0f;
+    float velocity_x = 0.0f;
+    float velocity_y = 0.0f;
+    float radius = 0.0f;
+    std::uint64_t created_ms = 0;
+    std::uint64_t updated_ms = 0;
+    std::uint64_t expires_ms = 0;
+    std::uint64_t next_tick_ms = 0;
+    std::uint32_t tick_interval_ms = 16;
+    LuaModValue data;
+    std::unordered_set<uintptr_t> hit_actor_addresses;
+};
+
 enum class LuaEnemyLootPolicy : std::uint8_t {
     Stock = 0,
     None,
@@ -131,6 +154,8 @@ struct LoadedLuaMod {
     std::vector<LuaBusSubscription> bus_subscriptions;
     std::uint64_t next_bus_subscription_id = 1;
     std::vector<LuaSpellDefinition> spell_definitions;
+    std::vector<LuaSpellEffectInstance> spell_effects;
+    std::uint64_t next_spell_effect_id = 1;
     std::vector<LuaItemDefinition> item_definitions;
     std::vector<LuaEnemyDefinition> enemy_definitions;
 };
@@ -180,6 +205,18 @@ void ResetLuaDropRollFilterDiagnostics();
 void ResetLuaWaveSpawnFilterDiagnostics();
 void ResetLuaSpellCastFilterDiagnostics();
 void ResetLuaResourceFilterDiagnostics();
+void ResetLuaRegisteredSpellRuntime();
+void DispatchPendingLuaRegisteredSpellCasts(
+    const SDModRuntimeTickContext& context);
+void TickLuaRegisteredSpellEffects(
+    const SDModRuntimeTickContext& context);
+bool CreateLuaSpellEffectsFromCallbackResult(
+    LoadedLuaMod* mod,
+    const LuaSpellDefinition& definition,
+    const LuaRegisteredSpellCastRequest& request,
+    std::uint64_t now_ms,
+    int result_index,
+    std::string* error_message);
 
 void StartLuaEventQueue();
 void StopLuaEventQueue();

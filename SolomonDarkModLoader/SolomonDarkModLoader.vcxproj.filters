@@ -1384,6 +1384,12 @@
     <ClCompile Include="src\lua_engine_bindings_spells.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_casts.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_registered_spell_effects.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_input.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>

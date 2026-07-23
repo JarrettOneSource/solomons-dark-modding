@@ -504,6 +504,8 @@
     <ClCompile Include="src\lua_engine_bindings_scene.cpp" />
     <ClCompile Include="src\lua_engine_bindings_waves.cpp" />
     <ClCompile Include="src\lua_engine_bindings_spells.cpp" />
+    <ClCompile Include="src\lua_engine_registered_spell_casts.cpp" />
+    <ClCompile Include="src\lua_engine_registered_spell_effects.cpp" />
     <ClCompile Include="src\lua_engine_bindings_items.cpp" />
     <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />

@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 76;
+constexpr std::uint16_t kProtocolVersion = 77;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -50,6 +50,7 @@ enum class PacketKind : std::uint16_t {
     ParticipantFrame = 20,
     LuaModStream = 21,
     LuaItemGrant = 22,
+    LuaRegisteredSpellCast = 23,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -1139,6 +1140,21 @@ struct LuaItemGrantPacket {
     std::uint8_t color_state[kParticipantVisualLinkColorBlockBytes] = {};
 };
 
+struct LuaRegisteredSpellCastPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t owner_participant_id;
+    std::uint64_t request_id;
+    std::uint64_t content_id;
+    std::uint64_t target_network_actor_id;
+    float origin_x;
+    float origin_y;
+    float aim_x;
+    float aim_y;
+    std::uint8_t flags = 0;
+    std::uint8_t reserved[7] = {};
+};
+
 struct LootPickupResultPacket {
     PacketHeader header;
     std::uint64_t authority_participant_id;
@@ -1286,6 +1302,8 @@ static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage cla
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");
 static_assert(sizeof(LuaItemGrantPacket) == 84, "Unexpected Lua item grant packet size");
+static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76,
+              "Unexpected Lua registered spell cast packet size");
 static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

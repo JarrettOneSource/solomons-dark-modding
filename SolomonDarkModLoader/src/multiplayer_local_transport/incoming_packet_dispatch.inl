@@ -137,6 +137,20 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::LuaRegisteredSpellCast &&
+            received ==
+                static_cast<int>(sizeof(LuaRegisteredSpellCastPacket))) {
+            LuaRegisteredSpellCastPacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaRegisteredSpellCast)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaRegisteredSpellCastPacket(packet, from, now_ms);
+            continue;
+        }
         if (kind == PacketKind::LuaItemGrant &&
             received == static_cast<int>(sizeof(LuaItemGrantPacket))) {
             LuaItemGrantPacket packet{};

@@ -37,6 +37,18 @@ bool QueueAuthoritativeLuaItemGrant(
     std::uint64_t* target_participant_id,
     bool* local_target,
     std::string* error_message);
+bool QueueOwnerRoutedLuaRegisteredSpellCast(
+    std::uint64_t content_id,
+    std::uint64_t requested_owner_participant_id,
+    std::uint64_t target_network_actor_id,
+    float origin_x,
+    float origin_y,
+    float aim_x,
+    float aim_y,
+    std::uint64_t* request_id,
+    std::uint64_t* owner_participant_id,
+    bool* local_owner,
+    std::string* error_message);
 bool PublishAuthoritativeLuaModStateSet(
     const std::string& mod_id,
     const std::string& key,

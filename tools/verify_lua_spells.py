@@ -20,6 +20,8 @@ EXPECTED_CONTENT_ID = 8348995147374483494
 PROBE = r'''
 assert(sd.runtime.has_capability("spells.register"))
 assert(sd.runtime.has_capability("spells.read"))
+assert(sd.runtime.has_capability("spells.cast.owner"))
+assert(type(sd.spells.cast) == "function")
 local expected_id = 8348995147374483494
 local found = nil
 for _, spell in ipairs(sd.spells.list()) do

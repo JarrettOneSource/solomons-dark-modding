@@ -1,11 +1,13 @@
 #include "lua_engine_bindings_internal.h"
 
 #include "lua_engine_values.h"
+#include "multiplayer_local_transport.h"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -318,6 +320,80 @@ const LuaSpellDefinition* FindOwnedSpellDefinitionByKey(
     return found == mod.spell_definitions.end() ? nullptr : &*found;
 }
 
+bool IsKnownSpellCastOption(std::string_view field) {
+    return field == "participant_id" ||
+        field == "target_network_actor_id" || field == "origin_x" ||
+        field == "origin_y" || field == "aim_x" || field == "aim_y";
+}
+
+void RejectUnknownSpellCastOptions(lua_State* state, int table_index) {
+    const int absolute_index = lua_absindex(state, table_index);
+    lua_pushnil(state);
+    while (lua_next(state, absolute_index) != 0) {
+        if (lua_type(state, -2) != LUA_TSTRING) {
+            lua_pop(state, 2);
+            luaL_error(
+                state,
+                "sd.spells.cast options accept only named fields");
+            return;
+        }
+        std::size_t length = 0;
+        const auto* name = lua_tolstring(state, -2, &length);
+        if (!IsKnownSpellCastOption(std::string_view(name, length))) {
+            const std::string owned_name(name, length);
+            lua_pop(state, 2);
+            luaL_error(
+                state,
+                "sd.spells.cast received unknown option '%s'",
+                owned_name.c_str());
+            return;
+        }
+        lua_pop(state, 1);
+    }
+}
+
+std::uint64_t ReadOptionalPositiveSpellCastInteger(
+    lua_State* state,
+    int table_index,
+    const char* field_name) {
+    lua_getfield(state, table_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        return 0;
+    }
+    if (!lua_isinteger(state, -1) || lua_tointeger(state, -1) <= 0) {
+        luaL_error(
+            state,
+            "sd.spells.cast %s must be a positive integer",
+            field_name);
+    }
+    const auto value = static_cast<std::uint64_t>(lua_tointeger(state, -1));
+    lua_pop(state, 1);
+    return value;
+}
+
+float ReadRequiredSpellCastCoordinate(
+    lua_State* state,
+    int table_index,
+    const char* field_name) {
+    lua_getfield(state, table_index, field_name);
+    if (lua_type(state, -1) != LUA_TNUMBER) {
+        luaL_error(
+            state,
+            "sd.spells.cast requires numeric option '%s'",
+            field_name);
+    }
+    const auto value = static_cast<double>(lua_tonumber(state, -1));
+    lua_pop(state, 1);
+    if (!std::isfinite(value) || std::fabs(value) > 10'000'000.0) {
+        luaL_error(
+            state,
+            "sd.spells.cast option '%s' is outside its supported range",
+            field_name);
+    }
+    return static_cast<float>(value);
+}
+
 void PushSpellDefinition(
     lua_State* state,
     const LuaSpellDefinition& definition) {
@@ -477,13 +553,99 @@ int LuaSpellsList(lua_State* state) {
     return 1;
 }
 
+int LuaSpellsCast(lua_State* state) {
+    auto* mod = GetLoadedLuaMod(state);
+    if (mod == nullptr) {
+        return luaL_error(state, "sd.spells.cast requires an owning Lua mod");
+    }
+    const LuaSpellDefinition* definition = nullptr;
+    if (lua_type(state, 1) == LUA_TSTRING) {
+        std::size_t key_length = 0;
+        const auto* key = lua_tolstring(state, 1, &key_length);
+        definition = FindOwnedSpellDefinitionByKey(
+            *mod,
+            std::string_view(key, key_length));
+    } else if (lua_isinteger(state, 1) && lua_tointeger(state, 1) > 0) {
+        definition = FindSpellDefinitionById(
+            static_cast<std::uint64_t>(lua_tointeger(state, 1)));
+        if (definition != nullptr &&
+            definition->identity.mod_id != mod->descriptor.id) {
+            definition = nullptr;
+        }
+    } else {
+        return luaL_error(
+            state,
+            "sd.spells.cast expects an owned content key or content id");
+    }
+    if (definition == nullptr) {
+        return luaL_error(state, "sd.spells.cast could not resolve an owned spell");
+    }
+
+    luaL_checktype(state, 2, LUA_TTABLE);
+    RejectUnknownSpellCastOptions(state, 2);
+    const auto requested_owner = ReadOptionalPositiveSpellCastInteger(
+        state,
+        2,
+        "participant_id");
+    const auto target_network_actor_id =
+        ReadOptionalPositiveSpellCastInteger(
+            state,
+            2,
+            "target_network_actor_id");
+    const auto origin_x = ReadRequiredSpellCastCoordinate(
+        state,
+        2,
+        "origin_x");
+    const auto origin_y = ReadRequiredSpellCastCoordinate(
+        state,
+        2,
+        "origin_y");
+    const auto aim_x = ReadRequiredSpellCastCoordinate(state, 2, "aim_x");
+    const auto aim_y = ReadRequiredSpellCastCoordinate(state, 2, "aim_y");
+
+    std::uint64_t request_id = 0;
+    std::uint64_t owner_participant_id = 0;
+    bool local_owner = false;
+    std::string cast_error;
+    if (!multiplayer::QueueOwnerRoutedLuaRegisteredSpellCast(
+            definition->identity.network_id,
+            requested_owner,
+            target_network_actor_id,
+            origin_x,
+            origin_y,
+            aim_x,
+            aim_y,
+            &request_id,
+            &owner_participant_id,
+            &local_owner,
+            &cast_error)) {
+        return luaL_error(state, "%s", cast_error.c_str());
+    }
+
+    lua_createtable(state, 0, 4);
+    lua_pushinteger(state, static_cast<lua_Integer>(request_id));
+    lua_setfield(state, -2, "request_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(definition->identity.network_id));
+    lua_setfield(state, -2, "content_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(owner_participant_id));
+    lua_setfield(state, -2, "owner_participant_id");
+    lua_pushboolean(state, local_owner ? 1 : 0);
+    lua_setfield(state, -2, "local_owner");
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaSpellBindings(lua_State* state) {
-    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 4);
     RegisterFunction(state, &LuaSpellsRegister, "register");
     RegisterFunction(state, &LuaSpellsGet, "get");
     RegisterFunction(state, &LuaSpellsList, "list");
+    RegisterFunction(state, &LuaSpellsCast, "cast");
     lua_setfield(state, -2, "spells");
 }
 

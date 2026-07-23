@@ -134,10 +134,10 @@ shared state; simulation calls auto-route to the owner).
 
 ### Structural gaps (why mods can't thrive yet)
 
-1. **Scripted spell execution remains** — deterministic spell metadata and callback
-   ownership now join registered items and stock-archetype enemies; owner-routed callback
-   dispatch, picker integration, and generic modded-effect replication remain to complete
-   the content-registration tier.
+1. **Scripted spell presentation remains** — deterministic spell metadata, owner-routed
+   callback execution, and bounded local effects now join registered items and
+   stock-archetype enemies; picker/input integration and generic modded-effect snapshot
+   replication remain to complete the content-registration tier.
 2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
 3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
    and other mutations still need authority-routed public seams.
@@ -255,11 +255,12 @@ Protocol 76 carries the content ID and effective constructor values through worl
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. See `lua-enemies.md`.
 
-**Spell catalog foundation implemented 2026-07-22.** `sd.spells.register`, `get`, and
-`list` bind deterministic identities to bounded immutable config, a primary/secondary
-slot, and owner-state callback references. Descriptors are address- and function-free;
-cast routing, picker integration, callback execution, and generic effect replication are
-the remaining spell work. See `lua-spells.md`.
+**Spell catalog and owner runtime implemented 2026-07-22.** `sd.spells.register`, `get`,
+`list`, and `cast` bind deterministic identities to bounded immutable config and
+owner-state callbacks. Protocol 77 routes host commands to the affected participant's
+owner, where `on_cast`, timed `on_tick`, and once-per-actor `on_hit` callbacks drive a
+bounded address-free effect lifecycle. Native picker/input integration and generic effect
+snapshot replication remain. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3

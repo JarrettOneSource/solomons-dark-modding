@@ -1,6 +1,7 @@
 #pragma once
 
 #include "runtime_bootstrap.h"
+#include "lua_mod_runtime.h"
 #include "sdmod_plugin_api.h"
 
 #include <atomic>
@@ -31,6 +32,40 @@ bool TryResolveLuaItemNativeRecipe(
     std::uint32_t* item_type_id,
     std::uint32_t* recipe_uid,
     std::string* error_message);
+
+struct LuaRegisteredSpellCastRequest {
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t owner_participant_id = 0;
+    std::uint64_t request_id = 0;
+    std::uint64_t content_id = 0;
+    std::uint64_t target_network_actor_id = 0;
+    float origin_x = 0.0f;
+    float origin_y = 0.0f;
+    float aim_x = 0.0f;
+    float aim_y = 0.0f;
+};
+
+struct LuaRegisteredSpellEffectState {
+    std::uint64_t owner_participant_id = 0;
+    std::uint64_t cast_request_id = 0;
+    std::uint64_t content_id = 0;
+    std::uint64_t effect_id = 0;
+    std::string key;
+    float x = 0.0f;
+    float y = 0.0f;
+    float velocity_x = 0.0f;
+    float velocity_y = 0.0f;
+    float radius = 0.0f;
+    std::uint32_t age_ms = 0;
+    std::uint32_t remaining_ms = 0;
+    LuaModValue data;
+};
+
+bool QueueLuaRegisteredSpellCastRequest(
+    const LuaRegisteredSpellCastRequest& request,
+    std::string* error_message);
+std::vector<LuaRegisteredSpellEffectState>
+SnapshotLocalLuaRegisteredSpellEffects();
 
 // Result of a queued Lua exec request serviced on the gameplay thread.
 struct LuaExecResult {

@@ -10,6 +10,17 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
     root_bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
     internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
+    casts = _read("SolomonDarkModLoader/src/lua_engine_registered_spell_casts.cpp")
+    effects = _read("SolomonDarkModLoader/src/lua_engine_registered_spell_effects.cpp")
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "lua_registered_spell_cast_sync.inl"
+    )
+    dispatch = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_dispatch.inl"
+    )
+    protocol = _read("SolomonDarkModLoader/include/multiplayer_runtime_protocol.h")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
     manifest = _read("mods/lua_spells_registry_lab/manifest.json")
     sample = _read("mods/lua_spells_registry_lab/scripts/main.lua")
@@ -20,7 +31,11 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
 
     assert "RegisterLuaSpellBindings(mod->state)" in root_bindings
     assert "lua_engine_bindings_spells.cpp" in project
-    for capability in ('"spells.register"', '"spells.read"'):
+    for capability in (
+        '"spells.register"',
+        '"spells.read"',
+        '"spells.cast.owner"',
+    ):
         assert capability in engine, f"spell capability lacks: {capability}"
     for token in (
         "enum class LuaSpellSlot",
@@ -31,6 +46,8 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "int on_tick_reference",
         "int on_hit_reference",
         "std::vector<LuaSpellDefinition> spell_definitions",
+        "struct LuaSpellEffectInstance",
+        "std::vector<LuaSpellEffectInstance> spell_effects",
     ):
         assert token in internal, f"spell lifecycle lacks: {token}"
     assert "mod->spell_definitions.clear();" in engine
@@ -39,6 +56,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         'RegisterFunction(state, &LuaSpellsRegister, "register")',
         'RegisterFunction(state, &LuaSpellsGet, "get")',
         'RegisterFunction(state, &LuaSpellsList, "list")',
+        'RegisterFunction(state, &LuaSpellsCast, "cast")',
         "RegisterLuaContentIdentityForMod(",
         "LuaContentKind::Spell",
         "kLuaMaximumRegisteredSpellsPerMod = 256",
@@ -70,6 +88,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         '"id": "sample.lua.spells_registry_lab"',
         '"spells.register"',
         '"spells.read"',
+        '"spells.cast.owner"',
     ):
         assert token in manifest, f"spell sample manifest lacks: {token}"
     for token in (
@@ -78,6 +97,8 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "on_cast = function",
         "on_tick = function",
         "on_hit = function",
+        'key = "gravity_well_field"',
+        "lifetime_ms = context.cfg.duration_ms",
         "8348995147374483494",
     ):
         assert token in sample, f"spell sample lacks: {token}"
@@ -87,11 +108,47 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "shared `sd.content.v1` identity",
         "copied into the loader's bounded Lua value representation",
         "no Lua registry index",
-        "This checkpoint does not yet make the definition selectable",
-        "generic content-ID-based effect lifecycle",
+        "Owner-routed casting",
+        "Protocol 77",
+        "once for that actor",
+        "generic content-ID-based effect snapshot channel",
     ):
         assert token in documentation, f"spell documentation lacks: {token}"
-    assert "**Spell catalog foundation implemented 2026-07-22.**" in roadmap
+    for token in (
+        "QueueLuaRegisteredSpellCastRequest",
+        "kLuaRegisteredSpellMaximumRememberedCasts = 1024",
+        "CreateLuaSpellEffectsFromCallbackResult",
+        "lua_pcall(state, 1, 1, 0)",
+    ):
+        assert token in casts, f"Lua spell cast dispatch lacks: {token}"
+    for token in (
+        "kMaximumEffectsPerCast = 16",
+        "kMaximumEffectsPerMod = 128",
+        "kMaximumReplicatedEffectDataBytes = 128",
+        "TickLuaRegisteredSpellEffects",
+        "on_tick_reference",
+        "on_hit_reference",
+        "hit_actor_addresses.find",
+        "SnapshotLocalLuaRegisteredSpellEffects",
+    ):
+        assert token in effects, f"Lua spell effect lifecycle lacks: {token}"
+    for token in (
+        "QueueOwnerRoutedLuaRegisteredSpellCastInternal",
+        "SendQueuedLuaRegisteredSpellCasts",
+        "ApplyLuaRegisteredSpellCastPacket",
+        "IsConfiguredRemoteAuthorityEndpoint(from)",
+        "received_lua_registered_spell_cast_request_ids",
+    ):
+        assert token in transport, f"Lua spell owner routing lacks: {token}"
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 77;",
+        "LuaRegisteredSpellCast = 23",
+        "struct LuaRegisteredSpellCastPacket",
+        "static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76",
+    ):
+        assert token in protocol, f"Lua spell protocol lacks: {token}"
+    assert "ApplyLuaRegisteredSpellCastPacket(packet, from, now_ms)" in dispatch
+    assert "**Spell catalog and owner runtime implemented 2026-07-22.**" in roadmap
     for token in (
         "sd.spells.list",
         "sd.spells.get(expected_id)",
@@ -102,6 +159,6 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         assert token in verifier, f"spell verifier lacks: {token}"
 
     return (
-        "sd.spells registers deterministic bounded metadata and owner-state callbacks "
-        "without exposing native IDs, addresses, registry references, or functions"
+        "sd.spells owner-routes deterministic casts and runs bounded owner-side "
+        "effect callbacks without exposing native IDs, addresses, or functions"
     )

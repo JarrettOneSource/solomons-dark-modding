@@ -349,6 +349,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("scene.switch.authority");
         capabilities.emplace_back("items.grant.authority");
         capabilities.emplace_back("enemies.spawn.authority");
+        capabilities.emplace_back("spells.cast.owner");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {
@@ -445,6 +446,8 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->next_timer_id = 1;
     mod->next_bus_subscription_id = 1;
     mod->spell_definitions.clear();
+    mod->spell_effects.clear();
+    mod->next_spell_effect_id = 1;
     mod->item_definitions.clear();
     mod->enemy_definitions.clear();
 }
@@ -473,6 +476,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     loaded_mods.clear();
     ResetLuaContentRegistry();
     ResetLuaModStateStore();
+    detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEventFilterRegistrations();
     if (!InitializeWaveIntelligence(bootstrap.stage_root, error_message)) {
         return false;
@@ -516,6 +520,7 @@ void ShutdownLuaEngine() {
     loaded_mods.clear();
     ResetLuaContentRegistry();
     ResetLuaModStateStore();
+    detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEventFilterRegistrations();
     ShutdownLuaDrawRuntime();
     ShutdownWaveIntelligence();
