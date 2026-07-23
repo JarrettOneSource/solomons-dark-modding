@@ -193,7 +193,10 @@ replicated events for synchronized displays.
 from `runtime.tick`; the EndScene renderer supports ASCII text, filled/outlined rects,
 thick lines, all 28 stock sprite atlases, viewport queries, and gameplay
 `world_to_screen`. `sd.hud` is an exact alias and the renderer preserves the caller's
-D3D9 state. See `lua-draw.md` and the opt-in `sample.lua.hud_showcase` mod.
+D3D9 state. Exact two-peer acceptance proves independent tick handlers, command
+submission, projection schemas, activation, and release; pixel-level backbuffer
+acceptance remains the rendered-output gate. See `lua-draw.md` and the opt-in
+`sample.lua.hud_showcase` mod.
 
 **2. Mutable pre-events (filters).**
 Cancellable/rewritable hooks at already-resolved seams:

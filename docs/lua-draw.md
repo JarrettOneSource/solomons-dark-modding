@@ -179,3 +179,29 @@ Loader startup fails instead of advertising these capabilities when the D3D9
 frame seam cannot be installed. Renderer resources are local, rebuilt after a
 device change, and bracketed by a full D3D9 state capture/restore so Lua draw
 commands do not leak state into the game or the debug overlay.
+
+## Verification
+
+Use the disposable pair verifier for presentation-local multiplayer semantics:
+
+```powershell
+py tools/verify_lua_draw_multiplayer.py --launch-pair
+```
+
+It stages only `sample.lua.hud_showcase`, checks the exact namespace, limits,
+viewport, stock sprite metadata, and tick-only submission rule on both peers,
+then gives host and client distinct labels and coordinates. Host-only
+activation, independent client activation, and independent deactivation prove
+that draw handlers and their command production remain local to each process.
+Window tiling and global process cleanup are disabled; only the two process IDs
+returned by this launch are stopped.
+
+Actual D3D9 output remains a separate rendered-window gate:
+
+```powershell
+py tools/verify_lua_draw.py
+```
+
+That verifier captures the game backbuffer and requires exact text, primitive,
+stock-sprite, and world-projection pixels. Run it only when a normal rendered
+game window may be used; the semantic pair verifier does not claim pixel coverage.
