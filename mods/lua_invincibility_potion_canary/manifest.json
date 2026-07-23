@@ -1,0 +1,20 @@
+{
+  "id": "canary.lua.invincibility_potion",
+  "name": "Invincibility Potion Canary",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.filters.damage",
+      "events.filters.resources",
+      "items.consumables.register",
+      "loot.register",
+      "player.resources.owner",
+      "sprites.local.read",
+      "sprites.local.register",
+      "timer.local.scheduler"
+    ]
+  }
+}

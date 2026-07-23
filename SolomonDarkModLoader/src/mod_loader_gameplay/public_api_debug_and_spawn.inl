@@ -10,6 +10,75 @@ bool ResetLocalPlayerManaDeltaObservation() {
     return true;
 }
 
+bool RestoreLocalPlayerMana(
+    float* resulting_mana,
+    std::string* error_message) {
+    if (resulting_mana != nullptr) {
+        *resulting_mana = 0.0f;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    const auto fail = [&](const char* message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+
+    SDModPlayerState player;
+    if (!TryGetPlayerState(&player) || !player.valid ||
+        player.actor_address == 0) {
+        return fail("The local player is unavailable.");
+    }
+
+    uintptr_t progression_address = 0;
+    float current_mana = 0.0f;
+    float maximum_mana = 0.0f;
+    if (!TryResolveActorProgressionRuntime(
+            player.actor_address,
+            &progression_address) ||
+        progression_address == 0 ||
+        !TryReadProgressionMana(
+            progression_address,
+            &current_mana,
+            &maximum_mana) ||
+        !std::isfinite(current_mana) ||
+        !std::isfinite(maximum_mana) ||
+        maximum_mana <= 0.0f) {
+        return fail("The local player's native mana pool is unavailable.");
+    }
+
+    constexpr float kManaRestoreEpsilon = 0.001f;
+    if (current_mana + kManaRestoreEpsilon < maximum_mana) {
+        const auto original =
+            GetX86HookTrampoline<PlayerActorApplyManaDeltaFn>(
+                g_gameplay_keyboard_injection
+                    .player_actor_apply_mana_delta_hook);
+        if (original == nullptr) {
+            return fail("The native mana writer is unavailable.");
+        }
+        (void)original(
+            reinterpret_cast<void*>(player.actor_address),
+            maximum_mana - current_mana,
+            0);
+        if (!TryReadProgressionMana(
+                progression_address,
+                &current_mana,
+                &maximum_mana) ||
+            !std::isfinite(current_mana) ||
+            !std::isfinite(maximum_mana) ||
+            current_mana + kManaRestoreEpsilon < maximum_mana) {
+            return fail("The native mana writer did not restore the local pool.");
+        }
+    }
+
+    if (resulting_mana != nullptr) {
+        *resulting_mana = current_mana;
+    }
+    return true;
+}
+
 bool TakeLocalPlayerManaDeltaObservation(
     SDModLocalManaDeltaObservation* observation) {
     if (observation == nullptr) {

@@ -366,6 +366,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("items.grant.authority");
         capabilities.emplace_back("items.consumables.register");
         capabilities.emplace_back("loot.register");
+        capabilities.emplace_back("player.resources.owner");
         capabilities.emplace_back("enemies.spawn.authority");
         capabilities.emplace_back("ai.control.authority");
         capabilities.emplace_back("spells.cast.owner");

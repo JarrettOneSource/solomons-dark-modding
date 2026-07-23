@@ -208,7 +208,7 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     ):
         assert token in generator, f"Lua API generator lacks: {token}"
     for token in (
-        "-- Inventory: 30 namespaces, 269 unique functions.",
+        "-- Inventory: 30 namespaces, 270 unique functions.",
         "---@class SdApi",
         "---@field runtime SdRuntimeApi",
         "---@field hud SdDrawApi",

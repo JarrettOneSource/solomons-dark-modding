@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from static_multiplayer_contract_support import _read, _require_in_order
+import struct
+
+from static_multiplayer_contract_support import ROOT, _read, _require_in_order
 
 
 def _require(label: str, text: str, tokens: tuple[str, ...]) -> None:
@@ -54,8 +56,35 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     gameplay_pump = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
     )
+    gameplay_api = _read(
+        "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    gameplay_actions = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
+    )
+    gameplay_bindings = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+    engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
+    damage_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_damage_authority_hook.inl"
+    )
     layout = _read("config/binary-layout.ini")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
+    canary_manifest = _read(
+        "mods/lua_invincibility_potion_canary/manifest.json"
+    )
+    canary = _read(
+        "mods/lua_invincibility_potion_canary/scripts/main.lua"
+    )
+    canary_sprite = _read(
+        "mods/lua_invincibility_potion_canary/sprites/"
+        "invincibility_potion.json"
+    )
+    canary_readme = _read(
+        "mods/lua_invincibility_potion_canary/README.md"
+    )
 
     _require(
         "bounded consumable registry",
@@ -189,6 +218,56 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "actor_world_register_animation=0x0063E5E0",
         ),
     )
+    _require(
+        "owner-local semantic mana restoration",
+        gameplay_api + gameplay_actions + gameplay_bindings + engine,
+        (
+            "RestoreLocalPlayerMana",
+            "GetX86HookTrampoline<PlayerActorApplyManaDeltaFn>",
+            "maximum_mana - current_mana",
+            'RegisterFunction(state, &LuaPlayerRestoreMana, "restore_mana")',
+            '"player.resources.owner"',
+        ),
+    )
+    assert "participant_id == 0 ? 1 : participant_id" in damage_hook
+
+    _require(
+        "complex invincibility-potion canary",
+        canary_manifest + canary + canary_sprite + canary_readme,
+        (
+            '"id": "canary.lua.invincibility_potion"',
+            '"items.consumables.register"',
+            '"loot.register"',
+            '"player.resources.owner"',
+            "local DURATION_MS = 3 * 60 * 1000",
+            'type = "potion"',
+            'kind = "spell_glow"',
+            "chance = 0.5",
+            "boss_chance = 1.0",
+            "sd.player.restore_mana()",
+            'sd.events.on("item.consumed"',
+            'sd.events.filter("damage.taken"',
+            'sd.events.filter("mana.changing"',
+            "return {delta = 0}",
+            "sd.timer.after(event.duration_ms",
+            "manually recolored derivative",
+            '"width": 53',
+            '"height": 50',
+        ),
+    )
+    icon = (
+        ROOT
+        / "mods/lua_invincibility_potion_canary/sprites/"
+        "invincibility_potion.png"
+    ).read_bytes()
+    assert icon[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", icon[16:24]) == (53, 50)
+    bundle = (
+        ROOT
+        / "mods/lua_invincibility_potion_canary/sprites/"
+        "invincibility_potion.bundle"
+    ).read_bytes()
+    assert len(bundle) == 45
     for item in (
         r"include\lua_item_runtime.h",
         r"src\lua_item_runtime.cpp",
@@ -201,5 +280,6 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     return (
         "Lua consumables register bounded stable identities, roll additive "
         "normal/boss loot, materialize through stock potion inventory paths, "
-        "replicate by content ID, and execute effects only on the consuming owner"
+        "replicate by content ID, execute owner-local resource effects, and ship "
+        "a baked-green three-minute invincibility canary"
     )

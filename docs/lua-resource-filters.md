@@ -1,12 +1,14 @@
-# Lua XP and gold resource filters
+# Lua XP, gold, and mana resource filters
 
 `sd.events.filter("xp.gaining", handler)` and
-`sd.events.filter("gold.changing", handler)` run synchronously before the
-stock resource mutation. They use the same stable mod-load and registration
-ordering as every other mutable event filter. Each handler sees earlier
-rewrites, and cancellation stops the chain.
+`sd.events.filter("gold.changing", handler)` run synchronously before their
+stock resource mutations. `sd.events.filter("mana.changing", handler)` wraps
+the native wizard mana-delta writer on the process that simulates that wizard.
+All three use the same stable mod-load and registration ordering as every other
+mutable event filter. Each handler sees earlier rewrites, and cancellation
+stops the chain.
 
-The capability for both filters is `events.filters.resources`.
+The capability for all three filters is `events.filters.resources`.
 
 ## XP payload
 
@@ -66,14 +68,57 @@ The existing queued `gold.changed` notification is post-mutation telemetry. It
 reports the actual applied delta after clamping, so it may differ from the
 pre-event request.
 
+## Mana payload
+
+The native hook runs at `PlayerActor::ApplyManaDelta` before the stock writer:
+
+```lua
+{
+  event = "mana.changing",
+  participant_id = 123, -- standalone local player uses semantic ID 1
+  actor_address = 12345678,
+  progression_address = 23456789,
+  current_mana = 35.0,
+  maximum_mana = 100.0,
+  delta = -12.0,
+  resulting_mana = 23.0,
+  allow_prompt = false,
+  source = "native",
+}
+```
+
+`resulting_mana` is the arithmetic pre-native result for the current rewritten
+`delta`; the stock writer still owns its final clamping and prompt behavior.
+The handler may rewrite the signed change with `{delta = number}`. Values must
+be finite and within `-1,000,000..1,000,000`.
+
+Returning `{delta = 0}` for a negative change makes mana spending free while
+preserving the stock cast, cooldown, animation, and replication paths:
+
+```lua
+sd.events.filter("mana.changing", function(event)
+  if infinite_mana[event.participant_id] and event.delta < 0 then
+    return {delta = 0}
+  end
+end)
+```
+
+`sd.player.restore_mana()` is the complementary owner-local semantic action.
+It takes no arguments, restores the calling process's local wizard through the
+native mana writer, and returns `true, resulting_mana` or `false, error`. It
+advertises `player.resources.owner`. The action deliberately calls the native
+writer beneath the hook so it can be used safely from a Lua callback without
+recursively re-entering `mana.changing`.
+
 ## Handler results
 
-Both filters accept:
+All three filters accept:
 
 - `nil` or `true` to keep the current outcome;
 - `false` or `{cancel = true}` to cancel before stock mutation;
 - `{amount = number}` for XP;
 - `{delta = integer}` for gold.
+- `{delta = number}` for mana.
 
 Patches are transactional. A bad field rejects the whole patch, logs the owning
 mod ID, and fails open with the prior handler's outcome. Callback errors and
@@ -81,9 +126,9 @@ Lua-engine re-entry also fail open. Filters cannot yield.
 
 ## Ownership and replication
 
-Standalone XP and gold changes run locally. In multiplayer, native XP gains run
-where that participant progression is simulated and ordinary progression
-replication carries the result.
+Standalone XP, gold, and mana changes run locally. In multiplayer, native XP
+and mana changes run where that participant progression is simulated and
+ordinary progression replication carries the result.
 
 Gold pickup authority is more explicit. The host filters its local stock
 pickup at `Gold_ChangeGlobal`. For a remote participant, the host filters the
@@ -96,7 +141,10 @@ the same pickup is never filtered twice.
 ## Sample and verification
 
 The opt-in `sample.lua.resource_filter_lab` mod doubles positive XP and gold
-gains while leaving spends unchanged. Run the static contract with:
+gains while leaving spends unchanged. The
+`canary.lua.invincibility_potion` mod uses `mana.changing` together with
+`sd.player.restore_mana()` to implement three minutes of true infinite mana.
+Run the static contract with:
 
 ```powershell
 py -3 tools/verify_lua_resource_filter_contract.py

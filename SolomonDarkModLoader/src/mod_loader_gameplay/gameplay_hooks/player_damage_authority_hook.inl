@@ -107,7 +107,9 @@ std::uint64_t ResolveDamageSourceParticipantId(uintptr_t source_address) {
     if (TryGetPlayerState(&local_player) &&
         local_player.valid &&
         local_player.actor_address == owner_actor) {
-        return multiplayer::GetLocalTransportParticipantId();
+        const auto participant_id =
+            multiplayer::GetLocalTransportParticipantId();
+        return participant_id == 0 ? 1 : participant_id;
     }
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);

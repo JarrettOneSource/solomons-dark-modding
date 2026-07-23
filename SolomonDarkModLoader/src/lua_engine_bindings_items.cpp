@@ -514,6 +514,11 @@ int LuaItemsGrant(lua_State* state) {
     if (definition == nullptr) {
         return luaL_error(state, "sd.items.grant content identity is not registered");
     }
+    if (definition->consumable) {
+        return luaL_error(
+            state,
+            "sd.items.grant supports recipe-backed items; registered consumables enter inventory through sd.loot");
+    }
 
     std::uint64_t requested_target_participant_id = 0;
     std::array<std::uint8_t, kLuaItemColorStateBytes> color_state = {};
