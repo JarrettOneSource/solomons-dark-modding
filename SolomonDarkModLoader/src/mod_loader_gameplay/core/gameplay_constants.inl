@@ -179,10 +179,6 @@ constexpr std::uint8_t kHagathaCuringSelector = 11;
 constexpr std::uint8_t kHagathaGlassCannonSelector = 16;
 constexpr std::uint8_t kHagathaCurseBossesSelector = 22;
 constexpr float kHagathaCurseBossesDamageMultiplier = 3.0f;
-constexpr std::uint32_t kDemonSkullNativeTypeId = 0x3F0;
-constexpr std::uint32_t kDemonNativeTypeId = 0x3F1;
-constexpr std::uint32_t kDireFacultyNativeTypeId = 0x3F2;
-constexpr std::uint32_t kHeartmongerNativeTypeId = 0x3F3;
 constexpr std::uint32_t kEtherPrimaryDamageSourceNativeTypeId = 0x7D3;
 constexpr std::uint32_t kFireballDamageSourceNativeTypeId = 0x7D4;
 constexpr std::uint32_t kWaterPrimaryDamageSourceNativeTypeId = 0x7D5;
@@ -192,10 +188,8 @@ constexpr std::uint32_t kMagicStormDamageSourceNativeTypeId = 0x7F0;
 constexpr std::uint32_t kMagicTrapDamageSourceNativeTypeId = 0x7F5;
 
 bool IsHagathaCurseBossesNativeType(std::uint32_t object_type_id) {
-    return object_type_id == kDemonSkullNativeTypeId ||
-           object_type_id == kDemonNativeTypeId ||
-           object_type_id == kDireFacultyNativeTypeId ||
-           object_type_id == kHeartmongerNativeTypeId;
+    return IsStockBossEnemyNativeType(
+        static_cast<std::int32_t>(object_type_id));
 }
 
 bool IsPlayerAuthoredDamageSourceNativeType(std::uint32_t object_type_id) {

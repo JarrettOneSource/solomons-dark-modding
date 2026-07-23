@@ -98,6 +98,7 @@
     <ClInclude Include="include\lua_camera_runtime.h" />
     <ClInclude Include="include\lua_developer_console.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
+    <ClInclude Include="include\lua_item_runtime.h" />
     <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_sprite_runtime.h" />
     <ClInclude Include="include\lua_time_runtime.h" />
@@ -128,6 +129,7 @@
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
+    <ClInclude Include="include\native_enemy_types.h" />
     <ClInclude Include="include\native_spell_stats.h" />
     <ClInclude Include="include\multiplayer_service_loop.h" />
     <ClInclude Include="include\runtime_bootstrap.h" />
@@ -542,7 +544,11 @@
     <ClCompile Include="src\lua_engine_registered_spell_casts.cpp" />
     <ClCompile Include="src\lua_engine_registered_spell_selection.cpp" />
     <ClCompile Include="src\lua_engine_registered_spell_effects.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_consumables.cpp" />
     <ClCompile Include="src\lua_engine_bindings_items.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_loot.cpp" />
+    <ClCompile Include="src\lua_item_native_hooks.cpp" />
+    <ClCompile Include="src\lua_item_runtime.cpp" />
     <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />
     <ClCompile Include="src\lua_engine_bindings_ai.cpp" />
     <ClCompile Include="src\lua_engine_enemy_ai.cpp" />

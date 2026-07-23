@@ -32,7 +32,7 @@ def test_lua_audio_is_scoped_bounded_local_and_game_owned() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaAudioBindings(mod->state);" in binding_root
-    assert "lua_createtable(mod->state, 0, 29);" in binding_root
+    assert "lua_createtable(mod->state, 0, 30);" in binding_root
     for source in (
         "lua_engine_bindings_audio.cpp",
         "lua_engine_audio.cpp",

@@ -286,7 +286,7 @@ multiplayer-safe. See `lua-items.md`.
 Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
 valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
 spawn filters, and attaches per-actor loot policy without mutating shared config.
-Protocol 80 carries the content ID and effective constructor values through world
+Protocol 81 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. The opt-in two-peer acceptance covers authority rejection, exact construction,
 client materialization, lifecycle notifications, tombstone identity, and `none` loot
@@ -295,7 +295,7 @@ suppression. See `lua-enemies.md`.
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
 `get_selection`, `cast`, and `get_effects` bind deterministic
-identities to bounded immutable config and owner-state callbacks. Protocol 80 routes host
+identities to bounded immutable config and owner-state callbacks. Protocol 81 routes host
 commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
 once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
 protocol fragments and relays complete per-owner effect generations, including explicit
@@ -321,7 +321,7 @@ participant, while point goals rotate the proven hostile move vector without
 bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal`
 belongs to a different actor class, so the implementation composes at
 `MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
-cross-class call. Clients run no mod AI and receive the resulting protocol-80 world
+cross-class call. Clients run no mod AI and receive the resulting protocol-81 world
 snapshots. The opt-in two-peer acceptance covers host-only controller execution,
 blackboard/target/move-goal decisions, collision-valid replicated motion, client mutation
 rejection, and per-actor retirement. See `lua-ai.md` and the opt-in
@@ -369,7 +369,7 @@ panels, labels, and buttons while rendering them through the game's native
 strict options, keyboard/mouse focus, and programmatic activation all feed one
 semantic action queue; callbacks run only from the game-thread Lua pump.
 Presentation actions remain local. Simulation-class buttons on clients become
-reliable protocol-80 authority requests authenticated by endpoint, participant
+reliable protocol-81 authority requests authenticated by endpoint, participant
 session nonce, request order, and the host's matching enabled registration.
 See `lua-ui-authoring.md` and the opt-in `sample.lua.ui_authoring_lab` mod.
 
@@ -405,7 +405,7 @@ rare mod that outgrows `sd.state`/broadcast (e.g., streaming large payloads). Mo
 never touch it — its existence keeps the default path honest.
 
 **Implemented 2026-07-23.** `sd.net.send/broadcast/on/off/get_limits` carries
-binary-safe payloads through a bounded protocol-80 fragment envelope. Clients send only
+binary-safe payloads through a bounded protocol-81 fragment envelope. Clients send only
 to the host; the host authenticates endpoint, hop identity, source participant session,
 target, envelope, and replay key before local delivery or relay. Per-mod subscriptions
 dispatch only from the Lua game-thread pump, and disconnect cleanup removes assemblies,

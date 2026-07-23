@@ -41,6 +41,8 @@ bool TryCaptureLuaDropRollFilterContext(
     captured = TryReadEnemyTypeFromActor(
         enemy_address,
         &context->native_type_id) && captured;
+    context->is_boss =
+        IsStockBossEnemyNativeType(context->native_type_id);
     captured = memory.TryReadField(
         enemy_address,
         kActorPositionXOffset,
@@ -179,6 +181,33 @@ bool LuaDropRollFilterContextChanged(
         filtered.forced_kind != LuaDropForcedKind::Stock;
 }
 
+void QueueLuaLootPoolDrops(const LuaDropRollFilterContext& context) {
+    for (const auto& entry : RollLuaLootPool(context.is_boss)) {
+        const auto definition =
+            FindLuaConsumableDefinition(entry.item_content_id);
+        if (!definition.has_value()) {
+            LogLuaDropRollFilterHookFailure(
+                &g_lua_loot_pool_spawn_log_count,
+                "registered loot item disappeared before its drop could be queued. "
+                "content_id=" + std::to_string(entry.item_content_id));
+            continue;
+        }
+
+        std::string error_message;
+        if (!QueueLuaConsumableDrop(
+                definition->native_subtype,
+                context.x,
+                context.y,
+                &error_message)) {
+            LogLuaDropRollFilterHookFailure(
+                &g_lua_loot_pool_spawn_log_count,
+                "registered loot drop could not be queued. content_id=" +
+                    std::to_string(entry.item_content_id) +
+                    " error=" + error_message);
+        }
+    }
+}
+
 void __fastcall HookDropSelector(void* self, void* unused_edx) {
     const auto original =
         GetX86HookTrampoline<DropSelectorFn>(g_state.hooks[kHookDropSelector]);
@@ -197,7 +226,10 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
             reinterpret_cast<uintptr_t>(self),
             &registered_config) &&
         registered_config.loot_policy != SDModLuaEnemyLootPolicy::Stock;
-    if (!HasLuaDropRollFilterHandlers() && !have_registered_policy) {
+    const bool have_registered_loot = !SnapshotLuaLootPool().empty();
+    if (!HasLuaDropRollFilterHandlers() &&
+        !have_registered_policy &&
+        !have_registered_loot) {
         original(self, unused_edx);
         return;
     }
@@ -285,4 +317,5 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
             "config=" + HexString(original_filter_context.config_address) +
                 " arena=" + HexString(original_filter_context.arena_address));
     }
+    QueueLuaLootPoolDrops(filtered_context);
 }

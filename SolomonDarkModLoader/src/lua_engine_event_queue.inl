@@ -65,6 +65,13 @@ void DispatchPendingLuaEventsToLuaMods() {
                         value.y);
                 } else if constexpr (std::is_same_v<Event, LevelUpEvent>) {
                     DispatchLevelUpToLuaMods(value.level, value.xp);
+                } else if constexpr (
+                    std::is_same_v<Event, ConsumableUseEvent>) {
+                    DispatchConsumableUseToLuaMods(
+                        value.content_id,
+                        value.participant_id,
+                        value.use_id,
+                        value.local_owner);
                 } else if constexpr (std::is_same_v<Event, CustomEvent>) {
                     DispatchCustomEventToLuaMods(
                         value.mod_id,
@@ -143,6 +150,19 @@ void QueueDropSpawnedEvent(const char* kind, float x, float y) {
 
 void QueueLevelUpEvent(int level, int xp) {
     EnqueueLuaEvent(LevelUpEvent{level, xp});
+}
+
+void QueueConsumableUseEvent(
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner) {
+    EnqueueLuaEvent(ConsumableUseEvent{
+        content_id,
+        participant_id,
+        use_id,
+        local_owner,
+    });
 }
 
 void QueueCustomEvent(

@@ -56,6 +56,9 @@ std::uint32_t FilterMaskForName(std::string_view filter_name) {
     if (filter_name == "gold.changing") {
         return kLuaGoldChangingFilterMask;
     }
+    if (filter_name == "mana.changing") {
+        return kLuaManaChangingFilterMask;
+    }
     return 0;
 }
 
@@ -467,6 +470,11 @@ bool HasLuaXpGainFilterHandlers() {
 bool HasLuaGoldChangeFilterHandlers() {
     return (g_registered_filter_mask.load(std::memory_order_acquire) &
             kLuaGoldChangingFilterMask) != 0;
+}
+
+bool HasLuaManaChangeFilterHandlers() {
+    return (g_registered_filter_mask.load(std::memory_order_acquire) &
+            kLuaManaChangingFilterMask) != 0;
 }
 
 namespace detail {

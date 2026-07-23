@@ -637,6 +637,7 @@ StatePacket BuildLocalStatePacket() {
         const auto& item = local->owned_progression.inventory_items[index];
         packet.inventory_items[index].type_id = item.type_id;
         packet.inventory_items[index].recipe_uid = item.recipe_uid;
+        packet.inventory_items[index].content_id = item.content_id;
         packet.inventory_items[index].slot = item.slot;
         packet.inventory_items[index].stack_count = item.stack_count;
         packet.inventory_items[index].parent_item_index = item.parent_item_index;

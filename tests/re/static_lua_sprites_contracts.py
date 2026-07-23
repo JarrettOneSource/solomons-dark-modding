@@ -126,7 +126,7 @@ def test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned() -> str:
     ):
         assert token in bindings, f"Lua sprite binding lacks: {token}"
     assert "RegisterLuaSpriteBindings(mod->state);" in binding_root
-    assert "lua_createtable(mod->state, 0, 29);" in binding_root
+    assert "lua_createtable(mod->state, 0, 30);" in binding_root
 
     for token in (
         "TryGetLuaRegisteredSpriteInfo(",

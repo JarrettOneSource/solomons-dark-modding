@@ -29,7 +29,7 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaCameraBindings(mod->state);" in binding_root
-    assert "lua_createtable(mod->state, 0, 29);" in binding_root
+    assert "lua_createtable(mod->state, 0, 30);" in binding_root
     for item in (
         "include\\lua_camera_runtime.h",
         "src\\lua_engine_bindings_camera.cpp",

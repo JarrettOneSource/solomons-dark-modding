@@ -305,6 +305,8 @@ void MarkLuaEventRegistered(LoadedLuaMod* mod, std::string_view event_name) {
         mod->drop_spawned_registered = true;
     } else if (event_name == kLevelUpEventName) {
         mod->level_up_registered = true;
+    } else if (event_name == kItemConsumedEventName) {
+        mod->item_consumed_registered = true;
     }
 }
 

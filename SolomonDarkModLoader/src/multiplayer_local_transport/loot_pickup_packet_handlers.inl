@@ -386,6 +386,17 @@ void ApplyLootPickupResultPacket(
     UpsertPeerEndpoint(from, packet.authority_participant_id, now_ms);
     const auto result_code = LootPickupResultCodeFromPacketValue(packet.result_code);
     const auto drop_kind = LootDropKindFromPacketValue(packet.drop_kind);
+    std::int32_t local_item_slot = packet.item_slot;
+    if ((drop_kind == LootDropKind::Potion &&
+         (packet.item_type_id != kPotionItemTypeId ||
+          !TryResolvePotionWireIdentity(
+              packet.item_slot,
+              packet.item_content_id,
+              &local_item_slot))) ||
+        (drop_kind != LootDropKind::Potion &&
+         packet.item_content_id != 0)) {
+        return;
+    }
     if (packet.participant_id == g_local_transport.local_peer_id &&
         drop_kind == LootDropKind::Gold) {
         if (result_code == LootPickupResultCode::Accepted) {
@@ -601,7 +612,7 @@ void ApplyLootPickupResultPacket(
                 packet.item_recipe_uid,
                 item_color_state,
                 item_color_state_valid,
-                packet.item_slot,
+                local_item_slot,
                 packet.stack_count,
                 packet.inventory_revision,
                 &native_inventory_error)) {

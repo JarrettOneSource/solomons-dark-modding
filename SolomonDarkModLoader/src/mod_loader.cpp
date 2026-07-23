@@ -13,6 +13,7 @@
 #include "lua_ui_runtime.h"
 #include "lua_engine.h"
 #include "lua_exec_pipe.h"
+#include "lua_item_runtime.h"
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
 #include "multiplayer_join_flow.h"
@@ -144,6 +145,7 @@ void ShutdownPartialRuntime() {
     ShutdownLuaDeveloperConsole();
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
+    ShutdownLuaItemNativeHooks();
     ShutdownGameplayKeyboardInjection();
     ShutdownRunLifecycleHooks();
     StopRuntimeTickService();
@@ -353,6 +355,17 @@ void Initialize(HMODULE module_handle) {
                 return;
             }
 
+            std::string lua_item_hook_error;
+            if (!InitializeLuaItemNativeHooks(&lua_item_hook_error)) {
+                const auto message = lua_item_hook_error.empty()
+                    ? std::string("Lua item native hooks failed to initialize.")
+                    : lua_item_hook_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-item-hooks-failed", message);
+                return;
+            }
+
             std::string run_lifecycle_hook_error;
             if (!InitializeRunLifecycleHooks(&run_lifecycle_hook_error)) {
                 const auto message = run_lifecycle_hook_error.empty()
@@ -484,6 +497,7 @@ void Shutdown() {
     RunShutdownStep("lua developer console", &ShutdownLuaDeveloperConsole);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
+    RunShutdownStep("lua item native hooks", &ShutdownLuaItemNativeHooks);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
     RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);
     RunShutdownStep("runtime tick service", &StopRuntimeTickService);

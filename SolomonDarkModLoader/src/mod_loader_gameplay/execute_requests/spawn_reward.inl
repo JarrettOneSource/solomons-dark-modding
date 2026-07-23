@@ -139,10 +139,20 @@ bool ExecuteSpawnPotionRewardNow(
     float x,
     float y,
     std::string* error_message) {
+    const bool is_lua_consumable = kind == "lua_consumable";
     const bool is_health_potion = kind == "health_potion" || kind == "life_potion" || kind == "potion0";
     const bool is_mana_potion = kind == "mana_potion" || kind == "mp_potion" || kind == "potion1" || kind == "potion";
-    if (!is_health_potion && !is_mana_potion) {
+    if (!is_lua_consumable && !is_health_potion && !is_mana_potion) {
         return false;
+    }
+    if (is_lua_consumable &&
+        (amount < kLuaFirstConsumablePotionSubtype ||
+         amount >= kLuaFirstConsumablePotionSubtype +
+             static_cast<int>(kLuaMaximumRegisteredConsumables))) {
+        if (error_message != nullptr) {
+            *error_message = "Lua consumable potion subtype is outside the runtime range.";
+        }
+        return true;
     }
 
     uintptr_t arena_address = 0;
@@ -164,8 +174,10 @@ bool ExecuteSpawnPotionRewardNow(
         return true;
     }
 
-    int potion_slot = is_mana_potion ? 1 : 0;
-    if (amount == 0 || amount == 1) {
+    int potion_slot = is_lua_consumable
+        ? amount
+        : (is_mana_potion ? 1 : 0);
+    if (!is_lua_consumable && (amount == 0 || amount == 1)) {
         potion_slot = amount;
     }
     DWORD exception_code = 0;

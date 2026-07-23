@@ -272,6 +272,8 @@ void ShutdownLocalTransport() {
         g_next_lua_mod_stream_sequence = 1;
         g_queued_authoritative_lua_item_grants.clear();
         g_next_lua_item_grant_request_id = 1;
+        g_queued_lua_consumable_uses.clear();
+        g_next_lua_consumable_use_id = 1;
         g_queued_lua_registered_spell_casts.clear();
         g_next_lua_registered_spell_cast_request_id = 1;
         g_queued_lua_ui_action_requests.clear();
@@ -321,6 +323,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendLocalEnemyDamageClaims();
     SendQueuedHostParticipantVitalsCorrections(now_ms);
     SendQueuedAuthoritativeLuaItemGrants();
+    SendQueuedLuaConsumableUses();
     SendQueuedLuaRegisteredSpellCasts();
     SendLuaRegisteredSpellEffectSnapshots(now_ms);
     SendQueuedLuaUiActionRequests();

@@ -26,7 +26,7 @@ def test_lua_timers_are_bounded_local_and_tick_driven() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaTimerBindings(mod->state)" in bindings
-    assert "lua_createtable(mod->state, 0, 29);" in bindings
+    assert "lua_createtable(mod->state, 0, 30);" in bindings
     assert "std::vector<LuaTimerEntry> timers" in internal
     assert '"timer.local.scheduler"' in engine
     assert "ClearLuaTimersForMod(mod)" in engine

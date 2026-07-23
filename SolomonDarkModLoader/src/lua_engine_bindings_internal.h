@@ -31,6 +31,14 @@ void RegisterLuaSceneBindings(lua_State* state);
 void RegisterLuaWaveBindings(lua_State* state);
 void RegisterLuaSpellBindings(lua_State* state);
 void RegisterLuaItemBindings(lua_State* state);
+void PopulateLuaConsumableItemDefinition(
+    lua_State* state,
+    int table_index,
+    LoadedLuaMod& mod,
+    LuaContentIdentity identity,
+    std::string item_name,
+    LuaItemDefinition* definition);
+void RegisterLuaLootBindings(lua_State* state);
 void RegisterLuaEnemyBindings(lua_State* state);
 void RegisterLuaAiBindings(lua_State* state);
 void RegisterLuaAudioBindings(lua_State* state);

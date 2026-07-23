@@ -41,7 +41,7 @@ def test_lua_bus_is_manifest_resolved_bounded_and_local() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaBusBindings(mod->state)" in bindings
-    assert "lua_createtable(mod->state, 0, 29);" in bindings
+    assert "lua_createtable(mod->state, 0, 30);" in bindings
     assert "std::vector<LuaBusSubscription> bus_subscriptions" in internal
     assert '"bus.local.contracts"' in engine
     assert "ClearLuaBusSubscriptionsForMod(mod)" in engine

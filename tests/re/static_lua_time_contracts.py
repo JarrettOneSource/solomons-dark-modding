@@ -106,7 +106,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "lua_time_revision",
         "LuaTimeControlPacketFlagStepFrames",
         "sizeof(LuaTimeControlPacket) == 56",
-        "sizeof(StatePacket) == 4544",
+        "sizeof(StatePacket) == 5056",
         "sizeof(ParticipantFramePacket) == 586",
     ):
         assert token in protocol, f"Lua time protocol lacks: {token}"

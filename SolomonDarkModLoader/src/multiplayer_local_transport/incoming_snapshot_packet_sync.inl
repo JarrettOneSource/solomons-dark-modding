@@ -236,6 +236,13 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
     for (std::uint8_t index = 0; index < drop_count; ++index) {
         const auto& packet_drop = packet.drops[index];
         const auto drop_kind = LootDropKindFromPacketValue(packet_drop.drop_kind);
+        std::int32_t local_item_slot = packet_drop.item_slot;
+        const bool potion_identity_valid =
+            drop_kind != LootDropKind::Potion ||
+            TryResolvePotionWireIdentity(
+                packet_drop.item_slot,
+                packet_drop.item_content_id,
+                &local_item_slot);
         if (packet_drop.network_drop_id == 0 ||
             packet_drop.native_type_id == 0 ||
             !std::isfinite(packet_drop.position_x) ||
@@ -257,8 +264,9 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
                 packet_drop.item_type_id == 0) ||
             (drop_kind == LootDropKind::Potion &&
                 (packet_drop.item_type_id != kPotionItemTypeId ||
-                 packet_drop.item_slot < kStockPotionSubtypeMin ||
-                 packet_drop.item_slot > kStockPotionSubtypeMax)) ||
+                 !potion_identity_valid)) ||
+            (drop_kind != LootDropKind::Potion &&
+                packet_drop.item_content_id != 0) ||
             (drop_kind == LootDropKind::Item &&
                 packet_drop.item_recipe_uid == 0 &&
                 !IsSupportedNonRecipeLootItem(
@@ -282,6 +290,7 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
         drop.auxiliary = packet_drop.auxiliary;
         drop.item_type_id = packet_drop.item_type_id;
         drop.item_recipe_uid = packet_drop.item_recipe_uid;
+        drop.item_content_id = packet_drop.item_content_id;
         drop.item_color_state_valid =
             (packet_drop.flags & LootDropSnapshotFlagItemColorState) != 0;
         if (drop.item_color_state_valid) {
@@ -290,7 +299,7 @@ LootSnapshotRuntimeInfo BuildLootSnapshotRuntimeInfo(
                 packet_drop.item_color_state,
                 drop.item_color_state.size());
         }
-        drop.item_slot = packet_drop.item_slot;
+        drop.item_slot = local_item_slot;
         drop.stack_count = packet_drop.stack_count;
         drop.actor_slot = packet_drop.actor_slot;
         drop.world_slot = packet_drop.world_slot;

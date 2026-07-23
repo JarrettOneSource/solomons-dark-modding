@@ -6,6 +6,7 @@
 #include "lua_draw_runtime.h"
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
+#include "lua_item_runtime.h"
 #include "lua_mod_runtime.h"
 #include "lua_sprite_runtime.h"
 #include "lua_time_runtime.h"
@@ -356,12 +357,15 @@ std::vector<std::string> BuildLuaCapabilitySet() {
     if (IsGameplayKeyboardInjectionInitialized()) {
         capabilities.emplace_back("input.keyboard.inject");
         capabilities.emplace_back("events.filters.damage");
+        capabilities.emplace_back("events.filters.mana");
         capabilities.emplace_back("events.filters.spell_cast");
         capabilities.emplace_back("rng.run.seed");
         capabilities.emplace_back("nav.read");
         capabilities.emplace_back("scene.read");
         capabilities.emplace_back("scene.switch.authority");
         capabilities.emplace_back("items.grant.authority");
+        capabilities.emplace_back("items.consumables.register");
+        capabilities.emplace_back("loot.register");
         capabilities.emplace_back("enemies.spawn.authority");
         capabilities.emplace_back("ai.control.authority");
         capabilities.emplace_back("spells.cast.owner");
@@ -447,6 +451,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
     ClearLuaUiBindingsForMod(mod);
+    ClearLuaItemRuntimeForMod(mod->descriptor.id);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);
@@ -464,6 +469,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->gold_changed_registered = false;
     mod->drop_spawned_registered = false;
     mod->level_up_registered = false;
+    mod->item_consumed_registered = false;
     mod->profile_storage_loaded = false;
     mod->profile_storage_values.clear();
     mod->next_timer_id = 1;
@@ -500,6 +506,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
     ResetLuaContentRegistry();
+    ResetLuaItemRuntime();
     ResetLuaModStateStore();
     detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEnemyAiRuntime();
@@ -542,6 +549,7 @@ void ShutdownLuaEngine() {
         ShutdownLuaDrawRuntime();
         ShutdownWaveIntelligence();
         ResetLuaContentRegistry();
+        ResetLuaItemRuntime();
         return;
     }
 
@@ -551,6 +559,7 @@ void ShutdownLuaEngine() {
     }
     loaded_mods.clear();
     ResetLuaContentRegistry();
+    ResetLuaItemRuntime();
     ResetLuaModStateStore();
     detail::ResetLuaRegisteredSpellRuntime();
     detail::ResetLuaEnemyAiRuntime();

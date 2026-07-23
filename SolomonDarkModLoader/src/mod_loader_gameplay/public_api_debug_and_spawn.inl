@@ -562,3 +562,40 @@ bool SpawnReward(std::string_view kind, int amount, float x, float y, std::strin
     request.y = y;
     return QueueRewardSpawnRequest(request, error_message);
 }
+
+bool QueueLuaConsumableDrop(
+    std::int32_t native_subtype,
+    float x,
+    float y,
+    std::string* error_message) {
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Lua consumable drop: gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    if (multiplayer::IsLocalTransportClient()) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Lua consumable drops are host-authoritative in multiplayer.";
+        }
+        return false;
+    }
+    if (native_subtype < kLuaFirstConsumablePotionSubtype ||
+        native_subtype >= kLuaFirstConsumablePotionSubtype +
+            static_cast<std::int32_t>(kLuaMaximumRegisteredConsumables)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Lua consumable native subtype is outside the runtime range.";
+        }
+        return false;
+    }
+
+    PendingRewardSpawnRequest request;
+    request.kind = "lua_consumable";
+    request.amount = native_subtype;
+    request.x = x;
+    request.y = y;
+    return QueueRewardSpawnRequest(request, error_message);
+}

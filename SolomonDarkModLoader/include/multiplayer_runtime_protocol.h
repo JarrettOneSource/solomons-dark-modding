@@ -69,6 +69,7 @@ enum class PacketKind : std::uint16_t {
     LuaUiActionRequest = 25,
     LuaNetMessage = 26,
     LuaTimeControl = 27,
+    LuaConsumableUse = 28,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -362,6 +363,7 @@ struct PacketHeader {
 struct ParticipantInventoryItemPacketState {
     std::uint32_t type_id;
     std::uint32_t recipe_uid;
+    std::uint64_t content_id;
     std::int32_t slot;
     std::int32_t stack_count;
     std::int16_t parent_item_index;
@@ -1034,6 +1036,7 @@ struct LootDropSnapshotPacketState {
     float auxiliary;
     std::uint32_t item_type_id;
     std::uint32_t item_recipe_uid;
+    std::uint64_t item_content_id;
     std::uint8_t item_color_state[kParticipantVisualLinkColorBlockBytes];
     std::int32_t item_slot;
     std::int32_t stack_count;
@@ -1282,6 +1285,17 @@ struct LuaUiActionRequestPacket {
     char action_id[kLuaUiIdentifierPacketBytes] = {};
 };
 
+struct LuaConsumableUsePacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint64_t use_id;
+    std::uint64_t content_id;
+    std::uint32_t run_nonce;
+    std::uint8_t flags = 0;
+    std::uint8_t reserved[7] = {};
+};
+
 struct LuaRegisteredSpellEffectPacketState {
     std::uint64_t effect_id;
     std::uint64_t cast_request_id;
@@ -1355,6 +1369,7 @@ struct LootPickupResultPacket {
     float resulting_mana_max;
     std::uint32_t item_type_id;
     std::uint32_t item_recipe_uid;
+    std::uint64_t item_content_id;
     std::uint8_t item_color_state[kParticipantVisualLinkColorBlockBytes];
     std::int32_t item_slot;
     std::int32_t stack_count;
@@ -1415,13 +1430,13 @@ static_assert(
 static_assert(
     !IsPacketSequenceNewer(0xFFFFFFFFu, 0u),
     "Packet sequence comparison must reject pre-wrap packets after wraparound");
-static_assert(sizeof(ParticipantInventoryItemPacketState) == 20, "Unexpected inventory item packet size");
+static_assert(sizeof(ParticipantInventoryItemPacketState) == 28, "Unexpected inventory item packet size");
 static_assert(sizeof(ParticipantEquippedItemPacketState) == 8, "Unexpected equipped item packet size");
 static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpected progression book entry packet size");
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 4544, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 5056, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
 static_assert(sizeof(ParticipantFramePacket) == 586,
@@ -1467,8 +1482,8 @@ static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 328, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 1032, "Unexpected world snapshot packet size");
-static_assert(sizeof(LootDropSnapshotPacketState) == 112, "Unexpected loot drop snapshot size");
-static_assert(sizeof(LootSnapshotPacket) == 7200, "Unexpected loot snapshot packet size");
+static_assert(sizeof(LootDropSnapshotPacketState) == 120, "Unexpected loot drop snapshot size");
+static_assert(sizeof(LootSnapshotPacket) == 7712, "Unexpected loot snapshot packet size");
 static_assert(kLootSnapshotPacketPrefixBytes == 32,
               "Unexpected loot snapshot packet prefix size");
 static_assert(LootSnapshotPacketWireSize(0) == 32,
@@ -1497,12 +1512,14 @@ static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76,
               "Unexpected Lua registered spell cast packet size");
 static_assert(sizeof(LuaUiActionRequestPacket) == 294,
               "Unexpected Lua UI action request packet size");
+static_assert(sizeof(LuaConsumableUsePacket) == 56,
+              "Unexpected Lua consumable use packet size");
 static_assert(sizeof(LuaRegisteredSpellEffectPacketState) == 248,
               "Unexpected Lua registered spell effect state size");
 static_assert(kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes == 44,
               "Unexpected Lua registered spell effect packet prefix size");
 static_assert(sizeof(LuaRegisteredSpellEffectSnapshotPacket) == 1036,
               "Unexpected Lua registered spell effect snapshot packet size");
-static_assert(sizeof(LootPickupResultPacket) == 164, "Unexpected loot pickup result packet size");
+static_assert(sizeof(LootPickupResultPacket) == 172, "Unexpected loot pickup result packet size");
 
 }  // namespace sdmod::multiplayer

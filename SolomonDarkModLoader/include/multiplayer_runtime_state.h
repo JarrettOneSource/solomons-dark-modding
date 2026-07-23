@@ -123,6 +123,7 @@ struct ParticipantRuntimeInfo {
 struct ParticipantInventoryItemState {
     std::uint32_t type_id = 0;
     std::uint32_t recipe_uid = 0;
+    std::uint64_t content_id = 0;
     std::int32_t slot = -1;
     std::int32_t stack_count = 0;
     std::int16_t parent_item_index = -1;

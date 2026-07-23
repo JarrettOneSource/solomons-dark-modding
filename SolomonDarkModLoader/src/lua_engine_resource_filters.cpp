@@ -20,7 +20,9 @@ namespace {
 
 constexpr char kXpGainingFilterName[] = "xp.gaining";
 constexpr char kGoldChangingFilterName[] = "gold.changing";
+constexpr char kManaChangingFilterName[] = "mana.changing";
 constexpr float kMaximumXpGain = 1'000'000.0f;
+constexpr float kMaximumAbsoluteManaDelta = 1'000'000.0f;
 constexpr std::uint32_t kMaximumBusyLogCount = 4;
 
 std::atomic<std::uint32_t> g_resource_filter_busy_log_count{0};
@@ -99,6 +101,39 @@ void PushGoldChangeFilterPayload(
     lua_pushboolean(state, would_succeed ? 1 : 0);
     lua_setfield(state, -2, "would_succeed");
     lua_pushstring(state, context.source == nullptr ? "unknown" : context.source);
+    lua_setfield(state, -2, "source");
+}
+
+void PushManaChangeFilterPayload(
+    lua_State* state,
+    const LuaManaChangeFilterContext& context) {
+    lua_createtable(state, 0, 10);
+    lua_pushstring(state, kManaChangingFilterName);
+    lua_setfield(state, -2, "event");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(context.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(context.progression_address));
+    lua_setfield(state, -2, "progression_address");
+    PushOptionalParticipantId(state, "participant_id", context.participant_id);
+    lua_pushnumber(state, static_cast<lua_Number>(context.current_mana));
+    lua_setfield(state, -2, "current_mana");
+    lua_pushnumber(state, static_cast<lua_Number>(context.maximum_mana));
+    lua_setfield(state, -2, "maximum_mana");
+    lua_pushnumber(state, static_cast<lua_Number>(context.delta));
+    lua_setfield(state, -2, "delta");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(context.current_mana + context.delta));
+    lua_setfield(state, -2, "resulting_mana");
+    lua_pushboolean(state, context.allow_prompt ? 1 : 0);
+    lua_setfield(state, -2, "allow_prompt");
+    lua_pushstring(
+        state,
+        context.source == nullptr ? "native" : context.source);
     lua_setfield(state, -2, "source");
 }
 
@@ -205,6 +240,48 @@ bool ParseGoldChangePatch(
             lua_pop(state, 1);
             return false;
         }
+    }
+    lua_pop(state, 1);
+    *canceled = requested_cancel;
+    return true;
+}
+
+bool ParseManaChangePatch(
+    lua_State* state,
+    int table_index,
+    LuaManaChangeFilterContext* candidate,
+    bool* canceled,
+    std::string* error_message) {
+    const auto absolute_index = lua_absindex(state, table_index);
+    bool requested_cancel = false;
+    if (!ReadCancellation(
+            state,
+            absolute_index,
+            &requested_cancel,
+            error_message)) {
+        return false;
+    }
+
+    lua_getfield(state, absolute_index, "delta");
+    if (!lua_isnil(state, -1)) {
+        if (lua_type(state, -1) != LUA_TNUMBER) {
+            if (error_message != nullptr) {
+                *error_message = "delta must be a number";
+            }
+            lua_pop(state, 1);
+            return false;
+        }
+        const auto delta = lua_tonumber(state, -1);
+        if (!std::isfinite(delta) ||
+            std::abs(delta) > kMaximumAbsoluteManaDelta) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "delta must be finite and within +/-1000000";
+            }
+            lua_pop(state, 1);
+            return false;
+        }
+        candidate->delta = static_cast<float>(delta);
     }
     lua_pop(state, 1);
     *canceled = requested_cancel;
@@ -377,6 +454,26 @@ bool ApplyLuaGoldChangeFilters(LuaGoldChangeFilterContext* context) {
                     context,
                     PushGoldChangeFilterPayload,
                     ParseGoldChangePatch)) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+bool ApplyLuaManaChangeFilters(LuaManaChangeFilterContext* context) {
+    if (context == nullptr || !HasLuaManaChangeFilterHandlers()) {
+        return true;
+    }
+    return ApplyResourceFiltersWithLock("mana change", [&]() {
+        for (const auto& mod : detail::LoadedLuaModsStorage()) {
+            if (!ApplyResourceFilterToMod(
+                    mod.get(),
+                    kManaChangingFilterName,
+                    kLuaManaChangingFilterMask,
+                    context,
+                    PushManaChangeFilterPayload,
+                    ParseManaChangePatch)) {
                 return false;
             }
         }

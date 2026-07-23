@@ -66,6 +66,9 @@ from static_lua_content_identity_contracts import (
 from static_lua_items_contracts import (
     test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
 )
+from static_lua_consumables_contracts import (
+    test_lua_consumables_are_native_stable_and_owner_executed,
+)
 from static_lua_enemies_contracts import (
     test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
 )
@@ -391,6 +394,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua items register stable identity and resolve peer-local recipes",
         test_lua_items_register_stable_identity_and_resolve_peer_local_recipes,
+    ),
+    (
+        "Lua consumables are native, stable, and owner-executed",
+        test_lua_consumables_are_native_stable_and_owner_executed,
     ),
     (
         "Lua enemies use exact stock spawning and replicated content identity",

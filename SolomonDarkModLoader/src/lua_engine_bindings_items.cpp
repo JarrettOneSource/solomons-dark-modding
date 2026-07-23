@@ -44,7 +44,10 @@ const ItemTypeBinding* FindItemTypeBinding(std::string_view item_type) {
 }
 
 bool IsKnownItemRegistrationField(std::string_view field) {
-    return field == "key" || field == "name" || field == "type";
+    return field == "key" || field == "name" || field == "type" ||
+        field == "description" || field == "icon" ||
+        field == "duration_ms" || field == "on_consume" ||
+        field == "consume_vfx";
 }
 
 bool IsKnownItemGrantOptionField(std::string_view field) {
@@ -141,7 +144,7 @@ int RejectUnknownItemRegistrationFields(lua_State* state, int table_index) {
             lua_pop(state, 2);
             return luaL_error(
                 state,
-                "sd.items.register accepts only named key, name, and type fields");
+                "sd.items.register accepts only named item descriptor fields");
         }
         std::size_t field_length = 0;
         const auto* field = lua_tolstring(state, -2, &field_length);
@@ -177,11 +180,33 @@ std::string ReadRequiredItemString(
     return result;
 }
 
+void RejectRecipeOnlyItemExtras(lua_State* state, int table_index) {
+    constexpr std::array<const char*, 5> potion_only_fields = {{
+        "description",
+        "icon",
+        "duration_ms",
+        "on_consume",
+        "consume_vfx",
+    }};
+    for (const auto* field : potion_only_fields) {
+        lua_getfield(state, table_index, field);
+        const bool present = !lua_isnil(state, -1);
+        lua_pop(state, 1);
+        if (present) {
+            luaL_error(
+                state,
+                "sd.items.register field '%s' is valid only for type 'potion'",
+                field);
+        }
+    }
+}
+
 bool SameNativeRecipeBinding(
     const LuaItemDefinition& definition,
     std::string_view recipe_name,
     std::uint32_t native_type_id) {
-    return definition.recipe_name == recipe_name &&
+    return !definition.consumable &&
+           definition.recipe_name == recipe_name &&
            definition.native_type_id == native_type_id;
 }
 
@@ -213,7 +238,7 @@ const LuaItemDefinition* FindOwnedItemDefinitionByKey(
 }
 
 void PushItemDefinition(lua_State* state, const LuaItemDefinition& definition) {
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 14);
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(definition.identity.network_id));
@@ -242,6 +267,58 @@ void PushItemDefinition(lua_State* state, const LuaItemDefinition& definition) {
         state,
         static_cast<lua_Integer>(definition.native_type_id));
     lua_setfield(state, -2, "native_type_id");
+
+    lua_pushboolean(state, definition.consumable ? 1 : 0);
+    lua_setfield(state, -2, "consumable");
+    if (definition.consumable) {
+        lua_pushlstring(
+            state,
+            definition.description.data(),
+            definition.description.size());
+        lua_setfield(state, -2, "description");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(definition.duration_ms));
+        lua_setfield(state, -2, "duration_ms");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(definition.native_subtype));
+        lua_setfield(state, -2, "native_subtype");
+        lua_createtable(state, 0, 2);
+        lua_pushlstring(
+            state,
+            definition.icon_atlas.data(),
+            definition.icon_atlas.size());
+        lua_setfield(state, -2, "atlas");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(definition.icon_frame));
+        lua_setfield(state, -2, "frame");
+        lua_setfield(state, -2, "icon");
+        if (definition.consume_vfx_kind != LuaConsumableVfxKind::None) {
+            lua_createtable(state, 0, 2);
+            lua_pushstring(state, "spell_glow");
+            lua_setfield(state, -2, "kind");
+            lua_createtable(state, 4, 0);
+            for (std::size_t index = 0;
+                 index < definition.consume_vfx_color.size();
+                 ++index) {
+                lua_pushnumber(
+                    state,
+                    static_cast<lua_Number>(
+                        definition.consume_vfx_color[index]));
+                lua_seti(
+                    state,
+                    -2,
+                    static_cast<lua_Integer>(index + 1));
+            }
+            lua_setfield(state, -2, "color");
+            lua_setfield(state, -2, "consume_vfx");
+        }
+        lua_pushboolean(state, 1);
+        lua_setfield(state, -2, "available");
+        return;
+    }
 
     std::uint32_t recipe_uid = 0;
     std::string resolution_error;
@@ -290,29 +367,34 @@ int LuaItemsRegister(lua_State* state) {
             "sd.items.register name must contain 1..%zu bytes",
             kLuaMaximumItemRecipeNameBytes);
     }
-    const auto* type_binding = FindItemTypeBinding(item_type);
-    if (type_binding == nullptr) {
+    const bool consumable = item_type == "potion";
+    const auto* type_binding =
+        consumable ? nullptr : FindItemTypeBinding(item_type);
+    if (!consumable && type_binding == nullptr) {
         return luaL_error(
             state,
-            "sd.items.register type must be ring, amulet, staff, hat, robe, or wand");
+            "sd.items.register type must be ring, amulet, staff, hat, robe, wand, or potion");
     }
 
-    for (const auto& loaded_mod : LoadedLuaModsStorage()) {
-        const auto duplicate = std::find_if(
-            loaded_mod->item_definitions.begin(),
-            loaded_mod->item_definitions.end(),
-            [&](const LuaItemDefinition& definition) {
-                return SameNativeRecipeBinding(
-                    definition,
-                    recipe_name,
-                    type_binding->native_type_id);
-            });
-        if (duplicate != loaded_mod->item_definitions.end()) {
-            return luaL_error(
-                state,
-                "sd.items.register native recipe is already bound by %s:%s",
-                duplicate->identity.mod_id.c_str(),
-                duplicate->identity.key.c_str());
+    if (!consumable) {
+        RejectRecipeOnlyItemExtras(state, 1);
+        for (const auto& loaded_mod : LoadedLuaModsStorage()) {
+            const auto duplicate = std::find_if(
+                loaded_mod->item_definitions.begin(),
+                loaded_mod->item_definitions.end(),
+                [&](const LuaItemDefinition& definition) {
+                    return SameNativeRecipeBinding(
+                        definition,
+                        recipe_name,
+                        type_binding->native_type_id);
+                });
+            if (duplicate != loaded_mod->item_definitions.end()) {
+                return luaL_error(
+                    state,
+                    "sd.items.register native recipe is already bound by %s:%s",
+                    duplicate->identity.mod_id.c_str(),
+                    duplicate->identity.key.c_str());
+            }
         }
     }
 
@@ -328,10 +410,20 @@ int LuaItemsRegister(lua_State* state) {
     }
 
     LuaItemDefinition definition;
-    definition.identity = std::move(identity);
-    definition.recipe_name = recipe_name;
-    definition.item_type = item_type;
-    definition.native_type_id = type_binding->native_type_id;
+    if (consumable) {
+        PopulateLuaConsumableItemDefinition(
+            state,
+            1,
+            *mod,
+            std::move(identity),
+            recipe_name,
+            &definition);
+    } else {
+        definition.identity = std::move(identity);
+        definition.recipe_name = recipe_name;
+        definition.item_type = item_type;
+        definition.native_type_id = type_binding->native_type_id;
+    }
     mod->item_definitions.push_back(std::move(definition));
     PushItemDefinition(state, mod->item_definitions.back());
     return 1;
@@ -515,6 +607,13 @@ bool TryResolveLuaItemNativeRecipeUnlocked(
     if (definition == nullptr) {
         if (error_message != nullptr) {
             *error_message = "Lua item content identity is not registered.";
+        }
+        return false;
+    }
+    if (definition->consumable) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Lua consumables do not bind a stock item recipe.";
         }
         return false;
     }

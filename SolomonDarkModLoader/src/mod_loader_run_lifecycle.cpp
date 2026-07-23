@@ -1,5 +1,6 @@
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
+#include "lua_item_runtime.h"
 #include "lua_time_runtime.h"
 #include "bot_runtime.h"
 #include "debug_ui_overlay.h"
@@ -11,6 +12,7 @@
 #include "multiplayer_join_flow.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
+#include "native_enemy_types.h"
 #include "wave_intelligence.h"
 #include "x86_hook.h"
 

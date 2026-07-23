@@ -3,12 +3,14 @@
 #include "logger.h"
 #include "lua_draw_runtime.h"
 #include "lua_ui_runtime.h"
+#include "native_enemy_types.h"
 
 extern "C" {
 #include "lua.h"
 #include "lauxlib.h"
 }
 
+#include <algorithm>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -74,6 +76,13 @@ struct LevelUpEvent {
     int xp = 0;
 };
 
+struct ConsumableUseEvent {
+    std::uint64_t content_id = 0;
+    std::uint64_t participant_id = 0;
+    std::uint64_t use_id = 0;
+    bool local_owner = false;
+};
+
 struct CustomEvent {
     std::string mod_id;
     std::string event_name;
@@ -93,6 +102,7 @@ using PendingLuaEvent = std::variant<
     GoldChangedEvent,
     DropSpawnedEvent,
     LevelUpEvent,
+    ConsumableUseEvent,
     CustomEvent>;
 
 std::mutex g_pending_lua_event_mutex;
@@ -170,10 +180,12 @@ void PushEnemyDeathPayload(
     float y,
     const char* kill_method,
     std::uint64_t content_id) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 8);
     PushEventNameField(state, kEnemyDeathEventName);
     lua_pushinteger(state, static_cast<lua_Integer>(enemy_type));
     lua_setfield(state, -2, "enemy_type");
+    lua_pushboolean(state, IsStockBossEnemyNativeType(enemy_type) ? 1 : 0);
+    lua_setfield(state, -2, "is_boss");
     lua_pushnumber(state, static_cast<lua_Number>(x));
     lua_setfield(state, -2, "x");
     lua_pushnumber(state, static_cast<lua_Number>(y));
@@ -195,10 +207,12 @@ void PushEnemySpawnedPayload(
     float x,
     float y,
     std::uint64_t content_id) {
-    lua_createtable(state, 0, 6);
+    lua_createtable(state, 0, 7);
     PushEventNameField(state, kEnemySpawnedEventName);
     lua_pushinteger(state, static_cast<lua_Integer>(enemy_type));
     lua_setfield(state, -2, "enemy_type");
+    lua_pushboolean(state, IsStockBossEnemyNativeType(enemy_type) ? 1 : 0);
+    lua_setfield(state, -2, "is_boss");
     lua_pushnumber(state, static_cast<lua_Number>(x));
     lua_setfield(state, -2, "x");
     lua_pushnumber(state, static_cast<lua_Number>(y));
@@ -263,6 +277,40 @@ void PushLevelUpPayload(lua_State* state, int level, int xp) {
     lua_setfield(state, -2, "level");
     lua_pushinteger(state, static_cast<lua_Integer>(xp));
     lua_setfield(state, -2, "xp");
+}
+
+void PushConsumableUsePayload(
+    lua_State* state,
+    const LuaItemDefinition& definition,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner) {
+    lua_createtable(state, 0, 8);
+    PushEventNameField(state, kItemConsumedEventName);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(definition.identity.network_id));
+    lua_setfield(state, -2, "content_id");
+    lua_pushlstring(
+        state,
+        definition.identity.mod_id.data(),
+        definition.identity.mod_id.size());
+    lua_setfield(state, -2, "mod_id");
+    lua_pushlstring(
+        state,
+        definition.identity.key.data(),
+        definition.identity.key.size());
+    lua_setfield(state, -2, "key");
+    lua_pushinteger(state, static_cast<lua_Integer>(participant_id));
+    lua_setfield(state, -2, "participant_id");
+    lua_pushinteger(state, static_cast<lua_Integer>(use_id));
+    lua_setfield(state, -2, "use_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(definition.duration_ms));
+    lua_setfield(state, -2, "duration_ms");
+    lua_pushboolean(state, local_owner ? 1 : 0);
+    lua_setfield(state, -2, "local_owner");
 }
 
 template <typename PayloadBuilder>
@@ -448,6 +496,26 @@ void DispatchLevelUpToMod(LoadedLuaMod* mod, int level, int xp) {
         });
 }
 
+void DispatchConsumableUseToMod(
+    LoadedLuaMod* mod,
+    const LuaItemDefinition& definition,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner) {
+    DispatchEventToMod(
+        mod,
+        kItemConsumedEventName,
+        mod != nullptr && mod->item_consumed_registered,
+        [&](lua_State* state) {
+            PushConsumableUsePayload(
+                state,
+                definition,
+                participant_id,
+                use_id,
+                local_owner);
+        });
+}
+
 }  // namespace
 
 void DispatchRuntimeTickToLuaMods(const RuntimeTickContext& context) {
@@ -553,6 +621,72 @@ void DispatchLevelUpToLuaMods(int level, int xp) {
     }
 }
 
+void DispatchConsumableUseToLuaMods(
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner) {
+    const LuaItemDefinition* definition = nullptr;
+    LoadedLuaMod* owner = nullptr;
+    for (const auto& mod : LoadedLuaModsStorage()) {
+        const auto found = std::find_if(
+            mod->item_definitions.begin(),
+            mod->item_definitions.end(),
+            [content_id](const LuaItemDefinition& item) {
+                return item.consumable &&
+                    item.identity.network_id == content_id;
+            });
+        if (found != mod->item_definitions.end()) {
+            definition = &*found;
+            owner = mod.get();
+            break;
+        }
+    }
+    if (definition == nullptr || owner == nullptr) {
+        return;
+    }
+
+    for (const auto& mod : LoadedLuaModsStorage()) {
+        DispatchConsumableUseToMod(
+            mod.get(),
+            *definition,
+            participant_id,
+            use_id,
+            local_owner);
+    }
+    if (!local_owner ||
+        owner->state == nullptr ||
+        definition->on_consume_reference == LUA_NOREF) {
+        return;
+    }
+
+    lua_rawgeti(
+        owner->state,
+        LUA_REGISTRYINDEX,
+        definition->on_consume_reference);
+    if (!lua_isfunction(owner->state, -1)) {
+        lua_pop(owner->state, 1);
+        LogLuaMessage(
+            *owner,
+            "registered consumable on_consume callback is unavailable");
+        return;
+    }
+    PushConsumableUsePayload(
+        owner->state,
+        *definition,
+        participant_id,
+        use_id,
+        true);
+    if (lua_pcall(owner->state, 1, 0, 0) != LUA_OK) {
+        const auto* message = lua_tostring(owner->state, -1);
+        LogLuaMessage(
+            *owner,
+            std::string("registered consumable on_consume callback failed: ") +
+                (message == nullptr ? "unknown" : message));
+        lua_pop(owner->state, 1);
+    }
+}
+
 #include "lua_engine_event_queue.inl"
 
 }  // namespace sdmod::detail
@@ -611,6 +745,24 @@ void DispatchLuaDropSpawned(const char* kind, float x, float y) {
 
 void DispatchLuaLevelUp(int level, int xp) {
     detail::QueueLevelUpEvent(level, xp);
+}
+
+void DispatchLuaConsumableUse(
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner) {
+    (void)QueueLuaConsumableNativeVfx(
+        LuaConsumableNativeVfxRequest{
+            content_id,
+            participant_id,
+            use_id,
+        });
+    detail::QueueConsumableUseEvent(
+        content_id,
+        participant_id,
+        use_id,
+        local_owner);
 }
 
 void DispatchLuaCustomEvent(
