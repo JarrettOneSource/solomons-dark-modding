@@ -132,11 +132,12 @@ They do not require simulation authority and do not send packets. Use
 state, and `sd.audio` only for the resulting local presentation.
 
 The disabled `sample.lua.audio_lab` mod demonstrates event-driven samples,
-looping streams, volume changes, and cleanup. It intentionally does not ship a
-sound file; place licensed test media under its `audio/` directory before
-enabling it. `tools/verify_lua_audio.py` checks the strict surface and can drive
-both BASS paths against an asset in the first loaded Lua mod without launching
-the game itself.
+looping streams, volume changes, and cleanup. It does not ship audible media.
+The checked-in base64 acceptance fixture is deterministic silent PCM and is
+decoded only by the pair verifier during staging. Place licensed media under
+the mod's `audio/` directory for normal authoring. `tools/verify_lua_audio.py`
+checks the strict surface and can drive both BASS paths against an asset in the
+first loaded Lua mod without launching the game itself.
 
 ## Verification
 
@@ -157,3 +158,19 @@ py -3 tools/verify_lua_audio.py --asset audio/acceptance.wav
 The verifier loops at low volume, checks both semantic state tables and a live
 volume change, then stops and frees each handle. It attaches only to an existing
 named pipe; it never launches or focuses Solomon Dark.
+
+For the complete multiplayer-local lifecycle, use a disposable pair:
+
+```powershell
+py tools/verify_lua_audio_multiplayer.py `
+  --launch-pair `
+  --confirm-silent-playback
+```
+
+The pair verifier materializes the pinned 10 ms silent WAV only for the staging
+window, so the exact mod fingerprint includes identical asset bytes. It proves
+host-only and client-only sample/stream ownership, semantic schemas, path and
+argument rejection, independent volume and stop behavior, the 64-playback
+per-mod ceiling, and exact clear isolation. Generated media is removed even on
+failure. Window tiling and global process cleanup are disabled, only the two
+returned process IDs are stopped, and the fixture contains no audible samples.

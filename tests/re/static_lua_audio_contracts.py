@@ -18,8 +18,18 @@ def test_lua_audio_is_scoped_bounded_local_and_game_owned() -> str:
     roadmap = _read("docs/lua-seam-roadmap.md")
     manifest = _read("mods/lua_audio_lab/manifest.json")
     sample = _read("mods/lua_audio_lab/scripts/main.lua")
+    fixture = _read(
+        "mods/lua_audio_lab/audio/acceptance.wav.base64"
+    )
     verifier = _read("tools/verify_lua_audio.py")
+    multiplayer_verifier = _read(
+        "tools/verify_lua_audio_multiplayer.py"
+    )
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_audio_multiplayer_verifier.py"
+    )
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaAudioBindings(mod->state);" in binding_root
     assert "lua_createtable(mod->state, 0, 29);" in binding_root
@@ -155,6 +165,7 @@ def test_lua_audio_is_scoped_bounded_local_and_game_owned() -> str:
         "sd.audio.clear()",
     ):
         assert token in sample, f"Lua audio sample lacks: {token}"
+    assert fixture.startswith("UklGR")
 
     for token in (
         'sd.runtime.has_capability("audio.local.playback")',
@@ -168,9 +179,49 @@ def test_lua_audio_is_scoped_bounded_local_and_game_owned() -> str:
         "playback_paths_passed",
     ):
         assert token in verifier, f"Lua audio verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.audio_lab"',
+        "FIXTURE_SHA256",
+        "_materialize_fixture_asset",
+        "CONTRACT_PROBE",
+        "STATE_PROBE",
+        "STOP_SAMPLE_PROBE",
+        "CLEAR_PROBE",
+        "CAPACITY_PROBE",
+        "_play_probe",
+        "_volume_probe",
+        "audio_state_matches",
+        "--confirm-silent-playback",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua audio multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_audio_state_requires_exact_local_schema",
+        "test_fixture_materialization_is_exact_and_cleans_up",
+        "test_fixture_refuses_to_overwrite_existing_audio",
+        "test_fixture_rejects_non_silent_pcm",
+        "test_playback_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_incomplete_process_ledger_stops_only_owned_process",
+        "test_run_proves_playback_volume_capacity_and_isolation",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua audio multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_audio_multiplayer_verifier"
+        in workflow
+    )
     assert '"audio": (' in runtime_verifier
 
     return (
         "sd.audio reuses the game-owned BASS device for bounded mod-root "
-        "samples and streams with opaque local-only ownership and cleanup"
+        "samples and streams with opaque local-only ownership plus exact "
+        "two-peer lifecycle and capacity acceptance"
     )

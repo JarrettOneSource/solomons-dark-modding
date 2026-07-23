@@ -343,8 +343,10 @@ handles, live volume, stop, semantic state, and per-mod cleanup. Canonical path
 containment, four explicit formats, 64-playback per-mod and 256-playback global
 limits, and a 512 MiB asset ceiling keep the local presentation surface bounded.
 The loader neither loads nor initializes BASS. Audio never replicates; authority
-code broadcasts a semantic custom event and every peer performs the cue locally.
-See `lua-audio.md` and the opt-in `sample.lua.audio_lab` mod.
+code broadcasts a semantic custom event and every peer performs the cue locally. The
+opt-in two-peer acceptance stages deterministic silent PCM and proves independent
+sample/stream state, volume, stop, capacity, and release behavior. See `lua-audio.md`
+and the opt-in `sample.lua.audio_lab` mod.
 
 **8. `sd.ui` authoring.** Create surfaces/panels/buttons/labels through the game's UI
 engine (`ui-engine-system-map.md`); reuse the semantic action layer for input. *Unlocks:*
