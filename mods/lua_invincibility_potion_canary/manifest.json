@@ -2,7 +2,6 @@
   "id": "canary.lua.invincibility_potion",
   "name": "Invincibility Potion Canary",
   "version": "0.1.0",
-  "enabled": false,
   "runtime": {
     "apiVersion": "0.2.0",
     "entryScript": "scripts/main.lua",
