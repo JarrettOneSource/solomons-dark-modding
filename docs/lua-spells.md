@@ -219,3 +219,19 @@ waits for both presentation callbacks, and leaves belt slot 1 clear. The
 programmatic action is accepted only while that owned authored surface is
 visible. Run `tools/verify_lua_ui_authoring.py` in the same rendered session for
 pixel-level D3D9 backbuffer evidence of the native-authored renderer.
+
+For the simulation and replication acceptance, use a disposable local pair:
+
+```powershell
+py tools/verify_lua_spells_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The pair verifier stages only `sample.lua.spells_registry_lab`. It proves that
+selection remains peer-local, a client cannot cast for the host, a host-owned
+cast runs only on the host, and a host command for the client runs only on that
+client owner. Each observer must receive exactly one address-free remote effect
+with the same content, request, effect, owner, transform, callback-produced
+data, and owner-ticked radius. The verifier witnesses that remote effect near
+the end of its lifetime, then requires the explicit empty retirement snapshot
+before the 1.5-second stale-snapshot expiry could remove it. Cleanup clears only
+the verifier's selection and stops only the exact processes it launched.

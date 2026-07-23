@@ -466,14 +466,40 @@ void RecordRecentRunEnemyDeathSnapshot(
             actor.actor_address,
             &lua_enemy_config)) {
         snapshot.lua_content_id = lua_enemy_config.content_id;
-    }
-    if (snapshot.lua_content_id == 0) {
+        if (lua_enemy_config.hp_valid) {
+            snapshot.lua_enemy_spawn_flags |= LuaEnemySpawnSnapshotFlagHp;
+            snapshot.lua_spawn_hp = lua_enemy_config.hp;
+        }
+        if (lua_enemy_config.chase_speed_valid) {
+            snapshot.lua_enemy_spawn_flags |=
+                LuaEnemySpawnSnapshotFlagChaseSpeed;
+            snapshot.lua_spawn_chase_speed = lua_enemy_config.chase_speed;
+        }
+        if (lua_enemy_config.attack_speed_valid) {
+            snapshot.lua_enemy_spawn_flags |=
+                LuaEnemySpawnSnapshotFlagAttackSpeed;
+            snapshot.lua_spawn_attack_speed = lua_enemy_config.attack_speed;
+        }
+        if (lua_enemy_config.scale_valid) {
+            snapshot.lua_enemy_spawn_flags |=
+                LuaEnemySpawnSnapshotFlagScale;
+            snapshot.lua_spawn_scale = lua_enemy_config.scale;
+        }
+    } else {
         const auto existing =
             g_local_transport.recent_run_enemy_deaths_by_network_id.find(
                 network_actor_id);
         if (existing !=
             g_local_transport.recent_run_enemy_deaths_by_network_id.end()) {
             snapshot.lua_content_id = existing->second.lua_content_id;
+            snapshot.lua_enemy_spawn_flags =
+                existing->second.lua_enemy_spawn_flags;
+            snapshot.lua_spawn_hp = existing->second.lua_spawn_hp;
+            snapshot.lua_spawn_chase_speed =
+                existing->second.lua_spawn_chase_speed;
+            snapshot.lua_spawn_attack_speed =
+                existing->second.lua_spawn_attack_speed;
+            snapshot.lua_spawn_scale = existing->second.lua_spawn_scale;
         }
     }
     if (snapshot.lua_content_id == 0) {
@@ -483,6 +509,15 @@ void RecordRecentRunEnemyDeathSnapshot(
         if (retained !=
             g_local_transport.retained_run_enemy_snapshots_by_network_id.end()) {
             snapshot.lua_content_id = retained->second.packet.lua_content_id;
+            snapshot.lua_enemy_spawn_flags =
+                retained->second.packet.lua_enemy_spawn_flags;
+            snapshot.lua_spawn_hp = retained->second.packet.lua_spawn_hp;
+            snapshot.lua_spawn_chase_speed =
+                retained->second.packet.lua_spawn_chase_speed;
+            snapshot.lua_spawn_attack_speed =
+                retained->second.packet.lua_spawn_attack_speed;
+            snapshot.lua_spawn_scale =
+                retained->second.packet.lua_spawn_scale;
         }
     }
     snapshot.position_x = actor.x;

@@ -221,6 +221,14 @@ bool BuildLocalWorldSnapshot(
             snapshot.native_type_id = death_snapshot.native_type_id;
             snapshot.enemy_type = death_snapshot.enemy_type;
             snapshot.lua_content_id = death_snapshot.lua_content_id;
+            snapshot.lua_enemy_spawn_flags =
+                death_snapshot.lua_enemy_spawn_flags;
+            snapshot.lua_spawn_hp = death_snapshot.lua_spawn_hp;
+            snapshot.lua_spawn_chase_speed =
+                death_snapshot.lua_spawn_chase_speed;
+            snapshot.lua_spawn_attack_speed =
+                death_snapshot.lua_spawn_attack_speed;
+            snapshot.lua_spawn_scale = death_snapshot.lua_spawn_scale;
             snapshot.actor_slot = -1;
             snapshot.world_slot = -1;
             snapshot.target_actor_slot = -1;

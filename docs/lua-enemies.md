@@ -109,3 +109,20 @@ The disabled-by-default `sample.lua.enemies_registry_lab` mod registers a
 `grave_tyrant` descriptor without spawning anything. `tools/verify_lua_enemies.py`
 is read-only. `tools/verify_lua_enemy_spawn.py --confirm-mutation` performs the
 opt-in live spawn check and must be run only in a disposable active arena.
+
+For the full two-peer lifecycle acceptance, use a disposable local pair:
+
+```powershell
+py tools/verify_lua_enemies_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The verifier stages only the enemy registry lab and primes the retail wave
+spawner in an isolated zero-enemy combat mode. It proves that the client cannot
+author a spawn; the host constructs exactly one registered enemy with the
+requested HP, speed, and scale; protocol 80 preserves its content ID and
+effective constructor values; and the client binds a peer-local actor of the
+same stock class. It then kills that actor through the native death path and
+requires one matching `enemy.spawned` and `enemy.death` notification on each
+peer, a content-aware client death tombstone, and no replicated loot for the
+per-spawn `loot = "none"` policy. Cleanup stops only the exact processes the
+verifier launched.

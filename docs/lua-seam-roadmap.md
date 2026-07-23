@@ -278,7 +278,9 @@ valid modifier array, transactionally composes per-spawn HP/speed/scale with ord
 spawn filters, and attaches per-actor loot policy without mutating shared config.
 Protocol 80 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
-every peer. See `lua-enemies.md`.
+every peer. The opt-in two-peer acceptance covers authority rejection, exact construction,
+client materialization, lifecycle notifications, tombstone identity, and `none` loot
+suppression. See `lua-enemies.md`.
 
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
@@ -290,7 +292,9 @@ protocol fragments and relays complete per-owner effect generations, including e
 empty retirement snapshots. Selected primary and exact live belt inputs suppress stock
 dispatch, charge native mana transactionally, enforce local cooldowns, and enter that same
 owner route. The disabled spell lab composes a player-facing native-authored picker from
-`sd.ui` and the local selection API. See `lua-spells.md`.
+`sd.ui` and the local selection API. The opt-in two-peer acceptance covers local-selection
+isolation, both owner directions, client route rejection, semantic effect convergence, and
+explicit pre-expiry retirement. See `lua-spells.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
@@ -308,7 +312,10 @@ bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal
 belongs to a different actor class, so the implementation composes at
 `MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
 cross-class call. Clients run no mod AI and receive the resulting protocol-80 world
-snapshots. See `lua-ai.md` and the opt-in `sample.lua.ai_boss_lab` mod.
+snapshots. The opt-in two-peer acceptance covers host-only controller execution,
+blackboard/target/move-goal decisions, collision-valid replicated motion, client mutation
+rejection, and per-actor retirement. See `lua-ai.md` and the opt-in
+`sample.lua.ai_boss_lab` mod.
 
 ### Tier 2 — ecosystem infrastructure
 
