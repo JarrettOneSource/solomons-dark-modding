@@ -168,6 +168,7 @@ class LuaItemsMultiplayerVerifierTests(unittest.TestCase):
         self.assertEqual(result["recipe_uids"], {"host": 101, "client": 202})
         launch_pair.assert_called_once_with(
             god_mode=True,
+            tile_windows=False,
             kill_existing=False,
             exact_mod_id=verifier.ACCEPTANCE_MOD_ID,
         )

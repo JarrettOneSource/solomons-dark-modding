@@ -173,6 +173,9 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         ("replication", live_verifier),
         ("runtime", runtime_verifier),
     ):
+        assert "tile_windows=False" in verifier, (
+            f"{verifier_name} verifier may rearrange active desktop windows"
+        )
         assert "kill_existing=False" in verifier, (
             f"{verifier_name} verifier does not preserve existing game processes"
         )

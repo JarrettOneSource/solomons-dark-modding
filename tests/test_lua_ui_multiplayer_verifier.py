@@ -181,6 +181,7 @@ class LuaUiMultiplayerVerifierTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         launch_pair.assert_called_once_with(
             god_mode=True,
+            tile_windows=False,
             kill_existing=False,
             exact_mod_id=verifier.ACCEPTANCE_MOD_ID,
         )

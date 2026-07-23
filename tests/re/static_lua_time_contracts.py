@@ -204,6 +204,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "step_sequence != pause_step_sequence + 3",
         "_set_scale_probe(1.0)",
         "start_host_testrun_and_wait_for_clients(",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

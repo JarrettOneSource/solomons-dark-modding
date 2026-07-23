@@ -247,6 +247,7 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         "simulation_routed=True",
         "simulation_participant_id=HOST_ID",
         "simulation_routed=False",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

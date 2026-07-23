@@ -159,6 +159,8 @@ owner-routed behavior, replicated semantic effects, direct primary/belt selectio
 native-authored `sd.ui` picker example. Authored UI, local draw/audio/camera/sprites,
 cross-mod contracts, and the author workflow are implemented. Multiplayer uses strict
 exact parity for every enabled mod; there is no unverified presentation-only exception.
+Every Lua pair/trio verifier explicitly disables window tiling, preserves pre-existing
+game processes, and tears down only the exact process IDs returned by its own launch.
 
 The remaining partial flagship concepts need product-specific work outside this seam list,
 such as Website leaderboard submission, level-authoring tools, specialized native effect

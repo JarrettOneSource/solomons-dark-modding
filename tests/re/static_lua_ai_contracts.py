@@ -192,6 +192,7 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "_movement_segment_probe",
         "_client_mutation_rejection_probe",
         "--confirm-mutation",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

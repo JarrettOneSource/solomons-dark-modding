@@ -28,6 +28,7 @@ def test_lua_roadmap_is_closed_under_exact_mod_parity() -> str:
         "Presentation-only divergence is not accepted",
         "Resolved policy: exact multiplayer parity",
         "Peers may not run different presentation-only mods",
+        "Every Lua pair/trio verifier explicitly disables window tiling",
         "## 5. Completed build order",
         "## 6. Open research and distribution questions",
         "**Author DX**",

@@ -215,6 +215,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         "unit_count=client_before + 1",
         "unit_count=host_before + 1",
         "--confirm-mutation",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

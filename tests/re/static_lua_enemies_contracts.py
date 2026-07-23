@@ -271,6 +271,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         'loot = "none"',
         "death_snapshot_matches",
         "--confirm-mutation",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

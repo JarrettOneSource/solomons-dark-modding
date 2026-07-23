@@ -238,6 +238,7 @@ def run(
         if launch:
             result["pair"] = launch_pair(
                 god_mode=True,
+                tile_windows=False,
                 kill_existing=False,
                 exact_mod_id=ACCEPTANCE_MOD_ID,
             )

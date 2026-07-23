@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -18,6 +19,43 @@ import verify_local_multiplayer_sync as verifier  # noqa: E402
 
 
 class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
+    def test_all_lua_pair_verifiers_disable_tiling_and_preserve_games(
+        self,
+    ) -> None:
+        verifier_paths = sorted(TOOLS_ROOT.glob("verify_lua_*.py"))
+        launch_call_count = 0
+        for path in verifier_paths:
+            tree = ast.parse(path.read_text(encoding="utf-8"), path.name)
+            launch_calls = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "launch_pair"
+            ]
+            launch_call_count += len(launch_calls)
+            for call in launch_calls:
+                keywords = {
+                    keyword.arg: keyword.value
+                    for keyword in call.keywords
+                    if keyword.arg is not None
+                }
+                with self.subTest(verifier=path.name, line=call.lineno):
+                    for keyword_name in ("tile_windows", "kill_existing"):
+                        value = keywords.get(keyword_name)
+                        self.assertIsInstance(
+                            value,
+                            ast.Constant,
+                            f"{keyword_name} must be an explicit false literal",
+                        )
+                        self.assertIs(
+                            value.value,
+                            False,
+                            f"{keyword_name} must be false",
+                        )
+
+        self.assertGreater(launch_call_count, 0)
+
     def test_exact_mod_ids_serialize_in_declared_order(self) -> None:
         self.assertEqual(
             verifier._serialize_exact_mod_ids(

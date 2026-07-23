@@ -317,6 +317,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "observer_effect_near_retirement",
         "effect_absent",
         "--confirm-mutation",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",

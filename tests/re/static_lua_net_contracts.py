@@ -207,6 +207,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
         "target=HOST_ID",
         "target=CLIENT_ID",
         "broadcast=True",
+        "tile_windows=False",
         "kill_existing=False",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",
