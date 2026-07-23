@@ -10,7 +10,8 @@ param(
     [switch]$GodMode,
     [string]$TestSurvivalBoneyardOverride = "",
     [switch]$TestBlankBoneyard,
-    [string]$TestWaveOverride = ""
+    [string]$TestWaveOverride = "",
+    [string]$ProcessIdOutputPath = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -85,6 +86,15 @@ $result = Invoke-LauncherWithEnvironment `
     -WorkingDirectory $launcherDir `
     -Environment $environment `
     -Arguments $arguments
+
+if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
+    [System.IO.File]::WriteAllText(
+        $ProcessIdOutputPath,
+        ([pscustomobject]@{
+            processId = [int]$result.launch.processId
+        } | ConvertTo-Json -Compress)
+    )
+}
 
 [pscustomobject]@{
     success = $true

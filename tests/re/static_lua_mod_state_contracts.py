@@ -46,6 +46,11 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
     )
     live_verifier = _read("tools/verify_lua_mod_replication.py")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
+    multiplayer_verifier = _read("tools/verify_local_multiplayer_sync.py")
+    pair_launcher = _read("scripts/Launch-LocalMultiplayerPair.ps1")
+    additional_client_launcher = _read(
+        "scripts/Launch-LocalMultiplayerAdditionalClient.ps1"
+    )
     compatibility = _read(
         "SolomonDarkModLauncher/src/Staging/"
         "MultiplayerCompatibilityMaterializer.cs"
@@ -173,6 +178,26 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         )
         assert "stop_games(" not in verifier, (
             f"{verifier_name} verifier still uses machine-wide game cleanup"
+        )
+    for token in (
+        "game_process_ids(",
+        "stop_game_processes(",
+        '"-NoKill"',
+        '"-ProcessIdOutputPath"',
+        "_read_process_id_ledger(",
+    ):
+        assert token in multiplayer_verifier, (
+            f"local multiplayer verifier lacks isolated cleanup support: {token}"
+        )
+    for launcher_name, launcher in (
+        ("pair", pair_launcher),
+        ("additional-client", additional_client_launcher),
+    ):
+        assert "$ProcessIdOutputPath" in launcher, (
+            f"{launcher_name} launcher does not publish exact game process IDs"
+        )
+        assert "[System.IO.File]::WriteAllText(" in launcher, (
+            f"{launcher_name} launcher does not persist process IDs immediately"
         )
 
     for token in (

@@ -166,6 +166,12 @@ def _read_process_id_ledger(path: Path | None) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
+def _new_process_id_ledger() -> Path:
+    runtime_root = ROOT / "runtime"
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    return runtime_root / f".local-mp-processes-{uuid.uuid4().hex}.json"
+
+
 def extract_json(buffer: str) -> dict[str, object] | None:
     start = buffer.find("{")
     if start < 0:
@@ -251,11 +257,7 @@ def launch_pair(
     process_id_ledger: Path | None = None
     if not kill_existing:
         args.append("-NoKill")
-        runtime_root = ROOT / "runtime"
-        runtime_root.mkdir(parents=True, exist_ok=True)
-        process_id_ledger = (
-            runtime_root / f".local-mp-processes-{uuid.uuid4().hex}.json"
-        )
+        process_id_ledger = _new_process_id_ledger()
         args.extend(
             [
                 "-ProcessIdOutputPath",
@@ -469,6 +471,13 @@ def launch_additional_client(
                 path_for_powershell(test_wave_override),
             ]
         )
+    process_id_ledger = _new_process_id_ledger()
+    args.extend(
+        [
+            "-ProcessIdOutputPath",
+            path_for_powershell(process_id_ledger),
+        ]
+    )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -480,6 +489,7 @@ def launch_additional_client(
     assert process.stdout is not None
     buffer = ""
     deadline = time.monotonic() + 75.0
+    launch_completed = False
     try:
         while time.monotonic() < deadline:
             ready, _, _ = select.select([process.stdout], [], [], 0.1)
@@ -493,6 +503,7 @@ def launch_additional_client(
                             raise VerifyFailure(
                                 f"additional-client launcher reported failure: {parsed}"
                             )
+                        launch_completed = True
                         return parsed
                 elif process.poll() is not None:
                     break
@@ -502,6 +513,7 @@ def launch_additional_client(
                     buffer += remainder
                 parsed = extract_json(buffer)
                 if parsed is not None and parsed.get("success"):
+                    launch_completed = True
                     return parsed
                 break
         raise VerifyFailure(
@@ -514,6 +526,11 @@ def launch_additional_client(
                 process.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
                 process.kill()
+        if not launch_completed:
+            stop_game_processes(
+                game_process_ids(_read_process_id_ledger(process_id_ledger))
+            )
+        process_id_ledger.unlink(missing_ok=True)
 
 
 CREATE_ELEMENT_IDS = {
