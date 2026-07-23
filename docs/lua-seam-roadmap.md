@@ -419,7 +419,10 @@ documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
 includes planned composition, and protocol 80 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
-See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
+The opt-in two-peer acceptance covers exact schedule parity, clean idle state,
+authority-only stock wave start, identical sorted live summaries, and matching
+`wave.started` payloads. See `lua-waves.md`, the read-only
+`tools/verify_lua_waves.py` probe, and the disabled `sample.lua.waves_lab` mod.
 
 ### Tier 3 — nearly-free power-ups and polish
 
