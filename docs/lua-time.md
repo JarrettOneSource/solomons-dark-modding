@@ -107,5 +107,17 @@ stay frozen.
 The namespace advertises `time.shared.scale` and
 `time.shared.frame_step`. The disabled `sample.lua.time_lab` mod exposes manual
 helpers, `tools/verify_lua_time.py` validates the live API on an already-running
-active run, and the static contract checks the native gates, bounds,
-authentication, replication, lifecycle cleanup, and documentation.
+active run.
+
+`tools/verify_lua_time_multiplayer.py --launch-pair` stages the exact time lab
+on an isolated host/client pair and enters a shared run.
+It proves client mutation is rejected. It then requires the host's slow-motion,
+pause, and three-frame step revisions to converge on the client with the exact
+authority participant, run nonce, scale, and cumulative step sequence. It
+separately proves that the resume revision and normal scale converge; ordinary
+snapshots omit historical step sequences by design. Cleanup must restore normal
+speed.
+It stops only the exact processes launched by the verifier.
+
+The static contract checks the native gates, bounds, authentication,
+replication, lifecycle cleanup, documentation, and both live verifier paths.

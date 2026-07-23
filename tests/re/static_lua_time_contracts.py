@@ -49,6 +49,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
     manifest = _read("mods/lua_time_lab/manifest.json")
     sample = _read("mods/lua_time_lab/scripts/main.lua")
     verifier = _read("tools/verify_lua_time.py")
+    multiplayer_verifier = _read("tools/verify_lua_time_multiplayer.py")
     runtime_verifier = _read("tools/verify_lua_runtime_contract.py")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
 
@@ -195,9 +196,35 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "pcall(sd.time.set_scale, 1)",
     ):
         assert token in verifier, f"Lua time verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.time_lab"',
+        "CLIENT_MUTATION_REJECTION",
+        "_set_scale_probe(0.5)",
+        "_set_scale_probe(0.0)",
+        "step_sequence != pause_step_sequence + 3",
+        "_set_scale_probe(1.0)",
+        "start_host_testrun_and_wait_for_clients(",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua time multiplayer verifier lacks: {token}"
+        )
+    normalized_documentation = " ".join(documentation.split())
+    for token in (
+        "verify_lua_time_multiplayer.py --launch-pair",
+        "client mutation is rejected",
+        "exact authority",
+        "cumulative step sequence",
+        "stops only the exact processes",
+    ):
+        assert token in normalized_documentation, (
+            f"Lua time multiplayer acceptance docs lack: {token}"
+        )
     assert '"time": (' in runtime_verifier
 
     return (
         "sd.time gates coherent fixed-point simulation frames, composes with "
-        "shared pauses, and replicates only authority-authenticated control"
+        "shared pauses, and has exact two-peer authority/replication acceptance"
     )
