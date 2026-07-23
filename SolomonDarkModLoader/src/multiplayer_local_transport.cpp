@@ -297,6 +297,11 @@ struct RecentRunEnemyDeathSnapshot {
     std::uint32_t native_type_id = 0;
     std::int32_t enemy_type = -1;
     std::uint64_t lua_content_id = 0;
+    std::uint8_t lua_enemy_spawn_flags = 0;
+    float lua_spawn_hp = 0.0f;
+    float lua_spawn_chase_speed = 0.0f;
+    float lua_spawn_attack_speed = 0.0f;
+    float lua_spawn_scale = 0.0f;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float radius = 0.0f;

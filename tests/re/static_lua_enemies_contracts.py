@@ -34,6 +34,12 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
     capture = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/local_snapshot_packet_builders.inl"
     )
+    death_capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/world_snapshot_capture.inl"
+    )
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
     incoming = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
     )
@@ -52,6 +58,11 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_enemies.py")
     spawn_verifier = _read("tools/verify_lua_enemy_spawn.py")
+    multiplayer_verifier = _read("tools/verify_lua_enemies_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_enemies_multiplayer_verifier.py"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaEnemyBindings(mod->state)" in root_bindings
     assert "lua_engine_bindings_enemies.cpp" in project
@@ -161,6 +172,34 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
     ):
         assert token in capture, f"enemy snapshot capture lacks: {token}"
     for token in (
+        "std::uint8_t lua_enemy_spawn_flags = 0;",
+        "float lua_spawn_hp = 0.0f;",
+        "float lua_spawn_chase_speed = 0.0f;",
+        "float lua_spawn_attack_speed = 0.0f;",
+        "float lua_spawn_scale = 0.0f;",
+    ):
+        assert token in transport, f"enemy death tombstone state lacks: {token}"
+    for token in (
+        "snapshot.lua_enemy_spawn_flags |= LuaEnemySpawnSnapshotFlagHp",
+        "snapshot.lua_spawn_hp = lua_enemy_config.hp",
+        "snapshot.lua_spawn_chase_speed = lua_enemy_config.chase_speed",
+        "snapshot.lua_spawn_attack_speed = lua_enemy_config.attack_speed",
+        "snapshot.lua_spawn_scale = lua_enemy_config.scale",
+        "retained->second.packet.lua_enemy_spawn_flags",
+    ):
+        assert token in death_capture, (
+            f"enemy death tombstone capture lacks: {token}"
+        )
+    for token in (
+        "snapshot.lua_enemy_spawn_flags =",
+        "death_snapshot.lua_enemy_spawn_flags",
+        "snapshot.lua_spawn_hp = death_snapshot.lua_spawn_hp",
+        "death_snapshot.lua_spawn_chase_speed",
+        "death_snapshot.lua_spawn_attack_speed",
+        "snapshot.lua_spawn_scale = death_snapshot.lua_spawn_scale",
+    ):
+        assert token in capture, f"enemy death tombstone packet lacks: {token}"
+    for token in (
         "actor.lua_content_id = packet_actor.lua_content_id",
         "actor.lua_spawn_hp = packet_actor.lua_spawn_hp",
         "actor.lua_spawn_chase_speed = packet_actor.lua_spawn_chase_speed",
@@ -218,6 +257,53 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "refusing enemy spawn",
     ):
         assert token in spawn_verifier, f"enemy spawn verifier lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.enemies_registry_lab"',
+        "CLIENT_REJECTION",
+        "EXPECTED_SPAWN_FLAGS = 11",
+        "get_last_manual_run_enemy_spawn",
+        "get_run_enemy_by_network_id",
+        'print("spawn_hp="',
+        'print("spawn_speed="',
+        'print("spawn_scale="',
+        'sd.events.on("enemy.spawned"',
+        'sd.events.on("enemy.death"',
+        'loot = "none"',
+        "death_snapshot_matches",
+        "--confirm-mutation",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"enemy multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_spawn_result_requires_exact_content_and_native_result",
+        "test_materialization_requires_exact_snapshot_and_local_binding",
+        "test_events_require_exact_single_spawn_and_death",
+        "test_death_snapshot_requires_exact_identity_and_constructor_values",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"enemy multiplayer verifier tests lack: {token}"
+        )
+    normalized_documentation = " ".join(documentation.split())
+    for token in (
+        "verify_lua_enemies_multiplayer.py --launch-pair --confirm-mutation",
+        "client cannot author a spawn",
+        "requested HP, speed, and scale",
+        "one matching `enemy.spawned` and `enemy.death` notification",
+        'per-spawn `loot = "none"` policy',
+        "stops only the exact processes",
+    ):
+        assert token in normalized_documentation, (
+            f"enemy multiplayer docs lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_enemies_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.enemies registers deterministic semantic stock archetypes and authority-routes "

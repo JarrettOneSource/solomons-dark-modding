@@ -278,7 +278,9 @@ valid modifier array, transactionally composes per-spawn HP/speed/scale with ord
 spawn filters, and attaches per-actor loot policy without mutating shared config.
 Protocol 80 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
-every peer. See `lua-enemies.md`.
+every peer. The opt-in two-peer acceptance covers authority rejection, exact construction,
+client materialization, lifecycle notifications, tombstone identity, and `none` loot
+suppression. See `lua-enemies.md`.
 
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,

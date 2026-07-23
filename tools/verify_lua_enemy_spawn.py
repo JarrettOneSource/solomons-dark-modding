@@ -26,7 +26,10 @@ local enemy = assert(
   "enable the Lua Enemies Registry Lab mod before verification"
 )
 local player = assert(sd.player.get_state(), "player state unavailable")
-assert(player.valid, "enter an active combat arena before verification")
+assert(
+  tonumber(player.actor_address) and tonumber(player.actor_address) > 0,
+  "enter an active combat arena before verification"
+)
 local x = player.x + 200
 local y = player.y
 local queued = sd.enemies.spawn(enemy.id, {
