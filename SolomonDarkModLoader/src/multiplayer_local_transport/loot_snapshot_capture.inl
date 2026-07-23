@@ -194,12 +194,25 @@ bool TryPopulateItemLootDropSnapshot(
         return false;
     }
     const bool is_potion = item_type_id == kPotionItemTypeId;
+    std::uint64_t item_content_id = 0;
+    if (is_potion &&
+        item_slot >= kLuaFirstConsumablePotionSubtype) {
+        const auto definition =
+            FindLuaConsumableDefinitionByNativeSubtype(item_slot);
+        if (!definition.has_value()) {
+            return false;
+        }
+        item_content_id = definition->content_id;
+    }
     const bool is_recipe_item = !is_potion && item_recipe_uid != 0;
     const bool is_supported_nonrecipe_item =
         IsSupportedNonRecipeLootItem(item_type_id, item_recipe_uid, item_slot);
+    std::int32_t resolved_potion_slot = -1;
     if ((is_potion &&
-         (item_slot < kStockPotionSubtypeMin ||
-          item_slot > kStockPotionSubtypeMax)) ||
+         !TryResolvePotionWireIdentity(
+             item_slot,
+             item_content_id,
+             &resolved_potion_slot)) ||
         (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item)) {
         return false;
     }
@@ -222,6 +235,7 @@ bool TryPopulateItemLootDropSnapshot(
     built.value = 0.0f;
     built.item_type_id = item_type_id;
     built.item_recipe_uid = item_recipe_uid;
+    built.item_content_id = item_content_id;
     built.item_slot = item_slot;
     built.stack_count = stack_count;
     built.actor_slot = actor.actor_slot;

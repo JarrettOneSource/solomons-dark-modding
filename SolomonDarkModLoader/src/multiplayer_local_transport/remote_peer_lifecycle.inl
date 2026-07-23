@@ -29,6 +29,10 @@ void ResetRemoteParticipantSessionEpoch(
         participant_id);
     g_local_transport.last_lua_ui_action_request_by_participant.erase(
         participant_id);
+    g_local_transport.last_lua_consumable_use_by_participant.erase(
+        participant_id);
+    g_local_transport.lua_consumable_session_nonce_by_participant.erase(
+        participant_id);
     ClearLuaNetParticipantTransportState(
         participant_id,
         configured_authority_disconnected);
@@ -104,6 +108,7 @@ void ResetRemoteParticipantSessionEpoch(
             ClearLocalLootPickupRequestStateLocked();
             g_queued_local_level_up_choices.clear();
             g_queued_lua_ui_action_requests.clear();
+            g_queued_lua_consumable_uses.clear();
             g_queued_local_air_chain_frame = QueuedLocalAirChainFrame{};
             g_have_queued_local_air_chain_frame = false;
         }

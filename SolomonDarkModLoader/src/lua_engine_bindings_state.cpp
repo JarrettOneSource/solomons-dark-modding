@@ -246,7 +246,8 @@ bool IsBuiltInLuaEventName(std::string_view event_name) {
            event_name == kSpellCastEventName ||
            event_name == kGoldChangedEventName ||
            event_name == kDropSpawnedEventName ||
-           event_name == kLevelUpEventName;
+           event_name == kLevelUpEventName ||
+           event_name == kItemConsumedEventName;
 }
 
 bool IsValidCustomLuaEventName(std::string_view event_name) {

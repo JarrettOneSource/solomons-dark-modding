@@ -169,6 +169,11 @@ bool RetireTestRunPlayerCreatedActors(
     std::uint32_t* requested_count,
     std::string* error_message);
 bool SpawnReward(std::string_view kind, int amount, float x, float y, std::string* error_message);
+bool QueueLuaConsumableDrop(
+    std::int32_t native_subtype,
+    float x,
+    float y,
+    std::string* error_message);
 bool QueueReplicatedLootSnapshot(
     const multiplayer::LootSnapshotRuntimeInfo& snapshot,
     std::string* error_message);

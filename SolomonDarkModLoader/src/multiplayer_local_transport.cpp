@@ -13,6 +13,7 @@
 #include "lua_engine.h"
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
+#include "lua_item_runtime.h"
 #include "lua_net_runtime.h"
 #include "lua_time_runtime.h"
 #include "lua_ui_runtime.h"
@@ -138,6 +139,7 @@ constexpr std::uint32_t kBeltButtonSkillTypeId = 0x1B67;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
 constexpr std::size_t kLuaItemGrantMaximumQueuedRequests = 256;
 constexpr std::size_t kLuaItemGrantMaximumRememberedRequests = 512;
+constexpr std::size_t kLuaConsumableUseMaximumQueuedRequests = 256;
 constexpr std::size_t kLuaRegisteredSpellMaximumQueuedCasts = 256;
 constexpr std::size_t kLuaRegisteredSpellMaximumRememberedCasts = 512;
 constexpr std::uint64_t kLuaRegisteredSpellEffectSnapshotIntervalMs = 50;
@@ -193,6 +195,36 @@ constexpr std::int32_t kStockPotionSubtypeMin = 0;
 constexpr std::int32_t kStockPotionSubtypeMax = 5;
 constexpr std::int32_t kMiscItemSubtypeMin = 0;
 constexpr std::int32_t kMiscItemSubtypeMax = 3;
+
+bool TryResolvePotionWireIdentity(
+    std::int32_t wire_slot,
+    std::uint64_t content_id,
+    std::int32_t* local_slot) {
+    if (local_slot != nullptr) {
+        *local_slot = -1;
+    }
+    if (local_slot == nullptr) {
+        return false;
+    }
+    if (content_id == 0) {
+        if (wire_slot < kStockPotionSubtypeMin ||
+            wire_slot > kStockPotionSubtypeMax) {
+            return false;
+        }
+        *local_slot = wire_slot;
+        return true;
+    }
+    if (wire_slot < kLuaFirstConsumablePotionSubtype) {
+        return false;
+    }
+    const auto definition =
+        FindLuaConsumableDefinition(content_id);
+    if (!definition.has_value()) {
+        return false;
+    }
+    *local_slot = definition->native_subtype;
+    return true;
+}
 
 bool IsSupportedNonRecipeLootItem(
     std::uint32_t item_type_id,
@@ -332,6 +364,7 @@ struct LootPickupResultPayload {
     float resulting_mana_max = 0.0f;
     std::uint32_t item_type_id = 0;
     std::uint32_t item_recipe_uid = 0;
+    std::uint64_t item_content_id = 0;
     bool item_color_state_valid = false;
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
     std::int32_t item_slot = -1;
@@ -752,6 +785,14 @@ struct QueuedAuthoritativeLuaItemGrant {
         color_state = {};
 };
 
+struct QueuedLuaConsumableUse {
+    std::uint64_t participant_id = 0;
+    std::uint64_t participant_session_nonce = 0;
+    std::uint64_t use_id = 0;
+    std::uint64_t content_id = 0;
+    std::uint32_t run_nonce = 0;
+};
+
 struct QueuedLuaRegisteredSpellCast {
     LuaRegisteredSpellCastRequest request;
 };
@@ -967,6 +1008,10 @@ struct LocalTransportState {
         received_lua_net_session_nonce_by_participant;
     std::unordered_set<std::uint64_t> received_lua_item_grant_request_ids;
     std::deque<std::uint64_t> received_lua_item_grant_request_order;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        last_lua_consumable_use_by_participant;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        lua_consumable_session_nonce_by_participant;
     std::unordered_set<std::uint64_t>
         received_lua_registered_spell_cast_request_ids;
     std::deque<std::uint64_t>
@@ -1013,6 +1058,8 @@ std::uint64_t g_next_lua_mod_stream_sequence = 1;
 std::vector<QueuedAuthoritativeLuaItemGrant>
     g_queued_authoritative_lua_item_grants;
 std::uint64_t g_next_lua_item_grant_request_id = 1;
+std::vector<QueuedLuaConsumableUse> g_queued_lua_consumable_uses;
+std::uint64_t g_next_lua_consumable_use_id = 1;
 std::vector<QueuedLuaRegisteredSpellCast>
     g_queued_lua_registered_spell_casts;
 std::uint64_t g_next_lua_registered_spell_cast_request_id = 1;
@@ -1371,6 +1418,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
+#include "multiplayer_local_transport/lua_consumable_use_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_effect_sync.inl"
 #include "multiplayer_local_transport/lua_ui_action_sync.inl"
@@ -1584,6 +1632,16 @@ bool QueueAuthoritativeLuaItemGrant(
         request_id,
         target_participant_id,
         local_target,
+        error_message);
+}
+
+bool QueueLocalLuaConsumableUse(
+    std::uint64_t content_id,
+    std::uint64_t* use_id,
+    std::string* error_message) {
+    return QueueLocalLuaConsumableUseInternal(
+        content_id,
+        use_id,
         error_message);
 }
 

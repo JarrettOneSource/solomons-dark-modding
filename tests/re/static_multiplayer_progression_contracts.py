@@ -281,7 +281,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpChoiceResultFlagAutoPicked",

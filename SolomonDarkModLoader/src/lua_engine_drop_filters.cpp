@@ -79,7 +79,7 @@ bool TryParseDropKind(std::string_view name, LuaDropForcedKind* kind) {
 void PushDropRollFilterPayload(
     lua_State* state,
     const LuaDropRollFilterContext& context) {
-    lua_createtable(state, 0, 14);
+    lua_createtable(state, 0, 15);
 
     lua_pushstring(state, kDropRollingFilterName);
     lua_setfield(state, -2, "event");
@@ -87,6 +87,8 @@ void PushDropRollFilterPayload(
     lua_setfield(state, -2, "kind");
     lua_pushinteger(state, static_cast<lua_Integer>(context.native_type_id));
     lua_setfield(state, -2, "native_type_id");
+    lua_pushboolean(state, context.is_boss ? 1 : 0);
+    lua_setfield(state, -2, "is_boss");
     lua_pushinteger(state, static_cast<lua_Integer>(context.enemy_address));
     lua_setfield(state, -2, "enemy_address");
     lua_pushinteger(state, static_cast<lua_Integer>(context.arena_address));

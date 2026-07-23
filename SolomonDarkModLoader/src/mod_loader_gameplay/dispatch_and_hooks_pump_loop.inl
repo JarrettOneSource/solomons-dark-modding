@@ -546,6 +546,7 @@ void PumpQueuedGameplayActions() {
     }
 
     ProcessPendingLuaItemGrant(now_ms);
+    PumpLuaConsumableNativeVfx();
 
     if (have_local_inventory_equip_request) {
         std::string equip_error;

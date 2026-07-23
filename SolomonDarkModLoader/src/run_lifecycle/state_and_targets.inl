@@ -168,6 +168,7 @@ std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_enemy_spawn_filter_write_log_count{0};
 std::atomic<std::uint32_t> g_lua_drop_roll_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_drop_roll_filter_write_log_count{0};
+std::atomic<std::uint32_t> g_lua_loot_pool_spawn_log_count{0};
 std::atomic<std::uint32_t> g_lua_wave_spawn_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_wave_spawn_filter_write_log_count{0};
 

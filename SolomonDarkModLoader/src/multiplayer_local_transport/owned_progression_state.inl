@@ -22,6 +22,15 @@ std::vector<ParticipantInventoryItemState> BuildOwnedInventoryItems(
         built.type_id = item.type_id;
         built.recipe_uid = item.recipe_uid;
         built.slot = item.slot;
+        if (item.type_id == kPotionItemTypeId &&
+            item.slot >= kLuaFirstConsumablePotionSubtype) {
+            const auto definition =
+                FindLuaConsumableDefinitionByNativeSubtype(
+                    item.slot);
+            if (definition.has_value()) {
+                built.content_id = definition->content_id;
+            }
+        }
         built.stack_count = item.stack_count;
         built.parent_item_index = item.parent_item_index;
         built.container_depth = item.container_depth;
@@ -39,6 +48,7 @@ bool InventoryItemsEqual(
     for (std::size_t index = 0; index < left.size(); ++index) {
         if (left[index].type_id != right[index].type_id ||
             left[index].recipe_uid != right[index].recipe_uid ||
+            left[index].content_id != right[index].content_id ||
             left[index].slot != right[index].slot ||
             left[index].stack_count != right[index].stack_count ||
             left[index].parent_item_index != right[index].parent_item_index ||
@@ -441,6 +451,7 @@ std::int32_t NormalizeInventoryLootStackCount(std::uint32_t type_id, std::int32_
 bool ApplyOwnedInventoryLootItem(
     std::uint32_t type_id,
     std::uint32_t recipe_uid,
+    std::uint64_t content_id,
     std::int32_t slot,
     std::int32_t stack_count,
     ParticipantOwnedProgressionState* owned_progression) {
@@ -451,7 +462,9 @@ bool ApplyOwnedInventoryLootItem(
     const auto normalized_stack_count = NormalizeInventoryLootStackCount(type_id, stack_count);
     if (type_id == kPotionItemTypeId) {
         for (auto& item : owned_progression->inventory_items) {
-            if (item.type_id == type_id && item.slot == slot) {
+            if (item.type_id == type_id &&
+                item.content_id == content_id &&
+                item.slot == slot) {
                 const auto next_stack =
                     static_cast<std::int64_t>(item.stack_count) +
                     static_cast<std::int64_t>(normalized_stack_count);
@@ -473,6 +486,7 @@ bool ApplyOwnedInventoryLootItem(
     ParticipantInventoryItemState item;
     item.type_id = type_id;
     item.recipe_uid = recipe_uid;
+    item.content_id = content_id;
     item.slot = slot;
     item.stack_count = normalized_stack_count;
     owned_progression->inventory_items.push_back(item);

@@ -337,6 +337,47 @@ std::uint8_t __fastcall HookPlayerActorApplyManaDelta(
         }
     }
 
+    std::uint64_t participant_id = bot_id;
+    if (!bot_actor) {
+        SDModPlayerState player_state;
+        if (TryGetPlayerState(&player_state) &&
+            player_state.valid &&
+            player_state.actor_address == actor_address) {
+            participant_id =
+                multiplayer::GetLocalTransportParticipantId();
+            if (participant_id == 0) {
+                participant_id = 1;
+            }
+        }
+    }
+
+    if (HasLuaManaChangeFilterHandlers()) {
+        uintptr_t progression_address = 0;
+        float current_mana = 0.0f;
+        float maximum_mana = 0.0f;
+        if (TryResolveActorProgressionRuntime(
+                actor_address,
+                &progression_address) &&
+            progression_address != 0 &&
+            TryReadProgressionMana(
+                progression_address,
+                &current_mana,
+                &maximum_mana)) {
+            LuaManaChangeFilterContext filtered_context;
+            filtered_context.actor_address = actor_address;
+            filtered_context.progression_address = progression_address;
+            filtered_context.participant_id = participant_id;
+            filtered_context.current_mana = current_mana;
+            filtered_context.maximum_mana = maximum_mana;
+            filtered_context.delta = delta;
+            filtered_context.allow_prompt = allow_prompt != 0;
+            if (!ApplyLuaManaChangeFilters(&filtered_context)) {
+                return 1;
+            }
+            delta = filtered_context.delta;
+        }
+    }
+
     if (!bot_actor) {
         bool observe_local_delta = false;
         {

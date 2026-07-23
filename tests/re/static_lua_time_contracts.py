@@ -98,7 +98,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         assert token in bindings, f"Lua time scheduler lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "LuaTimeControl = 27",
         "struct LuaTimeControlPacket",
         "authority_session_nonce",
@@ -106,7 +106,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "lua_time_revision",
         "LuaTimeControlPacketFlagStepFrames",
         "sizeof(LuaTimeControlPacket) == 56",
-        "sizeof(StatePacket) == 4528",
+        "sizeof(StatePacket) == 5040",
         "sizeof(ParticipantFramePacket) == 570",
     ):
         assert token in protocol, f"Lua time protocol lacks: {token}"

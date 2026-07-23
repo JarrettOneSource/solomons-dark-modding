@@ -140,7 +140,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 29);" in bindings
+    assert "lua_createtable(mod->state, 0, 30);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (
@@ -1046,7 +1046,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1057,10 +1057,10 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 4528",
-        "static_assert(sizeof(LootDropSnapshotPacketState) == 112",
-        "static_assert(sizeof(LootSnapshotPacket) == 7200",
-        "static_assert(sizeof(LootPickupResultPacket) == 164",
+        "static_assert(sizeof(StatePacket) == 5040",
+        "static_assert(sizeof(LootDropSnapshotPacketState) == 120",
+        "static_assert(sizeof(LootSnapshotPacket) == 7712",
+        "static_assert(sizeof(LootPickupResultPacket) == 172",
     ):
         assert token in protocol, f"powerup protocol lacks: {token}"
 
@@ -1219,7 +1219,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1229,7 +1229,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 4528",
+        "static_assert(sizeof(StatePacket) == 5040",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 

@@ -442,6 +442,89 @@ bool DrawSpriteCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) 
             sizeof(LuaDrawTexturedVertex)));
 }
 
+bool DrawConsumableQuad(
+    IDirect3DDevice9* device,
+    const LuaConsumableRenderQuad& quad) {
+    LuaDrawSpriteInfo sprite;
+    std::string canonical_atlas;
+    std::string sprite_error;
+    if (!TryGetLuaDrawSpriteInfo(
+            quad.icon_atlas,
+            quad.icon_frame,
+            &sprite,
+            &canonical_atlas,
+            &sprite_error)) {
+        return false;
+    }
+    auto* texture = GetAtlasTexture(device, canonical_atlas);
+    if (texture == nullptr || texture->width == 0 || texture->height == 0 ||
+        sprite.logical_width == 0 || sprite.logical_height == 0 ||
+        sprite.atlas_x + sprite.packed_width > texture->width ||
+        sprite.atlas_y + sprite.packed_height > texture->height) {
+        return false;
+    }
+
+    const float logical_width = static_cast<float>(sprite.logical_width);
+    const float logical_height = static_cast<float>(sprite.logical_height);
+    const float trim_x =
+        (logical_width - sprite.content_width) * 0.5f +
+        sprite.center_offset_x;
+    const float trim_y =
+        (logical_height - sprite.content_height) * 0.5f +
+        sprite.center_offset_y;
+    const float left_fraction = trim_x / logical_width;
+    const float top_fraction = trim_y / logical_height;
+    const float right_fraction =
+        (trim_x + sprite.packed_width) / logical_width;
+    const float bottom_fraction =
+        (trim_y + sprite.packed_height) / logical_height;
+
+    auto interpolate = [&](float horizontal, float vertical) {
+        const float top_x =
+            quad.vertices[0] +
+            (quad.vertices[2] - quad.vertices[0]) * horizontal;
+        const float top_y =
+            quad.vertices[1] +
+            (quad.vertices[3] - quad.vertices[1]) * horizontal;
+        const float bottom_x =
+            quad.vertices[4] +
+            (quad.vertices[6] - quad.vertices[4]) * horizontal;
+        const float bottom_y =
+            quad.vertices[5] +
+            (quad.vertices[7] - quad.vertices[5]) * horizontal;
+        return std::array<float, 2>{
+            top_x + (bottom_x - top_x) * vertical,
+            top_y + (bottom_y - top_y) * vertical,
+        };
+    };
+    const auto top_left = interpolate(left_fraction, top_fraction);
+    const auto top_right = interpolate(right_fraction, top_fraction);
+    const auto bottom_left = interpolate(left_fraction, bottom_fraction);
+    const auto bottom_right = interpolate(right_fraction, bottom_fraction);
+
+    const float u0 = sprite.atlas_x / texture->width;
+    const float v0 = sprite.atlas_y / texture->height;
+    const float u1 =
+        (sprite.atlas_x + sprite.packed_width) / texture->width;
+    const float v1 =
+        (sprite.atlas_y + sprite.packed_height) / texture->height;
+    const auto color = D3DCOLOR_ARGB(255, 255, 255, 255);
+    const std::array<LuaDrawTexturedVertex, 4> vertices = {{
+        {top_left[0], top_left[1], 0.0f, 1.0f, color, u0, v0},
+        {top_right[0], top_right[1], 0.0f, 1.0f, color, u1, v0},
+        {bottom_left[0], bottom_left[1], 0.0f, 1.0f, color, u0, v1},
+        {bottom_right[0], bottom_right[1], 0.0f, 1.0f, color, u1, v1},
+    }};
+    return ConfigureTexturedStage(device) &&
+        SUCCEEDED(device->SetFVF(kLuaDrawTexturedVertexFvf)) &&
+        SUCCEEDED(device->SetTexture(0, texture->texture)) &&
+        SUCCEEDED(device->DrawPrimitiveUP(
+            D3DPT_TRIANGLESTRIP,
+            2,
+            vertices.data(),
+            sizeof(LuaDrawTexturedVertex)));
+}
+
 bool DrawCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
     switch (command.kind) {
     case LuaDrawCommandKind::Text:

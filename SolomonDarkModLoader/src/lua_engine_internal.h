@@ -3,11 +3,13 @@
 #include "bot_runtime.h"
 #include "lua_content_registry.h"
 #include "lua_engine_events.h"
+#include "lua_item_runtime.h"
 #include "lua_mod_runtime.h"
 #include "lua_ui_runtime.h"
 #include "runtime_bootstrap.h"
 #include "sdmod_plugin_api.h"
 
+#include <array>
 #include <filesystem>
 #include <cstdint>
 #include <memory>
@@ -39,6 +41,7 @@ inline constexpr char kSpellCastEventName[] = "spell.cast";
 inline constexpr char kGoldChangedEventName[] = "gold.changed";
 inline constexpr char kDropSpawnedEventName[] = "drop.spawned";
 inline constexpr char kLevelUpEventName[] = "level.up";
+inline constexpr char kItemConsumedEventName[] = "item.consumed";
 
 enum class LuaTimerKind {
     Once,
@@ -78,6 +81,15 @@ struct LuaItemDefinition {
     std::string recipe_name;
     std::string item_type;
     std::uint32_t native_type_id = 0;
+    std::string description;
+    std::string icon_atlas;
+    std::uint32_t icon_frame = 0;
+    std::uint32_t duration_ms = 0;
+    std::int32_t native_subtype = -1;
+    LuaConsumableVfxKind consume_vfx_kind = LuaConsumableVfxKind::None;
+    std::array<float, 4> consume_vfx_color = {0.25f, 1.0f, 0.35f, 1.0f};
+    int on_consume_reference = -2;
+    bool consumable = false;
 };
 
 enum class LuaSpellSlot : std::uint8_t {
@@ -221,6 +233,7 @@ struct LoadedLuaMod {
     bool gold_changed_registered = false;
     bool drop_spawned_registered = false;
     bool level_up_registered = false;
+    bool item_consumed_registered = false;
     std::uint32_t event_filter_mask = 0;
     bool profile_storage_loaded = false;
     LuaModStateValues profile_storage_values;

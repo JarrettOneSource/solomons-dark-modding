@@ -28,6 +28,11 @@ void DispatchLuaSpellCast(int spell_id, float x, float y, float direction_x, flo
 void DispatchLuaGoldChanged(int gold, int delta, const char* source);
 void DispatchLuaDropSpawned(const char* kind, float x, float y);
 void DispatchLuaLevelUp(int level, int xp);
+void DispatchLuaConsumableUse(
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner);
 void DispatchLuaCustomEvent(
     const std::string& mod_id,
     const std::string& event_name,
@@ -60,6 +65,11 @@ void DispatchSpellCastToLuaMods(int spell_id, float x, float y, float direction_
 void DispatchGoldChangedToLuaMods(int gold, int delta, const char* source);
 void DispatchDropSpawnedToLuaMods(const char* kind, float x, float y);
 void DispatchLevelUpToLuaMods(int level, int xp);
+void DispatchConsumableUseToLuaMods(
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    bool local_owner);
 void DispatchCustomEventToLuaMods(
     const std::string& mod_id,
     const std::string& event_name,

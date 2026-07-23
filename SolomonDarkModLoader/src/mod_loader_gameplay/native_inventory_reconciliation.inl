@@ -83,8 +83,7 @@ bool TryGetNativeInventoryQuantity(
         item_recipe_uid,
         item_slot);
     if ((is_potion &&
-         (item_slot < kStockPotionSubtypeMin ||
-          item_slot > kStockPotionSubtypeMax)) ||
+         !IsSupportedReplicatedPotionSubtype(item_slot)) ||
         (!is_potion && item_recipe_uid == 0 && !is_nonrecipe_item)) {
         return false;
     }
@@ -155,8 +154,7 @@ NativeInventoryCreditOutcome ExecuteNativeInventoryCreditNow(
         request.network_drop_id == 0 ||
         (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item) ||
         (is_potion &&
-         (request.item_slot < kStockPotionSubtypeMin ||
-          request.item_slot > kStockPotionSubtypeMax)) ||
+         !IsSupportedReplicatedPotionSubtype(request.item_slot)) ||
         request.stack_count <= 0 ||
         request.inventory_revision == 0) {
         return fail(
@@ -592,8 +590,7 @@ bool QueueNativeInventoryCreditInternal(
         network_drop_id == 0 ||
         (!is_potion && !is_recipe_item && !is_supported_nonrecipe_item) ||
         (is_potion &&
-         (item_slot < kStockPotionSubtypeMin ||
-          item_slot > kStockPotionSubtypeMax)) ||
+         !IsSupportedReplicatedPotionSubtype(item_slot)) ||
         stack_count <= 0 ||
         inventory_revision == 0) {
         return fail("Native inventory credit metadata is invalid.");

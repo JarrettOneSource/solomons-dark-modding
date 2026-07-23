@@ -80,6 +80,7 @@ struct LootPickupResultRuntimeInfo {
     float resulting_mana_max = 0.0f;
     std::uint32_t item_type_id = 0;
     std::uint32_t item_recipe_uid = 0;
+    std::uint64_t item_content_id = 0;
     bool item_color_state_valid = false;
     std::array<std::uint8_t, kParticipantVisualLinkColorBlockBytes> item_color_state = {};
     std::int32_t item_slot = -1;

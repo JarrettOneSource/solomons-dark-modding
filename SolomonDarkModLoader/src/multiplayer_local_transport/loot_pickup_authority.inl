@@ -1,6 +1,16 @@
 void PublishLootPickupResultRuntimeInfo(
     const LootPickupResultPacket& packet,
     std::uint64_t now_ms) {
+    const auto packet_drop_kind =
+        LootDropKindFromPacketValue(packet.drop_kind);
+    std::int32_t local_item_slot = packet.item_slot;
+    if (packet_drop_kind == LootDropKind::Potion &&
+        !TryResolvePotionWireIdentity(
+            packet.item_slot,
+            packet.item_content_id,
+            &local_item_slot)) {
+        return;
+    }
     if (packet.participant_id == g_local_transport.local_peer_id) {
         CompleteInFlightLocalLootPickupRequest(
             packet.network_drop_id,
@@ -29,6 +39,7 @@ void PublishLootPickupResultRuntimeInfo(
         result.resulting_mana_max = packet.resulting_mana_max;
         result.item_type_id = packet.item_type_id;
         result.item_recipe_uid = packet.item_recipe_uid;
+        result.item_content_id = packet.item_content_id;
         result.item_color_state_valid =
             (packet.result_flags & LootPickupResultFlagItemColorState) != 0;
         if (result.item_color_state_valid) {
@@ -37,7 +48,7 @@ void PublishLootPickupResultRuntimeInfo(
                 packet.item_color_state,
                 result.item_color_state.size());
         }
-        result.item_slot = packet.item_slot;
+        result.item_slot = local_item_slot;
         result.stack_count = packet.stack_count;
         result.inventory_revision = packet.inventory_revision;
         PowerupRewardKind powerup_kind =
@@ -128,7 +139,8 @@ void PublishLootPickupResultRuntimeInfo(
             if (ApplyOwnedInventoryLootItem(
                     packet.item_type_id,
                     packet.item_recipe_uid,
-                    packet.item_slot,
+                    packet.item_content_id,
+                    local_item_slot,
                     packet.stack_count,
                     &participant->owned_progression)) {
                 participant->owned_progression.inventory_revision =
@@ -266,6 +278,7 @@ bool TryBuildAcceptedItemLootPickupPayload(
         : 1;
     payload->item_type_id = drop.item_type_id;
     payload->item_recipe_uid = drop.item_recipe_uid;
+    payload->item_content_id = drop.item_content_id;
     payload->item_color_state_valid =
         (drop.flags & LootDropSnapshotFlagItemColorState) != 0;
     if (payload->item_color_state_valid) {
@@ -306,6 +319,7 @@ void SendLootPickupResult(
     result.resulting_mana_max = payload.resulting_mana_max;
     result.item_type_id = payload.item_type_id;
     result.item_recipe_uid = payload.item_recipe_uid;
+    result.item_content_id = payload.item_content_id;
     if (payload.item_color_state_valid) {
         result.result_flags |= LootPickupResultFlagItemColorState;
         std::memcpy(
@@ -422,10 +436,19 @@ bool ValidateLootPickupRequest(
         if (drop_kind == LootDropKind::Potion && drop.item_type_id != kPotionItemTypeId) {
             return reject("potion_type_mismatch", LootPickupResultCode::Rejected);
         }
+        std::int32_t local_potion_slot = -1;
         if (drop_kind == LootDropKind::Potion &&
-            (drop.item_slot < kStockPotionSubtypeMin ||
-             drop.item_slot > kStockPotionSubtypeMax)) {
+            !TryResolvePotionWireIdentity(
+                drop.item_slot,
+                drop.item_content_id,
+                &local_potion_slot)) {
             return reject("unsupported_potion_subtype", LootPickupResultCode::Unsupported);
+        }
+        if (drop_kind != LootDropKind::Potion &&
+            drop.item_content_id != 0) {
+            return reject(
+                "unexpected_item_content_id",
+                LootPickupResultCode::Rejected);
         }
         if (drop_kind == LootDropKind::Item && drop.item_type_id == kPotionItemTypeId) {
             return reject("item_type_mismatch", LootPickupResultCode::Rejected);
@@ -583,6 +606,7 @@ void ApplyAcceptedHostLootPickupState(PendingHostLootPickup* pending) {
             if (ApplyOwnedInventoryLootItem(
                     payload.item_type_id,
                     payload.item_recipe_uid,
+                    payload.item_content_id,
                     payload.item_slot,
                     payload.stack_count,
                     &participant->owned_progression)) {

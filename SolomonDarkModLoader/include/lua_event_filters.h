@@ -16,6 +16,7 @@ inline constexpr std::uint32_t kLuaWaveSpawningFilterMask = 1u << 4;
 inline constexpr std::uint32_t kLuaSpellCastingFilterMask = 1u << 5;
 inline constexpr std::uint32_t kLuaXpGainingFilterMask = 1u << 6;
 inline constexpr std::uint32_t kLuaGoldChangingFilterMask = 1u << 7;
+inline constexpr std::uint32_t kLuaManaChangingFilterMask = 1u << 8;
 
 struct LuaDamageFilterContext {
     std::uintptr_t source_actor_address = 0;
@@ -63,6 +64,7 @@ struct LuaDropRollFilterContext {
     std::uintptr_t arena_address = 0;
     std::uintptr_t config_address = 0;
     std::int32_t native_type_id = -1;
+    bool is_boss = false;
     float x = 0.0f;
     float y = 0.0f;
     std::array<std::uint8_t, kLuaDropSelectorCount> selectors{};
@@ -136,5 +138,19 @@ struct LuaGoldChangeFilterContext {
 
 bool HasLuaGoldChangeFilterHandlers();
 bool ApplyLuaGoldChangeFilters(LuaGoldChangeFilterContext* context);
+
+struct LuaManaChangeFilterContext {
+    std::uintptr_t actor_address = 0;
+    std::uintptr_t progression_address = 0;
+    std::uint64_t participant_id = 0;
+    float current_mana = 0.0f;
+    float maximum_mana = 0.0f;
+    float delta = 0.0f;
+    bool allow_prompt = false;
+    const char* source = "native";
+};
+
+bool HasLuaManaChangeFilterHandlers();
+bool ApplyLuaManaChangeFilters(LuaManaChangeFilterContext* context);
 
 }  // namespace sdmod

@@ -76,6 +76,15 @@ bool IsSupportedReplicatedNonRecipeItem(
            item_slot <= kReplicatedLootMiscItemSubtypeMax;
 }
 
+bool IsSupportedReplicatedPotionSubtype(std::int32_t item_slot) {
+    if (item_slot >= kStockPotionSubtypeMin &&
+        item_slot <= kStockPotionSubtypeMax) {
+        return true;
+    }
+    return item_slot >= kLuaFirstConsumablePotionSubtype &&
+        FindLuaConsumableDefinitionByNativeSubtype(item_slot).has_value();
+}
+
 void QueueClientLocalLootSuppressionInternal(const char* reason, std::uint64_t delay_ms) {
     if (!multiplayer::IsLocalTransportClient()) {
         return;
@@ -120,8 +129,7 @@ bool IsSupportedReplicatedLootPresentationKind(const multiplayer::LootDropSnapsh
     if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
         return drop.native_type_id == kReplicatedLootItemDropNativeTypeId &&
                drop.item_type_id == kReplicatedLootPotionItemTypeId &&
-               drop.item_slot >= kStockPotionSubtypeMin &&
-               drop.item_slot <= kStockPotionSubtypeMax &&
+               IsSupportedReplicatedPotionSubtype(drop.item_slot) &&
                drop.stack_count > 0;
     }
     if (drop.drop_kind == multiplayer::LootDropKind::Item) {
@@ -357,12 +365,11 @@ bool WriteReplicatedLootDropFields(
         }
 
         if (drop.drop_kind == multiplayer::LootDropKind::Potion) {
-            const auto potion_slot =
-                static_cast<std::int32_t>((std::max)(
-                    kStockPotionSubtypeMin,
-                    (std::min)(kStockPotionSubtypeMax, drop.item_slot)));
             const auto stack_count = static_cast<std::int32_t>((std::max)(1, drop.stack_count));
-            wrote = memory.TryWriteField(held_item_address, kItemSlotOffset, potion_slot) && wrote;
+            wrote = memory.TryWriteField(
+                held_item_address,
+                kItemSlotOffset,
+                drop.item_slot) && wrote;
             if (kPotionStackCountOffset != 0) {
                 wrote = memory.TryWriteField(
                     held_item_address,
@@ -532,16 +539,12 @@ bool ExecuteSpawnReplicatedPotionDropNow(
     }
 
     DWORD exception_code = 0;
-    const auto potion_slot =
-        static_cast<int>((std::max)(
-            kStockPotionSubtypeMin,
-            (std::min)(kStockPotionSubtypeMax, drop.item_slot)));
     if (!CallSpawnPotionDropSafe(
             spawn_function_address,
             arena_address,
             drop.position_x,
             drop.position_y,
-            potion_slot,
+            drop.item_slot,
             &exception_code)) {
         if (error_message != nullptr) {
             *error_message =

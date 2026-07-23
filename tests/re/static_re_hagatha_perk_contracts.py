@@ -192,13 +192,13 @@ def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
         "wire protocol",
         protocol,
         (
-            "constexpr std::uint16_t kProtocolVersion = 80;",
+            "constexpr std::uint16_t kProtocolVersion = 81;",
             "kParticipantHagathaPerkMaxCount = 9",
             "struct ParticipantHagathaPerkPacketState",
             "std::uint32_t hagatha_perk_revision;",
             "ParticipantHagathaPerkPacketState hagatha_perks;",
             "static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20",
-            "static_assert(sizeof(StatePacket) == 4528",
+            "static_assert(sizeof(StatePacket) == 5040",
         ),
         failures,
     )
@@ -664,6 +664,9 @@ def test_hagatha_combat_modifiers_have_exact_two_owner_coverage() -> str:
     constants = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
     )
+    enemy_types = read_text(
+        ROOT / "SolomonDarkModLoader/include/native_enemy_types.h"
+    )
     native_types = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/native_function_types.inl"
     )
@@ -721,6 +724,7 @@ def test_hagatha_combat_modifiers_have_exact_two_owner_coverage() -> str:
     _require(
         "Curse Bosses native contract",
         constants
+        + enemy_types
         + native_types
         + request_state
         + player_damage_hook

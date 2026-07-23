@@ -163,6 +163,14 @@ bool IsAuthorizedSteamGameplayPacket(
             [](const LuaUiActionRequestPacket& packet) {
                 return packet.participant_id;
             });
+    case PacketKind::LuaConsumableUse:
+        return SteamPacketOwnerMatches<LuaConsumableUsePacket>(
+            data,
+            size,
+            sender_steam_id,
+            [](const LuaConsumableUsePacket& packet) {
+                return packet.participant_id;
+            });
     case PacketKind::LuaNetMessage:
         return SteamLuaNetPacketHopMatches(
             data,
@@ -238,6 +246,20 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyLuaItemGrantPacket(packet, from, now_ms);
+            continue;
+        }
+        if (kind == PacketKind::LuaConsumableUse &&
+            received ==
+                static_cast<int>(sizeof(LuaConsumableUsePacket))) {
+            LuaConsumableUsePacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LuaConsumableUse)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLuaConsumableUsePacket(packet, from, now_ms);
             continue;
         }
 

@@ -39,6 +39,10 @@ bool QueueAuthoritativeLuaItemGrant(
     std::uint64_t* target_participant_id,
     bool* local_target,
     std::string* error_message);
+bool QueueLocalLuaConsumableUse(
+    std::uint64_t content_id,
+    std::uint64_t* use_id,
+    std::string* error_message);
 bool QueueOwnerRoutedLuaRegisteredSpellCast(
     std::uint64_t content_id,
     std::uint64_t requested_owner_participant_id,

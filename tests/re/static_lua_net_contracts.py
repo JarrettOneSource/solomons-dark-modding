@@ -103,7 +103,7 @@ def test_lua_net_is_fragmented_authenticated_and_host_relayed() -> str:
     assert pump.count("detail::DispatchPendingLuaNetMessages();") == 2
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "LuaNetMessage = 26",
         "struct LuaNetMessagePacket",
         "transport_participant_id",

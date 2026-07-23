@@ -87,7 +87,7 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
         (
             "std::int16_t parent_item_index;",
             "std::uint16_t container_depth;",
-            "static_assert(sizeof(ParticipantInventoryItemPacketState) == 20",
+            "static_assert(sizeof(ParticipantInventoryItemPacketState) == 28",
         ),
         failures,
     )

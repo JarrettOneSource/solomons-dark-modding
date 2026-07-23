@@ -115,7 +115,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "WaveCompositionRowPacketState",
         "wave_summary_remaining_to_spawn",
         "wave_summary_rows[kWaveSummaryMaxCompositionRows]",

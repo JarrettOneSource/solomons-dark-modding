@@ -6,7 +6,15 @@ bool IsSaneParticipantInventorySnapshot(const StatePacket& packet) {
 
     for (std::size_t index = 0; index < packet.inventory_item_count; ++index) {
         const auto& item = packet.inventory_items[index];
+        std::int32_t local_slot = item.slot;
         if (item.type_id == 0 ||
+            (item.type_id == kPotionItemTypeId &&
+             !TryResolvePotionWireIdentity(
+                 item.slot,
+                 item.content_id,
+                 &local_slot)) ||
+            (item.type_id != kPotionItemTypeId &&
+             item.content_id != 0) ||
             item.container_depth > kSDModInventorySnapshotMaxDepth) {
             return false;
         }
@@ -216,7 +224,18 @@ void ApplyRemoteStatePacket(
                 ParticipantInventoryItemState item;
                 item.type_id = packet_item.type_id;
                 item.recipe_uid = packet_item.recipe_uid;
+                item.content_id = packet_item.content_id;
                 item.slot = packet_item.slot;
+                if (item.type_id == kPotionItemTypeId) {
+                    std::int32_t local_slot = -1;
+                    if (!TryResolvePotionWireIdentity(
+                            packet_item.slot,
+                            packet_item.content_id,
+                            &local_slot)) {
+                        continue;
+                    }
+                    item.slot = local_slot;
+                }
                 item.stack_count = packet_item.stack_count;
                 item.parent_item_index = packet_item.parent_item_index;
                 item.container_depth = packet_item.container_depth;
