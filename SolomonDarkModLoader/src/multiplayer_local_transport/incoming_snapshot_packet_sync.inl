@@ -57,6 +57,12 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
         actor.render_selection_byte = packet_actor.render_selection_byte;
         actor.render_variant_tertiary = packet_actor.render_variant_tertiary;
         actor.status_flags = packet_actor.status_flags;
+        actor.lua_enemy_spawn_flags = packet_actor.lua_enemy_spawn_flags;
+        actor.lua_content_id = packet_actor.lua_content_id;
+        actor.lua_spawn_hp = packet_actor.lua_spawn_hp;
+        actor.lua_spawn_chase_speed = packet_actor.lua_spawn_chase_speed;
+        actor.lua_spawn_attack_speed = packet_actor.lua_spawn_attack_speed;
+        actor.lua_spawn_scale = packet_actor.lua_spawn_scale;
         actor.turn_undead_duration_ticks =
             packet_actor.turn_undead_duration_ticks;
         actor.turn_undead_flee_heading =

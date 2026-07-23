@@ -24,7 +24,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
     engine_header = _read("SolomonDarkModLoader/include/lua_engine.h")
     pipe = _read("SolomonDarkModLoader/src/lua_exec_pipe.cpp")
     bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
-    events = _read("SolomonDarkModLoader/src/lua_engine_events.cpp")
+    events = read_source_unit("SolomonDarkModLoader/src/lua_engine_events.cpp")
     engine_internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
     lua_main = _read("mods/lua_bots/scripts/main.lua")
     lua_client = _read("tools/lua-exec.py")
@@ -131,10 +131,13 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaRngBindings",
         "RegisterLuaNavBindings",
         "RegisterLuaSceneBindings",
+        "RegisterLuaWaveBindings",
+        "RegisterLuaItemBindings",
+        "RegisterLuaEnemyBindings",
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 21);" in bindings
+    assert "lua_createtable(mod->state, 0, 22);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (
@@ -142,7 +145,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "std::deque<PendingLuaEvent> g_pending_lua_events;",
         "pending.swap(g_pending_lua_events);",
         "void DispatchPendingLuaEventsToLuaMods()",
-        "detail::QueueEnemyDeathEvent(enemy_type, x, y, kill_method);",
+        "detail::QueueEnemyDeathEvent(\n        enemy_type,",
         "void StartLuaEventQueue();",
         "void StopLuaEventQueue();",
     ):
@@ -196,8 +199,8 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "pending Lua exec requests are cancelable, stock scene-load stalls fit "
         "inside the hang backstop, pump skips fail by invariant, pipe shutdown "
         "interrupts its wait, hook events are deferred without re-entering the "
-        "Lua VM, handlers remain isolated, and all eighteen current sd namespaces "
-        "are registered"
+        "Lua VM, handlers remain isolated, and all current sd namespaces are "
+        "registered"
     )
 
 
@@ -1038,7 +1041,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 75;",
+        "constexpr std::uint16_t kProtocolVersion = 76;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1211,7 +1214,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 75;",
+        "constexpr std::uint16_t kProtocolVersion = 76;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",

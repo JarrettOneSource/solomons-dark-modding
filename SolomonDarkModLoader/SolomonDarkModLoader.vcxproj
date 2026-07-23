@@ -213,6 +213,7 @@
     <ClInclude Include="src\mod_loader_internal.h" />
     <ClInclude Include="src\runtime_debug_internal.h" />
     <ClInclude Include="src\lua_engine_internal.h" />
+    <ClInclude Include="src\lua_engine_event_queue.inl" />
     <ClInclude Include="src\lua_engine_main_thread_pump.inl" />
     <ClInclude Include="src\bot_runtime\helpers.inl" />
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
@@ -460,6 +461,7 @@
     <ClInclude Include="src\runtime_debug\hde32_impl.inl" />
     <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl" />
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />
+    <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl" />
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\actor_world_pause_hook.inl" />
@@ -502,6 +504,7 @@
     <ClCompile Include="src\lua_engine_bindings_scene.cpp" />
     <ClCompile Include="src\lua_engine_bindings_waves.cpp" />
     <ClCompile Include="src\lua_engine_bindings_items.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />

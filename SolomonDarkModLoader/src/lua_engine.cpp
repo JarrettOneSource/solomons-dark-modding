@@ -329,6 +329,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "waves.schedule.read",
         "items.register",
         "items.read",
+        "enemies.register",
+        "enemies.read",
     };
 
     if (multiplayer::IsFoundationInitialized()) {
@@ -344,6 +346,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("scene.read");
         capabilities.emplace_back("scene.switch.authority");
         capabilities.emplace_back("items.grant.authority");
+        capabilities.emplace_back("enemies.spawn.authority");
     }
 
     if (multiplayer::IsBotRuntimeInitialized()) {

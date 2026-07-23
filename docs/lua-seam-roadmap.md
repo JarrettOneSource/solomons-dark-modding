@@ -83,6 +83,12 @@ shared state; simulation calls auto-route to the owner).
   tests.
 - **`sd.scene`** — semantic address-free scene state plus authority-owned region switches;
   authenticated host intent moves connected clients and Lua-controlled participants.
+- **`sd.waves`** — effective schedule plus authority-replicated wave state, composition,
+  and spawn/death accounting.
+- **`sd.items`** — deterministic recipe-backed registration and authority-routed grants
+  resolved against each recipient's peer-local native catalog.
+- **`sd.enemies`** — deterministic semantic stock-archetype registration and
+  authority-owned exact spawning with per-actor stats and loot policy.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -128,8 +134,9 @@ shared state; simulation calls auto-route to the owner).
 
 ### Structural gaps (why mods can't thrive yet)
 
-1. **No content registration** — overlays and filters reshape stock behavior, but
-   registered scripted spells, enemies, and items remain to be built.
+1. **Scripted spell registration remains** — deterministic identities, registered items,
+   and registered stock-archetype enemies exist; authored spell callbacks and generic
+   modded-effect replication remain to complete the content-registration tier.
 2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
 3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
    and other mutations still need authority-routed public seams.
@@ -233,10 +240,19 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 75, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 76, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
+
+**Enemy registration and spawning implemented 2026-07-22.** `sd.enemies.register`,
+`get`, and `list` bind deterministic identities to semantic hostile stock classes.
+Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
+valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
+spawn filters, and attaches per-actor loot policy without mutating shared config.
+Protocol 76 carries the content ID and effective constructor values through world
+snapshots and death tombstones; spawn/death notify events expose the same stable ID on
+every peer. See `lua-enemies.md`.
 
 **5. `sd.ai` — enemy brain overrides.**
 Per-enemy move goals (`kGameNpcSetMoveGoal`), target override (fixes the slot-1–3
@@ -317,7 +333,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 75 carries a bounded validated
+includes planned composition, and protocol 76 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
 

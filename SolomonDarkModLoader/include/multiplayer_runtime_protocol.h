@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 75;
+constexpr std::uint16_t kProtocolVersion = 76;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -13,7 +13,7 @@ constexpr std::uint32_t kParticipantInventorySnapshotMaxItems = 64;
 constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kParticipantHagathaPerkMaxCount = 9;
-constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;
+constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;
 constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kWorldActorStudentBookPaletteMaxEntries = 5;
@@ -196,6 +196,19 @@ enum WorldActorStatusFlags : std::uint8_t {
     WorldActorStatusFlagTurnUndeadStateValid = 1 << 0,
     WorldActorStatusFlagTurnUndeadActive = 1 << 1,
 };
+
+enum LuaEnemySpawnSnapshotFlags : std::uint8_t {
+    LuaEnemySpawnSnapshotFlagHp = 1 << 0,
+    LuaEnemySpawnSnapshotFlagChaseSpeed = 1 << 1,
+    LuaEnemySpawnSnapshotFlagAttackSpeed = 1 << 2,
+    LuaEnemySpawnSnapshotFlagScale = 1 << 3,
+};
+
+constexpr std::uint8_t kLuaEnemySpawnSnapshotKnownFlags =
+    LuaEnemySpawnSnapshotFlagHp |
+    LuaEnemySpawnSnapshotFlagChaseSpeed |
+    LuaEnemySpawnSnapshotFlagAttackSpeed |
+    LuaEnemySpawnSnapshotFlagScale;
 
 constexpr std::uint8_t kWorldActorStatusKnownFlags =
     WorldActorStatusFlagTurnUndeadStateValid |
@@ -855,7 +868,13 @@ struct WorldActorSnapshotPacketState {
     std::uint8_t render_selection_byte;
     std::uint8_t render_variant_tertiary;
     std::uint8_t status_flags;
-    std::uint8_t presentation_reserved[2];
+    std::uint8_t lua_enemy_spawn_flags;
+    std::uint8_t presentation_reserved;
+    std::uint64_t lua_content_id;
+    float lua_spawn_hp;
+    float lua_spawn_chase_speed;
+    float lua_spawn_attack_speed;
+    float lua_spawn_scale;
     std::int32_t turn_undead_duration_ticks;
     float turn_undead_flee_heading;
     float turn_undead_activation_scalar;
@@ -1239,8 +1258,8 @@ static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
 static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 304, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 1264, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 328, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 1032, "Unexpected world snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 112, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7200, "Unexpected loot snapshot packet size");
 static_assert(kLootSnapshotPacketPrefixBytes == 32,

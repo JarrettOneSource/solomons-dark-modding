@@ -107,6 +107,36 @@ bool BuildLocalWorldSnapshot(
         snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
         snapshot.hp = std::isfinite(actor.hp) ? actor.hp : 0.0f;
         snapshot.max_hp = std::isfinite(actor.max_hp) ? actor.max_hp : 0.0f;
+        SDModLuaEnemySpawnConfig lua_enemy_config;
+        if (run_scene &&
+            actor.tracked_enemy &&
+            TryGetRunLifecycleLuaEnemySpawnConfig(
+                actor.actor_address,
+                &lua_enemy_config)) {
+            snapshot.lua_content_id = lua_enemy_config.content_id;
+            if (lua_enemy_config.hp_valid) {
+                snapshot.lua_enemy_spawn_flags |=
+                    LuaEnemySpawnSnapshotFlagHp;
+                snapshot.lua_spawn_hp = lua_enemy_config.hp;
+            }
+            if (lua_enemy_config.chase_speed_valid) {
+                snapshot.lua_enemy_spawn_flags |=
+                    LuaEnemySpawnSnapshotFlagChaseSpeed;
+                snapshot.lua_spawn_chase_speed =
+                    lua_enemy_config.chase_speed;
+            }
+            if (lua_enemy_config.attack_speed_valid) {
+                snapshot.lua_enemy_spawn_flags |=
+                    LuaEnemySpawnSnapshotFlagAttackSpeed;
+                snapshot.lua_spawn_attack_speed =
+                    lua_enemy_config.attack_speed;
+            }
+            if (lua_enemy_config.scale_valid) {
+                snapshot.lua_enemy_spawn_flags |=
+                    LuaEnemySpawnSnapshotFlagScale;
+                snapshot.lua_spawn_scale = lua_enemy_config.scale;
+            }
+        }
         PopulateWorldActorPresentationSnapshot(
             actor.actor_address,
             actor.object_type_id,
@@ -190,6 +220,7 @@ bool BuildLocalWorldSnapshot(
             snapshot.network_actor_id = network_actor_id;
             snapshot.native_type_id = death_snapshot.native_type_id;
             snapshot.enemy_type = death_snapshot.enemy_type;
+            snapshot.lua_content_id = death_snapshot.lua_content_id;
             snapshot.actor_slot = -1;
             snapshot.world_slot = -1;
             snapshot.target_actor_slot = -1;

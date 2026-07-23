@@ -50,6 +50,7 @@ void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies)
             if (!memory.TryReadField(actor_address, kActorOwnerOffset, &owner_address) ||
                 owner_address != scene_state.world_address) {
                 g_state.enemy_spawn_serials_by_address.erase(actor_address);
+                g_state.lua_enemy_configs_by_address.erase(actor_address);
                 it = g_state.enemy_types_by_address.erase(it);
                 continue;
             }
@@ -58,6 +59,16 @@ void GetRunLifecycleTrackedEnemies(std::vector<SDModTrackedEnemyState>* enemies)
         enemies->push_back({actor_address, it->second});
         ++it;
     }
+}
+
+bool TryGetRunLifecycleLuaEnemySpawnConfig(
+    uintptr_t enemy_address,
+    SDModLuaEnemySpawnConfig* config) {
+    return LookupLuaEnemySpawnConfig(enemy_address, config);
+}
+
+void ForgetRunLifecycleEnemyTracking(uintptr_t enemy_address) {
+    ForgetEnemyType(enemy_address);
 }
 
 bool TryGetRunLifecycleEnemySpawnSerial(uintptr_t enemy_address, std::uint32_t* spawn_serial) {
@@ -182,6 +193,7 @@ bool IsRunLifecycleManualEnemySpawnerReady() {
 
 bool QueueRunLifecycleEnemySpawnRequestInternal(
     std::uint64_t network_actor_id,
+    const SDModLuaEnemySpawnConfig& lua_config,
     int type_id,
     float x,
     float y,
@@ -229,8 +241,8 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
     }
 
     ManualRunEnemySpawnRequest request;
-    request.request_id = g_next_manual_run_enemy_spawn_request_id++;
     request.network_actor_id = network_actor_id;
+    request.lua_config = lua_config;
     request.type_id = type_id;
     request.x = x;
     request.y = y;
@@ -256,34 +268,36 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
             return true;
         }
         const auto already_queued = std::find_if(
-            g_queued_replicated_run_enemy_spawns.begin(),
-            g_queued_replicated_run_enemy_spawns.end(),
+            g_queued_run_enemy_spawns.begin(),
+            g_queued_run_enemy_spawns.end(),
             [&](const ManualRunEnemySpawnRequest& queued) {
                 return queued.network_actor_id != 0 &&
                        queued.network_actor_id == network_actor_id;
             });
-        if (already_queued != g_queued_replicated_run_enemy_spawns.end()) {
+        if (already_queued != g_queued_run_enemy_spawns.end()) {
             if (request_id != nullptr) {
                 *request_id = already_queued->request_id;
             }
             return true;
         }
-        if (g_queued_replicated_run_enemy_spawns.size() >= kQueuedReplicatedRunEnemySpawnLimit) {
+        if (g_queued_run_enemy_spawns.size() >= kQueuedRunEnemySpawnLimit) {
             if (error_message != nullptr) {
-                *error_message = "manual run enemy spawn: replicated catch-up queue is full.";
+                *error_message = "manual run enemy spawn: exact-spawn queue is full.";
             }
             return false;
         }
-        g_queued_replicated_run_enemy_spawns.push_back(request);
+        request.request_id = g_next_manual_run_enemy_spawn_request_id++;
+        g_queued_run_enemy_spawns.push_back(request);
     } else {
         if (g_have_pending_manual_run_enemy_spawn ||
             g_have_active_manual_run_enemy_spawn ||
-            !g_queued_replicated_run_enemy_spawns.empty()) {
+            !g_queued_run_enemy_spawns.empty()) {
             if (error_message != nullptr) {
                 *error_message = "manual run enemy spawn: a previous request is still pending.";
             }
             return false;
         }
+        request.request_id = g_next_manual_run_enemy_spawn_request_id++;
         g_pending_manual_run_enemy_spawn = request;
         g_have_pending_manual_run_enemy_spawn = true;
     }
@@ -296,6 +310,7 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
         "manual run enemy spawn: queued stock-spawner request. request_id=" +
         std::to_string(request.request_id) +
         " network_actor_id=" + std::to_string(request.network_actor_id) +
+        " content_id=" + std::to_string(request.lua_config.content_id) +
         " type_id=" + std::to_string(type_id) +
         " requested_pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " allow_active_waves=" + std::to_string(request.allow_active_waves ? 1 : 0) +
@@ -322,6 +337,7 @@ bool QueueRunLifecycleManualEnemySpawn(
     }
     return QueueRunLifecycleEnemySpawnRequestInternal(
         0,
+        SDModLuaEnemySpawnConfig{},
         type_id,
         x,
         y,
@@ -333,6 +349,7 @@ bool QueueRunLifecycleManualEnemySpawn(
 
 bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
     std::uint64_t network_actor_id,
+    const SDModLuaEnemySpawnConfig& lua_config,
     int type_id,
     float x,
     float y,
@@ -340,6 +357,7 @@ bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
     std::uint64_t* request_id) {
     return QueueRunLifecycleEnemySpawnRequestInternal(
         network_actor_id,
+        lua_config,
         type_id,
         x,
         y,
@@ -362,10 +380,10 @@ void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_a
         g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
         g_have_pending_manual_run_enemy_spawn = false;
     }
-    for (auto it = g_queued_replicated_run_enemy_spawns.begin();
-         it != g_queued_replicated_run_enemy_spawns.end();) {
+    for (auto it = g_queued_run_enemy_spawns.begin();
+         it != g_queued_run_enemy_spawns.end();) {
         if (it->network_actor_id == network_actor_id) {
-            it = g_queued_replicated_run_enemy_spawns.erase(it);
+            it = g_queued_run_enemy_spawns.erase(it);
             continue;
         }
         ++it;
@@ -397,7 +415,7 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
     {
         std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
         const bool have_any_pending_request =
-            g_have_pending_manual_run_enemy_spawn || !g_queued_replicated_run_enemy_spawns.empty();
+            g_have_pending_manual_run_enemy_spawn || !g_queued_run_enemy_spawns.empty();
         if (!have_any_pending_request || g_have_active_manual_run_enemy_spawn) {
             return false;
         }

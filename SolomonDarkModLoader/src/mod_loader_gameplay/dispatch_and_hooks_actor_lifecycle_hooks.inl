@@ -517,6 +517,7 @@ void __fastcall HookActorWorldUnregister(
     ForgetAuthoritativeTurnUndeadTargetLocksForActor(actor_address);
     if (actor_address != 0 && remove_from_container == 1) {
         multiplayer::NotifyLocalWorldActorUnregistered(actor_address);
+        ForgetRunLifecycleEnemyTracking(actor_address);
     }
     original(self, actor, remove_from_container);
     if (tracked_standalone_scene_churn_actor ||

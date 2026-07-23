@@ -36,8 +36,8 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 75;"),
-        (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 4;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 76;"),
+        (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
         (protocol_text, "std::uint16_t fragment_index;"),
@@ -49,7 +49,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
             protocol_text,
             "WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];",
         ),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1264"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1032"),
         (fragmentation_text, "struct CompleteWorldSnapshotPacketState"),
         (fragmentation_text, "struct PendingWorldSnapshotAssembly"),
         (fragmentation_text, "struct PendingWorldSnapshotAssemblies"),
@@ -142,9 +142,9 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     expected_fragments = math.ceil(
         retail_wave_actor_count / actors_per_fragment
     )
-    if expected_fragments != 20:
+    if expected_fragments != 27:
         raise StaticReTestFailure(
-            f"retail 80-enemy generation should be 20 fragments, got {expected_fragments}"
+            f"retail 80-enemy generation should be 27 fragments, got {expected_fragments}"
         )
 
     return (
@@ -391,8 +391,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 75;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 75;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 76;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 76;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),

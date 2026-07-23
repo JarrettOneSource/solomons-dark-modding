@@ -82,7 +82,7 @@ The returned table confirms queue acceptance, not native completion:
 | `local_target` | Whether the authority queued its own inventory mutation |
 
 The target owner resolves the registered name/type to its own recipe UID immediately
-before calling the stock inventory insertion routine on the gameplay pump. Protocol 75
+before calling the stock inventory insertion routine on the gameplay pump. Protocol 76
 carries only the authority ID, target ID, request ID, stable content ID, and optional
 color state; recipe UIDs and native addresses never cross the wire. Steam delivery is
 reliable, the receiver accepts the command only from its configured host, and bounded

@@ -107,7 +107,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 75;",
+        "constexpr std::uint16_t kProtocolVersion = 76;",
         "WaveCompositionRowPacketState",
         "wave_summary_remaining_to_spawn",
         "wave_summary_rows[kWaveSummaryMaxCompositionRows]",
@@ -135,7 +135,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "authenticated participant frame",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "protocol version is 75",
+        "protocol version is 76",
     ):
         assert token in documentation, f"Lua wave documentation lacks: {token}"
     assert "**Implemented 2026-07-22.** `sd.waves.get_state()`" in roadmap

@@ -70,6 +70,29 @@ struct LuaItemDefinition {
     std::uint32_t native_type_id = 0;
 };
 
+enum class LuaEnemyLootPolicy : std::uint8_t {
+    Stock = 0,
+    None,
+    Orb,
+    Gold,
+    Item,
+    Powerup,
+    Potion,
+};
+
+struct LuaEnemyDefinition {
+    LuaContentIdentity identity;
+    std::string base_name;
+    std::uint32_t native_type_id = 0;
+    bool hp_valid = false;
+    float hp = 0.0f;
+    bool speed_valid = false;
+    float speed = 0.0f;
+    bool scale_valid = false;
+    float scale = 1.0f;
+    LuaEnemyLootPolicy loot_policy = LuaEnemyLootPolicy::Stock;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -94,6 +117,7 @@ struct LoadedLuaMod {
     std::vector<LuaBusSubscription> bus_subscriptions;
     std::uint64_t next_bus_subscription_id = 1;
     std::vector<LuaItemDefinition> item_definitions;
+    std::vector<LuaEnemyDefinition> enemy_definitions;
 };
 
 std::mutex& LuaEngineMutex();

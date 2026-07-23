@@ -461,6 +461,30 @@ void RecordRecentRunEnemyDeathSnapshot(
     snapshot.actor_address = actor.actor_address;
     snapshot.native_type_id = actor.object_type_id;
     snapshot.enemy_type = actor.enemy_type;
+    SDModLuaEnemySpawnConfig lua_enemy_config;
+    if (TryGetRunLifecycleLuaEnemySpawnConfig(
+            actor.actor_address,
+            &lua_enemy_config)) {
+        snapshot.lua_content_id = lua_enemy_config.content_id;
+    }
+    if (snapshot.lua_content_id == 0) {
+        const auto existing =
+            g_local_transport.recent_run_enemy_deaths_by_network_id.find(
+                network_actor_id);
+        if (existing !=
+            g_local_transport.recent_run_enemy_deaths_by_network_id.end()) {
+            snapshot.lua_content_id = existing->second.lua_content_id;
+        }
+    }
+    if (snapshot.lua_content_id == 0) {
+        const auto retained =
+            g_local_transport.retained_run_enemy_snapshots_by_network_id.find(
+                network_actor_id);
+        if (retained !=
+            g_local_transport.retained_run_enemy_snapshots_by_network_id.end()) {
+            snapshot.lua_content_id = retained->second.packet.lua_content_id;
+        }
+    }
     snapshot.position_x = actor.x;
     snapshot.position_y = actor.y;
     snapshot.radius = actor.radius;

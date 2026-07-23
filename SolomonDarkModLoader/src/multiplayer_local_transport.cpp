@@ -282,6 +282,7 @@ struct RecentRunEnemyDeathSnapshot {
     uintptr_t actor_address = 0;
     std::uint32_t native_type_id = 0;
     std::int32_t enemy_type = -1;
+    std::uint64_t lua_content_id = 0;
     float position_x = 0.0f;
     float position_y = 0.0f;
     float radius = 0.0f;

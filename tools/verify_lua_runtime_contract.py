@@ -53,6 +53,9 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     "rng": ("get_seed", "set_seed"),
     "nav": ("get_grid", "test_segment"),
     "scene": ("get_state", "switch_region"),
+    "waves": ("get_state", "get_schedule"),
+    "items": ("register", "get", "list", "grant"),
+    "enemies": ("register", "get", "list", "spawn"),
     "draw": (
         "text",
         "rect",

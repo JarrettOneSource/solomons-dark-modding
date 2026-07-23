@@ -11,6 +11,11 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         memory.TryReadField(self_address, kEnemyDeathHandledOffset, &already_handled_byte);
     int enemy_type = LookupRememberedEnemyType(self_address);
     const bool have_enemy_type = enemy_type >= 0 || TryReadEnemyTypeFromActor(self_address, &enemy_type);
+    SDModLuaEnemySpawnConfig lua_enemy_config;
+    const std::uint64_t content_id =
+        LookupLuaEnemySpawnConfig(self_address, &lua_enemy_config)
+            ? lua_enemy_config.content_id
+            : 0;
     float x = 0.0f;
     float y = 0.0f;
     const bool have_position = TryReadActorPosition(self_address, &x, &y);
@@ -60,7 +65,12 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         " result=" + std::to_string(result));
     ForgetEnemyType(self_address);
     if (!already_handled && IsCombatArenaActiveForEnemyTracking()) {
-        DispatchLuaEnemyDeath(enemy_type, x, y, kUnknownKillMethod);
+        DispatchLuaEnemyDeath(
+            enemy_type,
+            x,
+            y,
+            kUnknownKillMethod,
+            content_id);
     }
 
     return result;

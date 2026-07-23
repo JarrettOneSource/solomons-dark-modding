@@ -229,6 +229,7 @@ struct SDModManualRunEnemySpawnResult {
     bool valid = false;
     bool ok = false;
     std::uint64_t request_id = 0;
+    std::uint64_t content_id = 0;
     int type_id = 0;
     uintptr_t actor_address = 0;
     float requested_x = 0.0f;
@@ -241,6 +242,29 @@ struct SDModManualRunEnemySpawnResult {
     DWORD rebind_exception_code = 0;
     std::uint64_t completed_tick_ms = 0;
     std::string error_message;
+};
+
+enum class SDModLuaEnemyLootPolicy : std::uint8_t {
+    Stock = 0,
+    None,
+    Orb,
+    Gold,
+    Item,
+    Powerup,
+    Potion,
+};
+
+struct SDModLuaEnemySpawnConfig {
+    std::uint64_t content_id = 0;
+    bool hp_valid = false;
+    float hp = 0.0f;
+    bool chase_speed_valid = false;
+    float chase_speed = 0.0f;
+    bool attack_speed_valid = false;
+    float attack_speed = 0.0f;
+    bool scale_valid = false;
+    float scale = 1.0f;
+    SDModLuaEnemyLootPolicy loot_policy = SDModLuaEnemyLootPolicy::Stock;
 };
 
 struct SDModSceneState {

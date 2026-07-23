@@ -308,6 +308,9 @@
     <ClInclude Include="src\lua_engine_main_thread_pump.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_event_queue.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1241,6 +1244,9 @@
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
+    <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
@@ -1370,6 +1376,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_items.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_enemies.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_input.cpp">

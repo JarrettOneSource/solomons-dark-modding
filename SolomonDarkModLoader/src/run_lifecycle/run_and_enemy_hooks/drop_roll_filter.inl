@@ -91,6 +91,7 @@ bool TryGetForcedDropArenaBit(
     case LuaDropForcedKind::Potion:
         *arena_bit = 1;
         return true;
+    case LuaDropForcedKind::None:
     case LuaDropForcedKind::Stock:
         return false;
     }
@@ -185,8 +186,18 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
         return;
     }
 
-    if (!HasLuaDropRollFilterHandlers() ||
-        multiplayer::IsLocalTransportClient()) {
+    if (multiplayer::IsLocalTransportClient()) {
+        original(self, unused_edx);
+        return;
+    }
+
+    SDModLuaEnemySpawnConfig registered_config;
+    const bool have_registered_policy =
+        LookupLuaEnemySpawnConfig(
+            reinterpret_cast<uintptr_t>(self),
+            &registered_config) &&
+        registered_config.loot_policy != SDModLuaEnemyLootPolicy::Stock;
+    if (!HasLuaDropRollFilterHandlers() && !have_registered_policy) {
         original(self, unused_edx);
         return;
     }
@@ -206,7 +217,36 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
     }
     original_filter_context = filtered_context;
 
-    if (!ApplyLuaDropRollFilters(&filtered_context)) {
+    if (have_registered_policy) {
+        switch (registered_config.loot_policy) {
+        case SDModLuaEnemyLootPolicy::None:
+            filtered_context.forced_kind = LuaDropForcedKind::None;
+            break;
+        case SDModLuaEnemyLootPolicy::Orb:
+            filtered_context.forced_kind = LuaDropForcedKind::Orb;
+            break;
+        case SDModLuaEnemyLootPolicy::Gold:
+            filtered_context.forced_kind = LuaDropForcedKind::Gold;
+            break;
+        case SDModLuaEnemyLootPolicy::Item:
+            filtered_context.forced_kind = LuaDropForcedKind::Item;
+            break;
+        case SDModLuaEnemyLootPolicy::Powerup:
+            filtered_context.forced_kind = LuaDropForcedKind::Powerup;
+            break;
+        case SDModLuaEnemyLootPolicy::Potion:
+            filtered_context.forced_kind = LuaDropForcedKind::Potion;
+            break;
+        case SDModLuaEnemyLootPolicy::Stock:
+            break;
+        }
+    }
+
+    if (HasLuaDropRollFilterHandlers() &&
+        !ApplyLuaDropRollFilters(&filtered_context)) {
+        return;
+    }
+    if (filtered_context.forced_kind == LuaDropForcedKind::None) {
         return;
     }
 

@@ -88,6 +88,8 @@ struct RunLifecycleState {
     std::mutex enemy_type_mutex;
     std::unordered_map<uintptr_t, int> enemy_types_by_address;
     std::unordered_map<uintptr_t, std::uint32_t> enemy_spawn_serials_by_address;
+    std::unordered_map<uintptr_t, SDModLuaEnemySpawnConfig>
+        lua_enemy_configs_by_address;
     std::uint32_t next_enemy_spawn_serial = 1;
     std::mutex wave_spawner_log_mutex;
     std::unordered_set<uintptr_t> logged_wave_spawners;
@@ -105,6 +107,7 @@ void ClearLuaWaveSpawnFilterInstances() {
 struct ManualRunEnemySpawnRequest {
     std::uint64_t request_id = 0;
     std::uint64_t network_actor_id = 0;
+    SDModLuaEnemySpawnConfig lua_config;
     int type_id = 0;
     float x = 0.0f;
     float y = 0.0f;
@@ -124,7 +127,7 @@ SDModManualRunEnemySpawnResult g_last_manual_run_enemy_spawn_result;
 bool g_have_pending_manual_run_enemy_spawn = false;
 bool g_have_active_manual_run_enemy_spawn = false;
 std::uint64_t g_next_manual_run_enemy_spawn_request_id = 1;
-std::deque<ManualRunEnemySpawnRequest> g_queued_replicated_run_enemy_spawns;
+std::deque<ManualRunEnemySpawnRequest> g_queued_run_enemy_spawns;
 std::unordered_map<uintptr_t, FrozenManualRunEnemy> g_frozen_manual_run_enemies;
 
 thread_local bool g_manual_run_enemy_spawner_tick_active = false;
@@ -146,7 +149,7 @@ constexpr std::size_t kWaveSpawnerLongDelayCountdownOffset = 0x2C;
 constexpr std::size_t kWaveSpawnerRandomizeDelayOffset = 0x30;
 constexpr std::size_t kWaveSpawnerSequentialGroupsOffset = 0x31;
 constexpr std::uint64_t kManualRunEnemySpawnerFreshnessWindowMs = 5000;
-constexpr std::size_t kQueuedReplicatedRunEnemySpawnLimit = 16;
+constexpr std::size_t kQueuedRunEnemySpawnLimit = 16;
 constexpr std::size_t kReplicatedCatchupSpawnBurstPerSpawnerTick = 8;
 constexpr std::size_t kEnemySpawnConfigHpOffset = 0x58;
 constexpr std::size_t kEnemySpawnConfigFamilyValuesOffset = 0x5C;

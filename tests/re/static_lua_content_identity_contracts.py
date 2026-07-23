@@ -87,6 +87,7 @@ def test_lua_content_ids_are_canonical_deterministic_and_load_scoped() -> str:
         "8108516122269430198ull",
         "6415373166652859851ull",
         "7260085584278011992ull",
+        "8726222830294414077ull",
         "cross-kind key reuse was accepted",
         "mod unload left content registered",
     ):

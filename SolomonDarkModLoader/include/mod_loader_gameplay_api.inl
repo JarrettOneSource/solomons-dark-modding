@@ -21,12 +21,24 @@ bool QueueRunLifecycleManualEnemySpawn(
     std::uint64_t* request_id);
 bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
     std::uint64_t network_actor_id,
+    const SDModLuaEnemySpawnConfig& lua_config,
+    int type_id,
+    float x,
+    float y,
+    std::string* error_message,
+    std::uint64_t* request_id);
+bool QueueRunLifecycleLuaEnemySpawn(
+    const SDModLuaEnemySpawnConfig& config,
     int type_id,
     float x,
     float y,
     std::string* error_message,
     std::uint64_t* request_id);
 void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_actor_id);
+bool TryGetRunLifecycleLuaEnemySpawnConfig(
+    uintptr_t enemy_address,
+    SDModLuaEnemySpawnConfig* config);
+void ForgetRunLifecycleEnemyTracking(uintptr_t enemy_address);
 bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message = nullptr);
 bool TryGetRunLifecycleManualEnemySpawnResult(
     SDModManualRunEnemySpawnResult* result,
