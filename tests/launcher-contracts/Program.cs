@@ -40,7 +40,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
-    ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync)
+    ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
+    ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync)
 };
 
 var failures = 0;
@@ -402,6 +403,42 @@ static Task TestSteamShortcutChildLaunchIdentityAsync()
         launchOptions.EnvironmentOverrides?["SteamGameId"] ==
         SteamBootstrapConfiguration.DefaultAppId,
         "staged game inherited the non-Steam shortcut SteamGameId");
+
+    return Task.CompletedTask;
+}
+
+static Task TestSteamShortcutUiChildIsolationAsync()
+{
+    var startInfo = new System.Diagnostics.ProcessStartInfo
+    {
+        UseShellExecute = false
+    };
+    var shortcutVariables = new[]
+    {
+        "SteamAppId",
+        "SteamGameId",
+        "SteamOverlayGameId",
+        "SteamClientLaunch",
+        "SteamEnv",
+        "SteamPath"
+    };
+    foreach (var variableName in shortcutVariables)
+    {
+        startInfo.Environment[variableName] = "synthetic-shortcut-value";
+    }
+    startInfo.Environment["PRESERVED"] = "value";
+
+    SteamShortcutChildEnvironment.RemoveFrom(startInfo);
+
+    foreach (var variableName in shortcutVariables)
+    {
+        Require(
+            !startInfo.Environment.ContainsKey(variableName),
+            $"desktop launcher CLI child retained {variableName}");
+    }
+    Require(
+        startInfo.Environment["PRESERVED"] == "value",
+        "desktop launcher CLI child isolation removed an unrelated variable");
 
     return Task.CompletedTask;
 }

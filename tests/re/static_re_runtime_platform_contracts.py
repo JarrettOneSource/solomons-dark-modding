@@ -172,6 +172,16 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         raise StaticReTestFailure(
             "join-flow presentation must cover the frame before optional diagnostics render"
         )
+    diagnostics_end = render_text.find("\n    }", diagnostics)
+    diagnostics_body = render_text[diagnostics:diagnostics_end]
+    if (
+        "render_elements.clear();" not in diagnostics_body
+        or "return;" in diagnostics_body
+    ):
+        raise StaticReTestFailure(
+            "quick-start mode must hide diagnostic surfaces without suppressing "
+            "functional multiplayer overlays"
+        )
 
     hook_start = run_hooks_text.find("void __fastcall HookStartGame(")
     hook_end = run_hooks_text.find("\n}", hook_start)

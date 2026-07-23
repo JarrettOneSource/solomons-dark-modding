@@ -122,6 +122,7 @@ internal sealed class SteamWebsiteSessionClient
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        SteamShortcutChildEnvironment.RemoveFrom(startInfo);
         foreach (var argument in new[]
                  {
                      "directory-auth",

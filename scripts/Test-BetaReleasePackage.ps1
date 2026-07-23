@@ -258,6 +258,13 @@ try {
         $catalogDeadline = (Get-Date).AddSeconds(20)
         $modSummaryPattern =
             '^Enabled mods: \d+ of ' + [regex]::Escape([string]$result.modCount) + '$'
+        $requiredMultiplayerActions = @(
+            "Host Game",
+            "Join Lobby ID",
+            "Play Solo",
+            "How to Play",
+            "Settings"
+        )
         $visibleText = @()
         while ((Get-Date) -lt $catalogDeadline -and -not $uiProcess.HasExited) {
             $elements = $automationRoot.FindAll(
@@ -275,7 +282,11 @@ try {
                 Where-Object { $_ -match $modSummaryPattern } |
                 Select-Object -First 1
             $catalogSummaryReady = $result.modCount -eq 0 -or $catalogSummary
-            if ($catalogReady -and $catalogSummaryReady) {
+            $actionsReady = @(
+                $requiredMultiplayerActions |
+                    Where-Object { $visibleText -contains $_ }
+            ).Count -eq $requiredMultiplayerActions.Count
+            if ($catalogReady -and $catalogSummaryReady -and $actionsReady) {
                 $result.uiCatalogStatus = "Ready"
                 break
             }
@@ -294,19 +305,51 @@ try {
                 Select-Object -Unique) -join "; "
             throw "Packaged desktop launcher did not refresh its mod catalog. $diagnostics"
         }
-        $requiredMultiplayerActions = @(
-            "Host Game",
-            "Join Lobby ID",
-            "Play Solo",
-            "How to Play",
-            "Choose Save"
-        )
         foreach ($action in $requiredMultiplayerActions) {
             if ($visibleText -notcontains $action) {
                 throw "Packaged desktop launcher is missing the '$action' action."
             }
         }
         $result.uiMultiplayerActions = $requiredMultiplayerActions
+
+        $settingsButtonCondition = New-Object System.Windows.Automation.AndCondition(
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::Button)),
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty,
+                "Settings")))
+        $settingsButton = $automationRoot.FindFirst(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $settingsButtonCondition)
+        if ($null -eq $settingsButton) {
+            throw "Packaged desktop launcher is missing the Settings button."
+        }
+        $settingsInvoke = $settingsButton.GetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern)
+        ([System.Windows.Automation.InvokePattern]$settingsInvoke).Invoke()
+
+        $settingsDeadline = (Get-Date).AddSeconds(5)
+        $settingsText = @()
+        while ((Get-Date) -lt $settingsDeadline -and -not $uiProcess.HasExited) {
+            $elements = $automationRoot.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $settingsText = @(
+                for ($index = 0; $index -lt $elements.Count; $index++) {
+                    $name = $elements.Item($index).Current.Name
+                    if (-not [string]::IsNullOrWhiteSpace($name)) {
+                        $name
+                    }
+                })
+            if ($settingsText -contains "Choose Save") {
+                break
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        if ($settingsText -notcontains "Choose Save") {
+            throw "Packaged desktop launcher Settings is missing the 'Choose Save' action."
+        }
     }
     finally {
         if ($null -ne $uiProcess -and -not $uiProcess.HasExited) {

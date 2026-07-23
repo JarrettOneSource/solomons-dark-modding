@@ -22,6 +22,8 @@
              Link="CrashReportArchiveBuilder.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherUiSettingsStore.cs"
              Link="LauncherUiSettingsStore.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\SteamShortcutChildEnvironment.cs"
+             Link="SteamShortcutChildEnvironment.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LocalSaveCatalog.cs"
              Link="LocalSaveCatalog.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\SaveDirectoryMirror.cs"

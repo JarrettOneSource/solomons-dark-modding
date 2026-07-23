@@ -278,7 +278,8 @@ internal static class StagedGameLauncher
         environmentOverrides[SteamBootstrapConfiguration.EnableEnvironmentVariable] = configuration.Steam.Enabled ? "1" : "0";
         environmentOverrides[SteamBootstrapConfiguration.AppIdEnvironmentVariable] = configuration.Steam.AppId;
         environmentOverrides[SteamBootstrapConfiguration.AllowRestartEnvironmentVariable] = configuration.Steam.AllowRestartIfNecessary ? "1" : "0";
-        // Steam non-Steam shortcuts inject their synthetic identity into child processes.
+        // Stamp the staged game with the retail AppID after the desktop UI removes
+        // any synthetic non-Steam shortcut identity from its CLI child.
         environmentOverrides["SteamAppId"] = configuration.Steam.AppId;
         environmentOverrides["SteamGameId"] = configuration.Steam.AppId;
         environmentOverrides[MultiplayerCompatibilityMaterializer.FingerprintEnvironmentVariable] =

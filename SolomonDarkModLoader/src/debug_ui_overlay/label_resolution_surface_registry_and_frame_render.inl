@@ -237,7 +237,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     }
 
     if (!diagnostic_visuals_enabled) {
-        return;
+        render_elements.clear();
     }
 
     if (render_elements.empty() && gameplay_health_bars.empty() &&

@@ -41,6 +41,7 @@ internal sealed class SteamInviteListenerClient : IDisposable
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
+            SteamShortcutChildEnvironment.RemoveFrom(startInfo);
             startInfo.ArgumentList.Add("__listen-steam-invites");
             startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
 

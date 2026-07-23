@@ -147,6 +147,7 @@ internal sealed class LauncherUiCommandClient
         {
             startInfo.Environment.Remove(variableName);
         }
+        SteamShortcutChildEnvironment.RemoveFrom(startInfo);
 
         foreach (var argument in arguments)
         {
