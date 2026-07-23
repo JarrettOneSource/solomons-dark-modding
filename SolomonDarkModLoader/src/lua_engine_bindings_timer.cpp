@@ -277,7 +277,7 @@ bool HasLuaTimers(const LoadedLuaMod* mod) {
 
 void DispatchLuaTimersToMod(
     LoadedLuaMod* mod,
-    const SDModRuntimeTickContext& context) {
+    const RuntimeTickContext& context) {
     if (mod == nullptr || mod->state == nullptr || mod->timers.empty()) {
         return;
     }

@@ -6,6 +6,8 @@
 
 namespace sdmod {
 
+inline constexpr char kRuntimeApiVersion[] = "0.2.0";
+
 struct RuntimeModDescriptor {
     std::string id;
     std::string storage_key;
@@ -23,7 +25,6 @@ struct RuntimeModDescriptor {
     std::filesystem::path source_root_path;
     std::filesystem::path source_entry_script_path;
     std::filesystem::path entry_script_path;
-    std::filesystem::path entry_dll_path;
     std::vector<std::string> required_capabilities;
     std::vector<std::string> optional_capabilities;
     std::vector<std::string> provides;
@@ -31,10 +32,6 @@ struct RuntimeModDescriptor {
 
     bool HasLuaEntry() const {
         return !entry_script_path.empty();
-    }
-
-    bool HasNativeEntry() const {
-        return !entry_dll_path.empty();
     }
 };
 

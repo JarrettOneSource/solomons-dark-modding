@@ -1,6 +1,6 @@
 # Solomon's Dark Modding
 
-A modding framework for `SolomonDark.exe`. Stages a local game copy, applies file overlays, and injects a native loader that hosts Lua scripts, native DLL mods, a scriptable bot runtime, and an opt-in debug overlay.
+A modding framework for `SolomonDark.exe`. Stages a local game copy, applies Boneyard and art overlays, and injects a loader that hosts Lua scripts, a scriptable bot runtime, and an opt-in debug overlay.
 
 The repository excludes original game files, staged runtime output, and local editor state. Keep a local Solomon's Dark copy outside this repository and point the launcher at it.
 
@@ -13,21 +13,21 @@ Bundled sample mods are discovered but start disabled on a clean install.
 
 - `SolomonDarkModLauncher/` — CLI launcher. Discovers mods, tracks enable/disable state, mirrors the retail tree into `runtime/stage/`, stages runtime manifests, launches the staged copy, and injects the loader.
 - `SolomonDarkModLauncher.UI/` — WPF front-end that shells the CLI through its `--json` contract.
-- `SolomonDarkModLoader/` — x86 native DLL. Hosts the embedded Lua runtime, the `sd.*` script API, native DLL mods, the bot runtime, Steam bootstrap, and the D3D9 debug overlay.
+- `SolomonDarkModLoader/` — x86 loader DLL. Hosts the embedded Lua runtime, the `sd.*` script API, the bot runtime, Steam bootstrap, and the D3D9 debug overlay.
 - `config/` — binary-layout anchors and debug overlay configuration staged into the game tree.
-- `mods/` — sample mods (overlay, Lua, native, and hybrid).
+- `mods/` — sample overlay and Lua mods.
 - `scripts/` — build, reset, verification, window capture, and Lua-exec helpers.
 - `tools/ghidra-scripts/` — Ghidra automation for reverse engineering.
 - `docs/` — system design notes, binary maps, and implementation investigations.
 
-## Mod types
+## Mod packages
 
-Mods are discovered from `manifest.json`. Each mod may be:
+Mods are discovered from `manifest.json`. Website-distributed packages may
+contain:
 
-- **Overlay** — files under `files/` copied over the staged tree in priority order.
+- **Boneyards** — `.boneyard` files under `files/` copied into the staged game or custom-level sandbox.
+- **Art** — files under `files/` copied into the staged `images/` tree in priority order.
 - **Lua** — entry scripts under `scripts/` loaded by the embedded Lua runtime.
-- **Native** — DLLs under `native/` loaded through `SDModPlugin_Initialize` / `SDModPlugin_Shutdown`.
-- **Hybrid** — any combination of the above.
 
 Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
 `wave_fast_start`, `lua_bots`, `lua_dark_cloud_sort_bootstrap`,
@@ -35,10 +35,9 @@ Sample mods include `item_gold_focus`, `skill_shock_nova`, `story_custom_intro`,
 and the paired Lua bus labs.
 
 Website-distributed packages use the same root-level manifest and may contain
-data overlays/Boneyards, root `images/` art overlays, sandboxed Lua, or any
-combination of those three. Native DLL mods remain manual installations and
-are never auto-downloaded. The public authoring guide, JSON Schema, and package
-examples live in the website repository under `frontend/public/`.
+Boneyards, root `images/` art overlays, sandboxed Lua, or any combination of
+those three. The public authoring guide, JSON Schema, and package examples live
+in the website repository under `frontend/public/`.
 
 Downloaded art overlays replace files in the game's native `images/` tree.
 Compatible sprite replacements must preserve the stock PNG/bundle consumer
@@ -98,7 +97,6 @@ present. Provide a 32-bit Steamworks runtime at
 ## Loader features
 
 - Embedded Lua engine with the `sd.*` API (gameplay, runtime, replicated state/events, local storage/timers/bus, immediate drawing/HUD, runtime sprites, UI, input, debug, bots), generated editor stubs, opt-in source hot reload, and a bounded in-game exec console (Ctrl plus backtick).
-- Native DLL mod host (`SDModPlugin_Initialize` / `SDModPlugin_Shutdown`).
 - Scriptable bot runtime exposed through `sd.bots.*`, driven from the runtime tick service.
 - Steam bootstrap: `steam_api.dll` load, `SteamAPI_Init`, and legacy friends/matchmaking/networking interface binding.
 - Memory-access helpers for hook development and live probing.

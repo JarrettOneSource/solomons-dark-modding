@@ -47,10 +47,10 @@ void LoadLuaModsForBootstrap(
             continue;
         }
 
-        if (mod.api_version != SDMOD_RUNTIME_API_VERSION) {
+        if (mod.api_version != kRuntimeApiVersion) {
             Log(
                 "[lua][" + mod.id + "] skipping mod due to apiVersion mismatch. host=" +
-                std::string(SDMOD_RUNTIME_API_VERSION) + " mod=" + mod.api_version);
+                std::string(kRuntimeApiVersion) + " mod=" + mod.api_version);
             continue;
         }
 

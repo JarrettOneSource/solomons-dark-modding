@@ -52,7 +52,6 @@ internal static class WebsiteModUpdater
         CancellationToken cancellationToken = default)
     {
         var installed = catalog.DiscoveredMods
-            .Where(mod => !mod.RequiresNativeRuntime)
             .ToDictionary(mod => mod.Manifest.Id, StringComparer.OrdinalIgnoreCase);
         if (installed.Count == 0)
         {

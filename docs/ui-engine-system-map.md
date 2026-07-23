@@ -290,7 +290,7 @@ That means reliable menu bounding boxes should come from widget and layout recov
 Camera work becomes more important later for:
 
 - world-space HUD markers
-- hybrid in-run overlays that mix UI and scene transforms
+- in-run overlays that mix UI and scene transforms
 - any UI surfaces that intentionally live in gameplay camera space
 
 ## Highest-value next RE targets

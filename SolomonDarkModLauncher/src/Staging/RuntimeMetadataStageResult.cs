@@ -12,11 +12,5 @@ internal sealed record RuntimeMetadataStageResult(
 {
     public int StagedRuntimeModCount => StagedRuntimeMods.Count;
 
-    public int StagedLuaModCount => StagedRuntimeMods.Count(
-        mod => string.Equals(mod.RuntimeKind, "lua", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(mod.RuntimeKind, "hybrid", StringComparison.OrdinalIgnoreCase));
-
-    public int StagedNativeModCount => StagedRuntimeMods.Count(
-        mod => string.Equals(mod.RuntimeKind, "native", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(mod.RuntimeKind, "hybrid", StringComparison.OrdinalIgnoreCase));
+    public int StagedLuaModCount => StagedRuntimeMods.Count;
 }

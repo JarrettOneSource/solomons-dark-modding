@@ -209,7 +209,7 @@ void PushEnemyAiThinkContext(
     const LuaEnemyAiRegistration& registration,
     const LuaEnemyAiInstance& instance,
     const SDModSceneActorState& actor,
-    const SDModRuntimeTickContext& tick) {
+    const RuntimeTickContext& tick) {
     const auto* definition = FindEnemyDefinition(mod, instance.content_id);
     SDModLuaEnemyAiCommandState command;
     const bool have_command = TryGetLuaEnemyAiCommandState(
@@ -568,7 +568,7 @@ void ReconcileEnemyAiInstances(
 void DispatchEnemyAiInstance(
     LoadedLuaMod* mod,
     LuaEnemyAiInstance* instance,
-    const SDModRuntimeTickContext& context) {
+    const RuntimeTickContext& context) {
     const auto* registration =
         FindEnemyAiRegistration(*mod, instance->content_id);
     SDModSceneActorState actor;
@@ -642,7 +642,7 @@ bool HasLuaEnemyAiRegistrations(const LoadedLuaMod* mod) {
     return mod != nullptr && !mod->enemy_ai_registrations.empty();
 }
 
-void DispatchLuaEnemyAiThink(const SDModRuntimeTickContext& context) {
+void DispatchLuaEnemyAiThink(const RuntimeTickContext& context) {
     if (!multiplayer::IsLuaModSimulationAuthority() ||
         !IsRunLifecycleActive()) {
         if (AnyEnemyAiInstances()) {

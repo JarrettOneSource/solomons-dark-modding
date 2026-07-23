@@ -20,7 +20,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("launcher release selection", TestLauncherReleaseSelectionAsync),
     ("launcher update installation", TestLauncherUpdateInstallationAsync),
     ("downloaded package traversal rejection", TestDownloadedPackageTraversalAsync),
-    ("downloaded native payload rejection", TestDownloadedNativePayloadAsync),
+    ("downloaded package contract", TestDownloadedPackageContractAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
@@ -490,32 +490,34 @@ static Task TestLuaHotReloadBootstrapAsync()
                 StringComparison.Ordinal),
             "runtime bootstrap omitted the source Lua entry path");
 
-        Directory.CreateDirectory(Path.Combine(modRoot, "native"));
-        File.WriteAllBytes(Path.Combine(modRoot, "native", "mod.dll"), [0]);
+        Directory.CreateDirectory(Path.Combine(modRoot, "files"));
+        File.WriteAllText(Path.Combine(modRoot, "files", "data.txt"), "data");
         File.WriteAllText(
             Path.Combine(modRoot, "manifest.json"),
             """
             {
               "id": "tests.hot-reload",
-              "name": "Invalid Native Hot Reload Test",
+              "name": "Invalid Hot Reload Test",
               "version": "1.0.0",
+              "overlays": [{
+                "target": "data/data.txt",
+                "source": "files/data.txt"
+              }],
               "runtime": {
-                "apiVersion": "0.2.0",
-                "entryDll": "native/mod.dll",
                 "hotReload": true
               }
             }
             """);
-        var nativeRejected = false;
+        var nonLuaRejected = false;
         try
         {
             ModDiscovery.DiscoverRoot(modRoot);
         }
         catch (InvalidOperationException)
         {
-            nativeRejected = true;
+            nonLuaRejected = true;
         }
-        Require(nativeRejected, "manifest accepted hot reload without a Lua entry point");
+        Require(nonLuaRejected, "manifest accepted hot reload without a Lua entry point");
     }
     finally
     {
@@ -771,30 +773,13 @@ static async Task TestAutomaticModUpdatesAsync()
               "name": "Automatic Update Test",
               "version": "1.0.0",
               "overlays": [{
-                "target": "data/update.txt",
+                "target": "images/update.txt",
                 "source": "files/update.txt"
               }]
             }
             """);
         File.WriteAllText(Path.Combine(currentRoot, "files", "update.txt"), "old");
         File.WriteAllText(Path.Combine(currentRoot, "user-edit.txt"), "remove with old edition");
-
-        var nativeRoot = Path.Combine(modsRoot, "native");
-        Directory.CreateDirectory(Path.Combine(nativeRoot, "native"));
-        File.WriteAllBytes(Path.Combine(nativeRoot, "native", "mod.dll"), [0]);
-        File.WriteAllText(
-            Path.Combine(nativeRoot, "manifest.json"),
-            """
-            {
-              "id": "tests.manual-native",
-              "name": "Manual Native Test",
-              "version": "1.0.0",
-              "runtime": {
-                "apiVersion": "0.2.0",
-                "entryDll": "native/mod.dll"
-              }
-            }
-            """);
 
         var updateEntries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
@@ -805,7 +790,7 @@ static async Task TestAutomaticModUpdatesAsync()
                   "name": "Automatic Update Test",
                   "version": "1.1.0",
                   "overlays": [{
-                    "target": "data/update.txt",
+                    "target": "images/update.txt",
                     "source": "files/update.txt"
                   }]
                 }
@@ -819,10 +804,7 @@ static async Task TestAutomaticModUpdatesAsync()
             ComputeContentHash(updateEntries));
         var packageSha256 = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
         var catalog = ModCatalog.CreateExact(
-            [
-                ModDiscovery.DiscoverRoot(currentRoot),
-                ModDiscovery.DiscoverRoot(nativeRoot)
-            ]);
+            [ModDiscovery.DiscoverRoot(currentRoot)]);
         var cacheRoot = Path.Combine(root, "cache");
         var handler = new ModUpdateHandler(package, required, packageSha256);
         using var client = new HttpClient(handler)
@@ -839,7 +821,7 @@ static async Task TestAutomaticModUpdatesAsync()
         Require(result.UpdatedModCount == 1, "website update did not replace one mod");
         Require(
             handler.RequestedIds.SequenceEqual(["tests.auto-update"]),
-            "native manual mod was sent to the website updater");
+            "website updater requested the wrong installed mod");
         var updated = ModDiscovery.DiscoverRoot(currentRoot);
         Require(updated.Manifest.Version == "1.1.0", "installed manifest version did not advance");
         Require(
@@ -848,10 +830,6 @@ static async Task TestAutomaticModUpdatesAsync()
         Require(
             !File.Exists(Path.Combine(currentRoot, "user-edit.txt")),
             "old edition files survived package replacement");
-        Require(
-            ModDiscovery.DiscoverRoot(nativeRoot).Manifest.Version == "1.0.0",
-            "manual native mod changed during website updates");
-
         using var offlineClient = new HttpClient(new OfflineDirectoryHandler())
         {
             BaseAddress = new Uri("https://offline.example.test/")
@@ -877,7 +855,7 @@ static async Task TestAutomaticModUpdatesAsync()
                   "name": "Automatic Update Test",
                   "version": "1.2.0",
                   "overlays": [{
-                    "target": "data/update.txt",
+                    "target": "images/update.txt",
                     "source": "files/update.txt"
                   }]
                 }
@@ -1020,15 +998,15 @@ static async Task TestDownloadedPackageTraversalAsync()
     }
 }
 
-static async Task TestDownloadedNativePayloadAsync()
+static async Task TestDownloadedPackageContractAsync()
 {
     var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
     {
         ["manifest.json"] = Encoding.UTF8.GetBytes(
             """
             {
-              "id": "tests.hidden-native",
-              "name": "Hidden Native Test",
+              "id": "tests.invalid-package-file",
+              "name": "Invalid Package File",
               "version": "1.0.0",
               "runtime": {
                 "apiVersion": "0.2.0",
@@ -1037,11 +1015,11 @@ static async Task TestDownloadedNativePayloadAsync()
             }
             """),
         ["scripts/main.lua"] = Encoding.UTF8.GetBytes("return true\n"),
-        ["native/hidden.DLL"] = Encoding.UTF8.GetBytes("not a dll")
+        ["files/payload.DLL"] = Encoding.UTF8.GetBytes("not a dll")
     };
     var package = CreateZip(entries);
     var required = new MultiplayerModDescriptor(
-        "tests.hidden-native",
+        "tests.invalid-package-file",
         "1.0.0",
         ComputeContentHash(entries));
     var resolved = new WebsiteResolvedMod(
@@ -1072,6 +1050,53 @@ static async Task TestDownloadedNativePayloadAsync()
             rejected = true;
         }
         Require(rejected, "downloaded DLL payload was accepted");
+
+        var dataEntries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                """
+                {
+                  "id": "tests.non-boneyard-data",
+                  "name": "Non-Boneyard Data",
+                  "version": "1.0.0",
+                  "overlays": [{
+                    "target": "data/wave.txt",
+                    "source": "files/wave.txt"
+                  }]
+                }
+                """),
+            ["files/wave.txt"] = Encoding.UTF8.GetBytes("wave data")
+        };
+        var dataPackage = CreateZip(dataEntries);
+        var dataRequired = new MultiplayerModDescriptor(
+            "tests.non-boneyard-data",
+            "1.0.0",
+            ComputeContentHash(dataEntries));
+        var dataResolved = new WebsiteResolvedMod(
+            dataRequired.Id,
+            dataRequired.Version,
+            dataRequired.ContentSha256,
+            Convert.ToHexString(SHA256.HashData(dataPackage)).ToLowerInvariant(),
+            "api/mods/tests/versions/1/download");
+        using var dataClient = new HttpClient(new PackageHandler(dataPackage))
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+        rejected = false;
+        try
+        {
+            await WebsiteModPackageInstaller.InstallAsync(
+                dataClient,
+                dataResolved,
+                dataRequired,
+                cacheRoot,
+                CancellationToken.None);
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+        Require(rejected, "downloaded non-Boneyard data overlay was accepted");
     }
     finally
     {

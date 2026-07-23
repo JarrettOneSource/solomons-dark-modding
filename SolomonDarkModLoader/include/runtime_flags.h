@@ -12,7 +12,6 @@ enum class RuntimeProfile {
 
 struct LoaderRuntimeFeatureFlags {
     bool lua_engine = true;
-    bool native_mods = true;
     bool runtime_tick_service = true;
     bool debug_ui = true;
 };

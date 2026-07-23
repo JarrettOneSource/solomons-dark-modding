@@ -43,7 +43,7 @@ internal static class ModManifestValidator
         if (manifest.Overlays.Count == 0 && !manifest.RequiresRuntime)
         {
             throw new InvalidOperationException(
-                $"Mods must define at least one overlay or one runtime entry point: {manifestPath}");
+                $"Mods must define at least one overlay or a Lua entry script: {manifestPath}");
         }
 
         foreach (var overlay in manifest.Overlays)
@@ -80,15 +80,6 @@ internal static class ModManifestValidator
                 manifest.Runtime.EntryScript,
                 "Runtime entryScript",
                 "scripts/");
-        }
-
-        if (manifest.RequiresNativeRuntime)
-        {
-            ValidateRuntimeEntryPath(
-                manifestPath,
-                manifest.Runtime.EntryDll,
-                "Runtime entryDll",
-                "native/");
         }
 
         ValidateCapabilities(manifestPath, manifest.Runtime.RequiredCapabilities, "runtime.requiredCapabilities");

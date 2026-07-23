@@ -53,7 +53,7 @@ internal static class LauncherOutputFormatter
             "  x86 native loader injection on launch",
             "  public or friends-only Steam lobbies, invite/lobby-ID join flow, compatibility handshake, and Steam Networking Messages transport",
             "  optional website discovery that never carries gameplay traffic",
-            "  staged runtime flags, runtime bootstrap manifests, and native-mod host plumbing",
+            "  staged runtime flags and Lua bootstrap manifests",
             "  embedded Lua runtime with sd.runtime, sd.events, sd.ui, sd.input, sd.hub, and sd.bots APIs",
             "  in-process memory-access layer and D3D9 overlay backbone for UI automation"
         ]);
@@ -230,7 +230,7 @@ internal static class LauncherOutputFormatter
             $"{result.HudLabels.Width}x{result.HudLabels.Height}");
         builder.AppendLine(
             $"Staged runtime mods: total={result.RuntimeMetadata.StagedRuntimeModCount} " +
-            $"lua={result.RuntimeMetadata.StagedLuaModCount} native={result.RuntimeMetadata.StagedNativeModCount} " +
+            $"lua={result.RuntimeMetadata.StagedLuaModCount} " +
             $"profile={result.RuntimeMetadata.RuntimeProfileName}");
         builder.AppendLine($"Steam appid file: {result.SteamBootstrap.StageAppIdPath ?? "missing"}");
         builder.AppendLine($"Steam API dll: {result.SteamBootstrap.StageApiDllPath ?? "missing"}");

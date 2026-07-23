@@ -55,7 +55,7 @@ void PumpLuaExecQueueOnMainThread() {
     }
 }
 
-void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
+void PumpLuaWorkOnMainThread(const RuntimeTickContext& context) {
     detail::ProcessLuaExecQueueOnMainThread();
 
     const bool multiplayer_configured = detail::IsMultiplayerTransportConfigured();
@@ -78,7 +78,7 @@ void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
     }
 }
 
-void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
+void PumpLuaWorkOnGameplayThread(const RuntimeTickContext& context) {
     detail::ProcessLuaExecQueueOnMainThread();
 
     const bool multiplayer_configured = detail::IsMultiplayerTransportConfigured();

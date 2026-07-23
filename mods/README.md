@@ -5,12 +5,11 @@ This folder is the default mods root for `SolomonDarkModLauncher`.
 Current support:
 
 - each mod is discovered from `manifest.json`
-- mods can be pure overlays, pure runtime mods, or hybrids
-- overlay source files must live under `files/`
+- local overlay source files live under `files/`
+- website-distributed overlays are Boneyards or art assets
 - runtime Lua entry scripts must live under `scripts/`
-- runtime native DLL entry points must live under `native/`
 - overlays are copied on top of the staged game tree in priority order
-- runtime mods are staged into `.sdmod/runtime/` and loaded by the injected loader
+- Lua mods are staged into `.sdmod/runtime/` and loaded by the injected loader
 
 Example manifest:
 

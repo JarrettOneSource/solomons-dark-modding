@@ -72,8 +72,7 @@ void PumpQueuedGameplayActions() {
     // the local player tick so snippets that touch world state run in the safe
     // actor phase.
     if (!gameplay_active) {
-        const SDModRuntimeTickContext lua_tick_context = {
-            sizeof(SDModRuntimeTickContext),
+        const RuntimeTickContext lua_tick_context = {
             GetRuntimeTickServiceIntervalMs(),
             0,
             now_ms,

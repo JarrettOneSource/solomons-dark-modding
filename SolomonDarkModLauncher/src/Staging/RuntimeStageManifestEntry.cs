@@ -17,7 +17,6 @@ internal sealed record RuntimeStageManifestEntry(
     string SourceModRootPath,
     string? SourceEntryScriptPath,
     string? StageEntryScriptPath,
-    string? StageEntryDllPath,
     IReadOnlyList<string> RequiredCapabilities,
     IReadOnlyList<string> OptionalCapabilities,
     IReadOnlyList<string> Provides,

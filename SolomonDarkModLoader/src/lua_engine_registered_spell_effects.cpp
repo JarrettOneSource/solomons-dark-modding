@@ -365,7 +365,7 @@ bool CreateLuaSpellEffectsFromCallbackResult(
 }
 
 void TickLuaRegisteredSpellEffects(
-    const SDModRuntimeTickContext& context) {
+    const RuntimeTickContext& context) {
     const bool have_effects = std::any_of(
         LoadedLuaModsStorage().begin(),
         LoadedLuaModsStorage().end(),

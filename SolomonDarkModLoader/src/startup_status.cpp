@@ -107,8 +107,6 @@ void WriteStartupStatus(
     stream << "  \"luaEngineInitialized\": " << (snapshot.lua_engine_initialized ? "true" : "false") << ",\n";
     stream << "  \"luaLoadedModCount\": " << snapshot.lua_loaded_mod_count << ",\n";
     stream << "  \"botRuntimeInitialized\": " << (snapshot.bot_runtime_initialized ? "true" : "false") << ",\n";
-    stream << "  \"nativeModsEnabled\": " << (snapshot.native_mods_enabled ? "true" : "false") << ",\n";
-    stream << "  \"nativeModCount\": " << snapshot.native_mod_count << ",\n";
     stream << "  \"runtimeTickServiceEnabled\": "
            << (snapshot.runtime_tick_service_enabled ? "true" : "false") << ",\n";
     stream << "  \"runtimeTickServiceRunning\": "

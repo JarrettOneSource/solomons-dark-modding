@@ -522,7 +522,7 @@ authority-only stock wave start, identical sorted live summaries, and matching
 
   **Implemented 2026-07-23.** The checked-in `api/lua/sd.lua` inventory is generated
   directly from root-reachable `RegisterLua*Bindings`, preserves table aliases such as
-  `sd.hud == sd.draw`, and is drift-checked with unit tests in CI. Lua/hybrid manifests
+  `sd.hud == sd.draw`, and is drift-checked with unit tests in CI. Lua manifests
   may opt into stable, hashed source-entry hot reload; syntax failures preserve the
   running state, normal unload cleanup precedes replacement, and reload is disabled for
   multiplayer transport launches so the staged parity hash remains authoritative.

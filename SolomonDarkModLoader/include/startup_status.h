@@ -24,8 +24,6 @@ struct StartupStatusSnapshot {
     bool lua_engine_initialized = false;
     int lua_loaded_mod_count = 0;
     bool bot_runtime_initialized = false;
-    bool native_mods_enabled = false;
-    int native_mod_count = 0;
     bool runtime_tick_service_enabled = false;
     bool runtime_tick_service_running = false;
 };

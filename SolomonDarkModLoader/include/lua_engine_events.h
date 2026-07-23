@@ -1,7 +1,7 @@
 #pragma once
 
 #include "lua_mod_runtime.h"
-#include "sdmod_plugin_api.h"
+#include "runtime_tick_service.h"
 #include "wave_intelligence.h"
 
 #include <cstdint>
@@ -39,7 +39,7 @@ void DispatchLuaCustomEvent(
 
 namespace sdmod::detail {
 
-void DispatchRuntimeTickToLuaMods(const SDModRuntimeTickContext& context);
+void DispatchRuntimeTickToLuaMods(const RuntimeTickContext& context);
 bool HasAnyLuaRuntimeTickHandlers();
 void DispatchRunStartedToLuaMods();
 void DispatchRunEndedToLuaMods(const char* reason);

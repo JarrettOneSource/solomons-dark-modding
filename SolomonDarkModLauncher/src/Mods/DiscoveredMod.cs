@@ -7,5 +7,4 @@ internal sealed record DiscoveredMod(
 {
     public bool RequiresRuntime => Manifest.RequiresRuntime;
     public bool RequiresLuaRuntime => Manifest.RequiresLuaRuntime;
-    public bool RequiresNativeRuntime => Manifest.RequiresNativeRuntime;
 }

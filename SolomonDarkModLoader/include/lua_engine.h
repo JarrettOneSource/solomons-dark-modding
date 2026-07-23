@@ -1,8 +1,8 @@
 #pragma once
 
 #include "runtime_bootstrap.h"
+#include "runtime_tick_service.h"
 #include "lua_mod_runtime.h"
-#include "sdmod_plugin_api.h"
 
 #include <atomic>
 #include <cstddef>
@@ -133,7 +133,7 @@ LuaExecResult QueueLuaExecRequestAndWait(
 // pipe-exec snippets routinely reach into those paths via
 // sd.debug.*/sd.world.*, so running this off-thread produces data races
 // on the overlap list used by MovementCollision_TestCirclePlacement.
-void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context);
+void PumpLuaWorkOnGameplayThread(const RuntimeTickContext& context);
 
 // Drain pending Lua exec requests on the main thread without
 // dispatching runtime.tick. During gameplay this is called from the
@@ -148,6 +148,6 @@ void PumpLuaExecQueueOnMainThread();
 // runtime.tick before a gameplay scene exists. Do not call this while
 // gameplay is active; gameplay-owned runtime.tick remains the contract
 // of PumpLuaWorkOnGameplayThread.
-void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context);
+void PumpLuaWorkOnMainThread(const RuntimeTickContext& context);
 
 }  // namespace sdmod
