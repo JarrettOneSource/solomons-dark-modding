@@ -778,7 +778,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             LauncherUiCommandMode.LaunchSinglePlayer or
             LauncherUiCommandMode.Stage)
         {
-            StopSteamSessionMonitoring(clearStatus: true);
+            StopSteamSessionMonitoring(
+                clearStatus: true,
+                preservePendingLobbyMods: mode == LauncherUiCommandMode.JoinSteam);
         }
 
         IsBusy = true;
@@ -1356,6 +1358,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        pendingLobbyMods_ = null;
         IsBusy = true;
         StatusText = "The launcher checks the host's mod list.";
         CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.JoinPreview);
@@ -1497,20 +1500,25 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void StopSteamSessionMonitoring(bool clearStatus)
+    private void StopSteamSessionMonitoring(
+        bool clearStatus,
+        bool preservePendingLobbyMods = false)
     {
         steamSessionMonitorCancellation_?.Cancel();
         steamSessionMonitorCancellation_?.Dispose();
         steamSessionMonitorCancellation_ = null;
         if (clearStatus)
         {
-            ClearSteamSessionStatus();
+            ClearSteamSessionStatus(preservePendingLobbyMods);
         }
     }
 
-    private void ClearSteamSessionStatus()
+    private void ClearSteamSessionStatus(bool preservePendingLobbyMods = false)
     {
-        pendingLobbyMods_ = null;
+        if (!preservePendingLobbyMods)
+        {
+            pendingLobbyMods_ = null;
+        }
         ClearLobbyDetails();
     }
 
