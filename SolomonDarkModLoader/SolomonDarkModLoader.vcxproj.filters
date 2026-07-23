@@ -182,6 +182,12 @@
     <ClInclude Include="include\multiplayer_runtime_protocol.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\wave_intelligence.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1300,6 +1306,9 @@
     <ClCompile Include="src\gameplay_seams.cpp">
       <Filter>Source Files\Gameplay</Filter>
     </ClCompile>
+    <ClCompile Include="src\wave_intelligence.cpp">
+      <Filter>Source Files\Gameplay</Filter>
+    </ClCompile>
     <ClCompile Include="src\logger_core.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
@@ -1334,6 +1343,12 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_scene.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_waves.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_engine_wave_events.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings_debug.cpp">

@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 73;
+constexpr std::uint16_t kProtocolVersion = 74;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -25,6 +25,7 @@ constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
 constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
 constexpr std::uint16_t kLuaModStreamMaxFragments = 64;
+constexpr std::uint16_t kWaveSummaryMaxCompositionRows = 20;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -494,6 +495,14 @@ struct StatePacket {
     float render_drive_move_blend;
 };
 
+struct WaveCompositionRowPacketState {
+    std::int32_t enemy_type;
+    std::uint16_t planned;
+    std::uint16_t spawned;
+    std::uint16_t alive;
+    std::uint16_t killed;
+};
+
 struct ParticipantFramePacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -566,6 +575,16 @@ struct ParticipantFramePacket {
     float magic_shield_hit_flash;
     float render_drive_overlay_alpha;
     float render_drive_move_blend;
+    std::uint8_t wave_summary_valid;
+    std::uint8_t wave_summary_phase;
+    std::uint16_t wave_summary_row_count;
+    std::int32_t wave_summary_wave;
+    std::int32_t wave_summary_remaining_to_spawn;
+    std::int32_t wave_summary_spawned;
+    std::int32_t wave_summary_alive;
+    std::int32_t wave_summary_killed;
+    WaveCompositionRowPacketState
+        wave_summary_rows[kWaveSummaryMaxCompositionRows];
 };
 
 struct SessionHelloPacket {
@@ -1170,7 +1189,9 @@ static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up o
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
 static_assert(sizeof(StatePacket) == 4520, "Unexpected state packet size");
-static_assert(sizeof(ParticipantFramePacket) == 298,
+static_assert(sizeof(WaveCompositionRowPacketState) == 12,
+              "Unexpected wave composition row packet size");
+static_assert(sizeof(ParticipantFramePacket) == 562,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");

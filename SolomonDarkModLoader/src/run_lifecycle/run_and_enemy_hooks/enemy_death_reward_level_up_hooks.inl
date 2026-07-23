@@ -27,6 +27,14 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
         g_frozen_manual_run_enemies.erase(self_address);
     }
+    if (!already_handled_before_death &&
+        IsCombatArenaActiveForEnemyTracking()) {
+        const auto wave_update = ObserveAuthorityWaveEnemyDeath(
+            self_address);
+        if (wave_update.completed_wave != 0) {
+            DispatchLuaWaveCompleted(wave_update.completed_wave);
+        }
+    }
     if (!have_enemy_type) {
         Log("enemy.death native type unavailable. enemy=" + HexString(self_address));
         ForgetEnemyType(self_address);

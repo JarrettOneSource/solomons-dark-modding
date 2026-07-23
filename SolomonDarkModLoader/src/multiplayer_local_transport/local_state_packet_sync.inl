@@ -555,6 +555,7 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
         WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
     packet.region_index = local->runtime.scene_intent.region_index;
     packet.region_type_id = local->runtime.scene_intent.region_type_id;
+    PopulateAuthorityWaveSummary(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
 }

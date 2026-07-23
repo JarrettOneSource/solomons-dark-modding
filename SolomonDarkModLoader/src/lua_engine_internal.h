@@ -105,6 +105,7 @@ bool CreateLuaStateForMod(LoadedLuaMod* mod, std::string* error_message);
 void CloseLuaStateForMod(LoadedLuaMod* mod);
 
 bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message);
+void PushWaveStartedPayload(lua_State* state, const WaveSummary& summary);
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message);
 LoadedLuaMod* GetLoadedLuaMod(lua_State* state);

@@ -26,7 +26,7 @@ struct RunEndedEvent {
 };
 
 struct WaveStartedEvent {
-    int wave_number = 0;
+    WaveSummary summary;
 };
 
 struct WaveCompletedEvent {
@@ -327,13 +327,13 @@ void DispatchRunEndedToMod(LoadedLuaMod* mod, const char* reason) {
         });
 }
 
-void DispatchWaveStartedToMod(LoadedLuaMod* mod, int wave_number) {
+void DispatchWaveStartedToMod(LoadedLuaMod* mod, const WaveSummary& summary) {
     DispatchEventToMod(
         mod,
         kWaveStartedEventName,
         mod != nullptr && mod->wave_started_registered,
-        [wave_number](lua_State* state) {
-            PushWavePayload(state, kWaveStartedEventName, wave_number);
+        [&summary](lua_State* state) {
+            PushWaveStartedPayload(state, summary);
         });
 }
 
@@ -444,9 +444,9 @@ void DispatchRunEndedToLuaMods(const char* reason) {
     }
 }
 
-void DispatchWaveStartedToLuaMods(int wave_number) {
+void DispatchWaveStartedToLuaMods(const WaveSummary& summary) {
     for (const auto& mod : LoadedLuaModsStorage()) {
-        DispatchWaveStartedToMod(mod.get(), wave_number);
+        DispatchWaveStartedToMod(mod.get(), summary);
     }
 }
 
@@ -524,7 +524,7 @@ void DispatchPendingLuaEventsToLuaMods() {
                     DispatchRunEndedToLuaMods(
                         value.reason ? value.reason->c_str() : nullptr);
                 } else if constexpr (std::is_same_v<Event, WaveStartedEvent>) {
-                    DispatchWaveStartedToLuaMods(value.wave_number);
+                    DispatchWaveStartedToLuaMods(value.summary);
                 } else if constexpr (std::is_same_v<Event, WaveCompletedEvent>) {
                     DispatchWaveCompletedToLuaMods(value.wave_number);
                 } else if constexpr (std::is_same_v<Event, EnemyDeathEvent>) {
@@ -575,8 +575,8 @@ void QueueRunEndedEvent(const char* reason) {
     EnqueueLuaEvent(RunEndedEvent{CopyNullableString(reason)});
 }
 
-void QueueWaveStartedEvent(int wave_number) {
-    EnqueueLuaEvent(WaveStartedEvent{wave_number});
+void QueueWaveStartedEvent(const WaveSummary& summary) {
+    EnqueueLuaEvent(WaveStartedEvent{summary});
 }
 
 void QueueWaveCompletedEvent(int wave_number) {
@@ -651,8 +651,8 @@ void DispatchLuaRunEnded(const char* reason) {
     detail::QueueRunEndedEvent(reason);
 }
 
-void DispatchLuaWaveStarted(int wave_number) {
-    detail::QueueWaveStartedEvent(wave_number);
+void DispatchLuaWaveStarted(const WaveSummary& summary) {
+    detail::QueueWaveStartedEvent(summary);
 }
 
 void DispatchLuaWaveCompleted(int wave_number) {

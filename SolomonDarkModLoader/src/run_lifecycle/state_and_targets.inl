@@ -129,6 +129,7 @@ std::unordered_map<uintptr_t, FrozenManualRunEnemy> g_frozen_manual_run_enemies;
 
 thread_local bool g_manual_run_enemy_spawner_tick_active = false;
 thread_local uintptr_t g_current_wave_spawner_tick_address = 0;
+thread_local std::int32_t g_current_wave_number = 0;
 
 constexpr std::uint64_t kSpellCastClickWindowMs = 400;
 constexpr char kUnknownKillMethod[] = "unknown";

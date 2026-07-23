@@ -297,6 +297,16 @@ spawn-aware bot tactics.
 *Multiplayer:* read-only; waves are authority-simulated and the framework replicates the
 wave summary, so `get_state()` answers identically on every peer.
 
+**Implemented 2026-07-22.** `sd.waves.get_state()` now reports the authority's
+phase, exact aggregate and per-type observed counts, and remaining native spawn
+budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
+group selection has no RNG-free exact future composition, planned rows use a
+documented deterministic largest-remainder projection that sums to `SPAWN`.
+Spawner identities attribute overlapping births and deaths, `wave.started`
+includes planned composition, and protocol 74 carries a bounded validated
+summary in authenticated authority participant frames for identical peer reads.
+See `lua-waves.md` and the read-only `tools/verify_lua_waves.py` probe.
+
 ### Tier 3 — nearly-free power-ups and polish
 
 - **`sd.time.set_scale()`** — slow-mo, pause, frame-step. *MP:* shared-simulation variable

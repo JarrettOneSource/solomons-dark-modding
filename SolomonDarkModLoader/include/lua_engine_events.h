@@ -2,6 +2,7 @@
 
 #include "lua_mod_runtime.h"
 #include "sdmod_plugin_api.h"
+#include "wave_intelligence.h"
 
 #include <cstdint>
 #include <string>
@@ -10,7 +11,7 @@ namespace sdmod {
 
 void DispatchLuaRunStarted();
 void DispatchLuaRunEnded(const char* reason);
-void DispatchLuaWaveStarted(int wave_number);
+void DispatchLuaWaveStarted(const WaveSummary& summary);
 void DispatchLuaWaveCompleted(int wave_number);
 void DispatchLuaEnemyDeath(int enemy_type, float x, float y, const char* kill_method);
 void DispatchLuaEnemySpawned(int enemy_type, float x, float y);
@@ -33,7 +34,7 @@ void DispatchRuntimeTickToLuaMods(const SDModRuntimeTickContext& context);
 bool HasAnyLuaRuntimeTickHandlers();
 void DispatchRunStartedToLuaMods();
 void DispatchRunEndedToLuaMods(const char* reason);
-void DispatchWaveStartedToLuaMods(int wave_number);
+void DispatchWaveStartedToLuaMods(const WaveSummary& summary);
 void DispatchWaveCompletedToLuaMods(int wave_number);
 void DispatchEnemyDeathToLuaMods(int enemy_type, float x, float y, const char* kill_method);
 void DispatchEnemySpawnedToLuaMods(int enemy_type, float x, float y);

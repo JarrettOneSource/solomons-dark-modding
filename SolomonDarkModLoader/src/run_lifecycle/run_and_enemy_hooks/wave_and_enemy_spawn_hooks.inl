@@ -102,6 +102,12 @@ void* __fastcall HookEnemySpawned(
         IsArenaCombatActorType(actor_object_type);
     if (arena_combat_actor_type) {
         RememberArenaEnemyWaveSpawner(g_current_wave_spawner_tick_address);
+        if (g_current_wave_number > 0) {
+            ObserveAuthorityWaveEnemySpawn(
+                enemy_address,
+                enemy_type,
+                g_current_wave_number);
+        }
     }
     Log(
         "enemy.spawned hook invoked. enemy=" + HexString(enemy_address) +

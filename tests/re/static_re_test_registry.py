@@ -46,6 +46,9 @@ from static_lua_foundations_contracts import (
 from static_lua_scene_contracts import (
     test_lua_scene_is_address_free_authority_owned_and_peer_followed,
 )
+from static_lua_waves_contracts import (
+    test_lua_waves_parse_track_and_replicate_semantic_summaries,
+)
 from static_multiplayer_transport_contracts import (
     test_app_thread_transport_verifier_tracks_named_cadence_gap,
     test_build_all_rebuilds_native_loader_from_clean_intermediates,
@@ -311,6 +314,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua scene control is semantic, authority-owned, and peer-followed",
         test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+    ),
+    (
+        "Lua wave intelligence is parsed, tracked, and authority-replicated",
+        test_lua_waves_parse_track_and_replicate_semantic_summaries,
     ),
     (
         "Lua bus is manifest-resolved, bounded, and local",

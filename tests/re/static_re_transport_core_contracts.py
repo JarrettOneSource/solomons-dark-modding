@@ -449,7 +449,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 73;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 74;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),

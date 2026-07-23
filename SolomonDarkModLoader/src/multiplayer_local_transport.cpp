@@ -20,6 +20,7 @@
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "steam_bootstrap.h"
+#include "wave_intelligence.h"
 #include "x86_hook.h"
 
 #include <algorithm>
@@ -1229,6 +1230,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/run_exit_sync.inl"
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
+#include "multiplayer_local_transport/wave_summary_sync.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"

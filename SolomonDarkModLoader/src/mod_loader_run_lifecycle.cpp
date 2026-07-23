@@ -9,6 +9,7 @@
 #include "mod_loader_internal.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
+#include "wave_intelligence.h"
 #include "x86_hook.h"
 
 #include <intrin.h>

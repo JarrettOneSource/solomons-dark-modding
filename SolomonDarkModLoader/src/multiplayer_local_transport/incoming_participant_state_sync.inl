@@ -436,6 +436,10 @@ void ApplyRemoteParticipantFramePacket(
         return;
     }
 
+    ApplyAuthorityWaveSummaryFromPacket(
+        packet,
+        packet_from_configured_authority);
+
     MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
     MaybeQueueClientHostRegionFollow(packet, scene_intent, from, now_ms);
     StageClientHostRunExitFollow(

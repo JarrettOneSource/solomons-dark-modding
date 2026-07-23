@@ -8,6 +8,7 @@
 #include "lua_mod_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
+#include "wave_intelligence.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -323,6 +324,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "ui.element.query",
         "ui.action.query",
         "ui.action.activate",
+        "waves.read",
+        "waves.schedule.read",
     };
 
     if (multiplayer::IsFoundationInitialized()) {
@@ -453,7 +456,11 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     loaded_mods.clear();
     ResetLuaModStateStore();
     detail::ResetLuaEventFilterRegistrations();
+    if (!InitializeWaveIntelligence(bootstrap.stage_root, error_message)) {
+        return false;
+    }
     if (!InitializeLuaDrawRuntime(bootstrap.stage_root, error_message)) {
+        ShutdownWaveIntelligence();
         return false;
     }
 
@@ -479,6 +486,7 @@ void ShutdownLuaEngine() {
     std::scoped_lock lock(detail::LuaEngineMutex());
     if (!detail::LuaEngineInitializedFlag()) {
         ShutdownLuaDrawRuntime();
+        ShutdownWaveIntelligence();
         return;
     }
 
@@ -490,6 +498,7 @@ void ShutdownLuaEngine() {
     ResetLuaModStateStore();
     detail::ResetLuaEventFilterRegistrations();
     ShutdownLuaDrawRuntime();
+    ShutdownWaveIntelligence();
     detail::LuaRuntimeDirectoryStorage().clear();
     detail::LuaRuntimeBootstrapStorage() = RuntimeBootstrap{};
     detail::LuaEngineInitializedFlag() = false;

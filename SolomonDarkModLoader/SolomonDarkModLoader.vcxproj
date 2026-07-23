@@ -105,6 +105,8 @@
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
+    <ClInclude Include="include\wave_intelligence.h" />
+    <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
@@ -495,6 +497,7 @@
     <ClCompile Include="src\lua_engine_bindings_bus.cpp" />
     <ClCompile Include="src\lua_engine_bindings_foundations.cpp" />
     <ClCompile Include="src\lua_engine_bindings_scene.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_waves.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />
@@ -506,6 +509,7 @@
     <ClCompile Include="src\lua_engine_bindings_runtime.cpp" />
     <ClCompile Include="src\lua_engine_bindings_ui.cpp" />
     <ClCompile Include="src\lua_engine_events.cpp" />
+    <ClCompile Include="src\lua_engine_wave_events.cpp" />
     <ClCompile Include="src\lua_engine_filters.cpp" />
     <ClCompile Include="src\lua_engine_drop_filters.cpp" />
     <ClCompile Include="src\lua_engine_enemy_spawn_filters.cpp" />
@@ -543,6 +547,7 @@
     <ClCompile Include="src\runtime_debug_snapshot.cpp" />
     <ClCompile Include="src\runtime_debug_trace.cpp" />
     <ClCompile Include="src\runtime_debug_watch.cpp" />
+    <ClCompile Include="src\wave_intelligence.cpp" />
     <ClCompile Include="src\runtime_debug_watch_helpers.cpp" />
     <ClCompile Include="src\runtime_debug_watch_management.cpp" />
     <ClCompile Include="src\runtime_debug_watch_registration.cpp" />
