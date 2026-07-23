@@ -522,10 +522,71 @@ void PushSharedGameplayPauseRuntimeInfo(
     lua_setfield(state, -2, "received_ms");
 }
 
+void PushDeathSpectatorRuntimeInfo(
+    lua_State* state,
+    const multiplayer::DeathSpectatorRuntimeInfo& spectator) {
+    lua_createtable(state, 0, 14);
+    lua_pushboolean(state, spectator.active ? 1 : 0);
+    lua_setfield(state, -2, "active");
+    lua_pushstring(
+        state,
+        multiplayer::DeathSpectatorPhaseLabel(spectator.phase));
+    lua_setfield(state, -2, "phase");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(spectator.death_started_ms));
+    lua_setfield(state, -2, "death_started_ms");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            spectator.presentation_remaining_ms));
+    lua_setfield(state, -2, "presentation_remaining_ms");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            spectator.target_participant_id));
+    lua_setfield(state, -2, "target_participant_id");
+    lua_pushlstring(
+        state,
+        spectator.target_name.data(),
+        spectator.target_name.size());
+    lua_setfield(state, -2, "target_name");
+    lua_pushboolean(
+        state,
+        spectator.waiting_for_alive_target ? 1 : 0);
+    lua_setfield(state, -2, "waiting_for_alive_target");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            spectator.last_applied_respawn_epoch));
+    lua_setfield(state, -2, "last_applied_respawn_epoch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            spectator.last_applied_respawn_wave));
+    lua_setfield(state, -2, "last_applied_respawn_wave");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(spectator.last_respawn_x));
+    lua_setfield(state, -2, "last_respawn_x");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(spectator.last_respawn_y));
+    lua_setfield(state, -2, "last_respawn_y");
+    std::string display_text;
+    (void)multiplayer::TryBuildDeathSpectatorStatusText(
+        &display_text);
+    lua_pushlstring(
+        state,
+        display_text.data(),
+        display_text.size());
+    lua_setfield(state, -2, "display_text");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 18);
+    lua_createtable(state, 0, 19);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
     lua_pushboolean(state, multiplayer::IsLocalTransportEnabled() ? 1 : 0);
@@ -663,6 +724,10 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         state,
         runtime.shared_gameplay_pause);
     lua_setfield(state, -2, "shared_gameplay_pause_status");
+    PushDeathSpectatorRuntimeInfo(
+        state,
+        runtime.death_spectator);
+    lua_setfield(state, -2, "death_spectator");
 
     return 1;
 }

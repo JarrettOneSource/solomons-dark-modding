@@ -201,10 +201,10 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
-        "static_assert(sizeof(ParticipantFramePacket) == 570",
+        "static_assert(sizeof(ParticipantFramePacket) == 586",
         "kLootSnapshotPacketPrefixBytes",
         "LootSnapshotPacketWireSize(",
         "IsValidLootSnapshotPacketWireSize(",

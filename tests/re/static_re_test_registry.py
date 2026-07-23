@@ -256,11 +256,15 @@ from static_re_native_movement_contracts import (
     test_smell_source_inventory_is_current,
 )
 from static_re_transport_core_contracts import (
+    test_dead_client_spectates_alive_players_with_local_camera_and_hud,
+    test_death_spectator_has_isolated_three_owner_live_regression,
     test_all_stock_potion_subtypes_replicate_as_native_pickups,
     test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts,
     test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
     test_misc_ground_items_replicate_without_recipe_identity,
     test_local_multiplayer_udp_transport_is_wired,
+    test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
+    test_wave_completion_respawns_every_owner_from_reliable_host_command,
 )
 from static_re_steam_contracts import (
     test_manual_enemy_test_mode_logging_is_transition_only,
@@ -1016,6 +1020,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "misc ground items replicate without recipe identity",
         test_misc_ground_items_replicate_without_recipe_identity,
+    ),
+    (
+        "multiplayer death preserves stock audio then enters spectator mode",
+        test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
+    ),
+    (
+        "dead client spectates alive players with local camera and HUD",
+        test_dead_client_spectates_alive_players_with_local_camera_and_hud,
+    ),
+    (
+        "wave completion respawns every owner from reliable host command",
+        test_wave_completion_respawns_every_owner_from_reliable_host_command,
+    ),
+    (
+        "death spectator has isolated three-owner live regression",
+        test_death_spectator_has_isolated_three_owner_live_regression,
     ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     (

@@ -557,6 +557,7 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
     packet.region_index = local->runtime.scene_intent.region_index;
     packet.region_type_id = local->runtime.scene_intent.region_type_id;
     PopulateAuthorityWaveSummary(&packet);
+    PopulateAuthorityWaveRespawn(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
 }
@@ -669,6 +670,7 @@ StatePacket BuildLocalStatePacket() {
         packet.queued_secondary_entry_indices[index] =
             local->character_profile.loadout.secondary_entry_indices[index];
     }
+    PopulateAuthorityWaveRespawn(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
 }

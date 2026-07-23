@@ -242,7 +242,7 @@ mod-defined events delivered to all peers in stream order.
 multiplayer-native contract. Build it early so Tier-1 seams are born MP-native.
 *Multiplayer:* this *is* the multiplayer story.
 
-**Implemented 2026-07-22.** Protocol 80 provides a bounded, deterministic Lua value
+**Implemented 2026-07-22.** Protocol 81 provides a bounded, deterministic Lua value
 codec; per-mod authority-owned state; ordered custom events; fragmented reliable Steam
 delivery; periodic and first-peer state checkpoints; and a three-peer late-join
 acceptance verifier. See `lua-state-and-events.md`.
@@ -276,7 +276,7 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 80, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 81, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
@@ -435,7 +435,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 80 carries a bounded validated
+includes planned composition, and protocol 81 carries a bounded validated
 summary in authenticated authority participant frames for identical peer reads.
 The opt-in two-peer acceptance covers exact schedule parity, clean idle state,
 authority-only stock wave start, identical sorted live summaries, and matching
@@ -459,7 +459,7 @@ authority-only stock wave start, identical sorted live summaries, and matching
   fixed-point scale, bounds paused frame-step work, and releases requests on unload and
   run reset. One scoped actor-world frame decision gates nested player and wave ticks while
   the Lua/replication pump remains responsive. Only the offline or host authority may
-  mutate time; protocol 80 repeats scale/revision state and sends prompt authenticated
+  mutate time; protocol 81 repeats scale/revision state and sends prompt authenticated
   reliable control updates with deduplicated step sequences. Shared menu and level-up
   pauses take precedence, and values above native speed are rejected. See `lua-time.md`
   and the disabled `sample.lua.time_lab` mod.

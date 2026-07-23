@@ -277,6 +277,26 @@ struct SharedGameplayPauseRuntimeInfo {
     std::uint64_t received_ms = 0;
 };
 
+enum class DeathSpectatorPhase {
+    Inactive,
+    DeathPresentation,
+    Spectating,
+};
+
+struct DeathSpectatorRuntimeInfo {
+    bool active = false;
+    DeathSpectatorPhase phase = DeathSpectatorPhase::Inactive;
+    std::uint64_t death_started_ms = 0;
+    std::uint32_t presentation_remaining_ms = 0;
+    std::uint64_t target_participant_id = 0;
+    std::string target_name;
+    bool waiting_for_alive_target = false;
+    std::uint32_t last_applied_respawn_epoch = 0;
+    std::int32_t last_applied_respawn_wave = 0;
+    float last_respawn_x = 0.0f;
+    float last_respawn_y = 0.0f;
+};
+
 struct ParticipantTransformSample {
     bool valid = false;
     std::uint64_t received_ms = 0;

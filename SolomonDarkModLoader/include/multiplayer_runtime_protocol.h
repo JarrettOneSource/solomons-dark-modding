@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 80;
+constexpr std::uint16_t kProtocolVersion = 81;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -429,6 +429,10 @@ struct StatePacket {
     std::uint8_t transform_valid;
     std::uint8_t controller_kind;
     std::uint32_t run_nonce;
+    std::uint32_t wave_respawn_epoch;
+    std::int32_t wave_respawn_wave;
+    float wave_respawn_x;
+    float wave_respawn_y;
     std::uint32_t local_menu_pause_request_epoch;
     std::uint32_t shared_gameplay_pause_deadline_remaining_ms;
     std::uint64_t shared_gameplay_pause_origin_participant_id;
@@ -557,6 +561,10 @@ struct ParticipantFramePacket {
     std::uint8_t scene_kind;
     std::uint8_t scene_reserved[3] = {};
     std::uint32_t run_nonce;
+    std::uint32_t wave_respawn_epoch;
+    std::int32_t wave_respawn_wave;
+    float wave_respawn_x;
+    float wave_respawn_y;
     std::uint32_t local_menu_pause_request_epoch;
     std::uint32_t shared_gameplay_pause_deadline_remaining_ms;
     std::uint64_t shared_gameplay_pause_origin_participant_id;
@@ -1413,10 +1421,10 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 4528, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 4544, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
-static_assert(sizeof(ParticipantFramePacket) == 570,
+static_assert(sizeof(ParticipantFramePacket) == 586,
               "Unexpected participant frame packet size");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");

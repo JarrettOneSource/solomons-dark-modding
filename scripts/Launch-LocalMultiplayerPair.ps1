@@ -13,6 +13,7 @@ param(
     [string]$HostName = "Host Player",
     [string]$ClientName = "Client Player",
     [string]$ThirdName = "Observer Player",
+    [string]$InstancePrefix = "local-mp",
     [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
@@ -37,6 +38,16 @@ $launcherDir = Split-Path $launcher -Parent
 $luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
 $clickWindowScript = Join-Path $PSScriptRoot "click_window.py"
 $launcherProcessHelpers = Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
+
+if ($InstancePrefix -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$') {
+    throw "InstancePrefix must be 1-48 filename-safe characters."
+}
+$hostInstance = "$InstancePrefix-host"
+$clientInstance = "$InstancePrefix-client"
+$thirdInstance = "$InstancePrefix-third"
+$hostLuaPipe = "SolomonDarkModLoader_LuaExec_$hostInstance"
+$clientLuaPipe = "SolomonDarkModLoader_LuaExec_$clientInstance"
+$thirdLuaPipe = "SolomonDarkModLoader_LuaExec_$thirdInstance"
 
 if (-not (Test-Path $launcher)) {
     throw "Launcher was not found at $launcher. Build and stage the launcher first."
@@ -885,22 +896,22 @@ if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
     $exactModIdList = $ExactModIds.Split(',')
     Set-ExactMultiplayerModState `
         -RootPath $root `
-        -Instance "local-mp-host" `
+        -Instance $hostInstance `
         -ModIds $exactModIdList
     Set-ExactMultiplayerModState `
         -RootPath $root `
-        -Instance "local-mp-client" `
+        -Instance $clientInstance `
         -ModIds $exactModIdList
     if ($EnableThird) {
         Set-ExactMultiplayerModState `
             -RootPath $root `
-            -Instance "local-mp-third" `
+            -Instance $thirdInstance `
             -ModIds $exactModIdList
     }
 }
 
 $hostResult = Start-MultiplayerInstance `
-    -Instance "local-mp-host" `
+    -Instance $hostInstance `
     -InstanceLaunchPreset $hostLaunchPreset `
     -Role "host" `
     -LocalPort $HostPort `
@@ -912,24 +923,24 @@ $hostResult = Start-MultiplayerInstance `
 Write-LaunchedProcessIds -HostResult $hostResult
 
 if ($GodMode) {
-    Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" | Out-Null
+    Enable-InstanceGodMode -PipeName $hostLuaPipe | Out-Null
 }
 
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
-        -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host" `
+        -PipeName $hostLuaPipe `
         -Element $hostSelection.Element `
         -Discipline $hostSelection.Discipline `
         -ProcessId ([int]$hostResult.launch.processId)
 }
 if ($hostWaitForHub) {
-    Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-host"
+    Wait-InstanceHub -PipeName $hostLuaPipe
 }
 
 Start-Sleep -Seconds 2
 
 $clientResult = Start-MultiplayerInstance `
-    -Instance "local-mp-client" `
+    -Instance $clientInstance `
     -InstanceLaunchPreset $clientLaunchPreset `
     -Role "client" `
     -LocalPort $ClientPort `
@@ -943,18 +954,18 @@ Write-LaunchedProcessIds `
     -ClientResult $clientResult
 
 if ($GodMode) {
-    Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client" | Out-Null
+    Enable-InstanceGodMode -PipeName $clientLuaPipe | Out-Null
 }
 
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
     Invoke-CreateSelection `
-        -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client" `
+        -PipeName $clientLuaPipe `
         -Element $clientSelection.Element `
         -Discipline $clientSelection.Discipline `
         -ProcessId ([int]$clientResult.launch.processId)
 }
 if ($clientWaitForHub) {
-    Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-client"
+    Wait-InstanceHub -PipeName $clientLuaPipe
 }
 
 $thirdResult = $null
@@ -962,7 +973,7 @@ if ($EnableThird) {
     Start-Sleep -Seconds 2
 
     $thirdResult = Start-MultiplayerInstance `
-        -Instance "local-mp-third" `
+        -Instance $thirdInstance `
         -InstanceLaunchPreset $thirdLaunchPreset `
         -Role "client" `
         -LocalPort $ThirdPort `
@@ -977,18 +988,18 @@ if ($EnableThird) {
         -ThirdResult $thirdResult
 
     if ($GodMode) {
-        Enable-InstanceGodMode -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third" | Out-Null
+        Enable-InstanceGodMode -PipeName $thirdLuaPipe | Out-Null
     }
 
     if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
         Invoke-CreateSelection `
-            -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third" `
+            -PipeName $thirdLuaPipe `
             -Element $thirdSelection.Element `
             -Discipline $thirdSelection.Discipline `
             -ProcessId ([int]$thirdResult.launch.processId)
     }
     if ($thirdWaitForHub) {
-        Wait-InstanceHub -PipeName "SolomonDarkModLoader_LuaExec_local-mp-third"
+        Wait-InstanceHub -PipeName $thirdLuaPipe
     }
 }
 
@@ -1033,9 +1044,10 @@ if (-not $NoTileWindows) {
     hostName = $HostName
     clientName = $ClientName
     thirdName = if ($EnableThird) { $ThirdName } else { $null }
-    hostLuaPipe = "SolomonDarkModLoader_LuaExec_local-mp-host"
-    clientLuaPipe = "SolomonDarkModLoader_LuaExec_local-mp-client"
-    thirdLuaPipe = if ($EnableThird) { "SolomonDarkModLoader_LuaExec_local-mp-third" } else { $null }
+    instancePrefix = $InstancePrefix
+    hostLuaPipe = $hostLuaPipe
+    clientLuaPipe = $clientLuaPipe
+    thirdLuaPipe = if ($EnableThird) { $thirdLuaPipe } else { $null }
     hostLog = $hostResult.launch.startupLogPath
     clientLog = $clientResult.launch.startupLogPath
     thirdLog = if ($null -ne $thirdResult) { $thirdResult.launch.startupLogPath } else { $null }

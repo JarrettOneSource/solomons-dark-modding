@@ -55,6 +55,283 @@ from static_re_contract_support import (
 )
 
 
+def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() -> str:
+    """A connected death stays in the run and becomes spectatable after 3 seconds."""
+
+    transport_header = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
+    transport_text = "\n".join(
+        (
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_public.inl"
+            ),
+        )
+    )
+    run_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/run_transition_hooks.inl"
+    )
+    native_re_text = read_text(
+        ROOT / "docs/reverse-engineering/native-player-death-spectator.md"
+    )
+
+    for token in (
+        "bool BeginLocalDeathSpectatorPresentation(",
+        "bool TryBuildDeathSpectatorStatusText(",
+    ):
+        assert token in transport_header, f"death spectator public API lacks: {token}"
+
+    for token in (
+        "kDeathPresentationDurationMs = 3000",
+        "DeathSpectatorPhase::DeathPresentation",
+        "DeathSpectatorPhase::Spectating",
+        "presentation_remaining_ms",
+    ):
+        assert token in transport_text, f"death spectator lifecycle lacks: {token}"
+
+    hook_start = run_hook_text.index("void __cdecl HookRunEnded()")
+    hook_end = run_hook_text.index(
+        "bool ShouldSuppressClientAuthoritativeRunWaveSpawner",
+        hook_start,
+    )
+    hook_body = run_hook_text[hook_start:hook_end]
+    spectator_gate = hook_body.index("BeginLocalDeathSpectatorPresentation(")
+    stock_game_over = hook_body.index("original();")
+    lifecycle_end = hook_body.index('CompleteRunLifecycleEnd("death", true, false);')
+    assert spectator_gate < stock_game_over < lifecycle_end
+    assert "return;" in hook_body[spectator_gate:stock_game_over]
+
+    for token in (
+        "0x004633D0",
+        "0x005CB570",
+        "stock death audio",
+        "offline",
+    ):
+        assert token in native_re_text, f"native death boundary documentation lacks: {token}"
+
+    return (
+        "connected deaths preserve stock pre-hook audio, suppress only Game Over, "
+        "and enter spectator mode after a three-second presentation"
+    )
+
+
+def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
+    """Spectator target selection is alive-only, local, visible, and click-driven."""
+
+    transport_text = "\n".join(
+        (
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_public.inl"
+            ),
+        )
+    )
+    camera_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/lua_camera_runtime.h"
+    )
+    camera_runtime = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_camera_runtime.cpp"
+    )
+    overlay_renderer = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/gameplay_death_spectator_rendering.inl"
+    )
+    frame_renderer = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/label_resolution_surface_registry_and_frame_render.inl"
+    )
+
+    for token in (
+        "SetLocalCameraFocus(",
+        "ClearLocalCameraFocus(",
+    ):
+        assert token in camera_header, f"shared local camera API lacks: {token}"
+    assert "return SetLocalCameraFocus(" in camera_runtime
+    assert "return ClearLocalCameraFocus(" in camera_runtime
+
+    for token in (
+        "SelectNextAliveSpectatorTarget",
+        "TryGetParticipantGameplayState(",
+        "participant.runtime.life_current > 0.0f",
+        "IsGameplayMouseLeftDown()",
+        "IsGameplayMouseRightDown()",
+        "ClearQueuedGameplayMouseLeft()",
+        "ClearQueuedGameplayMouseRight()",
+        "ClearLocalCameraFocus(kDeathSpectatorCameraOwner)",
+    ):
+        assert token in transport_text, f"spectator target loop lacks: {token}"
+    assert re.search(
+        r"SetLocalCameraFocus\s*\(\s*kDeathSpectatorCameraOwner",
+        transport_text,
+    )
+
+    for token in (
+        "TryBuildDeathSpectatorStatusText",
+        "DrawGameplayDeathSpectatorStatus",
+        "Left / Right click: next player",
+    ):
+        combined = transport_text + overlay_renderer + frame_renderer
+        assert token in combined, f"spectator HUD lacks: {token}"
+
+    assert "gameplay_death_spectator_text.empty()" in frame_renderer
+    assert "DrawGameplayDeathSpectatorStatus(" in frame_renderer
+
+    return (
+        "dead clients follow only live participant actors through a local camera, "
+        "show the target name, and cycle on either mouse button"
+    )
+
+
+def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> str:
+    """Every process applies one authenticated host respawn to its local owner."""
+
+    protocol_text = read_text(MULTIPLAYER_PROTOCOL)
+    transport_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+    )
+    state_builder_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+    )
+    incoming_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_participant_state_sync.inl"
+    )
+    gameplay_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    gameplay_respawn = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
+    )
+
+    assert "kProtocolVersion = 81" in protocol_text
+    for field in (
+        "wave_respawn_epoch",
+        "wave_respawn_wave",
+        "wave_respawn_x",
+        "wave_respawn_y",
+    ):
+        assert protocol_text.count(field) == 2, (
+            f"{field} must exist in both StatePacket and ParticipantFramePacket"
+        )
+
+    for token in (
+        "PopulateAuthorityWaveRespawn(&packet)",
+        "BuildLocalParticipantFramePacket",
+        "BuildLocalStatePacket",
+    ):
+        assert token in state_builder_text, f"outbound respawn convergence lacks: {token}"
+
+    assert incoming_text.count("ApplyAuthoritativeWaveRespawn(") >= 2
+    for token in (
+        "packet_from_configured_authority",
+        "packet.run_nonce",
+        "packet.wave_respawn_epoch",
+    ):
+        assert token in incoming_text + transport_text, (
+            f"inbound respawn authority lacks: {token}"
+        )
+
+    for token in (
+        "WavePhase::Completed",
+        "SnapshotWaveSummary()",
+        "TryRespawnLocalPlayerAt(",
+        "IsPacketSequenceNewer(",
+        "ResetLocalDeathSpectatorState(\"wave_respawn\")",
+    ):
+        assert token in transport_text, f"wave respawn lifecycle lacks: {token}"
+
+    assert "bool TryRespawnLocalPlayerAt(" in gameplay_header
+    for token in (
+        "kProgressionHpOffset",
+        "kProgressionMpOffset",
+        "kActorPositionXOffset",
+        "kActorPositionYOffset",
+        "ClearLiveWizardActorAnimationDriveState(",
+        "ClearLocalPlayerGameplayCastState(",
+        "RebindSceneActorCell(",
+        "TryGetPlayerState(&verified)",
+    ):
+        assert token in gameplay_respawn, f"local respawn primitive lacks: {token}"
+
+    return (
+        "wave completion publishes one authenticated host epoch over fast and "
+        "reliable packets, and each process revives its own player at the spawn"
+    )
+
+
+def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
+    """The acceptance pass observes presentation, camera, clicks, and respawn."""
+
+    lua_runtime = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
+    verifier = read_text(
+        ROOT / "tools/verify_multiplayer_death_spectator_respawn.py"
+    )
+    launcher_driver = read_text(
+        ROOT / "tools/verify_local_multiplayer_sync.py"
+    )
+    pair_script = read_text(
+        ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
+    )
+    native_re = read_text(
+        ROOT / "docs/reverse-engineering/native-player-death-spectator.md"
+    )
+
+    for token in (
+        "PushDeathSpectatorRuntimeInfo(",
+        '"death_spectator"',
+        '"presentation_remaining_ms"',
+        '"last_applied_respawn_epoch"',
+        '"display_text"',
+    ):
+        assert token in lua_runtime, f"Lua death diagnostics lack: {token}"
+
+    for token in (
+        "death_presentation_state_matches",
+        "spectator_state_matches",
+        "respawn_state_matches",
+        "sd.input.click_normalized(0.5, 0.5)",
+        "sd.input.hold_mouse_right_frames(1)",
+        "sd.world.trigger_enemy_death(address)",
+        "third_player=True",
+        "kill_existing=False",
+        "stop_game_processes(process_ids)",
+    ):
+        assert token in verifier, f"death live regression lacks: {token}"
+    assert "stop_games()" not in verifier
+
+    for token in (
+        'instance_prefix: str = "local-mp"',
+        '"-InstancePrefix"',
+        "host_pipe = f\"SolomonDarkModLoader_LuaExec_{instance_prefix}-host\"",
+    ):
+        assert token in launcher_driver, f"isolated pair driver lacks: {token}"
+    for token in (
+        '[string]$InstancePrefix = "local-mp"',
+        '$hostInstance = "$InstancePrefix-host"',
+        "hostLuaPipe = $hostLuaPipe",
+    ):
+        assert token in pair_script, f"isolated pair script lacks: {token}"
+
+    assert "verify_multiplayer_death_spectator_respawn.py" in native_re
+    return (
+        "an isolated no-focus-steal trio verifies the death delay, named camera "
+        "target, both click inputs, and all-owner wave respawn"
+    )
+
+
 def test_client_gold_pickup_replays_stock_feedback_once_after_authority_accepts() -> str:
     gold_hook_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/gold_pickup_hook.inl"
@@ -449,7 +726,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 80;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 81;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -559,7 +836,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 20"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 4528"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 4544"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 328"),
@@ -1372,8 +1649,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (gameplay_seams_bindings_text, '"native_rng_initialize", kNativeRngInitialize'),
         (gameplay_seams_header_text, "kItemDropPickupCaller"),
         (gameplay_seams_bindings_text, '"item_drop_pickup", kItemDropPickupCaller'),
-        (script_text, "local-mp-host"),
-        (script_text, "local-mp-client"),
+        (script_text, '[string]$InstancePrefix = "local-mp"'),
+        (script_text, '$hostInstance = "$InstancePrefix-host"'),
+        (script_text, '$clientInstance = "$InstancePrefix-client"'),
         (script_text, "[string]$HostPreset"),
         (script_text, "[string]$ClientPreset"),
         (script_text, "$effectiveHostPreset"),

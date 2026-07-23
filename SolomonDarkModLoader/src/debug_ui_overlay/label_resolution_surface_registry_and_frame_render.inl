@@ -64,6 +64,14 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             {},
             GameplayLevelUpWaitDrawResult::Hidden);
     }
+    std::string gameplay_death_spectator_text;
+    (void)multiplayer::TryBuildDeathSpectatorStatusText(
+        &gameplay_death_spectator_text);
+    if (gameplay_death_spectator_text.empty()) {
+        LogGameplayDeathSpectatorStatusDraw(
+            {},
+            GameplayDeathSpectatorDrawResult::Hidden);
+    }
 
     const auto quick_panel_render_elements =
         TryBuildQuickPanelOverlayRenderElements(exact_text_elements, exact_control_elements);
@@ -152,7 +160,8 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
 
     if (render_elements.empty() && gameplay_health_bars.empty() &&
         gameplay_dampen_presentations.empty() &&
-        gameplay_level_up_wait_text.empty()) {
+        gameplay_level_up_wait_text.empty() &&
+        gameplay_death_spectator_text.empty()) {
         return;
     }
 
@@ -183,6 +192,15 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             gameplay_level_up_wait_text);
         LogGameplayLevelUpWaitStatusDraw(
             gameplay_level_up_wait_text,
+            draw_result);
+    }
+    if (!gameplay_death_spectator_text.empty()) {
+        const auto draw_result = DrawGameplayDeathSpectatorStatus(
+            device,
+            g_debug_ui_overlay_state.font_atlas,
+            gameplay_death_spectator_text);
+        LogGameplayDeathSpectatorStatusDraw(
+            gameplay_death_spectator_text,
             draw_result);
     }
 

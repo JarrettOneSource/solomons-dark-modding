@@ -464,15 +464,15 @@ bool TryGetLuaCameraSnapshot(
     return true;
 }
 
-bool SetLuaCameraFocus(
-    std::string_view mod_id,
+bool SetLocalCameraFocus(
+    std::string_view owner_id,
     float world_x,
     float world_y,
     std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (mod_id.empty() || !std::isfinite(world_x) ||
+    if (owner_id.empty() || !std::isfinite(world_x) ||
         !std::isfinite(world_y) ||
         std::abs(world_x) > kMaximumCoordinateMagnitude ||
         std::abs(world_y) > kMaximumCoordinateMagnitude) {
@@ -495,15 +495,15 @@ bool SetLuaCameraFocus(
     std::scoped_lock lock(state.mutex);
     if (!state.initialized) {
         if (error_message != nullptr) {
-            *error_message = "Lua camera runtime is unavailable";
+            *error_message = "local camera runtime is unavailable";
         }
         return false;
     }
-    const std::string owner(mod_id);
+    const std::string owner(owner_id);
     if (state.focus_requests.find(owner) == state.focus_requests.end() &&
         state.focus_requests.size() >= kMaximumFocusOwners) {
         if (error_message != nullptr) {
-            *error_message = "Lua camera focus-owner limit reached";
+            *error_message = "local camera focus-owner limit reached";
         }
         return false;
     }
@@ -516,13 +516,29 @@ bool SetLuaCameraFocus(
     return true;
 }
 
-bool ClearLuaCameraFocus(std::string_view mod_id) {
-    if (mod_id.empty()) {
+bool ClearLocalCameraFocus(std::string_view owner_id) {
+    if (owner_id.empty()) {
         return false;
     }
     auto& state = CameraRuntimeState();
     std::scoped_lock lock(state.mutex);
-    return state.focus_requests.erase(std::string(mod_id)) != 0;
+    return state.focus_requests.erase(std::string(owner_id)) != 0;
+}
+
+bool SetLuaCameraFocus(
+    std::string_view mod_id,
+    float world_x,
+    float world_y,
+    std::string* error_message) {
+    return SetLocalCameraFocus(
+        mod_id,
+        world_x,
+        world_y,
+        error_message);
+}
+
+bool ClearLuaCameraFocus(std::string_view mod_id) {
+    return ClearLocalCameraFocus(mod_id);
 }
 
 bool ApplyLuaCameraShake(float intensity, std::string* error_message) {

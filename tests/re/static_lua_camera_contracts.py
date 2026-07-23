@@ -62,7 +62,7 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
         "std::unordered_map<std::string, CameraFocusRequest>",
         "request.region_address != scene.world_address",
         "request.sequence <= selected_sequence",
-        "state.focus_requests.erase(std::string(mod_id))",
+        "state.focus_requests.erase(std::string(owner_id))",
         "kActorWorldExpandedViewOriginXOffset",
         "kActorWorldCullViewOriginXOffset",
         "TryTranslateCameraRectangles",
@@ -93,6 +93,8 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
         "float shake_magnitude = 0.0f",
         "AppendLuaCameraCapabilities",
         "ClearLuaCameraFocus",
+        "SetLocalCameraFocus",
+        "ClearLocalCameraFocus",
     ):
         assert token in runtime_header, f"Lua camera public runtime lacks: {token}"
     for capability in (

@@ -140,6 +140,7 @@ std::string GetOverlaySurfaceRootId(std::string_view surface_id);
 #include "debug_ui_overlay/font_atlas_rendering.inl"
 #include "debug_ui_overlay/gameplay_dampen_rendering.inl"
 #include "debug_ui_overlay/gameplay_health_bar_rendering.inl"
+#include "debug_ui_overlay/gameplay_death_spectator_rendering.inl"
 #include "debug_ui_overlay/gameplay_level_up_wait_rendering.inl"
 #include "debug_ui_overlay/overlay_surface_builders.inl"
 #include "debug_ui_overlay/modal_surface_render_builders.inl"

@@ -240,6 +240,8 @@ bool InitializeLocalTransport() {
 
 void ShutdownLocalTransport() {
     ShutdownLocalLevelUpOptionRollHook();
+    ResetLocalDeathSpectatorState("transport_shutdown");
+    ResetWaveRespawnState();
     sdmod::ClearHostLootDropDeactivationState();
     if (g_local_transport.socket_handle != INVALID_SOCKET) {
         closesocket(g_local_transport.socket_handle);
@@ -295,8 +297,11 @@ void TickLocalTransport(std::uint64_t now_ms) {
 
     ApplyQueuedSteamGameplayEvents(now_ms);
     RefreshLocalParticipantFromGameState();
+    RefreshHostWaveRespawnCommand(now_ms);
+    RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
+    TickLocalDeathSpectator(now_ms);
     RefreshHostSharedGameplayPause(now_ms);
     ProcessCompletedHostLootPickups();
     ProcessQueuedLocalHostPowerupPickups(now_ms);

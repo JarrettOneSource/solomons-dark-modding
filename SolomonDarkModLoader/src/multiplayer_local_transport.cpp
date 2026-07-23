@@ -10,6 +10,7 @@
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "logger.h"
+#include "lua_camera_runtime.h"
 #include "lua_engine.h"
 #include "lua_engine_events.h"
 #include "lua_event_filters.h"
@@ -1363,6 +1364,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
 #include "multiplayer_local_transport/wave_summary_sync.inl"
+#include "multiplayer_local_transport/death_spectator_sync.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
@@ -1460,6 +1462,8 @@ void PublishLocalTransportRuntimeState() {
 
 }  // namespace
 
+#include "multiplayer_local_transport/death_spectator_public.inl"
+
 void ConfirmLocalParticipantVitalsCorrection(
     std::uint32_t correction_sequence) {
     if (!g_local_transport.initialized ||
@@ -1482,6 +1486,8 @@ void NotifyLocalRunStarted() {
         return;
     }
 
+    ResetLocalDeathSpectatorState("new_run");
+    ResetWaveRespawnState();
     const auto previous_exit_nonce =
         g_local_run_exit_latched_nonce.exchange(0, std::memory_order_acq_rel);
     const bool cleared_client_exit_follow =
@@ -1502,6 +1508,8 @@ void NotifyLocalRunEnded(std::string_view reason) {
         return;
     }
 
+    ResetLocalDeathSpectatorState(reason);
+    ResetWaveRespawnState();
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
     const auto current_nonce =

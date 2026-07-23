@@ -26,6 +26,8 @@ bool IsLocalTransportClient();
 bool IsLuaModSimulationAuthority();
 void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
+bool BeginLocalDeathSpectatorPresentation();
+bool TryBuildDeathSpectatorStatusText(std::string* status_text);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
 bool QueueAuthoritativeLuaItemGrant(

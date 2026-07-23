@@ -163,6 +163,10 @@ void ApplyRemoteStatePacket(
             std::move(waiting_participant_ids),
             now_ms);
     }
+    ApplyAuthoritativeWaveRespawn(
+        packet,
+        packet_from_configured_authority,
+        now_ms);
 
     UpdateRuntimeState([&](RuntimeState& state) {
 
@@ -426,6 +430,10 @@ void ApplyRemoteParticipantFramePacket(
             packet.lua_time_scale_units,
             packet.lua_time_revision);
     }
+    ApplyAuthoritativeWaveRespawn(
+        packet,
+        packet_from_configured_authority,
+        now_ms);
     MultiplayerCharacterProfile profile;
     bool participant_found = false;
     UpdateRuntimeState([&](RuntimeState& state) {

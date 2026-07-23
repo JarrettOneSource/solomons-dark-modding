@@ -236,6 +236,10 @@ def launch_pair(
     third_preset: str | None = None,
     allow_focus_steal: bool = False,
     kill_existing: bool = True,
+    instance_prefix: str = "local-mp",
+    host_port: int = 47770,
+    client_port: int = 47771,
+    third_port: int = 47772,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
@@ -254,6 +258,14 @@ def launch_pair(
         HOST_NAME,
         "-ClientName",
         CLIENT_NAME,
+        "-InstancePrefix",
+        instance_prefix,
+        "-HostPort",
+        str(host_port),
+        "-ClientPort",
+        str(client_port),
+        "-ThirdPort",
+        str(third_port),
     ]
     if host_preset is not None or client_preset is not None:
         if host_preset is not None:
@@ -351,6 +363,9 @@ def launch_pair(
         return completed.stdout.strip()
 
     launch_started = time.monotonic()
+    host_pipe = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-host"
+    client_pipe = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client"
+    third_pipe = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-third"
     deadline = launch_started + (180.0 if third_player else 120.0)
     # The PowerShell launcher owns the Lua pipes while it is driving the two
     # native create screens. Probing those same single-consumer pipes from this
@@ -395,11 +410,11 @@ def launch_pair(
             if now >= fallback_probe_after and now - last_hub_probe >= 1.0:
                 last_hub_probe = now
                 if (
-                    query_scene_for_launch(HOST_PIPE) == "hub"
-                    and query_scene_for_launch(CLIENT_PIPE) == "hub"
+                    query_scene_for_launch(host_pipe) == "hub"
+                    and query_scene_for_launch(client_pipe) == "hub"
                     and (
                         not third_player
-                        or query_scene_for_launch(THIRD_PIPE) == "hub"
+                        or query_scene_for_launch(third_pipe) == "hub"
                     )
                 ):
                     if hub_ready_since is None:
@@ -407,9 +422,9 @@ def launch_pair(
                     elif now - hub_ready_since >= 1.0:
                         fallback_result = {
                             "fallbackReady": True,
-                            "hostLuaPipe": HOST_PIPE,
-                            "clientLuaPipe": CLIENT_PIPE,
-                            "thirdLuaPipe": THIRD_PIPE if third_player else None,
+                            "hostLuaPipe": host_pipe,
+                            "clientLuaPipe": client_pipe,
+                            "thirdLuaPipe": third_pipe if third_player else None,
                             "hostName": HOST_NAME,
                             "clientName": CLIENT_NAME,
                             "thirdName": THIRD_NAME if third_player else None,

@@ -32,6 +32,12 @@ void AppendLuaCameraCapabilities(std::vector<std::string>* capabilities);
 bool TryGetLuaCameraSnapshot(
     std::string_view caller_mod_id,
     LuaCameraSnapshot* snapshot);
+bool SetLocalCameraFocus(
+    std::string_view owner_id,
+    float world_x,
+    float world_y,
+    std::string* error_message);
+bool ClearLocalCameraFocus(std::string_view owner_id);
 bool SetLuaCameraFocus(
     std::string_view mod_id,
     float world_x,

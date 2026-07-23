@@ -263,7 +263,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "RelayPacketBufferToPeers",
     )
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 80;",
+        "constexpr std::uint16_t kProtocolVersion = 81;",
         "LuaRegisteredSpellCast = 23",
         "struct LuaRegisteredSpellCastPacket",
         "static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76",

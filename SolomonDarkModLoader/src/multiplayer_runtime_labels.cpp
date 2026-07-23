@@ -53,6 +53,18 @@ const char* SessionTransportLabel(SessionTransportKind kind) {
     return "Unknown";
 }
 
+const char* DeathSpectatorPhaseLabel(DeathSpectatorPhase phase) {
+    switch (phase) {
+    case DeathSpectatorPhase::Inactive:
+        return "Inactive";
+    case DeathSpectatorPhase::DeathPresentation:
+        return "DeathPresentation";
+    case DeathSpectatorPhase::Spectating:
+        return "Spectating";
+    }
+    return "Unknown";
+}
+
 const char* ParticipantKindLabel(ParticipantKind kind) {
     switch (kind) {
     case ParticipantKind::LocalHuman:

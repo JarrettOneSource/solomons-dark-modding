@@ -185,6 +185,7 @@ struct RuntimeState {
     LevelUpChoiceResultRuntimeInfo last_level_up_choice_result;
     LevelUpWaitStatusRuntimeInfo level_up_wait_status;
     SharedGameplayPauseRuntimeInfo shared_gameplay_pause;
+    DeathSpectatorRuntimeInfo death_spectator;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
@@ -244,6 +245,7 @@ bool IsNativeControlledParticipant(const ParticipantInfo& participant);
 
 const char* SessionStatusLabel(SessionStatus status);
 const char* SessionTransportLabel(SessionTransportKind kind);
+const char* DeathSpectatorPhaseLabel(DeathSpectatorPhase phase);
 const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
