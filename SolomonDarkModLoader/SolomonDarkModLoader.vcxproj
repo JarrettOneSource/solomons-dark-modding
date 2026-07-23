@@ -111,6 +111,7 @@
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\multiplayer_foundation.h" />
+    <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
@@ -588,6 +589,7 @@
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
     <ClCompile Include="src\multiplayer_foundation.cpp" />
+    <ClCompile Include="src\multiplayer_join_flow.cpp" />
     <ClCompile Include="src\multiplayer_local_transport.cpp" />
     <ClCompile Include="src\multiplayer_runtime_labels.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />

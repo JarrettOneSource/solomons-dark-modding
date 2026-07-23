@@ -34,7 +34,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("crash capture archive", TestCrashCaptureArchiveAsync),
     ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
-    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync)
+    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
+    ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync)
 };
 
 var failures = 0;
@@ -286,6 +287,54 @@ static Task TestSelectedSaveLaunchRoutingAsync()
         Directory.Delete(root, recursive: true);
     }
 
+    return Task.CompletedTask;
+}
+
+static Task TestMultiplayerQuickStartLaunchRoutingAsync()
+{
+    var options = new LaunchOptions(
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PRESERVED"] = "value"
+        });
+    var host = MultiplayerLaunchEnvironment.Apply(
+        options,
+        MultiplayerLaunchOptions.Create(
+            MultiplayerLaunchMode.Host,
+            lobbyId: null,
+            inviteSteamId: null,
+            MultiplayerLaunchOptions.DefaultMaxParticipants,
+            openInviteDialog: false));
+    Require(
+        host.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == "1",
+        "Host Game did not enable multiplayer quick start");
+    Require(
+        host.EnvironmentOverrides?["PRESERVED"] == "value",
+        "Host Game discarded an existing launch environment override");
+
+    var join = MultiplayerLaunchEnvironment.Apply(
+        options,
+        MultiplayerLaunchOptions.Create(
+            MultiplayerLaunchMode.Join,
+            lobbyId: 123,
+            inviteSteamId: null,
+            MultiplayerLaunchOptions.DefaultMaxParticipants,
+            openInviteDialog: true));
+    Require(
+        join.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == "1",
+        "Join Game did not enable multiplayer quick start");
+
+    var disabled = MultiplayerLaunchEnvironment.Apply(
+        host,
+        MultiplayerLaunchOptions.Create(
+            MultiplayerLaunchMode.Off,
+            lobbyId: null,
+            inviteSteamId: null,
+            MultiplayerLaunchOptions.DefaultMaxParticipants,
+            openInviteDialog: true));
+    Require(
+        disabled.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == string.Empty,
+        "single-player launch did not clear multiplayer quick start");
     return Task.CompletedTask;
 }
 

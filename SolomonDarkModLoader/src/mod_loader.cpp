@@ -15,6 +15,7 @@
 #include "lua_exec_pipe.h"
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
+#include "multiplayer_join_flow.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
 #include "runtime_flags.h"
@@ -147,6 +148,7 @@ void ShutdownPartialRuntime() {
     ShutdownRunLifecycleHooks();
     StopRuntimeTickService();
     RuntimeDebug_Shutdown();
+    ShutdownMultiplayerJoinFlow();
     ShutdownDebugUiOverlay();
     multiplayer::ShutdownBotRuntime();
     multiplayer::ShutdownFoundation();
@@ -388,14 +390,31 @@ void Initialize(HMODULE module_handle) {
             Log("Runtime tick service not started because no runtime tick handlers were loaded.");
         }
 
-        if (runtime_flags.loader.debug_ui) {
-            if (!InitializeDebugUiOverlay() && IsDebugUiOverlayConfigLoaded()) {
-                if (const auto* debug_ui_config = TryGetDebugUiOverlayConfig();
-                    debug_ui_config != nullptr && debug_ui_config->enabled) {
-                    Log("Debug UI overlay requested but failed to initialize.");
+        const bool multiplayer_join_flow_enabled =
+            InitializeMultiplayerJoinFlow();
+        const auto* join_flow_ui_config =
+            TryGetDebugUiOverlayConfig();
+        const bool diagnostic_ui_enabled =
+            runtime_flags.loader.debug_ui &&
+            !multiplayer_join_flow_enabled &&
+            join_flow_ui_config != nullptr &&
+            join_flow_ui_config->enabled;
+        if (diagnostic_ui_enabled ||
+            multiplayer_join_flow_enabled) {
+            if (!InitializeDebugUiOverlay(diagnostic_ui_enabled)) {
+                if (multiplayer_join_flow_enabled) {
+                    const std::string message =
+                        "Multiplayer quick start could not initialize its native UI bridge.";
+                    Log(message);
+                    ShutdownPartialRuntime();
+                    write_failed_status(
+                        "multiplayer-quick-start-failed",
+                        message);
+                    return;
                 }
+                Log("Debug UI overlay requested but failed to initialize.");
             }
-        } else {
+        } else if (!runtime_flags.loader.debug_ui) {
             Log("Debug UI overlay disabled by runtime flags.");
         }
 
@@ -469,6 +488,7 @@ void Shutdown() {
     RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);
     RunShutdownStep("runtime tick service", &StopRuntimeTickService);
     RunShutdownStep("runtime debug", &RuntimeDebug_Shutdown);
+    RunShutdownStep("multiplayer join flow", &ShutdownMultiplayerJoinFlow);
     RunShutdownStep("debug ui overlay", &ShutdownDebugUiOverlay);
     RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);

@@ -8,6 +8,7 @@
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "mod_loader_internal.h"
+#include "multiplayer_join_flow.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_protocol.h"
 #include "wave_intelligence.h"

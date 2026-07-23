@@ -1,4 +1,4 @@
-bool InitializeDebugUiOverlay() {
+bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
 
     if (g_debug_ui_overlay_state.initialized) {
@@ -7,11 +7,13 @@ bool InitializeDebugUiOverlay() {
 
     const auto* config = TryGetDebugUiOverlayConfig();
     const auto* binary_layout = TryGetBinaryLayout();
-    if (config == nullptr || binary_layout == nullptr || !config->enabled) {
+    if (config == nullptr || binary_layout == nullptr) {
         return false;
     }
 
     ResetDebugUiOverlayStateUnlocked(&g_debug_ui_overlay_state);
+    g_debug_ui_overlay_state.diagnostic_visuals_enabled =
+        diagnostic_visuals_enabled;
     g_debug_ui_overlay_state.config = *config;
     g_debug_ui_overlay_state.surface_ranges = BuildSurfaceRanges(*binary_layout, config->surface_range_slop);
     g_debug_ui_overlay_state.frame_elements.reserve(config->max_tracked_elements_per_frame);
