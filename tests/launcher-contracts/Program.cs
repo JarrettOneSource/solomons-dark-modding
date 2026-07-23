@@ -6,6 +6,8 @@ using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
+using SolomonDarkModLauncher.Steam;
+using SolomonDarkModLauncher.Target;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.Workspace;
 
@@ -28,7 +30,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("crash capture archive", TestCrashCaptureArchiveAsync),
     ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
-    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync)
+    ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
+    ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync)
 };
 
 var failures = 0;
@@ -279,6 +282,68 @@ static Task TestSelectedSaveLaunchRoutingAsync()
     {
         Directory.Delete(root, recursive: true);
     }
+
+    return Task.CompletedTask;
+}
+
+static Task TestSteamShortcutChildLaunchIdentityAsync()
+{
+    const string shortcutAppId = "11710076608562855936";
+    var configuration = new LauncherConfiguration
+    {
+        Game = null!,
+        Workspace = null!,
+        Runtime = null!,
+        Steam = SteamBootstrapConfiguration.CreateDefault(
+            appIdOverride: null,
+            apiDllOverridePath: null)
+    };
+    var stage = new StageBuildResult(
+        StageRootPath: "stage",
+        StageExecutablePath: "SolomonDark.exe",
+        StageReportPath: "stage-report.json",
+        StageConfigRootPath: "config",
+        StageBinaryLayoutPath: "binary-layout.json",
+        StageDebugUiConfigPath: "debug-ui.json",
+        StageRuntimeRootPath: "runtime",
+        StageRuntimeBootstrapPath: "bootstrap.json",
+        StageRuntimeFlagsPath: "runtime-flags.json",
+        StageMirror: null!,
+        RuntimeMetadata: null!,
+        MultiplayerCompatibility: new MultiplayerCompatibilityStageResult(
+            "multiplayer-manifest.json",
+            new string('a', 64),
+            80,
+            []),
+        SteamBootstrap: new SteamStageBootstrapResult(
+            Enabled: true,
+            AppId: SteamBootstrapConfiguration.DefaultAppId,
+            StageAppIdPath: "steam_appid.txt",
+            StageApiDllPath: "steam_api.dll",
+            SteamApiSourcePath: "steam_api.dll",
+            ReadyForInitialization: true),
+        HudLabels: null!,
+        EnabledModCount: 0,
+        AppliedOverlayCount: 0);
+    var inheritedShortcutEnvironment = new Dictionary<string, string>(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        ["SteamAppId"] = shortcutAppId,
+        ["SteamGameId"] = shortcutAppId
+    };
+    var launchOptions = StagedGameLauncher.ApplySteamBootstrap(
+        configuration,
+        stage,
+        new LaunchOptions(inheritedShortcutEnvironment));
+
+    Require(
+        launchOptions.EnvironmentOverrides?["SteamAppId"] ==
+        SteamBootstrapConfiguration.DefaultAppId,
+        "staged game inherited the non-Steam shortcut SteamAppId");
+    Require(
+        launchOptions.EnvironmentOverrides?["SteamGameId"] ==
+        SteamBootstrapConfiguration.DefaultAppId,
+        "staged game inherited the non-Steam shortcut SteamGameId");
 
     return Task.CompletedTask;
 }
