@@ -451,7 +451,10 @@ authority-only stock wave start, identical sorted live summaries, and matching
   **Implemented 2026-07-22.** `sd.rng` provides `get_seed/set_seed` and accepts an exact
   bounded seed only from the offline/host simulation authority before a run. The existing
   run-nonce path carries it to clients and every peer applies it through the stock initializer
-  immediately before arena generation. See `lua-rng.md`.
+  immediately before arena generation. The opt-in two-peer acceptance covers fresh-state
+  isolation, client rejection, authenticated host-row publication, Run-intent-gated client
+  installation, native-gated arena entry, exact owner nonce state, and post-entry mutation
+  rejection. See `lua-rng.md` and the disabled `sample.lua.rng_lab` mod.
 - **`sd.nav`** — promote `get_nav_grid` + native `movement_collision_test_circle_placement`
   bridge out of `sd.debug` into a blessed pathfinding/LOS API (native collision test is
   already the required path — make it the easy one). *MP:* read-only, safe everywhere.

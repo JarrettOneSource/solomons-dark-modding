@@ -26,6 +26,13 @@ def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
     )
     roadmap = _read("docs/lua-seam-roadmap.md")
     verifier = _read("tools/verify_lua_rng.py")
+    multiplayer_verifier = _read("tools/verify_lua_rng_multiplayer.py")
+    multiplayer_verifier_tests = _read(
+        "tests/test_lua_rng_multiplayer_verifier.py"
+    )
+    manifest = _read("mods/lua_rng_lab/manifest.json")
+    sample = _read("mods/lua_rng_lab/scripts/main.lua")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     assert "RegisterLuaRngBindings(mod->state)" in bindings
     assert '"rng.run.seed"' in engine
@@ -62,6 +69,10 @@ def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
         "before entering a run",
         "run nonce",
         "rng.run.seed",
+        "verify_lua_rng_multiplayer.py --launch-pair --confirm-mutation",
+        "`testrun` entry is contingent",
+        "correct authority-versus-already-in-run rejection",
+        "stops only the two process IDs",
     ):
         assert token in documentation, f"Lua RNG documentation lacks: {token}"
     assert "**Implemented 2026-07-22.** `sd.rng`" in roadmap
@@ -80,10 +91,53 @@ def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
         "run seed did not round trip exactly",
     ):
         assert token in verifier, f"Lua RNG verifier lacks: {token}"
+    for token in (
+        '"id": "sample.lua.rng_lab"',
+        '"enabled": false',
+        '"rng.run.seed"',
+    ):
+        assert token in manifest, f"Lua RNG sample manifest lacks: {token}"
+    for token in (
+        'sd.runtime.has_capability("rng.run.seed")',
+        "sd.rng.get_seed()",
+    ):
+        assert token in sample, f"Lua RNG sample lacks: {token}"
+    for token in (
+        'ACCEPTANCE_MOD_ID = "sample.lua.rng_lab"',
+        "ACCEPTANCE_SEED = 0x1234567",
+        "CLIENT_REJECTION_PROBE",
+        "SEED_CONVERGENCE_PROBE",
+        "RUN_STATE_PROBE",
+        "participant_scene_kind",
+        "run_nonce",
+        "--confirm-mutation",
+        "tile_windows=False",
+        "kill_existing=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(launched_process_ids)",
+    ):
+        assert token in multiplayer_verifier, (
+            f"Lua RNG multiplayer verifier lacks: {token}"
+        )
+    for token in (
+        "test_initial_state_requires_exact_empty_rng_namespace",
+        "test_applied_state_requires_exact_nonce_and_rejection_reason",
+        "test_mutation_confirmation_is_required_before_contact",
+        "test_disposable_pair_is_required_before_contact",
+        "test_failed_launch_does_not_contact_unowned_lua_pipes",
+        "test_run_stages_exact_mod_and_stops_only_launched_pair",
+    ):
+        assert token in multiplayer_verifier_tests, (
+            f"Lua RNG multiplayer verifier tests lack: {token}"
+        )
+    assert (
+        "python -m unittest tests.test_lua_rng_multiplayer_verifier"
+        in workflow
+    )
 
     return (
         "sd.rng accepts exact pre-run seeds only from the simulation authority, "
-        "publishes the run nonce, and applies it through the native initializer"
+        "publishes the run nonce, and has native-gated two-peer acceptance"
     )
 
 

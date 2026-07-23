@@ -58,3 +58,22 @@ py -3 tools/verify_lua_rng.py
 
 The verifier checks the capability, exact round trip, integer/range rejection, and the
 documented return type. It intentionally leaves its accepted seed pending for the next run.
+
+For the full two-peer authority and native-application acceptance, use a
+disposable local pair:
+
+```powershell
+py tools/verify_lua_rng_multiplayer.py --launch-pair --confirm-mutation
+```
+
+The pair verifier stages only `sample.lua.rng_lab`, suppresses window tiling,
+and leaves unrelated Solomon Dark processes untouched. It begins with no seed
+on either peer and proves that the client cannot select one. While both peers
+remain in the hub, the host owns the selected seed and the client sees it only
+on the authenticated host participant row; the client's local seed remains
+unset. The host's `Run` intent then authorizes the client to install the exact
+nonce, and successful `testrun` entry is contingent on each process applying
+that pending seed through the stock native initializer. After entry, the
+verifier requires the same owner `run_nonce` and in-run state on both peers,
+plus the correct authority-versus-already-in-run rejection on attempted
+replacement. It stops only the two process IDs returned by its own launch.
