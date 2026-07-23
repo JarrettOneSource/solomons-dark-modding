@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lua_enemy_ai.h"
 #include "multiplayer_runtime_state.h"
 
 #include <cstdint>

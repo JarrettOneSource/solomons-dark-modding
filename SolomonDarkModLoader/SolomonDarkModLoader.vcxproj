@@ -83,6 +83,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="include\lua_enemy_ai.h" />
     <ClInclude Include="include\binary_layout.h" />
     <ClInclude Include="include\binary_layout_internal.h" />
     <ClInclude Include="include\bot_runtime.h" />
@@ -344,6 +345,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\input_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\item_drop_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\lua_enemy_ai_runtime.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
@@ -370,6 +372,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_lua_enemy_ai.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl" />
@@ -512,6 +515,8 @@
     <ClCompile Include="src\lua_engine_registered_spell_effects.cpp" />
     <ClCompile Include="src\lua_engine_bindings_items.cpp" />
     <ClCompile Include="src\lua_engine_bindings_enemies.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_ai.cpp" />
+    <ClCompile Include="src\lua_engine_enemy_ai.cpp" />
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />

@@ -51,6 +51,9 @@ from static_lua_enemies_contracts import (
 from static_lua_spells_contracts import (
     test_lua_spells_register_stable_metadata_and_owned_callbacks,
 )
+from static_lua_ai_contracts import (
+    test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving,
+)
 from static_lua_foundations_contracts import (
     test_lua_nav_is_bounded_read_only_and_native_backed,
     test_lua_run_seed_is_authority_owned_and_native_applied,
@@ -352,6 +355,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua spells register stable metadata and owned callbacks",
         test_lua_spells_register_stable_metadata_and_owned_callbacks,
+    ),
+    (
+        "Lua enemy AI is bounded, authority-owned, and collision-preserving",
+        test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving,
     ),
     (
         "Lua timers are bounded, local, and tick-driven",

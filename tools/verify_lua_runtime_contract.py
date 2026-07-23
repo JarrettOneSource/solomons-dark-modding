@@ -66,6 +66,15 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
     ),
     "items": ("register", "get", "list", "grant"),
     "enemies": ("register", "get", "list", "spawn"),
+    "ai": (
+        "register",
+        "get_state",
+        "list",
+        "set_target",
+        "set_move_goal",
+        "stop",
+        "clear",
+    ),
     "draw": (
         "text",
         "rect",

@@ -38,6 +38,37 @@ void CancelQueuedRunLifecycleReplicatedEnemyCatchupSpawn(std::uint64_t network_a
 bool TryGetRunLifecycleLuaEnemySpawnConfig(
     uintptr_t enemy_address,
     SDModLuaEnemySpawnConfig* config);
+bool SetLuaEnemyAiTargetOverride(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    std::uint64_t content_id,
+    std::uint32_t spawn_serial,
+    uintptr_t actor_address,
+    SDModLuaEnemyAiTargetMode target_mode,
+    std::uint64_t target_participant_id,
+    std::string* error_message);
+bool SetLuaEnemyAiMoveGoal(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    std::uint64_t content_id,
+    std::uint32_t spawn_serial,
+    uintptr_t actor_address,
+    float x,
+    float y,
+    float stop_distance,
+    std::string* error_message);
+bool StopLuaEnemyAiMoveGoal(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id);
+bool ClearLuaEnemyAiOverrides(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id);
+bool TryGetLuaEnemyAiCommandState(
+    std::string_view owner_mod_id,
+    std::uint64_t network_actor_id,
+    SDModLuaEnemyAiCommandState* state);
+void ClearLuaEnemyAiOverridesForMod(std::string_view owner_mod_id);
+void ResetLuaEnemyAiOverrides();
 void ForgetRunLifecycleEnemyTracking(uintptr_t enemy_address);
 bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message = nullptr);
 bool TryGetRunLifecycleManualEnemySpawnResult(

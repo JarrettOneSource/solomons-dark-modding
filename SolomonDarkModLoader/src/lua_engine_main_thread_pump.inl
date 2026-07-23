@@ -45,6 +45,7 @@ void PumpLuaWorkOnMainThread(const SDModRuntimeTickContext& context) {
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);
     detail::DispatchPendingLuaEventsToLuaMods();
+    detail::DispatchLuaEnemyAiThink(context);
     if (detail::HasAnyLuaRuntimeTickHandlers()) {
         detail::DispatchRuntimeTickToLuaMods(context);
     }
@@ -60,6 +61,7 @@ void PumpLuaWorkOnGameplayThread(const SDModRuntimeTickContext& context) {
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);
     detail::DispatchPendingLuaEventsToLuaMods();
+    detail::DispatchLuaEnemyAiThink(context);
     if (detail::HasAnyLuaRuntimeTickHandlers()) {
         detail::DispatchRuntimeTickToLuaMods(context);
     }

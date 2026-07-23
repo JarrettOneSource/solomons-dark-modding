@@ -89,6 +89,8 @@ shared state; simulation calls auto-route to the owner).
   resolved against each recipient's peer-local native catalog.
 - **`sd.enemies`** — deterministic semantic stock-archetype registration and
   authority-owned exact spawning with per-actor stats and loot policy.
+- **`sd.ai`** — registered-enemy authority brains with bounded per-spawn
+  blackboards, semantic participant targets, and collision-preserving point goals.
 - **`sd.events`** — `on` plus authority-only `broadcast` for mod-defined ordered events.
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
@@ -139,20 +141,20 @@ shared state; simulation calls auto-route to the owner).
    items and stock-archetype enemies; picker/input integration remains to complete the
    content-registration tier.
 2. **Presentation is incomplete** — Lua drawing exists, but audio and authored UI remain.
-3. **Shared simulation control is incomplete** — enemy brains, scene changes, timing,
-   and other mutations still need authority-routed public seams.
+3. **Shared timing control is incomplete** — enemy brains and scene changes are now
+   authority-owned, while coherent pause/slow-motion still needs its public seam.
 4. **Author DX and presentation parity policy remain incomplete.** Cross-mod contracts now
    exist, but generated editor stubs, hot reload, and manifest-enforced classification of
    presentation-only mods remain.
 
-### Known sharp edges (fix as part of the relevant seam)
+### Resolved sharp edges
 
-- `sd.world.spawn_enemy` freeze = call-shape mismatch in `Enemy_Create` (hardcoded
-  `nullptr,0,0,0,0`) — the enemy-spawn seam must build the correct call, not work around it.
-- Enemies only target gameplay-slot (1–3) actors; standalone bots are invisible to hostile
-  AI. The `sd.ai` targeting seam is where this gets fixed foundationally.
-- Promoting standalone bots via `HookMonsterPathfindingRefreshTarget` hangs the
-  pathfinder — enemy AI needs its own seam, not that hook.
+- The removed hand-built `Enemy_Create` path had an invalid call shape. Registered
+  enemies now enter through the verified exact-group stock spawner.
+- The stock selector's slot-0 assumption is widened with an exact cross-bucket target
+  delta, and `sd.ai` can explicitly target every materialized wizard participant.
+- Arbitrary `GameNpc` goal calls are not used for hostile actors; `sd.ai` steers the
+  proven `Badguy_MoveStep` collision path instead.
 
 ---
 
@@ -274,6 +276,16 @@ callbacks, formalized nav/collision queries.
 *Unlocks:* scripted bosses, invasions, enemies that fight bots, encounter design.
 *Multiplayer:* runs on the authority (enemies are authority-simulated); clients receive
 replicated movement — mod AI code never runs on clients.
+
+**Implemented 2026-07-23.** `sd.ai.register` attaches bounded per-spawn
+blackboards and authority-only `on_think` callbacks to deterministic registered
+enemies. Semantic target overrides support the local wizard and every materialized
+participant, while point goals rotate the proven hostile move vector without
+bypassing the stock collision executor. RE established that `kGameNpcSetMoveGoal`
+belongs to a different actor class, so the implementation composes at
+`MonsterPathfinding_RefreshTarget`/`Badguy_MoveStep` instead of making an invalid
+cross-class call. Clients run no mod AI and receive the resulting protocol-77 world
+snapshots. See `lua-ai.md` and the opt-in `sample.lua.ai_boss_lab` mod.
 
 ### Tier 2 — ecosystem infrastructure
 

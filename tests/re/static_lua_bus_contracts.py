@@ -29,7 +29,7 @@ def test_lua_bus_is_manifest_resolved_bounded_and_local() -> str:
     verifier = _read("tools/verify_lua_bus.py")
 
     assert "RegisterLuaBusBindings(mod->state)" in bindings
-    assert "lua_createtable(mod->state, 0, 23);" in bindings
+    assert "lua_createtable(mod->state, 0, 24);" in bindings
     assert "std::vector<LuaBusSubscription> bus_subscriptions" in internal
     assert '"bus.local.contracts"' in engine
     assert "ClearLuaBusSubscriptionsForMod(mod)" in engine

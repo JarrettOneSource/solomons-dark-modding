@@ -10,5 +10,6 @@
 #include "public_api_state_getters.inl"
 #include "public_api_inventory.inl"
 #include "public_api_debug_and_spawn.inl"
+#include "public_api_lua_enemy_ai.inl"
 #include "public_api_replicated_loot.inl"
 #include "nav_grid_snapshot_service.inl"

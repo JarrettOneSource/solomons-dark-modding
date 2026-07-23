@@ -458,7 +458,8 @@ void DispatchRuntimeTickToLuaMods(const SDModRuntimeTickContext& context) {
 bool HasAnyLuaRuntimeTickHandlers() {
     for (const auto& mod : LoadedLuaModsStorage()) {
         if (mod != nullptr &&
-            (mod->runtime_tick_registered || HasLuaTimers(mod.get()))) {
+            (mod->runtime_tick_registered || HasLuaTimers(mod.get()) ||
+             HasLuaEnemyAiRegistrations(mod.get()))) {
             return true;
         }
     }
@@ -467,12 +468,14 @@ bool HasAnyLuaRuntimeTickHandlers() {
 }
 
 void DispatchRunStartedToLuaMods() {
+    ResetLuaEnemyAiRuntime();
     for (const auto& mod : LoadedLuaModsStorage()) {
         DispatchRunStartedToMod(mod.get());
     }
 }
 
 void DispatchRunEndedToLuaMods(const char* reason) {
+    ResetLuaEnemyAiRuntime();
     for (const auto& mod : LoadedLuaModsStorage()) {
         DispatchRunEndedToMod(mod.get(), reason);
     }

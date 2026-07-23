@@ -130,6 +130,24 @@ struct LuaEnemyDefinition {
     LuaEnemyLootPolicy loot_policy = LuaEnemyLootPolicy::Stock;
 };
 
+struct LuaEnemyAiRegistration {
+    std::uint64_t content_id = 0;
+    std::string enemy_key;
+    std::uint32_t interval_ms = 100;
+    int on_think_reference = -2;
+    LuaModValue initial_blackboard;
+};
+
+struct LuaEnemyAiInstance {
+    std::uint64_t network_actor_id = 0;
+    std::uint64_t content_id = 0;
+    std::uint32_t spawn_serial = 0;
+    uintptr_t actor_address = 0;
+    std::uint64_t next_think_ms = 0;
+    std::uint64_t think_count = 0;
+    LuaModValue blackboard;
+};
+
 struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
@@ -158,6 +176,8 @@ struct LoadedLuaMod {
     std::uint64_t next_spell_effect_id = 1;
     std::vector<LuaItemDefinition> item_definitions;
     std::vector<LuaEnemyDefinition> enemy_definitions;
+    std::vector<LuaEnemyAiRegistration> enemy_ai_registrations;
+    std::vector<LuaEnemyAiInstance> enemy_ai_instances;
 };
 
 std::mutex& LuaEngineMutex();
@@ -219,6 +239,11 @@ void DispatchPendingLuaRegisteredSpellCasts(
     const SDModRuntimeTickContext& context);
 void TickLuaRegisteredSpellEffects(
     const SDModRuntimeTickContext& context);
+bool HasLuaEnemyAiRegistrations(const LoadedLuaMod* mod);
+void DispatchLuaEnemyAiThink(
+    const SDModRuntimeTickContext& context);
+void ResetLuaEnemyAiRuntime();
+void ClearLuaEnemyAiRuntimeForMod(LoadedLuaMod* mod);
 bool CreateLuaSpellEffectsFromCallbackResult(
     LoadedLuaMod* mod,
     const LuaSpellDefinition& definition,

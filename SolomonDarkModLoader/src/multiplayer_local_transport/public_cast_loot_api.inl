@@ -9,8 +9,7 @@ std::uint64_t GetLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
 }
 
 void NotifyLocalWorldActorUnregistered(uintptr_t actor_address) {
-    if (!g_local_transport.initialized ||
-        !g_local_transport.is_host ||
+    if (!IsLuaModSimulationAuthority() ||
         actor_address == 0) {
         return;
     }

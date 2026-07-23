@@ -4,7 +4,7 @@ bool TryFindHostRunEnemyByNetworkId(
     if (actor_out != nullptr) {
         *actor_out = {};
     }
-    if (network_actor_id == 0 || !g_local_transport.is_host) {
+    if (network_actor_id == 0 || !IsLuaModSimulationAuthority()) {
         return false;
     }
 
@@ -168,7 +168,7 @@ std::uint64_t ResolveLocalRunEnemyNetworkActorId(const SDModSceneActorState& act
         return 0;
     }
 
-    if (g_local_transport.is_host) {
+    if (IsLuaModSimulationAuthority()) {
         std::uint32_t spawn_serial = 0;
         if (TryGetRunLifecycleEnemySpawnSerial(actor.actor_address, &spawn_serial)) {
             return BuildRunWorldActorNetworkId(spawn_serial);
@@ -202,7 +202,7 @@ bool TryFindLocalRunEnemyByNetworkIdInternal(
         return false;
     }
 
-    if (g_local_transport.is_host) {
+    if (IsLuaModSimulationAuthority()) {
         return TryFindHostRunEnemyByNetworkId(network_actor_id, actor_out);
     }
 

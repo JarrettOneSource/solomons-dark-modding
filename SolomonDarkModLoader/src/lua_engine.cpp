@@ -335,6 +335,8 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "items.read",
         "enemies.register",
         "enemies.read",
+        "ai.register",
+        "ai.read",
     };
 
     if (multiplayer::IsFoundationInitialized()) {
@@ -351,6 +353,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         capabilities.emplace_back("scene.switch.authority");
         capabilities.emplace_back("items.grant.authority");
         capabilities.emplace_back("enemies.spawn.authority");
+        capabilities.emplace_back("ai.control.authority");
         capabilities.emplace_back("spells.cast.owner");
     }
 
@@ -427,6 +430,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaTimersForMod(mod);
     ClearLuaBusSubscriptionsForMod(mod);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
+    ClearLuaEnemyAiRuntimeForMod(mod);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {
         lua_close(mod->state);
@@ -453,6 +457,8 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     mod->next_spell_effect_id = 1;
     mod->item_definitions.clear();
     mod->enemy_definitions.clear();
+    mod->enemy_ai_registrations.clear();
+    mod->enemy_ai_instances.clear();
 }
 
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {
@@ -480,6 +486,7 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     ResetLuaContentRegistry();
     ResetLuaModStateStore();
     detail::ResetLuaRegisteredSpellRuntime();
+    detail::ResetLuaEnemyAiRuntime();
     detail::ResetLuaEventFilterRegistrations();
     if (!InitializeWaveIntelligence(bootstrap.stage_root, error_message)) {
         return false;
@@ -524,6 +531,7 @@ void ShutdownLuaEngine() {
     ResetLuaContentRegistry();
     ResetLuaModStateStore();
     detail::ResetLuaRegisteredSpellRuntime();
+    detail::ResetLuaEnemyAiRuntime();
     detail::ResetLuaEventFilterRegistrations();
     ShutdownLuaDrawRuntime();
     ShutdownWaveIntelligence();
