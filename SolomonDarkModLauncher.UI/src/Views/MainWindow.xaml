@@ -187,35 +187,34 @@
                     Padding="20,18"
                     Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <WrapPanel HorizontalAlignment="Center">
+                    <UniformGrid Columns="5" Rows="1">
                         <Button Command="{Binding HostSteamCommand}"
                                 Content="{Binding HostButtonText}"
-                                MinWidth="168"
-                                Margin="5,4"
+                                Margin="4,4"
+                                Padding="8,10"
                                 Style="{StaticResource PrimaryButtonStyle}" />
                         <Button Command="{Binding JoinSteamCommand}"
                                 Content="Join Lobby ID"
-                                MinWidth="142"
-                                Margin="5,4"
+                                Margin="4,4"
+                                Padding="8,10"
                                 Style="{StaticResource OutlineButtonStyle}" />
                         <Button Command="{Binding LaunchSinglePlayerCommand}"
                                 Content="Play Solo"
-                                MinWidth="146"
-                                Margin="5,4"
-                                Padding="20,10"
+                                Margin="4,4"
+                                Padding="8,10"
                                 FontSize="13"
                                 Style="{StaticResource SecondaryButtonStyle}" />
                         <Button Command="{Binding HowToPlayCommand}"
                                 Content="How to Play"
-                                MinWidth="128"
-                                Margin="5,4"
+                                Margin="4,4"
+                                Padding="8,10"
                                 Style="{StaticResource OutlineButtonStyle}" />
                         <Button Command="{Binding OpenSettingsCommand}"
                                 Content="Settings"
-                                MinWidth="118"
-                                Margin="5,4"
+                                Margin="4,4"
+                                Padding="8,10"
                                 Style="{StaticResource OutlineButtonStyle}" />
-                    </WrapPanel>
+                    </UniformGrid>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
                         <TextBlock Text="Lobby ID"
