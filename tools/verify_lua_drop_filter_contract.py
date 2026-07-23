@@ -4,106 +4,29 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
-REQUIRED_SNIPPETS = (
-    (
-        "SolomonDarkModLoader/include/lua_event_filters.h",
-        "kLuaDropRollingFilterMask = 1u << 3",
-        "drop filter mask",
-    ),
-    (
-        "SolomonDarkModLoader/src/lua_engine_filters.cpp",
-        'filter_name == "drop.rolling"',
-        "drop filter registration",
-    ),
-    (
-        "SolomonDarkModLoader/src/lua_engine_drop_filters.cpp",
-        "ApplyLuaDropRollFilters",
-        "ordered Lua filter implementation",
-    ),
-    (
-        "SolomonDarkModLoader/src/lua_engine.cpp",
-        '"events.filters.drop_roll"',
-        "runtime capability",
-    ),
-    (
-        "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl",
-        '"enemy_drop_selector", kEnemyDropSelector',
-        "resolved native seam",
-    ),
-    (
-        "config/binary-layout.ini",
-        "enemy_drop_selector=0x0047C070",
-        "retail selector address",
-    ),
-    (
-        "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl",
-        "targets[kHookDropSelector] = {kEnemyDropSelector, 7}",
-        "whole-instruction hook target",
-    ),
-    (
-        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/drop_roll_filter.inl",
-        "multiplayer::IsLocalTransportClient()",
-        "transport client authority gate",
-    ),
-    (
-        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/drop_roll_filter.inl",
-        "RestoreLuaDropRollFilterState(original_filter_context)",
-        "native transaction restore",
-    ),
-    (
-        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/drop_roll_filter.inl",
-        "selectors->fill(kDropForcedSelectorValue)",
-        "single-category force policy",
-    ),
-    (
-        "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj",
-        'ClCompile Include="src\\lua_engine_drop_filters.cpp"',
-        "project source membership",
-    ),
-    (
-        "docs/lua-drop-roll-filter.md",
-        "sd.events.filter(\"drop.rolling\", handler)",
-        "public API documentation",
-    ),
-    (
-        "mods/lua_drop_roll_filter_lab/manifest.json",
-        '"events.filters.drop_roll"',
-        "sample capability declaration",
-    ),
-)
+TEST_ROOT = ROOT / "tests" / "re"
 
 
 def main() -> int:
-    failures: list[dict[str, str]] = []
-    for relative_path, snippet, label in REQUIRED_SNIPPETS:
-        path = ROOT / relative_path
-        if not path.is_file():
-            failures.append(
-                {"label": label, "path": relative_path, "error": "missing file"}
-            )
-            continue
-        text = path.read_text(encoding="utf-8")
-        if snippet not in text:
-            failures.append(
-                {
-                    "label": label,
-                    "path": relative_path,
-                    "error": f"missing snippet: {snippet}",
-                }
-            )
+    sys.path.insert(0, str(TEST_ROOT))
+    from static_lua_drop_roll_filter_contracts import (  # noqa: PLC0415
+        test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving,
+    )
 
-    result = {
-        "ok": not failures,
-        "checks": len(REQUIRED_SNIPPETS),
-        "failures": failures,
-    }
-    print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if result["ok"] else 1
+    try:
+        detail = (
+            test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving()
+        )
+    except Exception as error:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(error)}, indent=2))
+        return 1
+    print(json.dumps({"ok": True, "detail": detail}, indent=2))
+    return 0
 
 
 if __name__ == "__main__":

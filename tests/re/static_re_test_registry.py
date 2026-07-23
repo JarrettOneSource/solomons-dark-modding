@@ -33,6 +33,12 @@ from static_lua_event_filter_contracts import (
 from static_lua_enemy_spawn_filter_contracts import (
     test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,
 )
+from static_lua_drop_roll_filter_contracts import (
+    test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving,
+)
+from static_lua_wave_spawn_filter_contracts import (
+    test_lua_wave_spawn_filters_are_owner_side_transactional_and_stock_preserving,
+)
 from static_lua_spell_cast_filter_contracts import (
     test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt,
 )
@@ -423,6 +429,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua enemy-spawn filter preserves stock call shape and ownership",
         test_lua_enemy_spawn_filter_preserves_stock_call_shape_and_ownership,
+    ),
+    (
+        "Lua drop-roll filters are owner-side, transactional, and stock-preserving",
+        test_lua_drop_roll_filters_are_owner_side_transactional_and_stock_preserving,
+    ),
+    (
+        "Lua wave-spawn filters are owner-side, transactional, and stock-preserving",
+        test_lua_wave_spawn_filters_are_owner_side_transactional_and_stock_preserving,
     ),
     (
         "Lua damage filters are ordered, owner-side, and transactional",

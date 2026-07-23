@@ -31,3 +31,7 @@ jobs:
         run: python -m unittest tests.test_lua_spells_verifier
       - name: Test launcher/native protocol alignment
         run: python -m unittest tests.test_protocol_version_alignment
+      - name: Verify Lua drop-roll filter contract
+        run: python tools/verify_lua_drop_filter_contract.py
+      - name: Verify Lua wave-spawn filter contract
+        run: python tools/verify_lua_wave_spawn_filter_contract.py
