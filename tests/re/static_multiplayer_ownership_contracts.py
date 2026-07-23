@@ -559,7 +559,9 @@ def test_transient_status_correction_ack_waits_for_native_application() -> str:
         "SolomonDarkModLoader/include/multiplayer_local_transport.h"
     )
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
-    mod_loader_header = _read("SolomonDarkModLoader/include/mod_loader.h")
+    mod_loader_header = read_source_unit(
+        "SolomonDarkModLoader/include/mod_loader.h"
+    )
     requests = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/runtime_request_state.inl"
     )
@@ -571,7 +573,7 @@ def test_transient_status_correction_ack_waits_for_native_application() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "dispatch_and_hooks_participant_vitals_actions.inl"
     )
-    authority = _read(
+    authority = read_source_unit(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "participant_vitals_authority.inl"
     )

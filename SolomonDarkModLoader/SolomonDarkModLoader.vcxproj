@@ -108,6 +108,7 @@
     <ClInclude Include="include\mod_loader.h" />
     <ClInclude Include="include\mod_loader_hub_state.inl" />
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
+    <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
@@ -229,6 +230,7 @@
     <ClInclude Include="src\lua_engine_event_queue.inl" />
     <ClInclude Include="src\lua_exec_wait.inl" />
     <ClInclude Include="src\lua_engine_main_thread_pump.inl" />
+    <ClInclude Include="src\lua_engine_registered_spell_effect_parsing.inl" />
     <ClInclude Include="src\bot_runtime\helpers.inl" />
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
     <ClInclude Include="src\bot_runtime\helpers\defaults_and_lookup.inl" />
@@ -340,6 +342,7 @@
     <ClInclude Include="src\mod_loader_gameplay\execute_requests\spawn_standalone_wizard.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_gameplay_thread_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_native_probe_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_participant_vitals_actions.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl" />
@@ -371,9 +374,11 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_control_hooks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\hub_service_runtime.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\lua_spell_cast_filter.inl" />
     <ClInclude Include="src\mod_loader_gameplay\nav_grid_snapshot_service.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_defense_behavior_probes.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_enemy_death_probe.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_experience_gain_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\host_loot_drop_deactivation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\local_player_native_equipment.inl" />
     <ClInclude Include="src\mod_loader_gameplay\lua_item_grant.inl" />
@@ -388,6 +393,8 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_behavior_probes.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_experience_gain_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
@@ -398,6 +405,7 @@
     <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_gold_pickup_feedback.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\replicated_loot_pickup_feedback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_public_api.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\spell_effect_materialization.inl" />
@@ -429,6 +437,7 @@
     <ClInclude Include="src\multiplayer_local_transport\air_chain_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\cast_target_resolution.inl" />
     <ClInclude Include="src\multiplayer_local_transport\client_enemy_damage_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\completed_host_loot_pickups.inl" />
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl" />
@@ -441,6 +450,7 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_item_grant_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\hagatha_perk_state.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_barrier_sync.inl" />
@@ -452,13 +462,17 @@
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_packet_handlers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_cast_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\native_progression_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\native_progression_derived_stats.inl" />
     <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\participant_vitals_correction.inl" />
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl" />

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import json
 
-from static_re_contract_support import ROOT, StaticReTestFailure, read_text
+from static_re_contract_support import (
+    ROOT,
+    StaticReTestFailure,
+    read_mod_loader_header_source,
+    read_source_unit,
+    read_text,
+)
 
 
 EXPECTED_NAMES = (
@@ -357,7 +363,7 @@ def test_hagatha_one_shot_runtime_state_is_host_authoritative() -> str:
     protocol = read_text(
         ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
     )
-    authority = read_text(
+    authority = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/participant_vitals_authority.inl"
     )
@@ -580,7 +586,7 @@ def test_cheat_death_health_increase_is_captured_as_authoritative_damage() -> st
         ),
         failures,
     )
-    authority = read_text(
+    authority = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/participant_vitals_authority.inl"
     )
@@ -683,8 +689,8 @@ def test_hagatha_combat_modifiers_have_exact_two_owner_coverage() -> str:
     native_probe = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/native_defense_behavior_probes.inl"
     )
-    public_api = read_text(ROOT / "SolomonDarkModLoader/include/mod_loader.h")
-    action_queue = read_text(
+    public_api = read_mod_loader_header_source()
+    action_queue = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_gameplay_action_queues.inl"
     )
