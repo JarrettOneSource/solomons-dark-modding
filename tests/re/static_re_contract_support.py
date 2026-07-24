@@ -237,6 +237,26 @@ def _host_path(raw_path: str) -> Path:
     return path
 
 
+def _primary_checkout_root(root: Path) -> Path | None:
+    git_file = root / ".git"
+    if not git_file.is_file():
+        return None
+    try:
+        marker = git_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    prefix = "gitdir:"
+    if not marker.lower().startswith(prefix):
+        return None
+    git_dir = _host_path(marker[len(prefix):].strip())
+    if not git_dir.is_absolute():
+        git_dir = root / git_dir
+    for candidate in (git_dir, *git_dir.parents):
+        if candidate.name == ".git":
+            return candidate.parent
+    return None
+
+
 def resolve_abandonware_binary(
     *,
     root: Path = ROOT,
@@ -270,6 +290,12 @@ def resolve_abandonware_binary(
         except (OSError, ValueError, TypeError):
             pass
 
+    primary_checkout = _primary_checkout_root(root)
+    if primary_checkout is not None:
+        candidates.append(
+            primary_checkout.parent
+            / "SolomonDarkAbandonware/SolomonDark.exe"
+        )
     candidates.extend(
         (
             root.parent / "SolomonDarkAbandonware/SolomonDark.exe",
