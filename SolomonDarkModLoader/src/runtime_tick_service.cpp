@@ -5,10 +5,10 @@
 #include "runtime_debug.h"
 
 #include <Windows.h>
+#include <process.h>
 
 #include <atomic>
 #include <cstdint>
-#include <thread>
 
 namespace sdmod {
 namespace {
@@ -16,10 +16,10 @@ namespace {
 constexpr std::uint32_t kRuntimeTickIntervalMs = 50;
 
 std::atomic<bool> g_runtime_tick_running = false;
-std::thread g_runtime_tick_thread;
+HANDLE g_runtime_tick_thread = nullptr;
 HANDLE g_runtime_tick_stop_event = nullptr;
 
-void RuntimeTickThreadMain() {
+unsigned __stdcall RuntimeTickThreadMain(void*) {
     std::uint64_t tick_count = 0;
     while (g_runtime_tick_running.load(std::memory_order_acquire)) {
         ++tick_count;
@@ -35,6 +35,7 @@ void RuntimeTickThreadMain() {
             break;
         }
     }
+    return 0;
 }
 
 }  // namespace
@@ -51,17 +52,24 @@ bool StartRuntimeTickService() {
         return false;
     }
 
-    try {
-        g_runtime_tick_thread = std::thread(RuntimeTickThreadMain);
-        Log("Runtime tick service started.");
-        return true;
-    } catch (...) {
+    const auto runtime_tick_thread = _beginthreadex(
+        nullptr,
+        0,
+        &RuntimeTickThreadMain,
+        nullptr,
+        0,
+        nullptr);
+    if (runtime_tick_thread == 0) {
         g_runtime_tick_running.store(false, std::memory_order_release);
         CloseHandle(g_runtime_tick_stop_event);
         g_runtime_tick_stop_event = nullptr;
         Log("Runtime tick service failed to start the worker thread.");
         return false;
     }
+
+    g_runtime_tick_thread = reinterpret_cast<HANDLE>(runtime_tick_thread);
+    Log("Runtime tick service started.");
+    return true;
 }
 
 void StopRuntimeTickService() {
@@ -69,8 +77,10 @@ void StopRuntimeTickService() {
     if (g_runtime_tick_stop_event != nullptr) {
         SetEvent(g_runtime_tick_stop_event);
     }
-    if (g_runtime_tick_thread.joinable()) {
-        g_runtime_tick_thread.join();
+    if (g_runtime_tick_thread != nullptr) {
+        WaitForSingleObject(g_runtime_tick_thread, INFINITE);
+        CloseHandle(g_runtime_tick_thread);
+        g_runtime_tick_thread = nullptr;
     }
     if (g_runtime_tick_stop_event != nullptr) {
         CloseHandle(g_runtime_tick_stop_event);

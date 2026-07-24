@@ -656,7 +656,9 @@ def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread
         ROOT / "tools/verify_steam_friend_run_exit_reentry.py"
     )
 
-    service_thread_start = service_loop_text.find("void ServiceThreadMain()")
+    service_thread_start = service_loop_text.find(
+        "unsigned __stdcall ServiceThreadMain(void*)"
+    )
     service_thread_end = service_loop_text.find(
         "\n}  // namespace",
         service_thread_start,

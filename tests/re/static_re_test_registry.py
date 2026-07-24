@@ -347,6 +347,7 @@ from static_re_binary_tooling_contracts import (
     test_native_global_reads_do_not_use_loader_substitutes,
     test_path_builder_does_not_walk_to_unrequested_alternate_goals,
     test_path_builder_expands_cells_before_los_smoothing,
+    test_process_termination_has_no_joinable_static_worker_destructors,
     test_process_termination_skips_loader_shutdown,
     test_remaining_native_addresses_and_probe_offsets_are_layout_backed,
     test_repo_wide_native_reads_do_not_publish_substitute_state,
@@ -930,6 +931,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "process termination skips loader-lock Steam shutdown",
         test_process_termination_skips_loader_shutdown,
+    ),
+    (
+        "process termination has no joinable static worker destructors",
+        test_process_termination_has_no_joinable_static_worker_destructors,
     ),
     (
         "crash reports preserve the faulting x86 frame chain",

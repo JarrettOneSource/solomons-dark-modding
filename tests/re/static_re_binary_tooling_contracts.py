@@ -373,6 +373,56 @@ def test_process_termination_skips_loader_shutdown() -> str:
     return "process termination bypasses loader-lock Steam/network shutdown"
 
 
+def test_process_termination_has_no_joinable_static_worker_destructors() -> str:
+    worker_sources = {
+        "Lua exec pipe": read_text(
+            ROOT / "SolomonDarkModLoader/src/lua_exec_pipe.cpp"
+        ),
+        "multiplayer service": read_text(
+            ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+        ),
+        "runtime tick": read_text(
+            ROOT / "SolomonDarkModLoader/src/runtime_tick_service.cpp"
+        ),
+    }
+
+    joinable_statics = [
+        name
+        for name, source in worker_sources.items()
+        if re.search(r"^std::thread\s+g_\w+_thread\s*;", source, re.M)
+    ]
+    if joinable_statics:
+        raise StaticReTestFailure(
+            "process-lifetime workers still register joinable std::thread "
+            "destructors: " + ", ".join(joinable_statics)
+        )
+
+    missing_native_lifecycle = [
+        name
+        for name, source in worker_sources.items()
+        if not all(
+            token in source
+            for token in (
+                "#include <process.h>",
+                "HANDLE g_",
+                "_beginthreadex(",
+                "WaitForSingleObject(",
+                "CloseHandle(",
+            )
+        )
+    ]
+    if missing_native_lifecycle:
+        raise StaticReTestFailure(
+            "process-lifetime workers do not use explicit native handles: "
+            + ", ".join(missing_native_lifecycle)
+        )
+
+    return (
+        "process-lifetime workers use explicit handles with no joinable "
+        "static destructors"
+    )
+
+
 def test_crash_reports_preserve_faulting_x86_frame_chain() -> str:
     internal_header = read_text(
         ROOT / "SolomonDarkModLoader/src/logger_internal.h"

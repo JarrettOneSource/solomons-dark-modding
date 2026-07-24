@@ -8,12 +8,12 @@
 #include "steam_bootstrap.h"
 
 #include <Windows.h>
+#include <process.h>
 
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
-#include <thread>
 
 namespace sdmod::multiplayer {
 namespace {
@@ -24,7 +24,7 @@ constexpr std::uint64_t kSteamStageDurationDiagnosticMs = 100;
 constexpr std::uint64_t kSteamStageDiagnosticIntervalMs = 1000;
 
 std::atomic<bool> g_service_running = false;
-std::thread g_service_thread;
+HANDLE g_service_thread = nullptr;
 HANDLE g_service_stop_event = nullptr;
 std::mutex g_session_transport_lifecycle_mutex;
 std::atomic<DWORD> g_gameplay_transport_owner_thread_id{0};
@@ -49,7 +49,7 @@ void LogStateTransitionIfNeeded(const RuntimeState& runtime_state,
     }
 }
 
-void ServiceThreadMain() {
+unsigned __stdcall ServiceThreadMain(void*) {
     bool logged_ready = false;
     std::string last_error;
     SessionStatus last_status = SessionStatus::Idle;
@@ -121,6 +121,7 @@ void ServiceThreadMain() {
     UpdateRuntimeState([](RuntimeState& state) {
         state.service_loop_running = false;
     });
+    return 0;
 }
 
 }  // namespace
@@ -154,10 +155,14 @@ bool StartServiceLoop() {
     g_last_gameplay_transport_tick_ms = 0;
     g_has_gameplay_transport_tick = false;
     g_service_running.store(true, std::memory_order_release);
-    try {
-        g_service_thread = std::thread(ServiceThreadMain);
-        return true;
-    } catch (...) {
+    const auto service_thread = _beginthreadex(
+        nullptr,
+        0,
+        &ServiceThreadMain,
+        nullptr,
+        0,
+        nullptr);
+    if (service_thread == 0) {
         g_service_running.store(false, std::memory_order_release);
         CloseHandle(g_service_stop_event);
         g_service_stop_event = nullptr;
@@ -166,6 +171,9 @@ bool StartServiceLoop() {
         Log("Multiplayer foundation: failed to start the service loop thread.");
         return false;
     }
+
+    g_service_thread = reinterpret_cast<HANDLE>(service_thread);
+    return true;
 }
 
 void StopServiceLoop() {
@@ -173,8 +181,10 @@ void StopServiceLoop() {
     if (g_service_stop_event != nullptr) {
         SetEvent(g_service_stop_event);
     }
-    if (g_service_thread.joinable()) {
-        g_service_thread.join();
+    if (g_service_thread != nullptr) {
+        WaitForSingleObject(g_service_thread, INFINITE);
+        CloseHandle(g_service_thread);
+        g_service_thread = nullptr;
     }
     if (g_service_stop_event != nullptr) {
         CloseHandle(g_service_stop_event);

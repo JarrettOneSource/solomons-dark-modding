@@ -4,15 +4,14 @@
 #include "lua_engine.h"
 
 #include <Windows.h>
+#include <process.h>
 
 #include <atomic>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
 
 namespace sdmod {
@@ -30,7 +29,7 @@ constexpr size_t kMaxPipeMessageSize = 1024 * 1024;
 constexpr std::uint32_t kLuaExecHangBackstopMs = 30000;
 
 std::atomic<bool> g_pipe_running = false;
-std::thread g_pipe_thread;
+HANDLE g_pipe_thread = nullptr;
 HANDLE g_pipe_stop_event = nullptr;
 
 enum class PipeReadStatus {
@@ -362,7 +361,7 @@ void NudgePipeServerForShutdown() {
     }
 }
 
-void PipeServerMain() {
+unsigned __stdcall PipeServerMain(void*) {
     Log("[lua-exec-pipe] server started. name=" + WideToUtf8(PipeName()));
 
     while (g_pipe_running.load(std::memory_order_acquire)) {
@@ -434,6 +433,7 @@ void PipeServerMain() {
 
     g_pipe_running.store(false, std::memory_order_release);
     Log("[lua-exec-pipe] server stopped.");
+    return 0;
 }
 
 }  // namespace
@@ -450,29 +450,36 @@ bool StartLuaExecPipeServer() {
         return false;
     }
 
-    try {
-        g_pipe_thread = std::thread(PipeServerMain);
-        return true;
-    } catch (...) {
+    const auto pipe_thread = _beginthreadex(
+        nullptr,
+        0,
+        &PipeServerMain,
+        nullptr,
+        0,
+        nullptr);
+    if (pipe_thread == 0) {
         g_pipe_running.store(false, std::memory_order_release);
         CloseHandle(g_pipe_stop_event);
         g_pipe_stop_event = nullptr;
         Log("Lua exec pipe: failed to start thread.");
         return false;
     }
+
+    g_pipe_thread = reinterpret_cast<HANDLE>(pipe_thread);
+    return true;
 }
 
 void StopLuaExecPipeServer() {
     const bool was_running = g_pipe_running.exchange(false, std::memory_order_acq_rel);
-    if (!was_running && !g_pipe_thread.joinable() && g_pipe_stop_event == nullptr) {
+    if (!was_running && g_pipe_thread == nullptr && g_pipe_stop_event == nullptr) {
         return;
     }
 
     if (g_pipe_stop_event != nullptr) {
         SetEvent(g_pipe_stop_event);
     }
-    if (g_pipe_thread.joinable()) {
-        const BOOL canceled = CancelSynchronousIo(g_pipe_thread.native_handle());
+    if (g_pipe_thread != nullptr) {
+        const BOOL canceled = CancelSynchronousIo(g_pipe_thread);
         if (!canceled) {
             const DWORD error = GetLastError();
             if (error != ERROR_NOT_FOUND && error != ERROR_INVALID_HANDLE) {
@@ -480,13 +487,9 @@ void StopLuaExecPipeServer() {
             }
         }
         NudgePipeServerForShutdown();
-        try {
-            g_pipe_thread.join();
-        } catch (const std::exception& ex) {
-            Log(std::string("[lua-exec-pipe] failed to join server thread during shutdown: ") + ex.what());
-        } catch (...) {
-            Log("[lua-exec-pipe] failed to join server thread during shutdown: unknown exception.");
-        }
+        WaitForSingleObject(g_pipe_thread, INFINITE);
+        CloseHandle(g_pipe_thread);
+        g_pipe_thread = nullptr;
     }
     if (g_pipe_stop_event != nullptr) {
         CloseHandle(g_pipe_stop_event);
