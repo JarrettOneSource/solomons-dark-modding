@@ -30,10 +30,12 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     nudge_player,
+    place_player,
     path_for_powershell,
     parse_int_text,
     parse_key_values,
     select_available_windows_udp_ports,
+    snap_to_nav,
     stop_game_processes,
     wait_for_remote,
     wait_for_scene,
@@ -55,6 +57,8 @@ WAVE_FIXTURE = (
 STAFF_TYPE_ID = 0x1B5C
 VITAL_TOLERANCE = 0.05
 POSITION_TOLERANCE = 0.25
+REMOTE_POSITION_TOLERANCE = 3.0
+FAR_FROM_SPAWN_MINIMUM = 220.0
 CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 FIRST_PICKER_OPTION_X = 0.375
 PICKER_OPTION_Y = 0.5
@@ -130,6 +134,508 @@ def _number(values: Mapping[str, str], key: str) -> float:
     except (TypeError, ValueError):
         return math.nan
     return value if math.isfinite(value) else math.nan
+
+
+def _distance(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+) -> float:
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+def _spawn_from_state(
+    values: Mapping[str, str],
+    *,
+    label: str,
+) -> dict[str, Any]:
+    spawn_x = _number(values, "player_spawn_x")
+    spawn_y = _number(values, "player_spawn_y")
+    spawn_facing = _number(values, "player_spawn_facing")
+    arena_address = _integer(values, "arena_address")
+    if (
+        values.get("player_spawn_valid") != "true"
+        or not math.isfinite(spawn_x)
+        or not math.isfinite(spawn_y)
+        or not math.isfinite(spawn_facing)
+        or arena_address == 0
+    ):
+        raise VerifyFailure(
+            f"{label} did not expose the live Arena player spawn: "
+            f"{dict(values)}"
+        )
+    return {
+        "arena_address": arena_address,
+        "x": spawn_x,
+        "y": spawn_y,
+        "facing": spawn_facing,
+    }
+
+
+def _assert_spawn_parity(
+    client_values: Mapping[str, str],
+    host_values: Mapping[str, str],
+) -> dict[str, Any]:
+    client = _spawn_from_state(client_values, label="client")
+    host = _spawn_from_state(host_values, label="host")
+    if (
+        abs(client["x"] - host["x"]) > POSITION_TOLERANCE
+        or abs(client["y"] - host["y"]) > POSITION_TOLERANCE
+        or abs(client["facing"] - host["facing"])
+        > POSITION_TOLERANCE
+    ):
+        raise VerifyFailure(
+            "host and client Arena player-spawn state diverged: "
+            f"host={host} client={client}"
+        )
+    return {"host": host, "client": client}
+
+
+def _wait_for_far_client_position(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+    expected_x: float,
+    expected_y: float,
+    spawn_x: float,
+    spawn_y: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + 10.0
+    stable_since: float | None = None
+    last_client: dict[str, str] = {}
+    last_host: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last_client = death.query_spectator_state(client_pipe)
+        last_host = death.query_remote_death_state(
+            host_pipe,
+            CLIENT_ID,
+        )
+        client_x = _number(last_client, "x")
+        client_y = _number(last_client, "y")
+        host_x = _number(last_host, "x")
+        host_y = _number(last_host, "y")
+        converged = (
+            last_host.get("materialized") == "true"
+            and _distance(
+                client_x,
+                client_y,
+                expected_x,
+                expected_y,
+            )
+            <= REMOTE_POSITION_TOLERANCE
+            and _distance(
+                host_x,
+                host_y,
+                expected_x,
+                expected_y,
+            )
+            <= REMOTE_POSITION_TOLERANCE
+            and _distance(
+                client_x,
+                client_y,
+                spawn_x,
+                spawn_y,
+            )
+            >= FAR_FROM_SPAWN_MINIMUM
+        )
+        if converged:
+            if stable_since is None:
+                stable_since = time.monotonic()
+            elif time.monotonic() - stable_since >= 0.5:
+                return {
+                    "expected": {
+                        "x": expected_x,
+                        "y": expected_y,
+                    },
+                    "client": last_client,
+                    "host": last_host,
+                    "distance_from_spawn": _distance(
+                        client_x,
+                        client_y,
+                        spawn_x,
+                        spawn_y,
+                    ),
+                }
+        else:
+            stable_since = None
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "client did not settle far from the Arena spawn on both peers: "
+        f"expected=({expected_x},{expected_y}) "
+        f"client={last_client} host={last_host}"
+    )
+
+
+def _place_client_far_from_spawn(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+) -> dict[str, Any]:
+    client_before = death.query_spectator_state(client_pipe)
+    host_before = death.query_remote_death_state(
+        host_pipe,
+        CLIENT_ID,
+    )
+    spawn = _assert_spawn_parity(client_before, host_before)
+    spawn_x = float(spawn["host"]["x"])
+    spawn_y = float(spawn["host"]["y"])
+    candidates: list[tuple[float, float]] = []
+    for dx, dy in (
+        (520.0, 360.0),
+        (-520.0, 360.0),
+        (520.0, -360.0),
+        (-520.0, -360.0),
+    ):
+        try:
+            candidates.append(
+                snap_to_nav(
+                    client_pipe,
+                    spawn_x + dx,
+                    spawn_y + dy,
+                )
+            )
+        except VerifyFailure:
+            continue
+    if not candidates:
+        raise VerifyFailure(
+            "could not resolve a traversable Boneyard position away "
+            "from the Arena spawn"
+        )
+    target_x, target_y = max(
+        candidates,
+        key=lambda position: _distance(
+            position[0],
+            position[1],
+            spawn_x,
+            spawn_y,
+        ),
+    )
+    if (
+        _distance(target_x, target_y, spawn_x, spawn_y)
+        < FAR_FROM_SPAWN_MINIMUM
+    ):
+        raise VerifyFailure(
+            "the Boneyard nav grid did not provide a sufficiently "
+            f"distant death position: spawn={spawn['host']} "
+            f"candidates={candidates}"
+        )
+    placement = place_player(
+        client_pipe,
+        target_x,
+        target_y,
+        135.0,
+    )
+    if placement.get("rebind") != "true":
+        raise VerifyFailure(
+            "far-from-spawn placement did not rebind the client actor: "
+            f"{placement}"
+        )
+    convergence = _wait_for_far_client_position(
+        host_pipe=host_pipe,
+        client_pipe=client_pipe,
+        expected_x=target_x,
+        expected_y=target_y,
+        spawn_x=spawn_x,
+        spawn_y=spawn_y,
+    )
+    return {
+        "spawn": spawn,
+        "placement": placement,
+        "convergence": convergence,
+    }
+
+
+def _respawn_actor_matches(
+    values: Mapping[str, str],
+    *,
+    spawn_x: float,
+    spawn_y: float,
+    remote: bool,
+) -> bool:
+    position_tolerance = (
+        REMOTE_POSITION_TOLERANCE
+        if remote
+        else POSITION_TOLERANCE
+    )
+    return (
+        values.get("materialized") == "true"
+        and _integer(values, "actor_address") != 0
+        and _integer(values, "grid_cell_address") != 0
+        and _integer(values, "grid_member_flag") == 1
+        and abs(_number(values, "render_sort_bias"))
+        <= 0.0001
+        and _integer(values, "death_drive_state") == 0
+        and (
+            remote
+            or _integer(values, "death_presentation_ticks") == 0
+        )
+        and (
+            not remote
+            or _integer(
+                values,
+                "authoritative_death_presentation_ticks",
+            )
+            == 0
+        )
+        and _integer(values, "terminal_pending") == 0
+        and values.get("presentation_active") == "false"
+        and values.get("red_effect_active") == "false"
+        and _distance(
+            _number(values, "x"),
+            _number(values, "y"),
+            spawn_x,
+            spawn_y,
+        )
+        <= position_tolerance
+    )
+
+
+def _wait_for_respawn_peer_views(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+    spawn_x: float,
+    spawn_y: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + 10.0
+    last_client: dict[str, str] = {}
+    last_host: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        observed_ns = time.monotonic_ns()
+        last_client = death.query_spectator_state(client_pipe)
+        last_host = death.query_remote_death_state(
+            host_pipe,
+            CLIENT_ID,
+        )
+        replicated_x = _number(last_host, "participant_x")
+        replicated_y = _number(last_host, "participant_y")
+        if (
+            _respawn_actor_matches(
+                last_client,
+                spawn_x=spawn_x,
+                spawn_y=spawn_y,
+                remote=False,
+            )
+            and _respawn_actor_matches(
+                last_host,
+                spawn_x=spawn_x,
+                spawn_y=spawn_y,
+                remote=True,
+            )
+            and _distance(
+                replicated_x,
+                replicated_y,
+                spawn_x,
+                spawn_y,
+            )
+            <= REMOTE_POSITION_TOLERANCE
+        ):
+            return {
+                "observed_monotonic_ns": observed_ns,
+                "client_owner": last_client,
+                "host_observer": last_host,
+            }
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "respawned client actor did not converge at the Arena spawn "
+        f"on owner and host views: client={last_client} "
+        f"host={last_host}"
+    )
+
+
+def _assert_respawn_spawn_and_corpse_retired(
+    *,
+    views: Mapping[str, Any],
+    death_location: Mapping[str, float],
+    before_corpse_views: Mapping[str, Mapping[str, str]],
+) -> dict[str, Any]:
+    client = views["client_owner"]
+    host = views["host_observer"]
+    spawn = _assert_spawn_parity(client, host)
+    spawn_x = float(spawn["host"]["x"])
+    spawn_y = float(spawn["host"]["y"])
+    death_x = float(death_location["x"])
+    death_y = float(death_location["y"])
+    if (
+        _distance(death_x, death_y, spawn_x, spawn_y)
+        < FAR_FROM_SPAWN_MINIMUM
+    ):
+        raise VerifyFailure(
+            "death did not occur far enough from the Arena spawn: "
+            f"death={death_location} spawn={spawn}"
+        )
+    if (
+        abs(_number(client, "last_respawn_x") - spawn_x)
+        > POSITION_TOLERANCE
+        or abs(_number(client, "last_respawn_y") - spawn_y)
+        > POSITION_TOLERANCE
+    ):
+        raise VerifyFailure(
+            "accepted respawn command did not carry the Arena spawn: "
+            f"client={client} spawn={spawn}"
+        )
+    for label, values, remote in (
+        ("client_owner", client, False),
+        ("host_observer", host, True),
+    ):
+        if not _respawn_actor_matches(
+            values,
+            spawn_x=spawn_x,
+            spawn_y=spawn_y,
+            remote=remote,
+        ):
+            raise VerifyFailure(
+                f"{label} retained a corpse/death presentation after "
+                f"respawn: {dict(values)}"
+            )
+    client_old_cell = _integer(
+        before_corpse_views["client_owner"],
+        "grid_cell_address",
+    )
+    client_new_cell = _integer(client, "grid_cell_address")
+    if client_old_cell != 0 and client_old_cell == client_new_cell:
+        raise VerifyFailure(
+            "the owner actor remained in its death-location world cell "
+            f"after respawn: cell={client_old_cell}"
+        )
+    host_old_cell = _integer(
+        before_corpse_views["host_observer"],
+        "grid_cell_address",
+    )
+    host_new_cell = _integer(host, "grid_cell_address")
+    if host_old_cell != 0 and host_old_cell == host_new_cell:
+        raise VerifyFailure(
+            "the host view retained the remote actor in its "
+            f"death-location world cell: cell={host_old_cell}"
+        )
+    return {
+        "spawn": spawn,
+        "death_location": {
+            "x": death_x,
+            "y": death_y,
+        },
+        "client_old_grid_cell": client_old_cell,
+        "client_spawn_grid_cell": client_new_cell,
+        "host_old_grid_cell": host_old_cell,
+        "host_spawn_grid_cell": host_new_cell,
+        "client_corpse_present": False,
+        "host_corpse_present": False,
+        "client_exact_spawn_delta": {
+            "x": _number(client, "x") - spawn_x,
+            "y": _number(client, "y") - spawn_y,
+        },
+        "host_exact_spawn_delta": {
+            "x": _number(host, "x") - spawn_x,
+            "y": _number(host, "y") - spawn_y,
+        },
+    }
+
+
+def _capture_focused_location(
+    pipe_name: str,
+    *,
+    world_x: float,
+    world_y: float,
+    output_path: Path,
+) -> dict[str, Any]:
+    focus = parse_key_values(
+        lua(
+            pipe_name,
+            (
+                "local ok=sd.camera.set_focus("
+                f"{world_x:.9f},{world_y:.9f}); "
+                "local c=sd.camera.get_state(); "
+                "print('ok='..tostring(ok)); "
+                "print('focus_active='..tostring(c.focus_active)); "
+                "print('owns_focus='..tostring(c.owns_focus)); "
+                "print('focus_x='..tostring(c.focus_x or 0)); "
+                "print('focus_y='..tostring(c.focus_y or 0)); "
+                "print('center_x='..tostring(c.center_x)); "
+                "print('center_y='..tostring(c.center_y))"
+            ),
+            timeout=8.0,
+        )
+    )
+    if (
+        focus.get("ok") != "true"
+        or focus.get("focus_active") != "true"
+        or focus.get("owns_focus") != "true"
+    ):
+        raise VerifyFailure(
+            f"could not focus {pipe_name} for screenshot: {focus}"
+        )
+    try:
+        time.sleep(0.25)
+        screenshot = capture_game_backbuffer(
+            pipe_name,
+            output_path,
+            maximum_dominant_fraction=0.95,
+        )
+    finally:
+        cleared = parse_key_values(
+            lua(
+                pipe_name,
+                "print('cleared='..tostring("
+                "sd.camera.clear_focus()))",
+                timeout=8.0,
+            )
+        )
+    return {
+        "focus": focus,
+        "screenshot": screenshot,
+        "clear": cleared,
+    }
+
+
+def _capture_respawn_locations(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+    screenshot_directory: Path,
+    scenario_label: str,
+    death_location: Mapping[str, float],
+    spawn: Mapping[str, Any],
+    client_spawn_filename: str,
+) -> dict[str, Any]:
+    spawn_x = float(spawn["host"]["x"])
+    spawn_y = float(spawn["host"]["y"])
+    death_x = float(death_location["x"])
+    death_y = float(death_location["y"])
+    return {
+        "death_location": {
+            "client": _capture_focused_location(
+                client_pipe,
+                world_x=death_x,
+                world_y=death_y,
+                output_path=screenshot_directory
+                / f"client-{scenario_label}-death-location-cleared.png",
+            ),
+            "host": _capture_focused_location(
+                host_pipe,
+                world_x=death_x,
+                world_y=death_y,
+                output_path=screenshot_directory
+                / f"host-{scenario_label}-death-location-cleared.png",
+            ),
+        },
+        "spawn": {
+            "client": _capture_focused_location(
+                client_pipe,
+                world_x=spawn_x,
+                world_y=spawn_y,
+                output_path=screenshot_directory
+                / client_spawn_filename,
+            ),
+            "host": _capture_focused_location(
+                host_pipe,
+                world_x=spawn_x,
+                world_y=spawn_y,
+                output_path=screenshot_directory
+                / f"host-{scenario_label}-spawn.png",
+            ),
+        },
+    }
 
 
 def _local_owned_participant(
@@ -415,6 +921,8 @@ def assert_immediate_respawn_sample(
     *,
     epoch: int,
     wave: int,
+    spawn_x: float,
+    spawn_y: float,
 ) -> None:
     if (
         values.get("active") != "false"
@@ -427,10 +935,20 @@ def assert_immediate_respawn_sample(
         or _integer(values, "death_drive_state") != 0
         or _integer(values, "death_presentation_ticks") != 0
         or _integer(values, "terminal_pending") != 0
+        or _integer(values, "grid_cell_address") == 0
+        or _integer(values, "grid_member_flag") != 1
+        or abs(_number(values, "render_sort_bias")) > 0.0001
         or values.get("presentation_active") != "false"
         or values.get("red_effect_active") != "false"
         or _integer(values, "death_transition_hits") != 1
         or _integer(values, "staff_drop_hits") != 1
+        or _distance(
+            _number(values, "x"),
+            _number(values, "y"),
+            spawn_x,
+            spawn_y,
+        )
+        > POSITION_TOLERANCE
     ):
         raise VerifyFailure(
             "wave respawn did not atomically retire the death epoch: "
@@ -684,6 +1202,10 @@ def run_dead_progression_scenario(
         result["staff_ready"] = _wait_for_client_staff(
             client_pipe
         )
+        result["far_from_spawn"] = _place_client_far_from_spawn(
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
+        )
         before_death = capture_local_actor_state(client_pipe)
         result["before_death"] = before_death
         result["host_authority_before_death"] = (
@@ -707,8 +1229,30 @@ def run_dead_progression_scenario(
             timeout=5.0,
             description="client death presentation",
         )
+        death_location = {
+            "x": _number(result["death_presentation"], "x"),
+            "y": _number(result["death_presentation"], "y"),
+        }
         spectating = _wait_for_client_spectator(client_pipe)
         result["spectating"] = spectating
+        corpse_views = {
+            "client_owner": spectating,
+            "host_observer": death.query_remote_death_state(
+                host_pipe,
+                CLIENT_ID,
+            ),
+        }
+        if (
+            _integer(spectating, "grid_member_flag") != 0
+            or abs(_number(spectating, "render_sort_bias") + 1000.0)
+            > 0.001
+            or _integer(spectating, "grid_cell_address") == 0
+        ):
+            raise VerifyFailure(
+                "grace death did not reach the native tick-159 corpse "
+                f"state before respawn: {spectating}"
+            )
+        result["corpse_before_respawn"] = corpse_views
 
         dead_progression_before = query_progression_snapshot(
             client_pipe
@@ -839,7 +1383,37 @@ def run_dead_progression_scenario(
             previous_epoch=previous_epoch,
             wave=wave,
         )
-        time.sleep(0.75)
+        spawn = result["far_from_spawn"]["spawn"]
+        peer_views = _wait_for_respawn_peer_views(
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
+            spawn_x=float(spawn["host"]["x"]),
+            spawn_y=float(spawn["host"]["y"]),
+        )
+        result["respawn_tick_peer_views"] = peer_views
+        result["spawn_and_corpse_retirement"] = (
+            _assert_respawn_spawn_and_corpse_retired(
+                views=peer_views,
+                death_location=death_location,
+                before_corpse_views=corpse_views,
+            )
+        )
+        result["location_screenshots"] = (
+            _capture_respawn_locations(
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
+                screenshot_directory=screenshot_directory,
+                scenario_label="grace-respawn",
+                death_location=death_location,
+                spawn=spawn,
+                client_spawn_filename=(
+                    "client-respawn-with-dead-time-skill.png"
+                ),
+            )
+        )
+        result["respawn_screenshot"] = result[
+            "location_screenshots"
+        ]["spawn"]["client"]["screenshot"]
         after_respawn = capture_local_actor_state(client_pipe)
         result["after_respawn"] = after_respawn
         result["host_authority_after_respawn"] = (
@@ -875,11 +1449,6 @@ def run_dead_progression_scenario(
         result["staff_drop_once"] = trace_states
         result["normal_control"] = _assert_normal_control(
             client_pipe
-        )
-        result["respawn_screenshot"] = capture_game_backbuffer(
-            client_pipe,
-            screenshot_directory
-            / "client-respawn-with-dead-time-skill.png",
         )
         result["selected_option"] = {
             "option_id": selected_option_id,
@@ -917,6 +1486,10 @@ def run_immediate_round_scenario(
         result["setup"] = _prepare_run(host_pipe, client_pipe)
         result["staff_ready"] = _wait_for_client_staff(
             client_pipe
+        )
+        result["far_from_spawn"] = _place_client_far_from_spawn(
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
         )
         before_death = capture_local_actor_state(client_pipe)
         result["before_death"] = before_death
@@ -957,6 +1530,18 @@ def run_immediate_round_scenario(
             timeout=5.0,
             description="immediate-round death presentation",
         )
+        death_location = {
+            "x": _number(result["death_presentation"], "x"),
+            "y": _number(result["death_presentation"], "y"),
+        }
+        corpse_views = {
+            "client_owner": result["death_presentation"],
+            "host_observer": death.query_remote_death_state(
+                host_pipe,
+                CLIENT_ID,
+            ),
+        }
+        result["death_presentation_peer_views"] = corpse_views
         previous_epoch = _integer(
             result["death_presentation"],
             "last_applied_respawn_epoch",
@@ -994,6 +1579,21 @@ def run_immediate_round_scenario(
             "last_applied_respawn_epoch",
         )
         result["respawn"] = respawn
+        spawn = result["far_from_spawn"]["spawn"]
+        peer_views = _wait_for_respawn_peer_views(
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
+            spawn_x=float(spawn["host"]["x"]),
+            spawn_y=float(spawn["host"]["y"]),
+        )
+        result["respawn_tick_peer_views"] = peer_views
+        result["spawn_and_corpse_retirement"] = (
+            _assert_respawn_spawn_and_corpse_retired(
+                views=peer_views,
+                death_location=death_location,
+                before_corpse_views=corpse_views,
+            )
+        )
 
         samples: list[dict[str, str]] = []
         stable_until = time.monotonic() + 3.4
@@ -1003,6 +1603,8 @@ def run_immediate_round_scenario(
                 sample,
                 epoch=epoch,
                 wave=wave,
+                spawn_x=float(spawn["host"]["x"]),
+                spawn_y=float(spawn["host"]["y"]),
             )
             samples.append(sample)
             time.sleep(0.12)
@@ -1023,14 +1625,41 @@ def run_immediate_round_scenario(
                 after_respawn,
             )
         )
+        screenshot_directory = SCREENSHOT_ROOT / instance_prefix
+        result["location_screenshots"] = (
+            _capture_respawn_locations(
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
+                screenshot_directory=screenshot_directory,
+                scenario_label="immediate-round-respawn",
+                death_location=death_location,
+                spawn=spawn,
+                client_spawn_filename=(
+                    "client-immediate-round-respawn-clean.png"
+                ),
+            )
+        )
+        result["respawn_screenshot"] = result[
+            "location_screenshots"
+        ]["spawn"]["client"]["screenshot"]
+        trace_states = {
+            "client": death.query_spectator_state(client_pipe),
+            "host": death.query_remote_death_state(
+                host_pipe,
+                CLIENT_ID,
+            ),
+        }
+        if not death.staff_drop_once_matches(
+            trace_states,
+            owner_label="client",
+        ):
+            raise VerifyFailure(
+                "immediate-round client staff drop did not remain one "
+                f"allocation: {trace_states}"
+            )
+        result["staff_drop_once"] = trace_states
         result["normal_control"] = _assert_normal_control(
             client_pipe
-        )
-        screenshot_directory = SCREENSHOT_ROOT / instance_prefix
-        result["respawn_screenshot"] = capture_game_backbuffer(
-            client_pipe,
-            screenshot_directory
-            / "client-immediate-round-respawn-clean.png",
         )
         result["ok"] = True
         return result

@@ -25,6 +25,39 @@ DOC = (
     / "reverse-engineering"
     / "native-player-death-spectator.md"
 )
+LAYOUT = ROOT / "config" / "binary-layout.ini"
+GAMEPLAY_HEADER = (
+    ROOT / "SolomonDarkModLoader" / "src" / "gameplay_seams.h"
+)
+GAMEPLAY_STATE = (
+    ROOT
+    / "SolomonDarkModLoader"
+    / "src"
+    / "mod_loader_gameplay"
+    / "public_api_state_getters.inl"
+)
+GAMEPLAY_RESPAWN = (
+    ROOT
+    / "SolomonDarkModLoader"
+    / "src"
+    / "mod_loader_gameplay"
+    / "public_api_local_player_respawn.inl"
+)
+REMOTE_VITALS = (
+    ROOT
+    / "SolomonDarkModLoader"
+    / "src"
+    / "mod_loader_gameplay"
+    / "bot_movement"
+    / "native_remote_vitals_and_playback.inl"
+)
+SCENE_DRIVE = (
+    ROOT
+    / "SolomonDarkModLoader"
+    / "src"
+    / "mod_loader_gameplay"
+    / "scene_and_animation_drive_profiles.inl"
+)
 VERIFIER = (
     ROOT
     / "tools"
@@ -135,8 +168,71 @@ def test_re_note_records_picker_respawn_and_same_actor_findings() -> None:
         "Packet header sequences are shared across packet kinds",
         "## Loadout identity across respawn",
         "same-actor boundary",
+        "## Stock Boneyard spawn publication and run-start placement",
+        "`FUN_00462410`",
+        "## Corpse registration and participant-scoped retirement",
+        "`WorldCellGrid_RebindActor`",
     ):
         assert token in note
+
+
+def test_respawn_uses_live_arena_spawn_and_restores_actor_registration() -> None:
+    """Both local and remote respawn restore the stock actor lifecycle."""
+
+    layout = read(LAYOUT)
+    header = read(GAMEPLAY_HEADER)
+    state = read(GAMEPLAY_STATE)
+    local_respawn = read(GAMEPLAY_RESPAWN)
+    remote_vitals = read(REMOTE_VITALS)
+    scene_drive = read(SCENE_DRIVE)
+    death = read(TRANSPORT_PARTS / "death_spectator_sync.inl")
+    for token in (
+        "actor_grid_member_flag=0x36",
+        "actor_render_sort_bias=0xA0",
+        "arena_player_spawn_x=0x8ED0",
+        "arena_player_spawn_y=0x8ED4",
+        "arena_player_spawn_facing=0x8EF0",
+    ):
+        assert token in layout
+    for token in (
+        "kActorGridMemberFlagOffset",
+        "kActorRenderSortBiasOffset",
+        "kArenaPlayerSpawnXOffset",
+        "kArenaPlayerSpawnYOffset",
+        "kArenaPlayerSpawnFacingOffset",
+    ):
+        assert token in header
+    for token in (
+        "player_spawn_valid",
+        "player_spawn_x",
+        "player_spawn_y",
+        "player_spawn_facing",
+    ):
+        assert token in state
+    for token in (
+        "CaptureHostWaveRespawnSpawnIfNeeded",
+        "TryGetWorldState(&world)",
+        "world.player_spawn_valid",
+        "world.player_spawn_x",
+        "world.player_spawn_y",
+    ):
+        assert token in death
+    for token in (
+        "RestoreWizardActorAliveRegistrationState",
+        "RebindSceneActorCell",
+    ):
+        assert token in local_respawn
+    for token in (
+        "RestoreWizardActorAliveRegistrationState",
+        "CallWorldCellGridRebindActorSafe",
+    ):
+        assert token in remote_vitals
+    for token in (
+        "kActorRenderSortBiasOffset",
+        "0.0f",
+        "kActorGridMemberFlagOffset",
+    ):
+        assert token in scene_drive
 
 
 def test_live_gate_is_isolated_and_reads_exact_actor_state() -> None:
@@ -155,6 +251,16 @@ def test_live_gate_is_isolated_and_reads_exact_actor_state() -> None:
         "assert_staff_preserved_without_duplication",
         "client-dead-spectator-level-up-picker.png",
         "client-immediate-round-respawn-clean.png",
+        "player_spawn_valid",
+        "_place_client_far_from_spawn",
+        "respawn_tick_peer_views",
+        "grid_member_flag",
+        "render_sort_bias",
+        'scenario_label="grace-respawn"',
+        'scenario_label="immediate-round-respawn"',
+        'f"client-{scenario_label}-death-location-cleared.png"',
+        'f"host-{scenario_label}-death-location-cleared.png"',
+        'f"host-{scenario_label}-spawn.png"',
         "stable_post_respawn_samples",
         "exact_pid_stock_window_click",
         'launch["clientProcessId"]',

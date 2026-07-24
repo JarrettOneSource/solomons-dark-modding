@@ -275,10 +275,15 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
             "death_drive_state": "0",
             "death_presentation_ticks": "0",
             "terminal_pending": "0",
+            "grid_cell_address": "4096",
+            "grid_member_flag": "1",
+            "render_sort_bias": "0",
             "presentation_active": "false",
             "red_effect_active": "false",
             "death_transition_hits": "1",
             "staff_drop_hits": "1",
+            "x": "128",
+            "y": "256",
             "hp": "50",
             "max_hp": "50",
             "mp": "50",
@@ -288,6 +293,8 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
             sample,
             epoch=4,
             wave=2,
+            spawn_x=128.0,
+            spawn_y=256.0,
         )
 
         sample["death_started_ms"] = "99"
@@ -299,6 +306,127 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
                 sample,
                 epoch=4,
                 wave=2,
+                spawn_x=128.0,
+                spawn_y=256.0,
+            )
+
+    def test_respawn_gate_reads_dynamic_spawn_and_retires_only_dead_actor(
+        self,
+    ) -> None:
+        shared = {
+            "player_spawn_valid": "true",
+            "arena_address": "12288",
+            "player_spawn_x": "128",
+            "player_spawn_y": "256",
+            "player_spawn_facing": "90",
+            "materialized": "true",
+            "actor_address": "16384",
+            "grid_member_flag": "1",
+            "render_sort_bias": "0",
+            "death_drive_state": "0",
+            "death_presentation_ticks": "0",
+            "terminal_pending": "0",
+            "presentation_active": "false",
+            "red_effect_active": "false",
+            "x": "128",
+            "y": "256",
+        }
+        client = {
+            **shared,
+            "grid_cell_address": "20480",
+            "last_respawn_x": "128",
+            "last_respawn_y": "256",
+        }
+        host = {
+            **shared,
+            "actor_address": "24576",
+            "grid_cell_address": "28672",
+            "participant_x": "128",
+            "participant_y": "256",
+            "death_presentation_ticks": "7",
+            "authoritative_death_presentation_ticks": "0",
+        }
+        result = verifier._assert_respawn_spawn_and_corpse_retired(
+            views={
+                "client_owner": client,
+                "host_observer": host,
+            },
+            death_location={"x": 700.0, "y": 700.0},
+            before_corpse_views={
+                "client_owner": {"grid_cell_address": "32768"},
+                "host_observer": {"grid_cell_address": "36864"},
+            },
+        )
+
+        self.assertFalse(result["client_corpse_present"])
+        self.assertFalse(result["host_corpse_present"])
+        self.assertEqual(result["spawn"]["host"]["x"], 128.0)
+        self.assertEqual(result["client_exact_spawn_delta"]["x"], 0.0)
+        self.assertEqual(result["host_exact_spawn_delta"]["y"], 0.0)
+
+    def test_respawn_gate_rejects_death_position_or_lingering_corpse(
+        self,
+    ) -> None:
+        shared = {
+            "player_spawn_valid": "true",
+            "arena_address": "12288",
+            "player_spawn_x": "128",
+            "player_spawn_y": "256",
+            "player_spawn_facing": "90",
+            "materialized": "true",
+            "actor_address": "16384",
+            "grid_cell_address": "20480",
+            "grid_member_flag": "1",
+            "render_sort_bias": "0",
+            "death_drive_state": "0",
+            "death_presentation_ticks": "0",
+            "terminal_pending": "0",
+            "presentation_active": "false",
+            "red_effect_active": "false",
+            "x": "700",
+            "y": "700",
+            "last_respawn_x": "128",
+            "last_respawn_y": "256",
+        }
+        host = {
+            **shared,
+            "actor_address": "24576",
+            "grid_cell_address": "28672",
+            "authoritative_death_presentation_ticks": "0",
+        }
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "retained a corpse",
+        ):
+            verifier._assert_respawn_spawn_and_corpse_retired(
+                views={
+                    "client_owner": shared,
+                    "host_observer": host,
+                },
+                death_location={"x": 700.0, "y": 700.0},
+                before_corpse_views={
+                    "client_owner": {"grid_cell_address": "32768"},
+                    "host_observer": {"grid_cell_address": "36864"},
+                },
+            )
+
+        shared["x"] = "128"
+        shared["y"] = "256"
+        shared["grid_member_flag"] = "0"
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "retained a corpse",
+        ):
+            verifier._assert_respawn_spawn_and_corpse_retired(
+                views={
+                    "client_owner": shared,
+                    "host_observer": host,
+                },
+                death_location={"x": 700.0, "y": 700.0},
+                before_corpse_views={
+                    "client_owner": {"grid_cell_address": "32768"},
+                    "host_observer": {"grid_cell_address": "36864"},
+                },
             )
 
 

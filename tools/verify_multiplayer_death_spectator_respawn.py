@@ -58,6 +58,7 @@ local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local spectator = assert(multiplayer.death_spectator)
 local player = sd.player.get_state()
 local actor = player and tonumber(player.actor_address) or 0
+local world = sd.world.get_state()
 local scene = sd.world.get_scene()
 local ui = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot() or nil
 local camera_ok, camera = false, nil
@@ -114,6 +115,9 @@ emit("max_mp", player and player.max_mp or 0)
 emit("anim_drive_state", player and player.anim_drive_state or -1)
 emit("materialized", actor ~= 0)
 emit("actor_address", actor)
+emit("grid_cell_address", player and player.grid_cell_address or 0)
+emit("grid_member_flag", player and player.grid_member_flag or 0)
+emit("render_sort_bias", player and player.render_sort_bias or 0)
 emit("death_drive_state", death_drive_state)
 emit("death_presentation_ticks", death_presentation_ticks)
 emit("terminal_pending", terminal_pending)
@@ -128,6 +132,11 @@ emit("attachment_type_id",
     player.attachment_visual_lane.current_object_type_id or 0)
 emit("x", player and player.x or 0)
 emit("y", player and player.y or 0)
+emit("player_spawn_valid", world and world.player_spawn_valid or false)
+emit("player_spawn_x", world and world.player_spawn_x or 0)
+emit("player_spawn_y", world and world.player_spawn_y or 0)
+emit("player_spawn_facing", world and world.player_spawn_facing or 0)
+emit("arena_address", world and world.arena_address or 0)
 emit("target_alive", target ~= nil and
   target.life_current > 0 and target.life_max > 0)
 emit("target_x", target_gameplay and target_gameplay.x or 0)
@@ -153,6 +162,13 @@ for _, candidate in ipairs(multiplayer.participants or {}) do
 end
 local gameplay = sd.bots.get_participant_state(participant_id)
 local actor = gameplay and tonumber(gameplay.actor_address) or 0
+local world = sd.world.get_state()
+local grid_member_offset =
+  sd.debug.layout_offset("actor_grid_member_flag")
+local grid_cell_offset =
+  sd.debug.layout_offset("actor_grid_cell_ptr")
+local render_sort_offset =
+  sd.debug.layout_offset("actor_render_sort_bias")
 local death_drive_state = actor ~= 0 and
   (sd.debug.read_u8(actor +
     sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
@@ -173,6 +189,19 @@ local staff_drop_hits =
 emit("materialized",
   gameplay ~= nil and gameplay.entity_materialized and actor ~= 0)
 emit("actor_address", actor)
+emit("x", gameplay and gameplay.x or 0)
+emit("y", gameplay and gameplay.y or 0)
+emit("participant_x", participant and participant.x or 0)
+emit("participant_y", participant and participant.y or 0)
+emit("grid_member_flag",
+  actor ~= 0 and grid_member_offset ~= nil and
+    (sd.debug.read_u8(actor + grid_member_offset) or 0) or 0)
+emit("grid_cell_address",
+  actor ~= 0 and grid_cell_offset ~= nil and
+    (sd.debug.read_ptr(actor + grid_cell_offset) or 0) or 0)
+emit("render_sort_bias",
+  actor ~= 0 and render_sort_offset ~= nil and
+    (sd.debug.read_float(actor + render_sort_offset) or 0) or 0)
 emit("hp",
   gameplay and gameplay.hp or
     (participant and participant.life_current or 0))
@@ -195,6 +224,11 @@ emit("staff_drop_hits", #staff_drop_hits)
 emit("attachment_type_id",
   gameplay and gameplay.attachment_visual_lane and
     gameplay.attachment_visual_lane.current_object_type_id or 0)
+emit("player_spawn_valid", world and world.player_spawn_valid or false)
+emit("player_spawn_x", world and world.player_spawn_x or 0)
+emit("player_spawn_y", world and world.player_spawn_y or 0)
+emit("player_spawn_facing", world and world.player_spawn_facing or 0)
+emit("arena_address", world and world.arena_address or 0)
 """
 
 

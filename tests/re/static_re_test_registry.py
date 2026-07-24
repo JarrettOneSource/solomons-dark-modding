@@ -208,6 +208,7 @@ from static_dead_progression_round_respawn_contracts import (
     test_dead_picker_uses_only_the_stock_screen_virtual_gate,
     test_live_gate_is_isolated_and_reads_exact_actor_state,
     test_re_note_records_picker_respawn_and_same_actor_findings,
+    test_respawn_uses_live_arena_spawn_and_restores_actor_registration,
     test_wave_respawn_is_a_transport_sequence_barrier,
 )
 from static_re_primary_combat_contracts import (
@@ -1096,6 +1097,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "dead progression RE note records lifecycle findings",
         test_re_note_records_picker_respawn_and_same_actor_findings,
+    ),
+    (
+        "respawn uses the live Arena spawn and restores actor registration",
+        test_respawn_uses_live_arena_spawn_and_restores_actor_registration,
     ),
     (
         "dead progression live gate uses stock input and exact actor reads",
