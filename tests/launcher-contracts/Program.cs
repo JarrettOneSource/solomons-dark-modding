@@ -813,6 +813,9 @@ static Task TestCrashCaptureArchiveAsync()
         Require(capture.Metadata.HasCrashLog, "crash log was not recorded in metadata");
         Require(capture.Metadata.MinidumpCount == 1, "minidump was not recorded in metadata");
         Require(capture.Metadata.EnabledMods.Count == 1, "crash report did not isolate enabled mods");
+        Require(
+            capture.Metadata.LoaderVersion == "contract-test",
+            "crash report did not identify the packaged loader build");
 
         var archivePath = CrashReportArchiveBuilder.Build(capture);
         try

@@ -117,10 +117,7 @@ internal sealed class DiagnosticLogUploader
             return artifacts;
         }
 
-        var logsRoot = Path.Combine(
-            Path.GetFullPath(stage.StageRoot),
-            ".sdmod",
-            "logs");
+        var logsRoot = RuntimeDiagnosticPaths.LogsRoot(stage);
         AddArtifact(
             artifacts,
             Path.Combine(logsRoot, "solomondarkmodloader.log"),
@@ -132,7 +129,7 @@ internal sealed class DiagnosticLogUploader
         AddArtifact(artifacts, stage.StageReportPath, "diagnostics/stage-report.json");
         AddArtifact(
             artifacts,
-            Path.Combine(stage.StageRoot, ".sdmod", "startup-status.json"),
+            RuntimeDiagnosticPaths.StartupStatus(stage),
             "diagnostics/startup-status.json");
         AddArtifact(
             artifacts,

@@ -1,9 +1,20 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed record CrashReportArtifact(string SourcePath, string ArchivePath);
+
+internal static class RuntimeDiagnosticPaths
+{
+    public static string LogsRoot(LauncherCliStage stage) =>
+        Path.Combine(StageMetadataRoot(stage), "logs");
+
+    public static string StartupStatus(LauncherCliStage stage) =>
+        Path.Combine(StageMetadataRoot(stage), "startup-status.json");
+
+    private static string StageMetadataRoot(LauncherCliStage stage) =>
+        Path.Combine(Path.GetFullPath(stage.StageRoot), ".sdmod");
+}
 
 internal sealed record CrashReportMod(string Id, string Version);
 
@@ -49,10 +60,7 @@ internal sealed record CrashReportCapture(
             return null;
         }
 
-        var logsRoot = Path.Combine(
-            Path.GetFullPath(stage.StageRoot),
-            ".sdmod",
-            "logs");
+        var logsRoot = RuntimeDiagnosticPaths.LogsRoot(stage);
         var crashLogPath = Path.Combine(logsRoot, "solomondarkmodloader.crash.log");
         var crashLogIsCurrent = IsCurrentNonemptyFile(crashLogPath, launch.StartedAtUtc);
         var dumpPaths = Directory.Exists(logsRoot)
@@ -93,7 +101,7 @@ internal sealed record CrashReportCapture(
         AddArtifact(artifacts, stage.StageReportPath, "diagnostics/stage-report.json");
         AddArtifact(
             artifacts,
-            Path.Combine(stage.StageRoot, ".sdmod", "startup-status.json"),
+            RuntimeDiagnosticPaths.StartupStatus(stage),
             "diagnostics/startup-status.json");
         AddArtifact(
             artifacts,
@@ -132,7 +140,7 @@ internal sealed record CrashReportCapture(
             DateTimeOffset.UtcNow,
             exitCode,
             launcherVersion,
-            ReadFileVersion(launch.LoaderPath),
+            launcherVersion,
             "0.72.5",
             response.Configuration?.RuntimeProfile ?? "unknown",
             RuntimeInformation.OSDescription,
@@ -168,17 +176,6 @@ internal sealed record CrashReportCapture(
         }
 
         artifacts.Add(new CrashReportArtifact(Path.GetFullPath(sourcePath), archivePath));
-    }
-
-    private static string ReadFileVersion(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return "unknown";
-        }
-
-        var version = FileVersionInfo.GetVersionInfo(path);
-        return version.ProductVersion ?? version.FileVersion ?? "unknown";
     }
 
     private static bool IsLaunchToken(string value) =>
