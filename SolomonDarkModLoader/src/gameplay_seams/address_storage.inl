@@ -139,6 +139,7 @@ uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch = 0;
 uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch = 0;
 uintptr_t kDampenStockEffectBlock = 0;
 uintptr_t kBoneyardEmptyCandidateInterpolationBranch = 0;
+std::array<uintptr_t, 7> kBoneyardCompactFlagsInitializeSites = {};
 uintptr_t kPuppetManagerVtable = 0;
 
 uintptr_t kMenuKeybindingGlobal = 0;

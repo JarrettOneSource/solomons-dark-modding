@@ -1091,8 +1091,13 @@ def test_boneyard_generator_skips_empty_candidate_interpolation() -> str:
 
     assert "boneyard_empty_candidate_interpolation_branch=0x0063D78F" in layout
     assert seam_bindings.count("kBoneyardEmptyCandidateInterpolationBranch") == 3
+    assert seam_bindings.count("kBoneyardCompactFlagsInitializeSites") == 9
     assert "0x3B, 0xFB, 0x7F, 0x04, 0x33, 0xC0, 0xEB, 0x09" in patch_source
     assert "0x85, 0xFF, 0x0F, 0x8E, 0xC2, 0x02, 0x00, 0x00" in patch_source
+    assert "0x80, 0x4E, 0x18, 0x01" in patch_source
+    assert "0xC6, 0x46, 0x18, 0x01" in patch_source
+    assert "compact_flags_written" in patch_source
+    assert "kBoneyardCompactFlagsOriginalBytes" in patch_source
     assert "InstallBoneyardGeneratorPatch" in lifecycle
     assert "RestoreBoneyardGeneratorPatch" in lifecycle
     assert "LuaDebugSetRunGenerationSeed" in debug_binding

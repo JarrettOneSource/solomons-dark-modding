@@ -156,8 +156,8 @@ extern uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch;
 extern uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch;
 extern uintptr_t kDampenStockEffectBlock;
 extern uintptr_t kBoneyardEmptyCandidateInterpolationBranch;
+extern std::array<uintptr_t, 7> kBoneyardCompactFlagsInitializeSites;
 extern uintptr_t kPuppetManagerVtable;
-
 extern uintptr_t kMenuKeybindingGlobal;
 extern uintptr_t kInventoryKeybindingGlobal;
 extern uintptr_t kSkillsKeybindingGlobal;

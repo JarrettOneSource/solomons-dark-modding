@@ -166,6 +166,13 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.cast_gate_patches", "magic_missile_hit_damage_projectile_group_gate_branch", kMagicMissileHitDamageProjectileGroupGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "dampen_stock_effect_block", kDampenStockEffectBlock),
         SDMOD_ADDR("gameplay.runtime_patches", "boneyard_empty_candidate_interpolation_branch", kBoneyardEmptyCandidateInterpolationBranch),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_0", kBoneyardCompactFlagsInitializeSites[0]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_1", kBoneyardCompactFlagsInitializeSites[1]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_2", kBoneyardCompactFlagsInitializeSites[2]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_3", kBoneyardCompactFlagsInitializeSites[3]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_4", kBoneyardCompactFlagsInitializeSites[4]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_5", kBoneyardCompactFlagsInitializeSites[5]),
+        SDMOD_ADDR("gameplay.runtime_patches", "boneyard_compact_flags_initialize_6", kBoneyardCompactFlagsInitializeSites[6]),
 
         SDMOD_ADDR("gameplay.globals", "menu_keybinding", kMenuKeybindingGlobal),
         SDMOD_ADDR("gameplay.globals", "inventory_keybinding", kInventoryKeybindingGlobal),

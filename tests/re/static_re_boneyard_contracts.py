@@ -207,6 +207,14 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "boneyard_tree_overlay_variant=0x142",
         "boneyard_tree_overlay_enabled=0x144",
         "boneyard_scrub_variant=0x140",
+        "actor_world_compact_decoration_list=0x8ADC",
+        "boneyard_compact_type=0x00",
+        "boneyard_compact_position_x=0x04",
+        "boneyard_compact_position_y=0x08",
+        "boneyard_compact_rotation=0x0C",
+        "boneyard_compact_scale=0x10",
+        "boneyard_compact_alpha=0x14",
+        "boneyard_compact_flags=0x18",
     )
     missing_layout = [token for token in required_layout_offsets if token not in layout]
     if missing_layout:
@@ -224,17 +232,31 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         'emit("boneyard_scenery_digest"',
         'emit("boneyard_tree_count"',
         'emit("boneyard_tree_digest"',
+        'off("actor_world_compact_decoration_list")',
+        'emit("boneyard_compact_count"',
+        'emit("boneyard_compact_digest"',
+        '"boneyard_compact_type_7_8_noncanonical_flags"',
+        "def decor_tables(",
+        "def capture_matched_camera_pair(",
+        "def capture_owned_process_identities(",
+        "def stop_owned_processes(",
         '"boneyard_scenery_count"',
         '"boneyard_scenery_digest"',
         '"boneyard_tree_count"',
         '"boneyard_tree_digest"',
         'integer(host, "boneyard_scenery_count") > 0',
         'integer(host, "boneyard_tree_count") > 0',
+        'integer(host, "boneyard_compact_count") > 0',
+        'integer(host, "boneyard_compact_type_7_8_count") > 0',
     )
     missing_verifier = [token for token in required_verifier_contract if token not in verifier]
     if missing_verifier:
         raise StaticReTestFailure(
             "Live Boneyard scenery equality gate is incomplete: " + ", ".join(missing_verifier)
+        )
+    if "stop_games()" in verifier:
+        raise StaticReTestFailure(
+            "Boneyard live verifier still performs machine-wide game cleanup"
         )
 
     for token in ("Solomon_Dig", "Lantern", "Tree 2001", "Scrub 2062"):
@@ -245,5 +267,6 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
 
     return (
         "multiplayer Boneyard scenery is generated from the host seed at the stock "
-        "Arena_Create boundary, with Tree/Scrub presentation compared exactly at runtime"
+        "Arena_Create boundary, with exact Tree/Scrub and compact-decor tables, "
+        "matched cameras, and exact PID/path cleanup verified at runtime"
     )

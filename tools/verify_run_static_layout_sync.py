@@ -3,24 +3,32 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import math
+import struct
+import subprocess
 import time
+from pathlib import Path
+from typing import Any
 
+import multiplayer_frame_capture
+import verify_local_multiplayer_sync as local_sync
 from verify_local_multiplayer_sync import (
-    CLIENT_PIPE,
     CLIENT_ID,
     CLIENT_NAME,
-    HOST_PIPE,
     HOST_ID,
     HOST_NAME,
     ROOT,
     VerifyFailure,
     disable_bots,
+    game_process_ids,
     launch_pair,
     lua,
     parse_key_values,
+    path_for_powershell,
+    select_available_windows_udp_ports,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
     wait_for_remote,
 )
 
@@ -58,6 +66,8 @@ local world_address = tonumber(scene and scene.world_address) or tonumber(player
 emit("scene", scene and (scene.name or scene.kind) or "")
 emit("world", hx(world_address))
 emit("rng.global_818b08", hx(read_u32(0x00818B08)))
+emit("player_x", player and player.x or 0)
+emit("player_y", player and player.y or 0)
 
 local local_run_nonce = 0
 local remote_run_nonce = 0
@@ -231,9 +241,15 @@ for index = 0, max_scenery - 1 do
   local scenery = read_ptr(scenery_items + (index * 4))
   if scenery ~= 0 then
     local type_id = read_u32(scenery + off("game_object_type_id"))
-    local x = qf(read_f(scenery + off("actor_position_x")))
-    local y = qf(read_f(scenery + off("actor_position_y")))
-    local radius = qf(read_f(scenery + off("actor_collision_radius")))
+    local x_address = scenery + off("actor_position_x")
+    local y_address = scenery + off("actor_position_y")
+    local radius_address = scenery + off("actor_collision_radius")
+    local x_value = read_f(x_address)
+    local y_value = read_f(y_address)
+    local radius_value = read_f(radius_address)
+    local x = qf(x_value)
+    local y = qf(y_value)
+    local radius = qf(radius_value)
     local materialization_key =
       read_i32(scenery + off("boneyard_scenery_materialization_key"))
     table.insert(scenery_rows, {type_id, x, y, radius, materialization_key})
@@ -250,13 +266,16 @@ for index = 0, max_scenery - 1 do
         or 0
       table.insert(boneyard_trees, {
         type_id,
-        x,
-        y,
-        radius,
+        read_u32(x_address),
+        read_u32(y_address),
+        read_u32(radius_address),
         materialization_key,
         variant,
         overlay_variant,
         overlay_enabled,
+        x_value,
+        y_value,
+        radius_value,
       })
     end
   end
@@ -269,10 +288,11 @@ local function sort_rows(rows, field_count)
     return false
   end)
 end
-local function digest_rows(rows, prefix)
+local function digest_rows(rows, prefix, field_count)
   local values = prefix
   for _, row in ipairs(rows) do
-    for _, value in ipairs(row) do table.insert(values, value) end
+    local count = field_count or #row
+    for index = 1, count do table.insert(values, row[index]) end
   end
   return digest_values(values)
 end
@@ -282,16 +302,88 @@ emit("boneyard_scenery_count", scenery_count)
 emit("boneyard_scenery_digest", hx(
   digest_rows(scenery_rows, {scenery_count, #scenery_rows})))
 emit("boneyard_tree_count", #boneyard_trees)
-emit("boneyard_tree_digest", hx(digest_rows(boneyard_trees, {#boneyard_trees})))
+emit("boneyard_tree_digest", hx(
+  digest_rows(boneyard_trees, {#boneyard_trees}, 8)))
 for index, tree in ipairs(boneyard_trees) do
   emit("boneyard_tree." .. index .. ".type_id", tree[1])
-  emit("boneyard_tree." .. index .. ".x_q10", tree[2])
-  emit("boneyard_tree." .. index .. ".y_q10", tree[3])
-  emit("boneyard_tree." .. index .. ".radius_q10", tree[4])
+  emit("boneyard_tree." .. index .. ".x_bits", hx(tree[2]))
+  emit("boneyard_tree." .. index .. ".y_bits", hx(tree[3]))
+  emit("boneyard_tree." .. index .. ".radius_bits", hx(tree[4]))
   emit("boneyard_tree." .. index .. ".materialization_key", tree[5])
   emit("boneyard_tree." .. index .. ".variant", tree[6])
   emit("boneyard_tree." .. index .. ".overlay_variant", tree[7])
   emit("boneyard_tree." .. index .. ".overlay_enabled", tree[8])
+  emit("boneyard_tree." .. index .. ".x", tree[9])
+  emit("boneyard_tree." .. index .. ".y", tree[10])
+  emit("boneyard_tree." .. index .. ".radius", tree[11])
+end
+
+-- RegionLayout section 11 is a separate PointerList of fixed 0x2C-byte
+-- compact-decoration records. Hash every serialized semantic field by its
+-- exact IEEE-754 bits, including the flags byte that was previously omitted.
+local compact_list = world_address + off("actor_world_compact_decoration_list")
+local compact_count = read_i32(compact_list + off("pointer_list_count"))
+local compact_items = read_ptr(compact_list + off("pointer_list_items"))
+local compact_rows = {}
+local compact_ignored_flag_bits_count = 0
+local compact_type_7_8_count = 0
+local compact_type_7_8_noncanonical_flags = 0
+local max_compact = compact_items ~= 0
+  and math.min(math.max(compact_count, 0), 4096)
+  or 0
+for index = 0, max_compact - 1 do
+  local compact = read_ptr(compact_items + (index * 4))
+  if compact ~= 0 then
+    local type_id = read_u32(compact + off("boneyard_compact_type"))
+    local x_bits = read_u32(compact + off("boneyard_compact_position_x"))
+    local y_bits = read_u32(compact + off("boneyard_compact_position_y"))
+    local rotation_bits = read_u32(compact + off("boneyard_compact_rotation"))
+    local scale_bits = read_u32(compact + off("boneyard_compact_scale"))
+    local alpha_bits = read_u32(compact + off("boneyard_compact_alpha"))
+    local flags = read_u8(compact + off("boneyard_compact_flags"))
+    if (flags & 0xFC) ~= 0 then
+      compact_ignored_flag_bits_count = compact_ignored_flag_bits_count + 1
+    end
+    if type_id == 7 or type_id == 8 then
+      compact_type_7_8_count = compact_type_7_8_count + 1
+      if flags ~= 1 then
+        compact_type_7_8_noncanonical_flags =
+          compact_type_7_8_noncanonical_flags + 1
+      end
+    end
+    table.insert(compact_rows, {
+      type_id,
+      x_bits,
+      y_bits,
+      rotation_bits,
+      scale_bits,
+      alpha_bits,
+      flags,
+    })
+  end
+end
+sort_rows(compact_rows, 7)
+emit("boneyard_compact_count", compact_count)
+emit("boneyard_compact_sampled", #compact_rows)
+emit("boneyard_compact_digest", hx(
+  digest_rows(compact_rows, {compact_count, #compact_rows}, 7)))
+emit("boneyard_compact_ignored_flag_bits_count",
+  compact_ignored_flag_bits_count)
+emit("boneyard_compact_type_7_8_count", compact_type_7_8_count)
+emit("boneyard_compact_type_7_8_noncanonical_flags",
+  compact_type_7_8_noncanonical_flags)
+for index, compact in ipairs(compact_rows) do
+  emit(
+    "boneyard_compact." .. index .. ".row",
+    string.format(
+      "%d,%s,%s,%s,%s,%s,%d",
+      compact[1],
+      hx(compact[2]),
+      hx(compact[3]),
+      hx(compact[4]),
+      hx(compact[5]),
+      hx(compact[6]),
+      compact[7]))
 end
 
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
@@ -308,7 +400,7 @@ emit("replicated_matched_actor_count", replicated and replicated.matched_actor_c
 
 
 def values(pipe_name: str) -> dict[str, str]:
-    return parse_key_values(lua(pipe_name, STATIC_LAYOUT_LUA, timeout=15.0))
+    return parse_key_values(lua(pipe_name, STATIC_LAYOUT_LUA, timeout=25.0))
 
 
 def integer(row: dict[str, str], key: str) -> int:
@@ -316,6 +408,109 @@ def integer(row: dict[str, str], key: str) -> int:
         return int(float(row.get(key, "0") or "0"))
     except ValueError:
         return 0
+
+
+def u32(text: str) -> int:
+    return int(text, 0) & 0xFFFFFFFF
+
+
+def float_from_u32(text: str) -> float:
+    return struct.unpack("<f", struct.pack("<I", u32(text)))[0]
+
+
+def decor_tables(row: dict[str, str]) -> dict[str, Any]:
+    trees: list[dict[str, Any]] = []
+    for index in range(1, integer(row, "boneyard_tree_count") + 1):
+        prefix = f"boneyard_tree.{index}."
+        required = (
+            "type_id",
+            "x_bits",
+            "y_bits",
+            "radius_bits",
+            "materialization_key",
+            "variant",
+            "overlay_variant",
+            "overlay_enabled",
+        )
+        missing = [field for field in required if prefix + field not in row]
+        if missing:
+            raise VerifyFailure(
+                f"Tree decor dump {index} is incomplete: {', '.join(missing)}"
+            )
+        x_bits = row[prefix + "x_bits"]
+        y_bits = row[prefix + "y_bits"]
+        radius_bits = row[prefix + "radius_bits"]
+        trees.append(
+            {
+                "type_id": integer(row, prefix + "type_id"),
+                "position": [
+                    float_from_u32(x_bits),
+                    float_from_u32(y_bits),
+                ],
+                "position_bits": [x_bits, y_bits],
+                "radius": float_from_u32(radius_bits),
+                "radius_bits": radius_bits,
+                "materialization_key": integer(
+                    row, prefix + "materialization_key"
+                ),
+                "variant": integer(row, prefix + "variant"),
+                "overlay_variant": integer(row, prefix + "overlay_variant"),
+                "overlay_enabled": integer(row, prefix + "overlay_enabled"),
+            }
+        )
+
+    compact: list[dict[str, Any]] = []
+    for index in range(1, integer(row, "boneyard_compact_sampled") + 1):
+        key = f"boneyard_compact.{index}.row"
+        fields = row.get(key, "").split(",")
+        if len(fields) != 7:
+            raise VerifyFailure(
+                f"compact decor dump {index} is malformed: {row.get(key)!r}"
+            )
+        (
+            type_id_text,
+            x_bits,
+            y_bits,
+            rotation_bits,
+            scale_bits,
+            alpha_bits,
+            flags_text,
+        ) = fields
+        compact.append(
+            {
+                "type_id": int(type_id_text),
+                "position": [
+                    float_from_u32(x_bits),
+                    float_from_u32(y_bits),
+                ],
+                "position_bits": [x_bits, y_bits],
+                "rotation": float_from_u32(rotation_bits),
+                "rotation_bits": rotation_bits,
+                "scale": float_from_u32(scale_bits),
+                "scale_bits": scale_bits,
+                "alpha": float_from_u32(alpha_bits),
+                "alpha_bits": alpha_bits,
+                "flags": int(flags_text),
+            }
+        )
+
+    return {
+        "tree_count": integer(row, "boneyard_tree_count"),
+        "tree_digest": row.get("boneyard_tree_digest", ""),
+        "trees": trees,
+        "compact_count": integer(row, "boneyard_compact_count"),
+        "compact_digest": row.get("boneyard_compact_digest", ""),
+        "compact_ignored_flag_bits_count": integer(
+            row, "boneyard_compact_ignored_flag_bits_count"
+        ),
+        "compact_type_7_8_count": integer(
+            row, "boneyard_compact_type_7_8_count"
+        ),
+        "compact_type_7_8_noncanonical_flags": integer(
+            row, "boneyard_compact_type_7_8_noncanonical_flags"
+        ),
+        "compact": compact,
+    }
 
 
 def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
@@ -331,6 +526,9 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         "boneyard_scenery_digest",
         "boneyard_tree_count",
         "boneyard_tree_digest",
+        "boneyard_compact_count",
+        "boneyard_compact_digest",
+        "boneyard_compact_type_7_8_count",
     ]
     return (
         host.get("scene") == "testrun"
@@ -341,50 +539,568 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         and integer(host, "circle_mask4_count") > 0
         and integer(host, "boneyard_scenery_count") > 0
         and integer(host, "boneyard_tree_count") > 0
+        and integer(host, "boneyard_compact_count") > 0
+        and integer(host, "boneyard_compact_type_7_8_count") > 0
+        and integer(host, "boneyard_compact_ignored_flag_bits_count") == 0
+        and integer(client, "boneyard_compact_ignored_flag_bits_count") == 0
+        and integer(host, "boneyard_compact_type_7_8_noncanonical_flags") == 0
+        and integer(client, "boneyard_compact_type_7_8_noncanonical_flags") == 0
         and integer(client, "replicated_run_static_count") >= integer(host, "static_actor_count")
         and integer(client, "replicated_matched_actor_count") >= integer(host, "static_actor_count")
         and all(host.get(key) == client.get(key) for key in required_equal)
     )
 
 
-def wait_for_layout_sync(timeout: float = 30.0) -> dict[str, object]:
+def wait_for_layout_sync(
+    host_pipe: str,
+    client_pipe: str,
+    timeout: float = 30.0,
+) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_host: dict[str, str] = {}
     last_client: dict[str, str] = {}
     while time.monotonic() < deadline:
-        last_host = values(HOST_PIPE)
-        last_client = values(CLIENT_PIPE)
+        last_host = values(host_pipe)
+        last_client = values(client_pipe)
         if layouts_match(last_host, last_client):
-            return {"host": last_host, "client": last_client}
+            host_decor = decor_tables(last_host)
+            client_decor = decor_tables(last_client)
+            if host_decor != client_decor:
+                raise VerifyFailure(
+                    "decor digests matched but the exact Tree/compact tables did not"
+                )
+            return {
+                "host": last_host,
+                "client": last_client,
+                "decor_tables": {
+                    "host": host_decor,
+                    "client": client_decor,
+                },
+            }
         time.sleep(0.25)
     raise VerifyFailure(f"run static layout did not converge: host={last_host} client={last_client}")
 
 
-def main() -> int:
-    result: dict[str, object] = {"ok": False}
+def _normalize_windows_path(path: str) -> str:
+    return path.replace("/", "\\").rstrip("\\").casefold()
+
+
+def expected_owned_process_identities(
+    launch: dict[str, object],
+    instance_prefix: str,
+) -> list[dict[str, Any]]:
+    roles = (
+        ("host", "hostProcessId"),
+        ("client", "clientProcessId"),
+    )
+    identities: list[dict[str, Any]] = []
+    for role, key in roles:
+        process_id = integer({key: str(launch.get(key, ""))}, key)
+        if process_id <= 0:
+            raise VerifyFailure(f"launcher did not report the {role} process ID")
+        expected_path = path_for_powershell(
+            ROOT
+            / "runtime"
+            / "instances"
+            / f"{instance_prefix}-{role}"
+            / "stage"
+            / "SolomonDark.exe"
+        )
+        identities.append(
+            {
+                "role": role,
+                "process_id": process_id,
+                "executable_path": expected_path,
+            }
+        )
+    return identities
+
+
+def capture_owned_process_identities(
+    expected_identities: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    expected = {
+        int(identity["process_id"]): identity
+        for identity in expected_identities
+    }
+
+    joined_ids = ",".join(str(process_id) for process_id in sorted(expected))
+    script = (
+        f"$ids = @({joined_ids}); "
+        "$rows = @(Get-CimInstance Win32_Process | "
+        "Where-Object { $ids -contains [int]$_.ProcessId } | "
+        "Select-Object ProcessId,ExecutablePath); "
+        "[Console]::Write((ConvertTo-Json -InputObject $rows -Compress))"
+    )
+    completed = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=15.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise VerifyFailure(f"could not inspect launched game processes: {detail}")
     try:
-        stop_games()
-        result["launch"] = launch_pair()
-        disable_bots()
-        result["hub_remote_materialized"] = {
-            "host": wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub"),
-            "client": wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub"),
+        rows = json.loads(completed.stdout.strip())
+    except json.JSONDecodeError as exc:
+        raise VerifyFailure(
+            f"launched process inspection returned invalid JSON: {completed.stdout!r}"
+        ) from exc
+    if not isinstance(rows, list):
+        rows = [rows]
+
+    by_id = {
+        int(row["ProcessId"]): row
+        for row in rows
+        if isinstance(row, dict) and "ProcessId" in row
+    }
+    identities: list[dict[str, Any]] = []
+    for process_id, identity in expected.items():
+        role = str(identity["role"])
+        expected_path = str(identity["executable_path"])
+        row = by_id.get(process_id)
+        if row is None:
+            raise VerifyFailure(
+                f"{role} process {process_id} exited before identity capture"
+            )
+        executable_path = str(row.get("ExecutablePath") or "")
+        if _normalize_windows_path(executable_path) != _normalize_windows_path(
+            expected_path
+        ):
+            raise VerifyFailure(
+                f"refusing ownership of {role} PID {process_id}: "
+                f"expected={expected_path!r} actual={executable_path!r}"
+            )
+        identities.append(
+            {
+                "role": role,
+                "process_id": process_id,
+                "executable_path": executable_path,
+            }
+        )
+    return identities
+
+
+def stop_owned_processes(
+    identities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not identities:
+        return {"exact_pid_path_cleanup": True, "processes": []}
+
+    payload = json.dumps(identities, separators=(",", ":")).replace("'", "''")
+    script = f"""
+$ErrorActionPreference = "Stop"
+$targets = ConvertFrom-Json -InputObject '{payload}'
+$stopped = @()
+foreach ($target in @($targets)) {{
+    $processId = [int]$target.process_id
+    $expectedPath = [string]$target.executable_path
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $processId"
+    if ($null -eq $process) {{
+        $stopped += [pscustomobject]@{{
+            processId = $processId
+            executablePath = $expectedPath
+            alreadyExited = $true
+        }}
+        continue
+    }}
+    if (-not [string]::Equals(
+            [string]$process.ExecutablePath,
+            $expectedPath,
+            [System.StringComparison]::OrdinalIgnoreCase)) {{
+        throw "PID $processId path changed; refusing cleanup"
+    }}
+    Stop-Process -Id $processId -Force
+    $stopped += [pscustomobject]@{{
+        processId = $processId
+        executablePath = $expectedPath
+        alreadyExited = $false
+    }}
+}}
+$deadline = [DateTime]::UtcNow.AddSeconds(10)
+do {{
+    $remaining = @(
+        $targets |
+            ForEach-Object {{ Get-Process -Id ([int]$_.process_id) -ErrorAction SilentlyContinue }}
+    )
+    if ($remaining.Count -eq 0) {{ break }}
+    Start-Sleep -Milliseconds 100
+}} while ([DateTime]::UtcNow -lt $deadline)
+if ($remaining.Count -ne 0) {{
+    throw "owned Solomon Dark processes did not exit"
+}}
+[Console]::Write((ConvertTo-Json -InputObject $stopped -Compress))
+"""
+    completed = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=20.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise VerifyFailure(f"exact PID/path cleanup failed: {detail}")
+    stopped = json.loads(completed.stdout.strip())
+    if not isinstance(stopped, list):
+        stopped = [stopped]
+    return {
+        "exact_pid_path_cleanup": True,
+        "processes": stopped,
+    }
+
+
+def matched_camera_target(
+    decor: dict[str, Any],
+    anchor_position: list[float] | None = None,
+) -> dict[str, Any]:
+    trees = decor["trees"]
+    compact = [
+        row for row in decor["compact"] if row["type_id"] in (7, 8)
+    ]
+    if not trees or not compact:
+        raise VerifyFailure("matched-camera capture lacks Tree or type 7/8 decor")
+
+    anchor = anchor_position or [
+        sum(tree["position"][axis] for tree in trees) / len(trees)
+        for axis in (0, 1)
+    ]
+    min_x = min(tree["position"][0] for tree in trees)
+    max_x = max(tree["position"][0] for tree in trees)
+    min_y = min(tree["position"][1] for tree in trees)
+    max_y = max(tree["position"][1] for tree in trees)
+    margin_x = (max_x - min_x) * 0.15
+    margin_y = (max_y - min_y) * 0.15
+    interior_trees = [
+        tree
+        for tree in trees
+        if min_x + margin_x <= tree["position"][0] <= max_x - margin_x
+        and min_y + margin_y <= tree["position"][1] <= max_y - margin_y
+    ]
+    tree = min(
+        interior_trees or trees,
+        key=lambda row: math.dist(row["position"], anchor),
+    )
+    candidate = min(
+        compact,
+        key=lambda row: math.dist(row["position"], tree["position"]),
+    )
+    distance = math.dist(candidate["position"], tree["position"])
+    return {
+        "position": tree["position"],
+        "selection_anchor": anchor,
+        "tree": tree,
+        "nearby_compact": candidate,
+        "nearby_compact_distance": distance,
+    }
+
+
+def focus_camera(
+    pipe_name: str,
+    target_x: float,
+    target_y: float,
+    timeout: float = 8.0,
+) -> dict[str, Any]:
+    if not math.isfinite(target_x) or not math.isfinite(target_y):
+        raise VerifyFailure(f"invalid camera target: {target_x}, {target_y}")
+    set_code = f"""
+local ok = sd.camera.set_focus({target_x!r}, {target_y!r})
+print("accepted=" .. tostring(ok))
+"""
+    accepted = parse_key_values(lua(pipe_name, set_code, timeout=10.0))
+    if accepted.get("accepted") != "true":
+        raise VerifyFailure(
+            f"camera focus was rejected on {pipe_name}: {accepted}"
+        )
+
+    query_code = """
+local camera = assert(sd.camera.get_state())
+print("focus_active=" .. tostring(camera.focus_active))
+print("focus_x=" .. tostring(camera.focus_x))
+print("focus_y=" .. tostring(camera.focus_y))
+print("center_x=" .. tostring(camera.center_x))
+print("center_y=" .. tostring(camera.center_y))
+print("width=" .. tostring(camera.width))
+print("height=" .. tostring(camera.height))
+"""
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(lua(pipe_name, query_code, timeout=10.0))
+        if (
+            last.get("focus_active") == "true"
+            and abs(float(last.get("focus_x", "nan")) - target_x) <= 0.05
+            and abs(float(last.get("focus_y", "nan")) - target_y) <= 0.05
+        ):
+            return {
+                key: (
+                    value == "true"
+                    if key == "focus_active"
+                    else float(value)
+                )
+                for key, value in last.items()
+            }
+        time.sleep(0.1)
+    raise VerifyFailure(
+        f"camera did not settle on {pipe_name}: target={target_x},{target_y} "
+        f"last={last}"
+    )
+
+
+def capture_matched_camera_pair(
+    host_pipe: str,
+    client_pipe: str,
+    decor: dict[str, Any],
+    anchor_position: list[float],
+    evidence_dir: Path,
+    run_index: int,
+) -> dict[str, Any]:
+    target = matched_camera_target(decor, anchor_position)
+    target_x, target_y = target["position"]
+    host_camera = focus_camera(host_pipe, target_x, target_y)
+    client_camera = focus_camera(client_pipe, target_x, target_y)
+    if (
+        abs(host_camera["center_x"] - client_camera["center_x"]) > 0.05
+        or abs(host_camera["center_y"] - client_camera["center_y"]) > 0.05
+    ):
+        raise VerifyFailure(
+            "matched camera centers differ: "
+            f"host={host_camera} client={client_camera}"
+        )
+    time.sleep(0.75)
+
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    host_path = evidence_dir / f"run-{run_index:02d}-host.png"
+    client_path = evidence_dir / f"run-{run_index:02d}-client.png"
+    screenshots = {
+        "host": multiplayer_frame_capture.capture_game_backbuffer(
+            host_pipe,
+            host_path,
+            maximum_dominant_fraction=0.97,
+        ),
+        "client": multiplayer_frame_capture.capture_game_backbuffer(
+            client_pipe,
+            client_path,
+            maximum_dominant_fraction=0.97,
+        ),
+    }
+    host_quality = screenshots["host"]["quality"]
+    client_quality = screenshots["client"]["quality"]
+    if (
+        host_quality["width"] != client_quality["width"]
+        or host_quality["height"] != client_quality["height"]
+    ):
+        raise VerifyFailure(
+            f"matched captures have different dimensions: {screenshots}"
+        )
+    return {
+        "target": target,
+        "host_camera": host_camera,
+        "client_camera": client_camera,
+        "screenshots": screenshots,
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Verify exact host/client seeded Boneyard decor tables and matched "
+            "native backbuffers across fresh isolated runs."
+        )
+    )
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--instance-prefix", default="run-static-layout")
+    parser.add_argument("--game-directory", type=Path)
+    parser.add_argument("--exact-mod-id", default="sample.lua.camera_lab")
+    parser.add_argument("--output", type=Path, default=RUNTIME_OUTPUT)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        default=ROOT / "runtime" / "run_static_layout_sync",
+    )
+    parser.add_argument("--layout-timeout", type=float, default=45.0)
+    args = parser.parse_args()
+    if args.runs < 1 or args.runs > 10:
+        parser.error("--runs must be between 1 and 10")
+    if args.layout_timeout <= 0:
+        parser.error("--layout-timeout must be positive")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
+    output_path = args.output.resolve()
+    evidence_dir = args.evidence_dir.resolve()
+    result: dict[str, Any] = {
+        "ok": False,
+        "runs_requested": args.runs,
+        "instance_prefix": args.instance_prefix,
+        "transport": "loopback_udp",
+        "runs": [],
+    }
+
+    def persist() -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(result, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    try:
+        for run_index in range(1, args.runs + 1):
+            run_result: dict[str, Any] = {"run_index": run_index}
+            result["runs"].append(run_result)
+            instance_prefix = f"{args.instance_prefix}-run{run_index:02d}"
+            host_port, client_port = select_available_windows_udp_ports(2)
+            launch: dict[str, object] = {}
+            identities: list[dict[str, Any]] = []
+            try:
+                launch = launch_pair(
+                    instance_prefix=instance_prefix,
+                    host_port=host_port,
+                    client_port=client_port,
+                    game_directory=args.game_directory,
+                    exact_mod_id=args.exact_mod_id,
+                )
+                run_result["launch"] = launch
+                reported_ids = game_process_ids(launch)
+                if len(reported_ids) != 2:
+                    raise VerifyFailure(
+                        f"pair launch did not report exactly two PIDs: {reported_ids}"
+                    )
+                identities = expected_owned_process_identities(
+                    launch, instance_prefix
+                )
+                identities = capture_owned_process_identities(identities)
+                run_result["owned_processes"] = identities
+
+                host_pipe = str(
+                    launch.get("hostLuaPipe")
+                    or f"SolomonDarkModLoader_LuaExec_{instance_prefix}-host"
+                )
+                client_pipe = str(
+                    launch.get("clientLuaPipe")
+                    or f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client"
+                )
+                local_sync.HOST_PIPE = host_pipe
+                local_sync.CLIENT_PIPE = client_pipe
+                disable_bots()
+                run_result["hub_remote_materialized"] = {
+                    "host": wait_for_remote(
+                        host_pipe, CLIENT_ID, CLIENT_NAME, "hub"
+                    ),
+                    "client": wait_for_remote(
+                        client_pipe, HOST_ID, HOST_NAME, "hub"
+                    ),
+                }
+                run_result["host_run_entry"] = (
+                    start_host_testrun_and_wait_for_clients()
+                )
+                layout_sync = wait_for_layout_sync(
+                    host_pipe,
+                    client_pipe,
+                    timeout=args.layout_timeout,
+                )
+                run_result["layout_sync"] = layout_sync
+                run_result["matched_camera"] = capture_matched_camera_pair(
+                    host_pipe,
+                    client_pipe,
+                    layout_sync["decor_tables"]["host"],
+                    [
+                        (
+                            float(layout_sync["host"]["player_x"])
+                            + float(layout_sync["client"]["player_x"])
+                        )
+                        / 2.0,
+                        (
+                            float(layout_sync["host"]["player_y"])
+                            + float(layout_sync["client"]["player_y"])
+                        )
+                        / 2.0,
+                    ],
+                    evidence_dir,
+                    run_index,
+                )
+                run_result["ok"] = True
+            finally:
+                if identities:
+                    run_result["cleanup"] = stop_owned_processes(identities)
+                persist()
+
+        nonces = [
+            run["layout_sync"]["host"]["local_run_nonce"]
+            for run in result["runs"]
+        ]
+        decor_digests = [
+            (
+                run["layout_sync"]["host"]["boneyard_tree_digest"],
+                run["layout_sync"]["host"]["boneyard_compact_digest"],
+            )
+            for run in result["runs"]
+        ]
+        if len(set(nonces)) != len(nonces):
+            raise VerifyFailure(f"fresh runs reused a run seed: {nonces}")
+        if len(set(decor_digests)) != len(decor_digests):
+            raise VerifyFailure(
+                f"fresh run decor tables were unexpectedly reused: {decor_digests}"
+            )
+        result["fresh_run_summary"] = {
+            "run_nonces": nonces,
+            "decor_digests": decor_digests,
+            "all_run_seeds_distinct": True,
+            "all_decor_tables_distinct_between_runs": True,
         }
-        result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
-        result["layout_sync"] = wait_for_layout_sync()
         result["ok"] = True
-        RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
-        print(json.dumps(result, indent=2, sort_keys=True))
+        persist()
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "output": str(output_path),
+                    "runs": args.runs,
+                    "screenshots": [
+                        run["matched_camera"]["screenshots"]
+                        for run in result["runs"]
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
     except Exception as exc:
         result["error"] = str(exc)
-        RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
-        print(json.dumps(result, indent=2, sort_keys=True))
+        persist()
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "output": str(output_path),
+                    "error": str(exc),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 1
-    finally:
-        stop_games()
 
 
 if __name__ == "__main__":
