@@ -50,7 +50,7 @@ The terminal path is:
 lethal PlayerWizard damage
   FUN_0052F540
     actor +0x94 = 1                    terminal pending
-    actor +0x98 = terminal countdown
+    actor +0x98 remains 1              constructor-owned countdown
       |
       v
 common actor tick
@@ -503,6 +503,138 @@ fields on the owning actor: `+0x36` was zero, `+0x54` remained non-null, and
 `+0x1BC` for the red-effect fix, showing that corpse registration is a
 separate native lifecycle that must be reversed explicitly on respawn.
 
+## Organic enemy damage and the native lethal threshold
+
+A follow-up investigation on published beta.15 (`cdcd53b`) traced real wave
+enemy damage because the earlier acceptance gate called a synthetic
+1,000-damage magic probe directly on the victim. That probe crossed every
+native threshold in one call and did not exercise host-authoritative damage on
+a client-owned actor.
+
+The retail organic path is:
+
+```text
+melee / projectile enemy hit
+  damage-context builder
+    |
+    v
+FUN_0063E7D0                       generic actor damage dispatcher
+  [PlayerWizard vtable +0x4C]
+    |
+    v
+FUN_00548150                       PlayerActor incoming damage
+  resistance and damage-lane calculation
+    |
+    v
+FUN_0052F540
+  FUN_0052AC80(actor, -damage)
+    actor +0x200 -> per-actor progression runtime
+    progression +0x70 += delta
+    clamp only to progression +0x74 maximum
+    return terminal when HP <= DAT_00786824
+```
+
+`FUN_00627160`, the native poison-modifier tick, resets and fills the same
+damage context, sets the poison/source flags, and enters `FUN_0063E7D0`.
+Melee, projectile, and poison therefore converge on the same PlayerActor
+terminal decision even though their context builders differ.
+
+Headless data recovery establishes that `DAT_00786824` is
+`0xC1200000`, or `-10.0f`. Retail does not arm death when the displayed life
+first reaches zero. It permits negative per-actor HP and sets `actor +0x94`
+only after a hit reaches `-10.0f` or lower. `FUN_006287D0` initializes
+`actor +0x98` to one; `FUN_0052F540` does not replace it. The next common
+actor tick decrements that constructor-owned countdown and invokes the
+PlayerWizard death virtual.
+
+This threshold explains a visible interval that a one-shot synthetic hit
+cannot expose:
+
+```text
+ordinary enemy hits
+  HP crosses 0
+  more hits accumulate native overkill
+  HP reaches -10
+  +0x94 is armed
+  next common tick invokes FUN_00534120
+```
+
+## Client-owned damage authority mismatch
+
+Connected clients reject unsolicited local native damage. A stock enemy hits
+the client's materialized PlayerWizard clone in the host process; the host
+reads that clone's per-actor progression HP and sends a
+`ParticipantVitalsCorrection` to the owner. The packet intentionally permits
+only `0..max_hp`. A correction of exactly zero is the protocol's terminal
+signal: the client calls `TryApplyAuthoritativeLocalPlayerDeath`, which primes
+positive presentation life and re-enters the stock damage path with one lethal
+hit so that the owner alone performs `FUN_00534120` and the staff drop.
+
+The beta.15 observation predicate breaks that intended conversion in two
+ways:
+
+```text
+native_damage_observed =
+  native_max_matches_last_write &&
+  !replicated_life_increased_since_last_write &&
+  native_hp >= 0 &&
+  native_hp + 0.05 < min(replicated_hp, last_written_hp)
+```
+
+- normal owner regeneration can make replicated life greater than the last
+  host write, suppressing later legitimate enemy hits;
+- when an enemy finally drives the host clone below zero, `native_hp >= 0`
+  rejects the crossing instead of converting it to the protocol's zero-life
+  terminal correction.
+
+Normal vital reconciliation then writes the owner's nonnegative replicated HP
+back to the clone. Small melee, projectile, or poison hits can repeatedly
+approach zero but cannot retain negative overkill or send the zero correction.
+The owner never enters death detection, presentation, staff drop, grace, or
+spectator handoff.
+
+The regeneration veto is unnecessary for distinguishing owner healing from
+host-native damage. The comparison already uses
+`min(replicated_hp, last_written_hp)` as its reference: an owner-only increase
+leaves native HP at the last host write and cannot satisfy the damage delta,
+while a simultaneous native hit still can.
+
+## HP-zero is not a remote presentation epoch
+
+`ApplyNativeRemoteParticipantDeathPresentationState` has a separate
+beta.15 ordering error. It starts a remote death epoch from replicated
+`life_current <= 0` and immediately writes `actor +0x160 = 1`, a zero
+presentation clock, and a detached held attachment. It evaluates the owner's
+replicated death-presentation flag only afterward.
+
+For a host-owned actor taking small stock hits, participant HP reaches its
+network-normalized zero while the owner is still accumulating native damage
+from zero to `-10`. The client observer therefore renders a corpse before
+`FUN_00534120` has run on the owner. Presentation must instead begin only from
+the owner-authored death-presentation flag. Once that flag has started the
+death epoch, replicated zero life may keep the bounded corpse state after the
+three-second flag clears; zero life alone must not start it.
+
+## Beta.15 organic reproduction matrix
+
+All runs used isolated loopback UDP groups, stock wave actors, their native
+control brains, and exact-PID cleanup. No run called the native magic-hit
+probe.
+
+| Victim | Enemy path | Activity | Beta.15 result |
+|---|---|---|---|
+| host | Skeleton melee | idle | owner presentation at 2.348 s; observer corpse at 1.140 s |
+| host | fire projectile | casting | owner presentation at 5.313 s; observer corpse at 4.021 s |
+| host | poison cast | idle | owner presentation at 6.591 s; observer corpse at 5.457 s |
+| client | Skeleton melee | idle | no death in 18 s; minimum owner HP 0.0030; one correction |
+| client | fire projectile | idle | no death in 18 s; minimum owner HP 0.0060; one correction |
+| client | poison cast | casting | no death in 18 s; minimum owner HP 0.0010; 15 corrections |
+
+Casting was confirmed through the real mouse-input queue and native dispatcher
+log before the poison attack. It did not change the divergence: host paths
+split between network zero and native `-10`, while client paths stopped before
+the zero-life authority signal.
+
 ## Required implementation and acceptance boundaries
 
 The native findings impose these constraints:
@@ -519,6 +651,13 @@ The native findings impose these constraints:
   `+0x94/+0x98` terminal dispatch immediately after stock damage capture; only
   the owning process may execute the side-effectful death virtual and create
   the staff bouncer.
+- A finite negative HP observation on the host clone is converted to the
+  existing zero-life terminal correction; negative life is not added to the
+  wire format.
+- Owner regeneration cannot veto a simultaneously observed host-native damage
+  delta.
+- Replicated HP zero does not start an observer death animation. The
+  owner-authored death-presentation flag starts the participant death epoch.
 - Owner and observers use the same death-presentation epoch and agree on
   `+0x160`, the owner-authored bounded `+0x1BC` clock, and whether the grace
   presentation is active. Protocol 84 carries that clock explicitly rather
@@ -549,3 +688,7 @@ assert owner/observer death presentation agreement, trace exactly one
 predicate is false after grace expiry.
 `tools/verify_multiplayer_death_spectator_respawn.py` is the isolated
 three-owner loopback acceptance entry point.
+`tools/verify_multiplayer_organic_player_death.py` is the two-owner stock-wave
+variant. It covers melee, projectile, and poison wave fixtures, host/client
+victims, idle/casting input, synchronized presentation, owner-only one-shot
+death/drop traces, grace expiry, spectator handoff, and respawn.
