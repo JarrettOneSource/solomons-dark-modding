@@ -65,7 +65,7 @@ STEAM DECK
 
 LIMITS
 
-- Multiplayer supports a maximum of four players.
+- Multiplayer supports 2-250 players; new lobbies default to four.
 - Host migration is not available.
 - All players must use the same beta build.
 - Level-ups pause all players until all players select an upgrade.

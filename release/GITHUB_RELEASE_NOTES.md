@@ -1,9 +1,12 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.12
+# Solomon Dark Multiplayer Beta v0.1.0-beta.13
 
-- Launching the desktop launcher through Steam's "Add a Non-Steam Game" flow no longer passes the shortcut's synthetic Steam identity into Host Game, Join Lobby ID, website joins, or Steam-invite joins.
-- Direct host/join startup now hides only diagnostic replacement surfaces; multiplayer nameplate health bars, dampen indicators, level-up waiting, and death-spectator notices remain visible.
-- Headless website-mod staging now works when the launcher is driven from Wine or Proton.
-- The packaged-launcher smoke test now verifies the hydrated multiplayer actions and the save picker inside Settings.
+- Hosts can choose a lobby capacity from 2 to Steam's 250-member limit; the default remains four.
+- Multiplayer presentation now keeps player names and health bars visible, holds the joining cover until the host character exists, and preserves the stock death, spectator, and respawn flow.
+- Players can enter hub rooms independently while the host continues simulating the courtyard, and joining clients no longer duplicate the courtyard Student population.
+- Protocol 82 reduces motion traffic, improves interpolation, and adds reliable identity, progression, wave, and authority checkpoints.
+- The D3D9 overlay now preserves device state, batches draws, survives device resets, and supports long-path Lua loading and hot reload.
+- Quick-start no longer leaves fresh saves hidden behind an opaque cover while the tutorial is already running.
+- Normal game shutdown no longer terminates through lingering worker threads. Crash reports now collect the native log, minidump, startup status, and packaged loader version from the paths the loader actually uses.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.

@@ -241,6 +241,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             "Cloud backups are disabled until the Steam account is linked.",
             "Select the host's lobby through Steam",
             "Lobby ID",
+            "Multiplayer supports 2-250 players; new lobbies default to four.",
             "The launcher does not store or package Steam credentials.",
         ):
             if required_text not in readme:
@@ -250,6 +251,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
             "Host & Invite Friends",
             "SHA-256",
             "Rush",
+            "maximum of four players",
         ):
             if removed_text in readme:
                 raise ArtifactFailure(
