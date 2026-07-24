@@ -203,9 +203,12 @@ held type 0x1B63 (Wand)
   same shape with Anim_WandBouncer and FUN_00460920
 ```
 
-`0x0053424D` is therefore an exact live trace point for a staff drop. It is
-inside the staff-only branch, before the allocator call, and cannot be reached
-by the tick-159 additive burst or the wand branch.
+`0x00534270`, the seven-byte staff-vtable assignment, is therefore an exact
+live-safe trace point for a completed staff construction. It is inside the
+staff-only branch, after allocation and the base constructor, and cannot be
+reached by the tick-159 additive burst or the wand branch. The earlier
+`0x0053424D` allocation instruction is followed by a relative call and is not
+safe for the runtime trace trampoline.
 
 The staff bouncer's recovered methods show no spawn recursion:
 
