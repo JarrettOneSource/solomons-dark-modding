@@ -119,14 +119,14 @@ Fixes, in payoff order:
 6. Position quantization (int16 centimeters, region-relative) — only worth it
    after item 1.
 
-## Scaling notes (post player-count-255 change)
+## Scaling notes (post configurable player-count change)
 
 - Participant frames are full mesh (O(N²)) and host world fanout is ~90 KB/s
   per client: ~8–10 players is the practical ceiling before interest
   management (distance-scored per-client actor scheduling) becomes necessary.
 - `kLevelUpWaitStatusMaxParticipants = 8` (`multiplayer_runtime_protocol.h:22`)
   truncates the level-up waiting list in a 9+ lobby — the one concrete packet
-  ceiling below 255.
+  ceiling below Steam's 250-member lobby limit.
 - The native game seats 4 wizards regardless; >4 participants is framework
   territory, not proven gameplay.
 

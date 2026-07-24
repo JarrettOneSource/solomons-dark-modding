@@ -43,7 +43,7 @@ internal static class LauncherOutputFormatter
             "  --directory-url <url>   Override the HTTPS mod-directory origin used automatically before lobby joins.",
             "  --lobby-ticket <token>  Signed password-lobby ticket supplied by the website.",
             "  --invite-steam-id <id>  Host development option: send the lobby to one Steam user if the overlay is unavailable.",
-            "  --max-players <2-4>     Set the host lobby capacity. Default: 4.",
+            "  --max-players <2-250>   Set the host lobby capacity. Default: 4.",
             "  --no-invite-dialog      Host without automatically opening Steam's friend invite dialog.",
             "  --help                  Show this help text.",
             string.Empty,

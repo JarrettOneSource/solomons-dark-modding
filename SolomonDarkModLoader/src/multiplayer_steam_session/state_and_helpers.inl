@@ -22,9 +22,8 @@ constexpr const char* kMemberProtocolKey = "sdmod_protocol";
 constexpr const char* kMemberManifestKey = "sdmod_manifest";
 
 constexpr std::uint32_t kDefaultMaxParticipants = 4;
-// The SessionHelloAck packet carries max_participants as one byte, so the
-// transport itself tops out at 255; hosts choose any capacity up to that.
-constexpr std::uint32_t kMaximumSupportedParticipants = 255;
+// Steam matchmaking caps lobby membership at 250.
+constexpr std::uint32_t kMaximumSupportedParticipants = 250;
 constexpr std::uint64_t kHelloRetryIntervalMs = 1000;
 constexpr std::uint64_t kKeepaliveIntervalMs = 2000;
 constexpr std::uint64_t kAuthenticatedPeerTimeoutMs = 30000;

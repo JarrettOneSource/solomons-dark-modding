@@ -9,9 +9,8 @@ internal sealed record MultiplayerLaunchOptions(
     LobbyHostOptions Host)
 {
     public const int DefaultMaxParticipants = 4;
-    // The session-hello acknowledgement carries the lobby capacity as a
-    // single byte, so 255 is the transport's own ceiling.
-    public const int MaximumSupportedParticipants = 255;
+    // Steam matchmaking caps lobby membership at 250.
+    public const int MaximumSupportedParticipants = 250;
 
     public static MultiplayerLaunchOptions Create(
         MultiplayerLaunchMode mode,

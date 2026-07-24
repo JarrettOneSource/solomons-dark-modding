@@ -40,6 +40,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
+    ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
     ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync)
 };
@@ -341,6 +342,38 @@ static Task TestMultiplayerQuickStartLaunchRoutingAsync()
     Require(
         disabled.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == string.Empty,
         "single-player launch did not clear multiplayer quick start");
+
+    return Task.CompletedTask;
+}
+
+static Task TestSteamLobbyCapacityBoundsAsync()
+{
+    var command = LauncherCommandParser.Parse(
+        ["launch", "--multiplayer", "host", "--max-players", "250"]);
+    Require(
+        command.MultiplayerMaxParticipants == 250,
+        "launcher parser lost Steam's maximum lobby capacity");
+
+    var launch = MultiplayerLaunchEnvironment.Apply(
+        new LaunchOptions(),
+        MultiplayerLaunchOptions.Create(
+            MultiplayerLaunchMode.Host,
+            lobbyId: null,
+            inviteSteamId: null,
+            command.MultiplayerMaxParticipants,
+            openInviteDialog: false));
+    Require(
+        launch.EnvironmentOverrides?[MultiplayerLaunchEnvironment.MaxParticipantsVariable] == "250",
+        "launcher did not pass Steam's maximum lobby capacity to the loader");
+
+    RequireThrows<InvalidOperationException>(
+        () => LauncherCommandParser.Parse(
+            ["launch", "--multiplayer", "host", "--max-players", "1"]),
+        "launcher accepted a lobby capacity below two");
+    RequireThrows<InvalidOperationException>(
+        () => LauncherCommandParser.Parse(
+            ["launch", "--multiplayer", "host", "--max-players", "251"]),
+        "launcher accepted a lobby capacity above Steam's limit");
 
     return Task.CompletedTask;
 }

@@ -390,11 +390,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref hostPlayerCountText_, value);
     }
 
-    // The hello-ack packet carries lobby capacity as one byte; anything the
-    // user types is folded into the transport's own 2-255 range.
+    // Steam matchmaking caps lobby membership at 250.
     public int HostPlayerCount =>
         int.TryParse(hostPlayerCountText_.Trim(), out var count)
-            ? Math.Clamp(count, 2, 255)
+            ? Math.Clamp(count, 2, 250)
             : 4;
 
     public bool HostPrivacyFriends
