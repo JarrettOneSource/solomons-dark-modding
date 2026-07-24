@@ -47,6 +47,9 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         std::isfinite(participant.runtime.life_max) &&
         participant.runtime.life_max > 0.0f &&
         participant.runtime.life_current <= 0.0f;
+    const bool presentation_active =
+        (participant.runtime.presentation_flags &
+         multiplayer::ParticipantPresentationFlagDeathPresentation) != 0;
     auto& memory = ProcessMemory::Instance();
     if (!authoritative_dead) {
         if (!binding->native_remote_death_epoch_active) {
@@ -81,6 +84,19 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         return true;
     }
 
+    if (!binding->native_remote_death_epoch_active &&
+        !presentation_active) {
+        return
+            memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorTerminalDispatchPendingOffset,
+                0) &&
+            memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorTerminalDispatchCountdownOffset,
+                0);
+    }
+
     if (!binding->native_remote_death_epoch_active) {
         binding->native_remote_death_epoch_active = true;
         binding->native_remote_death_attachment_actor_address = 0;
@@ -91,9 +107,6 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
     }
 
     binding->death_transition_stock_tick_seen = true;
-    const bool presentation_active =
-        (participant.runtime.presentation_flags &
-         multiplayer::ParticipantPresentationFlagDeathPresentation) != 0;
     std::uint16_t presentation_ticks = 0;
     if (presentation_active) {
         const auto packet_age_ms =
@@ -251,15 +264,13 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
             (std::max)(
                 1.0f,
                 binding->native_remote_last_written_max_hp * 0.1f);
-    const bool replicated_life_increased_since_last_write =
-        binding->native_remote_vital_baseline_valid &&
-        expected_hp > binding->native_remote_last_written_hp + 0.0001f;
     const float damage_reference_hp =
         (std::min)(expected_hp, binding->native_remote_last_written_hp);
+    // A negative native clone value is the host's terminal observation.
+    // QueueHostParticipantVitalsCorrection normalizes it to the protocol's
+    // zero-life death signal for owner-side stock death replay.
     const bool native_damage_observed =
         native_max_matches_last_write &&
-        !replicated_life_increased_since_last_write &&
-        native_hp >= 0.0f &&
         native_hp + 0.05f < damage_reference_hp;
     const bool native_hagatha_runtime_observed =
         native_max_matches_last_write &&

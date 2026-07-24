@@ -72,10 +72,14 @@ void ResolveWizardParticipantActorCollisions() {
     }
 
     for (auto& binding : g_participant_entities) {
+        const bool binding_dead =
+            IsNativeRemoteParticipantBinding(&binding)
+                ? binding.native_remote_death_epoch_active
+                : IsActorRuntimeDead(binding.actor_address);
         if (!IsWizardParticipantKind(binding.kind) ||
             binding.actor_address == 0 ||
             binding.actor_address == local_player_actor ||
-            IsActorRuntimeDead(binding.actor_address)) {
+            binding_dead) {
             continue;
         }
 

@@ -133,7 +133,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                         *participant,
                         now_ms);
                 }
-                if (!IsActorRuntimeDead(binding.actor_address)) {
+                if (!binding.native_remote_death_epoch_active) {
                     (void)ApplyNativeRemoteParticipantPlayback(
                         &binding,
                         binding.actor_address,

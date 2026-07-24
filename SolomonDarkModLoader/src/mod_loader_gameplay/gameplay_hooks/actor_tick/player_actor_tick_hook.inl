@@ -245,7 +245,10 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     "native_remote_pre_tick_progression_runtime");
                 (void)ApplyNativeRemoteParticipantVitalState(binding, actor_address);
             }
-            tracked_actor_dead = IsActorRuntimeDead(actor_address);
+            tracked_actor_dead =
+                tracked_actor_native_remote
+                    ? binding->native_remote_death_epoch_active
+                    : IsActorRuntimeDead(actor_address);
             if (tracked_actor_dead) {
                 QuiesceDeadWizardBinding(binding);
                 StopDeadWizardBotActorMotion(

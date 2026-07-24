@@ -213,12 +213,19 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/participant_scene_binding_ticks.inl"
     )
+    collision_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
+    )
     respawn_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
     verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_death_spectator_respawn.py"
+    )
+    organic_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_organic_player_death.py"
     )
 
     assert "ParticipantPresentationFlagDeathPresentation = 1 << 6" in protocol_text
@@ -293,6 +300,30 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     )
     assert "ApplyNativeRemoteParticipantDeathPresentationState(" in scene_tick_text
     assert "SnapshotRuntimeState()" in scene_tick_text
+    assert (
+        "!binding->native_remote_death_epoch_active &&\n"
+        "        !presentation_active"
+    ) in remote_vitals_text
+    assert "replicated_life_increased_since_last_write" not in remote_vitals_text
+    native_damage_start = remote_vitals_text.index(
+        "const bool native_damage_observed ="
+    )
+    native_damage_end = remote_vitals_text.index(
+        "const bool native_hagatha_runtime_observed =",
+        native_damage_start,
+    )
+    assert "native_hp >= 0.0f" not in remote_vitals_text[
+        native_damage_start:native_damage_end
+    ]
+    assert (
+        "tracked_actor_native_remote\n"
+        "                    ? binding->native_remote_death_epoch_active"
+    ) in tick_text
+    assert "if (!binding.native_remote_death_epoch_active)" in scene_tick_text
+    assert (
+        "? binding.native_remote_death_epoch_active\n"
+        "                : IsActorRuntimeDead(binding.actor_address)"
+    ) in collision_text
     assert "SuppressNativeRemoteParticipantTerminalDispatch(" in damage_hook_text
     assert damage_hook_text.count(
         "SuppressNativeRemoteParticipantTerminalDispatch("
@@ -315,9 +346,26 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     ):
         assert token in verifier_text, f"host-death live gate lacks: {token}"
 
+    for token in (
+        "organic_death_melee_test.txt",
+        "organic_death_projectile_test.txt",
+        "organic_death_poison_test.txt",
+        "SET_ENEMY_MODE_LUA",
+        'choices=("host", "client")',
+        'choices=("idle", "casting")',
+        "observer entered the death animation before the owner",
+        "owner organic staff drop trace was not 1",
+        "capture_game_backbuffer",
+        "stop_game_processes(process_ids)",
+    ):
+        assert token in organic_verifier_text, (
+            f"organic player-death live gate lacks: {token}"
+        )
+    assert "invoke_native_magic_hit_trial" not in organic_verifier_text
+
     return (
-        "one participant death epoch drives owner and observer presentation, "
-        "survives actor churn, and permits exactly one owner staff drop"
+        "stock enemy damage reaches the owner-authored death epoch, which drives "
+        "synchronized presentation and permits exactly one owner staff drop"
     )
 
 

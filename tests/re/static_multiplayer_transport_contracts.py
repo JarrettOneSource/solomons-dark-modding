@@ -1111,7 +1111,8 @@ def test_scene_tick_keeps_dead_remote_participants_inert() -> str:
     _require_in_order(
         scene_tick,
         "RefreshNativeRemoteParticipantTransformTarget(",
-        "if (!IsActorRuntimeDead(binding.actor_address)) {",
+        "ApplyNativeRemoteParticipantDeathPresentationState(",
+        "if (!binding.native_remote_death_epoch_active) {",
         "ApplyNativeRemoteParticipantPlayback(",
     )
     for token in (
@@ -1123,6 +1124,6 @@ def test_scene_tick_keeps_dead_remote_participants_inert() -> str:
         )
 
     return (
-        "scene-tick reconciliation buffers remote targets but does not move "
-        "a native proxy while its replicated actor is dead"
+        "scene-tick reconciliation buffers remote targets but stops moving "
+        "a native proxy only after the owner-authored death epoch begins"
     )
