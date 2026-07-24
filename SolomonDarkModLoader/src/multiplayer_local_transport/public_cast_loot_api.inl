@@ -161,8 +161,14 @@ void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
 
 bool InitializeLocalTransport() {
     if (!ConfigureLocalTransport()) {
+        g_local_transport_authority_participant_id.store(
+            0,
+            std::memory_order_release);
         return true;
     }
+    g_local_transport_authority_participant_id.store(
+        0,
+        std::memory_order_release);
     ResetSteamGameplayQueues();
 
     std::random_device random;
@@ -182,6 +188,11 @@ bool InitializeLocalTransport() {
             return false;
         }
         g_local_transport.initialized = true;
+        if (g_local_transport.is_host) {
+            g_local_transport_authority_participant_id.store(
+                g_local_transport.local_peer_id,
+                std::memory_order_release);
+        }
         Log(
             "Multiplayer Steam gameplay transport initialized. role=" +
             std::string(g_local_transport.is_host ? "host" : "client") +
@@ -232,6 +243,11 @@ bool InitializeLocalTransport() {
     }
 
     g_local_transport.initialized = true;
+    if (g_local_transport.is_host) {
+        g_local_transport_authority_participant_id.store(
+            g_local_transport.local_peer_id,
+            std::memory_order_release);
+    }
     std::ostringstream message;
     message << "Multiplayer local UDP transport initialized. role="
             << (g_local_transport.is_host ? "host" : "client")
@@ -256,6 +272,9 @@ void ShutdownLocalTransport() {
         WSACleanup();
     }
     g_local_transport = LocalTransportState{};
+    g_local_transport_authority_participant_id.store(
+        0,
+        std::memory_order_release);
     g_last_lua_time_control_revision_sent = 0;
     ResetReplicatedLuaTimeControl();
     g_remote_native_progression_reconcile_suppressed_for_test.store(
@@ -393,6 +412,11 @@ std::uint64_t GetLocalTransportParticipantId() {
     return g_local_transport.initialized ? g_local_transport.local_peer_id : 0;
 }
 
+std::uint64_t GetLocalTransportAuthorityParticipantId() {
+    return g_local_transport_authority_participant_id.load(
+        std::memory_order_acquire);
+}
+
 bool IsSteamGameplayTransportEnabled() {
     return g_local_transport.initialized &&
            g_local_transport.backend == GameplayTransportBackend::Steam;
@@ -431,6 +455,9 @@ bool ApplySteamGameplayPeerConnected(
     if (!g_local_transport.is_host && authoritative_host) {
         g_local_transport.configured_remote = endpoint;
         g_local_transport.configured_remote_valid = true;
+        g_local_transport_authority_participant_id.store(
+            steam_id,
+            std::memory_order_release);
     }
     return true;
 }
@@ -465,6 +492,9 @@ void ApplySteamGameplayPeerDisconnected(std::uint64_t steam_id) {
     if (configured_authority_disconnected) {
         g_local_transport.configured_remote = TransportPeerEndpoint{};
         g_local_transport.configured_remote_valid = false;
+        g_local_transport_authority_participant_id.store(
+            0,
+            std::memory_order_release);
         std::lock_guard<std::mutex> lock(g_client_host_run_authorization_mutex);
         g_client_host_run_authorization = ClientHostRunAuthorization{};
     }

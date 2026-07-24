@@ -76,10 +76,17 @@ template <typename Packet>
 bool IsAuthoritativeHostParticipantPacket(
     const Packet& packet,
     const TransportPeerEndpoint& from) {
-    return IsLocalTransportClient() &&
-           IsConfiguredRemoteAuthorityEndpoint(from) &&
-           packet.authority_participant_id != 0 &&
-           packet.participant_id == packet.authority_participant_id;
+    const bool authoritative =
+        IsLocalTransportClient() &&
+        IsConfiguredRemoteAuthorityEndpoint(from) &&
+        packet.authority_participant_id != 0 &&
+        packet.participant_id == packet.authority_participant_id;
+    if (authoritative) {
+        g_local_transport_authority_participant_id.store(
+            packet.participant_id,
+            std::memory_order_release);
+    }
+    return authoritative;
 }
 
 bool IsLocalSceneAlreadyRun(const SDModSceneState& scene_state) {

@@ -30,6 +30,7 @@ bool BeginLocalDeathSpectatorPresentation();
 bool TryBuildDeathSpectatorStatusText(std::string* status_text);
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
+std::uint64_t GetLocalTransportAuthorityParticipantId();
 bool QueueAuthoritativeLuaItemGrant(
     std::uint64_t content_id,
     std::uint64_t requested_target_participant_id,

@@ -3,6 +3,7 @@
 #include "debug_ui_overlay.h"
 #include "logger.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 
 #include <Windows.h>
@@ -125,6 +126,40 @@ bool IsBoneyardReady(const SDModSceneState& scene) {
            (scene.kind == "arena" || scene.name == "testrun") &&
            scene.world_address != 0 &&
            scene.arena_address != 0;
+}
+
+bool IsHostCharacterReady(const multiplayer::RuntimeState& runtime) {
+    if (runtime.session_is_host) {
+        SDModPlayerState host_player;
+        return TryGetPlayerState(&host_player) &&
+               host_player.valid &&
+               host_player.actor_address != 0;
+    }
+    const auto host_participant_id =
+        runtime.steam_host_id != 0
+        ? runtime.steam_host_id
+        : multiplayer::GetLocalTransportAuthorityParticipantId();
+    if (host_participant_id == 0) {
+        return false;
+    }
+
+    const auto host_participant = std::find_if(
+        runtime.participants.begin(),
+        runtime.participants.end(),
+        [&](const multiplayer::ParticipantInfo& participant) {
+            return participant.steam_id == host_participant_id ||
+                   participant.participant_id == host_participant_id;
+        });
+    if (host_participant == runtime.participants.end()) {
+        return false;
+    }
+
+    SDModParticipantGameplayState host_character;
+    return TryGetParticipantGameplayState(
+               host_participant->participant_id,
+               &host_character) &&
+           host_character.entity_materialized &&
+           host_character.actor_address != 0;
 }
 
 bool HasAction(
@@ -387,7 +422,8 @@ void TickMultiplayerJoinFlow() {
             hub_ready &&
             runtime.transport_ready &&
             runtime.session_status ==
-                multiplayer::SessionStatus::Ready) {
+                multiplayer::SessionStatus::Ready &&
+            IsHostCharacterReady(runtime)) {
             SetPhaseUnlocked(JoinFlowPhase::Hub);
         }
         return;

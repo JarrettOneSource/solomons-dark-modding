@@ -1034,6 +1034,7 @@ struct LocalTransportState {
 };
 
 LocalTransportState g_local_transport;
+std::atomic<std::uint64_t> g_local_transport_authority_participant_id{0};
 std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
 std::atomic<std::uint64_t>
     g_remote_native_progression_reconcile_suppressed_for_test{0};
@@ -1484,6 +1485,7 @@ void PublishLocalTransportRuntimeState() {
             g_local_transport.last_steam_send_failure_result;
         if (g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
             state.transport_ready = true;
+            state.session_is_host = g_local_transport.is_host;
             state.session_status = SessionStatus::Ready;
             state.session_transport = SessionTransportKind::LocalUdp;
             std::ostringstream status;

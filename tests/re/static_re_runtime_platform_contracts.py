@@ -33,6 +33,22 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
     )
+    transport_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+    )
+    transport_api_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    transport_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    incoming_transport_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_sync.inl"
+    )
     loader_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader.cpp")
     app_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
@@ -75,6 +91,29 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         (flow_text, "scene.arena_address != 0"),
         (flow_text, "runtime.transport_ready"),
         (flow_text, "multiplayer::SessionStatus::Ready"),
+        (flow_text, "bool IsHostCharacterReady("),
+        (flow_text, "IsHostCharacterReady(runtime)"),
+        (
+            transport_header_text,
+            "std::uint64_t GetLocalTransportAuthorityParticipantId();",
+        ),
+        (
+            transport_api_text,
+            "std::uint64_t GetLocalTransportAuthorityParticipantId()",
+        ),
+        (
+            transport_text,
+            "std::atomic<std::uint64_t> "
+            "g_local_transport_authority_participant_id{0};",
+        ),
+        (
+            transport_text,
+            "state.session_is_host = g_local_transport.is_host;",
+        ),
+        (
+            incoming_transport_text,
+            "g_local_transport_authority_participant_id.store(",
+        ),
         (flow_text, "multiplayer::ParticipantSceneIntentKind::Run"),
         (loader_text, "InitializeMultiplayerJoinFlow();"),
         (loader_text, "!multiplayer_join_flow_enabled"),
@@ -101,6 +140,66 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
             + ", ".join(missing)
         )
 
+    host_readiness_start = flow_text.find("bool IsHostCharacterReady(")
+    host_readiness_end = flow_text.find(
+        "\nbool HasAction(", host_readiness_start
+    )
+    host_readiness_body = flow_text[
+        host_readiness_start:host_readiness_end
+    ]
+    required_host_readiness = (
+        "runtime.session_is_host",
+        "TryGetPlayerState(&host_player)",
+        "host_player.valid",
+        "host_player.actor_address != 0",
+        "GetLocalTransportAuthorityParticipantId()",
+        "host_participant_id == 0",
+        "participant.steam_id == host_participant_id",
+        "participant.participant_id == host_participant_id",
+        "host_participant->participant_id",
+        "TryGetParticipantGameplayState(",
+        "host_character.entity_materialized",
+        "host_character.actor_address != 0",
+    )
+    missing_host_readiness = [
+        token
+        for token in required_host_readiness
+        if token not in host_readiness_body
+    ]
+    if missing_host_readiness:
+        raise StaticReTestFailure(
+            "multiplayer quick-start host-character readiness is missing "
+            "token(s): " + ", ".join(missing_host_readiness)
+        )
+
+    authority_resolver_start = transport_api_text.find(
+        "std::uint64_t GetLocalTransportAuthorityParticipantId()"
+    )
+    authority_resolver_end = transport_api_text.find(
+        "\nbool IsSteamGameplayTransportEnabled()", authority_resolver_start
+    )
+    authority_resolver_body = transport_api_text[
+        authority_resolver_start:authority_resolver_end
+    ]
+    required_authority_resolution = (
+        "g_local_transport_authority_participant_id.load(",
+        "std::memory_order_acquire",
+    )
+    missing_authority_resolution = [
+        token
+        for token in required_authority_resolution
+        if token not in authority_resolver_body
+    ]
+    if missing_authority_resolution:
+        raise StaticReTestFailure(
+            "local UDP quick-start host authority resolution is missing "
+            "token(s): " + ", ".join(missing_authority_resolution)
+        )
+    if "g_local_transport.peers" in authority_resolver_body:
+        raise StaticReTestFailure(
+            "app-thread host readiness must not read the service-thread peer vector"
+        )
+
     flow_tick = app_tick_text.find("TickMultiplayerJoinFlow();")
     semantic_dispatch = app_tick_text.find(
         "DispatchPendingDebugUiActionOnAppTick();", flow_tick
@@ -123,13 +222,15 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         connecting_body.find("hub_ready"),
         connecting_body.find("runtime.transport_ready"),
         connecting_body.find("multiplayer::SessionStatus::Ready"),
+        connecting_body.find("IsHostCharacterReady(runtime)"),
         connecting_body.find("SetPhaseUnlocked(JoinFlowPhase::Hub)"),
     )
     if any(position == -1 for position in readiness_order) or list(
         readiness_order
     ) != sorted(readiness_order):
         raise StaticReTestFailure(
-            "Connecting to match must remain until both the live hub and Steam session are ready"
+            "Connecting to match must remain until the live hub, Steam session, "
+            "and host character are ready"
         )
     if (
         flow_text.count(
@@ -195,7 +296,8 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
 
     return (
         "Host and Join skip to native loadout selection, then gate the "
-        "Connecting and Loading Boneyard covers on live Steam and scene readiness"
+        "Connecting and Loading Boneyard covers on live Steam, host-character, "
+        "and scene readiness"
     )
 
 
