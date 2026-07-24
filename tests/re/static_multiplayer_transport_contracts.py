@@ -325,6 +325,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "P95_NATIVE_POSITION_ERROR = 32.0",
         "P95_NATIVE_LAG_MS = 304.0",
         "P95_PRESENTATION_SOURCE_AGE_MS = 200.0",
+        "MINIMUM_PERSISTENT_GHOST_MS = 500.0",
         "DEFAULT_NETWORK_LATENCY_MS = 40.0",
         "DEFAULT_NETWORK_JITTER_MS = 12.0",
         '"teleport_event_count"',

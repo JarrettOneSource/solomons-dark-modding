@@ -273,7 +273,8 @@ regression. `tools/verify_multiplayer_organic_enemy_cast_timing.py` is the live
 two-instance impaired-loopback gate. It requires at least six natural enemies
 and four moving enemies; bounds current-host versus client-observed native
 position, p95 update latency, presentation-source age, teleports, rubber-bands,
-freezes, persistent ghosts, HP, animation, target, and arrival gaps throughout
+freezes, ghosts that remain unresolved for at least 500 ms, HP, animation,
+target, and arrival gaps throughout
 organic combat; and confirms that enemies actually damage a player. The same run casts client
 Air for 12 frames and requires both host-observed start and stop within 150 ms,
 host/client duration error within 100 ms, and native completion within 250 ms

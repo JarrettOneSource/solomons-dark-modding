@@ -80,7 +80,7 @@ def _time_aligned_samples(
 ) -> tuple[list[dict], list[dict]]:
     host: list[dict] = []
     client: list[dict] = []
-    for sample_index in range(80):
+    for sample_index in range(120):
         sampled_ms = 1000 + sample_index * 16
         host_actors = {}
         client_actors = {}
@@ -227,7 +227,7 @@ class OrganicEnemyCastTimingVerifierTests(unittest.TestCase):
         self,
     ) -> None:
         host, client = _time_aligned_samples(
-            ghost_range=range(66, 72),
+            ghost_range=range(70, 110),
         )
         analysis = verifier.analyze_enemy_sync(
             host,
@@ -247,6 +247,20 @@ class OrganicEnemyCastTimingVerifierTests(unittest.TestCase):
             "enemy ghosts persisted",
         ):
             verifier.analyze_enemy_sync(host, client)
+
+    def test_native_fidelity_allows_bounded_spawn_convergence(self) -> None:
+        host, client = _time_aligned_samples(
+            ghost_range=range(70, 76),
+        )
+        analysis = verifier.analyze_enemy_sync(host, client)
+        self.assertGreater(
+            analysis["native_fidelity"]["ghost_sample_count"],
+            0,
+        )
+        self.assertEqual(
+            analysis["native_fidelity"]["ghost_episode_count"],
+            0,
+        )
 
     def test_native_fidelity_ignores_initial_materialization(self) -> None:
         host, client = _time_aligned_samples(

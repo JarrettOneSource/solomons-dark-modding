@@ -75,6 +75,7 @@ CLIENT_RUBBER_BAND_MINIMUM_STEP = 6.0
 CLIENT_FREEZE_MAXIMUM_STEP = 0.5
 HOST_FREEZE_MINIMUM_STEP = 8.0
 MINIMUM_GLITCH_EPISODE_SAMPLES = 3
+MINIMUM_PERSISTENT_GHOST_MS = 500.0
 DEFAULT_NETWORK_LATENCY_MS = 40.0
 DEFAULT_NETWORK_JITTER_MS = 12.0
 DEFAULT_NETWORK_PROXY_SEED = 8242
@@ -528,18 +529,27 @@ def _event_episode_count(
     event_times: list[float],
     *,
     minimum_samples: int = 1,
+    minimum_duration_ms: float = 0.0,
 ) -> int:
     if not event_times:
         return 0
     episodes = 0
     run_length = 1
+    run_started_ms = event_times[0]
     for before_ms, after_ms in zip(event_times, event_times[1:]):
         if after_ms - before_ms <= MAXIMUM_NATIVE_ALIGNMENT_GAP_MS * 1.5:
             run_length += 1
             continue
-        episodes += int(run_length >= minimum_samples)
+        episodes += int(
+            run_length >= minimum_samples
+            and before_ms - run_started_ms >= minimum_duration_ms
+        )
         run_length = 1
-    episodes += int(run_length >= minimum_samples)
+        run_started_ms = after_ms
+    episodes += int(
+        run_length >= minimum_samples
+        and event_times[-1] - run_started_ms >= minimum_duration_ms
+    )
     return episodes
 
 
@@ -842,6 +852,7 @@ def analyze_native_fidelity(
         _event_episode_count(
             times,
             minimum_samples=MINIMUM_GLITCH_EPISODE_SAMPLES,
+            minimum_duration_ms=MINIMUM_PERSISTENT_GHOST_MS,
         )
         for times in (
             list(missing_times_by_id.values())
@@ -851,6 +862,7 @@ def analyze_native_fidelity(
     ghost_episode_count += _event_episode_count(
         unbound_extra_times,
         minimum_samples=MINIMUM_GLITCH_EPISODE_SAMPLES,
+        minimum_duration_ms=MINIMUM_PERSISTENT_GHOST_MS,
     )
     return {
         "common_native_enemy_count": len(common_ids),
