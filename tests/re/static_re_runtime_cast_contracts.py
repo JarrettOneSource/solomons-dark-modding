@@ -1313,7 +1313,12 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             "player tick still publishes stale D3D nameplate overlay snapshots")
 
     required_verifier_tokens = (
-        "launch_trio(god_mode=False, tile_windows=True)",
+        "launch_pair(",
+        "quick_start=True",
+        "kill_existing=False",
+        "tile_windows=False",
+        "exact_mod_id=ACCEPTANCE_MOD_ID",
+        "stop_game_processes(process_ids)",
         "wait_for_all_relationships(\"hub\", timeout)",
         "wait_for_all_relationships(\"testrun\", timeout)",
         "place_trio_for_capture(timeout)",
@@ -1337,6 +1342,10 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "ally HUD name extends outside its reserved label slot",
         "reversed(log_text.splitlines())",
         "capture_game_backbuffer(",
+        "verify_health_bar_pixels(",
+        '"healthbar_pixels"',
+        "verify_loopback_transport_log(",
+        '"bind=127.0.0.1"',
     )
     missing_verifier = [
         token for token in required_verifier_tokens if token not in verifier_text

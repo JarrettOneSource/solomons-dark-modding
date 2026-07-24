@@ -25,6 +25,7 @@ param(
     [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
     [switch]$NoKill,
+    [switch]$QuickStart,
     [switch]$AllowFocusSteal,
     [string]$ProcessIdOutputPath = "",
     [string]$ExactModIds = ""
@@ -162,6 +163,7 @@ function Start-MultiplayerInstance {
     $env = @{
         SDMOD_UI_SANDBOX_PRESET = $InstanceLaunchPreset
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
+        SDMOD_MULTIPLAYER_QUICK_START = $(if ($QuickStart) { "1" } else { "" })
     }
     if ($GodMode) {
         $env.SDMOD_MULTIPLAYER_GODMODE = "1"
@@ -1042,6 +1044,7 @@ if (-not $NoTileWindows) {
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedTestWaveOverride
     allowFocusSteal = [bool]$AllowFocusSteal
+    quickStartEnabled = [bool]$QuickStart
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId
     thirdParticipantId = if ($EnableThird) { $ThirdParticipantId } else { $null }

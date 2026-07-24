@@ -215,7 +215,12 @@ bool InitializeLocalTransport() {
 
     sockaddr_in bind_address{};
     bind_address.sin_family = AF_INET;
-    bind_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    const auto remote_address = ntohl(
+        g_local_transport.configured_remote.udp_address.sin_addr.s_addr);
+    const bool loopback_peer =
+        (remote_address & 0xFF000000u) == 0x7F000000u;
+    bind_address.sin_addr.s_addr = htonl(
+        loopback_peer ? INADDR_LOOPBACK : INADDR_ANY);
     bind_address.sin_port = htons(g_local_transport.local_port);
     if (bind(
             g_local_transport.socket_handle,
@@ -231,6 +236,7 @@ bool InitializeLocalTransport() {
     message << "Multiplayer local UDP transport initialized. role="
             << (g_local_transport.is_host ? "host" : "client")
             << " local_port=" << g_local_transport.local_port
+            << " bind=" << (loopback_peer ? "127.0.0.1" : "0.0.0.0")
             << " remote=" << g_local_transport.remote_host << ":" << g_local_transport.remote_port
             << " participant_id=" << g_local_transport.local_peer_id;
     message << " session_nonce=" << g_local_transport.local_session_nonce;

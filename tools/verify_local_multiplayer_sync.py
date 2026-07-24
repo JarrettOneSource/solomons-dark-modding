@@ -243,6 +243,7 @@ def launch_pair(
     game_directory: Path | None = None,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
+    quick_start: bool = False,
 ) -> dict[str, object]:
     serialized_exact_mod_ids = _serialize_exact_mod_ids(
         exact_mod_id=exact_mod_id,
@@ -307,6 +308,8 @@ def launch_pair(
         args.append("-NoTileWindows")
     if allow_focus_steal:
         args.append("-AllowFocusSteal")
+    if quick_start:
+        args.append("-QuickStart")
     if game_directory is not None:
         args.extend([
             "-GameDirectory",

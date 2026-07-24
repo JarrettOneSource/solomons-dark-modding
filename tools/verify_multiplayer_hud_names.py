@@ -6,31 +6,33 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from multiplayer_frame_capture import capture_game_backbuffer
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
-    CLIENT_PIPE,
     HOST_ID,
     HOST_NAME,
-    HOST_PIPE,
     ROOT,
     THIRD_ID,
     THIRD_NAME,
-    THIRD_PIPE,
     VerifyFailure,
-    launch_trio,
+    game_process_ids,
+    launch_pair,
     lua,
     place_player,
     query,
     start_testrun,
-    stop_games,
+    stop_game_processes,
     wait_for_remote,
     wait_for_remote_convergence,
     wait_for_scene,
@@ -39,10 +41,10 @@ from verify_player_health_death_sync import (
     set_local_player_vitals,
     wait_for_remote_matches_owner_health,
 )
-from verify_real_input_spell_cast_sync import detect_instance_pids
 
 
 OUTPUT = ROOT / "runtime" / "multiplayer_hud_names.json"
+ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
 CLIENT_TEST_HP = 250.0
 CLIENT_TEST_MAX_HP = 500.0
 EXPECTED_HALF_HEALTH_PERCENT = 50
@@ -63,30 +65,63 @@ class Participant:
     screenshot: Path
 
 
-HOST = Participant(
-    "host",
-    HOST_ID,
-    HOST_NAME,
-    HOST_PIPE,
-    ROOT / "runtime/instances/local-mp-host/stage/.sdmod/logs/solomondarkmodloader.log",
-    ROOT / "runtime/multiplayer_hud_names_host.png",
-)
-CLIENT = Participant(
-    "client",
-    CLIENT_ID,
-    CLIENT_NAME,
-    CLIENT_PIPE,
-    ROOT / "runtime/instances/local-mp-client/stage/.sdmod/logs/solomondarkmodloader.log",
-    ROOT / "runtime/multiplayer_hud_names_client.png",
-)
-THIRD = Participant(
-    "third",
-    THIRD_ID,
-    THIRD_NAME,
-    THIRD_PIPE,
-    ROOT / "runtime/instances/local-mp-third/stage/.sdmod/logs/solomondarkmodloader.log",
-    ROOT / "runtime/multiplayer_hud_names_third.png",
-)
+def _participants_for_prefix(
+    instance_prefix: str,
+) -> tuple[Participant, Participant, Participant]:
+    def participant(
+        label: str,
+        participant_id: int,
+        name: str,
+        suffix: str,
+    ) -> Participant:
+        instance = f"{instance_prefix}-{suffix}"
+        return Participant(
+            label,
+            participant_id,
+            name,
+            f"SolomonDarkModLoader_LuaExec_{instance}",
+            ROOT
+            / "runtime"
+            / "instances"
+            / instance
+            / "stage/.sdmod/logs/solomondarkmodloader.log",
+            ROOT
+            / "runtime"
+            / f"multiplayer_hud_names_{instance}.png",
+        )
+
+    return (
+        participant("host", HOST_ID, HOST_NAME, "host"),
+        participant("client", CLIENT_ID, CLIENT_NAME, "client"),
+        participant("third", THIRD_ID, THIRD_NAME, "third"),
+    )
+
+
+def _configure_participants(instance_prefix: str) -> None:
+    global HOST, CLIENT, THIRD, PARTICIPANTS
+
+    HOST, CLIENT, THIRD = _participants_for_prefix(instance_prefix)
+    PARTICIPANTS = (HOST, CLIENT, THIRD)
+
+
+def _reserve_udp_ports(count: int) -> list[int]:
+    sockets: list[socket.socket] = []
+    try:
+        for _ in range(count):
+            handle = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            handle.bind(("127.0.0.1", 0))
+            sockets.append(handle)
+        return [int(handle.getsockname()[1]) for handle in sockets]
+    finally:
+        for handle in sockets:
+            handle.close()
+
+
+def _default_instance_prefix() -> str:
+    return f"hud-{os.getpid():x}-{time.time_ns() & 0xFFFF:04x}"
+
+
+HOST, CLIENT, THIRD = _participants_for_prefix("local-mp")
 PARTICIPANTS = (HOST, CLIENT, THIRD)
 
 
@@ -319,6 +354,90 @@ def verify_dx9_nameplate_health_bar_geometry(
     }
 
 
+def verify_health_bar_pixels(
+    capture_path: Path,
+    geometry: dict[str, float],
+) -> dict[str, int]:
+    with Image.open(capture_path) as raw:
+        image = raw.convert("RGB")
+
+    left = max(0, math.ceil(geometry["left"] + 1.0))
+    top = max(0, math.ceil(geometry["top"] + 1.0))
+    right = min(image.width, math.floor(geometry["right"] - 1.0))
+    bottom = min(image.height, math.floor(geometry["bottom"] - 1.0))
+    if right - left < 4 or bottom - top < 2:
+        raise VerifyFailure(
+            f"healthbar pixels have invalid capture bounds: "
+            f"path={capture_path} geometry={geometry}"
+        )
+
+    health_ratio = max(0.0, min(1.0, geometry["health_ratio"]))
+    fill_right = left + round((right - left) * health_ratio)
+    if health_ratio > 0.0:
+        fill_right = max(left + 1, min(fill_right, right))
+
+    def is_health_pixel(pixel: tuple[int, int, int]) -> bool:
+        red, green, blue = pixel
+        return (
+            red >= 150
+            and red - green >= 70
+            and red - blue >= 60
+        )
+
+    def count_health_pixels(
+        region_left: int,
+        region_right: int,
+    ) -> tuple[int, int]:
+        pixels = [
+            image.getpixel((x, y))
+            for y in range(top, bottom)
+            for x in range(region_left, region_right)
+        ]
+        return (
+            sum(is_health_pixel(pixel) for pixel in pixels),
+            len(pixels),
+        )
+
+    filled_health_pixels, filled_pixels = count_health_pixels(
+        left,
+        fill_right,
+    )
+    if (
+        filled_pixels == 0
+        or filled_health_pixels / filled_pixels < 0.45
+    ):
+        raise VerifyFailure(
+            "captured frame is missing the expected filled healthbar pixels: "
+            f"path={capture_path} geometry={geometry} "
+            f"health_pixels={filled_health_pixels}/{filled_pixels}"
+        )
+
+    empty_health_pixels = 0
+    empty_pixels = 0
+    if fill_right < right:
+        empty_health_pixels, empty_pixels = count_health_pixels(
+            fill_right,
+            right,
+        )
+        if (
+            empty_pixels == 0
+            or empty_health_pixels / empty_pixels > 0.25
+        ):
+            raise VerifyFailure(
+                "captured frame does not show the expected empty healthbar "
+                "segment: "
+                f"path={capture_path} geometry={geometry} "
+                f"health_pixels={empty_health_pixels}/{empty_pixels}"
+            )
+
+    return {
+        "filled_health_pixels": filled_health_pixels,
+        "filled_pixels": filled_pixels,
+        "empty_health_pixels": empty_health_pixels,
+        "empty_pixels": empty_pixels,
+    }
+
+
 def verify_render_logs(
     *,
     expected_health_percent_by_participant: dict[int, int] | None = None,
@@ -465,9 +584,52 @@ def wait_for_render_logs(
     )
 
 
-def run(timeout: float) -> dict[str, Any]:
-    result: dict[str, Any] = {"ok": False}
-    result["launch"] = launch_trio(god_mode=False, tile_windows=True)
+def _verify_quick_start_enabled() -> dict[str, str]:
+    evidence: dict[str, str] = {}
+    for participant in PARTICIPANTS:
+        log_text = participant.log.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        marker = "Multiplayer join flow enabled."
+        if marker not in log_text:
+            raise VerifyFailure(
+                f"{participant.label} did not enter multiplayer quick-start "
+                f"mode: {participant.log}"
+            )
+        evidence[participant.label] = marker
+    return evidence
+
+
+def verify_loopback_transport_log(log_text: str) -> str:
+    return matching_line(
+        log_text,
+        (
+            "Multiplayer local UDP transport initialized.",
+            "bind=127.0.0.1",
+            "remote=127.0.0.1:",
+        ),
+    )
+
+
+def _verify_loopback_transport() -> dict[str, str]:
+    return {
+        participant.label: verify_loopback_transport_log(
+            participant.log.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ),
+        )
+        for participant in PARTICIPANTS
+    }
+
+
+def _verify_running_trio(
+    result: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    result["quick_start"] = _verify_quick_start_enabled()
+    result["loopback_transport"] = _verify_loopback_transport()
     result["bots_disabled"] = disable_all_bots()
     result["hub_relationships"] = wait_for_all_relationships("hub", timeout)
 
@@ -496,15 +658,21 @@ def run(timeout: float) -> dict[str, Any]:
     }
     result["render_logs"] = wait_for_render_logs(timeout)
 
-    pids = detect_instance_pids()
-    if "third" not in pids:
-        raise VerifyFailure(f"could not resolve third SolomonDark PID: {pids}")
     result["screenshots"] = {
         participant.label: capture_game_backbuffer(
             participant.pipe,
             participant.screenshot,
         )
         for participant in PARTICIPANTS
+    }
+    result["healthbar_pixels"] = {
+        observer.label: verify_health_bar_pixels(
+            observer.screenshot,
+            result["render_logs"][observer.label]["client_half_health"][
+                "dx9_health_bar_geometry"
+            ],
+        )
+        for observer in (HOST, THIRD)
     }
     result["summary"] = {
         "participant_count": len(PARTICIPANTS),
@@ -519,25 +687,90 @@ def run(timeout: float) -> dict[str, Any]:
     return result
 
 
+def run_live_verification(
+    *,
+    timeout: float,
+    instance_prefix: str,
+    ports: list[int],
+    game_directory: Path | None,
+) -> dict[str, Any]:
+    if len(ports) != 3:
+        raise ValueError("healthbar verification requires exactly three UDP ports")
+
+    _configure_participants(instance_prefix)
+    clear_previous_evidence()
+    launch = launch_pair(
+        host_preset="map_create_fire_mind_hub",
+        client_preset="map_create_water_body_hub",
+        third_preset="map_create_earth_arcane_hub",
+        temporary_host_profile=True,
+        god_mode=False,
+        tile_windows=False,
+        third_player=True,
+        kill_existing=False,
+        instance_prefix=instance_prefix,
+        host_port=ports[0],
+        client_port=ports[1],
+        third_port=ports[2],
+        game_directory=game_directory,
+        exact_mod_id=ACCEPTANCE_MOD_ID,
+        quick_start=True,
+    )
+    process_ids = game_process_ids(launch)
+    if len(process_ids) != 3:
+        stop_game_processes(process_ids)
+        raise VerifyFailure(
+            f"isolated healthbar trio did not report three exact process "
+            f"IDs: {launch}"
+        )
+
+    result: dict[str, Any] = {
+        "ok": False,
+        "launch": launch,
+        "instance_prefix": instance_prefix,
+        "ports": ports,
+        "process_ids": process_ids,
+    }
+    try:
+        return _verify_running_trio(result, timeout)
+    finally:
+        stop_game_processes(process_ids)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument(
+        "--instance-prefix",
+        default="",
+        help="Unique launcher instance prefix (generated by default).",
+    )
+    parser.add_argument(
+        "--game-dir",
+        type=Path,
+        default=None,
+        help="Retail game directory override for isolated worktrees.",
+    )
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
 
+    instance_prefix = args.instance_prefix or _default_instance_prefix()
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
-        clear_previous_evidence()
-        result = run(args.timeout)
+        result = run_live_verification(
+            timeout=args.timeout,
+            instance_prefix=instance_prefix,
+            ports=_reserve_udp_ports(3),
+            game_directory=args.game_dir,
+        )
         return_code = 0
     except Exception as exc:
         result["error"] = str(exc)
+        result["instance_prefix"] = instance_prefix
         return_code = 1
-    finally:
-        stop_games()
 
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -546,7 +779,7 @@ def main() -> int:
         "error": result.get("error"),
         "summary": result.get("summary"),
         "screenshots": result.get("screenshots"),
-        "output": str(OUTPUT),
+        "output": str(args.output),
     }, indent=2, sort_keys=True))
     return return_code
 
