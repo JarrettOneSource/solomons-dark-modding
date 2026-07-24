@@ -167,6 +167,15 @@ trader characters mostly use the common named-NPC tick `0x0050A4C0` or a
 narrow subclass extension. The art and movement rails therefore differ even
 when both are friendly characters in the same room.
 
+The courtyard creation loop around `0x0050CD10` registers each `0x138A`
+Student and increments the owning region's signed Student count at `+0x9308`.
+`Student::Tick (0x0050A4E0)` retires an expired Student through vtable slot
+`+0x18`; the Student vtable at `0x007916DC` resolves that slot to
+`0x00401FD0`, which sets the generic actor pending-remove byte at `+0x05`.
+The tick then decrements the same owner `+0x9308` count. Multiplayer surplus
+cleanup must mirror that deferred-retirement plus counter pair; calling the
+actor-world unregister path directly skips the stock courtyard lifecycle.
+
 ## Generic `GameNPC` and recipes
 
 `GameNPC` is type 5015, constructor `0x005E9A90`, vtable `0x0079CEBC`, and

@@ -737,7 +737,9 @@ def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
         (soak_text, '"applied hub presentation source is unavailable"'),
         (soak_text, "failed_remove_totals[-1] != failed_remove_totals[0]"),
         (soak_text, "created_totals[-1] != created_totals[0]"),
-        (soak_text, "removed_totals[-1] != removed_totals[0]"),
+        (soak_text, '"removed_named_binding_count"'),
+        (soak_text, 'sample["created_actor_count"] != 0'),
+        (soak_text, "stock deferred Student retirements"),
         (soak_text, "if lifecycle_change_count == 0:"),
         (soak_text, '"final_pair_responsive": True'),
         (soak_text, '"student_book_palette_mismatches"'),
@@ -793,7 +795,8 @@ def test_steam_friend_hub_lifecycle_soak_is_wired() -> str:
     return (
         "Steam hub soak supports both physical-Windows and same-machine test "
         "topologies while requiring one-to-one named NPC convergence, local-stock "
-        "Student presentation sync, and zero multiplayer hub lifecycle mutation"
+        "Student presentation sync, no factory creation, and no failed or named-NPC "
+        "retirement"
     )
 
 

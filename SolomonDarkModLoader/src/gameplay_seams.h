@@ -306,6 +306,7 @@ extern std::size_t kItemRecipeDefinitionTypeIdOffset;
 extern std::size_t kRegionObjectTypeIdOffset;
 extern std::size_t kObjectHeaderWordOffset;
 extern std::size_t kActorOwnerOffset;
+extern std::size_t kHubStudentCountOffset;
 extern std::size_t kActorGridCellPtrOffset;
 extern std::size_t kActorSlotOffset;
 extern std::size_t kActorWorldSlotOffset;

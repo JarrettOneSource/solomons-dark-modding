@@ -289,6 +289,7 @@ std::size_t kItemRecipeDefinitionTypeIdOffset = 0;
 std::size_t kRegionObjectTypeIdOffset = 0;
 std::size_t kObjectHeaderWordOffset = 0;
 std::size_t kActorOwnerOffset = 0;
+std::size_t kHubStudentCountOffset = 0;
 std::size_t kActorGridCellPtrOffset = 0;
 std::size_t kActorSlotOffset = 0;
 std::size_t kActorWorldSlotOffset = 0;

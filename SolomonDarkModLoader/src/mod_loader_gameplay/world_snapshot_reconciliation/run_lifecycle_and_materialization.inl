@@ -31,7 +31,10 @@ std::vector<ReplicatedWorldActorLocalBinding> BuildLocalReplicatedWorldActorBind
         PruneReplicatedSharedHubActorBindings(scene_actors);
     }
     for (const auto& actor : scene_actors) {
-        if (!ShouldReconcileLocalWorldActor(actor, scene_kind)) {
+        if (!ShouldReconcileLocalWorldActor(actor, scene_kind) ||
+            (scene_kind ==
+                 multiplayer::ParticipantSceneIntentKind::SharedHub &&
+             IsActorRetirementPending(actor.actor_address))) {
             continue;
         }
 

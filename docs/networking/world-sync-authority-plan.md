@@ -246,8 +246,8 @@ ask the retail game's global RNG to be the network protocol.
 
 ## Open RE Gaps
 
-- Full `Student` update/tick recovery from the vtable entry around
-  `0x0070A4E0`.
+- Recovery beyond the now-proven `Student::Tick (0x0050A4E0)` retirement
+  branch, including the remaining steering and presentation branches.
 - Safe native create/register/destroy wrappers for arbitrary world actors.
 - Exact actor-world enumeration semantics; the current live API samples one
   visible pointer per scanned bucket and is sufficient for divergence probes,
@@ -334,14 +334,21 @@ The shared-hub lifecycle/reconciliation slice now does the following:
   factory-backed hub NPCs and
   Student-specific book/color/variant bytes for `0x138A`
 - moved actors are rebound into the native world grid
-- missing known hub NPC families are created through the stock
+- missing known factory-backed hub NPC families are created through the stock
   `GameObjectFactory_Create(type_id)` plus generic
   `ActorWorld_Register(world, group=0, slot=-1)` path before reconciliation
-  (`0x1389`, `0x138A`, `0x138B`, `0x138C`, `0x138D`, `0x138F`, `0x1390`)
+  (`0x1389`, `0x138B`, `0x138C`, `0x138D`, `0x138F`, `0x1390`)
 - extra client-local actors from those replicated factory-backed hub NPC
   families are removed through `ActorWorld_Unregister(world, actor,
   remove_from_container=1)` so the client-owned hub NPC set converges to the
   host snapshot without parking hidden duplicates
+- Students remain owned by the stock transient courtyard lifecycle. When the
+  client has more active `0x138A` actors than the authoritative snapshot, it
+  requests retirement through the Student actor's native vtable path and
+  decrements the owner's stock Student count at `+0x9308`, matching
+  `Student::Tick`. Retired authority IDs are unbound for reuse, and actors with
+  the native pending-remove flag are excluded from later binding passes.
+  Multiplayer never factory-creates or directly unregisters a Student.
 - client-created replicated hub NPCs are also unregistered before native scene
   switches, preventing loader-owned hub actors from leaking into hub-to-run
   teardown
@@ -469,6 +476,28 @@ This deliberately blocks visual-only drop mirroring as a final fix. Mirroring a
 stock gold actor on the client before pickup ownership exists would allow a
 client-local walk-over to mutate that client's local global gold and would not
 prove the host-authoritative loot contract.
+
+## Live Verification - 2026-07-23
+
+`tools/verify_hub_student_population_sync.py` launches a uniquely named local
+host/client pair on private UDP ports, records the exact two game PIDs, and
+cleans up only those PIDs. It samples native `0x138A` actors, the owner
+`+0x9308` courtyard count, pending-remove state, replicated bindings, and the
+applied authoritative Student count.
+
+The post-fix connected run wrote
+`runtime/hub_student_population_sync.json` and passed:
+
+- `10` total samples with `8` post-warmup samples
+- client Student population converged in all `8` post-warmup samples
+- maximum client surplus was `0`; the doubled-client regression would exceed
+  the allowed transient surplus by a full local population
+- temporary stale bindings converged from at most `3` unbound Students to `0`
+- the native deferred-retirement total advanced to `2`, proving the surplus
+  cleanup path executed
+- the stock owner count equaled registered minus pending Students in every
+  host and client sample
+- no Student retirement failed
 
 ## Live Verification - 2026-05-29
 

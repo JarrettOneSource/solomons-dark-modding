@@ -139,6 +139,7 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
 
     std::unordered_set<std::uint64_t> authoritative_ids;
     authoritative_ids.reserve(snapshot.actors.size());
+    std::size_t authoritative_student_count = 0;
     const bool snapshot_may_be_complete =
         snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::SharedHub ||
         snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run;
@@ -148,6 +149,11 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             continue;
         }
         authoritative_ids.insert(authoritative_actor.network_actor_id);
+        if (snapshot.scene_intent.kind ==
+                multiplayer::ParticipantSceneIntentKind::SharedHub &&
+            authoritative_actor.native_type_id == 0x138A) {
+            authoritative_student_count += 1;
+        }
     }
 
     std::unordered_map<std::uint64_t, std::size_t> local_by_network_id;
@@ -302,6 +308,20 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         snapshot_may_be_complete &&
         (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::SharedHub ||
          can_mutate_shared_hub_actors)) {
+        std::size_t local_student_count = 0;
+        if (snapshot.scene_intent.kind ==
+            multiplayer::ParticipantSceneIntentKind::SharedHub) {
+            for (const auto& binding : local_bindings) {
+                if (binding.actor.object_type_id == 0x138A) {
+                    local_student_count += 1;
+                }
+            }
+        }
+        std::size_t student_retire_budget =
+            local_student_count > authoritative_student_count
+                ? local_student_count - authoritative_student_count
+                : 0;
+
         for (auto& binding : local_bindings) {
             if (binding.matched) {
                 continue;
@@ -375,22 +395,81 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             }
 
             if (snapshot.scene_intent.kind != multiplayer::ParticipantSceneIntentKind::SharedHub ||
-                !IsReplicatedSharedHubFactoryActorType(binding.actor.object_type_id) ||
-                authoritative_ids.find(binding.network_actor_id) != authoritative_ids.end()) {
+                !IsReplicatedSharedHubFactoryActorType(binding.actor.object_type_id)) {
+                continue;
+            }
+
+            if (binding.actor.object_type_id == 0x138A) {
+                const bool stale_authority_student =
+                    binding.network_actor_id != 0 &&
+                    authoritative_ids.find(binding.network_actor_id) ==
+                        authoritative_ids.end();
+                if (student_retire_budget == 0) {
+                    if (stale_authority_student) {
+                        RecordWorldSnapshotBinding(
+                            &counts,
+                            binding,
+                            false,
+                            false,
+                            false);
+                        UnbindReplicatedSharedHubActor(
+                            binding.network_actor_id,
+                            binding.actor.actor_address);
+                        binding.network_actor_id = 0;
+                    }
+                    continue;
+                }
+
+                DWORD exception_code = 0;
+                const auto retired_network_actor_id =
+                    binding.network_actor_id;
+                const auto retired_actor_address =
+                    binding.actor.actor_address;
+                if (TryRequestReplicatedHubStudentRetirement(
+                        binding,
+                        &exception_code)) {
+                    counts.removed_actor_count += 1;
+                    if (retired_network_actor_id != 0) {
+                        RecordWorldSnapshotBinding(
+                            &counts,
+                            binding,
+                            false,
+                            false,
+                            true);
+                        UnbindReplicatedSharedHubActor(
+                            retired_network_actor_id,
+                            retired_actor_address);
+                        binding.network_actor_id = 0;
+                    }
+                    student_retire_budget -= 1;
+                    Log(
+                        "world_snapshot: requested stock Student retirement. actor=" +
+                        HexString(retired_actor_address) +
+                        " network_actor_id=" +
+                        std::to_string(retired_network_actor_id) +
+                        " reason=" +
+                        (stale_authority_student
+                             ? "surplus_retired_authority"
+                             : "surplus_local"));
+                } else {
+                    counts.failed_remove_actor_count += 1;
+                    Log(
+                        "world_snapshot: failed to request stock Student retirement. actor=" +
+                        HexString(retired_actor_address) +
+                        " network_actor_id=" +
+                        std::to_string(retired_network_actor_id) +
+                        " seh=" + HexString(exception_code));
+                }
+                continue;
+            }
+
+            if (authoritative_ids.find(binding.network_actor_id) !=
+                authoritative_ids.end()) {
                 continue;
             }
 
             if (!IsReplicatedSharedHubLifecycleOwnedActorType(
                     binding.actor.object_type_id)) {
-                // Release a retired authority identity, but leave the local
-                // Student in the stock hub lifecycle that created it.
-                if (binding.network_actor_id != 0) {
-                    UnbindReplicatedSharedHubActor(
-                        binding.network_actor_id,
-                        binding.actor.actor_address);
-                    binding.network_actor_id = 0;
-                }
-                RecordWorldSnapshotBinding(&counts, binding, false, false, false);
                 continue;
             }
 

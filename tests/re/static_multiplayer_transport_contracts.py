@@ -456,10 +456,30 @@ def test_run_enemy_death_tombstones_precede_structural_omission() -> str:
 
 
 def test_hub_students_remain_in_the_stock_transient_lifecycle() -> str:
+    layout = _read("config/binary-layout.ini")
+    seam_header = _read("SolomonDarkModLoader/src/gameplay_seams.h")
+    seam_storage = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    seam_bindings = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
     reconciliation = read_source_unit(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "world_snapshot_reconciliation.inl"
     )
+
+    for source, token in (
+        (layout, "hub_student_count=0x9308"),
+        (seam_header, "extern std::size_t kHubStudentCountOffset;"),
+        (seam_storage, "std::size_t kHubStudentCountOffset = 0;"),
+        (
+            seam_bindings,
+            'SDMOD_SIZE("gameplay.offsets", "hub_student_count", '
+            "kHubStudentCountOffset)",
+        ),
+    ):
+        assert token in source, f"stock Student population counter lacks: {token}"
 
     lifecycle_start = reconciliation.index(
         "bool IsReplicatedSharedHubLifecycleOwnedActorType("
@@ -485,6 +505,32 @@ def test_hub_students_remain_in_the_stock_transient_lifecycle() -> str:
             f"{function_name} can structurally mutate stock Student actors"
         )
 
+    retirement_start = reconciliation.index(
+        "bool TryRequestReplicatedHubStudentRetirement("
+    )
+    retirement_end = reconciliation.index("\n}\n", retirement_start) + 3
+    retirement = reconciliation[retirement_start:retirement_end]
+    _require_in_order(
+        retirement,
+        "kActorPendingRemoveOffset",
+        "CallActorRequestRetirementSafe(",
+        "student_count - 1",
+    )
+    assert "kHubStudentCountOffset" in retirement
+    assert "CallActorWorldUnregisterSafe(" not in retirement
+
+    local_binding_start = reconciliation.index(
+        "std::vector<ReplicatedWorldActorLocalBinding> "
+        "BuildLocalReplicatedWorldActorBindings("
+    )
+    local_binding_end = reconciliation.index(
+        "bool IsLocalRunCombatAlreadyActive(",
+        local_binding_start,
+    )
+    assert "IsActorRetirementPending(" in reconciliation[
+        local_binding_start:local_binding_end
+    ], "pending-retirement Students can be rebound before stock removal"
+
     creation_gate = reconciliation[
         reconciliation.index("if (local_it == local_by_network_id.end()) {") :
         reconciliation.index("auto& binding = local_bindings[local_it->second];")
@@ -503,14 +549,17 @@ def test_hub_students_remain_in_the_stock_transient_lifecycle() -> str:
     ]
     _require_in_order(
         cleanup,
-        "!IsReplicatedSharedHubLifecycleOwnedActorType(",
+        "TryRequestReplicatedHubStudentRetirement(",
+        "RecordWorldSnapshotBinding(",
         "UnbindReplicatedSharedHubActor(",
         "RemoveReplicatedSharedHubActor(binding, &exception_code)",
     )
+    assert "student_retire_budget" in cleanup
+    assert "stale_authority_student" in cleanup
 
     return (
-        "hub Students synchronize through local stock actors without multiplayer "
-        "factory creation or native unregister"
+        "hub Students use stock deferred retirement and keep the courtyard "
+        "population counter aligned without factory creation or native unregister"
     )
 
 

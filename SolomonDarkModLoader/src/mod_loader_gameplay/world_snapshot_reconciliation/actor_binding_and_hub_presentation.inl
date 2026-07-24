@@ -80,10 +80,87 @@ bool IsReplicatedSharedHubFactoryActorType(std::uint32_t native_type_id) {
 bool IsReplicatedSharedHubLifecycleOwnedActorType(std::uint32_t native_type_id) {
     // Students are stock transient hub actors. Their native update retires and
     // replaces them independently on each machine. Multiplayer owns their
-    // transform and presentation only; constructing or unregistering them
-    // bypasses the stock spawner and eventually corrupts the hub actor pool.
+    // transform and presentation, and mirrors stock deferred retirement when
+    // an authoritative Student disappears. Constructing or directly
+    // unregistering them bypasses the stock spawner and eventually corrupts
+    // the hub actor pool.
     return IsReplicatedSharedHubFactoryActorType(native_type_id) &&
            native_type_id != 0x138A;
+}
+
+bool IsActorRetirementPending(uintptr_t actor_address) {
+    if (actor_address == 0 || kActorPendingRemoveOffset == 0) {
+        return false;
+    }
+
+    std::uint8_t pending_remove = 0;
+    return ProcessMemory::Instance().TryReadField(
+               actor_address,
+               kActorPendingRemoveOffset,
+               &pending_remove) &&
+           pending_remove != 0;
+}
+
+bool TryRequestReplicatedHubStudentRetirement(
+    const ReplicatedWorldActorLocalBinding& binding,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (binding.actor.actor_address == 0 ||
+        binding.actor.object_type_id != 0x138A ||
+        kActorOwnerOffset == 0 ||
+        kActorPendingRemoveOffset == 0 ||
+        kHubStudentCountOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t pending_remove = 0;
+    if (!memory.TryReadField(
+            binding.actor.actor_address,
+            kActorPendingRemoveOffset,
+            &pending_remove)) {
+        return false;
+    }
+    if (pending_remove != 0) {
+        // Stock Student::Tick already paired this retirement request with its
+        // own courtyard-count decrement.
+        return true;
+    }
+
+    uintptr_t owner_address = 0;
+    std::int32_t student_count = 0;
+    if (!memory.TryReadField(
+            binding.actor.actor_address,
+            kActorOwnerOffset,
+            &owner_address) ||
+        owner_address == 0 ||
+        (binding.actor.owner_address != 0 &&
+         binding.actor.owner_address != owner_address) ||
+        !memory.TryReadField(
+            owner_address,
+            kHubStudentCountOffset,
+            &student_count) ||
+        student_count <= 0) {
+        return false;
+    }
+
+    if (!CallActorRequestRetirementSafe(
+            binding.actor.actor_address,
+            exception_code) ||
+        !memory.TryReadField(
+            binding.actor.actor_address,
+            kActorPendingRemoveOffset,
+            &pending_remove) ||
+        pending_remove == 0) {
+        return false;
+    }
+
+    return memory.TryWriteField(
+        owner_address,
+        kHubStudentCountOffset,
+        student_count - 1);
 }
 
 std::uint64_t BuildReplicatedWorldActorNetworkId(
@@ -143,7 +220,10 @@ void PruneReplicatedSharedHubActorBindings(const std::vector<SDModSceneActorStat
     std::unordered_set<uintptr_t> active_hub_actors;
     active_hub_actors.reserve(scene_actors.size());
     for (const auto& actor : scene_actors) {
-        if (ShouldReconcileLocalWorldActor(actor, multiplayer::ParticipantSceneIntentKind::SharedHub)) {
+        if (ShouldReconcileLocalWorldActor(
+                actor,
+                multiplayer::ParticipantSceneIntentKind::SharedHub) &&
+            !IsActorRetirementPending(actor.actor_address)) {
             active_hub_actors.insert(actor.actor_address);
         }
     }

@@ -65,17 +65,23 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
     summary = comparison["summary"]
 
     # Stock Students retire and respawn independently on each machine. Their
-    # wire IDs identify host presentation snapshots, while each client binds as
-    # many of those snapshots as its own stock Student pool currently exposes.
-    # Persistent named NPCs still require exact one-to-one convergence.
+    # wire IDs identify host presentation snapshots; each client binds its
+    # stock pool and requests stock deferred retirement only for a population
+    # surplus. Persistent named NPCs still require exact one-to-one convergence.
     latest_authoritative = hub_records(client_values, "repactor")
     applied_authoritative = hub_records(client_values, "applyactor")
+    all_bindings = hub_records(client_values, "binding")
     bindings = [
         binding
-        for binding in hub_records(client_values, "binding")
+        for binding in all_bindings
         if binding.get("matched") == "true"
         and binding.get("parked") != "true"
         and binding.get("removed") != "true"
+    ]
+    removed_bindings = [
+        binding
+        for binding in all_bindings
+        if binding.get("removed") == "true"
     ]
     local_actors = hub_records(client_values, "actor")
 
@@ -184,6 +190,16 @@ def capture(pair: SteamFriendActivePair, timeout: float) -> dict[str, Any]:
         "unique_binding_address_count": len(binding_address_set),
         "matched_named_binding_count": len(binding_named_ids),
         "matched_student_binding_count": len(binding_student_ids),
+        "removed_named_binding_count": sum(
+            presentation.parse_int(binding.get("type"))
+            != presentation.STUDENT_TYPE_ID
+            for binding in removed_bindings
+        ),
+        "removed_student_binding_count": sum(
+            presentation.parse_int(binding.get("type"))
+            == presentation.STUDENT_TYPE_ID
+            for binding in removed_bindings
+        ),
         "local_actor_count": len(local_addresses),
         "unique_local_actor_count": len(local_address_set),
         "local_named_actor_count": len(local_named_addresses),
@@ -320,8 +336,10 @@ def convergence_errors(sample: dict[str, Any]) -> list[str]:
         errors.append("apply pass observed the wrong local hub population")
     if sample["apply_matched_actor_count"] != sample["matched_binding_count"]:
         errors.append("apply pass and published hub bindings disagree")
-    if sample["created_actor_count"] != 0 or sample["removed_actor_count"] != 0:
-        errors.append("multiplayer structurally mutated a stock hub actor")
+    if sample["created_actor_count"] != 0:
+        errors.append("multiplayer factory-created a stock hub actor")
+    if sample["removed_named_binding_count"] != 0:
+        errors.append("multiplayer retired a persistent named hub NPC")
     if sample["failed_remove_actor_count"] != 0:
         errors.append("hub actor removal failed in the latest apply pass")
     if sample["compared_total"] != sample["matched_binding_count"]:
@@ -466,10 +484,6 @@ def run(
         raise VerifyFailure(
             "multiplayer factory-created a stock hub actor during the soak"
         )
-    if removed_totals[-1] != removed_totals[0]:
-        raise VerifyFailure(
-            "multiplayer unregistered a stock hub actor during the soak"
-        )
     if lifecycle_change_count == 0:
         raise VerifyFailure(
             "the soak observed no stock hub actor lifecycle replacement"
@@ -497,6 +511,9 @@ def run(
             for sample in samples
         ),
         "created_actor_total_delta": created_totals[-1] - created_totals[0],
+        # This total now includes stock deferred Student retirements requested
+        # to discard a client-local population surplus. Named hub NPC
+        # retirement and direct ActorWorld_Unregister remain forbidden above.
         "removed_actor_total_delta": removed_totals[-1] - removed_totals[0],
         "failed_remove_actor_total_delta": (
             failed_remove_totals[-1] - failed_remove_totals[0]

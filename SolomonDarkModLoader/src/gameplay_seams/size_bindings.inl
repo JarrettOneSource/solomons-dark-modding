@@ -65,6 +65,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "region_object_type_id", kRegionObjectTypeIdOffset),
         SDMOD_SIZE("gameplay.offsets", "object_header_word", kObjectHeaderWordOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_owner", kActorOwnerOffset),
+        SDMOD_SIZE("gameplay.offsets", "hub_student_count", kHubStudentCountOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_grid_cell_ptr", kActorGridCellPtrOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_slot", kActorSlotOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_world_slot", kActorWorldSlotOffset),
