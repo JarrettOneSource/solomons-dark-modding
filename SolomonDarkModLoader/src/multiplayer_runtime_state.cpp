@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <unordered_map>
 
@@ -83,6 +84,8 @@ bool SameLootSnapshotTimeline(
            left.run_nonce == right.run_nonce &&
            SameParticipantSceneIntent(left.scene_intent, right.scene_intent);
 }
+
+#include "multiplayer_runtime_participant_sampling.inl"
 
 WorldActorSnapshot InterpolateWorldActorSnapshot(
     const WorldActorSnapshot& before,
@@ -484,6 +487,14 @@ bool TrySampleParticipantTransform(
         return true;
     }
     if (after == nullptr || after == before || after->received_ms <= before->received_ms) {
+        if (after == nullptr &&
+            TryExtrapolateParticipantTransform(
+                participant,
+                sample_ms,
+                *before,
+                sample)) {
+            return true;
+        }
         *sample = *before;
         return true;
     }
@@ -571,6 +582,8 @@ bool AppendLootSnapshot(RuntimeState* state, LootSnapshotRuntimeInfo snapshot) {
     state->loot_snapshot = std::move(snapshot);
     return true;
 }
+
+#include "multiplayer_runtime_world_sampling.inl"
 
 bool TrySampleWorldSnapshot(
     const RuntimeState& state,

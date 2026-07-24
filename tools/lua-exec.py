@@ -79,6 +79,8 @@ def _send_lua_wsl(code: str) -> str:
     command = [
         "powershell.exe",
         "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
         "-File",
         "scripts/Invoke-LuaExec.ps1",
         "-PipeName",

@@ -90,12 +90,16 @@ constexpr std::uint64_t kRunWorldActorNetworkIdBase = 0x1000000000000ull;
 constexpr std::uint64_t kRunHostLocalWorldActorNetworkIdBase = 0x1001000000000ull;
 constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
 constexpr std::uint64_t kLocalTransportParticipantFrameIntervalMs = 50;
+constexpr std::uint64_t kLocalTransportWaveSummaryCheckpointIntervalMs = 400;
 constexpr std::uint64_t kLocalTransportStateCheckpointIntervalMs = 1000;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 200;
+constexpr std::uint64_t kLocalTransportRunWorldMotionIntervalMs = 67;
 constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs = 1000;
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 250;
 constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportSpellEffectSnapshotIntervalMs = 16;
+constexpr std::uint64_t
+    kParticipantProgressionReliableCheckpointIntervalMs = 5000;
 constexpr std::uint64_t kLuaModStateCheckpointIntervalMs = 5000;
 constexpr std::uint64_t kLuaModFragmentAssemblyExpiryMs = 10000;
 constexpr std::size_t kLuaModMaxPendingAssemblies = 64;
@@ -473,6 +477,17 @@ struct LocalPeerEndpoint {
     TransportPeerEndpoint endpoint;
     std::uint64_t participant_id = 0;
     std::uint64_t last_packet_ms = 0;
+};
+
+struct ParticipantProgressionSendCheckpoint {
+    TransportPeerEndpoint endpoint;
+    bool inventory_sent = false;
+    bool progression_book_sent = false;
+    std::uint32_t inventory_revision = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
+    std::uint64_t inventory_sent_ms = 0;
+    std::uint64_t progression_book_sent_ms = 0;
 };
 
 struct QueuedLocalCastEvent {
@@ -881,6 +896,7 @@ struct HostMenuPauseRequestState {
 };
 
 #include "multiplayer_local_transport/world_snapshot_fragmentation.inl"
+#include "multiplayer_local_transport/world_motion_snapshot_fragmentation.inl"
 
 struct LocalTransportState {
     bool configured = false;
@@ -897,6 +913,7 @@ struct LocalTransportState {
     TransportPeerEndpoint configured_remote;
     std::uint64_t local_peer_id = 0;
     std::uint64_t last_participant_frame_send_ms = 0;
+    std::uint64_t last_wave_summary_send_ms = 0;
     std::uint64_t last_state_checkpoint_send_ms = 0;
     std::uint64_t last_world_snapshot_send_ms = 0;
     std::uint64_t last_world_snapshot_reliable_checkpoint_ms = 0;
@@ -944,7 +961,19 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, RecentRunEnemyDeathSnapshot> recent_run_enemy_deaths_by_network_id;
     std::unordered_map<std::uint64_t, RetainedRunEnemySnapshot>
         retained_run_enemy_snapshots_by_network_id;
+    std::vector<ParticipantProgressionSendCheckpoint>
+        participant_progression_send_checkpoints;
+    bool have_last_sent_wave_summary = false;
+    WaveSummaryPacket last_sent_wave_summary;
     PendingWorldSnapshotAssemblies pending_world_snapshots;
+    PendingWorldMotionSnapshotAssemblies
+        pending_world_motion_snapshots;
+    bool have_latest_world_identity_snapshot = false;
+    CompleteWorldSnapshotPacketState
+        latest_world_identity_snapshot;
+    bool have_last_sent_world_identity_snapshot = false;
+    CompleteWorldSnapshotPacketState
+        last_sent_world_identity_snapshot;
     std::unordered_map<std::uint64_t, float> last_synced_enemy_hp_by_network_id;
     std::unordered_map<std::uint64_t, float> last_enemy_claimed_hp_by_network_id;
     std::unordered_map<std::uint64_t, ObservedLocalEnemyDamage>
@@ -956,6 +985,8 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t>
         last_participant_frame_sequence_by_participant;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        last_wave_summary_sequence_by_authority;
     std::unordered_map<std::uint64_t, std::uint64_t>
         session_nonce_by_participant;
     std::unordered_map<std::uint64_t, std::uint64_t>
@@ -1325,18 +1356,6 @@ std::filesystem::path ResolveRuntimeWizardSkillConfigPath(const wchar_t* file_na
     return path.parent_path() / "data" / "wizardskills" / file_name;
 }
 
-void PopulateHostLevelUpBarrierStatePacket(
-    StatePacket* packet,
-    std::uint64_t now_ms);
-bool ApplyAuthoritativeLevelUpWaitStatus(
-    std::uint64_t authority_participant_id,
-    std::uint64_t barrier_id,
-    std::uint32_t revision,
-    std::uint32_t deadline_remaining_ms,
-    bool pause_active,
-    bool timed_out,
-    std::vector<std::uint64_t> waiting_participant_ids,
-    std::uint64_t now_ms);
 void RefreshLocalMenuPauseRequest(std::uint64_t now_ms);
 void RefreshHostSharedGameplayPause(std::uint64_t now_ms);
 void PopulateSharedGameplayPausePacketFields(
@@ -1377,6 +1396,13 @@ void ResetRemoteParticipantSessionEpoch(
     std::uint64_t participant_id,
     bool configured_authority_disconnected,
     bool preserve_session_nonce_history = false);
+bool BuildLocalParticipantInventorySnapshotPacket(
+    ParticipantInventorySnapshotPacket* packet);
+bool BuildLocalParticipantProgressionBookSnapshotPacket(
+    ParticipantProgressionBookSnapshotPacket* packet);
+void SendLocalParticipantProgressionSnapshots(
+    const std::vector<TransportPeerEndpoint>& endpoints,
+    std::uint64_t now_ms);
 bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
@@ -1411,7 +1437,6 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/run_exit_sync.inl"
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
-#include "multiplayer_local_transport/wave_summary_sync.inl"
 #include "multiplayer_local_transport/death_spectator_sync.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
@@ -1420,6 +1445,8 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/wave_summary_sync.inl"
+#include "multiplayer_local_transport/participant_progression_snapshot_sync.inl"
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
 #include "multiplayer_local_transport/lua_consumable_use_sync.inl"
 #include "multiplayer_local_transport/lua_registered_spell_cast_sync.inl"

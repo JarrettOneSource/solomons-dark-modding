@@ -37,11 +37,11 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
     )
     outgoing = read_text(
         ROOT
-        / "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/participant_progression_snapshot_sync.inl"
     )
     incoming = read_text(
         ROOT
-        / "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_participant_state_sync.inl"
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/participant_progression_snapshot_sync.inl"
     )
     lua_gameplay = read_text(
         ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
@@ -114,8 +114,8 @@ def test_nested_sack_inventory_preserves_owner_authored_container_paths() -> str
         "outgoing inventory serialization",
         outgoing,
         (
-            "packet.inventory_items[index].parent_item_index",
-            "packet.inventory_items[index].container_depth",
+            "packet_item.parent_item_index",
+            "packet_item.container_depth",
         ),
         failures,
     )

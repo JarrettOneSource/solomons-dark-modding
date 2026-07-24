@@ -9,12 +9,25 @@ promise.
 
 ## TL;DR
 
-One player hosts a normal Solomon's Dark session and becomes the authoritative world. Every other player sends movement and gameplay intents to the host; the host broadcasts authoritative player / enemy / drop / run state at ~20 Hz plus reliable gameplay events (cast, damage, pickup, wave transition). Clients render their own input immediately for responsiveness and hard-snap when the host disagrees. Multiplayer mode disables the dev/debug mutation backdoors and refuses mismatched mod sets so peers cannot silently diverge. No rollback, no serious anti-cheat, no dedicated server, no persistent-world machinery in the first ship — just one trusted-host Steam session that keeps everyone in the same fight and the same run.
+One player hosts a normal Solomon's Dark session and becomes the authoritative
+world. Every other player sends movement and gameplay intents to the host.
+Player frames run at 20 Hz; host-owned run motion runs at about 15 Hz under a
+fixed bandwidth budget, with reliable identity and state checkpoints on
+separate lanes. Clients render their own input immediately, interpolate remote
+state, and apply bounded soft corrections or authoritative snaps when required.
+Multiplayer mode disables the dev/debug mutation backdoors and refuses
+mismatched mod sets so peers cannot silently diverge. No rollback, serious
+anti-cheat, dedicated server, or persistent-world machinery is part of the
+first ship.
 
-The implementation direction is client-predicted / authority-verified: clients
+The implementation is client-predicted / authority-verified: clients
 perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
+
+The current wire version is protocol 82. See
+[`netcode-review.md`](netcode-review.md) for current packet sizes, cadence,
+interpolation, and bandwidth accounting.
 
 Protocol v65 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage
@@ -35,31 +48,36 @@ Steam playtest flow and the remaining external verification boundary.
   `MultiplayerCharacterProfile`, `ParticipantSceneIntent`, and runtime snapshot
   model used by Lua bots and future remote participants.
 - `multiplayer_service_loop.cpp` pumps Steam bootstrap/callback state every
-  50 ms and mirrors readiness into runtime state. It also pumps the local UDP
+  16 ms and mirrors readiness into runtime state. It also pumps the local UDP
   development transport when `SDMOD_MULTIPLAYER_TRANSPORT=local_udp`.
-- `multiplayer_runtime_protocol.h` is a fixed-packet scaffold with
+- `multiplayer_runtime_protocol.h` is the bounded fixed/variable packet schema
+  with
   `State`, `Launch`, `Cast`, `Progression`, `WorldSnapshot`, `LootSnapshot`,
-  and `SpellEffectSnapshot` packets. The
-  packet families below describe the target co-op protocol, not what the
-  current header fully implements.
+  `WorldMotionSnapshot`, `WaveSummary`, and `SpellEffectSnapshot` packets.
 - `multiplayer_local_transport.cpp` and its cohesive
   `multiplayer_local_transport/*.inl` implementation files provide the first
   replication slice: two local
-  processes exchange `StatePacket` movement/heading/vital snapshots over UDP
+  processes exchange 20 Hz `ParticipantFramePacket`
+  movement/heading/vital snapshots plus 1 Hz reliable `StatePacket`
+  convergence records over UDP
   and materialize the peer as `RemoteParticipant + Native`. Remote player
   packets are kept in a short transform history; gameplay samples that history
   about 120 ms in the past and applies interpolated position/heading on the
-  actor tick. HP/MP travel as native-float progression values on the same
-  packet, are written into the materialized remote actor's progression runtime
-  before death detection, and HP-zero uses the existing wizard corpse path so
-  dead remote players stop moving and ignore later owner transform packets until
-  a positive HP packet arrives. The gameplay sync queue is only for
+  actor tick. A starved moving sample can extrapolate observed velocity for at
+  most one arrival interval when movement intent agrees; idle and invalid
+  samples hold. HP/MP travel as native-float progression values on the frame,
+  are written into the materialized remote actor's progression runtime before
+  death detection, and HP-zero uses the existing wizard corpse path so dead
+  remote players stop moving and ignore later owner transform packets until a
+  positive HP packet arrives. The gameplay sync queue is only for
   materialization/rematerialization, not continuous pose updates. The local host
-  also sends passive
-  `WorldSnapshot` packets for non-player shared-hub scene actors and run-world
-  tracked enemies. Clients keep a short world-snapshot history, sample it about
-  150 ms in the past, and expose the latest replicated snapshot through Lua for
-  verification. Shared-hub actors are reconciled to the buffered host
+  sends full `WorldSnapshot` records for non-player shared-hub scene actors.
+  run-world tracked enemies use reliable full identity records on change and
+  checkpoint plus compact unreliable `WorldMotionSnapshot` generations at a
+  67 ms minimum interval. Clients keep a short world-snapshot history and
+  sample it at 1.5 times the recent arrival p90, clamped to 100–600 ms, with a
+  150 ms startup fallback. The latest replicated snapshot remains exposed
+  through Lua for verification. Shared-hub actors are reconciled to the buffered host
   transform/heading snapshot on the gameplay thread; presentation state is
   overlaid from the latest same-timeline host snapshot so animation phase does
   not inherit the transform interpolation delay. Known phase-advancing named
@@ -173,9 +191,13 @@ Steam playtest flow and the remaining external verification boundary.
   items, and `tools/verify_multiplayer_inventory_audit.py` proves both local
   multiplayer clients can read their own native starter inventory shape.
   Protocol v30 introduced bounded full participant-owned inventory item rows,
-  progression-book/statbook/skillbook/spellbook rows, and current ability loadout
-  in `StatePacket`, so peers can inspect each other's starter potion rows,
-  active/visible native book entries, and primary/secondary loadout. Protocol
+  progression-book/statbook/skillbook/spellbook rows, and current ability
+  loadout. Protocol v82 moves the large inventory and progression-book arrays
+  out of `StatePacket` into exact-length reliable packets sent on revision
+  change and at five-second checkpoints, while `StatePacket` retains the
+  revisions and compact loadout. Peers can still inspect each other's starter
+  potion rows, active/visible native book entries, and primary/secondary
+  loadout. Protocol
   v60 carries exact hat, robe, staff, wand, three-ring-slot, and amulet equipment
   identity: recipe UIDs and wearable colors are owner-authored, visible lanes
   are applied to native remote participants and periodically self-corrected,
@@ -247,7 +269,7 @@ Steam playtest flow and the remaining external verification boundary.
 
 | Area | Decision |
 |---|---|
-| Authority | Host-authoritative-lite. Clients render local echo; hard-snap on host disagreement. |
+| Authority | Host-authoritative-lite. Clients render local echo and remote interpolation; run enemies use bounded soft correction below the hard authority threshold. |
 | Transport | Steam friends-only lobbies + `ISteamNetworkingMessages` over the Steam Networking Sockets/SDR stack. |
 | Local dev transport | UDP loopback can be enabled with `SDMOD_MULTIPLAYER_TRANSPORT=local_udp` so two local stage instances can test connection and pose sync without two Steam accounts. |
 | Off-Steam transport | **Not in v1.** GameNetworkingSockets / ENet / direct-IP deferred. |
@@ -261,11 +283,13 @@ Steam playtest flow and the remaining external verification boundary.
 
 | Channel | Rate |
 |---|---|
-| Client → host input | 30 Hz |
-| Player snapshots | 20 Hz |
-| Enemy snapshots (baseline) | 20 Hz |
-| Enemy snapshots (bosses / hot states) | 30 Hz |
-| Reliable events | Immediate |
+| Participant frames | 20 Hz |
+| Participant reliable state | 1 Hz |
+| Run-world motion | ~15 Hz minimum cadence, bandwidth-stretched |
+| Shared-hub world state | 5 Hz minimum cadence, bandwidth-stretched |
+| Wave summary | On change + 400 ms checkpoint |
+| Inventory / progression books | On revision change + 5 s checkpoint |
+| Reliable gameplay events | Immediate |
 
 Sampling happens on the stock game thread after native updates — no extra sim thread.
 
@@ -295,11 +319,22 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - `disconnect / reconnect`
 
 **Unreliable channel**
-- `input` — per-client input w/ sequence number
-- `snapshot-delta` — variable-size entity state burst, carrying `last_processed_input_seq` per receiving client
-- `state` — current fixed-packet development snapshot for local UDP movement /
-  heading tests. Carries network `participant_id`, profile/loadout summary,
-  vitals, position, and heading.
+- `participant-frame` — owner-authored pose, movement intent, vitals, scene,
+  status, and presentation state
+- `world-motion-snapshot` — host-authored compact run-actor motion generations
+- `world-snapshot` — full shared-hub actor generations between reliable
+  checkpoints
+- `wave-summary`, `loot-snapshot`, and coalesced effect snapshots — disposable
+  semantic or presentation updates with their own convergence rules
+
+**Reliable convergence channel**
+- `state` — participant identity, scene/run authority, revisions, equipment,
+  compact progression, and a full transform/vitals checkpoint
+- `participant-inventory-snapshot` / `participant-progression-book-snapshot`
+  — exact-length rows sent on revision change and checkpoint
+- `world-snapshot` — run-actor structural identity on change and checkpoint
+- `level-up-barrier` — exact-length shared wait state for as many as 250
+  participants
 
 **Explicitly not in v1:** `clock-sync`, `save-provenance`, input-replay-for-rollback.
 
@@ -307,9 +342,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 
 | Entity | Authority | Sync | Rate |
 |---|---|---|---|
-| Local player | Self (input) → host (sim) → broadcast | Input to host w/ seq; host pose broadcast; local echo; hard-snap on correction | Input 30 Hz · pose 20 Hz |
-| Remote player | Their client's input → host → snapshot | Snapshot interpolation | 20 Hz |
-| Enemies | Host | Snapshot burst (pos + vel + hp + state) | 20 Hz · 30 Hz for bosses / hot states |
+| Local player | Self for presentation; host verifies shared outcomes | Local echo plus authenticated participant frame | 20 Hz |
+| Remote player | Owning client, authenticated and relayed | 120 ms interpolation with one-arrival bounded extrapolation | 20 Hz |
+| Enemies | Host | Reliable identity plus compact motion; adaptive interpolation and bounded correction | ~15 Hz motion |
 | Drops | Host | Reliable spawn; reliable pickup-request + confirm/deny | Event-driven |
 | Casts | Caster optimistic (plays anim); host broadcasts + confirms hit | Reliable event | Event-driven |
 
@@ -331,8 +366,17 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 ### Phase 1 — P2P host MVP
 
 - Local UDP two-process development harness:
-  `scripts/Launch-LocalMultiplayerPair.ps1` launches `local-mp-host` and
-  `local-mp-client` with separate runtime/stage roots and ports `47770/47771`.
+  `scripts/Launch-LocalMultiplayerPair.ps1` launches a host and client with
+  separate runtime/stage roots. Its default group is `local-mp` on ports
+  `47770/47771`; concurrent workers must supply a unique `-InstancePrefix`,
+  unique `-HostPort`/`-ClientPort`, `-NoKill`, and
+  `-ProcessIdOutputPath`. That keeps stage roots, temporary profiles, Lua
+  pipes, sockets, logs, and the exact-PID shutdown ledger inside one owned
+  instance group without stopping another worker's processes.
+  When the scripts run from a WSL UNC worktree, they automatically place stage
+  and profile data under a workspace-scoped Windows temporary runtime root.
+  Junction-dependent game copies therefore stay on a local Windows volume;
+  `-RuntimeRoot` selects another Windows-local base when needed.
   The client launch uses `--temporary-profile`, which redirects APPDATA,
   LOCALAPPDATA, and the staged `savegames` compatibility path into a fresh
   runtime-local temporary profile so joining a multiplayer host cannot mutate
@@ -366,7 +410,7 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Steam friends-only lobby → authenticated Steam Networking Messages handoff
 - Protocol/build/capability `hello` + acknowledgement handshake
 - Input stream + player pose snapshots at target rates
-- Enemy snapshot burst (20/30 Hz)
+- Run enemy identity checkpoints plus compact ~15 Hz motion
 - Cast / damage / death events
 - Wave + run lifecycle sync
 - Loot-drop spawn/despawn + gold/orb pickup-request/confirm/deny
@@ -378,7 +422,6 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - Stateful reconnect
 - Admin tooling (kick / ban / adminlist)
 - Latency simulation + stress test
-- Soft reconciliation upgrade for hard-snap (interpolate to host pos over 100–200ms) if playtests show chatter
 - Steam and local UDP share the same snapshot interpolation and gameplay
   authority boundary, so transport selection does not fork simulation rules.
 
@@ -405,10 +448,11 @@ For a non-host client on a typical Steam SDR connection (50–100ms RTT):
 Host feels none of this; their sim is local.
 
 The intended feel is native local movement with delayed authoritative
-confirmation for hits, pickups, and other host-owned outcomes. Under normal
-latency the correction path should be rare; if hard-snaps become visibly
-disruptive in playtest, Phase 2 adds soft reconciliation by interpolating toward
-host position over a short window.
+confirmation for hits, pickups, and other host-owned outcomes. Remote players
+interpolate and use bounded intent-checked extrapolation during a single missed
+arrival. Ordinary live run-enemy error below 192 world units is corrected by a
+0.2 blend; large divergence and explicit lifecycle boundaries apply the
+authoritative transform immediately.
 
 ## What we are explicitly NOT doing in v1
 

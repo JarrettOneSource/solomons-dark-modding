@@ -112,7 +112,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
     ):
         assert token in public_api + transport_api, f"item grant API lacks: {token}"
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "LuaItemGrant = 22",
         "struct LuaItemGrantPacket",
         "std::uint64_t content_id",
@@ -121,7 +121,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         assert token in protocol, f"item grant protocol lacks: {token}"
     grant_packet = protocol.split("struct LuaItemGrantPacket", 1)[1].split("};", 1)[0]
     assert "recipe_uid" not in grant_packet
-    assert "CurrentProtocolVersion = 81;" in compatibility
+    assert "CurrentProtocolVersion = 82;" in compatibility
     for token in (
         "SendQueuedAuthoritativeLuaItemGrants",
         "SendPacketToParticipantOrPeers(packet, grant.target_participant_id)",
@@ -184,7 +184,7 @@ def test_lua_items_register_stable_identity_and_resolve_peer_local_recipes() -> 
         "stable `id` and resolve the receiving peer's UID",
         "Descriptors never include recipe pointers",
         "Only the offline or host simulation authority may grant a recipe-backed item",
-        "Protocol 81",
+        "Protocol 82",
         "recipe UIDs and native addresses never cross the wire",
         "exactly 32 integer bytes",
     ):

@@ -115,18 +115,21 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
+        "WaveSummary = 32",
         "WaveCompositionRowPacketState",
-        "wave_summary_remaining_to_spawn",
-        "wave_summary_rows[kWaveSummaryMaxCompositionRows]",
-        "static_assert(sizeof(ParticipantFramePacket) == 586",
+        "struct WaveSummaryPacket",
+        "std::int32_t remaining_to_spawn;",
+        "rows[kWaveSummaryMaxCompositionRows]",
+        "static_assert(sizeof(WaveSummaryPacket) == 296",
+        "static_assert(sizeof(ParticipantFramePacket) == 322",
     ):
         assert token in protocol, f"wave packet contract lacks: {token}"
-    assert "PopulateAuthorityWaveSummary(&packet)" in outgoing
-    assert "!g_local_transport.is_host" in wave_sync
+    assert "PopulateAuthorityWaveSummary(&packet)" not in outgoing
+    assert "SendLocalWaveSummary(" in wave_sync
     for token in (
-        "packet_from_configured_authority",
-        "packet.wave_summary_row_count > kWaveSummaryMaxCompositionRows",
+        "IsConfiguredRemoteAuthorityEndpoint(from)",
+        "packet.row_count > kWaveSummaryMaxCompositionRows",
         "source.enemy_type <= previous_enemy_type",
         "rows_spawned != summary.spawned",
         "ApplyReplicatedWaveSummary(summary)",
@@ -134,16 +137,16 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         assert token in wave_sync, f"replicated wave validation lacks: {token}"
     _require_in_order(
         wave_sync,
-        "packet_from_configured_authority",
+        "IsConfiguredRemoteAuthorityEndpoint(from)",
         "ApplyReplicatedWaveSummary(summary)",
     )
 
     for token in (
         "deterministic largest-remainder",
-        "authenticated participant frame",
+        "authenticated wave summary",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "current protocol version is 81",
+        "current protocol version is 82",
         "verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation",
         "same sorted aggregate and per-type live summary",
         "stops only the two process IDs",

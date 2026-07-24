@@ -1,147 +1,168 @@
 # Netcode Review — 2026-07-23
 
-A code-level assessment of the multiplayer stack: architecture, interpolation,
-bandwidth, and a ranked improvement list. Everything below was verified against
-source on this date (protocol 81); file references are exact so items can be
-picked up without re-deriving them.
+This is a source-level review of the current multiplayer transport, protocol,
+interpolation, and steady-state packet cost. It also records the disposition of
+each optimization identified during the review. The code and packet sizes below
+are for protocol 82.
 
 ## Verdict
 
-The netcode is genuinely good — unusually disciplined for a DLL-level mod. The
-trusted-host model (client echo + authority verification, no rollback) is the
-right architecture for 4-player co-op, and the implementation carries it
-through: fail-closed validation, epoch/nonce guards everywhere, deterministic
-host-seeded world generation, and per-lane bandwidth budgets. The improvement
-list below is optimization work, not rescue work.
+The trusted-host design is appropriate for cooperative play: owners publish
+their player state, the host owns world actors and shared progression
+lifecycles, and receivers reject packets that do not match the expected
+endpoint, participant session, scene epoch, or run nonce. The original review
+did find a real world-motion cadence problem and three unnecessarily hot payload
+families. Protocol 82 addresses those without changing the authority model.
 
-## Verified inventory (code truth, not the README table)
+The remaining scaling boundary is gameplay, not a hidden eight-player wire
+limit. The level-up barrier now carries a variable-length list of as many as 250
+participants, matching the configured Steam lobby ceiling, while the native game
+still has only four proven wizard seats.
 
-Send cadences and budgets — `multiplayer_local_transport.cpp:92-146`
-(shared by the Steam backend through `QueueSteamGameplayPacketSend`):
+## Current wire lanes
 
-| Lane | Interval | Mode |
-|---|---|---|
-| Participant frame (pose/vitals/wave summary) | 50 ms (20 Hz) | UnreliableNoDelay |
-| World snapshot (enemies/hub NPCs) | 200 ms base (5 Hz), bandwidth-stretched | UnreliableNoDelay |
-| World snapshot reliable checkpoint | 1000 ms base | ReliableNoNagle |
-| State checkpoint (`StatePacket`, ~5 KB) | 1000 ms | ReliableNoNagle |
-| Loot snapshot | 250 ms (animated: 50 ms) | UnreliableNoDelay |
-| Spell-effect snapshot | 16 ms | UnreliableNoDelay |
-| Lua mod state checkpoint | 5000 ms | ReliableNoNagle |
-| Cast input (held phase) | 50 ms | UnreliableNoDelay (press/release reliable) |
+The authoritative constants live in
+`SolomonDarkModLoader/src/multiplayer_local_transport.cpp`; packet layouts and
+compile-time sizes live in
+`SolomonDarkModLoader/include/multiplayer_runtime_protocol.h`.
 
-Budgets: world 96 KB/s, auxiliary 48 KB/s, reliable checkpoint 24 KB/s
-(`BandwidthLimitedSnapshotIntervalMs` stretches intervals rather than
-dropping). Send-mode mapping: `outgoing_packet_sync.inl:1-24`. Service thread
-ticks at 16 ms and owns Steam callbacks/session/send queue
-(`multiplayer_service_loop.cpp:21`); inbound gameplay packets drain on the
-game thread.
+| Lane | Payload | Cadence | Steam mode |
+|---|---:|---|---|
+| Participant frame | 322 B | 50 ms / 20 Hz | UnreliableNoDelay |
+| Participant state checkpoint | 604 B | 1,000 ms | ReliableNoNagle |
+| Run-world motion | 968 B per 10 actors | 67 ms minimum / about 15 Hz, bandwidth-stretched | UnreliableNoDelay |
+| Run-world identity | 1,032 B per 3 actors | spawn/identity change plus bandwidth-limited reliable checkpoint | ReliableNoNagle |
+| Shared-hub world state | 1,032 B per 3 actors | 200 ms minimum / 5 Hz, bandwidth-stretched | Unreliable with reliable checkpoints |
+| Inventory snapshot | 40 B + 28 B/item | first send, revision change, and 5 s checkpoint | ReliableNoNagle |
+| Progression-book snapshot | 44 B + 20 B/entry | first send, revision change, and 5 s checkpoint | ReliableNoNagle |
+| Wave summary | 296 B | change plus 400 ms checkpoint | UnreliableNoDelay |
+| Loot snapshot | variable | 250 ms; 50 ms while animated | UnreliableNoDelay |
+| Native spell effects | 32 B + 124 B/effect | one coalesced generation per 16 ms tick | UnreliableNoDelay |
+| Lua mod state | variable fragments | 5,000 ms checkpoint | ReliableNoNagle |
+| Cast input | 128 B | held update every 50 ms | held unreliable; press/release reliable |
 
-Interpolation:
+The world-motion budget is 96 KiB/s, auxiliary snapshots use 48 KiB/s, and
+reliable world-identity checkpoints use 24 KiB/s. The limiter increases a
+lane's interval when its complete fragmented generation would exceed the
+corresponding budget.
 
-- Remote players: 120 ms fixed delay
-  (`bot_movement/native_remote_playback.inl:9`), 8-sample receive-time history
-  (`kParticipantTransformHistoryCapacity`,
-  `multiplayer_runtime_effect_state.inl:194`).
-- World actors: 150 ms fixed delay
-  (`world_snapshot_reconciliation/state_timeline_and_formation.inl:3`).
-- Sampler (`multiplayer_runtime_state.cpp:454`): lerp position, shortest-arc
-  heading, and the walk-cycle/render-drive floats; snap across run/scene
-  boundaries; hold-last on starvation (no extrapolation). Presentation fields
-  ride the newest bracketing sample so animation does not inherit the
-  transform delay.
+For a 60-actor run generation, motion uses six 968-byte fragments, or 5,808
+bytes. At the 67 ms base interval that is about 86.7 KB/s per receiving peer,
+inside the 96 KiB/s budget. The old full-state format required twenty
+1,032-byte fragments per generation, or 20,640 bytes; at 5 Hz it exceeded the
+same budget and was necessarily stretched.
 
-Packet economics (`multiplayer_runtime_protocol.h`):
+## World identity and motion
 
-- `WorldActorSnapshotPacketState` ≈ 250+ B/actor, 3 actors per fragment
-  (`kWorldSnapshotActorsPerFragment`, header line 16). 60 enemies ≈ 20
-  fragments ≈ ~18 KB per generation → ~90 KB/s per client at 5 Hz, i.e. at
-  the budget ceiling.
-- `ParticipantFramePacket` ≈ ~500 B (includes a 20-row wave summary, ~240 B)
-  at 20 Hz, sent peer-to-peer full mesh.
-- `StatePacket` carries full 64-item inventory + 128-entry progression-book
-  arrays (~5 KB) every checkpoint, change or not.
+Run actors now use two packet families:
 
-## What's strong
+- `WorldSnapshot` is the structural record. It carries native and Lua identity,
+  spawn configuration, presentation identity, and the full actor state needed
+  to bootstrap or recover a receiver. It is sent reliably when identity changes
+  and as a convergence checkpoint.
+- `WorldMotionSnapshot` is the hot record. Its 92-byte actor rows carry network
+  identity, target, transform, health, animation, locomotion, and transient
+  status. A receiver accepts a complete generation only after bounded fragment
+  validation, then merges it with the most recent full identity generation.
 
-- Per-participant sequence staleness rejection + session-nonce epochs for
-  reconnects; retired-nonce packets ignored.
-- Scene-epoch / run-nonce guards on snapshot application; fragmented snapshot
-  reassembly is generation-consistent.
-- Reliable checkpoint lane separates structural convergence from disposable
-  visual updates — the correct split.
-- Host-seeded deterministic RNG for Boneyard generation (scenery is generated,
-  not replicated), with the seed re-applied at the `Arena_Create` boundary.
-- Loot/pickups/level-ups are host-owned request/confirm lifecycles; the
-  level-up barrier auto-picks after 60 s so loss cannot strand a client.
-- Multiplayer profile disables every debug mutation backdoor (fail closed).
+Shared-hub NPCs retain the full snapshot path because their rich presentation
+identity is part of the state being animated and their actor count is small.
 
-## The interpolation problem worth fixing
+Both families retain generation-consistent fragment assembly and reject stale
+or mixed scene/run timelines. A motion generation without a matching full
+identity generation cannot invent an actor.
 
-World actors interpolate at a **150 ms delay against a 200 ms snapshot
-interval**. The delay is shorter than the packet spacing, so the sampler runs
-out of "future" sample for the tail of every window and holds position —
-enemies micro-step at 5 Hz, and the bandwidth limiter stretches this further
-on heavy waves. Remote players are healthy (120 ms vs 50 ms spacing = 2.4
-intervals of buffer). The README's "20 Hz enemy snapshots" table is
-aspirational; the code ships 5 Hz.
+## Interpolation and correction
 
-Fixes, in payoff order:
+Remote participants retain an eight-sample receive-time history and a 120 ms
+presentation delay. Interpolation covers the normal 50 ms frame cadence. If a
+sample time runs beyond the newest frame, the sampler can extrapolate observed
+velocity for at most one observed arrival interval, but only while non-zero
+movement intent agrees with that velocity. Idle, reversed, invalid, and
+cross-scene samples hold the last authoritative transform.
 
-1. Make higher rates affordable (see below), then run world snapshots at
-   10–15 Hz.
-2. Adaptive delay: derive delay from observed per-lane arrival spacing
-   (~1.5 × recent p90) instead of a constant, so it self-corrects when the
-   budget limiter stretches sends.
-3. Cheap remote-player extrapolation: `movement_intent` is already replicated;
-   project it for one missed frame before hold-last to hide relay jitter.
+World actors no longer use an unconditional 150 ms delay. The recommended
+delay is `1.5 * recent arrival p90`, clamped to 100–600 ms, with a 150 ms
+fallback until two compatible samples exist. This follows both the normal
+15 Hz run lane and any interval stretching caused by the bandwidth limiter.
+Position, shortest-arc heading, and locomotion phase interpolate within one
+scene/run timeline; presentation fields can still use the newest compatible
+snapshot so animation does not inherit transform latency.
 
-## Ranked optimizations
+Run enemies already had correction smoothing before this review: ordinary live
+errors below 192 world units apply a 0.2 soft-correction factor, while large
+errors, deaths, forced writes, and relevant transient states take the
+authoritative transform immediately. No second generic correction blend was
+added because it would obscure the existing authority and damage-observation
+rules.
 
-1. **Split world-actor identity from motion.** Most of the ~250 B/actor is
-   static per actor (Lua spawn params, Student book palettes, named-hub-NPC
-   presentation, type/slot identity) and reships every generation. Move it to
-   a reliable send-on-spawn/change record; keep a hot motion record (id, pos,
-   heading, hp, anim word, walk phase ≈ 40–50 B) in the unreliable lane.
-   ~5× steady-state reduction → 15–20 Hz enemy snapshots inside the existing
-   96 KB/s budget. This is the single highest-value change.
-2. **Change-gate the `StatePacket` checkpoint arrays.** Revision counters
-   already exist (inventory/equipment/books); send the big arrays only when
-   the corresponding revision moved.
-3. **Move the wave summary off the 20 Hz frame lane.** It changes on
-   kills/spawns, not frames; send on change or on a 250–500 ms lane.
-4. **Coalesce spell-effect snapshots.** The 16 ms lane sends per effect;
-   bundle all active effects into one packet per tick to cut header overhead
-   during heavy fights.
-5. **Smooth authority corrections.** Hard snaps are correct but jarring; a
-   ~100 ms exponential blend on correction application would remove the jar
-   without weakening authority.
-6. Position quantization (int16 centimeters, region-relative) — only worth it
-   after item 1.
+## Cold participant state
 
-## Scaling notes (post configurable player-count change)
+`StatePacket` remains a 1 Hz reliable convergence record for profile,
+equipment, derived progression, scene/run intent, vitals, transform, and
+revision counters. It no longer embeds the fixed 64-item inventory and
+128-entry progression-book arrays.
 
-- Participant frames are full mesh (O(N²)) and host world fanout is ~90 KB/s
-  per client: ~8–10 players is the practical ceiling before interest
-  management (distance-scored per-client actor scheduling) becomes necessary.
-- `kLevelUpWaitStatusMaxParticipants = 8` (`multiplayer_runtime_protocol.h:22`)
-  truncates the level-up waiting list in a 9+ lobby — the one concrete packet
-  ceiling below Steam's 250-member lobby limit.
-- The native game seats 4 wizards regardless; >4 participants is framework
-  territory, not proven gameplay.
+Inventory and book rows now have separate variable-length, owner-authored
+packets. Each receiver validates the exact prefix-plus-row wire length,
+participant session, row count, row identity, and revision before replacing
+replicated state. The sender evaluates changes during its state checkpoint,
+sends on first observation or revision change, and repeats each record every
+five seconds for convergence. A packet stale in either book revision is
+rejected.
 
-## Known open issue in this area
+The level-up barrier likewise uses an exact variable wire length. Its 52-byte
+prefix is followed by 32 bytes per participant, up to 250 participants; unused
+capacity is never transmitted. The state checkpoint no longer carries a second
+truncated barrier copy that could overwrite the dedicated reliable record.
 
-The kill-stress harness previously narrowed a post-cast convergence timeout to
-loader participant **transform ownership** (loader-driven march after casts —
-see memory/stress-harness notes). Interpolated targets are applied by direct
-position writes each tick, so ownership ambiguity manifests as exactly this
-drift. Resolve it before deep interpolation tuning; it pollutes measurements.
+## Wave and spell-effect traffic
 
-## Doc drift to fix in `README.md`
+The 20-row wave summary has moved out of `ParticipantFramePacket`. The host now
+sends one authenticated `WaveSummary` packet when the semantic summary changes
+and repeats it every 400 ms. Clients accept it only from the configured
+authority endpoint and session, and validate phase, row ordering, row totals,
+and aggregate totals before replacing their semantic view.
 
-- Tick-rate table: says 20 Hz snapshots / 30 Hz input / 50 ms service pump;
-  code ships 5 Hz world (budget-stretched), 20 Hz frames, 1 Hz state
-  checkpoint, 16 ms service tick.
-- `StatePacket` described as the movement lane; it is now the 1 Hz reliable
-  checkpoint, with `ParticipantFramePacket` as the pose lane.
+The original review's spell-effect recommendation was based on a mistaken read
+of the 16 ms send interval. Native effects were already coalesced: one
+variable-length generation carries as many as 32 active effects, including
+terminal tombstones needed to survive transient loss. No per-effect packet
+split existed to remove.
+
+## Optimization disposition
+
+| Rank | Review item | Disposition |
+|---:|---|---|
+| 1 | Split world identity from motion | Implemented in protocol 82; run motion is about 15 Hz within the existing budget. |
+| 2 | Change-gate large participant arrays | Implemented as variable reliable inventory and progression-book packets. |
+| 3 | Move wave summaries off the frame lane | Implemented as authenticated change/400 ms snapshots. |
+| 4 | Coalesce spell effects | Already implemented before the review; documentation corrected. |
+| 5 | Smooth authority corrections | Existing 0.2 soft correction retained; hard corrections remain for explicit authority boundaries. |
+| 6 | Quantize positions | Deferred. The actor split meets the present budget, and quantization needs measured world-range and precision evidence before changing the wire representation. |
+
+## Scaling and security notes
+
+- Participant frames are peer fanout traffic, so aggregate traffic still grows
+  quadratically with player count. The four-player launch target is unaffected;
+  a larger lobby will eventually need per-peer interest management.
+- Host world traffic grows linearly with receiving peers. At the 60-actor
+  example, each peer receives about 87 KB/s of disposable motion plus reliable
+  structural checkpoints.
+- The 250-entry barrier removes the previous protocol truncation, but it does
+  not claim that 250-player native gameplay is supported.
+- Packet-family, exact-size, bounded-count, sequence, endpoint, participant
+  session, scene-epoch, run-nonce, and authority checks remain fail closed.
+- Steam and loopback UDP use the same packet validation and application paths;
+  loopback UDP is the deterministic multi-process test backend, not a weaker
+  schema.
+
+## Regression gates
+
+`tests/native/multiplayer_runtime_state_tests.cpp` exercises adaptive world
+delay, bounded participant extrapolation, protocol sizes, exact variable packet
+lengths, and a full 250-participant level-up barrier. The static RE/transport
+suite checks the packet split, send modes, authority validation, project
+membership, and documentation contracts. The normal Windows loader build keeps
+all packet `static_assert` sizes enforced by MSVC, while CI also compiles and
+runs the native runtime-state regression on Linux.

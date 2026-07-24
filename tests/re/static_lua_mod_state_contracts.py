@@ -117,7 +117,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert token in events, f"custom Lua event dispatch lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "LuaModStream = 21",
         "enum class LuaModStreamMessageKind",
         "struct LuaModStreamPacket",
@@ -126,7 +126,7 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         "IsValidLuaModStreamPacketWireSize(",
     ):
         assert token in protocol, f"Lua mod wire protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 81;" in compatibility
+    assert "CurrentProtocolVersion = 82;" in compatibility
     for capability in (
         '"state.replicated.read"',
         '"state.replicated.write"',
@@ -211,6 +211,13 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         ("pair", pair_launcher),
         ("additional-client", additional_client_launcher),
     ):
+        assert (
+            '$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath'
+            in launcher
+        ), (
+            f"{launcher_name} launcher passes a provider-qualified WSL path "
+            "to .NET filesystem APIs"
+        )
         assert "$ProcessIdOutputPath" in launcher, (
             f"{launcher_name} launcher does not publish exact game process IDs"
         )
@@ -220,12 +227,23 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
         assert "$ExactModIds" in launcher, (
             f"{launcher_name} launcher does not accept exact verifier mods"
         )
+        assert "Resolve-MultiplayerRuntimeRootOverride" in launcher, (
+            f"{launcher_name} launcher does not isolate WSL worktree runtime "
+            "files on a Windows-local volume"
+        )
+        assert '"--runtime-root", $runtimeRootOverride' in launcher, (
+            f"{launcher_name} launcher does not pass its isolated runtime "
+            "root to the launcher"
+        )
         assert "Set-ExactMultiplayerModState" in launcher, (
             f"{launcher_name} launcher does not isolate its enabled mod set"
         )
     for token in (
+        "function Resolve-MultiplayerRuntimeRootOverride",
+        "[System.IO.Path]::GetTempPath()",
+        '"SolomonDarkModLoader\\wsl-runtime\\$workspaceName"',
         "function Set-ExactMultiplayerModState",
-        '"runtime\\instances"',
+        '(Join-Path $RuntimeRootPath "instances")',
         '"mod-manager-state.json"',
         "foreach ($ModId in $ModIds)",
         "$mods[$ModId]",

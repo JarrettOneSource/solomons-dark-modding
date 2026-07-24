@@ -1,43 +1,3 @@
-bool IsSaneParticipantInventorySnapshot(const StatePacket& packet) {
-    if (packet.inventory_item_count > kParticipantInventorySnapshotMaxItems ||
-        packet.inventory_item_total_count < packet.inventory_item_count) {
-        return false;
-    }
-
-    for (std::size_t index = 0; index < packet.inventory_item_count; ++index) {
-        const auto& item = packet.inventory_items[index];
-        std::int32_t local_slot = item.slot;
-        if (item.type_id == 0 ||
-            (item.type_id == kPotionItemTypeId &&
-             !TryResolvePotionWireIdentity(
-                 item.slot,
-                 item.content_id,
-                 &local_slot)) ||
-            (item.type_id != kPotionItemTypeId &&
-             item.content_id != 0) ||
-            item.container_depth > kSDModInventorySnapshotMaxDepth) {
-            return false;
-        }
-        if (item.container_depth == 0) {
-            if (item.parent_item_index != -1) {
-                return false;
-            }
-            continue;
-        }
-        if (item.parent_item_index < 0 ||
-            static_cast<std::size_t>(item.parent_item_index) >= index) {
-            return false;
-        }
-        const auto& parent = packet.inventory_items[item.parent_item_index];
-        if (parent.type_id != 0x1B60 ||
-            item.container_depth !=
-                static_cast<std::uint16_t>(parent.container_depth + 1)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void ApplyRemoteStatePacket(
     const StatePacket& packet,
     const TransportPeerEndpoint& from,
@@ -120,9 +80,6 @@ void ApplyRemoteStatePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
-    const bool inventory_packet_is_sane =
-        IsSaneParticipantInventorySnapshot(packet);
-
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
             packet.participant_id,
@@ -146,31 +103,6 @@ void ApplyRemoteStatePacket(
             packet.lua_time_revision);
     }
 
-    if (packet_from_configured_authority) {
-        std::vector<std::uint64_t> waiting_participant_ids;
-        const auto waiting_count =
-            (std::min<std::size_t>)(
-                packet.level_up_waiting_count,
-                kLevelUpWaitStatusMaxParticipants);
-        waiting_participant_ids.reserve(waiting_count);
-        for (std::size_t index = 0; index < waiting_count; ++index) {
-            const auto participant_id =
-                packet.level_up_waiting_participant_ids[index];
-            if (participant_id != 0) {
-                waiting_participant_ids.push_back(participant_id);
-            }
-        }
-        (void)ApplyAuthoritativeLevelUpWaitStatus(
-            packet.authority_participant_id,
-            packet.level_up_barrier_id,
-            packet.level_up_barrier_revision,
-            packet.level_up_deadline_remaining_ms,
-            packet.level_up_pause_active != 0,
-            (packet.level_up_barrier_flags &
-             kLevelUpBarrierFlagTimedOut) != 0,
-            std::move(waiting_participant_ids),
-            now_ms);
-    }
     ApplyAuthoritativeWaveRespawn(
         packet,
         packet_from_configured_authority,
@@ -205,46 +137,6 @@ void ApplyRemoteStatePacket(
         if (should_apply_gold) {
             participant->owned_progression.gold = packet.owned_gold;
             participant->owned_progression.gold_revision = packet.gold_revision;
-        }
-        const bool should_apply_inventory =
-            inventory_packet_is_sane &&
-            packet.inventory_revision >= participant->owned_progression.inventory_revision;
-        if (should_apply_inventory) {
-            participant->owned_progression.inventory_revision = packet.inventory_revision;
-            participant->owned_progression.inventory_item_total_count = packet.inventory_item_total_count;
-            participant->owned_progression.inventory_truncated =
-                (packet.inventory_snapshot_flags & ParticipantInventorySnapshotFlagTruncated) != 0;
-            participant->owned_progression.inventory_items.clear();
-            const auto packet_inventory_count =
-                (std::min)(
-                    static_cast<std::size_t>(packet.inventory_item_count),
-                    static_cast<std::size_t>(kParticipantInventorySnapshotMaxItems));
-            participant->owned_progression.inventory_items.reserve(packet_inventory_count);
-            for (std::size_t index = 0; index < packet_inventory_count; ++index) {
-                const auto& packet_item = packet.inventory_items[index];
-                if (packet_item.type_id == 0) {
-                    continue;
-                }
-                ParticipantInventoryItemState item;
-                item.type_id = packet_item.type_id;
-                item.recipe_uid = packet_item.recipe_uid;
-                item.content_id = packet_item.content_id;
-                item.slot = packet_item.slot;
-                if (item.type_id == kPotionItemTypeId) {
-                    std::int32_t local_slot = -1;
-                    if (!TryResolvePotionWireIdentity(
-                            packet_item.slot,
-                            packet_item.content_id,
-                            &local_slot)) {
-                        continue;
-                    }
-                    item.slot = local_slot;
-                }
-                item.stack_count = packet_item.stack_count;
-                item.parent_item_index = packet_item.parent_item_index;
-                item.container_depth = packet_item.container_depth;
-                participant->owned_progression.inventory_items.push_back(item);
-            }
         }
         const auto equipped_type_is = [](
             const ParticipantEquippedItemPacketState& item,
@@ -289,39 +181,6 @@ void ApplyRemoteStatePacket(
             participant->owned_progression.equipment_revision =
                 packet.equipment_revision;
         }
-        const bool should_apply_progression_book =
-            packet.statbook_revision >= participant->owned_progression.statbook_revision ||
-            packet.spellbook_revision >= participant->owned_progression.spellbook_revision;
-        if (should_apply_progression_book) {
-            participant->owned_progression.spellbook_revision = packet.spellbook_revision;
-            participant->owned_progression.statbook_revision = packet.statbook_revision;
-            participant->owned_progression.progression_book_entry_total_count =
-                packet.progression_book_entry_total_count;
-            participant->owned_progression.progression_book_truncated =
-                (packet.progression_book_snapshot_flags & ParticipantProgressionBookSnapshotFlagTruncated) != 0;
-            participant->owned_progression.progression_book_entries.clear();
-            const auto packet_progression_book_count =
-                (std::min)(
-                    static_cast<std::size_t>(packet.progression_book_entry_count),
-                    static_cast<std::size_t>(kParticipantProgressionBookSnapshotMaxEntries));
-            participant->owned_progression.progression_book_entries.reserve(packet_progression_book_count);
-            for (std::size_t index = 0; index < packet_progression_book_count; ++index) {
-                const auto& packet_entry = packet.progression_book_entries[index];
-                if (packet_entry.entry_index < 0) {
-                    continue;
-                }
-                ParticipantProgressionBookEntryState entry;
-                entry.entry_index = packet_entry.entry_index;
-                entry.internal_id = packet_entry.internal_id;
-                entry.active = packet_entry.active;
-                entry.visible = packet_entry.visible;
-                entry.category = packet_entry.category;
-                entry.statbook_max_level = packet_entry.statbook_max_level;
-                participant->owned_progression.progression_book_entries.push_back(entry);
-            }
-        }
-        participant->owned_progression.spellbook_revision =
-            (std::max)(participant->owned_progression.spellbook_revision, packet.spellbook_revision);
         const bool should_apply_concentration =
             packet.concentration_selection_valid != 0 &&
             (!participant->owned_progression.concentration_selection_valid ||
@@ -472,10 +331,6 @@ void ApplyRemoteParticipantFramePacket(
     if (!participant_found) {
         return;
     }
-
-    ApplyAuthorityWaveSummaryFromPacket(
-        packet,
-        packet_from_configured_authority);
 
     MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
     MaybeQueueClientHostRegionFollow(packet, scene_intent, from, now_ms);

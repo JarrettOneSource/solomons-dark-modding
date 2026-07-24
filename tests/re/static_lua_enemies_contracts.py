@@ -152,7 +152,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         assert token in drop_hook, f"registered loot policy lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "std::uint64_t lua_content_id",
         "LuaEnemySpawnSnapshotFlagHp",
         "LuaEnemySpawnSnapshotFlagChaseSpeed",
@@ -162,7 +162,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "sizeof(WorldSnapshotPacket) == 1032",
     ):
         assert token in protocol, f"enemy snapshot protocol lacks: {token}"
-    assert "CurrentProtocolVersion = 81;" in compatibility
+    assert "CurrentProtocolVersion = 82;" in compatibility
     for token in (
         "TryGetRunLifecycleLuaEnemySpawnConfig",
         "snapshot.lua_content_id = lua_enemy_config.content_id",
@@ -236,7 +236,7 @@ def test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity() -> 
         "semantic stock-class name",
         "offline or host simulation",
         "modifier array",
-        "Protocol 81",
+        "Protocol 82",
         "death tombstones",
         "Raw actor/config",
         "addresses never cross the wire",

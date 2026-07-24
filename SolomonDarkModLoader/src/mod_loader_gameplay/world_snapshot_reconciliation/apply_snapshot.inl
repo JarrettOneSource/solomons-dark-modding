@@ -25,7 +25,8 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
     const bool have_snapshot = multiplayer::TrySampleWorldSnapshot(
         runtime_state,
         now_ms,
-        kWorldSnapshotInterpolationDelayMs,
+        multiplayer::RecommendedWorldSnapshotInterpolationDelayMs(
+            runtime_state),
         &snapshot);
     if (!have_snapshot || !snapshot.valid || now_ms < snapshot.received_ms) {
         if (runtime_state.world_snapshot_apply.valid) {

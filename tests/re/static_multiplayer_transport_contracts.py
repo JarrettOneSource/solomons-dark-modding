@@ -186,7 +186,13 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_packet_sync.inl",
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_progression_snapshot_sync.inl",
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_snapshot_packet_sync.inl",
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_packet_dispatch.inl",
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "world_motion_snapshot_fragmentation.inl",
     )
     spell_effect = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
@@ -201,10 +207,10 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
-        "static_assert(sizeof(ParticipantFramePacket) == 586",
+        "static_assert(sizeof(ParticipantFramePacket) == 322",
         "kLootSnapshotPacketPrefixBytes",
         "LootSnapshotPacketWireSize(",
         "IsValidLootSnapshotPacketWireSize(",
@@ -215,7 +221,18 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         assert token in protocol, f"compact snapshot protocol lacks: {token}"
 
     for token in (
+        "WorldMotionSnapshot = 29",
+        "kWorldMotionSnapshotActorsPerFragment = 10",
+        "struct WorldActorMotionPacketState",
+        "struct WorldMotionSnapshotPacket",
+        "static_assert(sizeof(WorldActorMotionPacketState) == 92",
+        "static_assert(sizeof(WorldMotionSnapshotPacket) == 968",
+    ):
+        assert token in protocol, f"run-world motion protocol lacks: {token}"
+
+    for token in (
         "kLocalTransportParticipantFrameIntervalMs = 50",
+        "kLocalTransportRunWorldMotionIntervalMs = 67",
         "kLocalTransportStateCheckpointIntervalMs = 1000",
         "kLocalTransportWorldSnapshotBudgetBytesPerSecond",
         "kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond",
@@ -224,6 +241,49 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "last_participant_frame_sequence_by_participant",
     ):
         assert token in transport, f"snapshot stream budget contract lacks: {token}"
+
+    for token in (
+        "BuildWorldMotionSnapshot(complete_snapshot)",
+        "SameWorldSnapshotIdentity(",
+        "identity_changed",
+        "SteamNetworkSendMode::ReliableNoNagle",
+        "SteamNetworkSendMode::UnreliableNoDelay",
+    ):
+        assert token in outgoing, f"run-world split send path lacks: {token}"
+    for token in (
+        "ApplyWorldMotionSnapshotPacket(",
+        "TryAcceptWorldMotionSnapshotFragment(",
+        "MergeWorldMotionSnapshotWithIdentity(",
+    ):
+        assert token in incoming, f"run-world split receive path lacks: {token}"
+    for function_name in (
+        "ApplyWorldSnapshotPacket",
+        "ApplyWorldMotionSnapshotPacket",
+        "ApplyLootSnapshotPacket",
+    ):
+        authority_guard = re.search(
+            rf"void {function_name}\(.*?UpsertPeerEndpoint",
+            incoming,
+            flags=re.DOTALL,
+        )
+        assert authority_guard is not None
+        assert "!IsConfiguredRemoteAuthorityEndpoint(from)" in authority_guard.group(0), (
+            f"{function_name} accepts packets outside the configured authority endpoint"
+        )
+    assert "pending_world_motion_snapshots" in lifecycle
+    for function_name in (
+        "ApplyParticipantInventorySnapshotPacket",
+        "ApplyParticipantProgressionBookSnapshotPacket",
+    ):
+        source_guard = re.search(
+            rf"void {function_name}\(.*?UpsertPeerEndpoint",
+            incoming,
+            flags=re.DOTALL,
+        )
+        assert source_guard is not None
+        assert "ParticipantProgressionSnapshotSourceMatches(" in source_guard.group(0), (
+            f"{function_name} accepts an unbound owner endpoint"
+        )
 
     _require_in_order(
         local_state,

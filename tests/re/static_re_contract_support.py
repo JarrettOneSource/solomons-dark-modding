@@ -14,11 +14,30 @@ from pathlib import Path, PureWindowsPath
 from static_multiplayer_contract_support import read_source_unit
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKSPACE_ROOT = (
-    ROOT.parent.parent
-    if ROOT.parent.name == ".codex-worktrees"
-    else ROOT.parent
-)
+
+
+def resolve_workspace_root(repo_root: Path) -> Path:
+    git_marker = repo_root / ".git"
+    if git_marker.is_file():
+        prefix = "gitdir:"
+        marker_text = git_marker.read_text(encoding="utf-8").strip()
+        if marker_text.startswith(prefix):
+            git_directory = Path(
+                marker_text[len(prefix):].strip()
+            )
+            if not git_directory.is_absolute():
+                git_directory = (
+                    repo_root / git_directory
+                ).resolve()
+            if (
+                git_directory.parent.name == "worktrees"
+                and git_directory.parent.parent.name == ".git"
+            ):
+                return git_directory.parents[2].parent
+    return repo_root.parent
+
+
+WORKSPACE_ROOT = resolve_workspace_root(ROOT)
 TOOLS_DIR = ROOT / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))

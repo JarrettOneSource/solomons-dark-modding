@@ -251,6 +251,12 @@
     <ClInclude Include="include\multiplayer_runtime_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_runtime_participant_sampling.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_runtime_world_sampling.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1325,6 +1331,9 @@
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\participant_progression_snapshot_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\run_exit_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1341,6 +1350,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_fragmentation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\world_motion_snapshot_fragmentation.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_steam_session\lobby_and_events.inl">

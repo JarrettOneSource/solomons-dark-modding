@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 81;
+constexpr std::uint16_t kProtocolVersion = 82;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -14,12 +14,13 @@ constexpr std::uint32_t kParticipantRingSlotCount = 3;
 constexpr std::uint32_t kParticipantProgressionBookSnapshotMaxEntries = 128;
 constexpr std::uint32_t kParticipantHagathaPerkMaxCount = 9;
 constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;
+constexpr std::uint32_t kWorldMotionSnapshotActorsPerFragment = 10;
 constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;
 constexpr std::uint32_t kWorldActorStudentVisualStateBytes = 32;
 constexpr std::uint32_t kWorldActorStudentBookPaletteMaxEntries = 5;
 constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
 constexpr std::uint32_t kLevelUpOfferMaxOptions = 8;
-constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 8;
+constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 250;
 constexpr std::uint32_t kSpellEffectSnapshotMaxEffects = 32;
 constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
@@ -70,6 +71,10 @@ enum class PacketKind : std::uint16_t {
     LuaNetMessage = 26,
     LuaTimeControl = 27,
     LuaConsumableUse = 28,
+    WorldMotionSnapshot = 29,
+    ParticipantInventorySnapshot = 30,
+    ParticipantProgressionBookSnapshot = 31,
+    WaveSummary = 32,
 };
 
 enum class LuaModStreamMessageKind : std::uint8_t {
@@ -480,25 +485,6 @@ struct StatePacket {
     ParticipantDerivedStatPacketState derived_stats;
     std::uint32_t hagatha_perk_revision;
     ParticipantHagathaPerkPacketState hagatha_perks;
-    std::uint64_t level_up_barrier_id;
-    std::uint32_t level_up_barrier_revision;
-    std::uint32_t level_up_deadline_remaining_ms;
-    std::uint8_t level_up_pause_active;
-    std::uint8_t level_up_waiting_count;
-    std::uint8_t level_up_barrier_flags;
-    std::uint8_t level_up_waiting_reserved = 0;
-    std::uint64_t level_up_waiting_participant_ids[kLevelUpWaitStatusMaxParticipants];
-    std::uint16_t inventory_item_count;
-    std::uint16_t inventory_item_total_count;
-    std::uint16_t inventory_snapshot_flags;
-    std::uint16_t inventory_reserved;
-    ParticipantInventoryItemPacketState inventory_items[kParticipantInventorySnapshotMaxItems];
-    std::uint16_t progression_book_entry_count;
-    std::uint16_t progression_book_entry_total_count;
-    std::uint16_t progression_book_snapshot_flags;
-    std::uint16_t progression_book_reserved;
-    ParticipantProgressionBookEntryPacketState
-        progression_book_entries[kParticipantProgressionBookSnapshotMaxEntries];
     std::int32_t primary_entry_index;
     std::int32_t primary_combo_entry_index;
     std::int32_t queued_secondary_entry_indices[kSecondaryLoadoutSlotCount];
@@ -549,6 +535,23 @@ struct WaveCompositionRowPacketState {
     std::uint16_t spawned;
     std::uint16_t alive;
     std::uint16_t killed;
+};
+
+struct WaveSummaryPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t authority_session_nonce;
+    std::uint32_t run_nonce;
+    std::uint8_t valid;
+    std::uint8_t phase;
+    std::uint16_t row_count;
+    std::int32_t wave;
+    std::int32_t remaining_to_spawn;
+    std::int32_t spawned;
+    std::int32_t alive;
+    std::int32_t killed;
+    WaveCompositionRowPacketState
+        rows[kWaveSummaryMaxCompositionRows];
 };
 
 struct ParticipantFramePacket {
@@ -629,17 +632,83 @@ struct ParticipantFramePacket {
     float magic_shield_hit_flash;
     float render_drive_overlay_alpha;
     float render_drive_move_blend;
-    std::uint8_t wave_summary_valid;
-    std::uint8_t wave_summary_phase;
-    std::uint16_t wave_summary_row_count;
-    std::int32_t wave_summary_wave;
-    std::int32_t wave_summary_remaining_to_spawn;
-    std::int32_t wave_summary_spawned;
-    std::int32_t wave_summary_alive;
-    std::int32_t wave_summary_killed;
-    WaveCompositionRowPacketState
-        wave_summary_rows[kWaveSummaryMaxCompositionRows];
 };
+
+struct ParticipantInventorySnapshotPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint32_t inventory_revision;
+    std::uint16_t item_count;
+    std::uint16_t item_total_count;
+    std::uint16_t snapshot_flags;
+    std::uint16_t reserved = 0;
+    ParticipantInventoryItemPacketState
+        items[kParticipantInventorySnapshotMaxItems];
+};
+
+constexpr std::size_t
+    kParticipantInventorySnapshotPacketPrefixBytes =
+        offsetof(ParticipantInventorySnapshotPacket, items);
+
+constexpr std::size_t ParticipantInventorySnapshotPacketWireSize(
+    std::uint16_t item_count) {
+    return kParticipantInventorySnapshotPacketPrefixBytes +
+        static_cast<std::size_t>(item_count) *
+            sizeof(ParticipantInventoryItemPacketState);
+}
+
+constexpr bool IsValidParticipantInventorySnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint16_t item_count) {
+    return item_count <=
+            kParticipantInventorySnapshotMaxItems &&
+        received_bytes ==
+            ParticipantInventorySnapshotPacketWireSize(
+                item_count);
+}
+
+struct ParticipantProgressionBookSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t participant_id;
+    std::uint64_t participant_session_nonce;
+    std::uint32_t spellbook_revision;
+    std::uint32_t statbook_revision;
+    std::uint16_t entry_count;
+    std::uint16_t entry_total_count;
+    std::uint16_t snapshot_flags;
+    std::uint16_t reserved = 0;
+    ParticipantProgressionBookEntryPacketState
+        entries[
+            kParticipantProgressionBookSnapshotMaxEntries];
+};
+
+constexpr std::size_t
+    kParticipantProgressionBookSnapshotPacketPrefixBytes =
+        offsetof(
+            ParticipantProgressionBookSnapshotPacket,
+            entries);
+
+constexpr std::size_t
+ParticipantProgressionBookSnapshotPacketWireSize(
+    std::uint16_t entry_count) {
+    return
+        kParticipantProgressionBookSnapshotPacketPrefixBytes +
+        static_cast<std::size_t>(entry_count) *
+            sizeof(
+                ParticipantProgressionBookEntryPacketState);
+}
+
+constexpr bool
+IsValidParticipantProgressionBookSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint16_t entry_count) {
+    return entry_count <=
+            kParticipantProgressionBookSnapshotMaxEntries &&
+        received_bytes ==
+            ParticipantProgressionBookSnapshotPacketWireSize(
+                entry_count);
+}
 
 struct SessionHelloPacket {
     PacketHeader header;
@@ -934,6 +1003,27 @@ struct LevelUpBarrierPacket {
     LevelUpBarrierParticipantPacketState participants[kLevelUpWaitStatusMaxParticipants];
 };
 
+constexpr std::size_t kLevelUpBarrierPacketPrefixBytes =
+    offsetof(LevelUpBarrierPacket, participants);
+
+constexpr std::size_t LevelUpBarrierPacketWireSize(
+    std::uint8_t participant_count) {
+    return kLevelUpBarrierPacketPrefixBytes +
+        static_cast<std::size_t>(participant_count) *
+            sizeof(LevelUpBarrierParticipantPacketState);
+}
+
+constexpr bool IsValidLevelUpBarrierPacketWireSize(
+    std::size_t received_bytes,
+    std::uint8_t participant_count) {
+    return participant_count != 0 &&
+        participant_count <=
+            kLevelUpWaitStatusMaxParticipants &&
+        received_bytes ==
+            LevelUpBarrierPacketWireSize(
+                participant_count);
+}
+
 struct StudentBookPaletteEntryPacketState {
     float red;
     float green;
@@ -1019,6 +1109,54 @@ struct WorldSnapshotPacket {
     std::uint8_t scene_kind;
     std::uint8_t reserved[3] = {};
     WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];
+};
+
+struct WorldActorMotionPacketState {
+    std::uint64_t network_actor_id;
+    std::uint64_t target_participant_id;
+    std::uint32_t target_native_type_id;
+    std::int32_t target_actor_slot;
+    std::int32_t target_world_slot;
+    std::int32_t target_bucket_delta;
+    std::uint8_t flags;
+    std::uint8_t anim_drive_state;
+    std::uint16_t presentation_flags;
+    float position_x;
+    float position_y;
+    float radius;
+    float heading;
+    float hp;
+    float max_hp;
+    std::uint32_t anim_drive_state_word;
+    float walk_cycle_primary;
+    float walk_cycle_secondary;
+    std::uint8_t render_variant_primary;
+    std::uint8_t render_variant_secondary;
+    std::uint8_t render_weapon_type;
+    std::uint8_t render_selection_byte;
+    std::uint8_t render_variant_tertiary;
+    std::uint8_t status_flags;
+    std::uint8_t reserved[2] = {};
+    std::int32_t turn_undead_duration_ticks;
+    float turn_undead_flee_heading;
+    float turn_undead_activation_scalar;
+};
+
+struct WorldMotionSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint32_t scene_epoch;
+    std::uint32_t run_nonce;
+    std::uint32_t snapshot_id;
+    std::uint16_t fragment_index;
+    std::uint16_t fragment_count;
+    std::uint16_t actor_start_index;
+    std::uint16_t actor_count;
+    std::uint32_t actor_total_count;
+    std::uint8_t scene_kind;
+    std::uint8_t reserved[3] = {};
+    WorldActorMotionPacketState
+        actors[kWorldMotionSnapshotActorsPerFragment];
 };
 
 struct LootDropSnapshotPacketState {
@@ -1436,11 +1574,35 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 5056, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 604, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
-static_assert(sizeof(ParticipantFramePacket) == 586,
+static_assert(sizeof(WaveSummaryPacket) == 296,
+              "Unexpected wave summary packet size");
+static_assert(sizeof(ParticipantFramePacket) == 322,
               "Unexpected participant frame packet size");
+static_assert(
+    sizeof(ParticipantInventorySnapshotPacket) == 1832,
+    "Unexpected participant inventory snapshot size");
+static_assert(
+    kParticipantInventorySnapshotPacketPrefixBytes == 40,
+    "Unexpected participant inventory snapshot prefix size");
+static_assert(
+    ParticipantInventorySnapshotPacketWireSize(
+        kParticipantInventorySnapshotMaxItems) ==
+        sizeof(ParticipantInventorySnapshotPacket),
+    "Full participant inventory snapshot must consume its packet");
+static_assert(
+    sizeof(ParticipantProgressionBookSnapshotPacket) == 2604,
+    "Unexpected participant progression snapshot size");
+static_assert(
+    kParticipantProgressionBookSnapshotPacketPrefixBytes == 44,
+    "Unexpected participant progression snapshot prefix size");
+static_assert(
+    ParticipantProgressionBookSnapshotPacketWireSize(
+        kParticipantProgressionBookSnapshotMaxEntries) ==
+        sizeof(ParticipantProgressionBookSnapshotPacket),
+    "Full participant progression snapshot must consume its packet");
 static_assert(sizeof(SessionHelloPacket) == 128, "Unexpected session hello packet size");
 static_assert(sizeof(CastPacket) == 128, "Unexpected cast packet size");
 static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello acknowledgement packet size");
@@ -1474,14 +1636,25 @@ static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice pac
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");
 static_assert(sizeof(LevelUpBarrierParticipantPacketState) == 32,
               "Unexpected level-up barrier participant state size");
-static_assert(sizeof(LevelUpBarrierPacket) == 308,
+static_assert(kLevelUpBarrierPacketPrefixBytes == 52,
+              "Unexpected level-up barrier packet prefix size");
+static_assert(sizeof(LevelUpBarrierPacket) == 8052,
               "Unexpected level-up barrier packet size");
+static_assert(
+    LevelUpBarrierPacketWireSize(
+        kLevelUpWaitStatusMaxParticipants) ==
+        sizeof(LevelUpBarrierPacket),
+    "Full level-up barrier must consume its packet");
 static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
 static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
 static_assert(sizeof(WorldActorSnapshotPacketState) == 328, "Unexpected world actor snapshot size");
 static_assert(sizeof(WorldSnapshotPacket) == 1032, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorMotionPacketState) == 92,
+              "Unexpected world actor motion size");
+static_assert(sizeof(WorldMotionSnapshotPacket) == 968,
+              "Unexpected world motion snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 120, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7712, "Unexpected loot snapshot packet size");
 static_assert(kLootSnapshotPacketPrefixBytes == 32,

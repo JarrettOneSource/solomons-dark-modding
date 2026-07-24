@@ -15,6 +15,7 @@ param(
     [string]$ThirdName = "Observer Player",
     [string]$InstancePrefix = "local-mp",
     [string]$GameDirectory = "",
+    [string]$RuntimeRoot = "",
     [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
@@ -33,7 +34,7 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
-$root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
 $launcherDir = Split-Path $launcher -Parent
 $luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
@@ -64,6 +65,15 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+
+$runtimeRootOverride = Resolve-MultiplayerRuntimeRootOverride `
+    -RootPath $root `
+    -RequestedRuntimeRoot $RuntimeRoot
+$effectiveRuntimeRoot = if ([string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
+    Join-Path $root "runtime"
+} else {
+    $runtimeRootOverride
+}
 
 function Write-LaunchedProcessIds {
     param(
@@ -201,6 +211,9 @@ function Start-MultiplayerInstance {
     }
     if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
         $args += @("--game-dir", $GameDirectory)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
+        $args += @("--runtime-root", $runtimeRootOverride)
     }
 
     Invoke-LauncherWithEnvironment `
@@ -988,16 +1001,16 @@ $thirdWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveThirdPreset) -o
 if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
     $exactModIdList = $ExactModIds.Split(',')
     Set-ExactMultiplayerModState `
-        -RootPath $root `
+        -RuntimeRootPath $effectiveRuntimeRoot `
         -Instance $hostInstance `
         -ModIds $exactModIdList
     Set-ExactMultiplayerModState `
-        -RootPath $root `
+        -RuntimeRootPath $effectiveRuntimeRoot `
         -Instance $clientInstance `
         -ModIds $exactModIdList
     if ($EnableThird) {
         Set-ExactMultiplayerModState `
-            -RootPath $root `
+            -RuntimeRootPath $effectiveRuntimeRoot `
             -Instance $thirdInstance `
             -ModIds $exactModIdList
     }
@@ -1139,6 +1152,7 @@ if (-not $NoTileWindows) {
     clientName = $ClientName
     thirdName = if ($EnableThird) { $ThirdName } else { $null }
     instancePrefix = $InstancePrefix
+    runtimeRoot = $effectiveRuntimeRoot
     hostLuaPipe = $hostLuaPipe
     clientLuaPipe = $clientLuaPipe
     thirdLuaPipe = if ($EnableThird) { $thirdLuaPipe } else { $null }

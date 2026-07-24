@@ -107,6 +107,17 @@ bool IsAuthorizedSteamGameplayPacket(
                     ? packet.participant_id
                     : std::uint64_t{0};
             });
+    case PacketKind::ParticipantInventorySnapshot:
+        return SteamParticipantInventorySnapshotOwnerMatches(
+            data,
+            size,
+            sender_steam_id);
+    case PacketKind::ParticipantProgressionBookSnapshot:
+        return
+            SteamParticipantProgressionBookSnapshotOwnerMatches(
+                data,
+                size,
+                sender_steam_id);
     case PacketKind::Cast:
         return SteamPacketOwnerMatches<CastPacket>(
             data,
@@ -327,6 +338,64 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (kind ==
+                PacketKind::ParticipantInventorySnapshot &&
+            received >= static_cast<int>(
+                kParticipantInventorySnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(
+                sizeof(ParticipantInventorySnapshotPacket))) {
+            ParticipantInventorySnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::
+                        ParticipantInventorySnapshot) ||
+                !IsValidParticipantInventorySnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.item_count)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyParticipantInventorySnapshotPacket(
+                packet,
+                from,
+                now_ms);
+            continue;
+        }
+
+        if (kind ==
+                PacketKind::
+                    ParticipantProgressionBookSnapshot &&
+            received >= static_cast<int>(
+                kParticipantProgressionBookSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(
+                sizeof(
+                    ParticipantProgressionBookSnapshotPacket))) {
+            ParticipantProgressionBookSnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::
+                        ParticipantProgressionBookSnapshot) ||
+                !IsValidParticipantProgressionBookSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.entry_count)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyParticipantProgressionBookSnapshotPacket(
+                packet,
+                from,
+                now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::ParticipantFrame &&
             received == static_cast<int>(sizeof(ParticipantFramePacket))) {
             ParticipantFramePacket packet{};
@@ -338,6 +407,27 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyRemoteParticipantFramePacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::WaveSummary &&
+            received ==
+                static_cast<int>(sizeof(WaveSummaryPacket))) {
+            WaveSummaryPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::WaveSummary)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyAuthorityWaveSummaryPacket(
+                packet,
+                from,
+                now_ms);
             continue;
         }
 
@@ -408,6 +498,28 @@ void DispatchReceivedPacket(
             }
             g_local_transport.packets_received += 1;
             ApplyWorldSnapshotPacket(packet, from, now_ms);
+            continue;
+        }
+
+        if (kind == PacketKind::WorldMotionSnapshot &&
+            received ==
+                static_cast<int>(
+                    sizeof(WorldMotionSnapshotPacket))) {
+            WorldMotionSnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::WorldMotionSnapshot)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyWorldMotionSnapshotPacket(
+                packet,
+                from,
+                now_ms);
             continue;
         }
 
@@ -521,10 +633,21 @@ void DispatchReceivedPacket(
         }
 
         if (kind == PacketKind::LevelUpBarrier &&
-            received == static_cast<int>(sizeof(LevelUpBarrierPacket))) {
+            received >= static_cast<int>(
+                kLevelUpBarrierPacketPrefixBytes) &&
+            received <=
+                static_cast<int>(sizeof(LevelUpBarrierPacket))) {
             LevelUpBarrierPacket packet{};
-            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
-            if (!IsValidHeader(packet.header, PacketKind::LevelUpBarrier)) {
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::LevelUpBarrier) ||
+                !IsValidLevelUpBarrierPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.participant_count)) {
                 continue;
             }
             g_local_transport.packets_received += 1;

@@ -239,6 +239,8 @@ bool TrySampleWorldSnapshot(
     std::uint64_t now_ms,
     std::uint64_t interpolation_delay_ms,
     WorldSnapshotRuntimeInfo* snapshot);
+std::uint64_t RecommendedWorldSnapshotInterpolationDelayMs(
+    const RuntimeState& state);
 bool IsLocalHumanParticipant(const ParticipantInfo& participant);
 bool IsRemoteParticipant(const ParticipantInfo& participant);
 bool IsLuaControlledParticipant(const ParticipantInfo& participant);

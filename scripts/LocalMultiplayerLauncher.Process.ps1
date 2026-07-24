@@ -87,10 +87,36 @@ function ConvertFrom-MultiplayerLauncherJson {
     return $null
 }
 
-function Set-ExactMultiplayerModState {
+function Resolve-MultiplayerRuntimeRootOverride {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RootPath,
+        [string]$RequestedRuntimeRoot = ""
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedRuntimeRoot)) {
+        return [System.IO.Path]::GetFullPath($RequestedRuntimeRoot)
+    }
+
+    $normalizedRoot = [System.IO.Path]::GetFullPath($RootPath)
+    if (-not $normalizedRoot.StartsWith(
+        "\\",
+        [System.StringComparison]::Ordinal)) {
+        return ""
+    }
+
+    $workspaceName = [System.IO.Path]::GetFileName(
+        $normalizedRoot.TrimEnd('\'))
+    return [System.IO.Path]::GetFullPath(
+        (Join-Path `
+            ([System.IO.Path]::GetTempPath()) `
+            "SolomonDarkModLoader\wsl-runtime\$workspaceName"))
+}
+
+function Set-ExactMultiplayerModState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeRootPath,
         [Parameter(Mandatory = $true)]
         [string]$Instance,
         [Parameter(Mandatory = $true)]
@@ -117,7 +143,7 @@ function Set-ExactMultiplayerModState {
     }
 
     $instancesRoot = [System.IO.Path]::GetFullPath(
-        (Join-Path $RootPath "runtime\instances"))
+        (Join-Path $RuntimeRootPath "instances"))
     $normalizedInstance = $Instance.ToLowerInvariant()
     $instanceRoot = [System.IO.Path]::GetFullPath(
         (Join-Path $instancesRoot $normalizedInstance))

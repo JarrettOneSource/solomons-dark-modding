@@ -259,7 +259,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 81" in protocol_text
+    assert "kProtocolVersion = 82" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -785,7 +785,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 81;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 82;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -815,10 +815,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "struct SpellEffectSnapshotPacket"),
         (protocol_text, "static_assert(sizeof(SpellEffectPacketState) == 124"),
         (protocol_text, "static_assert(sizeof(SpellEffectSnapshotPacket) == 4000"),
-        (protocol_text, "kLevelUpWaitStatusMaxParticipants"),
-        (protocol_text, "std::uint8_t level_up_pause_active"),
-        (protocol_text, "std::uint8_t level_up_waiting_count"),
-        (protocol_text, "std::uint64_t level_up_waiting_participant_ids"),
+        (protocol_text, "kLevelUpWaitStatusMaxParticipants = 250"),
+        (protocol_text, "kLevelUpBarrierPacketPrefixBytes"),
+        (protocol_text, "LevelUpBarrierPacketWireSize("),
+        (protocol_text, "IsValidLevelUpBarrierPacketWireSize("),
         (native_enemy_lifecycle_header_text, "TryTriggerRunEnemyDeath"),
         (native_enemy_lifecycle_text, "ResolveGameAddressOrZero(kEnemyDeath)"),
         (native_enemy_lifecycle_text, "kEnemyDeathHandledOffset"),
@@ -873,10 +873,12 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "std::int32_t concentration_entry_b;"),
         (protocol_text, "struct ParticipantDerivedStatPacketState"),
         (protocol_text, "std::uint32_t derived_stat_revision;"),
-        (protocol_text, "std::uint16_t inventory_item_count;"),
+        (protocol_text, "struct ParticipantInventorySnapshotPacket"),
+        (protocol_text, "std::uint16_t item_count;"),
         (protocol_text, "ParticipantInventorySnapshotFlagTruncated"),
         (protocol_text, "ParticipantProgressionBookSnapshotFlagTruncated"),
-        (protocol_text, "std::uint16_t progression_book_entry_count;"),
+        (protocol_text, "struct ParticipantProgressionBookSnapshotPacket"),
+        (protocol_text, "std::uint16_t entry_count;"),
         (protocol_text, "ParticipantPresentationFlagAnimationDriveWord"),
         (protocol_text, "ParticipantPresentationFlagRenderDriveFloats"),
         (protocol_text, "ParticipantPresentationFlagStaffVisualState"),
@@ -894,8 +896,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "display_name"),
         (protocol_text, "static_assert(sizeof(ParticipantInventoryItemPacketState) == 28"),
         (protocol_text, "static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20"),
+        (protocol_text, "sizeof(ParticipantInventorySnapshotPacket) == 1832"),
+        (protocol_text, "sizeof(ParticipantProgressionBookSnapshotPacket) == 2604"),
+        (protocol_text, "static_assert(sizeof(LevelUpBarrierPacket) == 8052"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 5056"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 604"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 328"),
@@ -1274,8 +1279,9 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "TryWriteLocalGlobalGold"),
         (transport_text, "accepted_loot_pickup_drop_ids"),
         (transport_text, "RefreshOwnedInventoryFromSnapshot"),
-        (transport_text, "packet.inventory_item_count"),
-        (transport_text, "participant->owned_progression.inventory_items"),
+        (transport_text, "BuildLocalParticipantInventorySnapshotPacket("),
+        (transport_text, "ParticipantInventorySnapshotPacketWireSize("),
+        (transport_text, "progression.inventory_items.push_back(item);"),
         (transport_text, "ParticipantInventorySnapshotFlagTruncated"),
         (read_mod_loader_header_source(), "SDModInventoryState"),
         (read_mod_loader_header_source(), "kSDModInventorySnapshotMaxItems"),
@@ -1410,7 +1416,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "failed_remove_actor_total_count +="),
         (world_snapshot_reconciliation_text, "TryRebindActorToOwnerWorld"),
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
-        (world_snapshot_reconciliation_text, "kWorldSnapshotInterpolationDelayMs"),
+        (
+            world_snapshot_reconciliation_text,
+            "RecommendedWorldSnapshotInterpolationDelayMs(",
+        ),
         (world_snapshot_reconciliation_text, "TrySampleWorldSnapshot"),
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemySoftCorrectionFactor"),
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemyHardSnapDistance"),
@@ -1473,8 +1482,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "local->owned_progression.gold_revision += 1"),
         (transport_text, "RefreshOwnedProgressionBookFromSnapshot"),
         (transport_text, "RefreshOwnedAbilityLoadoutFromProfile"),
-        (transport_text, "packet.progression_book_entry_count"),
-        (transport_text, "participant->owned_progression.progression_book_entries"),
+        (
+            transport_text,
+            "BuildLocalParticipantProgressionBookSnapshotPacket(",
+        ),
+        (
+            transport_text,
+            "ParticipantProgressionBookSnapshotPacketWireSize(",
+        ),
+        (transport_text, "progression.progression_book_entries.push_back("),
         (state_getters_text, "const bool structural_tail_record ="),
         (state_getters_text, "entry.statbook_max_level > 256"),
         (progression_probe_text, "compare_book_rows"),

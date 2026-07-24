@@ -118,18 +118,18 @@ end)
 
 ## Multiplayer
 
-Wave simulation remains authority-owned. The host copies the bounded summary
-into its authenticated participant frame. A client accepts it only from the
-configured authority endpoint and session identity, validates row order and
-all aggregate totals, and then replaces its local semantic view. Participant
-frames also provide the late-join checkpoint, so `sd.waves.get_state()` returns
-the same authority summary on host and clients without requiring a Lua mod to
-replicate anything.
+Wave simulation remains authority-owned. The host sends the bounded summary in
+an authenticated wave summary on change and repeats it every 400 ms for
+late-join convergence. A client accepts it only from the configured authority
+endpoint and session identity, validates row order and all aggregate totals,
+and then replaces its local semantic view. `sd.waves.get_state()` therefore
+returns the same authority summary on host and clients without requiring a Lua
+mod to replicate anything.
 
 The packet carries at most 20 sorted composition rows. The parser recognizes
 the eight stock wave-file enemy tokens recovered from the retail schedule; it
 does not infer wave syntax from unrelated native object classes.
-The current protocol version is 81; incompatible peers are rejected during
+The current protocol version is 82; incompatible peers are rejected during
 the normal handshake.
 
 ## Read-only verification

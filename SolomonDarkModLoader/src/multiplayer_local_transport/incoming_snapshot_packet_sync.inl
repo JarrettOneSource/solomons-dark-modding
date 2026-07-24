@@ -197,6 +197,7 @@ void ApplyWorldSnapshotPacket(
     const TransportPeerEndpoint& from,
     std::uint64_t now_ms) {
     if (g_local_transport.is_host ||
+        !IsConfiguredRemoteAuthorityEndpoint(from) ||
         packet.authority_participant_id == 0 ||
         packet.authority_participant_id == g_local_transport.local_peer_id) {
         return;
@@ -208,6 +209,60 @@ void ApplyWorldSnapshotPacket(
             packet,
             now_ms,
             &g_local_transport.pending_world_snapshots,
+            &complete_snapshot)) {
+        return;
+    }
+    if (complete_snapshot.scene_kind == WorldSceneKind::Run &&
+        (!g_local_transport.have_latest_world_identity_snapshot ||
+         complete_snapshot.snapshot_id ==
+             g_local_transport
+                 .latest_world_identity_snapshot.snapshot_id ||
+         IsPacketSequenceNewer(
+             complete_snapshot.snapshot_id,
+             g_local_transport
+                 .latest_world_identity_snapshot.snapshot_id))) {
+        g_local_transport.latest_world_identity_snapshot =
+            complete_snapshot;
+        g_local_transport.have_latest_world_identity_snapshot =
+            true;
+    } else if (
+        complete_snapshot.scene_kind != WorldSceneKind::Run) {
+        g_local_transport.have_latest_world_identity_snapshot =
+            false;
+    }
+    PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms);
+}
+
+void ApplyWorldMotionSnapshotPacket(
+    const WorldMotionSnapshotPacket& packet,
+    const TransportPeerEndpoint& from,
+    std::uint64_t now_ms) {
+    if (g_local_transport.is_host ||
+        !IsConfiguredRemoteAuthorityEndpoint(from) ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id ==
+            g_local_transport.local_peer_id) {
+        return;
+    }
+
+    UpsertPeerEndpoint(
+        from,
+        packet.authority_participant_id,
+        now_ms);
+    CompleteWorldMotionSnapshotPacketState motion_snapshot;
+    if (!TryAcceptWorldMotionSnapshotFragment(
+            packet,
+            now_ms,
+            &g_local_transport.pending_world_motion_snapshots,
+            &motion_snapshot) ||
+        !g_local_transport.have_latest_world_identity_snapshot) {
+        return;
+    }
+
+    CompleteWorldSnapshotPacketState complete_snapshot;
+    if (!MergeWorldMotionSnapshotWithIdentity(
+            motion_snapshot,
+            g_local_transport.latest_world_identity_snapshot,
             &complete_snapshot)) {
         return;
     }
@@ -328,6 +383,7 @@ void ApplyLootSnapshotPacket(
     const TransportPeerEndpoint& from,
     std::uint64_t now_ms) {
     if (g_local_transport.is_host ||
+        !IsConfiguredRemoteAuthorityEndpoint(from) ||
         packet.authority_participant_id == 0 ||
         packet.authority_participant_id == g_local_transport.local_peer_id) {
         return;
@@ -362,4 +418,9 @@ void ApplyLootSnapshotPacket(
 #include "multiplayer_local_transport/participant_vitals_authority.inl"
 
 using TransportPacketBuffer =
-    std::array<char, sizeof(LootSnapshotPacket)>;
+    std::array<
+        char,
+        (sizeof(LevelUpBarrierPacket) >
+                 sizeof(LootSnapshotPacket)
+             ? sizeof(LevelUpBarrierPacket)
+             : sizeof(LootSnapshotPacket))>;

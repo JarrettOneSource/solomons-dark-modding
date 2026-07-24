@@ -12,7 +12,9 @@ SteamNetworkSendMode SteamSendModeForPacket(const Packet& packet) {
         // Ordinary generations are disposable visual updates. Never queue
         // them behind newer generations; periodic reliable generations own
         // structural convergence.
+    case PacketKind::WorldMotionSnapshot:
     case PacketKind::ParticipantFrame:
+    case PacketKind::WaveSummary:
     case PacketKind::LootSnapshot:
     case PacketKind::SpellEffectSnapshot:
     case PacketKind::AirChainSnapshot:
@@ -114,6 +116,9 @@ void SendLocalState(std::uint64_t now_ms) {
             endpoint,
             SteamNetworkSendMode::ReliableNoNagle);
     }
+    SendLocalParticipantProgressionSnapshots(
+        endpoints,
+        now_ms);
 }
 
 void SendLocalParticipantFrame(std::uint64_t now_ms) {
@@ -138,7 +143,8 @@ void SendLocalParticipantFrame(std::uint64_t now_ms) {
 
 void SendWorldSnapshot(std::uint64_t now_ms) {
     if (!g_local_transport.is_host ||
-        now_ms - g_local_transport.last_world_snapshot_send_ms < kLocalTransportWorldSnapshotIntervalMs) {
+        now_ms - g_local_transport.last_world_snapshot_send_ms <
+            kLocalTransportRunWorldMotionIntervalMs) {
         return;
     }
 
@@ -153,22 +159,111 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
         return;
     }
 
-    const auto fragment_count = (std::max<std::size_t>)(
-        1,
-        (complete_snapshot.actors.size() +
-         kWorldSnapshotActorsPerFragment - 1u) /
-            kWorldSnapshotActorsPerFragment);
-    const auto generation_wire_size =
-        fragment_count * sizeof(WorldSnapshotPacket);
-    const auto send_interval_ms = BandwidthLimitedSnapshotIntervalMs(
-        generation_wire_size,
-        kLocalTransportWorldSnapshotIntervalMs,
-        kLocalTransportWorldSnapshotBudgetBytesPerSecond);
+    const auto endpoints = BuildKnownSendEndpoints();
+    const auto full_fragment_count =
+        WorldSnapshotFragmentCountForActorCount(
+            static_cast<std::uint32_t>(
+                complete_snapshot.actors.size()));
+    const auto full_generation_wire_size =
+        static_cast<std::size_t>(full_fragment_count) *
+        sizeof(WorldSnapshotPacket);
+
+    if (complete_snapshot.scene_kind == WorldSceneKind::Run) {
+        const auto motion_snapshot =
+            BuildWorldMotionSnapshot(complete_snapshot);
+        const auto motion_fragment_count =
+            WorldMotionSnapshotFragmentCountForActorCount(
+                static_cast<std::uint32_t>(
+                    motion_snapshot.actors.size()));
+        const auto motion_generation_wire_size =
+            static_cast<std::size_t>(motion_fragment_count) *
+            sizeof(WorldMotionSnapshotPacket);
+        const auto motion_interval_ms =
+            BandwidthLimitedSnapshotIntervalMs(
+                motion_generation_wire_size,
+                kLocalTransportRunWorldMotionIntervalMs,
+                kLocalTransportWorldSnapshotBudgetBytesPerSecond);
+        if (now_ms -
+                g_local_transport.last_world_snapshot_send_ms <
+            motion_interval_ms) {
+            return;
+        }
+
+        const bool identity_changed =
+            !g_local_transport
+                 .have_last_sent_world_identity_snapshot ||
+            !SameWorldSnapshotIdentity(
+                complete_snapshot,
+                g_local_transport
+                    .last_sent_world_identity_snapshot);
+        const auto reliable_checkpoint_interval_ms =
+            BandwidthLimitedSnapshotIntervalMs(
+                full_generation_wire_size,
+                kLocalTransportWorldSnapshotReliableCheckpointIntervalMs,
+                kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond);
+        const bool reliable_checkpoint =
+            identity_changed ||
+            now_ms -
+                    g_local_transport
+                        .last_world_snapshot_reliable_checkpoint_ms >=
+                reliable_checkpoint_interval_ms;
+        if (reliable_checkpoint) {
+            std::vector<WorldSnapshotPacket> identity_packets;
+            if (!BuildWorldSnapshotFragmentPackets(
+                    complete_snapshot,
+                    &g_local_transport.next_sequence,
+                    &identity_packets)) {
+                return;
+            }
+            for (const auto& endpoint : endpoints) {
+                for (const auto& packet : identity_packets) {
+                    SendPacketToEndpoint(
+                        packet,
+                        endpoint,
+                        SteamNetworkSendMode::ReliableNoNagle);
+                }
+            }
+            g_local_transport
+                .last_world_snapshot_reliable_checkpoint_ms =
+                now_ms;
+            g_local_transport
+                .last_sent_world_identity_snapshot =
+                complete_snapshot;
+            g_local_transport
+                .have_last_sent_world_identity_snapshot = true;
+        }
+
+        std::vector<WorldMotionSnapshotPacket> motion_packets;
+        if (!BuildWorldMotionSnapshotFragmentPackets(
+                motion_snapshot,
+                &g_local_transport.next_sequence,
+                &motion_packets)) {
+            return;
+        }
+        g_local_transport.last_world_snapshot_send_ms = now_ms;
+        PublishWorldSnapshotRuntimeInfo(
+            complete_snapshot,
+            now_ms);
+        for (const auto& endpoint : endpoints) {
+            for (const auto& packet : motion_packets) {
+                SendPacketToEndpoint(
+                    packet,
+                    endpoint,
+                    SteamNetworkSendMode::UnreliableNoDelay);
+            }
+        }
+        return;
+    }
+
+    const auto send_interval_ms =
+        BandwidthLimitedSnapshotIntervalMs(
+            full_generation_wire_size,
+            kLocalTransportWorldSnapshotIntervalMs,
+            kLocalTransportWorldSnapshotBudgetBytesPerSecond);
     if (now_ms - g_local_transport.last_world_snapshot_send_ms <
         send_interval_ms) {
         return;
     }
-    g_local_transport.last_world_snapshot_send_ms = now_ms;
 
     std::vector<WorldSnapshotPacket> packets;
     if (!BuildWorldSnapshotFragmentPackets(
@@ -177,7 +272,9 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
             &packets)) {
         return;
     }
-
+    g_local_transport.last_world_snapshot_send_ms = now_ms;
+    g_local_transport.have_last_sent_world_identity_snapshot =
+        false;
     PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms);
 
     const bool reliable_checkpoint =
@@ -185,23 +282,21 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
                 g_local_transport
                     .last_world_snapshot_reliable_checkpoint_ms >=
             BandwidthLimitedSnapshotIntervalMs(
-                generation_wire_size,
+                full_generation_wire_size,
                 kLocalTransportWorldSnapshotReliableCheckpointIntervalMs,
                 kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond);
     if (reliable_checkpoint) {
-        g_local_transport.last_world_snapshot_reliable_checkpoint_ms = now_ms;
+        g_local_transport.last_world_snapshot_reliable_checkpoint_ms =
+            now_ms;
     }
-    const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
         for (const auto& packet : packets) {
-            if (reliable_checkpoint) {
-                SendPacketToEndpoint(
-                    packet,
-                    endpoint,
-                    SteamNetworkSendMode::ReliableNoNagle);
-            } else {
-                SendPacketToEndpoint(packet, endpoint);
-            }
+            SendPacketToEndpoint(
+                packet,
+                endpoint,
+                reliable_checkpoint
+                    ? SteamNetworkSendMode::ReliableNoNagle
+                    : SteamNetworkSendMode::UnreliableNoDelay);
         }
     }
 }

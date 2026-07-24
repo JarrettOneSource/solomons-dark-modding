@@ -949,6 +949,8 @@ def _spawn_lua_daemon(pipe_name: str) -> subprocess.Popen:
         [
             "powershell.exe",
             "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
             "-File",
             "scripts/Invoke-LuaExec.ps1",
             "-Daemon",

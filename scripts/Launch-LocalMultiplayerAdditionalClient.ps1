@@ -1,6 +1,7 @@
 param(
     [string]$Instance = "local-mp-third",
     [string]$Preset = "create_manual",
+    [string]$RuntimeRoot = "",
     [UInt16]$LocalPort = 47772,
     [string]$ParticipantId = "0x2000000000001003",
     [string]$PlayerName = "Observer Player",
@@ -18,7 +19,7 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
-$root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
 $launcherDir = Split-Path $launcher -Parent
 $launcherProcessHelpers = Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
@@ -32,10 +33,19 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 
 . $launcherProcessHelpers
 
+$runtimeRootOverride = Resolve-MultiplayerRuntimeRootOverride `
+    -RootPath $root `
+    -RequestedRuntimeRoot $RuntimeRoot
+$effectiveRuntimeRoot = if ([string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
+    Join-Path $root "runtime"
+} else {
+    $runtimeRootOverride
+}
+
 if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
     $exactModIdList = $ExactModIds.Split(',')
     Set-ExactMultiplayerModState `
-        -RootPath $root `
+        -RuntimeRootPath $effectiveRuntimeRoot `
         -Instance $Instance `
         -ModIds $exactModIdList
 }
@@ -90,6 +100,9 @@ $arguments = @(
     "--runtime-flag", "multiplayer.steam_bootstrap=false",
     "--temporary-profile"
 )
+if (-not [string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
+    $arguments += @("--runtime-root", $runtimeRootOverride)
+}
 $result = Invoke-LauncherWithEnvironment `
     -LauncherPath $launcher `
     -WorkingDirectory $launcherDir `
@@ -119,4 +132,5 @@ if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     testSurvivalBoneyardOverride = $resolvedOverride
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedWaveOverride
+    runtimeRoot = $effectiveRuntimeRoot
 } | ConvertTo-Json -Depth 4 -Compress

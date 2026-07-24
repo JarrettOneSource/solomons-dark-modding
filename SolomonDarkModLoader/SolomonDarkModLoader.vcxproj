@@ -127,6 +127,8 @@
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
+    <ClInclude Include="src\multiplayer_runtime_participant_sampling.inl" />
+    <ClInclude Include="src\multiplayer_runtime_world_sampling.inl" />
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
@@ -482,6 +484,7 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\participant_progression_snapshot_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_correction.inl" />
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />
@@ -494,6 +497,7 @@
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_hub_presentation_and_loot_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_fragmentation.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\world_motion_snapshot_fragmentation.inl" />
     <ClInclude Include="src\multiplayer_steam_session\lobby_and_events.inl" />
     <ClInclude Include="src\multiplayer_steam_session\lobby_event_handlers.inl" />
     <ClInclude Include="src\multiplayer_steam_session\network_messages.inl" />

@@ -60,6 +60,16 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
 
     assert "DEFAULT_WSL_BRIDGE_TIMEOUT_SECONDS = 35.0" in lua_client
     assert "NATIVE_UI_LUA_TIMEOUT_SECONDS = 35.0" in local_verifier
+    for bridge in (lua_client, local_verifier):
+        assert re.search(
+            r'"powershell\.exe",\s*'
+            r'"-NoProfile",\s*'
+            r'"-ExecutionPolicy",\s*'
+            r'"Bypass",\s*'
+            r'"-File",\s*'
+            r'"scripts/Invoke-LuaExec\.ps1"',
+            bridge,
+        ), "WSL Lua bridge does not bypass policy for its repo-local script"
     assert local_verifier.count(
         "timeout=NATIVE_UI_LUA_TIMEOUT_SECONDS"
     ) >= 4
@@ -1046,7 +1056,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1057,7 +1067,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 5056",
+        "static_assert(sizeof(StatePacket) == 604",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 120",
         "static_assert(sizeof(LootSnapshotPacket) == 7712",
         "static_assert(sizeof(LootPickupResultPacket) == 172",
@@ -1219,7 +1229,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1229,7 +1239,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 5056",
+        "static_assert(sizeof(StatePacket) == 604",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 

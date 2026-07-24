@@ -27,6 +27,8 @@ void ResetRemoteParticipantSessionEpoch(
     g_local_transport.last_state_packet_sequence_by_participant.erase(participant_id);
     g_local_transport.last_participant_frame_sequence_by_participant.erase(
         participant_id);
+    g_local_transport.last_wave_summary_sequence_by_authority.erase(
+        participant_id);
     g_local_transport.last_lua_ui_action_request_by_participant.erase(
         participant_id);
     g_local_transport.last_lua_consumable_use_by_participant.erase(
@@ -255,6 +257,14 @@ void ResetRemoteParticipantSessionEpoch(
             state.loot_snapshot = LootSnapshotRuntimeInfo{};
         }
     });
+    if (g_local_transport.have_latest_world_identity_snapshot &&
+        g_local_transport.latest_world_identity_snapshot
+                .authority_participant_id == participant_id) {
+        g_local_transport.have_latest_world_identity_snapshot =
+            false;
+        g_local_transport.latest_world_identity_snapshot = {};
+        g_local_transport.pending_world_motion_snapshots = {};
+    }
 
     Log(
         "Multiplayer transport reset disconnected participant session epoch. "

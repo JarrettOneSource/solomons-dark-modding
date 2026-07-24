@@ -556,7 +556,6 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
         WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
     packet.region_index = local->runtime.scene_intent.region_index;
     packet.region_type_id = local->runtime.scene_intent.region_type_id;
-    PopulateAuthorityWaveSummary(&packet);
     PopulateAuthorityWaveRespawn(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
@@ -619,52 +618,6 @@ StatePacket BuildLocalStatePacket() {
         local->owned_progression,
         &packet.hagatha_perk_revision,
         &packet.hagatha_perks);
-    PopulateHostLevelUpBarrierStatePacket(
-        &packet,
-        static_cast<std::uint64_t>(GetTickCount64()));
-    const auto inventory_packet_count =
-        (std::min)(
-            local->owned_progression.inventory_items.size(),
-            static_cast<std::size_t>(kParticipantInventorySnapshotMaxItems));
-    packet.inventory_item_count = static_cast<std::uint16_t>(inventory_packet_count);
-    packet.inventory_item_total_count = local->owned_progression.inventory_item_total_count;
-    packet.inventory_snapshot_flags =
-        local->owned_progression.inventory_truncated ||
-            local->owned_progression.inventory_items.size() > kParticipantInventorySnapshotMaxItems
-            ? ParticipantInventorySnapshotFlagTruncated
-            : 0;
-    for (std::size_t index = 0; index < inventory_packet_count; ++index) {
-        const auto& item = local->owned_progression.inventory_items[index];
-        packet.inventory_items[index].type_id = item.type_id;
-        packet.inventory_items[index].recipe_uid = item.recipe_uid;
-        packet.inventory_items[index].content_id = item.content_id;
-        packet.inventory_items[index].slot = item.slot;
-        packet.inventory_items[index].stack_count = item.stack_count;
-        packet.inventory_items[index].parent_item_index = item.parent_item_index;
-        packet.inventory_items[index].container_depth = item.container_depth;
-    }
-    const auto progression_book_packet_count =
-        (std::min)(
-            local->owned_progression.progression_book_entries.size(),
-            static_cast<std::size_t>(kParticipantProgressionBookSnapshotMaxEntries));
-    packet.progression_book_entry_count = static_cast<std::uint16_t>(progression_book_packet_count);
-    packet.progression_book_entry_total_count =
-        local->owned_progression.progression_book_entry_total_count;
-    packet.progression_book_snapshot_flags =
-        local->owned_progression.progression_book_truncated ||
-            local->owned_progression.progression_book_entries.size() >
-                kParticipantProgressionBookSnapshotMaxEntries
-            ? ParticipantProgressionBookSnapshotFlagTruncated
-            : 0;
-    for (std::size_t index = 0; index < progression_book_packet_count; ++index) {
-        const auto& entry = local->owned_progression.progression_book_entries[index];
-        packet.progression_book_entries[index].entry_index = entry.entry_index;
-        packet.progression_book_entries[index].internal_id = entry.internal_id;
-        packet.progression_book_entries[index].active = entry.active;
-        packet.progression_book_entries[index].visible = entry.visible;
-        packet.progression_book_entries[index].category = entry.category;
-        packet.progression_book_entries[index].statbook_max_level = entry.statbook_max_level;
-    }
     packet.primary_entry_index = local->character_profile.loadout.primary_entry_index;
     packet.primary_combo_entry_index = local->character_profile.loadout.primary_combo_entry_index;
     for (std::size_t index = 0; index < local->character_profile.loadout.secondary_entry_indices.size(); ++index) {

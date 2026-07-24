@@ -132,7 +132,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         "stable custom-potion wire identity",
         protocol + inventory_sync + loot_capture + loot_receive,
         (
-            "constexpr std::uint16_t kProtocolVersion = 81;",
+            "constexpr std::uint16_t kProtocolVersion = 82;",
             "std::uint64_t content_id;",
             "std::uint64_t item_content_id;",
             "static_assert(sizeof(ParticipantInventoryItemPacketState) == 28",

@@ -341,6 +341,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendLuaTimeControlUpdate();
     SendLocalState(now_ms);
     SendLocalParticipantFrame(now_ms);
+    SendLocalWaveSummary(now_ms);
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
     SendAirChainSnapshots(now_ms);

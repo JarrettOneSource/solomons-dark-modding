@@ -143,9 +143,16 @@ void BroadcastHostLevelUpBarrierState(std::uint64_t now_ms, bool force) {
 
     barrier.last_broadcast_ms = now_ms;
     const auto packet = BuildHostLevelUpBarrierPacket(now_ms);
+    const auto packet_size =
+        LevelUpBarrierPacketWireSize(
+            packet.participant_count);
     const auto endpoints = BuildKnownSendEndpoints();
     for (const auto& endpoint : endpoints) {
-        SendPacketToEndpoint(packet, endpoint);
+        SendBufferToEndpoint(
+            &packet,
+            packet_size,
+            endpoint,
+            SteamNetworkSendMode::ReliableNoNagle);
     }
 }
 
@@ -332,34 +339,6 @@ void MarkHostLevelUpBarrierParticipantDisconnected(
     CompleteHostLevelUpBarrierIfReady(now_ms);
     if (g_local_transport.host_level_up_barrier.active) {
         BroadcastHostLevelUpBarrierState(now_ms, true);
-    }
-}
-
-void PopulateHostLevelUpBarrierStatePacket(
-    StatePacket* packet,
-    std::uint64_t now_ms) {
-    if (packet == nullptr || !IsLocalTransportHost()) {
-        return;
-    }
-    const auto& barrier = g_local_transport.host_level_up_barrier;
-    packet->level_up_barrier_id = barrier.barrier_id;
-    packet->level_up_barrier_revision = barrier.revision;
-    packet->level_up_deadline_remaining_ms =
-        HostLevelUpBarrierDeadlineRemainingMs(now_ms);
-    packet->level_up_pause_active = barrier.active ? 1 : 0;
-    packet->level_up_barrier_flags =
-        (barrier.active ? kLevelUpBarrierFlagActive : 0) |
-        (barrier.timed_out ? kLevelUpBarrierFlagTimedOut : 0);
-    const auto waiting_participant_ids =
-        CollectHostLevelUpBarrierWaitingParticipantIds();
-    const auto waiting_count =
-        (std::min)(
-            waiting_participant_ids.size(),
-            static_cast<std::size_t>(kLevelUpWaitStatusMaxParticipants));
-    packet->level_up_waiting_count = static_cast<std::uint8_t>(waiting_count);
-    for (std::size_t index = 0; index < waiting_count; ++index) {
-        packet->level_up_waiting_participant_ids[index] =
-            waiting_participant_ids[index];
     }
 }
 

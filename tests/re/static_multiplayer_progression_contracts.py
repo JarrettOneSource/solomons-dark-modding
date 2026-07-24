@@ -281,12 +281,16 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 81;",
+        "constexpr std::uint16_t kProtocolVersion = 82;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
+        "kLevelUpWaitStatusMaxParticipants = 250",
+        "kLevelUpBarrierPacketPrefixBytes",
+        "LevelUpBarrierPacketWireSize(",
+        "IsValidLevelUpBarrierPacketWireSize(",
         "kLevelUpChoiceResultFlagAutoPicked",
         "kLevelUpBarrierParticipantFlagDisconnected",
-        "static_assert(sizeof(LevelUpBarrierPacket) == 308",
+        "static_assert(sizeof(LevelUpBarrierPacket) == 8052",
     ):
         assert token in protocol, f"level-up barrier protocol lacks: {token}"
 
@@ -297,6 +301,8 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "BeginOrExtendHostLevelUpBarrier(",
         "CompleteHostLevelUpBarrierIfReady(",
         "MarkHostLevelUpBarrierParticipantDisconnected(",
+        "SendBufferToEndpoint(",
+        "SteamNetworkSendMode::ReliableNoNagle",
         "ApplyAuthoritativeLevelUpWaitStatus(",
         "packet.barrier_id < current.barrier_id",
         "packet.revision < current.revision",
@@ -681,7 +687,7 @@ def test_level_up_choice_result_advances_owned_book_before_resume() -> str:
     )
     incoming_state = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
-        "incoming_participant_state_sync.inl"
+        "participant_progression_snapshot_sync.inl"
     )
     level_up_verifier = _read(
         "tools/verify_multiplayer_level_up_offer_sync.py"
@@ -715,11 +721,12 @@ def test_level_up_choice_result_advances_owned_book_before_resume() -> str:
     )
 
     # The authority/result mutation advances both revisions. Therefore a
-    # pre-choice state packet with the old revision fails these gates instead
-    # of rolling the accepted rank back before the owner's next checkpoint.
+    # pre-choice book snapshot with either old revision fails these gates
+    # instead of rolling the accepted rank back before the owner's next
+    # checkpoint.
     for token in (
-        "packet.statbook_revision >= participant->owned_progression.statbook_revision",
-        "packet.spellbook_revision >= participant->owned_progression.spellbook_revision",
+        "packet.statbook_revision <\n                progression.statbook_revision",
+        "packet.spellbook_revision <\n                progression.spellbook_revision",
     ):
         assert token in incoming_state, (
             f"progression-book packet revision gate lacks: {token}"
