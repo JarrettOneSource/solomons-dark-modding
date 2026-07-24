@@ -301,6 +301,167 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
     )
 
 
+def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
+    flow_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
+    )
+
+    required_tokens = (
+        "JoinFlowPhase::PrivateGameplay",
+        "bool IsPrivateGameplayReady(",
+        "scene.valid &&",
+        "scene.world_address != 0 &&",
+        "!IsHubScene(scene) &&",
+        "!IsBoneyardScene(scene)",
+        "const bool private_gameplay_ready =",
+    )
+    missing = [token for token in required_tokens if token not in flow_text]
+    if missing:
+        raise StaticReTestFailure(
+            "private-gameplay quick-start recovery is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    tick_start = flow_text.find("void TickMultiplayerJoinFlow()")
+    advancing_start = flow_text.find(
+        "case JoinFlowPhase::AdvancingMenus:", tick_start
+    )
+    private_start = flow_text.find(
+        "case JoinFlowPhase::PrivateGameplay:", advancing_start
+    )
+    awaiting_start = flow_text.find(
+        "case JoinFlowPhase::AwaitingLoadout:", private_start
+    )
+    selecting_start = flow_text.find(
+        "case JoinFlowPhase::SelectingLoadout:", awaiting_start
+    )
+    connecting_start = flow_text.find(
+        "case JoinFlowPhase::Connecting:", selecting_start
+    )
+    hub_start = flow_text.find(
+        "case JoinFlowPhase::Hub:", connecting_start
+    )
+    phase_order = (
+        advancing_start,
+        private_start,
+        awaiting_start,
+        selecting_start,
+        connecting_start,
+        hub_start,
+    )
+    if any(position == -1 for position in phase_order) or list(
+        phase_order
+    ) != sorted(phase_order):
+        raise StaticReTestFailure(
+            "private gameplay must be an explicit quick-start phase"
+        )
+
+    advancing_body = flow_text[advancing_start:private_start]
+    private_transition = advancing_body.find(
+        "if (private_gameplay_ready)"
+    )
+    pending_resolution = advancing_body.find(
+        "ResolvePendingActionUnlocked"
+    )
+    if not 0 <= private_transition < pending_resolution:
+        raise StaticReTestFailure(
+            "active private gameplay must escape the menu cover before "
+            "quick-start waits on a menu action"
+        )
+
+    private_body = flow_text[private_start:awaiting_start]
+    private_requirements = (
+        "SetPhaseUnlocked(JoinFlowPhase::Connecting)",
+        "SetPhaseUnlocked(JoinFlowPhase::Run)",
+        "snapshot->captured_at_milliseconds >",
+        "g_join_flow.phase_entered_ms",
+        "SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus)",
+    )
+    missing_private = [
+        token for token in private_requirements if token not in private_body
+    ]
+    if missing_private:
+        raise StaticReTestFailure(
+            "private gameplay cannot recover into every supported destination: "
+            + ", ".join(missing_private)
+        )
+
+    selecting_body = flow_text[selecting_start:connecting_start]
+    selecting_private = selecting_body.find(
+        "if (private_gameplay_ready)"
+    )
+    loadout_finished = selecting_body.find(
+        "HasLoadoutSelectionFinished"
+    )
+    connecting_transition = selecting_body.find(
+        "SetPhaseUnlocked(JoinFlowPhase::Connecting)"
+    )
+    if not 0 <= loadout_finished < selecting_private < connecting_transition:
+        raise StaticReTestFailure(
+            "a new-save tutorial reached from loadout selection must stay visible"
+        )
+
+    connecting_body = flow_text[connecting_start:hub_start]
+    connecting_private = connecting_body.find(
+        "if (private_gameplay_ready)"
+    )
+    transition_delay = connecting_body.find(
+        "kTransitionPresentationMinimumMs"
+    )
+    if not 0 <= connecting_private < transition_delay:
+        raise StaticReTestFailure(
+            "private gameplay must dismiss the Connecting cover immediately"
+        )
+
+    presentation_start = flow_text.find(
+        "GetMultiplayerJoinFlowPresentation()"
+    )
+    presentation_text = flow_text[presentation_start:]
+    advancing_presentation = presentation_text.find(
+        "case JoinFlowPhase::AdvancingMenus:"
+    )
+    private_presentation = presentation_text.find(
+        "case JoinFlowPhase::PrivateGameplay:"
+    )
+    awaiting_presentation = presentation_text.find(
+        "case JoinFlowPhase::AwaitingLoadout:"
+    )
+    if not (
+        0 <= advancing_presentation <
+        private_presentation <
+        awaiting_presentation
+    ):
+        raise StaticReTestFailure(
+            "quick-start presentation must distinguish menu discovery, "
+            "private gameplay, and loadout transition"
+        )
+
+    advancing_presentation_body = presentation_text[
+        advancing_presentation:private_presentation
+    ]
+    if (
+        "g_join_flow.main_menu_first_seen_ms != 0"
+        not in advancing_presentation_body
+    ):
+        raise StaticReTestFailure(
+            "quick-start must not cover the frame before the main menu is observed"
+        )
+
+    private_presentation_body = presentation_text[
+        private_presentation:awaiting_presentation
+    ]
+    if "return {};" not in private_presentation_body:
+        raise StaticReTestFailure(
+            "active private gameplay must render without a quick-start cover"
+        )
+
+    return (
+        "Fresh-save tutorial and other private gameplay remain visible, then "
+        "resume quick-start only when hub, run, or menu state is live"
+    )
+
+
 def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
     transport_header_text = read_text(
         ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"

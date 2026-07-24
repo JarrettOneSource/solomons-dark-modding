@@ -27,6 +27,7 @@ constexpr std::uint64_t kTransitionPresentationMinimumMs = 750;
 enum class JoinFlowPhase {
     Disabled,
     AdvancingMenus,
+    PrivateGameplay,
     AwaitingLoadout,
     SelectingLoadout,
     Connecting,
@@ -58,6 +59,8 @@ const char* PhaseLabel(JoinFlowPhase phase) {
     switch (phase) {
     case JoinFlowPhase::AdvancingMenus:
         return "advancing_menus";
+    case JoinFlowPhase::PrivateGameplay:
+        return "private_gameplay";
     case JoinFlowPhase::AwaitingLoadout:
         return "awaiting_loadout";
     case JoinFlowPhase::SelectingLoadout:
@@ -115,15 +118,23 @@ void SetPhaseUnlocked(JoinFlowPhase phase) {
         static_cast<std::uint64_t>(GetTickCount64());
 }
 
-bool IsHubReady(const SDModSceneState& scene) {
+bool IsHubScene(const SDModSceneState& scene) {
     return scene.valid &&
-           (scene.kind == "hub" || scene.name == "hub") &&
+           (scene.kind == "hub" || scene.name == "hub");
+}
+
+bool IsBoneyardScene(const SDModSceneState& scene) {
+    return scene.valid &&
+           (scene.kind == "arena" || scene.name == "testrun");
+}
+
+bool IsHubReady(const SDModSceneState& scene) {
+    return IsHubScene(scene) &&
            scene.world_address != 0;
 }
 
 bool IsBoneyardReady(const SDModSceneState& scene) {
-    return scene.valid &&
-           (scene.kind == "arena" || scene.name == "testrun") &&
+    return IsBoneyardScene(scene) &&
            scene.world_address != 0 &&
            scene.arena_address != 0;
 }
@@ -160,6 +171,13 @@ bool IsHostCharacterReady(const multiplayer::RuntimeState& runtime) {
                &host_character) &&
            host_character.entity_materialized &&
            host_character.actor_address != 0;
+}
+
+bool IsPrivateGameplayReady(const SDModSceneState& scene) {
+    return scene.valid &&
+           scene.world_address != 0 &&
+           !IsHubScene(scene) &&
+           !IsBoneyardScene(scene);
 }
 
 bool HasAction(
@@ -339,6 +357,8 @@ void TickMultiplayerJoinFlow() {
     (void)TryGetSceneState(&scene);
     const bool hub_ready = IsHubReady(scene);
     const bool boneyard_ready = IsBoneyardReady(scene);
+    const bool private_gameplay_ready =
+        IsPrivateGameplayReady(scene);
 
     DebugUiSurfaceSnapshot current_snapshot;
     const bool snapshot_available =
@@ -348,6 +368,21 @@ void TickMultiplayerJoinFlow() {
 
     switch (g_join_flow.phase) {
     case JoinFlowPhase::AdvancingMenus:
+        if (boneyard_ready) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::Run);
+            return;
+        }
+        if (hub_ready) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::Connecting);
+            return;
+        }
+        if (private_gameplay_ready) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
+            return;
+        }
         if (!ResolvePendingActionUnlocked(snapshot, now_ms)) {
             return;
         }
@@ -393,10 +428,28 @@ void TickMultiplayerJoinFlow() {
         }
         return;
 
+    case JoinFlowPhase::PrivateGameplay:
+        if (boneyard_ready) {
+            SetPhaseUnlocked(JoinFlowPhase::Run);
+        } else if (hub_ready) {
+            SetPhaseUnlocked(JoinFlowPhase::Connecting);
+        } else if (
+            !private_gameplay_ready &&
+            snapshot != nullptr &&
+            snapshot->captured_at_milliseconds >
+                g_join_flow.phase_entered_ms) {
+            g_join_flow.main_menu_first_seen_ms = 0;
+            g_join_flow.action_retry_not_before_ms = 0;
+            SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
+        }
+        return;
+
     case JoinFlowPhase::AwaitingLoadout:
         if (snapshot != nullptr &&
             snapshot->surface_id == "create") {
             EnterLoadoutSelectionUnlocked(scene);
+        } else if (private_gameplay_ready) {
+            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
         } else if (hub_ready) {
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
         } else if (boneyard_ready) {
@@ -405,12 +458,21 @@ void TickMultiplayerJoinFlow() {
         return;
 
     case JoinFlowPhase::SelectingLoadout:
-        if (HasLoadoutSelectionFinished(scene, now_ms)) {
+        if (!HasLoadoutSelectionFinished(scene, now_ms)) {
+            return;
+        }
+        if (private_gameplay_ready) {
+            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
+        } else {
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
         }
         return;
 
     case JoinFlowPhase::Connecting:
+        if (private_gameplay_ready) {
+            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
+            return;
+        }
         if (now_ms <
             g_join_flow.phase_entered_ms +
                 kTransitionPresentationMinimumMs) {
@@ -492,6 +554,12 @@ GetMultiplayerJoinFlowPresentation() {
     std::scoped_lock lock(g_join_flow.mutex);
     switch (g_join_flow.phase) {
     case JoinFlowPhase::AdvancingMenus:
+        return {
+            g_join_flow.main_menu_first_seen_ms != 0,
+            {},
+        };
+    case JoinFlowPhase::PrivateGameplay:
+        return {};
     case JoinFlowPhase::AwaitingLoadout:
         return {true, {}};
     case JoinFlowPhase::Connecting:

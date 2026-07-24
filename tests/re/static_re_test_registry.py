@@ -316,6 +316,7 @@ from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
     test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness,
     test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
+    test_multiplayer_quick_start_keeps_private_gameplay_visible,
     test_remote_progression_preserves_local_concentration_context,
     test_remote_progression_uses_passive_authoritative_hydration,
     test_steam_combat_stat_profiles_isolate_concentration,
@@ -903,6 +904,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "launcher multiplayer quick start uses live UI and scene readiness",
         test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness,
+    ),
+    (
+        "multiplayer quick start keeps private gameplay visible",
+        test_multiplayer_quick_start_keeps_private_gameplay_visible,
     ),
     (
         "Wine stage savegames uses a directory mirror",
