@@ -183,27 +183,42 @@ bool SubmitLuaDrawCommand(
     return true;
 }
 
-std::vector<LuaDrawFrameSnapshot> SnapshotLuaDrawFrames() {
+void RefreshLuaDrawFrameSnapshots(
+    std::vector<LuaDrawFrameSnapshot>* snapshots) {
+    if (snapshots == nullptr) {
+        return;
+    }
     std::scoped_lock lock(g_lua_draw_runtime.mutex);
-    std::vector<LuaDrawFrameSnapshot> snapshots;
+    std::vector<LuaDrawFrameSnapshot> previous = std::move(*snapshots);
+    snapshots->clear();
     if (!g_lua_draw_runtime.initialized) {
-        return snapshots;
+        return;
     }
 
-    snapshots.reserve(g_lua_draw_runtime.mod_order.size());
+    snapshots->reserve(g_lua_draw_runtime.mod_order.size());
     for (const auto& mod_id : g_lua_draw_runtime.mod_order) {
         const auto frame = g_lua_draw_runtime.mod_frames.find(mod_id);
         if (frame == g_lua_draw_runtime.mod_frames.end() ||
             frame->second.active_commands.empty()) {
             continue;
         }
-        snapshots.push_back(LuaDrawFrameSnapshot{
+        const auto cached = std::find_if(
+            previous.begin(),
+            previous.end(),
+            [&](const LuaDrawFrameSnapshot& snapshot) {
+                return snapshot.mod_id == mod_id &&
+                    snapshot.generation == frame->second.generation;
+            });
+        if (cached != previous.end()) {
+            snapshots->push_back(std::move(*cached));
+            continue;
+        }
+        snapshots->push_back(LuaDrawFrameSnapshot{
             mod_id,
             frame->second.generation,
             frame->second.active_commands,
         });
     }
-    return snapshots;
 }
 
 }  // namespace sdmod

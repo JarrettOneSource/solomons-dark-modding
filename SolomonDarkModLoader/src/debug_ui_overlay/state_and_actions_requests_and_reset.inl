@@ -484,6 +484,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     }
 
     ReleaseFontAtlas(&state->font_atlas);
+    state->font_device = nullptr;
     state->initialized = false;
     state->diagnostic_visuals_enabled = false;
     state->first_frame_logged = false;

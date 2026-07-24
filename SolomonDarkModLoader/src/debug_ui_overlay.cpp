@@ -3,6 +3,7 @@
 
 #include "binary_layout.h"
 #include "d3d9_end_scene_hook.h"
+#include "d3d9_font_atlas.h"
 #include "debug_ui_config.h"
 #include "logger.h"
 #include "lua_engine_events.h"
@@ -21,7 +22,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -161,14 +161,8 @@ constexpr std::size_t kUiLabeledControlRenderHookPatchSize = 7;
 constexpr std::size_t kUiUnlabeledControlRenderHookPatchSize = 6;
 constexpr std::size_t kUiPanelRenderHookPatchSize = 7;
 constexpr std::size_t kUiRectDispatchHookPatchSize = 6;
-constexpr int kFirstGlyph = 32;
-constexpr int kLastGlyph = 126;
-constexpr int kGlyphCount = kLastGlyph - kFirstGlyph + 1;
-constexpr int kFontTextureWidth = 512;
-constexpr int kFontTextureHeight = 256;
-constexpr int kFontCellWidth = 24;
-constexpr int kFontCellHeight = 24;
-constexpr int kFontColumns = 16;
+constexpr int kFirstGlyph = kD3d9FontFirstGlyph;
+constexpr int kLastGlyph = kD3d9FontLastGlyph;
 constexpr float kOverlayTextHorizontalPadding = 8.0f;
 constexpr float kOverlayTextVerticalPadding = 3.0f;
 constexpr float kOverlayClusterMinimumWidth = 24.0f;
@@ -403,19 +397,7 @@ enum class PendingDarkCloudBrowserAction {
     MyLevels,
 };
 
-struct GlyphInfo {
-    float u0 = 0.0f;
-    float v0 = 0.0f;
-    float u1 = 0.0f;
-    float v1 = 0.0f;
-    int width = 0;
-};
-
-struct FontAtlas {
-    IDirect3DTexture9* texture = nullptr;
-    int line_height = 16;
-    std::array<GlyphInfo, kGlyphCount> glyphs = {};
-};
+using FontAtlas = D3d9FontAtlas;
 
 struct ColorVertex {
     float x;
@@ -501,6 +483,7 @@ struct DebugUiOverlayState {
     X86Hook ui_panel_render_hook;
     X86Hook ui_rect_dispatch_hook;
     FontAtlas font_atlas;
+    IDirect3DDevice9* font_device = nullptr;
     std::vector<SurfaceObservationRange> surface_ranges;
     std::vector<ObservedUiElement> frame_elements;
     std::vector<ObservedUiElement> frame_exact_text_elements;

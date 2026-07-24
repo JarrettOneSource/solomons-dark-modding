@@ -377,14 +377,6 @@ void RenderLuaUiFrame(IDirect3DDevice9* device) {
     }
     auto* render_context = reinterpret_cast<void*>(
         context_base + render_context_draw_state_offset);
-    IDirect3DStateBlock9* state_block = nullptr;
-    if (FAILED(device->CreateStateBlock(D3DSBT_ALL, &state_block)) ||
-        state_block == nullptr || FAILED(state_block->Capture())) {
-        if (state_block != nullptr) {
-            state_block->Release();
-        }
-        return;
-    }
 
     DWORD exception_code = 0;
     bool succeeded = true;
@@ -447,8 +439,6 @@ void RenderLuaUiFrame(IDirect3DDevice9* device) {
         }
     }
 
-    state_block->Apply();
-    state_block->Release();
     std::scoped_lock lock(g_lua_ui_renderer.mutex);
     if (!succeeded && !g_lua_ui_renderer.fault_logged) {
         g_lua_ui_renderer.fault_logged = true;

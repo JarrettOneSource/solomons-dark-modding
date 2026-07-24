@@ -215,24 +215,10 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     const auto join_flow_presentation =
         GetMultiplayerJoinFlowPresentation();
     if (join_flow_presentation.visible) {
-        IDirect3DStateBlock9* state_block = nullptr;
-        if (SUCCEEDED(
-                device->CreateStateBlock(
-                    D3DSBT_ALL,
-                    &state_block)) &&
-            state_block != nullptr) {
-            state_block->Capture();
-        }
-
         ConfigureOverlayRenderState(device);
         DrawMultiplayerJoinFlowPresentation(
             device,
             join_flow_presentation);
-
-        if (state_block != nullptr) {
-            state_block->Apply();
-            state_block->Release();
-        }
         return;
     }
 
@@ -245,11 +231,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         gameplay_level_up_wait_text.empty() &&
         gameplay_death_spectator_text.empty()) {
         return;
-    }
-
-    IDirect3DStateBlock9* state_block = nullptr;
-    if (SUCCEEDED(device->CreateStateBlock(D3DSBT_ALL, &state_block)) && state_block != nullptr) {
-        state_block->Capture();
     }
 
     ConfigureOverlayRenderState(device);
@@ -297,10 +278,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             " Dampen presentation(s) on the first rendered frame.");
     }
 
-    if (state_block != nullptr) {
-        state_block->Apply();
-        state_block->Release();
-    }
 }
 
 void OnD3d9Frame(IDirect3DDevice9* device) {
@@ -316,6 +293,10 @@ void OnD3d9Frame(IDirect3DDevice9* device) {
         }
     }
 
+    if (g_debug_ui_overlay_state.font_device != device) {
+        ReleaseFontAtlas(&g_debug_ui_overlay_state.font_atlas);
+        g_debug_ui_overlay_state.font_device = device;
+    }
     std::string font_error;
     if (!InitializeFontAtlas(device, &g_debug_ui_overlay_state.font_atlas, &font_error)) {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);

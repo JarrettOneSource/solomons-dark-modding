@@ -6,6 +6,7 @@
 #include "lua_draw_runtime.h"
 #include "lua_engine_bindings_internal.h"
 #include "lua_engine_internal.h"
+#include "lua_source_loader.h"
 #include "lua_item_runtime.h"
 #include "lua_mod_runtime.h"
 #include "lua_sprite_runtime.h"
@@ -269,10 +270,10 @@ bool ExecuteEntryScript(
         return false;
     }
 
-    const auto script_path = entry_script_path.string();
-    if (luaL_loadfile(mod->state, script_path.c_str()) != LUA_OK) {
-        *error_message = lua_tostring(mod->state, -1);
-        lua_pop(mod->state, 1);
+    if (!LoadLuaSourceFile(
+            mod->state,
+            entry_script_path,
+            error_message)) {
         return false;
     }
 

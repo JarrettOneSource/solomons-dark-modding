@@ -11,17 +11,52 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $buildScript = Join-Path $PSScriptRoot "Build-All.ps1"
 $sourceOrganizationScript = Join-Path $PSScriptRoot "Check-SourceOrganization.ps1"
+$launcherProcessHelpers =
+    Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
+$launcherDirectory = Split-Path -Parent $launcher
+if (-not (Test-Path $launcherProcessHelpers)) {
+    throw "Launcher process helpers were not found at $launcherProcessHelpers"
+}
+. $launcherProcessHelpers
+
 if ([string]::IsNullOrWhiteSpace($InstanceName)) {
-    $InstanceName = "verify-$PID-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $InstanceName =
+        "verify-$PID-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+}
+if ($InstanceName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') {
+    throw "InstanceName must be 1-64 filename-safe characters."
+}
+$InstanceName = $InstanceName.ToLowerInvariant()
+
+$gameSearchRoot = $root
+for ($depth = 0;
+     $depth -lt 4 -and [string]::IsNullOrWhiteSpace($GameDirectory);
+     $depth++) {
+    $gameSearchRoot = Split-Path -Parent $gameSearchRoot
+    if ([string]::IsNullOrWhiteSpace($gameSearchRoot)) {
+        break
+    }
+    $candidateGameDirectory =
+        Join-Path $gameSearchRoot "SolomonDarkAbandonware"
+    if (Test-Path (Join-Path $candidateGameDirectory "SolomonDark.exe")) {
+        $GameDirectory = $candidateGameDirectory
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
+    $GameDirectory = [System.IO.Path]::GetFullPath($GameDirectory)
+    if (-not (Test-Path (Join-Path $GameDirectory "SolomonDark.exe"))) {
+        throw "GameDirectory does not contain SolomonDark.exe: $GameDirectory"
+    }
+}
+
+$launcherContextArguments = @("--instance", $InstanceName)
+if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
+    $launcherContextArguments += @("--game-dir", $GameDirectory)
 }
 $instanceRoot = Join-Path $root "runtime/instances/$InstanceName"
 $stageBinaryLayout = Join-Path $instanceRoot "stage/.sdmod/config/binary-layout.ini"
 $stageDebugUiConfig = Join-Path $instanceRoot "stage/.sdmod/config/debug-ui.ini"
-$commonLauncherArguments = @("--instance", $InstanceName)
-if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
-    $commonLauncherArguments += @("--game-dir", $GameDirectory)
-}
 
 function Assert-LastExitCode {
     param([string]$Step)
@@ -37,7 +72,8 @@ function Invoke-Launcher {
         [string[]]$Arguments
     )
 
-    & $launcher @Arguments
+    $effectiveArguments = @($Arguments) + $launcherContextArguments
+    & $launcher @effectiveArguments
     Assert-LastExitCode "Launcher command '$($Arguments -join ' ')'"
 }
 
@@ -47,38 +83,12 @@ function Invoke-LauncherJson {
         [string[]]$Arguments
     )
 
-    $output = & $launcher @Arguments
-    Assert-LastExitCode "Launcher command '$($Arguments -join ' ')'"
-    $text = $output -join [Environment]::NewLine
-    try {
-        $result = $text | ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
-        throw "Launcher command did not return valid JSON: $text"
-    }
-    if (-not $result.success) {
-        throw "Launcher command failed: $($result.error)"
-    }
-    return $result
-}
-
-function Wait-ForFile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path,
-        [int]$TimeoutSeconds = 10
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if (Test-Path $Path) {
-            return
-        }
-
-        Start-Sleep -Milliseconds 250
-    }
-
-    throw "Timed out waiting for file: $Path"
+    return Invoke-LauncherWithEnvironment `
+        -LauncherPath $launcher `
+        -WorkingDirectory $launcherDirectory `
+        -Environment @{} `
+        -Arguments (@("--json") + @($Arguments) + $launcherContextArguments) `
+        -TimeoutSeconds 30
 }
 
 function Wait-ForFileContent {
@@ -115,16 +125,15 @@ function Wait-ForFileContent {
     throw "Timed out waiting for expected log markers in $Path"
 }
 
-function Stop-SolomonDarkProcess {
+function Stop-OwnedSolomonDarkProcess {
     param([int]$ProcessId)
 
     if ($ProcessId -le 0) {
         return
     }
-    $gameProcess = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue |
-        Where-Object { $_.ProcessName -eq "SolomonDark" }
-    if ($null -ne $gameProcess) {
-        $gameProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if ($null -ne $process -and $process.ProcessName -eq "SolomonDark") {
+        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -138,8 +147,8 @@ Assert-LastExitCode "Source organization check"
 & $buildScript -Configuration $Configuration
 Assert-LastExitCode "$Configuration build"
 
-Invoke-Launcher -Arguments (@("list-mods") + $commonLauncherArguments)
-Invoke-Launcher -Arguments (@("stage") + $commonLauncherArguments)
+Invoke-Launcher -Arguments @("list-mods")
+Invoke-Launcher -Arguments @("stage")
 
 if (-not (Test-Path $stageBinaryLayout)) {
     throw "Stage verification failed. Expected staged binary layout was not found at $stageBinaryLayout"
@@ -150,13 +159,13 @@ if (-not (Test-Path $stageDebugUiConfig)) {
 }
 
 if ($LaunchAndVerifyLoader) {
-    $processId = 0
+    $gameProcessId = 0
     try {
-        $launchResult = Invoke-LauncherJson -Arguments (
-            @("launch", "--json", "--temporary-profile") +
-            $commonLauncherArguments
+        $launchResult = Invoke-LauncherJson -Arguments @(
+            "launch",
+            "--temporary-profile"
         )
-        $processId = [int]$launchResult.launch.processId
+        $gameProcessId = [int]$launchResult.launch.processId
         $loaderLog = [string]$launchResult.launch.startupLogPath
         if ([string]::IsNullOrWhiteSpace($loaderLog)) {
             throw "Launcher did not report the instance loader log path."
@@ -165,11 +174,11 @@ if ($LaunchAndVerifyLoader) {
             "SolomonDarkModLoader attached\.",
             "Binary layout loaded\.",
             "Debug UI config loaded\.",
-            "Lua engine stub initialized\."
+            "Lua engine initialized\."
         )
     }
     finally {
-        Stop-SolomonDarkProcess -ProcessId $processId
+        Stop-OwnedSolomonDarkProcess -ProcessId $gameProcessId
     }
 }
 

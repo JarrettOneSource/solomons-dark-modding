@@ -16,6 +16,7 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
                 "SolomonDarkModLoader/src/lua_draw_renderer/"
                 "rendering_helpers.inl"
             ),
+            _read("SolomonDarkModLoader/src/d3d9_font_atlas.cpp"),
             _read("SolomonDarkModLoader/src/lua_draw_texture_loader.cpp"),
         )
     )
@@ -77,20 +78,35 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
         assert token in assets, f"bounded stock-atlas parser lacks: {token}"
 
     for token in (
-        "CreateStateBlock(D3DSBT_ALL",
-        "state_block->Capture()",
-        "state_block->Apply()",
+        "class LuaDrawBatcher",
+        "LuaDrawBatchMode::PointText",
+        "LuaDrawBatchMode::LinearSprite",
         "ConfigureUntexturedStage(",
         "ConfigureTexturedStage(",
-        "D3DPT_TRIANGLESTRIP",
         "D3DPT_TRIANGLELIST",
-        "InitializeFontAtlas(",
+        "InitializeD3d9FontAtlas(",
+        "point_text ? D3DTEXF_POINT : D3DTEXF_LINEAR",
         "LoadLuaDrawTexture(",
         "CLSID_WICImagingFactory",
         "D3DPOOL_MANAGED",
         "successful_command_count != 0",
     ):
         assert token in renderer, f"D3D9 Lua draw renderer lacks: {token}"
+    assert "CreateStateBlock" not in renderer
+    assert "D3DPT_TRIANGLESTRIP" not in _read(
+        "SolomonDarkModLoader/src/lua_draw_renderer/rendering_helpers.inl"
+    )
+    for token in (
+        "CreateStateBlock(",
+        "D3DSBT_ALL",
+        "g_frame_state_block->Capture()",
+        "state_block->Apply()",
+        "HookReset(",
+        "kResetVtableIndex = 16",
+    ):
+        assert token in d3d_hook, (
+            f"shared D3D9 state owner lacks: {token}"
+        )
 
     for token in (
         'RegisterFunction(state, &LuaDrawText, "text")',
@@ -138,6 +154,7 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
     for source in (
         "lua_engine_bindings_draw.cpp",
         "lua_draw_assets.cpp",
+        "d3d9_font_atlas.cpp",
         "lua_draw_renderer.cpp",
         "lua_draw_runtime.cpp",
         "lua_draw_texture_loader.cpp",

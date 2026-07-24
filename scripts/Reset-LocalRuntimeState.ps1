@@ -1,6 +1,6 @@
 param(
-    [switch]$KeepAppData,
-    [switch]$KeepRuntimeWorkspace
+    [switch]$KeepRuntimeWorkspace,
+    [int[]]$OwnedProcessIds = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +8,6 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $runtimeRoot = Join-Path $root "runtime"
 $distRoot = Join-Path $root "dist"
-$appDataRoot = Join-Path $env:APPDATA "solomondark"
 
 function Remove-PathWithRetries {
     param(
@@ -44,6 +43,16 @@ function Remove-PathWithRetries {
     }
 }
 
+foreach ($processId in @($OwnedProcessIds | Sort-Object -Unique)) {
+    if ($processId -le 0) {
+        continue
+    }
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($null -ne $process -and $process.ProcessName -eq "SolomonDark") {
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if (-not $KeepRuntimeWorkspace -and (Test-Path $runtimeRoot)) {
     Write-Host "Removing runtime workspace: $runtimeRoot"
     Remove-PathWithRetries -PathToRemove $runtimeRoot
@@ -52,11 +61,6 @@ if (-not $KeepRuntimeWorkspace -and (Test-Path $runtimeRoot)) {
 if (Test-Path $distRoot) {
     Write-Host "Removing dist output: $distRoot"
     Remove-PathWithRetries -PathToRemove $distRoot
-}
-
-if (-not $KeepAppData -and (Test-Path $appDataRoot)) {
-    Write-Host "Removing APPDATA profile: $appDataRoot"
-    Remove-PathWithRetries -PathToRemove $appDataRoot
 }
 
 Write-Host "Reset complete."

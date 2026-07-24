@@ -24,7 +24,6 @@ param(
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
-    [switch]$NoKill,
     [switch]$QuickStart,
     [switch]$AllowFocusSteal,
     [string]$ProcessIdOutputPath = "",
@@ -118,10 +117,6 @@ if (-not [string]::IsNullOrWhiteSpace($TestWaveOverride)) {
         throw "Test wave override must be a .txt file: $TestWaveOverride"
     }
     $resolvedTestWaveOverride = $resolvedWaveOverrideItem.FullName
-}
-
-if (-not $NoKill) {
-    Get-Process SolomonDark* -ErrorAction SilentlyContinue | Stop-Process -Force
 }
 
 Add-Type @"
@@ -786,6 +781,99 @@ function Invoke-UiActionAndWait {
     throw "Timed out waiting for UI action $ActionId dispatch on pipe $PipeName. Last status: $last"
 }
 
+function Wait-InstanceCreateSurface {
+    param(
+        [string]$PipeName,
+        [int]$ProcessId,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $mainMenuQuietSince = $null
+    $pendingAction = ""
+    $last = ""
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $resultText = Invoke-InstanceLuaExec `
+                -PipeName $PipeName `
+                -Code @"
+local snap = sd.ui.get_snapshot()
+local surface = type(snap) == 'table' and tostring(snap.surface_id or '') or ''
+local actions = {}
+if type(snap) == 'table' then
+  for _, element in ipairs(snap.elements or {}) do
+    if type(element.action_id) == 'string' and element.action_id ~= '' then
+      actions[element.action_id] = true
+    end
+  end
+end
+print('surface=' .. surface)
+print('dialog_primary=' .. tostring(actions['dialog.primary'] == true))
+print('main_menu_play=' .. tostring(actions['main_menu.play'] == true))
+print('main_menu_new_game=' .. tostring(actions['main_menu.new_game'] == true))
+"@
+            $values = Convert-KeyValueText -Text $resultText
+            $surface = if ($values.ContainsKey("surface")) { $values["surface"] } else { "" }
+            $dialogPrimary = $values["dialog_primary"] -eq "true"
+            $mainMenuPlay = $values["main_menu_play"] -eq "true"
+            $mainMenuNewGame = $values["main_menu_new_game"] -eq "true"
+            $last = "surface=$surface dialog_primary=$dialogPrimary play=$mainMenuPlay new_game=$mainMenuNewGame pending=$pendingAction"
+
+            if ($surface -eq "create") {
+                return
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($pendingAction)) {
+                $pendingActionStillVisible =
+                    ($pendingAction -eq "dialog.primary" -and $surface -eq "dialog" -and $dialogPrimary) -or
+                    ($pendingAction -eq "main_menu.play" -and $surface -eq "main_menu" -and $mainMenuPlay) -or
+                    ($pendingAction -eq "main_menu.new_game" -and $surface -eq "main_menu" -and $mainMenuNewGame)
+                if ($pendingActionStillVisible) {
+                    Start-Sleep -Milliseconds 100
+                    continue
+                }
+                $pendingAction = ""
+            }
+
+            $actionId = ""
+            $actionSurface = ""
+            if ($surface -eq "dialog" -and $dialogPrimary) {
+                $mainMenuQuietSince = $null
+                $actionId = "dialog.primary"
+                $actionSurface = "dialog"
+            } elseif ($surface -eq "main_menu") {
+                if ($null -eq $mainMenuQuietSince) {
+                    $mainMenuQuietSince = Get-Date
+                } elseif (((Get-Date) - $mainMenuQuietSince).TotalMilliseconds -ge 1250) {
+                    if ($mainMenuPlay) {
+                        $actionId = "main_menu.play"
+                    } elseif ($mainMenuNewGame) {
+                        $actionId = "main_menu.new_game"
+                    }
+                    $actionSurface = "main_menu"
+                }
+            } else {
+                $mainMenuQuietSince = $null
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($actionId)) {
+                Invoke-UiActionAndWait `
+                    -PipeName $PipeName `
+                    -ActionId $actionId `
+                    -SurfaceId $actionSurface `
+                    -ProcessId $ProcessId
+                $pendingAction = $actionId
+                $mainMenuQuietSince = $null
+            }
+        } catch {
+            $last = $_.Exception.Message
+        }
+        Start-Sleep -Milliseconds 100
+    }
+
+    throw "Timed out navigating to create on Lua pipe $PipeName. Last value: $last"
+}
+
 function Invoke-CreateSelection {
     param(
         [string]$PipeName,
@@ -803,10 +891,9 @@ function Invoke-CreateSelection {
     $expectedElementId = [int]$createElementIds[$Element]
     $expectedDisciplineId = [int]$createDisciplineIds[$Discipline]
 
-    Wait-InstanceLuaValue `
+    Wait-InstanceCreateSurface `
         -PipeName $PipeName `
-        -ExpectedValue "create" `
-        -Code "local u=sd.ui.get_snapshot(); return tostring(u and u.surface_id or '')"
+        -ProcessId $ProcessId
 
     $elementActionId = "create.select_element_$Element"
     $elementLatched = $false
@@ -886,13 +973,13 @@ $hostLaunchPreset = $effectiveHostPreset
 $clientLaunchPreset = $effectiveClientPreset
 $thirdLaunchPreset = $effectiveThirdPreset
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
-    $hostLaunchPreset = "create_manual"
+    $hostLaunchPreset = "pair_manual"
 }
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
-    $clientLaunchPreset = "create_manual"
+    $clientLaunchPreset = "pair_manual"
 }
 if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
-    $thirdLaunchPreset = "create_manual"
+    $thirdLaunchPreset = "pair_manual"
 }
 $hostWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveHostPreset) -or ($null -ne $hostSelection)
 $clientWaitForHub = (Test-PresetWaitsForHub -PresetName $effectiveClientPreset) -or ($null -ne $clientSelection)

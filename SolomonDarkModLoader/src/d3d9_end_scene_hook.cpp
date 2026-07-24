@@ -22,7 +22,11 @@ namespace sdmod {
 namespace {
 
 using EndSceneFn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9* device);
+using ResetFn = HRESULT(STDMETHODCALLTYPE*)(
+    IDirect3DDevice9* device,
+    D3DPRESENT_PARAMETERS* presentation_parameters);
 
+constexpr size_t kResetVtableIndex = 16;
 constexpr size_t kEndSceneVtableIndex = 42;
 constexpr DWORD kDeviceAcquireTimeoutMilliseconds = 5000;
 constexpr DWORD kDeviceAcquirePollMilliseconds = 50;
@@ -32,9 +36,56 @@ std::array<D3d9FrameCallback, kMaximumFrameCallbacks> g_callbacks{};
 std::size_t g_callback_count = 0;
 std::mutex g_hook_mutex;
 EndSceneFn g_original_end_scene = nullptr;
+ResetFn g_original_reset = nullptr;
 void** g_end_scene_slot = nullptr;
+void** g_reset_slot = nullptr;
+IDirect3DDevice9* g_state_block_device = nullptr;
+IDirect3DStateBlock9* g_frame_state_block = nullptr;
 std::atomic<IDirect3DDevice9*> g_last_seen_device{nullptr};
+bool g_state_block_failure_logged = false;
 bool g_hook_installed = false;
+
+void ReleaseFrameStateBlockUnlocked() {
+    if (g_frame_state_block != nullptr) {
+        g_frame_state_block->Release();
+        g_frame_state_block = nullptr;
+    }
+    g_state_block_device = nullptr;
+    g_state_block_failure_logged = false;
+}
+
+IDirect3DStateBlock9* CaptureFrameStateUnlocked(
+    IDirect3DDevice9* device) {
+    if (g_state_block_device != device) {
+        ReleaseFrameStateBlockUnlocked();
+        g_state_block_device = device;
+    }
+
+    HRESULT result = D3D_OK;
+    if (g_frame_state_block == nullptr) {
+        result = device->CreateStateBlock(
+            D3DSBT_ALL,
+            &g_frame_state_block);
+    } else {
+        result = g_frame_state_block->Capture();
+    }
+    if (FAILED(result) || g_frame_state_block == nullptr) {
+        if (g_frame_state_block != nullptr) {
+            g_frame_state_block->Release();
+            g_frame_state_block = nullptr;
+        }
+        g_state_block_device = device;
+        if (!g_state_block_failure_logged) {
+            g_state_block_failure_logged = true;
+            Log(
+                "D3D9 frame hook skipped overlay callbacks because shared "
+                "state capture failed.");
+        }
+        return nullptr;
+    }
+    g_state_block_failure_logged = false;
+    return g_frame_state_block;
+}
 
 std::string D3d9CaptureHresult(const char* operation, HRESULT result) {
     return std::string(operation) + " failed with HRESULT " +
@@ -124,22 +175,70 @@ HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
     lua_exec_diag::g_endscene_generation.fetch_add(
         1,
         std::memory_order_release);
-    const auto result = g_original_end_scene != nullptr ? g_original_end_scene(device) : D3D_OK;
-
     std::array<D3d9FrameCallback, kMaximumFrameCallbacks> callbacks{};
     std::size_t callback_count = 0;
+    IDirect3DStateBlock9* state_block = nullptr;
+    EndSceneFn original_end_scene = nullptr;
     {
         std::scoped_lock lock(g_hook_mutex);
         callbacks = g_callbacks;
         callback_count = g_callback_count;
-    }
-    for (std::size_t index = 0; index < callback_count; ++index) {
-        if (callbacks[index] != nullptr) {
-            callbacks[index](device);
+        original_end_scene = g_original_end_scene;
+        if (callback_count != 0) {
+            state_block = CaptureFrameStateUnlocked(device);
+            if (state_block != nullptr) {
+                state_block->AddRef();
+            }
         }
     }
 
-    return result;
+    if (state_block != nullptr) {
+        bool restore_succeeded = true;
+        bool rendered_callback = false;
+        for (std::size_t index = 0; index < callback_count; ++index) {
+            if (callbacks[index] == nullptr) {
+                continue;
+            }
+            if (rendered_callback &&
+                FAILED(state_block->Apply())) {
+                restore_succeeded = false;
+                break;
+            }
+            callbacks[index](device);
+            rendered_callback = true;
+        }
+        if (rendered_callback &&
+            FAILED(state_block->Apply())) {
+            restore_succeeded = false;
+        }
+        if (!restore_succeeded) {
+            std::scoped_lock lock(g_hook_mutex);
+            if (!g_state_block_failure_logged) {
+                g_state_block_failure_logged = true;
+                Log(
+                    "D3D9 frame hook could not restore shared overlay state.");
+            }
+        }
+        state_block->Release();
+    }
+
+    return original_end_scene != nullptr
+        ? original_end_scene(device)
+        : D3D_OK;
+}
+
+HRESULT STDMETHODCALLTYPE HookReset(
+    IDirect3DDevice9* device,
+    D3DPRESENT_PARAMETERS* presentation_parameters) {
+    ResetFn original_reset = nullptr;
+    {
+        std::scoped_lock lock(g_hook_mutex);
+        ReleaseFrameStateBlockUnlocked();
+        original_reset = g_original_reset;
+    }
+    return original_reset != nullptr
+        ? original_reset(device, presentation_parameters)
+        : D3D_OK;
 }
 
 bool PatchHookSlot(void** slot, void* replacement, std::string* error_message) {
@@ -245,17 +344,38 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
     }
 
     g_end_scene_slot = &vtable[kEndSceneVtableIndex];
+    g_reset_slot = &vtable[kResetVtableIndex];
     g_original_end_scene = reinterpret_cast<EndSceneFn>(*g_end_scene_slot);
+    g_original_reset = reinterpret_cast<ResetFn>(*g_reset_slot);
 
-    if (!PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(&HookEndScene), error_message)) {
+    if (!PatchHookSlot(
+            g_reset_slot,
+            reinterpret_cast<void*>(&HookReset),
+            error_message)) {
         g_original_end_scene = nullptr;
+        g_original_reset = nullptr;
         g_end_scene_slot = nullptr;
+        g_reset_slot = nullptr;
+        return false;
+    }
+    if (!PatchHookSlot(
+            g_end_scene_slot,
+            reinterpret_cast<void*>(&HookEndScene),
+            error_message)) {
+        PatchHookSlot(
+            g_reset_slot,
+            reinterpret_cast<void*>(g_original_reset),
+            nullptr);
+        g_original_end_scene = nullptr;
+        g_original_reset = nullptr;
+        g_end_scene_slot = nullptr;
+        g_reset_slot = nullptr;
         return false;
     }
 
     g_callbacks[g_callback_count++] = callback;
     g_hook_installed = true;
-    Log("D3D9 frame hook: EndScene slot patched on the live device.");
+    Log("D3D9 frame hook: Reset and EndScene slots patched on the live device.");
     return true;
 }
 
@@ -286,8 +406,17 @@ void RemoveD3d9FrameCallback(D3d9FrameCallback callback) {
     if (g_end_scene_slot != nullptr && g_original_end_scene != nullptr) {
         PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(g_original_end_scene), nullptr);
     }
+    if (g_reset_slot != nullptr && g_original_reset != nullptr) {
+        PatchHookSlot(
+            g_reset_slot,
+            reinterpret_cast<void*>(g_original_reset),
+            nullptr);
+    }
+    ReleaseFrameStateBlockUnlocked();
     g_original_end_scene = nullptr;
+    g_original_reset = nullptr;
     g_end_scene_slot = nullptr;
+    g_reset_slot = nullptr;
     g_last_seen_device.store(nullptr, std::memory_order_release);
     g_hook_installed = false;
 }
@@ -505,11 +634,20 @@ void RemoveD3d9FrameHook() {
     if (g_end_scene_slot != nullptr && g_original_end_scene != nullptr) {
         PatchHookSlot(g_end_scene_slot, reinterpret_cast<void*>(g_original_end_scene), nullptr);
     }
+    if (g_reset_slot != nullptr && g_original_reset != nullptr) {
+        PatchHookSlot(
+            g_reset_slot,
+            reinterpret_cast<void*>(g_original_reset),
+            nullptr);
+    }
 
     g_callbacks.fill(nullptr);
     g_callback_count = 0;
+    ReleaseFrameStateBlockUnlocked();
     g_original_end_scene = nullptr;
+    g_original_reset = nullptr;
     g_end_scene_slot = nullptr;
+    g_reset_slot = nullptr;
     g_last_seen_device.store(nullptr, std::memory_order_release);
     g_hook_installed = false;
 }

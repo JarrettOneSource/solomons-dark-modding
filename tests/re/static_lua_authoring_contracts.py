@@ -94,7 +94,7 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
         "kFnvOffsetBasis",
         "TryReadFingerprint",
         "PreflightLuaSource",
-        "luaL_loadfile(preflight_state",
+        "LoadLuaSourceFile(",
         "InitializeLuaHotReloadState",
         "PollLuaHotReloadsOnLockedThread",
         "hot reload rejected; existing state preserved",

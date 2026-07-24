@@ -34,12 +34,48 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         )
 
         self.assertNotIn("Get-Process SolomonDark", reset)
-        self.assertNotIn("Stop-Process", reset)
+        self.assertIn("[int[]]$OwnedProcessIds = @()", reset)
+        self.assertIn("Get-Process -Id $processId", reset)
+        self.assertNotIn("$env:APPDATA", reset)
         self.assertNotIn("Get-Process SolomonDark", verify)
         self.assertIn("Get-Process -Id $ProcessId", verify)
         self.assertIn('"--instance", $InstanceName', verify)
         self.assertIn('"--temporary-profile"', verify)
         self.assertIn("$launchResult.launch.processId", verify)
+        self.assertIn(". $launcherProcessHelpers", verify)
+        self.assertIn("Invoke-LauncherWithEnvironment `", verify)
+        self.assertNotIn("$output = & $launcher", verify)
+
+    def test_pair_launcher_owns_navigation_without_the_ui_sandbox_mod(
+        self,
+    ) -> None:
+        source = (
+            ROOT / "scripts" / "Launch-LocalMultiplayerPair.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function Wait-InstanceCreateSurface", source)
+        self.assertIn('$hostLaunchPreset = "pair_manual"', source)
+        self.assertIn('$clientLaunchPreset = "pair_manual"', source)
+        self.assertIn('$thirdLaunchPreset = "pair_manual"', source)
+        self.assertIn('$actionId = "dialog.primary"', source)
+        self.assertIn('$actionId = "main_menu.play"', source)
+        self.assertIn('$actionId = "main_menu.new_game"', source)
+        self.assertIn("TotalMilliseconds -ge 1250", source)
+        create_selection = source.split(
+            "function Invoke-CreateSelection", maxsplit=1
+        )[1].split("function Wait-InstanceHub", maxsplit=1)[0]
+        self.assertIn("Wait-InstanceCreateSurface `", create_selection)
+
+    def test_pair_launcher_defaults_to_isolated_process_ownership(self) -> None:
+        parameter = inspect.signature(
+            verifier.launch_pair
+        ).parameters["kill_existing"]
+        self.assertIs(parameter.default, False)
+        with self.assertRaisesRegex(
+            ValueError,
+            "machine-wide game cleanup is unsupported",
+        ):
+            verifier.launch_pair(kill_existing=True)
 
     def test_all_lua_pair_verifiers_disable_tiling_and_preserve_games(
         self,

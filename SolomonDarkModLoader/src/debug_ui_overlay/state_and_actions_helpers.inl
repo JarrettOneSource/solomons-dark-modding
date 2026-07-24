@@ -1,15 +1,5 @@
 void ReleaseFontAtlas(FontAtlas* atlas) {
-    if (atlas == nullptr) {
-        return;
-    }
-
-    if (atlas->texture != nullptr) {
-        atlas->texture->Release();
-        atlas->texture = nullptr;
-    }
-
-    atlas->line_height = 16;
-    atlas->glyphs = {};
+    ReleaseD3d9FontAtlas(atlas);
 }
 
 std::string NormalizeSemanticUiToken(std::string_view value) {

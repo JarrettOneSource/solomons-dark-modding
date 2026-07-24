@@ -94,7 +94,8 @@ bool SubmitLuaDrawCommand(
     std::string_view mod_id,
     LuaDrawCommand command,
     std::string* error_message);
-std::vector<LuaDrawFrameSnapshot> SnapshotLuaDrawFrames();
+void RefreshLuaDrawFrameSnapshots(
+    std::vector<LuaDrawFrameSnapshot>* snapshots);
 
 bool TryGetLuaDrawSpriteInfo(
     std::string_view atlas,

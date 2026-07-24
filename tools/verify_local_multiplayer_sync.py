@@ -344,7 +344,7 @@ def launch_pair(
     third_player: bool = False,
     third_preset: str | None = None,
     allow_focus_steal: bool = False,
-    kill_existing: bool = True,
+    kill_existing: bool = False,
     instance_prefix: str = "local-mp",
     host_port: int = 47770,
     client_port: int = 47771,
@@ -354,6 +354,11 @@ def launch_pair(
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
 ) -> dict[str, object]:
+    if kill_existing:
+        raise ValueError(
+            "machine-wide game cleanup is unsupported; launch an isolated "
+            "instance group and stop only its reported process IDs"
+        )
     serialized_exact_mod_ids = _serialize_exact_mod_ids(
         exact_mod_id=exact_mod_id,
         exact_mod_ids=exact_mod_ids,
@@ -426,16 +431,13 @@ def launch_pair(
         ])
     if serialized_exact_mod_ids is not None:
         args.extend(["-ExactModIds", serialized_exact_mod_ids])
-    process_id_ledger: Path | None = None
-    if not kill_existing:
-        args.append("-NoKill")
-        process_id_ledger = _new_process_id_ledger()
-        args.extend(
-            [
-                "-ProcessIdOutputPath",
-                path_for_powershell(process_id_ledger),
-            ]
-        )
+    process_id_ledger = _new_process_id_ledger()
+    args.extend(
+        [
+            "-ProcessIdOutputPath",
+            path_for_powershell(process_id_ledger),
+        ]
+    )
     process = subprocess.Popen(
         args,
         cwd=ROOT,

@@ -1,6 +1,7 @@
 #include "lua_engine_internal.h"
 
 #include "logger.h"
+#include "lua_source_loader.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -119,13 +120,10 @@ bool PreflightLuaSource(
         *error_message = "luaL_newstate failed during syntax preflight.";
         return false;
     }
-    const auto source_path = mod.descriptor.source_entry_script_path.string();
-    const int status = luaL_loadfile(preflight_state, source_path.c_str());
-    if (status != LUA_OK) {
-        const auto* lua_error = lua_tostring(preflight_state, -1);
-        *error_message = lua_error == nullptr
-            ? "unknown Lua syntax error"
-            : lua_error;
+    if (!LoadLuaSourceFile(
+            preflight_state,
+            mod.descriptor.source_entry_script_path,
+            error_message)) {
         lua_close(preflight_state);
         return false;
     }

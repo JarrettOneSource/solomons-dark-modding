@@ -197,13 +197,16 @@ def test_lua_mod_state_and_events_are_authority_replicated() -> str:
     for token in (
         "game_process_ids(",
         "stop_game_processes(",
-        '"-NoKill"',
         '"-ProcessIdOutputPath"',
         "_read_process_id_ledger(",
+        "kill_existing: bool = False",
+        "if kill_existing:",
     ):
         assert token in multiplayer_verifier, (
             f"local multiplayer verifier lacks isolated cleanup support: {token}"
         )
+    assert '"-NoKill"' not in multiplayer_verifier
+    assert "$NoKill" not in pair_launcher
     for launcher_name, launcher in (
         ("pair", pair_launcher),
         ("additional-client", additional_client_launcher),

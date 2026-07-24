@@ -238,6 +238,33 @@ def wait_for_draw(pipe_name: str, timeout: float) -> dict[str, str]:
     raise VerifyFailure(f"Lua draw handler did not complete two ticks: {last}")
 
 
+def capture_acceptance_frame(
+    pipe_name: str,
+    screenshot: Path,
+    *,
+    game_path_kind: str,
+    origin_y: int,
+    timeout: float,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Wait until the committed display list reaches the D3D9 render callback."""
+
+    deadline = time.monotonic() + timeout
+    while True:
+        capture = capture_game_backbuffer(
+            pipe_name,
+            screenshot,
+            game_path_kind=game_path_kind,
+        )
+        try:
+            pixels = inspect_acceptance_pixels(screenshot, origin_y)
+        except VerifyFailure:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+            continue
+        return capture, pixels
+
+
 def run(
     pipe_name: str,
     screenshot: Path,
@@ -294,12 +321,13 @@ def run(
     ):
         raise VerifyFailure(f"live gameplay world projection is unavailable: {projection}")
 
-    capture = capture_game_backbuffer(
+    capture, pixels = capture_acceptance_frame(
         pipe_name,
         screenshot,
         game_path_kind=game_path_kind,
+        origin_y=origin_y,
+        timeout=timeout,
     )
-    pixels = inspect_acceptance_pixels(screenshot, origin_y)
     return {
         "ok": True,
         "pipe": pipe_name,

@@ -125,6 +125,9 @@
     <ClInclude Include="include\d3d9_end_scene_hook.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\d3d9_font_atlas.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\debug_ui_config.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -350,6 +353,9 @@
     <ClInclude Include="src\lua_engine_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_source_loader.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_engine_main_thread_pump.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -357,6 +363,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_event_queue.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_event_public_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_exec_wait.inl">
@@ -1262,6 +1271,9 @@
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_authority.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\loot_pickup_host_finalization.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\loot_pickup_packet_handlers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1349,6 +1361,9 @@
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1421,6 +1436,9 @@
       <Filter>Source Files\Bot Runtime</Filter>
     </ClCompile>
     <ClCompile Include="src\d3d9_end_scene_hook.cpp">
+      <Filter>Source Files\Support</Filter>
+    </ClCompile>
+    <ClCompile Include="src\d3d9_font_atlas.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\debug_ui_config.cpp">
@@ -1580,6 +1598,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_hot_reload.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_source_loader.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_mod_loading.cpp">

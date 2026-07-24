@@ -7,9 +7,7 @@ D3DCOLOR PackColor(const LuaDrawColor& color) {
 }
 
 void ReleaseRendererResourcesUnlocked() {
-    if (g_lua_draw_renderer.font.texture != nullptr) {
-        g_lua_draw_renderer.font.texture->Release();
-    }
+    ReleaseD3d9FontAtlas(&g_lua_draw_renderer.font.atlas);
     g_lua_draw_renderer.font = {};
     for (auto& [atlas, texture] : g_lua_draw_renderer.atlas_textures) {
         (void)atlas;
@@ -40,139 +38,6 @@ void PruneUnavailableAtlasTextures() {
     }
 }
 
-bool InitializeFontAtlas(
-    IDirect3DDevice9* device,
-    LuaDrawFontAtlas* atlas,
-    std::string* error_message) {
-    if (device == nullptr || atlas == nullptr || error_message == nullptr) {
-        return false;
-    }
-    if (atlas->texture != nullptr) {
-        return true;
-    }
-
-    BITMAPINFO bitmap_info{};
-    bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bitmap_info.bmiHeader.biWidth = kFontTextureWidth;
-    bitmap_info.bmiHeader.biHeight = -kFontTextureHeight;
-    bitmap_info.bmiHeader.biPlanes = 1;
-    bitmap_info.bmiHeader.biBitCount = 32;
-    bitmap_info.bmiHeader.biCompression = BI_RGB;
-
-    void* dib_pixels = nullptr;
-    HDC screen_dc = GetDC(nullptr);
-    if (screen_dc == nullptr) {
-        *error_message = "GetDC failed while creating the Lua draw font atlas.";
-        return false;
-    }
-    HDC memory_dc = CreateCompatibleDC(screen_dc);
-    HBITMAP bitmap = CreateDIBSection(
-        screen_dc,
-        &bitmap_info,
-        DIB_RGB_COLORS,
-        &dib_pixels,
-        nullptr,
-        0);
-    ReleaseDC(nullptr, screen_dc);
-    HFONT font = CreateFontW(
-        -16,
-        0,
-        0,
-        0,
-        FW_NORMAL,
-        FALSE,
-        FALSE,
-        FALSE,
-        ANSI_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY,
-        FF_DONTCARE,
-        L"Consolas");
-    if (memory_dc == nullptr || bitmap == nullptr || dib_pixels == nullptr || font == nullptr) {
-        if (font != nullptr) DeleteObject(font);
-        if (bitmap != nullptr) DeleteObject(bitmap);
-        if (memory_dc != nullptr) DeleteDC(memory_dc);
-        *error_message = "GDI failed while creating the Lua draw font atlas.";
-        return false;
-    }
-
-    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
-    HGDIOBJ old_font = SelectObject(memory_dc, font);
-    auto CleanupGdi = [&]() {
-        SelectObject(memory_dc, old_font);
-        SelectObject(memory_dc, old_bitmap);
-        DeleteObject(font);
-        DeleteObject(bitmap);
-        DeleteDC(memory_dc);
-    };
-    SetBkMode(memory_dc, TRANSPARENT);
-    SetTextColor(memory_dc, RGB(255, 255, 255));
-    std::memset(dib_pixels, 0, kFontTextureWidth * kFontTextureHeight * 4);
-
-    atlas->line_height = 16;
-    for (int index = 0; index < kFontGlyphCount; ++index) {
-        const wchar_t glyph = static_cast<wchar_t>(kFirstFontGlyph + index);
-        const int x = (index % kFontColumns) * kFontCellWidth + 2;
-        const int y = (index / kFontColumns) * kFontCellHeight + 2;
-        SIZE size{};
-        if (!GetTextExtentPoint32W(memory_dc, &glyph, 1, &size) || size.cx <= 0 || size.cy <= 0) {
-            size.cx = 8;
-            size.cy = 16;
-        }
-        TextOutW(memory_dc, x, y, &glyph, 1);
-        auto& target = atlas->glyphs[index];
-        target.u0 = static_cast<float>(x) / kFontTextureWidth;
-        target.v0 = static_cast<float>(y) / kFontTextureHeight;
-        target.u1 = static_cast<float>(x + size.cx) / kFontTextureWidth;
-        target.v1 = static_cast<float>(y + size.cy) / kFontTextureHeight;
-        target.width = size.cx;
-        atlas->line_height = (std::max)(
-            atlas->line_height,
-            static_cast<int>(size.cy));
-    }
-
-    IDirect3DTexture9* texture = nullptr;
-    HRESULT result = device->CreateTexture(
-        kFontTextureWidth,
-        kFontTextureHeight,
-        1,
-        0,
-        D3DFMT_A8R8G8B8,
-        D3DPOOL_MANAGED,
-        &texture,
-        nullptr);
-    if (FAILED(result) || texture == nullptr) {
-        CleanupGdi();
-        *error_message = "D3D9 failed to create the Lua draw font texture.";
-        return false;
-    }
-    D3DLOCKED_RECT locked{};
-    if (FAILED(texture->LockRect(0, &locked, nullptr, 0))) {
-        texture->Release();
-        CleanupGdi();
-        *error_message = "D3D9 failed to lock the Lua draw font texture.";
-        return false;
-    }
-    const auto* source = static_cast<const std::uint8_t*>(dib_pixels);
-    for (int y = 0; y < kFontTextureHeight; ++y) {
-        auto* destination = reinterpret_cast<std::uint32_t*>(
-            static_cast<std::uint8_t*>(locked.pBits) + y * locked.Pitch);
-        const auto* source_row = source + y * kFontTextureWidth * 4;
-        for (int x = 0; x < kFontTextureWidth; ++x) {
-            const auto blue = source_row[x * 4 + 0];
-            const auto green = source_row[x * 4 + 1];
-            const auto red = source_row[x * 4 + 2];
-            const auto alpha = (std::max)(red, (std::max)(green, blue));
-            destination[x] = D3DCOLOR_ARGB(alpha, 255, 255, 255);
-        }
-    }
-    texture->UnlockRect(0);
-    CleanupGdi();
-    atlas->texture = texture;
-    return true;
-}
-
 bool ConfigureRenderState(IDirect3DDevice9* device) {
     bool ok = true;
 #define SDMOD_SET_D3D_STATE(expression) ok = SUCCEEDED(expression) && ok
@@ -188,159 +53,363 @@ bool ConfigureRenderState(IDirect3DDevice9* device) {
     SDMOD_SET_D3D_STATE(device->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA));
     SDMOD_SET_D3D_STATE(device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA));
     SDMOD_SET_D3D_STATE(device->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE));
-    SDMOD_SET_D3D_STATE(device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT));
-    SDMOD_SET_D3D_STATE(device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT));
-    SDMOD_SET_D3D_STATE(device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE));
 #undef SDMOD_SET_D3D_STATE
     return ok;
 }
 
 bool ConfigureUntexturedStage(IDirect3DDevice9* device) {
-    return SUCCEEDED(device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_DIFFUSE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE));
+    return SUCCEEDED(device->SetTextureStageState(
+               0, D3DTSS_COLOROP, D3DTOP_SELECTARG1)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_COLORARG1, D3DTA_DIFFUSE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE));
 }
 
-bool ConfigureTexturedStage(IDirect3DDevice9* device) {
-    return SUCCEEDED(device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)) &&
-        SUCCEEDED(device->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE));
-}
-
-bool DrawColorQuad(
+bool ConfigureTexturedStage(
     IDirect3DDevice9* device,
+    D3DTEXTUREFILTERTYPE min_filter,
+    D3DTEXTUREFILTERTYPE mag_filter) {
+    return SUCCEEDED(device->SetTextureStageState(
+               0, D3DTSS_COLOROP, D3DTOP_MODULATE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_COLORARG1, D3DTA_TEXTURE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_COLORARG2, D3DTA_DIFFUSE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_ALPHAOP, D3DTOP_MODULATE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE)) &&
+        SUCCEEDED(device->SetTextureStageState(
+            0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE)) &&
+        SUCCEEDED(device->SetSamplerState(
+            0, D3DSAMP_MINFILTER, min_filter)) &&
+        SUCCEEDED(device->SetSamplerState(
+            0, D3DSAMP_MAGFILTER, mag_filter)) &&
+        SUCCEEDED(device->SetSamplerState(
+            0, D3DSAMP_MIPFILTER, D3DTEXF_NONE));
+}
+
+enum class LuaDrawBatchMode {
+    None,
+    Color,
+    PointText,
+    LinearSprite,
+};
+
+class LuaDrawBatcher {
+public:
+    LuaDrawBatcher(
+        IDirect3DDevice9* device,
+        std::vector<LuaDrawColorVertex>& color_vertices,
+        std::vector<LuaDrawTexturedVertex>& textured_vertices)
+        : device_(device),
+          color_vertices_(color_vertices),
+          textured_vertices_(textured_vertices) {
+        color_vertices_.clear();
+        textured_vertices_.clear();
+    }
+
+    void BeginRun(
+        LuaDrawBatchMode mode,
+        IDirect3DTexture9* texture) {
+        if (mode_ == mode && texture_ == texture) {
+            return;
+        }
+        Flush();
+        mode_ = mode;
+        texture_ = texture;
+    }
+
+    void AppendColorQuad(
+        float left,
+        float top,
+        float right,
+        float bottom,
+        D3DCOLOR color) {
+        AppendColorQuad(
+            {left, top, 0.0f, 1.0f, color},
+            {right, top, 0.0f, 1.0f, color},
+            {left, bottom, 0.0f, 1.0f, color},
+            {right, bottom, 0.0f, 1.0f, color});
+    }
+
+    void AppendColorQuad(
+        const LuaDrawColorVertex& top_left,
+        const LuaDrawColorVertex& top_right,
+        const LuaDrawColorVertex& bottom_left,
+        const LuaDrawColorVertex& bottom_right) {
+        color_vertices_.push_back(top_left);
+        color_vertices_.push_back(top_right);
+        color_vertices_.push_back(bottom_left);
+        color_vertices_.push_back(bottom_left);
+        color_vertices_.push_back(top_right);
+        color_vertices_.push_back(bottom_right);
+    }
+
+    void AppendTexturedQuad(
+        const LuaDrawTexturedVertex& top_left,
+        const LuaDrawTexturedVertex& top_right,
+        const LuaDrawTexturedVertex& bottom_left,
+        const LuaDrawTexturedVertex& bottom_right) {
+        textured_vertices_.push_back(top_left);
+        textured_vertices_.push_back(top_right);
+        textured_vertices_.push_back(bottom_left);
+        textured_vertices_.push_back(bottom_left);
+        textured_vertices_.push_back(top_right);
+        textured_vertices_.push_back(bottom_right);
+    }
+
+    void CompleteCommand() {
+        ++current_command_count_;
+    }
+
+    void RecordImmediateSuccess() {
+        ++successful_command_count_;
+    }
+
+    bool Finish() {
+        return Flush();
+    }
+
+    std::size_t successful_command_count() const {
+        return successful_command_count_;
+    }
+
+    std::size_t failed_command_count() const {
+        return failed_command_count_;
+    }
+
+private:
+    bool Flush() {
+        if (current_command_count_ == 0) {
+            color_vertices_.clear();
+            textured_vertices_.clear();
+            mode_ = LuaDrawBatchMode::None;
+            texture_ = nullptr;
+            return true;
+        }
+
+        bool succeeded = false;
+        if (mode_ == LuaDrawBatchMode::Color) {
+            succeeded =
+                ConfigureUntexturedStage(device_) &&
+                SUCCEEDED(device_->SetFVF(kLuaDrawColorVertexFvf)) &&
+                SUCCEEDED(device_->SetTexture(0, nullptr)) &&
+                SUCCEEDED(device_->DrawPrimitiveUP(
+                    D3DPT_TRIANGLELIST,
+                    static_cast<UINT>(color_vertices_.size() / 3),
+                    color_vertices_.data(),
+                    sizeof(LuaDrawColorVertex)));
+        } else {
+            const bool point_text =
+                mode_ == LuaDrawBatchMode::PointText;
+            succeeded =
+                ConfigureTexturedStage(
+                    device_,
+                    D3DTEXF_POINT,
+                    point_text ? D3DTEXF_POINT : D3DTEXF_LINEAR) &&
+                SUCCEEDED(device_->SetFVF(kLuaDrawTexturedVertexFvf)) &&
+                SUCCEEDED(device_->SetTexture(0, texture_)) &&
+                SUCCEEDED(device_->DrawPrimitiveUP(
+                    D3DPT_TRIANGLELIST,
+                    static_cast<UINT>(textured_vertices_.size() / 3),
+                    textured_vertices_.data(),
+                    sizeof(LuaDrawTexturedVertex)));
+        }
+
+        if (succeeded) {
+            successful_command_count_ += current_command_count_;
+        } else {
+            failed_command_count_ += current_command_count_;
+        }
+        current_command_count_ = 0;
+        color_vertices_.clear();
+        textured_vertices_.clear();
+        mode_ = LuaDrawBatchMode::None;
+        texture_ = nullptr;
+        return succeeded;
+    }
+
+    IDirect3DDevice9* device_ = nullptr;
+    LuaDrawBatchMode mode_ = LuaDrawBatchMode::None;
+    IDirect3DTexture9* texture_ = nullptr;
+    std::vector<LuaDrawColorVertex>& color_vertices_;
+    std::vector<LuaDrawTexturedVertex>& textured_vertices_;
+    std::size_t current_command_count_ = 0;
+    std::size_t successful_command_count_ = 0;
+    std::size_t failed_command_count_ = 0;
+};
+
+void QueueColorQuad(
+    LuaDrawBatcher* batcher,
     float left,
     float top,
     float right,
     float bottom,
     D3DCOLOR color) {
-    const std::array<LuaDrawColorVertex, 4> vertices = {{
-        {left, top, 0.0f, 1.0f, color},
-        {right, top, 0.0f, 1.0f, color},
-        {left, bottom, 0.0f, 1.0f, color},
-        {right, bottom, 0.0f, 1.0f, color},
-    }};
-    return ConfigureUntexturedStage(device) &&
-        SUCCEEDED(device->SetFVF(kLuaDrawColorVertexFvf)) &&
-        SUCCEEDED(device->SetTexture(0, nullptr)) &&
-        SUCCEEDED(device->DrawPrimitiveUP(
-            D3DPT_TRIANGLESTRIP,
-            2,
-            vertices.data(),
-            sizeof(LuaDrawColorVertex)));
+    batcher->BeginRun(LuaDrawBatchMode::Color, nullptr);
+    batcher->AppendColorQuad(left, top, right, bottom, color);
 }
 
-bool DrawLineCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
+bool QueueLineCommand(
+    LuaDrawBatcher* batcher,
+    const LuaDrawCommand& command) {
     const float dx = command.x2 - command.x;
     const float dy = command.y2 - command.y;
     const float length = std::sqrt(dx * dx + dy * dy);
-    if (!std::isfinite(length) || length < 0.0001f) {
-        const float half = command.thickness * 0.5f;
-        return DrawColorQuad(
-            device,
+    const float half = command.thickness * 0.5f;
+    if (!std::isfinite(length)) {
+        return false;
+    }
+    if (length < 0.0001f) {
+        QueueColorQuad(
+            batcher,
             command.x - half,
             command.y - half,
             command.x + half,
             command.y + half,
             PackColor(command.color));
+        batcher->CompleteCommand();
+        return true;
     }
-    const float half = command.thickness * 0.5f;
+
     const float perpendicular_x = -dy / length * half;
     const float perpendicular_y = dx / length * half;
     const auto color = PackColor(command.color);
-    const std::array<LuaDrawColorVertex, 4> vertices = {{
-        {command.x + perpendicular_x, command.y + perpendicular_y, 0.0f, 1.0f, color},
-        {command.x2 + perpendicular_x, command.y2 + perpendicular_y, 0.0f, 1.0f, color},
-        {command.x - perpendicular_x, command.y - perpendicular_y, 0.0f, 1.0f, color},
-        {command.x2 - perpendicular_x, command.y2 - perpendicular_y, 0.0f, 1.0f, color},
-    }};
-    return ConfigureUntexturedStage(device) &&
-        SUCCEEDED(device->SetFVF(kLuaDrawColorVertexFvf)) &&
-        SUCCEEDED(device->SetTexture(0, nullptr)) &&
-        SUCCEEDED(device->DrawPrimitiveUP(
-            D3DPT_TRIANGLESTRIP,
-            2,
-            vertices.data(),
-            sizeof(LuaDrawColorVertex)));
+    batcher->BeginRun(LuaDrawBatchMode::Color, nullptr);
+    batcher->AppendColorQuad(
+        {command.x + perpendicular_x, command.y + perpendicular_y,
+         0.0f, 1.0f, color},
+        {command.x2 + perpendicular_x, command.y2 + perpendicular_y,
+         0.0f, 1.0f, color},
+        {command.x - perpendicular_x, command.y - perpendicular_y,
+         0.0f, 1.0f, color},
+        {command.x2 - perpendicular_x, command.y2 - perpendicular_y,
+         0.0f, 1.0f, color});
+    batcher->CompleteCommand();
+    return true;
 }
 
-bool DrawRectCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
+bool QueueRectCommand(
+    LuaDrawBatcher* batcher,
+    const LuaDrawCommand& command) {
     const auto color = PackColor(command.color);
     if (command.kind == LuaDrawCommandKind::FilledRect) {
-        return DrawColorQuad(
-            device,
+        QueueColorQuad(
+            batcher,
             command.x,
             command.y,
             command.x + command.width,
             command.y + command.height,
             color);
+        batcher->CompleteCommand();
+        return true;
     }
+
     const float thickness = (std::min)(
         command.thickness,
         (std::min)(command.width, command.height) * 0.5f);
-    return DrawColorQuad(device, command.x, command.y, command.x + command.width, command.y + thickness, color) &&
-        DrawColorQuad(device, command.x, command.y + command.height - thickness, command.x + command.width, command.y + command.height, color) &&
-        DrawColorQuad(device, command.x, command.y + thickness, command.x + thickness, command.y + command.height - thickness, color) &&
-        DrawColorQuad(device, command.x + command.width - thickness, command.y + thickness, command.x + command.width, command.y + command.height - thickness, color);
+    QueueColorQuad(
+        batcher,
+        command.x,
+        command.y,
+        command.x + command.width,
+        command.y + thickness,
+        color);
+    QueueColorQuad(
+        batcher,
+        command.x,
+        command.y + command.height - thickness,
+        command.x + command.width,
+        command.y + command.height,
+        color);
+    QueueColorQuad(
+        batcher,
+        command.x,
+        command.y + thickness,
+        command.x + thickness,
+        command.y + command.height - thickness,
+        color);
+    QueueColorQuad(
+        batcher,
+        command.x + command.width - thickness,
+        command.y + thickness,
+        command.x + command.width,
+        command.y + command.height - thickness,
+        color);
+    batcher->CompleteCommand();
+    return true;
 }
 
-bool DrawTextCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
+bool QueueTextCommand(
+    IDirect3DDevice9* device,
+    LuaDrawBatcher* batcher,
+    const LuaDrawCommand& command) {
     auto& font = g_lua_draw_renderer.font;
     if (!font.load_attempted) {
         font.load_attempted = true;
-        if (!InitializeFontAtlas(device, &font, &font.error_message)) {
+        D3d9FontAtlasSpec spec;
+        if (!InitializeD3d9FontAtlas(
+                device,
+                spec,
+                &font.atlas,
+                &font.error_message)) {
             Log("Lua draw text renderer unavailable. " + font.error_message);
         }
     }
-    if (font.texture == nullptr) {
+    if (font.atlas.texture == nullptr) {
         return false;
     }
-    std::vector<LuaDrawTexturedVertex> vertices;
-    vertices.reserve(command.text.size() * 6);
+
+    batcher->BeginRun(
+        LuaDrawBatchMode::PointText,
+        font.atlas.texture);
     const auto color = PackColor(command.color);
     float cursor_x = command.x;
     float cursor_y = command.y;
+    bool appended = false;
     for (unsigned char ch : command.text) {
         if (ch == '\n') {
             cursor_x = command.x;
-            cursor_y += font.line_height * command.scale;
+            cursor_y += font.atlas.line_height * command.scale;
             continue;
         }
         if (ch == '\t') {
-            cursor_x += font.glyphs[' ' - kFirstFontGlyph].width * command.scale * 4.0f;
+            cursor_x +=
+                font.atlas.glyphs[
+                    ' ' - kD3d9FontFirstGlyph].width *
+                command.scale * 4.0f;
             continue;
         }
-        if (ch < kFirstFontGlyph || ch > kLastFontGlyph) {
+        if (ch < kD3d9FontFirstGlyph ||
+            ch > kD3d9FontLastGlyph) {
             ch = '?';
         }
-        const auto& glyph = font.glyphs[ch - kFirstFontGlyph];
-        const float width = (std::max)(glyph.width, 1) * command.scale;
-        const float height = font.line_height * command.scale;
+        const auto& glyph =
+            font.atlas.glyphs[ch - kD3d9FontFirstGlyph];
+        const float width =
+            (std::max)(glyph.width, 1) * command.scale;
+        const float height =
+            font.atlas.line_height * command.scale;
         const float right = cursor_x + width;
         const float bottom = cursor_y + height;
-        vertices.push_back({cursor_x, cursor_y, 0.0f, 1.0f, color, glyph.u0, glyph.v0});
-        vertices.push_back({right, cursor_y, 0.0f, 1.0f, color, glyph.u1, glyph.v0});
-        vertices.push_back({cursor_x, bottom, 0.0f, 1.0f, color, glyph.u0, glyph.v1});
-        vertices.push_back({cursor_x, bottom, 0.0f, 1.0f, color, glyph.u0, glyph.v1});
-        vertices.push_back({right, cursor_y, 0.0f, 1.0f, color, glyph.u1, glyph.v0});
-        vertices.push_back({right, bottom, 0.0f, 1.0f, color, glyph.u1, glyph.v1});
+        batcher->AppendTexturedQuad(
+            {cursor_x, cursor_y, 0.0f, 1.0f, color, glyph.u0, glyph.v0},
+            {right, cursor_y, 0.0f, 1.0f, color, glyph.u1, glyph.v0},
+            {cursor_x, bottom, 0.0f, 1.0f, color, glyph.u0, glyph.v1},
+            {right, bottom, 0.0f, 1.0f, color, glyph.u1, glyph.v1});
+        appended = true;
         cursor_x = right;
     }
-    if (vertices.empty()) {
-        return true;
+    if (appended) {
+        batcher->CompleteCommand();
+    } else {
+        batcher->RecordImmediateSuccess();
     }
-    return ConfigureTexturedStage(device) &&
-        SUCCEEDED(device->SetFVF(kLuaDrawTexturedVertexFvf)) &&
-        SUCCEEDED(device->SetTexture(0, font.texture)) &&
-        SUCCEEDED(device->DrawPrimitiveUP(
-            D3DPT_TRIANGLELIST,
-            static_cast<UINT>(vertices.size() / 3),
-            vertices.data(),
-            sizeof(LuaDrawTexturedVertex)));
+    return true;
 }
 
 LuaDrawAtlasTexture* GetAtlasTexture(
@@ -380,7 +449,10 @@ LuaDrawAtlasTexture* GetAtlasTexture(
     return cached.texture == nullptr ? nullptr : &cached;
 }
 
-bool DrawSpriteCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
+bool QueueSpriteCommand(
+    IDirect3DDevice9* device,
+    LuaDrawBatcher* batcher,
+    const LuaDrawCommand& command) {
     LuaDrawSpriteInfo sprite;
     std::string canonical_atlas;
     std::string sprite_error;
@@ -393,16 +465,20 @@ bool DrawSpriteCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) 
         return false;
     }
     auto* texture = GetAtlasTexture(device, canonical_atlas);
-    if (texture == nullptr || texture->width == 0 || texture->height == 0) {
-        return false;
-    }
-    if (sprite.atlas_x + sprite.packed_width > texture->width ||
+    if (texture == nullptr ||
+        texture->width == 0 ||
+        texture->height == 0 ||
+        sprite.logical_width == 0 ||
+        sprite.logical_height == 0 ||
+        sprite.atlas_x + sprite.packed_width > texture->width ||
         sprite.atlas_y + sprite.packed_height > texture->height) {
         return false;
     }
 
-    const float logical_width = static_cast<float>(sprite.logical_width);
-    const float logical_height = static_cast<float>(sprite.logical_height);
+    const float logical_width =
+        static_cast<float>(sprite.logical_width);
+    const float logical_height =
+        static_cast<float>(sprite.logical_height);
     const float scale_x = command.width / logical_width;
     const float scale_y = command.height / logical_height;
     const float logical_left = command.centered
@@ -423,27 +499,26 @@ bool DrawSpriteCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) 
     const float bottom = top + sprite.packed_height * scale_y;
     const float u0 = sprite.atlas_x / texture->width;
     const float v0 = sprite.atlas_y / texture->height;
-    const float u1 = (sprite.atlas_x + sprite.packed_width) / texture->width;
-    const float v1 = (sprite.atlas_y + sprite.packed_height) / texture->height;
+    const float u1 =
+        (sprite.atlas_x + sprite.packed_width) / texture->width;
+    const float v1 =
+        (sprite.atlas_y + sprite.packed_height) / texture->height;
     const auto color = PackColor(command.color);
-    const std::array<LuaDrawTexturedVertex, 4> vertices = {{
+    batcher->BeginRun(
+        LuaDrawBatchMode::LinearSprite,
+        texture->texture);
+    batcher->AppendTexturedQuad(
         {left, top, 0.0f, 1.0f, color, u0, v0},
         {right, top, 0.0f, 1.0f, color, u1, v0},
         {left, bottom, 0.0f, 1.0f, color, u0, v1},
-        {right, bottom, 0.0f, 1.0f, color, u1, v1},
-    }};
-    return ConfigureTexturedStage(device) &&
-        SUCCEEDED(device->SetFVF(kLuaDrawTexturedVertexFvf)) &&
-        SUCCEEDED(device->SetTexture(0, texture->texture)) &&
-        SUCCEEDED(device->DrawPrimitiveUP(
-            D3DPT_TRIANGLESTRIP,
-            2,
-            vertices.data(),
-            sizeof(LuaDrawTexturedVertex)));
+        {right, bottom, 0.0f, 1.0f, color, u1, v1});
+    batcher->CompleteCommand();
+    return true;
 }
 
-bool DrawConsumableQuad(
+bool QueueConsumableQuad(
     IDirect3DDevice9* device,
+    LuaDrawBatcher* batcher,
     const LuaConsumableRenderQuad& quad) {
     LuaDrawSpriteInfo sprite;
     std::string canonical_atlas;
@@ -457,15 +532,20 @@ bool DrawConsumableQuad(
         return false;
     }
     auto* texture = GetAtlasTexture(device, canonical_atlas);
-    if (texture == nullptr || texture->width == 0 || texture->height == 0 ||
-        sprite.logical_width == 0 || sprite.logical_height == 0 ||
+    if (texture == nullptr ||
+        texture->width == 0 ||
+        texture->height == 0 ||
+        sprite.logical_width == 0 ||
+        sprite.logical_height == 0 ||
         sprite.atlas_x + sprite.packed_width > texture->width ||
         sprite.atlas_y + sprite.packed_height > texture->height) {
         return false;
     }
 
-    const float logical_width = static_cast<float>(sprite.logical_width);
-    const float logical_height = static_cast<float>(sprite.logical_height);
+    const float logical_width =
+        static_cast<float>(sprite.logical_width);
+    const float logical_height =
+        static_cast<float>(sprite.logical_height);
     const float trim_x =
         (logical_width - sprite.content_width) * 0.5f +
         sprite.center_offset_x;
@@ -479,7 +559,7 @@ bool DrawConsumableQuad(
     const float bottom_fraction =
         (trim_y + sprite.packed_height) / logical_height;
 
-    auto interpolate = [&](float horizontal, float vertical) {
+    auto Interpolate = [&](float horizontal, float vertical) {
         const float top_x =
             quad.vertices[0] +
             (quad.vertices[2] - quad.vertices[0]) * horizontal;
@@ -497,10 +577,14 @@ bool DrawConsumableQuad(
             top_y + (bottom_y - top_y) * vertical,
         };
     };
-    const auto top_left = interpolate(left_fraction, top_fraction);
-    const auto top_right = interpolate(right_fraction, top_fraction);
-    const auto bottom_left = interpolate(left_fraction, bottom_fraction);
-    const auto bottom_right = interpolate(right_fraction, bottom_fraction);
+    const auto top_left =
+        Interpolate(left_fraction, top_fraction);
+    const auto top_right =
+        Interpolate(right_fraction, top_fraction);
+    const auto bottom_left =
+        Interpolate(left_fraction, bottom_fraction);
+    const auto bottom_right =
+        Interpolate(right_fraction, bottom_fraction);
 
     const float u0 = sprite.atlas_x / texture->width;
     const float v0 = sprite.atlas_y / texture->height;
@@ -509,33 +593,38 @@ bool DrawConsumableQuad(
     const float v1 =
         (sprite.atlas_y + sprite.packed_height) / texture->height;
     const auto color = D3DCOLOR_ARGB(255, 255, 255, 255);
-    const std::array<LuaDrawTexturedVertex, 4> vertices = {{
+    batcher->BeginRun(
+        LuaDrawBatchMode::LinearSprite,
+        texture->texture);
+    batcher->AppendTexturedQuad(
         {top_left[0], top_left[1], 0.0f, 1.0f, color, u0, v0},
         {top_right[0], top_right[1], 0.0f, 1.0f, color, u1, v0},
         {bottom_left[0], bottom_left[1], 0.0f, 1.0f, color, u0, v1},
-        {bottom_right[0], bottom_right[1], 0.0f, 1.0f, color, u1, v1},
-    }};
-    return ConfigureTexturedStage(device) &&
-        SUCCEEDED(device->SetFVF(kLuaDrawTexturedVertexFvf)) &&
-        SUCCEEDED(device->SetTexture(0, texture->texture)) &&
-        SUCCEEDED(device->DrawPrimitiveUP(
-            D3DPT_TRIANGLESTRIP,
-            2,
-            vertices.data(),
-            sizeof(LuaDrawTexturedVertex)));
+        {bottom_right[0], bottom_right[1], 0.0f, 1.0f, color, u1, v1});
+    batcher->CompleteCommand();
+    return true;
 }
 
-bool DrawCommand(IDirect3DDevice9* device, const LuaDrawCommand& command) {
+bool QueueCommand(
+    IDirect3DDevice9* device,
+    LuaDrawBatcher* batcher,
+    const LuaDrawCommand& command) {
     switch (command.kind) {
     case LuaDrawCommandKind::Text:
-        return DrawTextCommand(device, command);
+        return QueueTextCommand(
+            device,
+            batcher,
+            command);
     case LuaDrawCommandKind::FilledRect:
     case LuaDrawCommandKind::OutlinedRect:
-        return DrawRectCommand(device, command);
+        return QueueRectCommand(batcher, command);
     case LuaDrawCommandKind::Line:
-        return DrawLineCommand(device, command);
+        return QueueLineCommand(batcher, command);
     case LuaDrawCommandKind::Sprite:
-        return DrawSpriteCommand(device, command);
+        return QueueSpriteCommand(
+            device,
+            batcher,
+            command);
     }
     return false;
 }

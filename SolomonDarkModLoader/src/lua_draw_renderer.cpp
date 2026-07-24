@@ -1,6 +1,7 @@
 #include "lua_draw_runtime.h"
 
 #include "d3d9_end_scene_hook.h"
+#include "d3d9_font_atlas.h"
 #include "logger.h"
 #include "lua_draw_internal.h"
 #include "lua_item_runtime.h"
@@ -12,7 +13,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <mutex>
@@ -24,14 +24,6 @@
 namespace sdmod {
 namespace {
 
-constexpr int kFirstFontGlyph = 32;
-constexpr int kLastFontGlyph = 126;
-constexpr int kFontGlyphCount = kLastFontGlyph - kFirstFontGlyph + 1;
-constexpr int kFontTextureWidth = 512;
-constexpr int kFontTextureHeight = 256;
-constexpr int kFontColumns = 16;
-constexpr int kFontCellWidth = 32;
-constexpr int kFontCellHeight = 32;
 constexpr float kMinimumPositiveClipW = 0.0001f;
 
 struct LuaDrawColorVertex {
@@ -57,18 +49,8 @@ constexpr DWORD kLuaDrawColorVertexFvf =
 constexpr DWORD kLuaDrawTexturedVertexFvf =
     D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1;
 
-struct LuaDrawFontGlyph {
-    float u0 = 0.0f;
-    float v0 = 0.0f;
-    float u1 = 0.0f;
-    float v1 = 0.0f;
-    int width = 0;
-};
-
-struct LuaDrawFontAtlas {
-    IDirect3DTexture9* texture = nullptr;
-    std::array<LuaDrawFontGlyph, kFontGlyphCount> glyphs{};
-    int line_height = 16;
+struct LuaDrawFontResource {
+    D3d9FontAtlas atlas;
     bool load_attempted = false;
     std::string error_message;
 };
@@ -95,11 +77,13 @@ struct LuaDrawProjectionSnapshot {
 struct LuaDrawRendererState {
     bool started = false;
     bool first_frame_logged = false;
-    bool state_block_failure_logged = false;
     int draw_failure_logs_remaining = 8;
     IDirect3DDevice9* resource_device = nullptr;
-    LuaDrawFontAtlas font;
+    LuaDrawFontResource font;
     std::unordered_map<std::string, LuaDrawAtlasTexture> atlas_textures;
+    std::vector<LuaDrawFrameSnapshot> frame_snapshots;
+    std::vector<LuaDrawColorVertex> color_batch_vertices;
+    std::vector<LuaDrawTexturedVertex> textured_batch_vertices;
     LuaDrawProjectionSnapshot world_projection;
     D3DVIEWPORT9 last_viewport{};
     std::mutex mutex;
@@ -189,8 +173,8 @@ void ShutdownLuaDrawRenderer() {
     ReleaseRendererResourcesUnlocked();
     g_lua_draw_renderer.started = false;
     g_lua_draw_renderer.first_frame_logged = false;
-    g_lua_draw_renderer.state_block_failure_logged = false;
     g_lua_draw_renderer.draw_failure_logs_remaining = 8;
+    g_lua_draw_renderer.frame_snapshots.clear();
     g_lua_draw_renderer.world_projection = {};
     g_lua_draw_renderer.last_viewport = {};
 }
@@ -310,7 +294,6 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
         viewport.Width == 0 || viewport.Height == 0) {
         return;
     }
-    const auto frames = SnapshotLuaDrawFrames();
     const auto consumable_quads = TakeLuaConsumableRenderQuads();
 
     std::scoped_lock lock(g_lua_draw_renderer.mutex);
@@ -323,32 +306,23 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
         g_lua_draw_renderer.resource_device = device;
     }
     PruneUnavailableAtlasTextures();
+    RefreshLuaDrawFrameSnapshots(&g_lua_draw_renderer.frame_snapshots);
+    const auto& frames = g_lua_draw_renderer.frame_snapshots;
     if (frames.empty() && consumable_quads.empty()) {
         return;
     }
 
-    IDirect3DStateBlock9* state_block = nullptr;
-    HRESULT state_result = device->CreateStateBlock(D3DSBT_ALL, &state_block);
-    if (FAILED(state_result) || state_block == nullptr ||
-        FAILED(state_block->Capture())) {
-        if (state_block != nullptr) {
-            state_block->Release();
-        }
-        if (!g_lua_draw_renderer.state_block_failure_logged) {
-            g_lua_draw_renderer.state_block_failure_logged = true;
-            Log("Lua draw skipped a frame because D3D9 state capture failed.");
-        }
-        return;
-    }
     bool render_state_ok = ConfigureRenderState(device);
+    LuaDrawBatcher batcher(
+        device,
+        g_lua_draw_renderer.color_batch_vertices,
+        g_lua_draw_renderer.textured_batch_vertices);
     std::size_t command_count = 0;
-    std::size_t successful_command_count = 0;
     for (const auto& frame : frames) {
         for (const auto& command : frame.commands) {
             ++command_count;
-            if (render_state_ok && DrawCommand(device, command)) {
-                ++successful_command_count;
-            } else {
+            if (!render_state_ok ||
+                !QueueCommand(device, &batcher, command)) {
                 if (g_lua_draw_renderer.draw_failure_logs_remaining > 0) {
                     --g_lua_draw_renderer.draw_failure_logs_remaining;
                     Log(
@@ -361,17 +335,25 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
     }
     for (const auto& quad : consumable_quads) {
         ++command_count;
-        if (render_state_ok && DrawConsumableQuad(device, quad)) {
-            ++successful_command_count;
-        } else if (g_lua_draw_renderer.draw_failure_logs_remaining > 0) {
+        if ((!render_state_ok ||
+             !QueueConsumableQuad(device, &batcher, quad)) &&
+            g_lua_draw_renderer.draw_failure_logs_remaining > 0) {
             --g_lua_draw_renderer.draw_failure_logs_remaining;
             Log(
                 "Lua consumable icon draw failed. content_id=" +
                 std::to_string(quad.content_id));
         }
     }
-    state_block->Apply();
-    state_block->Release();
+    batcher.Finish();
+    if (batcher.failed_command_count() != 0 &&
+        g_lua_draw_renderer.draw_failure_logs_remaining > 0) {
+        --g_lua_draw_renderer.draw_failure_logs_remaining;
+        Log(
+            "Lua draw D3D9 batch submission failed. commands=" +
+            std::to_string(batcher.failed_command_count()));
+    }
+    const auto successful_command_count =
+        batcher.successful_command_count();
 
     if (!g_lua_draw_renderer.first_frame_logged &&
         successful_command_count != 0) {

@@ -117,7 +117,6 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         '"render_context_color"',
         "ResolveGameAddressOrZero",
         "InstallD3d9FrameHook(",
-        "CreateStateBlock(D3DSBT_ALL",
         "NativeUiString",
         "__try",
         "__except",
@@ -125,6 +124,7 @@ def test_lua_ui_authoring_is_native_bounded_and_authority_routed() -> str:
         "ExactTextRenderFn",
     ):
         assert token in renderer, f"native authored UI renderer lacks: {token}"
+    assert "CreateStateBlock" not in renderer
     for token in (
         "[lua_ui_authoring]",
         "device_pointer_global=0x00B401E8",
