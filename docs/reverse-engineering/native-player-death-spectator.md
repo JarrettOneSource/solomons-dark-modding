@@ -190,17 +190,22 @@ The only PlayerWizard staff-bouncer allocation site is in `FUN_00534120`:
 
 ```text
 held type 0x1B5C (Staff)
-  allocate 0x50 bytes
-  FUN_00453060                         Anim_Bouncer base ctor
-  vtable = 0x00793C4C                 Anim_StaffBouncer
-  FUN_004608D0                        resolve staff visual
+  0x0053424D  allocate 0x50 bytes
+  0x0053426B  FUN_00453060             Anim_Bouncer base ctor
+  0x00534270  vtable = 0x00793C4C      Anim_StaffBouncer
+  0x00534286  FUN_004608D0             resolve staff visual
   initialize position/velocity/life
-  insert in owner world list at +0x2C4
+  0x0053436B  insert in owner world list at +0x2C4
   call bouncer virtual +0x1C
 
 held type 0x1B63 (Wand)
+  0x00534387  allocate 0x50 bytes
   same shape with Anim_WandBouncer and FUN_00460920
 ```
+
+`0x0053424D` is therefore an exact live trace point for a staff drop. It is
+inside the staff-only branch, before the allocator call, and cannot be reached
+by the tick-159 additive burst or the wand branch.
 
 The staff bouncer's recovered methods show no spawn recursion:
 
