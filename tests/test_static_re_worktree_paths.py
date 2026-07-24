@@ -14,7 +14,12 @@ RE_TESTS = ROOT / "tests" / "re"
 if str(RE_TESTS) not in sys.path:
     sys.path.insert(0, str(RE_TESTS))
 
-from static_re_contract_support import resolve_workspace_root
+from static_re_contract_support import (
+    PRIMARY_CHECKOUT_ROOT,
+    RE_RUNTIME_ROOT,
+    resolve_primary_checkout_root,
+    resolve_workspace_root,
+)
 
 
 class StaticReWorktreePathTests(unittest.TestCase):
@@ -36,6 +41,10 @@ class StaticReWorktreePathTests(unittest.TestCase):
                 resolve_workspace_root(worktree),
                 workspace,
             )
+            self.assertEqual(
+                resolve_primary_checkout_root(worktree),
+                main_repo,
+            )
 
     def test_main_checkout_uses_its_parent_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -46,6 +55,16 @@ class StaticReWorktreePathTests(unittest.TestCase):
                 resolve_workspace_root(repo),
                 repo.parent,
             )
+            self.assertEqual(
+                resolve_primary_checkout_root(repo),
+                repo,
+            )
+
+    def test_runtime_artifacts_are_read_from_the_primary_checkout(self) -> None:
+        self.assertEqual(
+            RE_RUNTIME_ROOT,
+            PRIMARY_CHECKOUT_ROOT / "runtime",
+        )
 
 
 if __name__ == "__main__":

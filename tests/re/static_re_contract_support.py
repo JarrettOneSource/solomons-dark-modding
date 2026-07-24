@@ -16,28 +16,49 @@ from static_multiplayer_contract_support import read_source_unit
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def resolve_workspace_root(repo_root: Path) -> Path:
+def _host_path(raw_path: str) -> Path:
+    path = Path(raw_path)
+    if os.name == "nt" or path.is_absolute():
+        return path
+
+    windows_path = PureWindowsPath(raw_path)
+    if windows_path.drive and windows_path.root:
+        return (
+            Path("/mnt")
+            / windows_path.drive.rstrip(":").lower()
+            / Path(*windows_path.parts[1:])
+        )
+    return path
+
+
+def resolve_primary_checkout_root(repo_root: Path) -> Path:
     git_marker = repo_root / ".git"
-    if git_marker.is_file():
-        prefix = "gitdir:"
+    if not git_marker.is_file():
+        return repo_root
+    try:
         marker_text = git_marker.read_text(encoding="utf-8").strip()
-        if marker_text.startswith(prefix):
-            git_directory = Path(
-                marker_text[len(prefix):].strip()
-            )
-            if not git_directory.is_absolute():
-                git_directory = (
-                    repo_root / git_directory
-                ).resolve()
-            if (
-                git_directory.parent.name == "worktrees"
-                and git_directory.parent.parent.name == ".git"
-            ):
-                return git_directory.parents[2].parent
-    return repo_root.parent
+    except OSError:
+        return repo_root
+    prefix = "gitdir:"
+    if not marker_text.lower().startswith(prefix):
+        return repo_root
+
+    git_directory = _host_path(marker_text[len(prefix):].strip())
+    if not git_directory.is_absolute():
+        git_directory = (repo_root / git_directory).resolve()
+    for candidate in (git_directory, *git_directory.parents):
+        if candidate.name == ".git":
+            return candidate.parent
+    return repo_root
+
+
+def resolve_workspace_root(repo_root: Path) -> Path:
+    return resolve_primary_checkout_root(repo_root).parent
 
 
 WORKSPACE_ROOT = resolve_workspace_root(ROOT)
+PRIMARY_CHECKOUT_ROOT = resolve_primary_checkout_root(ROOT)
+RE_RUNTIME_ROOT = PRIMARY_CHECKOUT_ROOT / "runtime"
 TOOLS_DIR = ROOT / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
@@ -237,43 +258,10 @@ DISPATCH_PUMP_LOOP = (
     ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
 )
 BINARY_LAYOUT = ROOT / "config/binary-layout.ini"
-STAGED_BINARY_LAYOUT = ROOT / "runtime/stage/.sdmod/config/binary-layout.ini"
-STAGED_BINARY = ROOT / "runtime/stage/SolomonDark.exe"
-
-
-def _host_path(raw_path: str) -> Path:
-    path = Path(raw_path)
-    if os.name == "nt" or path.is_absolute():
-        return path
-
-    windows_path = PureWindowsPath(raw_path)
-    if windows_path.drive and windows_path.root:
-        return (
-            Path("/mnt")
-            / windows_path.drive.rstrip(":").lower()
-            / Path(*windows_path.parts[1:])
-        )
-    return path
-
-
-def _primary_checkout_root(root: Path) -> Path | None:
-    git_file = root / ".git"
-    if not git_file.is_file():
-        return None
-    try:
-        marker = git_file.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    prefix = "gitdir:"
-    if not marker.lower().startswith(prefix):
-        return None
-    git_dir = _host_path(marker[len(prefix):].strip())
-    if not git_dir.is_absolute():
-        git_dir = root / git_dir
-    for candidate in (git_dir, *git_dir.parents):
-        if candidate.name == ".git":
-            return candidate.parent
-    return None
+STAGED_BINARY_LAYOUT = (
+    RE_RUNTIME_ROOT / "stage/.sdmod/config/binary-layout.ini"
+)
+STAGED_BINARY = RE_RUNTIME_ROOT / "stage/SolomonDark.exe"
 
 
 def resolve_abandonware_binary(
@@ -309,12 +297,11 @@ def resolve_abandonware_binary(
         except (OSError, ValueError, TypeError):
             pass
 
-    primary_checkout = _primary_checkout_root(root)
-    if primary_checkout is not None:
-        candidates.append(
-            primary_checkout.parent
-            / "SolomonDarkAbandonware/SolomonDark.exe"
-        )
+    primary_checkout = resolve_primary_checkout_root(root)
+    candidates.append(
+        primary_checkout.parent
+        / "SolomonDarkAbandonware/SolomonDark.exe"
+    )
     candidates.extend(
         (
             root.parent / "SolomonDarkAbandonware/SolomonDark.exe",
@@ -328,18 +315,18 @@ def resolve_abandonware_binary(
 
 
 ABANDONWARE_BINARY = resolve_abandonware_binary()
-ALLY_HP_PROGRESS_GHIDRA = ROOT / "runtime/ghidra_ally_hp_progression_paths.txt"
-ALLY_HP_RECOMPUTE_GHIDRA = ROOT / "runtime/ghidra_ally_hp_recompute_candidate.txt"
-PRIMARY_SPELL_BUILDER_GHIDRA = ROOT / "runtime/ghidra_primary_spell_builder_resource_paths.txt"
-SYNTHETIC_SOURCE_PROFILE_GHIDRA = ROOT / "runtime/ghidra_synthetic_source_profile_paths.txt"
-SOURCE_PROFILE_NEGATIVE_GHIDRA = ROOT / "runtime/ghidra_source_profile_negative_producer_scan.txt"
-SOURCE_PROFILE_ACTOR174_EXPANDED_GHIDRA = ROOT / "runtime/ghidra_source_profile_actor174_expanded_scan.txt"
-SOURCE_PROFILE_FIELD_CANDIDATE_GHIDRA = ROOT / "runtime/ghidra_source_profile_field_candidate_decompiles.txt"
-SOURCE_PROFILE_WRITE_SITES_EXPANDED_GHIDRA = ROOT / "runtime/ghidra_source_profile_write_sites_expanded.txt"
+ALLY_HP_PROGRESS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_ally_hp_progression_paths.txt"
+ALLY_HP_RECOMPUTE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_ally_hp_recompute_candidate.txt"
+PRIMARY_SPELL_BUILDER_GHIDRA = RE_RUNTIME_ROOT / "ghidra_primary_spell_builder_resource_paths.txt"
+SYNTHETIC_SOURCE_PROFILE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_synthetic_source_profile_paths.txt"
+SOURCE_PROFILE_NEGATIVE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_source_profile_negative_producer_scan.txt"
+SOURCE_PROFILE_ACTOR174_EXPANDED_GHIDRA = RE_RUNTIME_ROOT / "ghidra_source_profile_actor174_expanded_scan.txt"
+SOURCE_PROFILE_FIELD_CANDIDATE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_source_profile_field_candidate_decompiles.txt"
+SOURCE_PROFILE_WRITE_SITES_EXPANDED_GHIDRA = RE_RUNTIME_ROOT / "ghidra_source_profile_write_sites_expanded.txt"
 SOURCE_PROFILE_NEGATIVE_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_negative_probe.py"
 SOURCE_PROFILE_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_source_profile_writer_probe.py"
 PURE_PRIMARY_STARTUP_LIVE_PROBE = ROOT / "tests/re/run_live_pure_primary_startup_probe.py"
-PURE_PRIMARY_EQUIP_SINK_GHIDRA = ROOT / "runtime/ghidra_pure_primary_equip_sink_paths.txt"
+PURE_PRIMARY_EQUIP_SINK_GHIDRA = RE_RUNTIME_ROOT / "ghidra_pure_primary_equip_sink_paths.txt"
 BOT_MANA_TRACE_HELPERS = ROOT / "tests/re/bot_mana_trace_helpers.py"
 BOT_MANA_WRITER_LIVE_PROBE = ROOT / "tests/re/run_live_bot_mana_writer_probe.py"
 BOT_NATIVE_MANA_SPEND_LIVE_PROBE = ROOT / "tests/re/run_live_bot_native_mana_spend_probe.py"
@@ -354,65 +341,65 @@ BOT_OUT_OF_MANA_REJECTION_LIVE_PROBE = (
 )
 BOT_ELEMENT_DAMAGE_PROBE = ROOT / "tools/probe_bot_element_damage.py"
 BOULDER_RETARGET_LIVE_PROBE = ROOT / "tests/re/run_live_boulder_retarget_probe.py"
-ENEMY_WAVE_GHIDRA = ROOT / "runtime/ghidra_enemy_wave_spawn_paths.txt"
-ENEMY_SPAWN_CALL_SHAPES_GHIDRA = ROOT / "runtime/ghidra_enemy_spawn_call_shapes.txt"
+ENEMY_WAVE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_enemy_wave_spawn_paths.txt"
+ENEMY_SPAWN_CALL_SHAPES_GHIDRA = RE_RUNTIME_ROOT / "ghidra_enemy_spawn_call_shapes.txt"
 ENEMY_SPAWN_API_REMOVED_LIVE_PROBE = ROOT / "tests/re/run_live_enemy_spawn_api_removed_probe.py"
-PATHFINDING_MOVEMENT_GHIDRA = ROOT / "runtime/ghidra_pathfinding_movement_paths.txt"
-PATHFINDING_POLICY_SCALARS_GHIDRA = ROOT / "runtime/ghidra_pathfinding_policy_scalar_scan.txt"
-PATHFINDING_POLICY_SCALAR_DECOMPILE_GHIDRA = ROOT / "runtime/ghidra_pathfinding_policy_scalar_decompile.txt"
-PATHFINDING_POLICY_FLOAT_GLOBALS_GHIDRA = ROOT / "runtime/ghidra_pathfinding_policy_float_globals.txt"
+PATHFINDING_MOVEMENT_GHIDRA = RE_RUNTIME_ROOT / "ghidra_pathfinding_movement_paths.txt"
+PATHFINDING_POLICY_SCALARS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_pathfinding_policy_scalar_scan.txt"
+PATHFINDING_POLICY_SCALAR_DECOMPILE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_pathfinding_policy_scalar_decompile.txt"
+PATHFINDING_POLICY_FLOAT_GLOBALS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_pathfinding_policy_float_globals.txt"
 PATHFINDING_LAYOUT_LIVE_PROBE = ROOT / "tests/re/run_live_pathfinding_layout_probe.py"
-PLAYER_GAMENPC_MOVEMENT_SEED_GHIDRA = ROOT / "runtime/ghidra_player_gamenpc_movement_seed_paths.txt"
+PLAYER_GAMENPC_MOVEMENT_SEED_GHIDRA = RE_RUNTIME_ROOT / "ghidra_player_gamenpc_movement_seed_paths.txt"
 PLAYER_GAMENPC_MOVEMENT_SEED_OFFSET_GHIDRA = (
-    ROOT / "runtime/ghidra_player_gamenpc_movement_seed_offsets.txt"
+    RE_RUNTIME_ROOT / "ghidra_player_gamenpc_movement_seed_offsets.txt"
 )
-STOCK_TICK_RESTORE_GHIDRA = ROOT / "runtime/ghidra_stock_tick_restore_paths.txt"
-STOCK_TICK_OWNERSHIP_XREFS_GHIDRA = ROOT / "runtime/ghidra_stock_tick_ownership_xrefs.txt"
-STOCK_TICK_INPUT_OFFSET_ACCESS_GHIDRA = ROOT / "runtime/ghidra_stock_tick_input_offset_accesses.txt"
+STOCK_TICK_RESTORE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_stock_tick_restore_paths.txt"
+STOCK_TICK_OWNERSHIP_XREFS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_stock_tick_ownership_xrefs.txt"
+STOCK_TICK_INPUT_OFFSET_ACCESS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_stock_tick_input_offset_accesses.txt"
 STOCK_TICK_RESTORE_LIVE_PROBE = ROOT / "tests/re/run_live_stock_tick_restore_probe.py"
 BOT_NATIVE_SPEED_LIVE_PROBE = ROOT / "tests/re/run_live_bot_native_speed_probe.py"
 REGISTERED_GAMENPC_PUBLICATION_GHIDRA = (
-    ROOT / "runtime/ghidra_registered_gamenpc_publication_blockers.txt"
+    RE_RUNTIME_ROOT / "ghidra_registered_gamenpc_publication_blockers.txt"
 )
 REGISTERED_GAMENPC_PUBLICATION_XREFS_GHIDRA = (
-    ROOT / "runtime/ghidra_registered_gamenpc_publication_xrefs.txt"
+    RE_RUNTIME_ROOT / "ghidra_registered_gamenpc_publication_xrefs.txt"
 )
 REGISTERED_GAMENPC_PUBLICATION_EXPANDED_GHIDRA = (
-    ROOT / "runtime/ghidra_registered_gamenpc_publication_expanded.txt"
+    RE_RUNTIME_ROOT / "ghidra_registered_gamenpc_publication_expanded.txt"
 )
 REGISTERED_GAMENPC_BLOCKER_LIVE_PROBE = (
     ROOT / "tests/re/run_live_registered_gamenpc_blocker_probe.py"
 )
 STANDALONE_COLLISION_REGISTRATION_GHIDRA = (
-    ROOT / "runtime/ghidra_standalone_collision_registration_paths.txt"
+    RE_RUNTIME_ROOT / "ghidra_standalone_collision_registration_paths.txt"
 )
 STANDALONE_COLLISION_OVERLAP_GHIDRA = (
-    ROOT / "runtime/ghidra_standalone_collision_overlap_builder_paths.txt"
+    RE_RUNTIME_ROOT / "ghidra_standalone_collision_overlap_builder_paths.txt"
 )
 STANDALONE_COLLISION_OWNERSHIP_XREFS_GHIDRA = (
-    ROOT / "runtime/ghidra_standalone_collision_ownership_xrefs.txt"
+    RE_RUNTIME_ROOT / "ghidra_standalone_collision_ownership_xrefs.txt"
 )
 STANDALONE_COLLISION_FIELD_WRITES_GHIDRA = (
-    ROOT / "runtime/ghidra_standalone_collision_field_writes.txt"
+    RE_RUNTIME_ROOT / "ghidra_standalone_collision_field_writes.txt"
 )
 STANDALONE_CLONE_INSTRUCTION_GHIDRA = (
-    ROOT / "runtime/ghidra_wizard_clone_from_source_instructions.txt"
+    RE_RUNTIME_ROOT / "ghidra_wizard_clone_from_source_instructions.txt"
 )
-CAST_STATE_GHIDRA = ROOT / "runtime/ghidra_stock_tick_slot_shim_cast_paths.txt"
-CAST_STATE_OFFSETS_GHIDRA = ROOT / "runtime/ghidra_cast_state_offsets.txt"
-CAST_SPELL_OBJECT_GHIDRA = ROOT / "runtime/ghidra_cast_spell_object_handlers.txt"
-CAST_SLOT0_DISPATCH_XREFS_GHIDRA = ROOT / "runtime/ghidra_cast_slot0_dispatch_xrefs.txt"
-CAST_SLOT0_GATE_OFFSET_ACCESS_GHIDRA = ROOT / "runtime/ghidra_cast_slot0_gate_offset_accesses.txt"
-CAST_SELECTION_LIFECYCLE_XREFS_GHIDRA = ROOT / "runtime/ghidra_selection_lifecycle_xrefs.txt"
-CAST_SELECTION_CLEANUP_TARGETS_GHIDRA = ROOT / "runtime/ghidra_selection_and_cleanup_targets.txt"
+CAST_STATE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_stock_tick_slot_shim_cast_paths.txt"
+CAST_STATE_OFFSETS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_cast_state_offsets.txt"
+CAST_SPELL_OBJECT_GHIDRA = RE_RUNTIME_ROOT / "ghidra_cast_spell_object_handlers.txt"
+CAST_SLOT0_DISPATCH_XREFS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_cast_slot0_dispatch_xrefs.txt"
+CAST_SLOT0_GATE_OFFSET_ACCESS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_cast_slot0_gate_offset_accesses.txt"
+CAST_SELECTION_LIFECYCLE_XREFS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_selection_lifecycle_xrefs.txt"
+CAST_SELECTION_CLEANUP_TARGETS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_selection_and_cleanup_targets.txt"
 CAST_SELECTION_BRAIN_OFFSET_ACCESS_GHIDRA = (
-    ROOT / "runtime/ghidra_selection_brain_offset_accesses.txt"
+    RE_RUNTIME_ROOT / "ghidra_selection_brain_offset_accesses.txt"
 )
 CAST_ACTIVE_SPELL_LIFECYCLE_XREFS_GHIDRA = (
-    ROOT / "runtime/ghidra_active_spell_lifecycle_xrefs.txt"
+    RE_RUNTIME_ROOT / "ghidra_active_spell_lifecycle_xrefs.txt"
 )
-CAST_LATCH_OFFSET_ACCESS_GHIDRA = ROOT / "runtime/ghidra_cast_latch_offset_accesses.txt"
-CAST_BOULDER_VTABLE_GHIDRA = ROOT / "runtime/ghidra_boulder_spell_object_vtable_slots.txt"
+CAST_LATCH_OFFSET_ACCESS_GHIDRA = RE_RUNTIME_ROOT / "ghidra_cast_latch_offset_accesses.txt"
+CAST_BOULDER_VTABLE_GHIDRA = RE_RUNTIME_ROOT / "ghidra_boulder_spell_object_vtable_slots.txt"
 LUA_BOT_CONFIG = ROOT / "mods/lua_bots/scripts/lib/lua_bots/config.lua"
 LUA_BOT_COMBAT = ROOT / "mods/lua_bots/scripts/lib/lua_bots/combat.lua"
 LUA_BOT_FOLLOW = ROOT / "mods/lua_bots/scripts/lib/lua_bots/follow.lua"
