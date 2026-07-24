@@ -477,6 +477,28 @@ stock gold actor on the client before pickup ownership exists would allow a
 client-local walk-over to mutate that client's local global gold and would not
 prove the host-authoritative loot contract.
 
+## Live Verification - 2026-07-24
+
+The Student population gate now observes one isolated host/client session until
+it either proves exact convergence or reaches a 30-second deadline. The former
+fixed 12-sample window could stop immediately after the host added a Student
+and report a one-Student client deficit even though that same authoritative
+actor materialized shortly afterward.
+
+The gate records authoritative and bound Student network IDs together with the
+applied snapshot sequence. Passing requires three consecutive samples where
+the client active population, stock count, bindings, and authoritative identity
+set match exactly, with no pending or unbound Students. It also requires the
+deferred-retirement counter to advance. Transient differences are retained as
+diagnostics but receive no final tolerance.
+
+An 80-sample identity trace reproduced the lag for 19 authoritative Student
+IDs. Every ID subsequently bound in the same session, none retired before
+binding, and none remained missing. The longest observed materialization took
+seven samples. A follow-up run of the convergence-aware gate reached three
+consecutive exact samples after 8.05 seconds with a final population gap of
+zero, no missing IDs, and four exercised retirements.
+
 ## Live Verification - 2026-07-23
 
 `tools/verify_hub_student_population_sync.py` launches a uniquely named local

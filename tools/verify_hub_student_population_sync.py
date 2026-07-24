@@ -26,9 +26,9 @@ from verify_local_multiplayer_sync import (
 
 DEFAULT_OUTPUT = ROOT / "runtime" / "hub_student_population_sync.json"
 ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
-DEFAULT_SAMPLE_COUNT = 12
 DEFAULT_WARMUP_SAMPLES = 3
-DEFAULT_MAX_TRANSIENT_SURPLUS = 3
+DEFAULT_CONVERGENCE_TIMEOUT = 30.0
+DEFAULT_CONFIRMATION_SAMPLES = 3
 
 
 LUA_CAPTURE = r"""
@@ -69,12 +69,18 @@ local replicated =
   sd.world.get_replicated_actors() or nil
 local authoritative_students = 0
 local bound_students = 0
+local authoritative_student_ids = {}
+local bound_student_ids = {}
+local bound_student_id_set = {}
 if replicated ~= nil then
   local authority = replicated.apply_actors_available and
     replicated.apply_actors or replicated.actors or {}
   for _, actor in ipairs(authority) do
     if tonumber(actor.object_type_id) == student_type then
       authoritative_students = authoritative_students + 1
+      table.insert(
+        authoritative_student_ids,
+        tonumber(actor.network_actor_id) or 0)
     end
   end
   for _, binding in ipairs(replicated.bindings or {}) do
@@ -83,7 +89,19 @@ if replicated ~= nil then
         binding.matched and not binding.parked and not binding.removed and
         active_addresses[address] then
       bound_students = bound_students + 1
+      local network_actor_id = tonumber(binding.network_actor_id) or 0
+      table.insert(bound_student_ids, network_actor_id)
+      bound_student_id_set[network_actor_id] = true
     end
+  end
+end
+
+table.sort(authoritative_student_ids)
+table.sort(bound_student_ids)
+local missing_student_ids = {}
+for _, network_actor_id in ipairs(authoritative_student_ids) do
+  if not bound_student_id_set[network_actor_id] then
+    table.insert(missing_student_ids, network_actor_id)
   end
 end
 
@@ -100,6 +118,15 @@ emit(
 emit("authoritative_students", authoritative_students)
 emit("bound_students", bound_students)
 emit("unbound_students", math.max(active_students - bound_students, 0))
+emit("authoritative_student_ids", table.concat(authoritative_student_ids, ","))
+emit("bound_student_ids", table.concat(bound_student_ids, ","))
+emit("missing_student_ids", table.concat(missing_student_ids, ","))
+emit("sampled_ms", replicated and replicated.sampled_ms or 0)
+emit("snapshot_sequence", replicated and replicated.sequence or 0)
+emit("apply_sequence", replicated and replicated.apply_sequence or 0)
+emit(
+  "apply_source_snapshot_age_ms",
+  replicated and replicated.apply_source_snapshot_age_ms or 0)
 emit(
   "removed_actor_total_count",
   replicated and replicated.removed_actor_total_count or 0)
@@ -130,6 +157,18 @@ def _int(values: Mapping[str, str], key: str) -> int:
             ) from exc
 
 
+def _int_list(values: Mapping[str, str], key: str) -> list[int]:
+    raw = values.get(key, "")
+    if not raw:
+        return []
+    try:
+        return [int(value, 0) for value in raw.split(",")]
+    except ValueError as exc:
+        raise VerifyFailure(
+            f"hub Student probe returned invalid {key}: {raw!r}"
+        ) from exc
+
+
 def _parse_endpoint(row: Mapping[str, object]) -> dict[str, object]:
     name = str(row.get("name", "unknown"))
     if row.get("returncode") != 0:
@@ -153,6 +192,19 @@ def _parse_endpoint(row: Mapping[str, object]) -> dict[str, object]:
         ),
         "bound_students": _int(values, "bound_students"),
         "unbound_students": _int(values, "unbound_students"),
+        "authoritative_student_ids": _int_list(
+            values,
+            "authoritative_student_ids",
+        ),
+        "bound_student_ids": _int_list(values, "bound_student_ids"),
+        "missing_student_ids": _int_list(values, "missing_student_ids"),
+        "sampled_ms": _int(values, "sampled_ms"),
+        "snapshot_sequence": _int(values, "snapshot_sequence"),
+        "apply_sequence": _int(values, "apply_sequence"),
+        "apply_source_snapshot_age_ms": _int(
+            values,
+            "apply_source_snapshot_age_ms",
+        ),
         "removed_actor_total_count": _int(
             values,
             "removed_actor_total_count",
@@ -190,13 +242,14 @@ def evaluate_samples(
     samples: Sequence[Mapping[str, object]],
     *,
     warmup_samples: int = DEFAULT_WARMUP_SAMPLES,
-    max_transient_surplus: int = DEFAULT_MAX_TRANSIENT_SURPLUS,
+    confirmation_samples: int = DEFAULT_CONFIRMATION_SAMPLES,
     require_retirement: bool = True,
+    require_convergence: bool = True,
 ) -> dict[str, object]:
     if warmup_samples < 0:
         raise ValueError("warmup_samples must not be negative")
-    if max_transient_surplus < 0:
-        raise ValueError("max_transient_surplus must not be negative")
+    if confirmation_samples <= 0:
+        raise ValueError("confirmation_samples must be positive")
     if len(samples) <= warmup_samples:
         raise VerifyFailure(
             "hub Student verifier has no post-warmup samples"
@@ -206,9 +259,12 @@ def evaluate_samples(
     client_surpluses: list[int] = []
     population_gaps: list[int] = []
     unbound_counts: list[int] = []
+    missing_counts: list[int] = []
     removal_totals: list[int] = []
     converged_count = 0
     binding_converged_count = 0
+    consecutive_converged = 0
+    maximum_consecutive_converged = 0
 
     for sample in stable_samples:
         index = int(sample.get("index", -1))
@@ -246,37 +302,93 @@ def evaluate_samples(
                     f"sample {index} {label} recorded a failed retirement"
                 )
 
-        host_active = int(host["active_students"])
         client_active = int(client["active_students"])
         authoritative = int(client["authoritative_students"])
         bound = int(client["bound_students"])
         unbound = int(client["unbound_students"])
-        if authoritative <= 0 or bound <= 0:
+        if authoritative <= 0 or bound < 0:
             raise VerifyFailure(
-                f"sample {index} lacks authoritative or bound Students"
+                f"sample {index} lacks an authoritative Student population"
             )
         if bound > client_active or unbound != client_active - bound:
             raise VerifyFailure(
                 f"sample {index} client Student binding counts are incoherent"
             )
 
-        reference = max(host_active, authoritative)
-        surplus = client_active - reference
+        authoritative_ids = client.get("authoritative_student_ids")
+        bound_ids = client.get("bound_student_ids")
+        missing_ids = client.get("missing_student_ids")
+        for label, identifiers in (
+            ("authoritative", authoritative_ids),
+            ("bound", bound_ids),
+            ("missing", missing_ids),
+        ):
+            if (
+                not isinstance(identifiers, Sequence)
+                or isinstance(identifiers, (str, bytes))
+                or any(
+                    not isinstance(identifier, int) or identifier <= 0
+                    for identifier in identifiers
+                )
+                or len(set(identifiers)) != len(identifiers)
+            ):
+                raise VerifyFailure(
+                    f"sample {index} has invalid {label} Student identities"
+                )
+        assert isinstance(authoritative_ids, Sequence)
+        assert isinstance(bound_ids, Sequence)
+        assert isinstance(missing_ids, Sequence)
+        authoritative_id_set = set(authoritative_ids)
+        bound_id_set = set(bound_ids)
+        missing_id_set = set(missing_ids)
+        if len(authoritative_ids) != authoritative:
+            raise VerifyFailure(
+                f"sample {index} authoritative Student identities "
+                "do not match the population count"
+            )
+        if len(bound_ids) != bound:
+            raise VerifyFailure(
+                f"sample {index} bound Student identities "
+                "do not match the binding count"
+            )
+        if missing_id_set != authoritative_id_set - bound_id_set:
+            raise VerifyFailure(
+                f"sample {index} missing Student identities are incoherent"
+            )
+
+        surplus = client_active - authoritative
         gap = abs(client_active - authoritative)
         client_surpluses.append(surplus)
         population_gaps.append(gap)
         unbound_counts.append(unbound)
+        missing_counts.append(len(missing_ids))
         removal_totals.append(
             int(client["removed_actor_total_count"])
         )
-        if surplus > max_transient_surplus:
-            raise VerifyFailure(
-                f"sample {index} client retained {surplus} surplus Students"
-            )
-        if gap <= max_transient_surplus:
+        population_converged = client_active == authoritative
+        binding_converged = (
+            bound == client_active
+            and unbound == 0
+            and authoritative_id_set == bound_id_set
+            and not missing_ids
+        )
+        exactly_converged = (
+            population_converged
+            and binding_converged
+            and int(client["pending_students"]) == 0
+        )
+        if population_converged:
             converged_count += 1
-        if unbound <= max_transient_surplus:
+        if binding_converged:
             binding_converged_count += 1
+        if exactly_converged:
+            consecutive_converged += 1
+            maximum_consecutive_converged = max(
+                maximum_consecutive_converged,
+                consecutive_converged,
+            )
+        else:
+            consecutive_converged = 0
 
     if any(
         later < earlier
@@ -289,24 +401,16 @@ def evaluate_samples(
         raise VerifyFailure(
             "the connected run did not exercise deferred Student retirement"
         )
-    required_converged = max(2, len(stable_samples) // 2)
-    if converged_count < required_converged:
+    if (
+        require_convergence
+        and consecutive_converged < confirmation_samples
+    ):
         raise VerifyFailure(
-            "client Student population did not converge often enough: "
-            f"{converged_count}/{len(stable_samples)} samples"
-        )
-    if binding_converged_count < required_converged:
-        raise VerifyFailure(
-            "client Student bindings did not converge often enough: "
-            f"{binding_converged_count}/{len(stable_samples)} samples"
-        )
-    if population_gaps[-1] > max_transient_surplus:
-        raise VerifyFailure(
-            "client Student population was not converged in the final sample"
-        )
-    if unbound_counts[-1] > max_transient_surplus:
-        raise VerifyFailure(
-            "client retained unbound Students in the final sample"
+            "client Student population did not reach "
+            f"{confirmation_samples} consecutive exact identity matches; "
+            f"final gap {population_gaps[-1]}, "
+            f"missing IDs {list(missing_ids)}, "
+            f"unbound Students {unbound_counts[-1]}"
         )
 
     return {
@@ -314,20 +418,38 @@ def evaluate_samples(
         "stable_sample_count": len(stable_samples),
         "converged_sample_count": converged_count,
         "binding_converged_sample_count": binding_converged_count,
-        "maximum_client_surplus": max(client_surpluses),
+        "maximum_client_surplus": max(
+            max(surplus, 0)
+            for surplus in client_surpluses
+        ),
+        "maximum_client_deficit": max(
+            max(-surplus, 0)
+            for surplus in client_surpluses
+        ),
+        "maximum_population_gap": max(population_gaps),
         "maximum_unbound_client_students": max(unbound_counts),
+        "maximum_missing_student_ids": max(missing_counts),
         "final_population_gap": population_gaps[-1],
+        "final_missing_student_ids": list(missing_ids),
+        "consecutive_converged_sample_count": consecutive_converged,
+        "maximum_consecutive_converged_sample_count": (
+            maximum_consecutive_converged
+        ),
+        "required_confirmation_samples": confirmation_samples,
+        "convergence_confirmed": (
+            consecutive_converged >= confirmation_samples
+        ),
         "student_retirement_total": max(removal_totals),
     }
 
 
 def run_live_verification(
     *,
-    sample_count: int,
+    convergence_timeout: float,
+    confirmation_samples: int,
     warmup_samples: int,
     interval: float,
     timeout: float,
-    max_transient_surplus: int,
     instance_prefix: str,
     host_port: int,
     client_port: int,
@@ -358,27 +480,98 @@ def run_live_verification(
             ("client", str(launch["clientLuaPipe"])),
         ]
         samples: list[dict[str, object]] = []
-        for index in range(sample_count):
+        started_at = time.monotonic()
+        deadline = started_at + convergence_timeout
+        index = 0
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             sample = capture_sample(
                 clients,
                 index=index,
-                timeout=timeout,
+                timeout=min(timeout, remaining),
+            )
+            observed_at = time.monotonic()
+            sample["elapsed_seconds"] = round(
+                observed_at - started_at,
+                3,
             )
             samples.append(sample)
             print(json.dumps(sample, sort_keys=True), flush=True)
-            if index + 1 < sample_count:
-                time.sleep(interval)
 
-        aggregate = evaluate_samples(
-            samples,
-            warmup_samples=warmup_samples,
-            max_transient_surplus=max_transient_surplus,
-        )
+            if len(samples) > warmup_samples:
+                aggregate = evaluate_samples(
+                    samples,
+                    warmup_samples=warmup_samples,
+                    confirmation_samples=confirmation_samples,
+                    require_retirement=False,
+                    require_convergence=False,
+                )
+                if (
+                    observed_at <= deadline
+                    and aggregate["convergence_confirmed"]
+                    and aggregate["student_retirement_total"] > 0
+                ):
+                    aggregate = evaluate_samples(
+                        samples,
+                        warmup_samples=warmup_samples,
+                        confirmation_samples=confirmation_samples,
+                    )
+                    return {
+                        "ok": True,
+                        "instance_prefix": instance_prefix,
+                        "ports": [host_port, client_port],
+                        "process_ids": process_ids,
+                        "convergence_timeout_seconds": (
+                            convergence_timeout
+                        ),
+                        "elapsed_seconds": sample["elapsed_seconds"],
+                        "aggregate": aggregate,
+                        "samples": samples,
+                    }
+
+            remaining = deadline - observed_at
+            if remaining <= 0:
+                break
+            if interval > 0:
+                time.sleep(min(interval, remaining))
+            index += 1
+
+        if len(samples) <= warmup_samples:
+            error = (
+                "hub Student verifier reached its convergence deadline "
+                "without post-warmup samples"
+            )
+            aggregate = None
+        else:
+            aggregate = evaluate_samples(
+                samples,
+                warmup_samples=warmup_samples,
+                confirmation_samples=confirmation_samples,
+                require_retirement=False,
+                require_convergence=False,
+            )
+            final_client = samples[-1]["client"]
+            assert isinstance(final_client, Mapping)
+            error = (
+                "client Student population did not reach "
+                f"{confirmation_samples} consecutive exact identity "
+                f"matches within {convergence_timeout:g}s; "
+                f"final gap {aggregate['final_population_gap']}, "
+                f"missing IDs {aggregate['final_missing_student_ids']}, "
+                f"unbound Students {final_client['unbound_students']}, "
+                "retirement total "
+                f"{aggregate['student_retirement_total']}"
+            )
         return {
-            "ok": True,
+            "ok": False,
+            "error": error,
             "instance_prefix": instance_prefix,
             "ports": [host_port, client_port],
             "process_ids": process_ids,
+            "convergence_timeout_seconds": convergence_timeout,
+            "elapsed_seconds": round(time.monotonic() - started_at, 3),
             "aggregate": aggregate,
             "samples": samples,
         }
@@ -395,7 +588,16 @@ def _optional_game_directory(raw: str | None) -> Path | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLE_COUNT)
+    parser.add_argument(
+        "--convergence-timeout",
+        type=float,
+        default=DEFAULT_CONVERGENCE_TIMEOUT,
+    )
+    parser.add_argument(
+        "--confirmation-samples",
+        type=int,
+        default=DEFAULT_CONFIRMATION_SAMPLES,
+    )
     parser.add_argument(
         "--warmup-samples",
         type=int,
@@ -403,11 +605,6 @@ def main() -> int:
     )
     parser.add_argument("--interval", type=float, default=0.25)
     parser.add_argument("--timeout", type=float, default=5.0)
-    parser.add_argument(
-        "--max-transient-surplus",
-        type=int,
-        default=DEFAULT_MAX_TRANSIENT_SURPLUS,
-    )
     parser.add_argument("--instance-prefix")
     parser.add_argument("--host-port", type=int)
     parser.add_argument("--client-port", type=int)
@@ -418,14 +615,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
-    if args.samples <= args.warmup_samples:
-        parser.error("--samples must exceed --warmup-samples")
     if args.warmup_samples < 0:
         parser.error("--warmup-samples must not be negative")
+    if args.confirmation_samples <= 0:
+        parser.error("--confirmation-samples must be positive")
+    if args.convergence_timeout <= 0:
+        parser.error("--convergence-timeout must be positive")
     if args.interval < 0 or args.timeout <= 0:
         parser.error("--interval must be non-negative and --timeout positive")
-    if args.max_transient_surplus < 0:
-        parser.error("--max-transient-surplus must not be negative")
 
     host_port = args.host_port or _reserve_udp_port()
     client_port = args.client_port or _reserve_udp_port()
@@ -436,17 +633,17 @@ def main() -> int:
     return_code = 1
     try:
         result = run_live_verification(
-            sample_count=args.samples,
+            convergence_timeout=args.convergence_timeout,
+            confirmation_samples=args.confirmation_samples,
             warmup_samples=args.warmup_samples,
             interval=args.interval,
             timeout=args.timeout,
-            max_transient_surplus=args.max_transient_surplus,
             instance_prefix=args.instance_prefix or _default_instance_prefix(),
             host_port=host_port,
             client_port=client_port,
             game_directory=_optional_game_directory(args.game_dir),
         )
-        return_code = 0
+        return_code = 0 if result.get("ok") else 1
     except Exception as exc:
         result["error"] = str(exc)
         result["error_type"] = type(exc).__name__
