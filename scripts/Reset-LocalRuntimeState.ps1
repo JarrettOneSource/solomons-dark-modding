@@ -44,12 +44,6 @@ function Remove-PathWithRetries {
     }
 }
 
-Write-Host "Stopping running SolomonDark.exe processes..."
-$gameProcesses = @(Get-Process SolomonDark -ErrorAction SilentlyContinue)
-if ($gameProcesses.Count -gt 0) {
-    $gameProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
-}
-
 if (-not $KeepRuntimeWorkspace -and (Test-Path $runtimeRoot)) {
     Write-Host "Removing runtime workspace: $runtimeRoot"
     Remove-PathWithRetries -PathToRemove $runtimeRoot

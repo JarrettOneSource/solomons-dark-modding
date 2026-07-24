@@ -1,7 +1,9 @@
 param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
-    [switch]$LaunchAndVerifyLoader
+    [switch]$LaunchAndVerifyLoader,
+    [string]$GameDirectory = "",
+    [string]$InstanceName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,16 +11,22 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $buildScript = Join-Path $PSScriptRoot "Build-All.ps1"
 $sourceOrganizationScript = Join-Path $PSScriptRoot "Check-SourceOrganization.ps1"
-$resetScript = Join-Path $PSScriptRoot "Reset-LocalRuntimeState.ps1"
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
-$stageBinaryLayout = Join-Path $root "runtime/stage/.sdmod/config/binary-layout.ini"
-$stageDebugUiConfig = Join-Path $root "runtime/stage/.sdmod/config/debug-ui.ini"
-$loaderLog = Join-Path $root "runtime/stage/.sdmod/logs/solomondarkmodloader.log"
+if ([string]::IsNullOrWhiteSpace($InstanceName)) {
+    $InstanceName = "verify-$PID-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+}
+$instanceRoot = Join-Path $root "runtime/instances/$InstanceName"
+$stageBinaryLayout = Join-Path $instanceRoot "stage/.sdmod/config/binary-layout.ini"
+$stageDebugUiConfig = Join-Path $instanceRoot "stage/.sdmod/config/debug-ui.ini"
+$commonLauncherArguments = @("--instance", $InstanceName)
+if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
+    $commonLauncherArguments += @("--game-dir", $GameDirectory)
+}
 
 function Assert-LastExitCode {
     param([string]$Step)
 
-    if ($LASTEXITCODE -ne 0) {
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "$Step failed with exit code $LASTEXITCODE."
     }
 }
@@ -31,6 +39,27 @@ function Invoke-Launcher {
 
     & $launcher @Arguments
     Assert-LastExitCode "Launcher command '$($Arguments -join ' ')'"
+}
+
+function Invoke-LauncherJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $output = & $launcher @Arguments
+    Assert-LastExitCode "Launcher command '$($Arguments -join ' ')'"
+    $text = $output -join [Environment]::NewLine
+    try {
+        $result = $text | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "Launcher command did not return valid JSON: $text"
+    }
+    if (-not $result.success) {
+        throw "Launcher command failed: $($result.error)"
+    }
+    return $result
 }
 
 function Wait-ForFile {
@@ -87,20 +116,30 @@ function Wait-ForFileContent {
 }
 
 function Stop-SolomonDarkProcess {
-    $gameProcesses = @(Get-Process SolomonDark -ErrorAction SilentlyContinue)
-    if ($gameProcesses.Count -gt 0) {
-        $gameProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+    param([int]$ProcessId)
+
+    if ($ProcessId -le 0) {
+        return
+    }
+    $gameProcess = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProcessName -eq "SolomonDark" }
+    if ($null -ne $gameProcess) {
+        $gameProcess | Stop-Process -Force -ErrorAction SilentlyContinue
     }
 }
 
-& $resetScript -KeepAppData
+if (Test-Path $instanceRoot) {
+    Remove-Item $instanceRoot -Recurse -Force
+}
 
 & $sourceOrganizationScript
+Assert-LastExitCode "Source organization check"
 
 & $buildScript -Configuration $Configuration
+Assert-LastExitCode "$Configuration build"
 
-Invoke-Launcher -Arguments @("list-mods")
-Invoke-Launcher -Arguments @("stage")
+Invoke-Launcher -Arguments (@("list-mods") + $commonLauncherArguments)
+Invoke-Launcher -Arguments (@("stage") + $commonLauncherArguments)
 
 if (-not (Test-Path $stageBinaryLayout)) {
     throw "Stage verification failed. Expected staged binary layout was not found at $stageBinaryLayout"
@@ -111,14 +150,17 @@ if (-not (Test-Path $stageDebugUiConfig)) {
 }
 
 if ($LaunchAndVerifyLoader) {
-    Stop-SolomonDarkProcess
-
-    if (Test-Path $loaderLog) {
-        Remove-Item $loaderLog -Force
-    }
-
+    $processId = 0
     try {
-        Invoke-Launcher -Arguments @("launch")
+        $launchResult = Invoke-LauncherJson -Arguments (
+            @("launch", "--json", "--temporary-profile") +
+            $commonLauncherArguments
+        )
+        $processId = [int]$launchResult.launch.processId
+        $loaderLog = [string]$launchResult.launch.startupLogPath
+        if ([string]::IsNullOrWhiteSpace($loaderLog)) {
+            throw "Launcher did not report the instance loader log path."
+        }
         $loaderLogContent = Wait-ForFileContent -Path $loaderLog -Patterns @(
             "SolomonDarkModLoader attached\.",
             "Binary layout loaded\.",
@@ -127,8 +169,8 @@ if ($LaunchAndVerifyLoader) {
         )
     }
     finally {
-        Stop-SolomonDarkProcess
+        Stop-SolomonDarkProcess -ProcessId $processId
     }
 }
 
-Write-Host "Workspace verification passed."
+Write-Host "Workspace verification passed for instance '$InstanceName'."

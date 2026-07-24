@@ -21,6 +21,24 @@ import verify_local_multiplayer_sync as verifier  # noqa: E402
 
 
 class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
+    def test_workspace_reset_and_verifier_never_stop_unowned_games(
+        self,
+    ) -> None:
+        reset = (ROOT / "scripts/Reset-LocalRuntimeState.ps1").read_text(
+            encoding="utf-8",
+        )
+        verify = (ROOT / "scripts/Verify-Workspace.ps1").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertNotIn("Get-Process SolomonDark", reset)
+        self.assertNotIn("Stop-Process", reset)
+        self.assertNotIn("Get-Process SolomonDark", verify)
+        self.assertIn("Get-Process -Id $ProcessId", verify)
+        self.assertIn('"--instance", $InstanceName', verify)
+        self.assertIn('"--temporary-profile"', verify)
+        self.assertIn("$launchResult.launch.processId", verify)
+
     def test_all_lua_pair_verifiers_disable_tiling_and_preserve_games(
         self,
     ) -> None:
