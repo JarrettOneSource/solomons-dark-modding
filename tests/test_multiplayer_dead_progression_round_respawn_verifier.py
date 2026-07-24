@@ -161,6 +161,31 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
                 [23111, 23112, 23112, 23114]
             )
 
+    def test_native_corpse_gate_waits_for_tick_159_registration_state(
+        self,
+    ) -> None:
+        state = {
+            "active": "true",
+            "phase": "Spectating",
+            "grid_cell_address": "4096",
+            "grid_member_flag": "0",
+            "render_sort_bias": "-1000",
+            "death_drive_state": "1",
+            "red_effect_active": "false",
+        }
+        self.assertTrue(
+            verifier._native_corpse_state_matches(state)
+        )
+
+        first_spectator_frame = dict(state)
+        first_spectator_frame["grid_member_flag"] = "1"
+        first_spectator_frame["render_sort_bias"] = "0"
+        self.assertFalse(
+            verifier._native_corpse_state_matches(
+                first_spectator_frame
+            )
+        )
+
     def test_dead_picker_click_targets_the_exact_client_pid(self) -> None:
         completed = mock.Mock(
             returncode=0,

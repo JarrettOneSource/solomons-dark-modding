@@ -262,6 +262,7 @@ def test_live_gate_is_isolated_and_reads_exact_actor_state() -> None:
         "client-immediate-round-respawn-clean.png",
         "player_spawn_valid",
         "_place_client_far_from_spawn",
+        "_wait_for_native_corpse_state",
         "respawn_tick_peer_views",
         "grid_member_flag",
         "render_sort_bias",

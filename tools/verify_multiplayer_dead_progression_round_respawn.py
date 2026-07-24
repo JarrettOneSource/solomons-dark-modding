@@ -1069,6 +1069,32 @@ def _wait_for_client_spectator(
     )
 
 
+def _native_corpse_state_matches(
+    values: Mapping[str, str],
+) -> bool:
+    return (
+        values.get("active") == "true"
+        and values.get("phase") == "Spectating"
+        and _integer(values, "grid_cell_address") != 0
+        and _integer(values, "grid_member_flag") == 0
+        and abs(_number(values, "render_sort_bias") + 1000.0)
+        <= 0.001
+        and _integer(values, "death_drive_state") == 1
+        and values.get("red_effect_active") == "false"
+    )
+
+
+def _wait_for_native_corpse_state(
+    client_pipe: str,
+) -> dict[str, str]:
+    return death._wait_for_values(
+        client_pipe,
+        _native_corpse_state_matches,
+        timeout=3.0,
+        description="native tick-159 client corpse state",
+    )
+
+
 def _wait_for_respawn(
     client_pipe: str,
     *,
@@ -1235,23 +1261,16 @@ def run_dead_progression_scenario(
         }
         spectating = _wait_for_client_spectator(client_pipe)
         result["spectating"] = spectating
+        corpse_owner = _wait_for_native_corpse_state(
+            client_pipe
+        )
         corpse_views = {
-            "client_owner": spectating,
+            "client_owner": corpse_owner,
             "host_observer": death.query_remote_death_state(
                 host_pipe,
                 CLIENT_ID,
             ),
         }
-        if (
-            _integer(spectating, "grid_member_flag") != 0
-            or abs(_number(spectating, "render_sort_bias") + 1000.0)
-            > 0.001
-            or _integer(spectating, "grid_cell_address") == 0
-        ):
-            raise VerifyFailure(
-                "grace death did not reach the native tick-159 corpse "
-                f"state before respawn: {spectating}"
-            )
         result["corpse_before_respawn"] = corpse_views
 
         dead_progression_before = query_progression_snapshot(
