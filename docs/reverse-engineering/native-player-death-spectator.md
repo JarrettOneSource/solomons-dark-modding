@@ -309,14 +309,27 @@ valid screen and `desired_count=3`, but its option array remained
 `values=0/count=0`. The multiplayer option-roll hook could not run because the
 native tick never reached the progression vtable call at `+0x74`.
 
-The correct bridge is narrowly scoped to this UI virtual: while a connected
-dead participant has an unresolved local offer, invoke the screen tick with
-the actor's `+0x160` selector temporarily cleared, then restore the exact
-selector before returning to gameplay. The spectator lifecycle remains dead
-for damage, rendering, and replication; only the stock picker virtual sees the
-alive selector it requires. Spectator target cycling must also yield ownership
-of left/right input until the picker closes, including its release debounce,
-so a skill click cannot be consumed as a camera-target click.
+The screen also owns a ten-tick reveal countdown at `screen +0x78`. Its full
+tick body only decrements that countdown when this screen is the top entry in
+the native UI stack rooted at `DAT_0081F674`; when the countdown reaches zero,
+the same call rolls the options and builds their native children. A second
+isolated dead-player trace observed the countdown move from 10 to 8 and then
+stall: manually entering the virtual from the loader's gameplay reconciliation
+advanced it only while incidental main-thread work ran. A dead actor no longer
+provides the continuous `PlayerActor::Tick` pump that living-player acceptance
+had relied upon. This means manually calling or fast-forwarding the virtual is
+not a usable presentation path: later reveal and input frames would still
+stall.
+
+The correct bridge is therefore an exact detour of this UI virtual. While a
+connected dead participant has an unresolved local offer and this exact screen
+is ticking, the detour clears actor `+0x160`, calls the stock virtual at its
+normal UI-frame cadence, and restores the exact selector before returning.
+The spectator lifecycle remains dead for damage, rendering, and replication;
+only the stock picker virtual sees the alive selector it requires. Spectator
+target cycling must also yield ownership of left/right input until the picker
+closes, including its release debounce, so a skill click cannot be consumed as
+a camera-target click.
 
 ## Wave completion respawn and stale death authority
 
