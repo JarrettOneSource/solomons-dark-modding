@@ -14,7 +14,6 @@ void TickMultiplayerJoinFlow() {
     SDModSceneState scene;
     (void)TryGetSceneState(&scene);
     const bool hub_ready = IsHubReady(scene);
-    const bool tutorial_ready = IsTutorialReady(scene);
     const bool boneyard_ready = IsBoneyardReady(scene);
     const bool private_gameplay_ready =
         IsPrivateGameplayReady(scene);
@@ -94,24 +93,6 @@ void TickMultiplayerJoinFlow() {
                 *snapshot,
                 "main_menu.new_game",
                 now_ms);
-        }
-        return;
-
-    case JoinFlowPhase::BypassingTutorial:
-        if (hub_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Connecting);
-        } else if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        } else if (private_gameplay_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
-        } else if (
-            !tutorial_ready &&
-            snapshot != nullptr &&
-            snapshot->surface_id != "control_scheme_picker" &&
-            snapshot->captured_at_milliseconds >
-                g_join_flow.phase_entered_ms) {
-            g_join_flow.main_menu_first_seen_ms = 0;
-            SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
         }
         return;
 

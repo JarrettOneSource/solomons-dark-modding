@@ -41,6 +41,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string transcriptText_ = string.Empty;
     private string instanceName_;
     private bool debugUiEnabled_;
+    private bool showStockTutorial_;
     private string lobbyId_;
     private string gameDirectory_;
     private bool isGameReady_;
@@ -101,6 +102,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         diagnosticLogUploader_ = new DiagnosticLogUploader(steamWebsiteSessionClient_);
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
+        showStockTutorial_ = client.ShowStockTutorial;
         lobbyId_ = client.LobbyId;
         gameDirectory_ = client.GameDirectory;
         directoryUrl_ = client.DirectoryUrl;
@@ -538,6 +540,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref debugUiEnabled_, value))
             {
                 client_.UpdateDebugUiEnabled(value);
+                UpdateLaunchPreview();
+            }
+        }
+    }
+
+    public bool ShowStockTutorial
+    {
+        get => showStockTutorial_;
+        set
+        {
+            if (SetProperty(ref showStockTutorial_, value))
+            {
+                client_.UpdateShowStockTutorial(value);
                 UpdateLaunchPreview();
             }
         }

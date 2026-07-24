@@ -22,6 +22,7 @@ internal static class LauncherCommandParser
         var runtimeFlagOverrides = new List<string>();
         var temporaryProfile = false;
         var freshInstall = false;
+        var showStockTutorial = false;
         string? steamAppId = null;
         string? steamApiDll = null;
         var multiplayerMode = MultiplayerLaunchMode.Unspecified;
@@ -125,6 +126,12 @@ internal static class LauncherCommandParser
             {
                 freshInstall = true;
                 temporaryProfile = true;
+                continue;
+            }
+
+            if (arg == "--show-stock-tutorial")
+            {
+                showStockTutorial = true;
                 continue;
             }
 
@@ -243,6 +250,7 @@ internal static class LauncherCommandParser
             runtimeFlagOverrides,
             temporaryProfile,
             freshInstall,
+            showStockTutorial,
             steamAppId,
             steamApiDll,
             multiplayer.Mode,

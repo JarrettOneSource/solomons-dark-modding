@@ -313,7 +313,7 @@ function Assert-LogContract {
 
     $text = [System.IO.File]::ReadAllText($LogPath)
     $bypassToken =
-        "Multiplayer join flow bypassed the stock fresh-save tutorial before construction."
+        "Fresh-save tutorial bypass redirected the stock tutorial bootstrap to standard gameplay before construction."
     $bypassCount = [regex]::Matches(
         $text,
         [regex]::Escape($bypassToken)).Count

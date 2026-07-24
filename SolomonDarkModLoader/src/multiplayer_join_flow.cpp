@@ -1,13 +1,11 @@
 #include "multiplayer_join_flow.h"
 
 #include "debug_ui_overlay.h"
-#include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
-#include "x86_hook.h"
 
 #include <Windows.h>
 
@@ -33,7 +31,6 @@ constexpr std::uint64_t kActionRetryDelayMs = 100;
 constexpr std::uint64_t kCreateSurfaceExitStabilityMs = 100;
 constexpr std::uint64_t kTransitionPresentationMinimumMs = 750;
 constexpr std::uint64_t kQuickStartRunMaterializedDelayMs = 12000;
-constexpr std::size_t kTutorialGameplayBootstrapMinimumPatchSize = 5;
 constexpr std::size_t kCreateElementEnabledOffset = 0x18C;
 constexpr std::size_t kCreateElementSelectedOffset = 0x1A4;
 constexpr std::size_t kCreateDisciplineEnabledOffset = 0x228;
@@ -43,7 +40,6 @@ constexpr std::uint32_t kCreateSelectionUnset = 0xFFFFFFFFu;
 enum class JoinFlowPhase {
     Disabled,
     AdvancingMenus,
-    BypassingTutorial,
     PrivateGameplay,
     AwaitingLoadout,
     SelectingLoadout,
@@ -80,46 +76,14 @@ struct JoinFlowState {
 };
 
 JoinFlowState g_join_flow;
-X86Hook g_tutorial_gameplay_bootstrap_hook;
-
-using TutorialGameplayBootstrapFn = void(__thiscall*)(void* app);
-using StartStandardGameplayFn = void(__thiscall*)(void* app);
-
-StartStandardGameplayFn g_start_standard_gameplay = nullptr;
 
 void ClearPendingActionUnlocked();
 void SetPhaseUnlocked(JoinFlowPhase phase);
-
-void __fastcall HookTutorialGameplayBootstrap(
-    void* app,
-    void* /*unused_edx*/) {
-    if (g_start_standard_gameplay == nullptr) {
-        const auto original =
-            GetX86HookTrampoline<TutorialGameplayBootstrapFn>(
-                g_tutorial_gameplay_bootstrap_hook);
-        if (original != nullptr) {
-            original(app);
-        }
-        return;
-    }
-
-    {
-        std::scoped_lock lock(g_join_flow.mutex);
-        ClearPendingActionUnlocked();
-        SetPhaseUnlocked(JoinFlowPhase::BypassingTutorial);
-    }
-    Log(
-        "Multiplayer join flow bypassed the stock fresh-save tutorial "
-        "before construction.");
-    g_start_standard_gameplay(app);
-}
 
 const char* PhaseLabel(JoinFlowPhase phase) {
     switch (phase) {
     case JoinFlowPhase::AdvancingMenus:
         return "advancing_menus";
-    case JoinFlowPhase::BypassingTutorial:
-        return "bypassing_tutorial";
     case JoinFlowPhase::PrivateGameplay:
         return "private_gameplay";
     case JoinFlowPhase::AwaitingLoadout:
@@ -518,38 +482,11 @@ bool IsRunRequested(const multiplayer::RuntimeState& runtime) {
 bool InitializeMultiplayerJoinFlow() {
     std::scoped_lock lock(g_join_flow.mutex);
     ResetStateUnlocked(&g_join_flow);
-    g_start_standard_gameplay = nullptr;
     if (!ReadEnabledEnvironmentVariable(
             kQuickStartEnvironmentVariable)) {
         return false;
     }
 
-    const auto tutorial_bootstrap_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(
-            kTutorialGameplayBootstrap);
-    const auto standard_gameplay_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(
-            kStartStandardGameplay);
-    std::string hook_error;
-    if (tutorial_bootstrap_address == 0 ||
-        standard_gameplay_address == 0 ||
-        !InstallSafeX86Hook(
-            reinterpret_cast<void*>(tutorial_bootstrap_address),
-            reinterpret_cast<void*>(&HookTutorialGameplayBootstrap),
-            kTutorialGameplayBootstrapMinimumPatchSize,
-            &g_tutorial_gameplay_bootstrap_hook,
-            &hook_error)) {
-        Log(
-            "Multiplayer join flow could not install the stock tutorial "
-            "bootstrap guard. error=" +
-            (hook_error.empty()
-                 ? std::string("unresolved native target")
-                 : hook_error));
-        return false;
-    }
-    g_start_standard_gameplay =
-        reinterpret_cast<StartStandardGameplayFn>(
-            standard_gameplay_address);
     const auto quick_start_element =
         ReadShortEnvironmentVariable(
             kQuickStartElementEnvironmentVariable);
@@ -595,8 +532,6 @@ bool InitializeMultiplayerJoinFlow() {
 }
 
 void ShutdownMultiplayerJoinFlow() {
-    RemoveX86Hook(&g_tutorial_gameplay_bootstrap_hook);
-    g_start_standard_gameplay = nullptr;
     std::scoped_lock lock(g_join_flow.mutex);
     const bool was_enabled = g_join_flow.enabled;
     ResetStateUnlocked(&g_join_flow);
@@ -641,8 +576,6 @@ GetMultiplayerJoinFlowPresentation() {
             g_join_flow.main_menu_first_seen_ms != 0,
             {},
         };
-    case JoinFlowPhase::BypassingTutorial:
-        return {true, "Preparing multiplayer hub"};
     case JoinFlowPhase::PrivateGameplay:
         return {};
     case JoinFlowPhase::AwaitingLoadout:

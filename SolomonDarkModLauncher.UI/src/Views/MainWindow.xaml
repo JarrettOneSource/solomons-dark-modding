@@ -1061,6 +1061,33 @@
 
                     <TextBlock Margin="0,16,0,2"
                                Style="{StaticResource FieldLabelStyle}"
+                               Text="Gameplay" />
+                    <Border Padding="14,12"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <DockPanel LastChildFill="True">
+                            <CheckBox DockPanel.Dock="Right"
+                                      Margin="16,0,0,0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding ShowStockTutorial}"
+                                      Style="{StaticResource ToggleSwitchStyle}" />
+                            <StackPanel>
+                                <TextBlock Text="Show stock tutorial"
+                                           FontSize="13"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Margin="0,4,0,0"
+                                           Text="Show the original tutorial whenever a fresh save is launched."
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <TextBlock Margin="0,16,0,2"
+                               Style="{StaticResource FieldLabelStyle}"
                                Text="Cloud Account" />
                     <Border Padding="14,12"
                             Background="{StaticResource InputBackgroundBrush}"

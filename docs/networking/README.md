@@ -407,8 +407,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   materialize, dispatches stock Create actions on the game thread without a Lua
   mod, and queues the existing host-authoritative stock gameplay transition
   after preserving the joined-hub evidence. It validates exactly one stock
-  control-picker action and one pre-construction
-  tutorial bypass per peer, and captures every required screenshot and log. The
+  control-picker action and one launcher-owned pre-construction tutorial bypass
+  per peer, and captures every required screenshot and log. The
   opt-in native run request waits for a materialized remote player and never
   requires a Lua mod or focus-stealing input. Cleanup is limited to its recorded
   PIDs after matching each live executable path.

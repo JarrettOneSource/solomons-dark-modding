@@ -32,6 +32,7 @@ internal sealed class LauncherUiCommandClient
     private readonly string? runtimeRoot_;
     private string instanceName_ = "default";
     private bool debugUiEnabled_ = true;
+    private bool showStockTutorial_;
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
     private string directoryUrl_;
@@ -46,6 +47,7 @@ internal sealed class LauncherUiCommandClient
             string.Empty;
         directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
             DefaultDirectoryUrl;
+        showStockTutorial_ = settingsStore_.LoadShowStockTutorial();
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -56,6 +58,7 @@ internal sealed class LauncherUiCommandClient
 
     public string InstanceName => instanceName_;
     public bool DebugUiEnabled => debugUiEnabled_;
+    public bool ShowStockTutorial => showStockTutorial_;
 
     public string LobbyId => lobbyId_;
 
@@ -71,6 +74,12 @@ internal sealed class LauncherUiCommandClient
     public void UpdateDebugUiEnabled(bool enabled)
     {
         debugUiEnabled_ = enabled;
+    }
+
+    public void UpdateShowStockTutorial(bool showStockTutorial)
+    {
+        showStockTutorial_ = showStockTutorial;
+        settingsStore_.SaveShowStockTutorial(showStockTutorial);
     }
 
     public void UpdateLobbyId(string? lobbyId)
@@ -227,6 +236,12 @@ internal sealed class LauncherUiCommandClient
         {
             arguments.Add("--runtime-flag");
             arguments.Add("loader.debug_ui=false");
+        }
+
+        if (showStockTutorial_ &&
+            LauncherUiCommandRouting.LaunchesGame(mode))
+        {
+            arguments.Add("--show-stock-tutorial");
         }
 
         if (!string.IsNullOrWhiteSpace(gameDirectory_))

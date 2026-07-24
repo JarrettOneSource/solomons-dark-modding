@@ -55,6 +55,13 @@ internal sealed class LauncherUiSettingsStore
         });
     }
 
+    public bool LoadShowStockTutorial() => Load().ShowStockTutorial;
+
+    public void SaveShowStockTutorial(bool showStockTutorial)
+    {
+        Save(Load() with { ShowStockTutorial = showStockTutorial });
+    }
+
     public int LoadActiveSaveSlot()
     {
         var slot = Load().ActiveSaveSlot;
@@ -96,5 +103,6 @@ internal sealed class LauncherUiSettingsStore
         public string? GameDirectory { get; init; }
         public string? DirectoryUrl { get; init; }
         public int ActiveSaveSlot { get; init; }
+        public bool ShowStockTutorial { get; init; }
     }
 }

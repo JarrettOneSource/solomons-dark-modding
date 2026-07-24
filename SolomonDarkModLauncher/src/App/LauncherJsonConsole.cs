@@ -54,6 +54,7 @@ internal static class LauncherJsonConsole
                 HasRuntimeFlagOverrides = execution.Configuration.Runtime.HasOverrides,
                 TemporaryProfile = execution.Command.TemporaryProfile,
                 FreshInstall = execution.Command.FreshInstall,
+                ShowStockTutorial = execution.Command.ShowStockTutorial,
                 LoaderDebugUi = runtimeFlags.LoaderDebugUi,
                 SteamAppId = execution.Configuration.Steam.AppId,
                 SteamApiOverride = execution.Configuration.Steam.ApiDllOverridePath
@@ -362,6 +363,7 @@ internal static class LauncherJsonConsole
         public required bool HasRuntimeFlagOverrides { get; init; }
         public required bool TemporaryProfile { get; init; }
         public required bool FreshInstall { get; init; }
+        public required bool ShowStockTutorial { get; init; }
         public required bool LoaderDebugUi { get; init; }
         public required string SteamAppId { get; init; }
         public required string? SteamApiOverride { get; init; }

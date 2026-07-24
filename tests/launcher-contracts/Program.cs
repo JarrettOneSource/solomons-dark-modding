@@ -44,6 +44,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("fresh install isolation", TestFreshInstallIsolationAsync),
+    ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
@@ -460,6 +461,123 @@ static Task TestMultiplayerQuickStartLaunchRoutingAsync()
     Require(
         disabled.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == string.Empty,
         "single-player launch did not clear multiplayer quick start");
+
+    return Task.CompletedTask;
+}
+
+static Task TestTutorialBypassLaunchRoutingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var defaultCommand = LauncherCommandParser.Parse(["launch"]);
+        Require(
+            !defaultCommand.ShowStockTutorial,
+            "launcher default unexpectedly opted in to the stock tutorial");
+        var tutorialCommand = LauncherCommandParser.Parse(
+            ["launch", "--show-stock-tutorial"]);
+        Require(
+            tutorialCommand.ShowStockTutorial,
+            "launcher parser lost --show-stock-tutorial");
+
+        var settingsRoot = Path.Combine(root, "ui-settings");
+        var settings = new LauncherUiSettingsStore(settingsRoot);
+        Require(
+            !settings.LoadShowStockTutorial(),
+            "desktop launcher settings defaulted to the stock tutorial");
+        settings.SaveShowStockTutorial(true);
+        Require(
+            new LauncherUiSettingsStore(settingsRoot)
+                .LoadShowStockTutorial(),
+            "desktop launcher did not persist the stock tutorial opt-in");
+
+        var workspace = WorkspacePaths.Create(
+            Path.Combine(root, "workspace"),
+            modsRootOverride: null,
+            runtimeRootOverride: null,
+            stageRootOverride: null);
+        var profileCases = new[]
+        {
+            (Name: "normal", Temporary: false, Fresh: false),
+            (Name: "temporary", Temporary: true, Fresh: false),
+            (Name: "fresh-install", Temporary: false, Fresh: true)
+        };
+        var launchModes = new[]
+        {
+            MultiplayerLaunchMode.Unspecified,
+            MultiplayerLaunchMode.Off,
+            MultiplayerLaunchMode.Host,
+            MultiplayerLaunchMode.Join
+        };
+
+        foreach (var profileCase in profileCases)
+        {
+            var profileOptions =
+                IsolatedProfileBootstrapper.CreateLaunchOptions(
+                    workspace,
+                    new Dictionary<string, string>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["PRESERVED"] = profileCase.Name,
+                        [TutorialLaunchEnvironment
+                            .SkipFreshSaveTutorialVariable] =
+                            string.Empty
+                    },
+                    temporaryProfile: profileCase.Temporary,
+                    freshInstall: profileCase.Fresh);
+
+            foreach (var mode in launchModes)
+            {
+                var multiplayer = MultiplayerLaunchOptions.Create(
+                    mode,
+                    lobbyId: null,
+                    inviteSteamId: null,
+                    MultiplayerLaunchOptions.DefaultMaxParticipants,
+                    openInviteDialog:
+                        mode != MultiplayerLaunchMode.Host);
+                var defaultLaunch = MultiplayerLaunchEnvironment.Apply(
+                    TutorialLaunchEnvironment.Apply(
+                        profileOptions,
+                        showStockTutorial: false),
+                    multiplayer);
+                Require(
+                    defaultLaunch.EnvironmentOverrides?[
+                        TutorialLaunchEnvironment
+                            .SkipFreshSaveTutorialVariable] == "1",
+                    $"{profileCase.Name} {mode} launch omitted the tutorial-bypass signal");
+                Require(
+                    defaultLaunch.EnvironmentOverrides?["PRESERVED"] ==
+                        profileCase.Name,
+                    $"{profileCase.Name} {mode} launch discarded existing environment overrides");
+                Require(
+                    defaultLaunch.EnvironmentOverrides?["APPDATA"] is not null &&
+                    defaultLaunch.EnvironmentOverrides?["LOCALAPPDATA"] is not null,
+                    $"{profileCase.Name} {mode} launch lost its isolated profile environment");
+
+                var stockTutorialLaunch =
+                    MultiplayerLaunchEnvironment.Apply(
+                        TutorialLaunchEnvironment.Apply(
+                            profileOptions,
+                            showStockTutorial: true),
+                        multiplayer);
+                Require(
+                    stockTutorialLaunch.EnvironmentOverrides?[
+                        TutorialLaunchEnvironment
+                            .SkipFreshSaveTutorialVariable] ==
+                            string.Empty,
+                    $"{profileCase.Name} {mode} launch ignored the stock tutorial opt-in");
+            }
+        }
+
+        Require(
+            TutorialLaunchEnvironment.SkipFreshSaveTutorialVariable !=
+                MultiplayerLaunchEnvironment.QuickStartVariable,
+            "tutorial bypass and multiplayer quick start share one environment gate");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 
     return Task.CompletedTask;
 }

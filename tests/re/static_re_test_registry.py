@@ -325,6 +325,7 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
+    test_launcher_tutorial_bypass_is_standalone_and_default_on,
     test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness,
     test_launcher_saves_are_isolated_link_gated_and_proton_persisted,
     test_multiplayer_quick_start_keeps_private_gameplay_visible,
@@ -915,6 +916,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "client run switch requires fresh authenticated host intent",
         test_client_run_switch_requires_fresh_authenticated_host_intent,
+    ),
+    (
+        "launcher tutorial bypass is standalone and default-on",
+        test_launcher_tutorial_bypass_is_standalone_and_default_on,
     ),
     (
         "launcher multiplayer quick start uses live UI and scene readiness",

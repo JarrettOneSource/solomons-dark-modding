@@ -6,6 +6,7 @@
 #include "mod_loader_internal.h"
 
 #include "bot_runtime.h"
+#include "fresh_save_tutorial_bypass.h"
 #include "logger.h"
 #include "lua_camera_runtime.h"
 #include "lua_developer_console.h"
@@ -151,6 +152,7 @@ void ShutdownPartialRuntime() {
     StopRuntimeTickService();
     RuntimeDebug_Shutdown();
     ShutdownMultiplayerJoinFlow();
+    ShutdownFreshSaveTutorialBypass();
     ShutdownDebugUiOverlay();
     multiplayer::ShutdownBotRuntime();
     multiplayer::ShutdownFoundation();
@@ -403,6 +405,21 @@ void Initialize(HMODULE module_handle) {
             Log("Runtime tick service not started because no runtime tick handlers were loaded.");
         }
 
+        {
+            std::string tutorial_bypass_error;
+            if (!InitializeFreshSaveTutorialBypass(
+                    &tutorial_bypass_error)) {
+                const auto message = tutorial_bypass_error.empty()
+                    ? std::string(
+                        "Fresh-save tutorial bypass failed to initialize.")
+                    : tutorial_bypass_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("tutorial-bypass-failed", message);
+                return;
+            }
+        }
+
         const bool multiplayer_join_flow_enabled =
             InitializeMultiplayerJoinFlow();
         const auto* join_flow_ui_config =
@@ -503,6 +520,9 @@ void Shutdown() {
     RunShutdownStep("runtime tick service", &StopRuntimeTickService);
     RunShutdownStep("runtime debug", &RuntimeDebug_Shutdown);
     RunShutdownStep("multiplayer join flow", &ShutdownMultiplayerJoinFlow);
+    RunShutdownStep(
+        "fresh-save tutorial bypass",
+        &ShutdownFreshSaveTutorialBypass);
     RunShutdownStep("debug ui overlay", &ShutdownDebugUiOverlay);
     RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);

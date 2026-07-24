@@ -200,6 +200,12 @@ profile for a one-off run. Use `--fresh-install` for the true first-run
 contract: it implies a temporary profile, imports no retail APPDATA, excludes
 the source install's `sandbox` tree, and rejects `--savegames-root`.
 
+Launcher game starts skip the stock fresh-save tutorial by default in Solo,
+Host, and Join modes. Use the single `--show-stock-tutorial` opt-in, or enable
+**Show stock tutorial** in desktop launcher Settings, to restore the original
+tutorial for that launch policy. Direct starts outside the launcher retain
+stock behavior because they do not receive the launcher-owned bypass signal.
+
 The automated fresh two-player gate is
 `scripts/Verify-FreshInstallMultiplayer.ps1`. Give it unique, previously absent
 Windows runtime/evidence directories, unique loopback ports and instance names,

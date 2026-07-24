@@ -83,6 +83,7 @@ internal sealed class LauncherCliConfiguration
     public string IsolatedGameAppDataPath { get; set; } = string.Empty;
     public string RuntimeProfile { get; set; } = string.Empty;
     public bool HasRuntimeFlagOverrides { get; set; }
+    public bool ShowStockTutorial { get; set; }
     public bool LoaderDebugUi { get; set; }
     public string SteamAppId { get; set; } = string.Empty;
     public string? SteamApiOverride { get; set; }

@@ -77,6 +77,13 @@ after local writes settle and again when the game closes. The launcher stores
 no website password or Steam credential. Proton uses a staged directory mirror
 and copies it back to the selected local slot before the final backup.
 
+Every Solo, Host, and Join game started by the launcher skips the stock
+fresh-save tutorial and enters the standard gameplay flow. To play the original
+tutorial, enable **Show stock tutorial** in launcher Settings or pass
+`--show-stock-tutorial` to the CLI. This is one launcher-only preference;
+starting `SolomonDark.exe` outside the launcher keeps the stock behavior, and
+the multiplayer quick-start automation remains a separate test harness.
+
 ## Runtime contract
 
 The launcher stages these files into `runtime/stage/.sdmod/`:

@@ -40,6 +40,7 @@ internal static class StagedGameLauncher
         LauncherConfiguration configuration,
         bool temporaryProfile = false,
         bool freshInstall = false,
+        bool showStockTutorial = false,
         MultiplayerLaunchOptions? multiplayer = null,
         string? savegamesRootOverride = null,
         LaunchOptions? options = null)
@@ -60,6 +61,9 @@ internal static class StagedGameLauncher
                 StageSandboxCompatibilityLinks.Materialize(stage.StageRootPath, options.SavegamesRootPath);
         }
         options = ApplySandboxEnvironment(configuration, options);
+        options = TutorialLaunchEnvironment.Apply(
+            options,
+            showStockTutorial);
         options = MultiplayerLaunchEnvironment.Apply(
             options,
             multiplayer ?? MultiplayerLaunchOptions.Create(

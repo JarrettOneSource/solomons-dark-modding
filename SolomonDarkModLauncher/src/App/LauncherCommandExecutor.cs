@@ -165,6 +165,7 @@ internal static class LauncherCommandExecutor
             configuration,
             command.TemporaryProfile,
             command.FreshInstall,
+            command.ShowStockTutorial,
             multiplayer,
             command.SavegamesRootOverride);
         return new LauncherCommandExecution(
