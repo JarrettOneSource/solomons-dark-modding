@@ -29,6 +29,13 @@ LAYOUT = ROOT / "config" / "binary-layout.ini"
 GAMEPLAY_HEADER = (
     ROOT / "SolomonDarkModLoader" / "src" / "gameplay_seams.h"
 )
+GAMEPLAY_OFFSET_DECLARATIONS = (
+    ROOT
+    / "SolomonDarkModLoader"
+    / "src"
+    / "gameplay_seams"
+    / "progression_and_actor_offsets.inl"
+)
 GAMEPLAY_STATE = (
     ROOT
     / "SolomonDarkModLoader"
@@ -180,7 +187,9 @@ def test_respawn_uses_live_arena_spawn_and_restores_actor_registration() -> None
     """Both local and remote respawn restore the stock actor lifecycle."""
 
     layout = read(LAYOUT)
-    header = read(GAMEPLAY_HEADER)
+    header = read(GAMEPLAY_HEADER) + read(
+        GAMEPLAY_OFFSET_DECLARATIONS
+    )
     state = read(GAMEPLAY_STATE)
     local_respawn = read(GAMEPLAY_RESPAWN)
     remote_vitals = read(REMOTE_VITALS)

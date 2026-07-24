@@ -1,5 +1,10 @@
+extern std::size_t kArenaPlayerSpawnXOffset;
+extern std::size_t kArenaPlayerSpawnYOffset;
+extern std::size_t kArenaPlayerSpawnFacingOffset;
 extern std::size_t kArenaCombatWaveCounterOffset;
 extern std::size_t kArenaCombatActiveFlagOffset;
+extern std::size_t kActorGridMemberFlagOffset;
+extern std::size_t kActorRenderSortBiasOffset;
 extern std::size_t kProgressionLevelOffset;
 extern std::size_t kProgressionXpOffset;
 extern std::size_t kProgressionPreviousXpThresholdOffset;
