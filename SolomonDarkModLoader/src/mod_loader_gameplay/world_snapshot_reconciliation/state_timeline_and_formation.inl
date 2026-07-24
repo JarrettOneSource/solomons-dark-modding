@@ -1,4 +1,4 @@
-
+constexpr std::uint64_t kWorldSnapshotInterpolationDelayMs = 150;
 constexpr std::uint64_t kWorldSnapshotApplyStaleMs = 1200;
 constexpr std::uint64_t kWorldSnapshotRunLifecycleRequestIntervalMs = 1000;
 constexpr std::uint64_t kReplicatedRunEnemyRemoteDeathHoldMs = 1200;

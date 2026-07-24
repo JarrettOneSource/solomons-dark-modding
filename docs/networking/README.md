@@ -80,8 +80,9 @@ Steam playtest flow and the remaining external verification boundary.
   run-world tracked enemies use reliable full identity records on change and
   checkpoint plus compact unreliable `WorldMotionSnapshot` generations at a
   67 ms minimum interval. Clients keep a short world-snapshot history and
-  sample it at 1.5 times the recent arrival p90, clamped to 100–600 ms, with a
-  150 ms startup fallback. The latest replicated snapshot remains exposed
+  sample it at a fixed 150 ms presentation delay. Arrival jitter must not
+  lengthen that delay; doing so made one delayed fragment keep enemies visibly
+  behind host authority for multiple history windows. The latest replicated snapshot remains exposed
   through Lua for verification. Shared-hub actors are reconciled to the buffered host
   transform/heading snapshot on the gameplay thread; presentation state is
   overlaid from the latest same-timeline host snapshot so animation phase does
@@ -349,7 +350,7 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 |---|---|---|---|
 | Local player | Self for presentation; host verifies shared outcomes | Local echo plus authenticated participant frame | 20 Hz |
 | Remote player | Owning client, authenticated and relayed | 120 ms interpolation with one-arrival bounded extrapolation | 20 Hz |
-| Enemies | Host | Reliable identity plus compact motion; adaptive interpolation and bounded correction | ~15 Hz motion |
+| Enemies | Host | Reliable identity plus compact motion; fixed 150 ms interpolation and bounded correction | ~15 Hz motion |
 | Drops | Host | Reliable spawn; reliable pickup-request + confirm/deny | Event-driven |
 | Casts | Caster optimistic (plays anim); host broadcasts + confirms hit | Reliable event | Event-driven |
 
@@ -463,7 +464,7 @@ For a non-host client on a typical Steam SDR connection (50–100ms RTT):
 | Cast spell (animation) | **Zero lag** — animation plays optimistically on key-down. |
 | See damage numbers / hit resolve | **RTT delay** (~50–100ms) — host resolves, broadcasts. |
 | Pick up loot | **RTT delay** — pickup-request -> host confirm; the host credits the owning participant's inventory, gold, spellbook, or statbook state. |
-| See enemies | **100–150ms in the past** — snapshot interpolation buffer. |
+| See enemies | **About 150ms plus transport/reconciliation** — fixed snapshot interpolation buffer. |
 | Hard-snap / rubber-band | **Rare** — collision edge cases, desync after host correction. |
 
 Host feels none of this; their sim is local.

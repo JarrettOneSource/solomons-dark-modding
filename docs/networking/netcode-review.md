@@ -59,6 +59,21 @@ inside the 96 KiB/s budget. The old full-state format required twenty
 1,032-byte fragments per generation, or 20,640 bytes; at 5 Hz it exceeded the
 same budget and was necessarily stretched.
 
+## Optimization archaeology
+
+The recent optimization series has one behavioral implementation commit and
+two follow-ups:
+
+| Commit | Enemy replication change |
+|---|---|
+| `7bf7489` | Recorded the review and proposed the split; documentation only, with no cadence, packet, interpolation, or runtime change. |
+| `9f7aa39` | Implemented protocol 82. Run actors moved from full 1,032-byte snapshots (three actors per fragment, 200 ms minimum / 5 Hz before bandwidth stretching) to 92-byte motion rows (ten actors per 968-byte fragment, 67 ms minimum / about 15 Hz) plus reliable full identity only on structural change/checkpoint. Every live actor still appears in each motion generation; there is no distance or per-enemy priority scheduler. It also replaced the fixed 150 ms world delay with `1.5 * recent arrival p90`, clamped to 100–600 ms over an eight-snapshot history. Participant cold arrays and wave summaries were split/change-gated, but those lanes do not carry enemy transforms. |
+| `5d3aadb` | Fixed linked-worktree lookup for staged reverse-engineering artifacts and tests; no packet cadence, batching, delta, priority, interpolation, or send-rate change. |
+| `0215c36` | Kept the protocol-82 sender rates but changed receive batching: instead of withholding a motion generation until every fragment arrived, each valid fragment immediately advances its actor subset in a rolling identity-backed snapshot, with per-actor generation rejection. It also sent cast press/release on the immediate unreliable lane before reliable convergence. |
+
+The pre-optimization behavioral baseline is `a1132f0`, the parent of
+`9f7aa39`.
+
 ## World identity and motion
 
 Run actors now use two packet families:
@@ -125,6 +140,38 @@ client Air cast reached the host in 24 ms, stopped there 16 ms after client
 release, differed in observed duration by 8 ms, and completed 22 ms after
 release.
 
+## Authority-fidelity regression follow-up — 2026-07-24
+
+The organic loopback gate still paired host and client payloads by identical
+snapshot sequence. That proves packet decoding, but it compares a received
+client snapshot with the host snapshot that produced it, so position error is
+zero even when the rendered client enemy is hundreds of milliseconds behind
+the host's current native actor. Its client-clone check also compares the clone
+with that same delayed client snapshot. Neither measure represented what a
+player sees against current host authority.
+
+The replacement samples host and client native enemies on their independent
+monotonic clocks, interpolates the host track at each client observation,
+estimates per-enemy latency by bounded cross-correlation, and counts client-only
+teleports, direction reversals, freezes, and persistent missing/extra ghosts.
+The live gate now defaults to a deterministic local UDP proxy with 40 ms
+one-way latency and 12 ms uniform per-datagram jitter.
+
+Under that identical profile, the pre-optimization `a1132f0` loader measured
+30.761 units p95 authority divergence, 304 ms p95 observed latency, 188 ms p95
+presentation-source age, and 41.365 units maximum divergence. The optimized
+build measured 36.976, 320 ms, 305 ms, and 47.162 respectively. The adaptive
+eight-sample p90 estimator amplified a jittery fragment interval into a roughly
+300 ms presentation delay for several successive frames.
+
+The correction reverts only that adaptive interpolation change to the original
+fixed 150 ms delay. It retains compact 15 Hz motion, immediate independent
+fragment application, per-actor stale rejection, and the cast-edge convergence
+fix. The controlled fixed-delay build measured 29.242 units p95 divergence,
+288 ms p95 observed latency, 150 ms p95 source age, and 36.207 units maximum
+divergence—at least as good as the pre-optimization baseline on every fidelity
+measure.
+
 ## Interpolation and correction
 
 Remote participants retain an eight-sample receive-time history and a 120 ms
@@ -134,10 +181,9 @@ velocity for at most one observed arrival interval, but only while non-zero
 movement intent agrees with that velocity. Idle, reversed, invalid, and
 cross-scene samples hold the last authoritative transform.
 
-World actors no longer use an unconditional 150 ms delay. The recommended
-delay is `1.5 * recent arrival p90`, clamped to 100–600 ms, with a 150 ms
-fallback until two compatible samples exist. This follows both the normal
-15 Hz run lane and any interval stretching caused by the bandwidth limiter.
+World actors use a fixed 150 ms delay. A short receive history still brackets
+normal 15 Hz motion samples, but a transient fragment interval cannot inflate
+presentation latency for the rest of the history window.
 Position, shortest-arc heading, and locomotion phase interpolate within one
 scene/run timeline; presentation fields can still use the newest compatible
 snapshot so animation does not inherit transform latency.
@@ -212,8 +258,8 @@ split existed to remove.
 
 ## Regression gates
 
-`tests/native/multiplayer_runtime_state_tests.cpp` exercises adaptive world
-delay, bounded participant extrapolation, protocol sizes, exact variable packet
+`tests/native/multiplayer_runtime_state_tests.cpp` exercises fixed world delay
+under uneven arrivals, bounded participant extrapolation, protocol sizes, exact variable packet
 lengths, and a full 250-participant level-up barrier. The static RE/transport
 suite checks the packet split, send modes, authority validation, project
 membership, and documentation contracts. The normal Windows loader build keeps
@@ -224,10 +270,11 @@ runs the native runtime-state regression on Linux.
 from 12-actor generations and proves that received enemy subsets advance while
 untouched actors remain stable; it also rejects a late fragment without
 regression. `tools/verify_multiplayer_organic_enemy_cast_timing.py` is the live
-two-instance loopback gate. It requires at least six natural enemies and four
-moving enemies, bounds host/client authoritative and client-native position,
-HP, animation, target, and arrival-gap measurements throughout organic combat,
-and confirms that enemies actually damage a player. The same run casts client
+two-instance impaired-loopback gate. It requires at least six natural enemies
+and four moving enemies; bounds current-host versus client-observed native
+position, p95 update latency, presentation-source age, teleports, rubber-bands,
+freezes, persistent ghosts, HP, animation, target, and arrival gaps throughout
+organic combat; and confirms that enemies actually damage a player. The same run casts client
 Air for 12 frames and requires both host-observed start and stop within 150 ms,
 host/client duration error within 100 ms, and native completion within 250 ms
 of the client release.

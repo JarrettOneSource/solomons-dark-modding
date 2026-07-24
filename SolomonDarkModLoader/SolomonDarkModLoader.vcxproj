@@ -129,7 +129,6 @@
     <ClInclude Include="include\multiplayer_runtime_snapshot_state.inl" />
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
     <ClInclude Include="src\multiplayer_runtime_participant_sampling.inl" />
-    <ClInclude Include="src\multiplayer_runtime_world_sampling.inl" />
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />

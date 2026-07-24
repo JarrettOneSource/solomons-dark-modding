@@ -1817,7 +1817,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (world_snapshot_reconciliation_text, "kWorldSnapshotApplyStaleMs"),
         (
             world_snapshot_reconciliation_text,
-            "RecommendedWorldSnapshotInterpolationDelayMs(",
+            "kWorldSnapshotInterpolationDelayMs = 150",
         ),
         (world_snapshot_reconciliation_text, "TrySampleWorldSnapshot"),
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemySoftCorrectionFactor"),

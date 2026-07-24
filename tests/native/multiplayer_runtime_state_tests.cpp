@@ -44,30 +44,32 @@ sdmod::multiplayer::WorldSnapshotRuntimeInfo MakeWorldSnapshot(
     return snapshot;
 }
 
-bool AdaptiveWorldDelayKeepsABracketingSample() {
+bool FixedWorldDelayDoesNotAmplifyArrivalJitter() {
     using namespace sdmod::multiplayer;
 
     RuntimeState state;
     AppendWorldSnapshot(&state, MakeWorldSnapshot(1, 1000, 0.0f));
     AppendWorldSnapshot(&state, MakeWorldSnapshot(2, 1200, 20.0f));
 
-    const auto delay_ms = RecommendedWorldSnapshotInterpolationDelayMs(state);
     WorldSnapshotRuntimeInfo sample;
-    if (!Require(delay_ms == 300, "200 ms arrivals did not select a 300 ms delay") ||
+    if (!Require(
+            TrySampleWorldSnapshot(state, 1250, 150, &sample),
+            "fixed-delay world sample was unavailable") ||
         !Require(
-            TrySampleWorldSnapshot(state, 1390, delay_ms, &sample),
-            "adaptive world sample was unavailable") ||
-        !Require(sample.actors.size() == 1, "adaptive world sample lost its actor") ||
+            sample.actors.size() == 1,
+            "fixed-delay world sample lost its actor") ||
         !Require(
-            NearlyEqual(sample.actors[0].position_x, 9.0f),
-            "adaptive world sample held the newest position instead of interpolating")) {
+            NearlyEqual(sample.actors[0].position_x, 10.0f),
+            "fixed-delay world sample did not interpolate at 150 ms")) {
         return false;
     }
 
     AppendWorldSnapshot(&state, MakeWorldSnapshot(3, 1300, 30.0f));
     return Require(
-        RecommendedWorldSnapshotInterpolationDelayMs(state) == 300,
-        "recent p90 delay became too shallow after one faster arrival");
+        TrySampleWorldSnapshot(state, 1350, 150, &sample) &&
+            sample.actors.size() == 1 &&
+            NearlyEqual(sample.actors[0].position_x, 20.0f),
+        "arrival jitter changed the fixed 150 ms presentation delay");
 }
 
 bool RemotePlayerExtrapolatesAtMostOneArrival() {
@@ -169,7 +171,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
 }  // namespace
 
 int main() {
-    if (!AdaptiveWorldDelayKeepsABracketingSample() ||
+    if (!FixedWorldDelayDoesNotAmplifyArrivalJitter() ||
         !RemotePlayerExtrapolatesAtMostOneArrival() ||
         !PacketSplitsHaveBoundedVariableWireSizes()) {
         return 1;

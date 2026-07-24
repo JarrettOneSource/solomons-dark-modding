@@ -583,8 +583,6 @@ bool AppendLootSnapshot(RuntimeState* state, LootSnapshotRuntimeInfo snapshot) {
     return true;
 }
 
-#include "multiplayer_runtime_world_sampling.inl"
-
 bool TrySampleWorldSnapshot(
     const RuntimeState& state,
     std::uint64_t now_ms,
