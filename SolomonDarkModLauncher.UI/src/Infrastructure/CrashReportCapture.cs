@@ -49,8 +49,10 @@ internal sealed record CrashReportCapture(
             return null;
         }
 
-        var runtimeRoot = Path.GetFullPath(stage.StageRuntimeRootPath);
-        var logsRoot = Path.Combine(runtimeRoot, "logs");
+        var logsRoot = Path.Combine(
+            Path.GetFullPath(stage.StageRoot),
+            ".sdmod",
+            "logs");
         var crashLogPath = Path.Combine(logsRoot, "solomondarkmodloader.crash.log");
         var crashLogIsCurrent = IsCurrentNonemptyFile(crashLogPath, launch.StartedAtUtc);
         var dumpPaths = Directory.Exists(logsRoot)
@@ -91,8 +93,8 @@ internal sealed record CrashReportCapture(
         AddArtifact(artifacts, stage.StageReportPath, "diagnostics/stage-report.json");
         AddArtifact(
             artifacts,
-            Path.Combine(stage.StageRoot, ".sdmod", "loader-startup-status.json"),
-            "diagnostics/loader-startup-status.json");
+            Path.Combine(stage.StageRoot, ".sdmod", "startup-status.json"),
+            "diagnostics/startup-status.json");
         AddArtifact(
             artifacts,
             Path.Combine(stage.StageRoot, ".sdmod", "multiplayer-session-status.json"),

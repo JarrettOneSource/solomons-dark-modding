@@ -767,12 +767,17 @@ static Task TestCrashCaptureArchiveAsync()
     {
         var stageRoot = Path.Combine(root, "stage");
         var runtimeRoot = Path.Combine(stageRoot, ".sdmod", "runtime");
-        var logsRoot = Path.Combine(runtimeRoot, "logs");
+        var logsRoot = Path.Combine(stageRoot, ".sdmod", "logs");
         Directory.CreateDirectory(logsRoot);
         var crashLogPath = Path.Combine(logsRoot, "solomondarkmodloader.crash.log");
         var loaderLogPath = Path.Combine(logsRoot, "solomondarkmodloader.log");
+        var startupStatusPath = Path.Combine(
+            stageRoot,
+            ".sdmod",
+            "startup-status.json");
         File.WriteAllText(crashLogPath, "unhandled exception code=0xC0000005\n");
         File.WriteAllText(loaderLogPath, "loader attached\n");
+        File.WriteAllText(startupStatusPath, """{"success":true}""");
         var dumpPath = Path.Combine(
             logsRoot,
             "solomondarkmodloader.crash.20260722_120000_000.tid7.dmp");
@@ -798,7 +803,8 @@ static Task TestCrashCaptureArchiveAsync()
                 ProcessId = 123,
                 LaunchToken = "0123456789abcdef0123456789abcdef",
                 StartedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
-                LoaderPath = Path.Combine(root, "SolomonDarkModLoader.dll")
+                LoaderPath = Path.Combine(root, "SolomonDarkModLoader.dll"),
+                StartupLogPath = loaderLogPath
             }
         };
 
@@ -816,6 +822,9 @@ static Task TestCrashCaptureArchiveAsync()
             Require(entryNames.Contains("report.json"), "crash archive is missing report.json");
             Require(entryNames.Contains("logs/crash.log"), "crash archive is missing the crash log");
             Require(entryNames.Contains("logs/loader.log"), "crash archive is missing the loader log");
+            Require(
+                entryNames.Contains("diagnostics/startup-status.json"),
+                "crash archive is missing the loader startup status");
             Require(entryNames.Contains($"dumps/{Path.GetFileName(dumpPath)}"), "crash archive is missing the minidump");
             Require(entryNames.All(name => !Path.IsPathRooted(name)), "crash archive exposed absolute entry paths");
             using var manifestReader = new StreamReader(
