@@ -80,6 +80,87 @@ def test_boneyard_parser_rejects_empty_truncated_and_trailing_files() -> str:
     return "Boneyard parser rejects empty, truncated, trailing, and malformed envelopes"
 
 
+def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() -> str:
+    findings = _read(
+        "docs/reverse-engineering/native-default-boneyard-load-seed-and-decor.md"
+    )
+    layout = _read("config/binary-layout.ini")
+
+    required_findings = (
+        "0x0058E8C0",
+        "0x005BB970",
+        "0x005CFA80",
+        "0x0046EA90",
+        "0x0046DC60",
+        "0x0046D7B0",
+        "0x006388B0",
+        "0x0062CB00",
+        "0x006531B0",
+        "0x00818B08",
+        "0x00818B10",
+        "ReinitializeAppliedRunGenerationSeedForArenaCreate",
+        "Generated `play.boneyard` bytes",
+        "Tree/Scrub, Gravestone, Building, Goodie, Road, Fence, terrain, and compact decor",
+        "80 4E 18 01",
+        "C6 46 18 01",
+        "protocol version must remain unchanged",
+    )
+    missing_findings = [token for token in required_findings if token not in findings]
+    if missing_findings:
+        raise StaticReTestFailure(
+            "default Boneyard RE map is incomplete: " + ", ".join(missing_findings)
+        )
+
+    required_layout = (
+        "default_boneyard_selection_dispatch=0x0058E8C0",
+        "default_boneyard_gameplay_loader=0x005BB970",
+        "gameplay_start_finalize=0x005CFA80",
+        "boneyard_loader=0x0046DC60",
+        "boneyard_procedural_create_save=0x0046D7B0",
+        "boneyard_generator=0x006388B0",
+        "boneyard_tree_generator=0x0062CB00",
+        "boneyard_materialize=0x006531B0",
+        "native_rng_construct=0x00401110",
+        "native_rng_initialize=0x00401120",
+        "native_rng_integer=0x00401170",
+        "native_rng_float=0x00401310",
+        "native_global_rng_state=0x00818B08",
+        "native_global_rng_state_object=0x00818B10",
+        "actor_world_compact_decoration_list=0x8ADC",
+        "boneyard_compact_flags=0x18",
+        "boneyard_compact_runtime_size=0x2C",
+        "boneyard_compact_serialized_size=0x19",
+    )
+    missing_layout = [token for token in required_layout if token not in layout]
+    if missing_layout:
+        raise StaticReTestFailure(
+            "default Boneyard binary-layout map is incomplete: "
+            + ", ".join(missing_layout)
+        )
+
+    for index, address in enumerate(
+        (
+            "0x0063BC10",
+            "0x0063BD1F",
+            "0x0063BDFB",
+            "0x0063BF30",
+            "0x0063C03B",
+            "0x0063C117",
+            "0x0063C45F",
+        )
+    ):
+        token = f"boneyard_compact_flags_initialize_{index}={address}"
+        if token not in layout:
+            raise StaticReTestFailure(
+                f"default Boneyard compact-decoration patch site is missing: {token}"
+            )
+
+    return (
+        "default Boneyard selection, retail RNG, local materialization, authority "
+        "seed transport, and all seven uninitialized compact-flag sites are mapped"
+    )
+
+
 def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> str:
     seed_sources = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/run_generation_seed_helpers.inl"
