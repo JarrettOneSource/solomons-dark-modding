@@ -1399,6 +1399,7 @@ bool BuildLocalParticipantProgressionBookSnapshotPacket(
 void SendLocalParticipantProgressionSnapshots(
     const std::vector<TransportPeerEndpoint>& endpoints,
     std::uint64_t now_ms);
+bool IsRunGameOverAccepted(std::uint32_t run_nonce);
 bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
@@ -1434,6 +1435,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
 #include "multiplayer_local_transport/death_spectator_sync.inl"
+#include "multiplayer_local_transport/run_game_over_sync.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
@@ -1536,6 +1538,7 @@ void PublishLocalTransportRuntimeState() {
 }  // namespace
 
 #include "multiplayer_local_transport/death_spectator_public.inl"
+#include "multiplayer_local_transport/run_game_over_public.inl"
 
 void ConfirmLocalParticipantVitalsCorrection(
     std::uint32_t correction_sequence) {
@@ -1561,6 +1564,7 @@ void NotifyLocalRunStarted() {
 
     ResetLocalDeathSpectatorState("new_run");
     ResetWaveRespawnState();
+    ResetRunGameOverState("new_run");
     const auto previous_exit_nonce =
         g_local_run_exit_latched_nonce.exchange(0, std::memory_order_acq_rel);
     const bool cleared_client_exit_follow =
@@ -1589,7 +1593,11 @@ void NotifyLocalRunEnded(std::string_view reason) {
         local != nullptr && local->runtime.run_nonce != 0
             ? local->runtime.run_nonce
             : g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
-    if (g_local_transport.is_host && current_nonce != 0) {
+    const bool terminal_game_over =
+        IsRunGameOverAccepted(current_nonce);
+    if (g_local_transport.is_host &&
+        current_nonce != 0 &&
+        !terminal_game_over) {
         g_local_run_exit_latched_nonce.store(current_nonce, std::memory_order_release);
     }
 
@@ -1610,6 +1618,8 @@ void NotifyLocalRunEnded(std::string_view reason) {
         "Multiplayer local run exit latched. role=" +
         std::string(g_local_transport.is_host ? "host" : "client") +
         " run_nonce=" + std::to_string(current_nonce) +
+        " terminal_game_over=" +
+        std::to_string(terminal_game_over ? 1 : 0) +
         " reason=" + std::string(reason));
 }
 

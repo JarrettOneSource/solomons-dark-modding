@@ -299,6 +299,15 @@ struct DeathSpectatorRuntimeInfo {
     float last_respawn_y = 0.0f;
 };
 
+struct RunGameOverRuntimeInfo {
+    std::uint32_t command_epoch = 0;
+    std::uint32_t accepted_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint64_t authority_participant_id = 0;
+    bool pending_dispatch = false;
+    std::uint32_t dispatch_count = 0;
+};
+
 struct ParticipantTransformSample {
     bool valid = false;
     std::uint64_t received_ms = 0;

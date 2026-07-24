@@ -3,7 +3,7 @@
 This is a source-level review of the current multiplayer transport, protocol,
 interpolation, and steady-state packet cost. It also records the disposition of
 each optimization identified during the review. The code and packet sizes below
-are for protocol 83.
+are for protocol 84.
 
 ## Verdict
 
@@ -12,7 +12,7 @@ their player state, the host owns world actors and shared progression
 lifecycles, and receivers reject packets that do not match the expected
 endpoint, participant session, scene epoch, or run nonce. The original review
 did find a real world-motion cadence problem and three unnecessarily hot payload
-families. Protocol 83 addresses those without changing the authority model.
+families. Protocol 84 addresses those without changing the authority model.
 
 The remaining scaling boundary is gameplay, not a hidden eight-player wire
 limit. The level-up barrier now carries a variable-length list of as many as 250
@@ -28,8 +28,8 @@ compile-time sizes live in
 
 | Lane | Payload | Cadence | Steam mode |
 |---|---:|---|---|
-| Participant frame | 322 B | 50 ms / 20 Hz | UnreliableNoDelay |
-| Participant state checkpoint | 604 B | 1,000 ms | ReliableNoNagle |
+| Participant frame | 334 B | 50 ms / 20 Hz | UnreliableNoDelay |
+| Participant state checkpoint | 616 B | 1,000 ms | ReliableNoNagle |
 | Run-world motion | 968 B per 10 actors | 67 ms minimum / about 15 Hz, bandwidth-stretched | UnreliableNoDelay |
 | Run-world identity | 1,032 B per 3 actors | spawn/identity change plus bandwidth-limited reliable checkpoint | ReliableNoNagle |
 | Shared-hub world state | 1,032 B per 3 actors | 200 ms minimum / 5 Hz, bandwidth-stretched | Unreliable with reliable checkpoints |
@@ -40,6 +40,13 @@ compile-time sizes live in
 | Native spell effects | 32 B + 124 B/effect | one coalesced generation per 16 ms tick | UnreliableNoDelay |
 | Lua mod state | variable fragments | 5,000 ms checkpoint | ReliableNoNagle |
 | Cast input | 128 B | held update every 50 ms | held unreliable; press/release immediate unreliable plus reliable convergence |
+
+Participant state and frame packets also carry the run-scoped native Game Over
+command and acknowledgement epochs. The host emits that command only after
+every connected member on the active run nonce has entered the native terminal
+death state; clients accept it only from the configured authority. The
+reliable state checkpoint owns eventual delivery, while the participant frame
+provides the low-latency copy.
 
 The world-motion budget is 96 KiB/s, auxiliary snapshots use 48 KiB/s, and
 reliable world-identity checkpoints use 24 KiB/s. The limiter increases a

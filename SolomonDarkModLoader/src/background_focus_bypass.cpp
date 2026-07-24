@@ -455,6 +455,7 @@ void __fastcall DetourAppMainTick(void* app, void* edx) {
     // the secure lock desktop, but D3D9 EndScene stops. Own queued Lua and
     // menu-time work here so remote control does not depend on presentation.
     PumpGameplayMainThreadWork();
+    DispatchPendingMultiplayerGameOverOnAppTick();
 
     // Native UI callbacks normally run on the same update thread that owns
     // CPU/menu lifetimes. The work pump can queue a semantic action, so dispatch

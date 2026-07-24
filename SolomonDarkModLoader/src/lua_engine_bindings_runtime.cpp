@@ -516,10 +516,41 @@ void PushDeathSpectatorRuntimeInfo(
     lua_setfield(state, -2, "display_text");
 }
 
+void PushRunGameOverRuntimeInfo(
+    lua_State* state,
+    const multiplayer::RunGameOverRuntimeInfo& game_over) {
+    lua_createtable(state, 0, 6);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(game_over.command_epoch));
+    lua_setfield(state, -2, "command_epoch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(game_over.accepted_epoch));
+    lua_setfield(state, -2, "accepted_epoch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(game_over.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            game_over.authority_participant_id));
+    lua_setfield(state, -2, "authority_participant_id");
+    lua_pushboolean(
+        state,
+        game_over.pending_dispatch ? 1 : 0);
+    lua_setfield(state, -2, "pending_dispatch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(game_over.dispatch_count));
+    lua_setfield(state, -2, "dispatch_count");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 19);
+    lua_createtable(state, 0, 20);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
     lua_pushboolean(state, multiplayer::IsLocalTransportEnabled() ? 1 : 0);
@@ -676,6 +707,10 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         state,
         runtime.death_spectator);
     lua_setfield(state, -2, "death_spectator");
+    PushRunGameOverRuntimeInfo(
+        state,
+        runtime.game_over);
+    lua_setfield(state, -2, "game_over");
 
     return 1;
 }

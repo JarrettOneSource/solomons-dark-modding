@@ -260,6 +260,7 @@ from static_re_native_movement_contracts import (
     test_smell_source_inventory_is_current,
 )
 from static_re_transport_core_contracts import (
+    test_all_dead_dispatches_native_game_over_once_per_participant,
     test_dead_client_spectates_alive_players_with_local_camera_and_hud,
     test_death_spectator_has_isolated_three_owner_live_regression,
     test_all_stock_potion_subtypes_replicate_as_native_pickups,
@@ -1061,6 +1062,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "solo death bypasses spectator and dispatches stock Game Over",
         test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
+    ),
+    (
+        "all dead dispatches native Game Over once per participant",
+        test_all_dead_dispatches_native_game_over_once_per_participant,
     ),
     (
         "dead client spectates alive players with local camera and HUD",

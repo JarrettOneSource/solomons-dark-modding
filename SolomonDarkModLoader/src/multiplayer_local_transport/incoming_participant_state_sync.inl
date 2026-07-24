@@ -80,6 +80,10 @@ void ApplyRemoteStatePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
+    ApplyAuthoritativeRunGameOver(
+        packet,
+        packet_from_configured_authority);
+    RecordRunGameOverAcknowledgement(packet);
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
             packet.participant_id,
@@ -286,6 +290,10 @@ void ApplyRemoteParticipantFramePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
+    ApplyAuthoritativeRunGameOver(
+        packet,
+        packet_from_configured_authority);
+    RecordRunGameOverAcknowledgement(packet);
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
             packet.participant_id,

@@ -105,7 +105,10 @@ void SendLocalState(std::uint64_t now_ms) {
 
     const auto packet = BuildLocalStatePacket();
     if (packet.transform_valid == 0 &&
-        !(g_local_transport.is_host && packet.run_nonce != 0 && packet.in_run == 0)) {
+        !(g_local_transport.is_host &&
+          packet.run_nonce != 0 &&
+          packet.in_run == 0) &&
+        !HasRunGameOverPacketWork(packet)) {
         return;
     }
 
@@ -131,7 +134,8 @@ void SendLocalParticipantFrame(std::uint64_t now_ms) {
     const auto packet = BuildLocalParticipantFramePacket();
     if (packet.transform_valid == 0 &&
         !(g_local_transport.is_host && packet.run_nonce != 0 &&
-          packet.in_run == 0)) {
+          packet.in_run == 0) &&
+        !HasRunGameOverPacketWork(packet)) {
         return;
     }
 

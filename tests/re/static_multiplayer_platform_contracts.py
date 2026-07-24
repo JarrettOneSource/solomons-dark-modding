@@ -491,11 +491,14 @@ def test_host_run_exit_is_authoritative_and_self_correcting() -> str:
         "packet->transform_valid = 0;",
         "packet->run_nonce = run_exit_nonce;",
     )
-    assert (
-        "packet.transform_valid == 0 &&\n"
-        "        !(g_local_transport.is_host && packet.run_nonce != 0 && packet.in_run == 0)"
-        in outgoing
-    )
+    for token in (
+        "packet.transform_valid == 0",
+        "g_local_transport.is_host",
+        "packet.run_nonce != 0",
+        "packet.in_run == 0",
+        "!HasRunGameOverPacketWork(packet)",
+    ):
+        assert token in outgoing, f"terminal packet send gate lacks: {token}"
     _require_in_order(
         incoming,
         "MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);",

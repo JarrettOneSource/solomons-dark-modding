@@ -292,7 +292,7 @@ The native findings impose these constraints:
   the staff bouncer.
 - Owner and observers use the same death-presentation epoch and agree on
   `+0x160`, the owner-authored bounded `+0x1BC` clock, and whether the grace
-  presentation is active. Protocol 83 carries that clock explicitly rather
+  presentation is active. Protocol 84 carries that clock explicitly rather
   than starting a peer-local timer when the death packet arrives.
 - After 3,000 ms, `+0x1BC` is held below the Arena red-effect threshold and can
   never reach the stock tick-300 end-of-life path.

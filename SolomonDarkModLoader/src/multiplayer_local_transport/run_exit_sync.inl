@@ -25,7 +25,8 @@ void StageClientHostRunExitFollow(
     if (!IsLocalTransportClient() ||
         !packet_from_configured_authority ||
         packet.in_run != 0 ||
-        packet.run_nonce == 0) {
+        packet.run_nonce == 0 ||
+        IsRunGameOverAccepted(packet.run_nonce)) {
         return;
     }
 
@@ -64,6 +65,10 @@ void ServiceClientHostRunExitFollow(std::uint64_t now_ms) {
 
     auto& follow = g_local_transport.client_host_run_exit_follow;
     if (!follow.active) {
+        return;
+    }
+    if (IsRunGameOverAccepted(follow.run_nonce)) {
+        ResetClientHostRunExitFollow("native Game Over accepted");
         return;
     }
     if (follow.received_ms == 0 ||

@@ -25,9 +25,14 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-The current wire version is protocol 83. See
+The current wire version is protocol 84. See
 [`netcode-review.md`](netcode-review.md) for current packet sizes, cadence,
 interpolation, and bandwidth accounting.
+
+Protocol 84 also carries one authority-scoped, run-nonce-scoped native Game
+Over command and per-participant acknowledgement. This is distinct from a
+normal host run exit: every participant consumes the command on its own app
+thread and enters the complete stock Game Over flow.
 
 Protocol v65 distinguishes automatically observed native enemy-damage claims
 from explicit damage requests. Native collision callbacks may report damage

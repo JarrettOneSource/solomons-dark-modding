@@ -187,6 +187,7 @@ struct RuntimeState {
     LevelUpWaitStatusRuntimeInfo level_up_wait_status;
     SharedGameplayPauseRuntimeInfo shared_gameplay_pause;
     DeathSpectatorRuntimeInfo death_spectator;
+    RunGameOverRuntimeInfo game_over;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;

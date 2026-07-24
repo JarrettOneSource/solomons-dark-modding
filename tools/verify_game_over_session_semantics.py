@@ -53,6 +53,7 @@ SOLO_PLAYER_NAME = "Solo Game Over"
 OUTPUT = ROOT / "runtime" / "game_over_session_semantics.json"
 ARTIFACT_ROOT = ROOT / "runtime" / "game-over-acceptance"
 SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
+CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 VITAL_TOLERANCE = 0.05
 
 
@@ -587,37 +588,79 @@ def capture_native_game_over(
     )
 
 
-def _click(pipe_name: str, x: float, y: float) -> None:
-    accepted = lua(
-        pipe_name,
-        f"return tostring(sd.input.click_normalized({x}, {y}))",
-    ).strip()
-    if accepted != "true":
+def _click_owned_window(
+    process_id: int,
+    x: float,
+    y: float,
+) -> str:
+    command = subprocess.list2cmdline(
+        [
+            "py",
+            "-3",
+            path_for_powershell(CLICK_WINDOW),
+            "--pid",
+            str(process_id),
+            "--relative",
+            "--x",
+            str(x),
+            "--y",
+            str(y),
+            "--activate",
+            "--activation-delay-ms",
+            "250",
+            "--post-delay-ms",
+            "150",
+            "--hold-ms",
+            "90",
+            "--button",
+            "left",
+            "--global-only",
+        ]
+    )
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=8.0,
+        check=False,
+    )
+    if completed.returncode != 0:
         raise VerifyFailure(
-            f"stock input click was not accepted on {pipe_name}: {accepted!r}"
+            "exact-PID stock click failed "
+            f"for process {process_id} ({completed.returncode}): "
+            f"{completed.stdout.strip()}"
         )
+    return completed.stdout.strip()
 
 
 def _drive_stock_click_until(
     pipe_name: str,
+    process_id: int,
     x: float,
     y: float,
     predicate,
     *,
     timeout: float,
     description: str,
-) -> dict[str, str]:
+) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     next_click_at = 0.0
     last: dict[str, str] = {}
+    clicks: list[str] = []
     while time.monotonic() < deadline:
         now = time.monotonic()
         if now >= next_click_at:
-            _click(pipe_name, x, y)
+            clicks.append(_click_owned_window(process_id, x, y))
             next_click_at = now + 0.5
         last = query_session_state(pipe_name)
         if predicate(last):
-            return last
+            return {
+                "process_id": process_id,
+                "clicks": clicks,
+                "state": last,
+            }
         time.sleep(0.05)
     raise VerifyFailure(
         f"stock click did not reach {description} on {pipe_name}; last={last}"
@@ -625,42 +668,45 @@ def _drive_stock_click_until(
 
 
 def advance_stock_post_game_over(
-    pipe_names: list[str],
+    process_ids_by_pipe: Mapping[str, int],
 ) -> dict[str, object]:
     mortuary = {
         pipe_name: _drive_stock_click_until(
             pipe_name,
+            process_id,
             0.5,
             0.5,
             lambda values: values.get("scene") == "memorator",
             timeout=15.0,
             description="native Mortuary",
         )
-        for pipe_name in pipe_names
+        for pipe_name, process_id in process_ids_by_pipe.items()
     }
 
     hall_of_fame = {
         pipe_name: _drive_stock_click_until(
             pipe_name,
+            process_id,
             0.5,
             0.5,
             lambda values: values.get("surface") == "hall_of_fame",
             timeout=15.0,
             description="native Hall of Fame",
         )
-        for pipe_name in pipe_names
+        for pipe_name, process_id in process_ids_by_pipe.items()
     }
 
     main_menu = {
         pipe_name: _drive_stock_click_until(
             pipe_name,
+            process_id,
             0.5,
             0.95,
             lambda values: values.get("surface") == "main_menu",
             timeout=15.0,
             description="stock main menu",
         )
-        for pipe_name in pipe_names
+        for pipe_name, process_id in process_ids_by_pipe.items()
     }
     return {
         "mortuary": mortuary,
@@ -802,7 +848,7 @@ def run_solo_verification(
             screenshot,
         )
         result["post_game_over"] = advance_stock_post_game_over(
-            [pipe_name]
+            {pipe_name: next(iter(owned))}
         )
         result["ok"] = True
         return result
@@ -967,7 +1013,13 @@ def run_trio_verification(
                 ("third", third_pipe),
             )
         }
-        result["post_game_over"] = advance_stock_post_game_over(pipes)
+        result["post_game_over"] = advance_stock_post_game_over(
+            {
+                host_pipe: int(launch["hostProcessId"]),
+                client_pipe: int(launch["clientProcessId"]),
+                third_pipe: int(launch["thirdProcessId"]),
+            }
+        )
         result["ok"] = True
         return result
     finally:

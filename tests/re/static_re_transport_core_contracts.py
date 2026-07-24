@@ -387,6 +387,166 @@ def test_solo_death_bypasses_spectator_and_dispatches_stock_game_over() -> str:
     )
 
 
+def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
+    """One host command terminalizes the run through every stock Game Over."""
+
+    protocol_text = read_text(MULTIPLAYER_PROTOCOL)
+    terminal_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/run_game_over_sync.inl"
+    )
+    terminal_public_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/run_game_over_public.inl"
+    )
+    transport_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    local_state_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+    )
+    outgoing_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_packet_sync.inl"
+    )
+    incoming_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_participant_state_sync.inl"
+    )
+    run_exit_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/run_exit_sync.inl"
+    )
+    run_lifecycle_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
+    )
+    app_tick_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
+    )
+    runtime_text = read_multiplayer_runtime_state_source()
+    lua_runtime_text = read_lua_runtime_source()
+    verifier_text = read_text(
+        ROOT / "tools/verify_game_over_session_semantics.py"
+    )
+    native_re_text = read_text(
+        ROOT
+        / "docs/reverse-engineering/native-game-over-session-semantics.md"
+    )
+
+    assert "kProtocolVersion = 84" in protocol_text
+    for field in (
+        "game_over_command_epoch",
+        "game_over_ack_epoch",
+        "game_over_run_nonce",
+    ):
+        assert protocol_text.count(field) == 2, (
+            f"{field} must exist in state and frame packets"
+        )
+    assert "sizeof(StatePacket) == 616" in protocol_text
+    assert "sizeof(ParticipantFramePacket) == 334" in protocol_text
+
+    for token in (
+        "RefreshHostRunGameOverCommand(",
+        "IsConnectedRunGameOverMember(",
+        "member_ids.size() < 2",
+        "participant.runtime.life_current <= 0.0f",
+        "participant.runtime.anim_drive_state != 0",
+        "participant.runtime.run_nonce == run_nonce",
+        "AcceptRunGameOverCommand(",
+        "g_run_game_over.accepted_epoch != 0",
+        "packet_from_configured_authority",
+        "packet.game_over_run_nonce != packet.run_nonce",
+        "ResetLocalDeathSpectatorState(\"all_players_dead\")",
+        "ResetWaveRespawnState();",
+        "RecordRunGameOverAcknowledgement(",
+        "HostRunGameOverAcknowledgedByAllParticipants(",
+        "packet->run_nonce = g_run_game_over.run_nonce;",
+    ):
+        assert token in terminal_text, f"terminal authority lacks: {token}"
+
+    assert (
+        '#include "multiplayer_local_transport/run_game_over_sync.inl"'
+        in transport_text
+    )
+    assert "PopulateRunGameOverPacketFields(packet);" in local_state_text
+    assert incoming_text.count("ApplyAuthoritativeRunGameOver(") == 2
+    assert outgoing_text.count("!HasRunGameOverPacketWork(packet)") == 2
+    assert "SteamNetworkSendMode::ReliableNoNagle" in outgoing_text
+
+    for token in (
+        "IsRunGameOverAccepted(packet.run_nonce)",
+        "IsRunGameOverAccepted(follow.run_nonce)",
+        'ResetClientHostRunExitFollow("native Game Over accepted")',
+    ):
+        assert token in run_exit_text, f"run-exit race remains: {token}"
+
+    dispatch_start = run_lifecycle_text.index(
+        "void DispatchPendingMultiplayerGameOverOnAppTick()"
+    )
+    dispatch_end = run_lifecycle_text.index(
+        "int GetRunLifecycleCurrentWave()",
+        dispatch_start,
+    )
+    dispatch_body = run_lifecycle_text[dispatch_start:dispatch_end]
+    for earlier, later in (
+        ("ConsumePendingNativeGameOverDispatch()", "original();"),
+        ("original();", '"all_players_dead"'),
+        ('"all_players_dead"', "NotifyNativeGameOverDispatched();"),
+    ):
+        assert dispatch_body.index(earlier) < dispatch_body.index(later)
+    app_pump = app_tick_text.index("PumpGameplayMainThreadWork();")
+    terminal_dispatch = app_tick_text.index(
+        "DispatchPendingMultiplayerGameOverOnAppTick();",
+        app_pump,
+    )
+    stock_tick = app_tick_text.index(
+        "g_background_focus_bypass_state.original_app_main_tick",
+        terminal_dispatch,
+    )
+    assert app_pump < terminal_dispatch < stock_tick
+
+    for token in (
+        "RunGameOverRuntimeInfo",
+        "command_epoch",
+        "accepted_epoch",
+        "pending_dispatch",
+        "dispatch_count",
+    ):
+        assert token in runtime_text, f"terminal diagnostics lack: {token}"
+        assert token in lua_runtime_text, f"Lua terminal diagnostics lack: {token}"
+    assert "g_run_game_over.dispatch_count = 1;" in terminal_public_text
+
+    for token in (
+        "first-death-spectator.png",
+        "second-death-spectator.png",
+        "terminal_game_over_state_matches",
+        'artifact_directory / f"{label}-game-over.png"',
+        '("host", host_pipe)',
+        '("client", client_pipe)',
+        '("third", third_pipe)',
+        "advance_stock_post_game_over(",
+        "CLICK_WINDOW",
+        '"--pid"',
+        '"--activate"',
+        '"--global-only"',
+    ):
+        assert token in verifier_text, f"trio live gate lacks: {token}"
+    assert "sd.input.click_normalized" not in verifier_text
+    for token in (
+        "configured authority",
+        "original `Game_OnGameOver` trampoline",
+        "host run-exit following must not race",
+    ):
+        assert token in native_re_text, f"terminal RE note lacks: {token}"
+
+    return (
+        "the host recognizes native terminal death for every connected run "
+        "member and dispatches one stock Game Over per participant"
+    )
+
+
 def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
     """Spectator target selection is alive-only, local, visible, and click-driven."""
 
@@ -494,7 +654,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 83" in protocol_text
+    assert "kProtocolVersion = 84" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -1021,7 +1181,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 83;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 84;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -1136,7 +1296,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "sizeof(ParticipantProgressionBookSnapshotPacket) == 2604"),
         (protocol_text, "static_assert(sizeof(LevelUpBarrierPacket) == 8052"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 604"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 616"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 328"),

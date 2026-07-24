@@ -160,6 +160,7 @@ bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp) {
 void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
 
 bool InitializeLocalTransport() {
+    ResetRunGameOverState("transport_initialize");
     if (!ConfigureLocalTransport()) {
         g_local_transport_authority_participant_id.store(
             0,
@@ -262,6 +263,7 @@ bool InitializeLocalTransport() {
 
 void ShutdownLocalTransport() {
     ShutdownLocalLevelUpOptionRollHook();
+    ResetRunGameOverState("transport_shutdown");
     ResetLocalDeathSpectatorState("transport_shutdown");
     ResetWaveRespawnState();
     sdmod::ClearHostLootDropDeactivationState();
@@ -329,6 +331,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
     TickLocalDeathSpectator(now_ms);
+    RefreshHostRunGameOverCommand();
     RefreshHostSharedGameplayPause(now_ms);
     ProcessCompletedHostLootPickups();
     ProcessQueuedLocalHostPowerupPickups(now_ms);

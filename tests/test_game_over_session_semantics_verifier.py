@@ -144,6 +144,25 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
             missing_continue = verifier.classify_native_game_over_image(path)
             self.assertFalse(missing_continue["matched"])
 
+    def test_stock_post_game_over_click_targets_one_exact_process(self) -> None:
+        completed = mock.Mock(returncode=0, stdout="clicked owned game\n")
+        with mock.patch.object(
+            verifier.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            result = verifier._click_owned_window(4321, 0.5, 0.95)
+
+        self.assertEqual(result, "clicked owned game")
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command[:3],
+            ["powershell.exe", "-NoProfile", "-Command"],
+        )
+        self.assertIn("--pid 4321", command[3])
+        self.assertIn("--activate", command[3])
+        self.assertIn("--global-only", command[3])
+
 
 if __name__ == "__main__":
     unittest.main()

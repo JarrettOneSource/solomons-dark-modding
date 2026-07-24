@@ -110,6 +110,12 @@ the host and every client an independently owned full native Game Over object
 while keeping the decision host-authoritative. Dispatch also retires local
 spectator camera/HUD state before the native surface is installed.
 
+Installing the Game Over surface retires the ordinary local run state before
+the transport stops pumping. Terminal command and acknowledgment envelopes
+must therefore retain the accepted terminal run nonce independently; otherwise
+post-dispatch packets carry a zero ordinary nonce and peers correctly reject
+the command as cross-run traffic.
+
 The terminal command is distinct from wave respawn and ordinary host run-exit:
 
 - wave respawn is invalid once the session has terminalized;
@@ -133,3 +139,8 @@ Static and live gates must prove both sides of the boundary:
   replay-safe, and present in the reliable state path;
 - lifecycle: native Game Over dispatch occurs exactly once per participant and
   suppresses competing host-run-exit follow for that terminalized run.
+
+The live post-flow gate sends stock mouse input only to each
+executable-path-validated process ID and verifies the resulting Mortuary, Hall
+of Fame, and main-menu states. Lua gameplay-click injection is not evidence for
+this surface because the native Game Over object owns its own input tick.

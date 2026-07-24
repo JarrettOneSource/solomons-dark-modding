@@ -459,6 +459,7 @@ void PopulateLocalParticipantFrameFields(
     packet->controller_kind =
         static_cast<std::uint8_t>(ParticipantControllerKind::Native);
     packet->run_nonce = local.runtime.run_nonce;
+    PopulateRunGameOverPacketFields(packet);
     PopulateSharedGameplayPausePacketFields(runtime_state, packet);
     PopulateLuaTimeControlPacketFields(packet);
     packet->participant_vitals_correction_ack_sequence =

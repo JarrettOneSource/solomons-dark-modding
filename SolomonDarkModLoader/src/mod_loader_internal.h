@@ -13,6 +13,7 @@ void LogCpuLifecycleGuardActivity();
 
 void PumpGameplayMainThreadWork();
 void PumpGameplayPostStockTickWork();
+void DispatchPendingMultiplayerGameOverOnAppTick();
 
 bool InitializeRunLifecycleHooks(std::string* error_message);
 void ShutdownRunLifecycleHooks();
