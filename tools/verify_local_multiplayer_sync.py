@@ -349,7 +349,10 @@ def launch_pair(
     host_port: int = 47770,
     client_port: int = 47771,
     third_port: int = 47772,
+    host_remote_port: int | None = None,
+    client_remote_port: int | None = None,
     game_directory: Path | None = None,
+    launcher_path: Path | None = None,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
@@ -383,6 +386,10 @@ def launch_pair(
         "-ThirdPort",
         str(third_port),
     ]
+    if host_remote_port is not None:
+        args.extend(["-HostRemotePort", str(host_remote_port)])
+    if client_remote_port is not None:
+        args.extend(["-ClientRemotePort", str(client_remote_port)])
     if host_preset is not None or client_preset is not None:
         if host_preset is not None:
             args.extend(["-HostPreset", host_preset])
@@ -428,6 +435,11 @@ def launch_pair(
         args.extend([
             "-GameDirectory",
             path_for_powershell(game_directory),
+        ])
+    if launcher_path is not None:
+        args.extend([
+            "-LauncherPath",
+            path_for_powershell(launcher_path),
         ])
     if serialized_exact_mod_ids is not None:
         args.extend(["-ExactModIds", serialized_exact_mod_ids])

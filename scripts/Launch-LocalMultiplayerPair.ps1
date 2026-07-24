@@ -6,6 +6,8 @@ param(
     [UInt16]$HostPort = 47770,
     [UInt16]$ClientPort = 47771,
     [UInt16]$ThirdPort = 47772,
+    [UInt16]$HostRemotePort = 0,
+    [UInt16]$ClientRemotePort = 0,
     [string]$RemoteHost = "127.0.0.1",
     [string]$HostParticipantId = "0x2000000000001001",
     [string]$ClientParticipantId = "0x2000000000001002",
@@ -40,6 +42,17 @@ param(
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
+
+$effectiveHostRemotePort = if ($HostRemotePort -ne 0) {
+    $HostRemotePort
+} else {
+    $ClientPort
+}
+$effectiveClientRemotePort = if ($ClientRemotePort -ne 0) {
+    $ClientRemotePort
+} else {
+    $HostPort
+}
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $launcher = if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
@@ -1205,7 +1218,7 @@ $hostResult = Start-MultiplayerInstance `
     -InstanceLaunchPreset $hostLaunchPreset `
     -Role "host" `
     -LocalPort $HostPort `
-    -RemotePort $ClientPort `
+    -RemotePort $effectiveHostRemotePort `
     -ParticipantId $HostParticipantId `
     -PlayerName $HostName `
     -RemotePlayerName $ClientName `
@@ -1262,7 +1275,7 @@ $clientResult = Start-MultiplayerInstance `
     -InstanceLaunchPreset $clientLaunchPreset `
     -Role "client" `
     -LocalPort $ClientPort `
-    -RemotePort $HostPort `
+    -RemotePort $effectiveClientRemotePort `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName `
     -RemotePlayerName $HostName `
