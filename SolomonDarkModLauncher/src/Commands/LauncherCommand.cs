@@ -6,6 +6,7 @@ internal sealed record LauncherCommand(
     LauncherMode Mode,
     bool ShowHelp,
     bool JsonOutput,
+    bool ProgressJson,
     string? InstanceName,
     string? GameDirectoryOverride,
     string? ModsRootOverride,

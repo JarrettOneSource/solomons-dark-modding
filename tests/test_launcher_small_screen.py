@@ -30,6 +30,19 @@ class LauncherSmallScreenTests(unittest.TestCase):
         ):
             self.assertIn(token, code)
 
+    def test_update_progress_is_visible_and_accessible(self) -> None:
+        xaml = MAIN_WINDOW_XAML.read_text(encoding="utf-8")
+
+        for token in (
+            'Binding="{Binding IsUpdateProgressVisible}"',
+            'Text="{Binding UpdateStatusText}"',
+            'Text="{Binding UpdateProgressDetailText}"',
+            'AutomationProperties.Name="Update progress"',
+            'Value="{Binding UpdateProgressValue, Mode=OneWay}"',
+            'Style="{StaticResource UpdateProgressBarStyle}"',
+        ):
+            self.assertIn(token, xaml)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,7 @@ internal static class LauncherOutputFormatter
             string.Empty,
             "Options:",
             "  --json                  Emit structured JSON output for wrapper tools.",
+            "  --progress-json         Stream update progress before the final JSON response. Requires --json.",
             "  --instance <name>       Use a named launcher instance. Default uses runtime/; named instances use runtime/instances/<name>/.",
             "  --game-dir <path>       Override the Solomon Dark install directory.",
             "  --mods-root <path>      Override the mods directory.",

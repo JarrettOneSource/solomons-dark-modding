@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\DistributionLayout.cs" Link="Shared\DistributionLayout.cs" />
     <Compile Include="..\Shared\SemanticVersion.cs" Link="Shared\SemanticVersion.cs" />
+    <Compile Include="..\Shared\UpdateProgress.cs" Link="Shared\UpdateProgress.cs" />
     <Compile Remove="SolomonDarkModLauncher.UI\**\*.cs" />
     <None Remove="SolomonDarkModLauncher.UI\**\*" />
     <Content Include="assets\**\*">

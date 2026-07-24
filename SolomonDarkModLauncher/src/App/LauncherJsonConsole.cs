@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Infrastructure;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.App;
 
@@ -11,8 +13,20 @@ internal static class LauncherJsonConsole
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
+
+    public static IProgress<UpdateProgress> CreateProgressReporter() =>
+        new JsonProgressReporter();
+
+    internal static string SerializeProgress(UpdateProgress progress) =>
+        JsonSerializer.Serialize(
+            new LauncherJsonProgressEnvelope(progress),
+            JsonOptions);
 
     public static void PrintExecution(LauncherCommandExecution execution)
     {
@@ -232,6 +246,12 @@ internal static class LauncherJsonConsole
         }, JsonOptions));
     }
 
+    internal static void PrintProgress(UpdateProgress progress)
+    {
+        Console.WriteLine(SerializeProgress(progress));
+        Console.Out.Flush();
+    }
+
     private static string GetModeToken(LauncherMode mode)
     {
         return mode switch
@@ -260,6 +280,17 @@ internal static class LauncherJsonConsole
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
         public required LauncherJsonModStateChange? ModStateChange { get; init; }
+    }
+
+    private sealed record LauncherJsonProgressEnvelope(
+        UpdateProgress UpdateProgress);
+
+    private sealed class JsonProgressReporter : IProgress<UpdateProgress>
+    {
+        public void Report(UpdateProgress value)
+        {
+            PrintProgress(value);
+        }
     }
 
     private sealed class LauncherJsonLobbyModSync

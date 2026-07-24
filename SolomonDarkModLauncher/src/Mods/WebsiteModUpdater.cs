@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using SolomonDarkModding.Versioning;
+using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.Target;
 
 namespace SolomonDarkModLauncher.Mods;
@@ -29,6 +30,7 @@ internal static class WebsiteModUpdater
         LauncherConfiguration configuration,
         ModCatalog catalog,
         string directoryBaseUrl,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         using var client = new HttpClient
@@ -41,6 +43,7 @@ internal static class WebsiteModUpdater
             configuration.Workspace.ModsRootPath,
             configuration.Workspace.ModCacheRootPath,
             client,
+            progress,
             cancellationToken);
     }
 
@@ -49,6 +52,7 @@ internal static class WebsiteModUpdater
         string modsRootPath,
         string cacheRootPath,
         HttpClient client,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var installed = catalog.DiscoveredMods
@@ -58,6 +62,14 @@ internal static class WebsiteModUpdater
             return new WebsiteModUpdateResult(0, [], Error: null);
         }
 
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Checking,
+            installed.Count == 1
+                ? "Checking 1 installed mod for updates…"
+                : $"Checking {installed.Count} installed mods for updates…",
+            0,
+            installed.Count,
+            UpdateProgressUnit.Items));
         IReadOnlyList<WebsiteResolvedMod> available;
         try
         {
@@ -65,10 +77,15 @@ internal static class WebsiteModUpdater
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            var message =
+                $"The website did not answer the mod update check within {UpdateMetadataTimeout.TotalSeconds:0} seconds.";
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Failed,
+                $"Mod update failed: {message}"));
             return new WebsiteModUpdateResult(
                 installed.Count,
                 [],
-                $"The website did not answer the mod update check within {UpdateMetadataTimeout.TotalSeconds:0} seconds.");
+                message);
         }
         catch (Exception exception) when (exception is
             HttpRequestException or
@@ -76,12 +93,37 @@ internal static class WebsiteModUpdater
             InvalidOperationException or
             JsonException)
         {
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Failed,
+                $"Mod update failed: {exception.Message}"));
             return new WebsiteModUpdateResult(installed.Count, [], exception.Message);
         }
 
-        var updates = new List<ModUpdate>();
-        foreach (var resolved in available)
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Checking,
+            available.Count == 0
+                ? "Installed mods are up to date."
+                : available.Count == 1
+                    ? "1 mod update is available."
+                    : $"{available.Count} mod updates are available.",
+            installed.Count,
+            installed.Count,
+            UpdateProgressUnit.Items));
+        if (available.Count == 0)
         {
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Completed,
+                "Installed mods are up to date.",
+                installed.Count,
+                installed.Count,
+                UpdateProgressUnit.Items));
+            return new WebsiteModUpdateResult(installed.Count, [], Error: null);
+        }
+
+        var updates = new List<ModUpdate>();
+        for (var index = 0; index < available.Count; index++)
+        {
+            var resolved = available[index];
             var current = installed[resolved.Id];
             var required = new MultiplayerModDescriptor(
                 resolved.Id,
@@ -94,19 +136,36 @@ internal static class WebsiteModUpdater
                     resolved,
                     required,
                     cacheRootPath,
-                    cancellationToken);
+                    cancellationToken,
+                    progress);
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Installing,
+                    $"Replacing {resolved.Id} v{current.Manifest.Version} with v{resolved.Version}…",
+                    index,
+                    available.Count,
+                    UpdateProgressUnit.Items));
                 Promote(cached, current, required, modsRootPath);
                 updates.Add(new ModUpdate(
                     resolved.Id,
                     current.Manifest.Version,
                     resolved.Version));
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Installing,
+                    $"Installed {resolved.Id} v{resolved.Version}.",
+                    index + 1,
+                    available.Count,
+                    UpdateProgressUnit.Items));
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                var message = $"The website did not finish downloading {resolved.Id}.";
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Failed,
+                    $"Mod update failed: {message}"));
                 return new WebsiteModUpdateResult(
                     installed.Count,
                     updates,
-                    $"The website did not finish downloading {resolved.Id}.");
+                    message);
             }
             catch (Exception exception) when (exception is
                 HttpRequestException or
@@ -116,10 +175,21 @@ internal static class WebsiteModUpdater
                 UnauthorizedAccessException or
                 JsonException)
             {
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Failed,
+                    $"Mod update failed: {exception.Message}"));
                 return new WebsiteModUpdateResult(installed.Count, updates, exception.Message);
             }
         }
 
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Completed,
+            updates.Count == 1
+                ? $"Updated {updates[0].Id} to v{updates[0].Version}."
+                : $"Updated {updates.Count} mods.",
+            updates.Count,
+            updates.Count,
+            UpdateProgressUnit.Items));
         return new WebsiteModUpdateResult(installed.Count, updates, Error: null);
     }
 

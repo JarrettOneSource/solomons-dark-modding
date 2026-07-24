@@ -1,6 +1,7 @@
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
 using SolomonDarkModLauncher.Steam;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.App;
 
@@ -19,6 +20,8 @@ internal static class LauncherApplication
         }
 
         var wantsJson = args.Any(arg => string.Equals(arg, "--json", StringComparison.OrdinalIgnoreCase));
+        var wantsProgressJson = args.Any(arg =>
+            string.Equals(arg, "--progress-json", StringComparison.OrdinalIgnoreCase));
 
         try
         {
@@ -47,7 +50,10 @@ internal static class LauncherApplication
                 return 0;
             }
 
-            var execution = LauncherCommandExecutor.Execute(command);
+            var progress = command.ProgressJson
+                ? LauncherJsonConsole.CreateProgressReporter()
+                : null;
+            var execution = LauncherCommandExecutor.Execute(command, progress);
             if (command.JsonOutput)
             {
                 LauncherJsonConsole.PrintExecution(execution);
@@ -63,6 +69,12 @@ internal static class LauncherApplication
         {
             if (wantsJson)
             {
+                if (wantsProgressJson)
+                {
+                    LauncherJsonConsole.PrintProgress(new UpdateProgress(
+                        UpdateProgressPhase.Failed,
+                        $"Launcher operation failed: {ex.Message}"));
+                }
                 LauncherJsonConsole.PrintError(ex);
             }
             else

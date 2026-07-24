@@ -10,6 +10,7 @@ internal static class LauncherCommandParser
         var mode = LauncherMode.Launch;
         var showHelp = false;
         var jsonOutput = false;
+        var progressJson = false;
         string? instanceName = null;
         string? targetModId = null;
         string? gameDir = null;
@@ -49,6 +50,12 @@ internal static class LauncherCommandParser
             if (arg == "--json")
             {
                 jsonOutput = true;
+                continue;
+            }
+
+            if (arg == "--progress-json")
+            {
+                progressJson = true;
                 continue;
             }
 
@@ -187,6 +194,11 @@ internal static class LauncherCommandParser
             multiplayerMode = MultiplayerLaunchMode.Join;
         }
 
+        if (progressJson && !jsonOutput)
+        {
+            throw new InvalidOperationException("--progress-json requires --json.");
+        }
+
         var lobbyHost = LobbyHostOptions.Create(lobbyPrivacy, directoryBaseUrl);
         var multiplayer = MultiplayerLaunchOptions.Create(
             multiplayerMode,
@@ -206,6 +218,7 @@ internal static class LauncherCommandParser
             mode,
             showHelp,
             jsonOutput,
+            progressJson,
             instanceName,
             gameDir,
             modsRoot,

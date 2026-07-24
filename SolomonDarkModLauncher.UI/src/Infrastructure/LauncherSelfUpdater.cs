@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using SolomonDarkModding.Distribution;
+using SolomonDarkModding.Updates;
 using SolomonDarkModding.Versioning;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
@@ -42,7 +43,8 @@ internal static class LauncherSelfUpdater
 
     public static async Task StartUpdateAsync(
         LauncherRelease release,
-        string activationArgument)
+        string activationArgument,
+        IProgress<UpdateProgress>? progress = null)
     {
         if (!TryFindPortableRoot(out var portableRoot, out var launcherPath))
         {
@@ -54,6 +56,9 @@ internal static class LauncherSelfUpdater
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SolomonDarkMultiplayerBeta",
             "updates");
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Checking,
+            $"Preparing launcher v{release.Version.Value} update…"));
         CleanUpdateCache(updatesRoot);
 
         var updateDirectory = Path.Combine(updatesRoot, release.Version.Value);
@@ -65,53 +70,21 @@ internal static class LauncherSelfUpdater
             DistributionLayout.UpdaterExecutableName);
         using (var client = CreateClient())
         using (var downloadCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(10)))
-        using (var response = await client.GetAsync(
-                   release.DownloadUrl,
-                   HttpCompletionOption.ResponseHeadersRead,
-                   downloadCancellation.Token))
         {
-            response.EnsureSuccessStatusCode();
-            if (response.Content.Headers.ContentLength > MaximumArchiveBytes)
-            {
-                throw new InvalidDataException("The launcher update is larger than expected.");
-            }
-
-            await using var input = await response.Content.ReadAsStreamAsync(
-                downloadCancellation.Token);
-            await using var output = new FileStream(
+            await DownloadArchiveAsync(
+                client,
+                release,
                 archivePath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None);
-            var buffer = new byte[128 * 1024];
-            long downloadedBytes = 0;
-            while (true)
-            {
-                var count = await input.ReadAsync(buffer, downloadCancellation.Token);
-                if (count == 0)
-                {
-                    break;
-                }
-                downloadedBytes += count;
-                if (downloadedBytes > MaximumArchiveBytes)
-                {
-                    throw new InvalidDataException("The launcher update is larger than expected.");
-                }
-                await output.WriteAsync(buffer.AsMemory(0, count), downloadCancellation.Token);
-            }
-        }
-
-        using (var archive = ZipFile.OpenRead(archivePath))
-        {
-            if (archive.Entries.Count == 0)
-            {
-                throw new InvalidDataException("The downloaded launcher update is empty.");
-            }
+                progress,
+                downloadCancellation.Token);
         }
 
         var packagedUpdaterPath = Path.Combine(
             portableRoot,
             DistributionLayout.UpdaterExecutableName);
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Installing,
+            "Opening the launcher installer…"));
         File.Copy(packagedUpdaterPath, temporaryUpdaterPath, overwrite: true);
 
         var startInfo = new ProcessStartInfo(temporaryUpdaterPath)
@@ -137,6 +110,89 @@ internal static class LauncherSelfUpdater
         if (Process.Start(startInfo) is null)
         {
             throw new InvalidOperationException("The launcher updater did not start.");
+        }
+    }
+
+    internal static async Task DownloadArchiveAsync(
+        HttpClient client,
+        LauncherRelease release,
+        string archivePath,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(
+            release.DownloadUrl,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var expectedBytes = response.Content.Headers.ContentLength;
+        if (expectedBytes > MaximumArchiveBytes)
+        {
+            throw new InvalidDataException("The launcher update is larger than expected.");
+        }
+
+        var status = $"Downloading launcher v{release.Version.Value}…";
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Downloading,
+            status,
+            0,
+            expectedBytes,
+            UpdateProgressUnit.Bytes));
+        long downloadedBytes = 0;
+        {
+            await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
+            await using var output = new FileStream(
+                archivePath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                128 * 1024,
+                FileOptions.Asynchronous);
+            var buffer = new byte[128 * 1024];
+            long lastReportedBytes = 0;
+            while (true)
+            {
+                var count = await input.ReadAsync(buffer, cancellationToken);
+                if (count == 0)
+                {
+                    break;
+                }
+                downloadedBytes += count;
+                if (downloadedBytes > MaximumArchiveBytes)
+                {
+                    throw new InvalidDataException("The launcher update is larger than expected.");
+                }
+                await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+                if (downloadedBytes - lastReportedBytes >= 512 * 1024 ||
+                    expectedBytes is { } expected && downloadedBytes >= expected)
+                {
+                    progress?.Report(new UpdateProgress(
+                        UpdateProgressPhase.Downloading,
+                        status,
+                        downloadedBytes,
+                        expectedBytes,
+                        UpdateProgressUnit.Bytes));
+                    lastReportedBytes = downloadedBytes;
+                }
+            }
+        }
+
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Downloading,
+            status,
+            downloadedBytes,
+            expectedBytes ?? downloadedBytes,
+            UpdateProgressUnit.Bytes));
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Verifying,
+            $"Verifying launcher v{release.Version.Value} archive…",
+            downloadedBytes,
+            expectedBytes ?? downloadedBytes,
+            UpdateProgressUnit.Bytes));
+        using var archive = ZipFile.OpenRead(archivePath);
+        if (archive.Entries.Count == 0)
+        {
+            throw new InvalidDataException("The downloaded launcher update is empty.");
         }
     }
 

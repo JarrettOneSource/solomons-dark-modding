@@ -6,12 +6,15 @@ using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
 using SolomonDarkModLauncher.Target;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.App;
 
 internal static class LauncherCommandExecutor
 {
-    public static LauncherCommandExecution Execute(LauncherCommand command)
+    public static LauncherCommandExecution Execute(
+        LauncherCommand command,
+        IProgress<UpdateProgress>? progress = null)
     {
         var configuration = LauncherConfiguration.CreateDefault(
             AppContext.BaseDirectory,
@@ -33,7 +36,8 @@ internal static class LauncherCommandExecutor
             modUpdate = WebsiteModUpdater.UpdateAsync(
                     configuration,
                     catalog,
-                    command.LobbyHost.DirectoryBaseUrl)
+                    command.LobbyHost.DirectoryBaseUrl,
+                    progress)
                 .GetAwaiter()
                 .GetResult();
             if (modUpdate.UpdatedModCount > 0)
@@ -51,7 +55,8 @@ internal static class LauncherCommandExecutor
                     catalog,
                     lobbyId,
                     command.LobbyHost.DirectoryBaseUrl,
-                    command.LobbyTicket)
+                    command.LobbyTicket,
+                    progress)
                 .GetAwaiter()
                 .GetResult();
             catalog = lobbyModSync.Catalog;

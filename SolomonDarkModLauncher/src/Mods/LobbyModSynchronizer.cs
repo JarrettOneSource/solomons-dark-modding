@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.Target;
 
 namespace SolomonDarkModLauncher.Mods;
@@ -15,6 +16,7 @@ internal static class LobbyModSynchronizer
         ulong lobbyId,
         string directoryBaseUrl,
         string? ticket,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         using var client = CreateClient(directoryBaseUrl);
@@ -24,6 +26,7 @@ internal static class LobbyModSynchronizer
             ticket,
             configuration.Workspace.ModCacheRootPath,
             client,
+            progress,
             cancellationToken);
     }
 
@@ -33,9 +36,12 @@ internal static class LobbyModSynchronizer
         string? ticket,
         string cacheRootPath,
         HttpClient client,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Checking,
+            "Checking the host's mod packages…"));
         var manifest = await TryFetchJoinManifestAsync(
             client,
             lobbyId,
@@ -43,10 +49,21 @@ internal static class LobbyModSynchronizer
             cancellationToken);
         if (manifest.Mods is null)
         {
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Failed,
+                $"Host mod sync failed: {manifest.Error}"));
             return LobbyModSyncResult.Offline(localCatalog, manifest.Error!);
         }
 
         var required = manifest.Mods;
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Checking,
+            required.Count == 1
+                ? "Checking 1 required host mod…"
+                : $"Checking {required.Count} required host mods…",
+            0,
+            required.Count,
+            UpdateProgressUnit.Items));
         var exactMods = new Dictionary<string, DiscoveredMod>(StringComparer.OrdinalIgnoreCase);
         var reusedManual = 0;
         var reusedCached = 0;
@@ -84,6 +101,9 @@ internal static class LobbyModSynchronizer
                 .ToArray();
             if (unavailable.Length > 0)
             {
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Failed,
+                    "Host mod sync failed because a required package is unavailable."));
                 throw new InvalidOperationException(
                     "Mod list mismatch that cannot be repaired automatically: the host has " +
                     $"{Describe(unavailable)} enabled, but " +
@@ -92,20 +112,38 @@ internal static class LobbyModSynchronizer
                     "Ask the host to publish the missing mods or disable them before you join.");
             }
 
-            foreach (var requirement in missing)
+            for (var index = 0; index < missing.Length; index++)
             {
+                var requirement = missing[index];
                 var installed = await WebsiteModPackageInstaller.InstallAsync(
                     client,
                     resolved[requirement.Id],
                     requirement,
                     cacheRootPath,
-                    cancellationToken);
+                    cancellationToken,
+                    progress);
                 exactMods.Add(requirement.Id, installed);
                 downloaded++;
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Installing,
+                    $"Prepared {requirement.Id} v{requirement.Version} for this session.",
+                    index + 1,
+                    missing.Length,
+                    UpdateProgressUnit.Items));
             }
         }
 
         var ordered = required.Select(requirement => exactMods[requirement.Id]).ToArray();
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Completed,
+            downloaded == 0
+                ? "Host mods are already available."
+                : downloaded == 1
+                    ? "Downloaded and verified 1 host mod."
+                    : $"Downloaded and verified {downloaded} host mods.",
+            required.Count,
+            required.Count,
+            UpdateProgressUnit.Items));
         return new LobbyModSyncResult(
             ModCatalog.CreateExact(ordered),
             required.Count,

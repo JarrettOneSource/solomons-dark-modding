@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using SolomonDarkModding.Versioning;
+using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.App;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
@@ -21,6 +22,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("automatic mod updates", TestAutomaticModUpdatesAsync),
     ("semantic version ordering", TestSemanticVersionOrderingAsync),
     ("launcher release selection", TestLauncherReleaseSelectionAsync),
+    ("launcher download progress", TestLauncherDownloadProgressAsync),
+    ("update progress JSON protocol", TestUpdateProgressJsonProtocolAsync),
     ("launcher update installation", TestLauncherUpdateInstallationAsync),
     ("downloaded package traversal rejection", TestDownloadedPackageTraversalAsync),
     ("downloaded package contract", TestDownloadedPackageContractAsync),
@@ -912,12 +915,24 @@ static async Task TestWebsitePackageInstallAsync()
         {
             BaseAddress = new Uri("https://mods.example.test/community/")
         };
+        var progress = new RecordingProgress();
         var installed = await WebsiteModPackageInstaller.InstallAsync(
             client,
             resolved,
             required,
             cacheRoot,
-            CancellationToken.None);
+            CancellationToken.None,
+            progress);
+        Require(
+            progress.Values.Any(value =>
+                value.Phase == UpdateProgressPhase.Downloading &&
+                value.Completed == package.Length &&
+                value.Total == package.Length),
+            "website package download did not report its real byte total");
+        Require(
+            progress.Values.Any(value => value.Phase == UpdateProgressPhase.Verifying) &&
+            progress.Values.Any(value => value.Phase == UpdateProgressPhase.Installing),
+            "website package progress omitted verification or installation");
         Require(installed.Manifest.Id == required.Id, "installed manifest id changed");
         Require(installed.RequiresLuaRuntime, "combined package did not retain Lua runtime");
         Require(installed.Manifest.Overlays.Count == 2, "combined package did not retain Boneyard and art overlays");
@@ -1010,12 +1025,14 @@ static async Task TestAutomaticModUpdatesAsync()
         {
             BaseAddress = new Uri("https://mods.example.test/community/")
         };
+        var progress = new RecordingProgress();
 
         var result = await WebsiteModUpdater.UpdateAsync(
             catalog,
             modsRoot,
             cacheRoot,
-            client);
+            client,
+            progress);
         Require(result.Error is null, $"automatic update failed: {result.Error}");
         Require(result.UpdatedModCount == 1, "website update did not replace one mod");
         Require(
@@ -1029,18 +1046,27 @@ static async Task TestAutomaticModUpdatesAsync()
         Require(
             !File.Exists(Path.Combine(currentRoot, "user-edit.txt")),
             "old edition files survived package replacement");
+        Require(
+            progress.Values.First().Phase == UpdateProgressPhase.Checking &&
+            progress.Values.Last().Phase == UpdateProgressPhase.Completed,
+            "automatic mod update did not report checking through completion");
         using var offlineClient = new HttpClient(new OfflineDirectoryHandler())
         {
             BaseAddress = new Uri("https://offline.example.test/")
         };
         var reloaded = ModCatalog.CreateExact(
             ModDiscovery.Discover(modsRoot).ToArray());
+        var offlineProgress = new RecordingProgress();
         var offline = await WebsiteModUpdater.UpdateAsync(
             reloaded,
             modsRoot,
             cacheRoot,
-            offlineClient);
+            offlineClient,
+            offlineProgress);
         Require(offline.Error is not null, "offline update check did not report its skip reason");
+        Require(
+            offlineProgress.Values.Last().Phase == UpdateProgressPhase.Failed,
+            "offline update failure was not reported visibly");
         Require(
             ModDiscovery.DiscoverRoot(currentRoot).Manifest.Version == "1.1.0",
             "offline update check changed the installed mod");
@@ -1073,12 +1099,17 @@ static async Task TestAutomaticModUpdatesAsync()
         {
             BaseAddress = new Uri("https://mods.example.test/community/")
         };
+        var invalidProgress = new RecordingProgress();
         var rejected = await WebsiteModUpdater.UpdateAsync(
             reloaded,
             modsRoot,
             Path.Combine(root, "invalid-cache"),
-            invalidClient);
+            invalidClient,
+            invalidProgress);
         Require(rejected.Error is not null, "tampered update package was accepted");
+        Require(
+            invalidProgress.Values.Last().Phase == UpdateProgressPhase.Failed,
+            "tampered update failure was not reported visibly");
         Require(
             ModDiscovery.DiscoverRoot(currentRoot).Manifest.Version == "1.1.0",
             "rejected update damaged the installed mod");
@@ -1635,12 +1666,14 @@ static async Task TestWebsiteLobbyPreflightAsync()
             BaseAddress = new Uri("https://mods.example.test/community/")
         };
         var cacheRoot = Path.Combine(root, "cache");
+        var progress = new RecordingProgress();
         var result = await LobbyModSynchronizer.SynchronizeAsync(
             localCatalog,
             42,
             ticket: null,
             cacheRoot,
-            client);
+            client,
+            progress);
         Require(result.UsedWebsite, "available website unexpectedly selected offline fallback");
         Require(result.RequiredModCount == 1, "preflight required count changed");
         Require(result.DownloadedModCount == 1, "missing website mod was not downloaded");
@@ -1650,6 +1683,10 @@ static async Task TestWebsiteLobbyPreflightAsync()
         Require(handler.JoinManifestRequests == 1, "preflight did not request the join manifest once");
         Require(handler.ResolveRequests == 1, "preflight did not resolve the missing package once");
         Require(handler.DownloadRequests == 1, "preflight did not download the missing package once");
+        Require(
+            progress.Values.Any(value => value.Phase == UpdateProgressPhase.Downloading) &&
+            progress.Values.Last().Phase == UpdateProgressPhase.Completed,
+            "lobby mod sync did not report download through completion");
 
         var manualCatalog = ModCatalog.CreateExact(result.Catalog.EnabledMods);
         var manualHandler = new LobbyDirectoryHandler(
@@ -1675,13 +1712,18 @@ static async Task TestWebsiteLobbyPreflightAsync()
         {
             BaseAddress = new Uri("https://offline.example.test/")
         };
+        var offlineProgress = new RecordingProgress();
         var offlineResult = await LobbyModSynchronizer.SynchronizeAsync(
             manualCatalog,
             42,
             ticket: null,
             Path.Combine(root, "offline-cache"),
-            offlineClient);
+            offlineClient,
+            offlineProgress);
         Require(!offlineResult.UsedWebsite, "unavailable website did not select offline fallback");
+        Require(
+            offlineProgress.Values.Last().Phase == UpdateProgressPhase.Failed,
+            "offline host mod sync failure was not reported visibly");
         Require(
             offlineResult.Catalog.EnabledMods.Count == 1 &&
             offlineResult.Catalog.IsEnabled(required.Id),
@@ -1917,6 +1959,129 @@ static Task TestLauncherReleaseSelectionAsync()
     return Task.CompletedTask;
 }
 
+static async Task TestLauncherDownloadProgressAsync()
+{
+    Require(
+        SemanticVersion.TryParse("0.1.0-beta.12", out var version),
+        "launcher download test version did not parse");
+    var archive = CreateZip(new Dictionary<string, byte[]>
+    {
+        ["SolomonDarkMultiplayerBeta-v0.1.0-beta.12/launcher.bin"] =
+            Enumerable.Range(0, 700_000).Select(index => (byte)(index % 251)).ToArray()
+    });
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var archivePath = Path.Combine(root, "launcher-update.zip");
+        using var client = new HttpClient(new ByteArrayHandler(archive));
+        var progress = new RecordingProgress();
+        await LauncherSelfUpdater.DownloadArchiveAsync(
+            client,
+            new LauncherRelease(
+                version!,
+                "SolomonDarkMultiplayerBeta-v0.1.0-beta.12.zip",
+                "https://updates.example.test/launcher.zip"),
+            archivePath,
+            progress,
+            CancellationToken.None);
+
+        Require(
+            File.ReadAllBytes(archivePath).SequenceEqual(archive),
+            "launcher update download changed the archive bytes");
+        var finalDownload = progress.Values.Last(value =>
+            value.Phase == UpdateProgressPhase.Downloading);
+        Require(
+            finalDownload.Completed == archive.Length &&
+            finalDownload.Total == archive.Length &&
+            finalDownload.Unit == UpdateProgressUnit.Bytes,
+            "launcher download did not report its real byte total");
+        Require(
+            progress.Values.Last().Phase == UpdateProgressPhase.Verifying,
+            "launcher download did not enter archive verification");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static Task TestUpdateProgressJsonProtocolAsync()
+{
+    var expected = new UpdateProgress(
+        UpdateProgressPhase.Downloading,
+        "Downloading launcher v1.2.3…",
+        512,
+        1024,
+        UpdateProgressUnit.Bytes);
+    var payload = LauncherJsonConsole.SerializeProgress(expected);
+    Require(
+        LauncherJsonResponseReader.TryParseUpdateProgress(payload, out var parsed),
+        "desktop launcher did not recognize the CLI progress envelope");
+    Require(parsed == expected, "CLI progress JSON changed in transit");
+    Require(
+        payload.Contains("\"phase\":\"downloading\"", StringComparison.Ordinal) &&
+        payload.Contains("\"completed\":512", StringComparison.Ordinal) &&
+        payload.Contains("\"total\":1024", StringComparison.Ordinal),
+        "progress JSON omitted the phase or real byte counters");
+
+    var presentation = UpdateProgressPresentation.Create(parsed!);
+    Require(
+        presentation.Value == 50 &&
+        presentation.DetailText.Contains("512 bytes of 1 KB", StringComparison.Ordinal),
+        "desktop progress presentation did not calculate the real percentage and bytes");
+
+    var command = LauncherCommandParser.Parse(
+        ["list-mods", "--json", "--progress-json"]);
+    Require(command.ProgressJson, "launcher parser did not enable streamed progress");
+    RequireThrows<InvalidOperationException>(
+        () => LauncherCommandParser.Parse(["list-mods", "--progress-json"]),
+        "launcher accepted progress streaming without final JSON output");
+
+    var originalOutput = Console.Out;
+    var originalError = Console.Error;
+    using var failedOutput = new StringWriter();
+    using var failedError = new StringWriter();
+    int exitCode;
+    try
+    {
+        Console.SetOut(failedOutput);
+        Console.SetError(failedError);
+        exitCode = LauncherApplication.Run(
+            ["list-mods", "--json", "--progress-json", "--unknown-option"]);
+    }
+    finally
+    {
+        Console.SetOut(originalOutput);
+        Console.SetError(originalError);
+    }
+
+    var failureLines = failedOutput.ToString()
+        .Split(
+            [Environment.NewLine],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var failureErrorLines = failedError.ToString()
+        .Split(
+            [Environment.NewLine],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    Require(exitCode == 1, "invalid streamed command unexpectedly succeeded");
+    Require(
+        failureLines.Length == 1 &&
+        LauncherJsonResponseReader.TryParseUpdateProgress(
+            failureLines[0],
+            out var failureProgress) &&
+        failureProgress?.Phase == UpdateProgressPhase.Failed,
+        "failing streamed command did not terminate progress with a failed phase");
+    Require(
+        failureErrorLines.Length == 1,
+        "failing streamed command omitted its final JSON error response");
+    using var failureDocument = JsonDocument.Parse(failureErrorLines[0]);
+    Require(
+        failureDocument.RootElement.TryGetProperty("success", out var success) &&
+        success.ValueKind == JsonValueKind.False,
+        "failing streamed command omitted its final JSON error response");
+    return Task.CompletedTask;
+}
+
 static Task TestLauncherUpdateInstallationAsync()
 {
     var root = CreateTemporaryDirectory();
@@ -1956,7 +2121,8 @@ static Task TestLauncherUpdateInstallationAsync()
             CompressionLevel.Optimal,
             includeBaseDirectory: true);
 
-        LauncherUpdateInstaller.Install(archivePath, target);
+        var progress = new RecordingProgress();
+        LauncherUpdateInstaller.Install(archivePath, target, progress);
         Require(
             File.ReadAllText(Path.Combine(target, "SolomonDarkMultiplayerBeta.exe")) ==
                 "new launcher",
@@ -1970,6 +2136,16 @@ static Task TestLauncherUpdateInstallationAsync()
         Require(
             File.ReadAllText(userModPath) == "return 'mine'\n",
             "launcher update did not preserve a user-installed mod");
+        Require(
+            progress.Values.Any(value =>
+                value.Phase == UpdateProgressPhase.Installing &&
+                value.Unit == UpdateProgressUnit.Bytes &&
+                value.Completed == value.Total),
+            "launcher installer did not report real extraction progress");
+        Require(
+            progress.Values.Any(value => value.Phase == UpdateProgressPhase.Verifying) &&
+            progress.Values.Last().StatusText == "Launcher files installed.",
+            "launcher installer did not report verification through installation");
 
         var nextSourceRoot = Path.Combine(
             root,
@@ -2125,6 +2301,27 @@ static void RequireThrows<TException>(Action action, string message)
         return;
     }
     throw new InvalidOperationException(message);
+}
+
+file sealed class RecordingProgress : IProgress<UpdateProgress>
+{
+    public List<UpdateProgress> Values { get; } = [];
+
+    public void Report(UpdateProgress value)
+    {
+        Values.Add(value);
+    }
+}
+
+file sealed class ByteArrayHandler(byte[] content) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(content)
+        });
 }
 
 file sealed class PackageHandler(byte[] package) : HttpMessageHandler

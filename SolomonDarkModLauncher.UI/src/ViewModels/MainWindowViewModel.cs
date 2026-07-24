@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
+using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.Views;
 
@@ -27,6 +28,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool hasError_;
     private string errorMessage_ = string.Empty;
     private string statusText_ = "The launcher starts.";
+    private bool isUpdateProgressVisible_;
+    private string updateStatusText_ = string.Empty;
+    private string updateProgressDetailText_ = string.Empty;
+    private double updateProgressValue_;
+    private bool isUpdateProgressError_;
+    private bool isUpdateProgressComplete_;
     private string modSummaryText_ = string.Empty;
     private string commandPreviewText_ = string.Empty;
     private string transcriptText_ = string.Empty;
@@ -212,6 +219,42 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         get => statusText_;
         private set => SetProperty(ref statusText_, value);
+    }
+
+    public bool IsUpdateProgressVisible
+    {
+        get => isUpdateProgressVisible_;
+        private set => SetProperty(ref isUpdateProgressVisible_, value);
+    }
+
+    public string UpdateStatusText
+    {
+        get => updateStatusText_;
+        private set => SetProperty(ref updateStatusText_, value);
+    }
+
+    public string UpdateProgressDetailText
+    {
+        get => updateProgressDetailText_;
+        private set => SetProperty(ref updateProgressDetailText_, value);
+    }
+
+    public double UpdateProgressValue
+    {
+        get => updateProgressValue_;
+        private set => SetProperty(ref updateProgressValue_, value);
+    }
+
+    public bool IsUpdateProgressError
+    {
+        get => isUpdateProgressError_;
+        private set => SetProperty(ref isUpdateProgressError_, value);
+    }
+
+    public bool IsUpdateProgressComplete
+    {
+        get => isUpdateProgressComplete_;
+        private set => SetProperty(ref isUpdateProgressComplete_, value);
     }
 
     public bool IsInLobby
@@ -830,12 +873,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         IsBusy = true;
+        ClearUpdateProgress();
         StatusText = statusText;
         CommandPreviewText = client_.BuildCommandPreview(mode, targetModId, hostOptions);
         LauncherUiInvocationResult invocation;
         try
         {
-            invocation = await client_.InvokeAsync(mode, targetModId, hostOptions);
+            var progress = new Progress<UpdateProgress>(ReportUpdateProgress);
+            invocation = await client_.InvokeAsync(
+                mode,
+                targetModId,
+                hostOptions,
+                progress);
         }
         catch (Exception ex)
         {
@@ -870,7 +919,32 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        ClearError();
+        var modUpdateError = invocation.Response.ModUpdate?.Error;
+        var lobbySyncError = invocation.Response.LobbyModSync is
+        {
+            UsedWebsite: false,
+            FallbackReason: { Length: > 0 } fallbackReason
+        }
+            ? fallbackReason
+            : null;
+        if (!string.IsNullOrWhiteSpace(modUpdateError))
+        {
+            SetError($"Mod update failed: {modUpdateError}");
+            ReportUpdateProgress(new UpdateProgress(
+                UpdateProgressPhase.Failed,
+                $"Mod update failed: {modUpdateError}"));
+        }
+        else if (!string.IsNullOrWhiteSpace(lobbySyncError))
+        {
+            SetError($"Host mod sync failed: {lobbySyncError}");
+            ReportUpdateProgress(new UpdateProgress(
+                UpdateProgressPhase.Failed,
+                $"Host mod sync failed: {lobbySyncError}"));
+        }
+        else
+        {
+            ClearError();
+        }
         isGameReady_ = true;
         lastResponse_ = invocation.Response;
         UpdateFromResponse(invocation.Response);
@@ -913,6 +987,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
         StatusText = mode switch
         {
+            _ when !string.IsNullOrWhiteSpace(modUpdateError) =>
+                "The mod update failed. Read the error message.",
+            _ when !string.IsNullOrWhiteSpace(lobbySyncError) =>
+                "Host mod sync failed. The launcher used your current mods.",
             LauncherUiCommandMode.ListMods when
                 invocation.Response.ModUpdate?.UpdatedModCount > 0 =>
                 invocation.Response.ModUpdate.UpdatedModCount == 1
@@ -1419,12 +1497,28 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         IsLauncherUpdatePromptOpen = false;
         ClearError();
+        ClearUpdateProgress();
         IsBusy = true;
-        StatusText = $"Downloading launcher v{version}…";
+        StatusText =
+            $"Launcher v{version} will restart automatically after installation.";
+    }
+
+    public void ReportUpdateProgress(UpdateProgress progress)
+    {
+        var presentation = UpdateProgressPresentation.Create(progress);
+        IsUpdateProgressVisible = true;
+        UpdateStatusText = progress.StatusText;
+        UpdateProgressDetailText = presentation.DetailText;
+        UpdateProgressValue = presentation.Value;
+        IsUpdateProgressError = presentation.IsError;
+        IsUpdateProgressComplete = presentation.IsComplete;
     }
 
     public void ReportLauncherUpdateFailure(string message)
     {
+        ReportUpdateProgress(new UpdateProgress(
+            UpdateProgressPhase.Failed,
+            "The launcher update failed."));
         SetError(message);
         IsBusy = false;
         StatusText = "The launcher update failed. You can keep using this version.";
@@ -1752,6 +1846,16 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         HasError = false;
         ErrorMessage = string.Empty;
+    }
+
+    private void ClearUpdateProgress()
+    {
+        IsUpdateProgressVisible = false;
+        UpdateStatusText = string.Empty;
+        UpdateProgressDetailText = string.Empty;
+        UpdateProgressValue = 0;
+        IsUpdateProgressError = false;
+        IsUpdateProgressComplete = false;
     }
 
     private static bool CanOpenFolder(string? path)

@@ -1,4 +1,5 @@
 using System.Windows;
+using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.ViewModels;
 using SolomonDarkModLauncher.UI.Views;
@@ -146,7 +147,8 @@ public partial class App : Application
         {
             await LauncherSelfUpdater.StartUpdateAsync(
                 release,
-                activationArgument_);
+                activationArgument_,
+                new Progress<UpdateProgress>(viewModel.ReportUpdateProgress));
             Shutdown();
         }
         catch (Exception exception)

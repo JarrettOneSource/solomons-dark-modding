@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text;
 using SolomonDarkModding.Distribution;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -18,7 +20,11 @@ internal sealed class LauncherUiCommandClient
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
 
     private readonly LauncherUiSettingsStore settingsStore_ = new();
@@ -132,6 +138,7 @@ internal sealed class LauncherUiCommandClient
         LauncherUiCommandMode mode,
         string? targetModId = null,
         LauncherHostOptions? hostOptions = null,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var arguments = BuildArguments(mode, targetModId, hostOptions);
@@ -160,7 +167,8 @@ internal sealed class LauncherUiCommandClient
         var readResult = await LauncherJsonResponseReader.ReadAsync(
             process,
             JsonOptions,
-            cancellationToken);
+            cancellationToken,
+            progress);
         var response = readResult.Response;
         string? errorMessage = null;
 
@@ -197,7 +205,12 @@ internal sealed class LauncherUiCommandClient
         string? targetModId,
         LauncherHostOptions? hostOptions = null)
     {
-        var arguments = new List<string> { GetModeToken(mode), "--json" };
+        var arguments = new List<string>
+        {
+            GetModeToken(mode),
+            "--json",
+            "--progress-json"
+        };
 
         if (mode is LauncherUiCommandMode.EnableMod or LauncherUiCommandMode.DisableMod)
         {

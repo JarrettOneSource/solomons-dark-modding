@@ -2,6 +2,7 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.Mods;
 
@@ -17,7 +18,8 @@ internal static class WebsiteModPackageInstaller
         WebsiteResolvedMod resolved,
         MultiplayerModDescriptor required,
         string cacheRootPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress = null)
     {
         ValidateResolvedIdentity(resolved, required);
         var targetPath = GetCachePath(cacheRootPath, required);
@@ -33,9 +35,25 @@ internal static class WebsiteModPackageInstaller
         Directory.CreateDirectory(operationRoot);
         try
         {
-            await DownloadAsync(client, resolved, archivePath, cancellationToken);
-            await ExtractAsync(archivePath, extractedPath, cancellationToken);
+            await DownloadAsync(
+                client,
+                resolved,
+                archivePath,
+                cancellationToken,
+                progress);
+            await ExtractAsync(
+                archivePath,
+                extractedPath,
+                resolved,
+                cancellationToken,
+                progress);
 
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Verifying,
+                $"Verifying {resolved.Id} v{resolved.Version} content…",
+                0,
+                1,
+                UpdateProgressUnit.Items));
             var installed = ModDiscovery.DiscoverRoot(extractedPath);
             ValidateDownloadedMod(installed, required);
             var contentSha256 = ModContentHasher.HashDirectory(extractedPath);
@@ -47,13 +65,31 @@ internal static class WebsiteModPackageInstaller
                 throw new InvalidDataException(
                     $"Downloaded mod {required.Id} did not match the host content hash.");
             }
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Verifying,
+                $"Verified {resolved.Id} v{resolved.Version}.",
+                1,
+                1,
+                UpdateProgressUnit.Items));
 
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Installing,
+                $"Installing {resolved.Id} v{resolved.Version}…",
+                0,
+                1,
+                UpdateProgressUnit.Items));
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             if (Directory.Exists(targetPath))
             {
                 Directory.Delete(targetPath, recursive: true);
             }
             Directory.Move(extractedPath, targetPath);
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Installing,
+                $"Installed {resolved.Id} v{resolved.Version}.",
+                1,
+                1,
+                UpdateProgressUnit.Items));
             return ModDiscovery.DiscoverRoot(targetPath);
         }
         finally
@@ -103,7 +139,8 @@ internal static class WebsiteModPackageInstaller
         HttpClient client,
         WebsiteResolvedMod resolved,
         string archivePath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress)
     {
         if (!Uri.TryCreate(resolved.DownloadUrl, UriKind.Relative, out var relativeUri) ||
             resolved.DownloadUrl.StartsWith("/", StringComparison.Ordinal) ||
@@ -131,11 +168,20 @@ internal static class WebsiteModPackageInstaller
                 $"(HTTP {(int)response.StatusCode}).");
         }
 
-        if (response.Content.Headers.ContentLength is > MaxPackageBytes)
+        var expectedBytes =
+            response.Content.Headers.ContentLength ?? resolved.FileSizeBytes;
+        if (expectedBytes is > MaxPackageBytes)
         {
             throw new InvalidDataException("Downloaded mod packages may not exceed 100 MiB.");
         }
 
+        var downloadStatus = $"Downloading {resolved.Id} v{resolved.Version}…";
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Downloading,
+            downloadStatus,
+            0,
+            expectedBytes,
+            UpdateProgressUnit.Bytes));
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var destination = new FileStream(
             archivePath,
@@ -147,6 +193,7 @@ internal static class WebsiteModPackageInstaller
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = ArrayPool<byte>.Shared.Rent(81920);
         long total = 0;
+        long lastReported = 0;
         try
         {
             int count;
@@ -162,6 +209,17 @@ internal static class WebsiteModPackageInstaller
 
                 hash.AppendData(buffer, 0, count);
                 await destination.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+                if (total - lastReported >= 256 * 1024 ||
+                    expectedBytes is { } expected && total >= expected)
+                {
+                    progress?.Report(new UpdateProgress(
+                        UpdateProgressPhase.Downloading,
+                        downloadStatus,
+                        total,
+                        expectedBytes,
+                        UpdateProgressUnit.Bytes));
+                    lastReported = total;
+                }
             }
         }
         finally
@@ -169,6 +227,18 @@ internal static class WebsiteModPackageInstaller
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Downloading,
+            downloadStatus,
+            total,
+            expectedBytes ?? total,
+            UpdateProgressUnit.Bytes));
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Verifying,
+            $"Verifying {resolved.Id} v{resolved.Version} package…",
+            total,
+            expectedBytes ?? total,
+            UpdateProgressUnit.Bytes));
         var packageSha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         if (!string.Equals(
                 packageSha256,
@@ -183,7 +253,9 @@ internal static class WebsiteModPackageInstaller
     private static async Task ExtractAsync(
         string archivePath,
         string targetPath,
-        CancellationToken cancellationToken)
+        WebsiteResolvedMod resolved,
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress)
     {
         Directory.CreateDirectory(targetPath);
         using var archive = ZipFile.OpenRead(archivePath);
@@ -220,6 +292,14 @@ internal static class WebsiteModPackageInstaller
         ValidateArchiveTree(validatedEntries
             .Where(item => !item.RelativePath.EndsWith("/", StringComparison.Ordinal))
             .Select(item => item.RelativePath));
+        var installStatus = $"Installing {resolved.Id} v{resolved.Version} files…";
+        progress?.Report(new UpdateProgress(
+            UpdateProgressPhase.Installing,
+            installStatus,
+            0,
+            expandedBytes,
+            UpdateProgressUnit.Bytes));
+        long installedBytes = 0;
         foreach (var item in validatedEntries)
         {
             var destinationPath = ResolveInside(targetPath, item.RelativePath);
@@ -239,6 +319,13 @@ internal static class WebsiteModPackageInstaller
                 81920,
                 FileOptions.Asynchronous);
             await source.CopyToAsync(destination, cancellationToken);
+            installedBytes = checked(installedBytes + item.Entry.Length);
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Installing,
+                installStatus,
+                installedBytes,
+                expandedBytes,
+                UpdateProgressUnit.Bytes));
         }
     }
 

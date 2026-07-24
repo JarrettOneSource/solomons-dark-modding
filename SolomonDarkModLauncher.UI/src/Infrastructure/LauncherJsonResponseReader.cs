@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using SolomonDarkModding.Updates;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -13,22 +15,33 @@ internal static class LauncherJsonResponseReader
 {
     private const int MaximumDiagnosticCharacters = 8192;
     private static readonly TimeSpan ResponseFlushTimeout = TimeSpan.FromSeconds(2);
+    private static readonly JsonSerializerOptions ProgressJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
+    };
 
     public static async Task<LauncherJsonReadResult> ReadAsync(
         Process process,
         JsonSerializerOptions jsonOptions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress = null)
     {
         using var readCancellation =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var stdoutTask = ReadStreamAsync(
             process.StandardOutput,
             jsonOptions,
-            readCancellation.Token);
+            readCancellation.Token,
+            progress);
         var stderrTask = ReadStreamAsync(
             process.StandardError,
             jsonOptions,
-            readCancellation.Token);
+            readCancellation.Token,
+            progress);
 
         StreamReadResult? selected = null;
         try
@@ -90,7 +103,8 @@ internal static class LauncherJsonResponseReader
     private static async Task<StreamReadResult> ReadStreamAsync(
         StreamReader reader,
         JsonSerializerOptions jsonOptions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress)
     {
         var diagnostics = new StringBuilder();
         try
@@ -106,6 +120,11 @@ internal static class LauncherJsonResponseReader
                 {
                     return new StreamReadResult(response, line, diagnostics.ToString());
                 }
+                if (TryParseUpdateProgress(line, out var updateProgress))
+                {
+                    progress?.Report(updateProgress!);
+                    continue;
+                }
                 AppendDiagnostic(diagnostics, line);
             }
         }
@@ -114,6 +133,32 @@ internal static class LauncherJsonResponseReader
         }
 
         return new StreamReadResult(null, string.Empty, diagnostics.ToString());
+    }
+
+    internal static bool TryParseUpdateProgress(
+        string line,
+        out UpdateProgress? progress)
+    {
+        progress = null;
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("updateProgress", out _))
+            {
+                return false;
+            }
+
+            var envelope = JsonSerializer.Deserialize<ProgressEnvelope>(
+                line,
+                ProgressJsonOptions);
+            progress = envelope?.UpdateProgress;
+            return progress is not null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool TryParseResponse(
@@ -171,4 +216,7 @@ internal static class LauncherJsonResponseReader
         LauncherCliResponse? Response,
         string RawPayload,
         string Diagnostics);
+
+    private sealed record ProgressEnvelope(
+        UpdateProgress? UpdateProgress);
 }
