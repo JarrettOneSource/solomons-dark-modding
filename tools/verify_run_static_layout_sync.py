@@ -14,6 +14,7 @@ from typing import Any
 
 import multiplayer_frame_capture
 import verify_local_multiplayer_sync as local_sync
+from PIL import Image, ImageFilter
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -849,6 +850,8 @@ print("height=" .. tostring(camera.height))
             last.get("focus_active") == "true"
             and abs(float(last.get("focus_x", "nan")) - target_x) <= 0.05
             and abs(float(last.get("focus_y", "nan")) - target_y) <= 0.05
+            and abs(float(last.get("center_x", "nan")) - target_x) <= 0.05
+            and abs(float(last.get("center_y", "nan")) - target_y) <= 0.05
         ):
             return {
                 key: (
@@ -863,6 +866,68 @@ print("height=" .. tostring(camera.height))
         f"camera did not settle on {pipe_name}: target={target_x},{target_y} "
         f"last={last}"
     )
+
+
+def _correlation(left: list[int], right: list[int]) -> float:
+    if len(left) != len(right) or not left:
+        raise ValueError("correlation inputs must be nonempty and equal length")
+    left_mean = sum(left) / len(left)
+    right_mean = sum(right) / len(right)
+    left_centered = [value - left_mean for value in left]
+    right_centered = [value - right_mean for value in right]
+    numerator = sum(
+        left_value * right_value
+        for left_value, right_value in zip(
+            left_centered, right_centered, strict=True
+        )
+    )
+    denominator = math.sqrt(
+        sum(value * value for value in left_centered)
+        * sum(value * value for value in right_centered)
+    )
+    return numerator / denominator if denominator > 0.0 else 0.0
+
+
+def matched_frame_correlation(
+    host_path: Path,
+    client_path: Path,
+) -> dict[str, float]:
+    normalized: list[Image.Image] = []
+    for path in (host_path, client_path):
+        with Image.open(path) as source:
+            gray = source.convert("L")
+            top = gray.height // 9
+            bottom = gray.height * 5 // 6
+            world_view = gray.crop((0, top, gray.width, bottom))
+            normalized.append(
+                world_view.resize(
+                    (
+                        200,
+                        max(
+                            1,
+                            round(
+                                200
+                                * world_view.height
+                                / world_view.width
+                            ),
+                        ),
+                    ),
+                    Image.Resampling.BILINEAR,
+                )
+            )
+
+    host_gray = list(normalized[0].get_flattened_data())
+    client_gray = list(normalized[1].get_flattened_data())
+    host_edges = list(
+        normalized[0].filter(ImageFilter.FIND_EDGES).get_flattened_data()
+    )
+    client_edges = list(
+        normalized[1].filter(ImageFilter.FIND_EDGES).get_flattened_data()
+    )
+    return {
+        "grayscale_correlation": _correlation(host_gray, client_gray),
+        "edge_correlation": _correlation(host_edges, client_edges),
+    }
 
 
 def capture_matched_camera_pair(
@@ -885,38 +950,57 @@ def capture_matched_camera_pair(
             "matched camera centers differ: "
             f"host={host_camera} client={client_camera}"
         )
-    time.sleep(0.75)
-
     evidence_dir.mkdir(parents=True, exist_ok=True)
     host_path = evidence_dir / f"run-{run_index:02d}-host.png"
     client_path = evidence_dir / f"run-{run_index:02d}-client.png"
-    screenshots = {
-        "host": multiplayer_frame_capture.capture_game_backbuffer(
-            host_pipe,
-            host_path,
-            maximum_dominant_fraction=0.97,
-        ),
-        "client": multiplayer_frame_capture.capture_game_backbuffer(
-            client_pipe,
-            client_path,
-            maximum_dominant_fraction=0.97,
-        ),
-    }
-    host_quality = screenshots["host"]["quality"]
-    client_quality = screenshots["client"]["quality"]
-    if (
-        host_quality["width"] != client_quality["width"]
-        or host_quality["height"] != client_quality["height"]
-    ):
-        raise VerifyFailure(
-            f"matched captures have different dimensions: {screenshots}"
-        )
-    return {
-        "target": target,
-        "host_camera": host_camera,
-        "client_camera": client_camera,
-        "screenshots": screenshots,
-    }
+    last: dict[str, Any] = {}
+    for attempt in range(1, 4):
+        host_camera = focus_camera(host_pipe, target_x, target_y)
+        client_camera = focus_camera(client_pipe, target_x, target_y)
+        time.sleep(1.0)
+        screenshots = {
+            "host": multiplayer_frame_capture.capture_game_backbuffer(
+                host_pipe,
+                host_path,
+                maximum_dominant_fraction=0.97,
+            ),
+            "client": multiplayer_frame_capture.capture_game_backbuffer(
+                client_pipe,
+                client_path,
+                maximum_dominant_fraction=0.97,
+            ),
+        }
+        host_quality = screenshots["host"]["quality"]
+        client_quality = screenshots["client"]["quality"]
+        if (
+            host_quality["width"] != client_quality["width"]
+            or host_quality["height"] != client_quality["height"]
+        ):
+            raise VerifyFailure(
+                f"matched captures have different dimensions: {screenshots}"
+            )
+        correlation = matched_frame_correlation(host_path, client_path)
+        last = {
+            "attempt": attempt,
+            "correlation": correlation,
+            "screenshots": screenshots,
+        }
+        if (
+            correlation["grayscale_correlation"] >= 0.75
+            and correlation["edge_correlation"] >= 0.65
+        ):
+            return {
+                "target": target,
+                "host_camera": host_camera,
+                "client_camera": client_camera,
+                "capture_attempts": attempt,
+                "frame_correlation": correlation,
+                "screenshots": screenshots,
+            }
+    raise VerifyFailure(
+        "matched camera screenshots did not align their world landmarks "
+        f"after three captures: {last}"
+    )
 
 
 def parse_args() -> argparse.Namespace:

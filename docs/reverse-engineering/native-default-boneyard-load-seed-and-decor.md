@@ -266,3 +266,42 @@ positions after generation.
 
 Because the authority seed and packet representation do not change, the
 network protocol version must remain unchanged for this repair.
+
+## Post-fix live acceptance
+
+`tools/verify_run_static_layout_sync.py` ran three fresh host/client pairs in
+isolated instance groups over loopback UDP. For each run it compared the full
+decoded Tree table and full compact-decoration table, including exact IEEE-754
+position/rotation/scale/alpha bits, Tree variants, and compact types and flags.
+It also focused both native cameras on the same selected Tree and rejected the
+screenshots unless both grayscale and edge landmarks correlated.
+
+| Run | Authority seed | Trees | Tree digest | Compact decor | Compact digest | Gray / edge correlation |
+| ---: | --- | ---: | --- | ---: | --- | --- |
+| 1 | `0x20C8A4C4` | 99 | `0x05578935` | 319 | `0xEA27EE7F` | 0.9689 / 0.9373 |
+| 2 | `0x016B0955` | 96 | `0xB102C6A7` | 351 | `0xB3CDE95F` | 0.9897 / 0.9007 |
+| 3 | `0x3CC84FEC` | 111 | `0xE676A3C3` | 320 | `0x66260DAC` | 0.9979 / 0.9841 |
+
+The other locally materialized lanes from the same generator also matched:
+
+| Run | Scenery type/geometry | Static collision circles | Collision shapes | Replicated run-static actors |
+| ---: | --- | --- | --- | --- |
+| 1 | 487 / `0x165174E1` | 469 / `0xAE700889` | 18 / `0x3D256503` | 2 / `0x43BCB9E9` |
+| 2 | 480 / `0x010EAF17` | 456 / `0x77DBB79A` | 14 / `0x7FD0E4CA` | 2 / `0x902FF326` |
+| 3 | 466 / `0x3419F3B2` | 445 / `0x2BC31C35` | 17 / `0x01A2FBF9` | 2 / `0xA7E5B130` |
+
+Every count, digest, and decoded row matched host versus client. All compact
+records had zero ignored high flag bits, and every type 7/8 record had the
+canonical flags byte `0x01`. The three authority seeds and resulting layouts
+were distinct. Both peer logs in every run recorded the same seed at
+`arena_create_pre_stock` and `compact_flags_sites=7` at patch installation.
+
+Evidence is retained locally under:
+
+- `runtime/evidence/boneyard-seed-sync/acceptance/seeded-decor-host-client.json`
+- `runtime/evidence/boneyard-seed-sync/acceptance/screenshots/`
+- `runtime/evidence/boneyard-seed-sync/acceptance/logs/`
+
+The verifier stopped only the six game processes it launched after validating
+their exact PIDs and executable paths. The final independent process query
+found no process from the acceptance instance prefix.

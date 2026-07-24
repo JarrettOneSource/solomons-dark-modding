@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import struct
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +109,36 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(target["position"], [0.0, 0.0])
         self.assertEqual(target["nearby_compact"]["position"], [100.0, 100.0])
         self.assertAlmostEqual(target["nearby_compact_distance"], 2**0.5 * 100)
+
+    def test_frame_correlation_rejects_a_displaced_world_region(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            host_path = root / "host.png"
+            client_path = root / "client.png"
+            displaced_path = root / "displaced.png"
+            image = Image.new("RGB", (400, 240), "black")
+            for x in range(80, 160):
+                for y in range(60, 180):
+                    image.putpixel((x, y), (220, 180, 120))
+            image.save(host_path)
+            image.save(client_path)
+
+            displaced = Image.new("RGB", image.size, "black")
+            for x in range(240, 320):
+                for y in range(60, 180):
+                    displaced.putpixel((x, y), (220, 180, 120))
+            displaced.save(displaced_path)
+
+            matched = verifier.matched_frame_correlation(
+                host_path, client_path
+            )
+            mismatched = verifier.matched_frame_correlation(
+                host_path, displaced_path
+            )
+            self.assertAlmostEqual(matched["grayscale_correlation"], 1.0)
+            self.assertAlmostEqual(matched["edge_correlation"], 1.0)
+            self.assertLess(mismatched["grayscale_correlation"], 0.75)
+            self.assertLess(mismatched["edge_correlation"], 0.65)
 
 
 if __name__ == "__main__":
