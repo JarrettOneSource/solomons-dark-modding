@@ -27,6 +27,27 @@ std::uint16_t CurrentLocalDeathPresentationTick(
         now_ms - g_local_death_spectator.death_started_ms);
 }
 
+bool HasConnectedRunPeer(
+    const RuntimeState& runtime_state,
+    std::uint32_t run_nonce) {
+    if (run_nonce == 0) {
+        return false;
+    }
+    for (const auto& participant : runtime_state.participants) {
+        if (participant.participant_id == 0 ||
+            participant.kind == ParticipantKind::LocalHuman ||
+            !participant.ready ||
+            !participant.transport_connected ||
+            !participant.runtime.valid ||
+            !participant.runtime.in_run ||
+            participant.runtime.run_nonce != run_nonce) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
 struct WaveRespawnCommand {
     std::uint32_t epoch = 0;
     std::int32_t wave = 0;

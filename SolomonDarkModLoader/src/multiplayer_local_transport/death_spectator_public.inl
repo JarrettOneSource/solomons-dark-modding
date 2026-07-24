@@ -23,6 +23,15 @@ bool BeginLocalDeathSpectatorPresentation() {
         player.anim_drive_state == 0) {
         return false;
     }
+    if (!HasConnectedRunPeer(runtime_state, local->runtime.run_nonce)) {
+        Log(
+            "Multiplayer death spectator bypassed for single-participant "
+            "run. participant_id=" +
+            std::to_string(g_local_transport.local_peer_id) +
+            " run_nonce=" +
+            std::to_string(local->runtime.run_nonce));
+        return false;
+    }
 
     g_local_death_spectator.phase =
         DeathSpectatorPhase::DeathPresentation;

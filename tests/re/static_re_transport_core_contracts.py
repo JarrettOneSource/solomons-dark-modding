@@ -321,6 +321,72 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     )
 
 
+def test_solo_death_bypasses_spectator_and_dispatches_stock_game_over() -> str:
+    """A transport-initialized one-participant run remains stock solo play."""
+
+    transport_text = "\n".join(
+        (
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_public.inl"
+            ),
+        )
+    )
+    run_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/run_transition_hooks.inl"
+    )
+    native_re_text = read_text(
+        ROOT
+        / "docs/reverse-engineering/native-game-over-session-semantics.md"
+    )
+
+    for token in (
+        "bool HasConnectedRunPeer(",
+        "participant.kind == ParticipantKind::LocalHuman",
+        "!participant.ready",
+        "!participant.transport_connected",
+        "!participant.runtime.valid",
+        "!participant.runtime.in_run",
+        "participant.runtime.run_nonce != run_nonce",
+        "!HasConnectedRunPeer(runtime_state, local->runtime.run_nonce)",
+        "Multiplayer death spectator bypassed for ",
+        "single-participant ",
+    ):
+        assert token in transport_text, f"solo spectator boundary lacks: {token}"
+
+    hook_start = run_hook_text.index("void __cdecl HookRunEnded()")
+    hook_end = run_hook_text.index(
+        "bool ShouldSuppressClientAuthoritativeRunWaveSpawner",
+        hook_start,
+    )
+    hook_body = run_hook_text[hook_start:hook_end]
+    assert hook_body.index("BeginLocalDeathSpectatorPresentation(") < (
+        hook_body.index("original();")
+    )
+    assert 'CompleteRunLifecycleEnd("death", true, false);' in hook_body
+
+    for token in (
+        "0x005CB570",
+        "one connected, ready participant",
+        "must immediately continue through the",
+        "original trampoline",
+        "full `game_over` surface visible",
+    ):
+        assert token in native_re_text, (
+            f"native solo Game Over documentation lacks: {token}"
+        )
+
+    return (
+        "single-participant runs bypass spectator state and continue through "
+        "the complete stock Game Over trampoline"
+    )
+
+
 def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
     """Spectator target selection is alive-only, local, visible, and click-driven."""
 

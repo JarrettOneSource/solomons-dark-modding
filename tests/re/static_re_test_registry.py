@@ -269,6 +269,7 @@ from static_re_transport_core_contracts import (
     test_local_multiplayer_udp_transport_is_wired,
     test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
+    test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
     test_wave_completion_respawns_every_owner_from_reliable_host_command,
 )
 from static_re_steam_contracts import (
@@ -1056,6 +1057,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "multiplayer death epoch owns presentation and staff drop once",
         test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
+    ),
+    (
+        "solo death bypasses spectator and dispatches stock Game Over",
+        test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
     ),
     (
         "dead client spectates alive players with local camera and HUD",
