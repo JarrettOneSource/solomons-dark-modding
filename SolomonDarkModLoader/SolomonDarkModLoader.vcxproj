@@ -179,6 +179,7 @@
     <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl" />
+    <ClInclude Include="src\debug_ui_overlay\gameplay_death_spectator_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl" />
@@ -388,6 +389,8 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_hub.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_lua_enemy_ai.inl" />
@@ -449,6 +452,9 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_public.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_item_grant_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\lua_consumable_use_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\death_spectator_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\death_spectator_public.inl" />
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\hagatha_perk_state.inl" />

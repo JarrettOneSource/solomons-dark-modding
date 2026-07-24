@@ -542,6 +542,9 @@
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
+    <ClInclude Include="src\debug_ui_overlay\gameplay_death_spectator_rendering.inl">
+      <Filter>Header Files\Debug UI Overlay</Filter>
+    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
@@ -1001,6 +1004,12 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -1206,6 +1215,15 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\lua_item_grant_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\lua_consumable_use_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\death_spectator_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\death_spectator_public.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">

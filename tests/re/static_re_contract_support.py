@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import struct
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from static_multiplayer_contract_support import read_source_unit
 
@@ -217,7 +220,69 @@ DISPATCH_PUMP_LOOP = (
 BINARY_LAYOUT = ROOT / "config/binary-layout.ini"
 STAGED_BINARY_LAYOUT = ROOT / "runtime/stage/.sdmod/config/binary-layout.ini"
 STAGED_BINARY = ROOT / "runtime/stage/SolomonDark.exe"
-ABANDONWARE_BINARY = WORKSPACE_ROOT / "SolomonDarkAbandonware/SolomonDark.exe"
+
+
+def _host_path(raw_path: str) -> Path:
+    path = Path(raw_path)
+    if os.name == "nt" or path.is_absolute():
+        return path
+
+    windows_path = PureWindowsPath(raw_path)
+    if windows_path.drive and windows_path.root:
+        return (
+            Path("/mnt")
+            / windows_path.drive.rstrip(":").lower()
+            / Path(*windows_path.parts[1:])
+        )
+    return path
+
+
+def resolve_abandonware_binary(
+    *,
+    root: Path = ROOT,
+    workspace_root: Path = WORKSPACE_ROOT,
+    environment: Mapping[str, str] | None = None,
+) -> Path:
+    environment = os.environ if environment is None else environment
+    override = environment.get("SD_RE_GAME_DIR", "").strip()
+    if override:
+        override_path = _host_path(override)
+        return (
+            override_path
+            if override_path.name.lower() == "solomondark.exe"
+            else override_path / "SolomonDark.exe"
+        )
+
+    candidates: list[Path] = []
+    stage_report_path = root / "runtime/stage/.sdmod/stage-report.json"
+    if stage_report_path.is_file():
+        try:
+            stage_report = json.loads(
+                stage_report_path.read_text(encoding="utf-8")
+            )
+            retail_game_path = str(
+                stage_report.get("retailGamePath", "")
+            ).strip()
+            if retail_game_path:
+                candidates.append(
+                    _host_path(retail_game_path) / "SolomonDark.exe"
+                )
+        except (OSError, ValueError, TypeError):
+            pass
+
+    candidates.extend(
+        (
+            root.parent / "SolomonDarkAbandonware/SolomonDark.exe",
+            workspace_root / "SolomonDarkAbandonware/SolomonDark.exe",
+        )
+    )
+    return next(
+        (candidate for candidate in candidates if candidate.is_file()),
+        candidates[0],
+    )
+
+
+ABANDONWARE_BINARY = resolve_abandonware_binary()
 ALLY_HP_PROGRESS_GHIDRA = ROOT / "runtime/ghidra_ally_hp_progression_paths.txt"
 ALLY_HP_RECOMPUTE_GHIDRA = ROOT / "runtime/ghidra_ally_hp_recompute_candidate.txt"
 PRIMARY_SPELL_BUILDER_GHIDRA = ROOT / "runtime/ghidra_primary_spell_builder_resource_paths.txt"

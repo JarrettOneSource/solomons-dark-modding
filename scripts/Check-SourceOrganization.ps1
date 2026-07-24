@@ -122,6 +122,8 @@ foreach ($projectItem in $projectItems) {
 $acceptedLargeFiles = @{
     "include/multiplayer_runtime_protocol.h" = "Fixed local-UDP packet schema; split with the transport protocol redesign."
     "src/lua_engine_bindings_gameplay.cpp" = "Single Lua gameplay registration unit; split after the multiplayer API stabilizes."
+    "src/lua_engine_bindings_runtime.cpp" = "Runtime snapshot table marshalling remains one cohesive Lua binding unit."
+    "src/lua_engine_events.cpp" = "The ordered gameplay event variant, queue, and dispatch visitor remain one cohesive unit."
     "src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl" = "Existing native cast preparation sequence with tightly coupled state guards."
     "src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl" = "Existing native cast lifecycle sequence with tightly coupled cleanup paths."
     "src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl" = "Native actor-tick hook kept contiguous while multiplayer playback is validated."
@@ -131,6 +133,7 @@ $acceptedLargeFiles = @{
     "src/mod_loader_gameplay/replicated_loot_reconciliation.inl" = "Host-owned loot materialization lifecycle kept together through live verification."
     "src/mod_loader_gameplay/world_snapshot_reconciliation.inl" = "Host-authoritative world reconciliation pipeline pending a behavior-neutral module split."
     "src/multiplayer_local_transport.cpp" = "Local-UDP protocol prototype pending extraction behind the final transport interface."
+    "src/multiplayer_local_transport/loot_pickup_authority.inl" = "Host loot-pickup validation, ownership, and completion form one authority transaction."
     "src/run_lifecycle/run_and_enemy_hooks.inl" = "Run lifecycle and enemy authority hooks kept contiguous through multiplayer stress validation."
     "src/wave_intelligence.cpp" = "Effective schedule parsing and authority/replication accounting form one semantic wave service."
 }
