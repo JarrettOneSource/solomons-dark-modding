@@ -21,6 +21,7 @@ internal static class LauncherCommandParser
         string? runtimeProfile = null;
         var runtimeFlagOverrides = new List<string>();
         var temporaryProfile = false;
+        var freshInstall = false;
         string? steamAppId = null;
         string? steamApiDll = null;
         var multiplayerMode = MultiplayerLaunchMode.Unspecified;
@@ -120,6 +121,13 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--fresh-install")
+            {
+                freshInstall = true;
+                temporaryProfile = true;
+                continue;
+            }
+
             if (arg == "--steam-appid")
             {
                 steamAppId = ReadValue(args, ref index, arg);
@@ -198,6 +206,11 @@ internal static class LauncherCommandParser
         {
             throw new InvalidOperationException("--progress-json requires --json.");
         }
+        if (freshInstall && !string.IsNullOrWhiteSpace(savegamesRoot))
+        {
+            throw new InvalidOperationException(
+                "--fresh-install cannot be combined with --savegames-root.");
+        }
 
         var lobbyHost = LobbyHostOptions.Create(lobbyPrivacy, directoryBaseUrl);
         var multiplayer = MultiplayerLaunchOptions.Create(
@@ -229,6 +242,7 @@ internal static class LauncherCommandParser
             runtimeProfile,
             runtimeFlagOverrides,
             temporaryProfile,
+            freshInstall,
             steamAppId,
             steamApiDll,
             multiplayer.Mode,

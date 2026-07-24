@@ -273,6 +273,33 @@ bool TryGetCurrentSpellPicker(uintptr_t* picker_address) {
     return true;
 }
 
+bool TryGetCurrentControlSchemePicker(uintptr_t* picker_address) {
+    if (picker_address == nullptr) {
+        return false;
+    }
+
+    const auto now = GetTickCount64();
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    auto& tracked_picker =
+        g_debug_ui_overlay_state.control_scheme_picker_render;
+    if (tracked_picker.render_depth > 0 &&
+        tracked_picker.active_object_ptr != 0) {
+        *picker_address = tracked_picker.active_object_ptr;
+        return true;
+    }
+
+    if (tracked_picker.tracked_object_ptr == 0 ||
+        now < tracked_picker.captured_at ||
+        now - tracked_picker.captured_at >
+            kTrackedControlSchemePickerMaximumIdleMs) {
+        tracked_picker.tracked_object_ptr = 0;
+        return false;
+    }
+
+    *picker_address = tracked_picker.tracked_object_ptr;
+    return true;
+}
+
 void RememberDarkCloudBrowserPanelRect(
     uintptr_t browser_address,
     float left,

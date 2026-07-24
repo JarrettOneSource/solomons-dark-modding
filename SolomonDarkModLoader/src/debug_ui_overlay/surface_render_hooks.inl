@@ -243,6 +243,46 @@ void __fastcall HookSpellPickerRenderHelper(void* self, void* /*unused_edx*/) {
     }
 }
 
+void __fastcall HookControlSchemePickerRenderHelper(
+    void* self,
+    void* /*unused_edx*/) {
+    {
+        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+        if (!g_debug_ui_overlay_state
+                 .first_control_scheme_picker_render_logged) {
+            g_debug_ui_overlay_state
+                .first_control_scheme_picker_render_logged = true;
+            Log(
+                "Debug UI overlay intercepted its first control-scheme "
+                "picker render call. object=" +
+                HexString(reinterpret_cast<uintptr_t>(self)));
+        }
+
+        auto& tracked =
+            g_debug_ui_overlay_state.control_scheme_picker_render;
+        ++tracked.render_depth;
+        tracked.active_object_ptr = reinterpret_cast<uintptr_t>(self);
+        tracked.tracked_object_ptr = reinterpret_cast<uintptr_t>(self);
+        tracked.captured_at = GetTickCount64();
+    }
+
+    const auto original = GetX86HookTrampoline<SurfaceRenderHelperFn>(
+        g_debug_ui_overlay_state.control_scheme_picker_render_hook);
+    if (original != nullptr) {
+        original(self);
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    auto& tracked =
+        g_debug_ui_overlay_state.control_scheme_picker_render;
+    if (tracked.render_depth > 0) {
+        --tracked.render_depth;
+    }
+    if (tracked.render_depth == 0) {
+        tracked.active_object_ptr = 0;
+    }
+}
+
 void __fastcall HookHallOfFameRenderHelper(void* self, void* /*unused_edx*/) {
     const auto* config = TryGetDebugUiOverlayConfig();
     auto is_hall_of_fame = false;

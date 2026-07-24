@@ -118,6 +118,31 @@ pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
 dotnet run --project ./tests/launcher-contracts/SolomonDarkModLauncher.ContractTests.csproj
 ```
 
+The destructive-to-itself first-run regression uses a caller-owned, previously
+absent Windows runtime root and never reads or changes retail saves:
+
+```powershell
+.\scripts\Verify-FreshInstallMultiplayer.ps1 `
+    -GameDirectory C:\path\to\clean-solomon-dark `
+    -LauncherPath C:\path\to\SolomonDarkModLauncher.exe `
+    -RuntimeRoot C:\Temp\sd-fresh-runtime-unique `
+    -EvidenceDirectory C:\Temp\sd-fresh-evidence-unique `
+    -InstancePrefix fresh-unique `
+    -HostPort 47620 -ClientPort 47621 -PreviewPort 47622 `
+    -AcceptJoinPreview
+```
+
+Both output directories must be absent before the run. The gate proves the
+empty profiles/stages, zero enabled mods and no pre-staged mod state, records
+join-preview consent, verifies that joining only prepares the lobby until
+**Launch Game** is explicit, launches two loopback instances through the real
+launcher, bypasses tutorial construction through the stock standard-gameplay
+transition, dispatches the stock Create actions on the game thread with zero
+Lua mods, queues the existing host-authoritative stock gameplay transition
+after the remote player materializes, and captures hub/run screenshots and
+logs. It stops only the exact game PIDs and executable paths that it recorded,
+then leaves the runtime and evidence directories intact for inspection.
+
 On a Linux or SteamOS compatibility host, run the Windows launcher contracts
 through each installed Proton generation with UMU:
 
@@ -145,9 +170,14 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 ./dist/launcher/SolomonDarkModLauncher.exe stage
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
 ./dist/launcher/SolomonDarkModLauncher.exe launch
+./dist/launcher/SolomonDarkModLauncher.exe launch --fresh-install
 ./dist/launcher/SolomonDarkModLauncher.exe launch --savegames-root path\to\launcher-savegames
 ./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll
 ```
+
+`--fresh-install` always uses a reset instance-local temporary profile, imports
+no retail APPDATA, and excludes the source install's `sandbox` tree from the
+stage. It cannot be combined with `--savegames-root`.
 
 GUI:
 

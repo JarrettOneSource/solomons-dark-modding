@@ -45,9 +45,38 @@ bool TryBuildGameplayRegionSceneContextSnapshot(
                &snapshot->region_type_id);
 }
 
+bool IsActiveTutorialGameplay(uintptr_t gameplay_address) {
+    if (gameplay_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t tutorial_active = 0;
+    uintptr_t tutorial_surface = 0;
+    uintptr_t tutorial_vtable = 0;
+    const auto expected_vtable =
+        memory.ResolveGameAddressOrZero(kTutorialVtable);
+    return expected_vtable != 0 &&
+           memory.TryReadField(
+               gameplay_address,
+               kGameplayTutorialActiveOffset,
+               &tutorial_active) &&
+           tutorial_active != 0 &&
+           memory.TryReadField(
+               gameplay_address,
+               kGameplayTutorialSurfaceOffset,
+               &tutorial_surface) &&
+           tutorial_surface != 0 &&
+           memory.TryReadValue(tutorial_surface, &tutorial_vtable) &&
+           tutorial_vtable == expected_vtable;
+}
+
 std::string DescribeSceneKind(const SceneContextSnapshot& snapshot) {
     if (snapshot.world_address == 0) {
         return "transition";
+    }
+    if (IsActiveTutorialGameplay(snapshot.gameplay_scene_address)) {
+        return "tutorial";
     }
     if (snapshot.region_type_id == kSceneTypeHub || snapshot.current_region_index == kHubRegionIndex) {
         return "hub";
@@ -64,6 +93,9 @@ std::string DescribeSceneKind(const SceneContextSnapshot& snapshot) {
 std::string DescribeSceneName(const SceneContextSnapshot& snapshot) {
     if (snapshot.world_address == 0) {
         return "transition";
+    }
+    if (IsActiveTutorialGameplay(snapshot.gameplay_scene_address)) {
+        return "tutorial";
     }
 
     const auto typed_name = DescribeRegionNameByType(snapshot.region_type_id);

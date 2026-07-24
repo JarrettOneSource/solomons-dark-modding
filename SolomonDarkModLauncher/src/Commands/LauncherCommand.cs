@@ -17,6 +17,7 @@ internal sealed record LauncherCommand(
     string? RuntimeProfileOverride,
     IReadOnlyList<string> RuntimeFlagOverrides,
     bool TemporaryProfile,
+    bool FreshInstall,
     string? SteamAppIdOverride,
     string? SteamApiDllOverride,
     MultiplayerLaunchMode MultiplayerMode,

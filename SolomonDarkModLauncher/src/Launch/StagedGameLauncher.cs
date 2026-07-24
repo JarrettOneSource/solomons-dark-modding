@@ -39,6 +39,7 @@ internal static class StagedGameLauncher
         StageBuildResult stage,
         LauncherConfiguration configuration,
         bool temporaryProfile = false,
+        bool freshInstall = false,
         MultiplayerLaunchOptions? multiplayer = null,
         string? savegamesRootOverride = null,
         LaunchOptions? options = null)
@@ -50,7 +51,8 @@ internal static class StagedGameLauncher
             options?.EnvironmentOverrides,
             TryResolveRetailAppDataPath(),
             temporaryProfile,
-            savegamesRootOverride);
+            savegamesRootOverride,
+            freshInstall);
         var savegamesUsesDirectoryMirror = false;
         if (!string.IsNullOrWhiteSpace(options.SavegamesRootPath))
         {

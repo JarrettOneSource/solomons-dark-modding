@@ -49,6 +49,9 @@ bool TryResolveLiveUiSurfaceOwner(
         if (expected_vftable_address == 0 && config != nullptr) {
             expected_vftable_address = config->spell_picker_vftable;
         }
+    } else if (surface_root_id == "control_scheme_picker") {
+        (void)TryGetCurrentControlSchemePicker(
+            &candidate_owner_address);
     } else if (surface_root_id == "create") {
         const auto* surface_definition = FindUiSurfaceDefinition("create");
         if (surface_definition != nullptr) {

@@ -509,6 +509,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->first_main_menu_render_logged = false;
     state->first_hall_of_fame_render_logged = false;
     state->first_spell_picker_render_logged = false;
+    state->first_control_scheme_picker_render_logged = false;
     // Surface registry first-frame flags are reset by RenderOverlayFrame's
     // registry definition.  The flags live in a static array in
     // label_resolution_and_frame_render.inl which is included after this file,
@@ -541,6 +542,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->main_menu_render_hook = X86Hook{};
     state->hall_of_fame_render_hook = X86Hook{};
     state->spell_picker_render_hook = X86Hook{};
+    state->control_scheme_picker_render_hook = X86Hook{};
     state->ui_labeled_control_render_hook = X86Hook{};
     state->ui_labeled_control_alt_render_hook = X86Hook{};
     state->ui_unlabeled_control_render_hook = X86Hook{};
@@ -561,6 +563,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->myquick_panel_render = TrackedSurfaceRenderState{};
     state->hall_of_fame_render = TrackedSurfaceRenderState{};
     state->spell_picker_render = TrackedSurfaceRenderState{};
+    state->control_scheme_picker_render = TrackedSurfaceRenderState{};
     state->myquick_panel_modal = TrackedSimpleMenuState{};
     state->simple_menu = TrackedSimpleMenuState{};
     state->dark_cloud_browser_panel = TrackedWidgetRectState{};

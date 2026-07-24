@@ -66,6 +66,67 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         )[1].split("function Wait-InstanceHub", maxsplit=1)[0]
         self.assertIn("Wait-InstanceCreateSurface `", create_selection)
 
+    def test_fresh_install_gate_is_isolated_and_exactly_owned(self) -> None:
+        gate = (
+            ROOT / "scripts" / "Verify-FreshInstallMultiplayer.ps1"
+        ).read_text(encoding="utf-8")
+        pair = (
+            ROOT / "scripts" / "Launch-LocalMultiplayerPair.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Resolve-NewAcceptanceDirectory", gate)
+        self.assertIn(
+            "$Label must not exist before the fresh-install gate",
+            gate,
+        )
+        self.assertIn("[switch]$AcceptJoinPreview", gate)
+        self.assertIn('"join-preview"', gate)
+        self.assertIn('"--fresh-install"', gate)
+        self.assertIn("preparedWithoutGame = $true", gate)
+        self.assertIn("enabledModCountBeforeLaunch = 0", gate)
+        self.assertIn("modStateAbsentBeforeLaunch = $true", gate)
+        self.assertIn("-NoLuaAutomation `", gate)
+        self.assertIn("-QuickStartRun `", gate)
+        self.assertIn("Wait-SharedRunFromNativeQuickStart", gate)
+        self.assertIn(
+            "SDMOD_MULTIPLAYER_QUICK_START_RUN",
+            pair,
+        )
+        self.assertIn("Lua runtime mods loaded: 0", gate)
+        self.assertNotIn(
+            '[string]$ExactModIds = "sample.lua.ui_sandbox_lab"',
+            gate,
+        )
+        self.assertIn("Stop-ExactGameProcess", gate)
+        self.assertIn("$process.ExecutablePath", gate)
+        self.assertNotIn("Get-Process SolomonDark", gate)
+        self.assertNotIn("Remove-Item", gate)
+        self.assertIn("-FreshInstall `", gate)
+        self.assertIn("HostFirstLaunchScreenshotPath", gate)
+        self.assertIn("ClientJoinedScreenshotPath", gate)
+        self.assertIn("Assert-ScreenshotSceneCoverage", gate)
+        self.assertIn("dark transition frame", gate)
+        self.assertIn("expected exactly one", gate)
+        self.assertIn("first-run dialog dispatches", gate)
+        self.assertIn("Assert-NoTutorialSandboxArtifacts", gate)
+        self.assertNotIn("Wait-InstanceRemoteParticipant", gate)
+        self.assertNotIn("Invoke-InstanceLua", gate)
+
+        self.assertIn("[switch]$FreshInstall", pair)
+        self.assertIn("[switch]$NoLuaAutomation", pair)
+        self.assertIn("Wait-NativeQuickStartSelection", pair)
+        self.assertIn(
+            "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT",
+            pair,
+        )
+        self.assertIn(
+            "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE",
+            pair,
+        )
+        self.assertIn('$args += "--fresh-install"', pair)
+        self.assertIn("Wait-InstanceRemoteParticipant", pair)
+        self.assertIn("-LauncherPath $resolvedLauncherPath", gate)
+
     def test_pair_launcher_defaults_to_isolated_process_ownership(self) -> None:
         parameter = inspect.signature(
             verifier.launch_pair

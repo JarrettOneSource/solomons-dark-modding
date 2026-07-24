@@ -12,10 +12,14 @@ internal static class IsolatedProfileBootstrapper
         IReadOnlyDictionary<string, string>? existingOverrides = null,
         string? retailGameAppDataPath = null,
         bool temporaryProfile = false,
-        string? savegamesRootOverride = null)
+        string? savegamesRootOverride = null,
+        bool freshInstall = false)
     {
-        var profile = temporaryProfile
-            ? PrepareTemporaryProfile(workspace, retailGameAppDataPath)
+        var useTemporaryProfile = temporaryProfile || freshInstall;
+        var profile = useTemporaryProfile
+            ? PrepareTemporaryProfile(
+                workspace,
+                freshInstall ? null : retailGameAppDataPath)
             : PreparePersistentProfile(
                 workspace,
                 retailGameAppDataPath,
@@ -35,7 +39,7 @@ internal static class IsolatedProfileBootstrapper
         environmentOverrides[LocalAppDataEnvironmentVariable] = profile.LocalAppDataPath;
         return new LaunchOptions(
             environmentOverrides,
-            temporaryProfile,
+            useTemporaryProfile,
             profile.ProfileRootPath,
             profile.SavegamesRootPath);
     }

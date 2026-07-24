@@ -53,6 +53,7 @@ internal static class LauncherJsonConsole
                 RuntimeProfile = SolomonDarkModLauncher.Staging.RuntimeStageFlags.ToProfileName(execution.Configuration.Runtime.Profile),
                 HasRuntimeFlagOverrides = execution.Configuration.Runtime.HasOverrides,
                 TemporaryProfile = execution.Command.TemporaryProfile,
+                FreshInstall = execution.Command.FreshInstall,
                 LoaderDebugUi = runtimeFlags.LoaderDebugUi,
                 SteamAppId = execution.Configuration.Steam.AppId,
                 SteamApiOverride = execution.Configuration.Steam.ApiDllOverridePath
@@ -360,6 +361,7 @@ internal static class LauncherJsonConsole
         public required string RuntimeProfile { get; init; }
         public required bool HasRuntimeFlagOverrides { get; init; }
         public required bool TemporaryProfile { get; init; }
+        public required bool FreshInstall { get; init; }
         public required bool LoaderDebugUi { get; init; }
         public required string SteamAppId { get; init; }
         public required string? SteamApiOverride { get; init; }

@@ -212,6 +212,9 @@
     <ClInclude Include="include\multiplayer_join_flow.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_local_transport.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>

@@ -196,7 +196,21 @@ The staged catalog then contains only the website host set.
 Use `--instance <name>` when preserving separate staged/profile state for
 repeatable diagnosis. The launcher profile is isolated from the retail Solomon
 Dark APPDATA tree; `--temporary-profile` additionally resets that isolated
-profile for a one-off run.
+profile for a one-off run. Use `--fresh-install` for the true first-run
+contract: it implies a temporary profile, imports no retail APPDATA, excludes
+the source install's `sandbox` tree, and rejects `--savegames-root`.
+
+The automated fresh two-player gate is
+`scripts/Verify-FreshInstallMultiplayer.ps1`. Give it unique, previously absent
+Windows runtime/evidence directories, unique loopback ports and instance names,
+and explicit `-AcceptJoinPreview`. It records the empty starting state,
+zero enabled mods with no pre-staged mod state, join-preview consent, the
+joined-but-not-launched boundary, first launch, hub, materialized peer, and
+shared-run evidence without touching retail saves or stopping any process
+outside its exact PID ledger. Stock Create actions dispatch on the game thread
+with no Lua mod; after the joined-hub capture, an opt-in native quick-start
+request queues the existing host-authoritative stock gameplay transition only
+after the remote player has materialized.
 
 ## First two-player checklist
 

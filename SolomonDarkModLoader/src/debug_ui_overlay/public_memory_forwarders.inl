@@ -44,6 +44,7 @@ bool TryGetActiveHallOfFameRender(uintptr_t* hof_address);
 bool TryGetCurrentHallOfFame(uintptr_t* hof_address);
 bool TryGetActiveSpellPickerRender(uintptr_t* picker_address);
 bool TryGetCurrentSpellPicker(uintptr_t* picker_address);
+bool TryGetCurrentControlSchemePicker(uintptr_t* picker_address);
 bool TryReadMyQuickPanelBuilderOwnerAddress(
     const DebugUiOverlayConfig& config,
     uintptr_t quick_panel_address,

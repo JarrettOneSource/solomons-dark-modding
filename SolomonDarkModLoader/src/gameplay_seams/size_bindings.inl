@@ -17,6 +17,8 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "player_progression_appearance_primary_c", kPlayerProgressionAppearancePrimaryCOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_testrun_mode_flag", kGameplayTestrunModeFlagOffset),
         SDMOD_SIZE("gameplay.offsets", "gameplay_hub_surface", kGameplayHubSurfaceOffset),
+        SDMOD_SIZE("gameplay.offsets", "gameplay_tutorial_surface", kGameplayTutorialSurfaceOffset),
+        SDMOD_SIZE("gameplay.offsets", "gameplay_tutorial_active", kGameplayTutorialActiveOffset),
         SDMOD_SIZE("gameplay.offsets", "hub_courtyard_service_vfunc", kHubCourtyardServiceVfuncOffset),
         SDMOD_SIZE("gameplay.offsets", "hub_luthacus_storage_action", kHubLuthacusStorageActionOffset),
         SDMOD_SIZE("gameplay.offsets", "hub_fomentius_action", kHubFomentiusActionOffset),

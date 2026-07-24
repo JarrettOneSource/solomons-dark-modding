@@ -55,6 +55,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "pointer_list_delete_batch", kPointerListDeleteBatch),
         SDMOD_ADDR("gameplay.hooks", "object_delete", kObjectDelete),
         SDMOD_ADDR("gameplay.hooks", "gameplay_switch_region", kGameplaySwitchRegion),
+        SDMOD_ADDR("gameplay.hooks", "start_standard_gameplay", kStartStandardGameplay),
+        SDMOD_ADDR("gameplay.hooks", "tutorial_gameplay_bootstrap", kTutorialGameplayBootstrap),
         SDMOD_ADDR("gameplay.hooks", "gameplay_create_player_slot", kGameplayCreatePlayerSlot),
         SDMOD_ADDR("gameplay.hooks", "wizard_clone_from_source_actor", kWizardCloneFromSourceActor),
         SDMOD_ADDR("gameplay.hooks", "player_actor_ctor", kPlayerActorCtor),
@@ -228,6 +230,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.globals", "hub_courtyard_vtable", kHubCourtyardVtable),
         SDMOD_ADDR("gameplay.globals", "inventory_screen_vtable", kInventoryScreenVtable),
         SDMOD_ADDR("gameplay.globals", "inventory_shop_vtable", kInventoryShopVtable),
+        SDMOD_ADDR("gameplay.globals", "tutorial_vtable", kTutorialVtable),
 
         SDMOD_ADDR("run_lifecycle.hooks", "main_menu_control_action", kMainMenuControlAction),
         SDMOD_ADDR("run_lifecycle.hooks", "start_game", kStartGame),

@@ -16,6 +16,7 @@ struct SurfaceRegistryEntry {
 
 static SurfaceRegistryEntry s_surface_registry[] = {
     // Priority order: first match wins.
+    {"control_scheme_picker", "ControlSchemePicker", true, true, true, false},
     {"controls",            "Controls",             true,  false, true,  false},
     {"settings",            "Settings",             true,  false, false, false},
     {"create",              "Create",               true,  true,  true,  false},
@@ -29,6 +30,7 @@ static SurfaceRegistryEntry s_surface_registry[] = {
 };
 
 static constexpr std::size_t kSurfaceRegistrySize = sizeof(s_surface_registry) / sizeof(s_surface_registry[0]);
+static constexpr std::uint64_t kFreshTrackedDialogPriorityMs = 250;
 
 void ResetSurfaceRegistryFirstFrameFlags() {
     for (auto& entry : s_surface_registry) {
@@ -123,6 +125,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         TryBuildQuickPanelOverlayRenderElements(exact_text_elements, exact_control_elements);
 
     struct { const char* id; std::vector<OverlayRenderElement> elems; } built[] = {
+        {"control_scheme_picker", TryBuildControlSchemePickerOverlayRenderElements()},
         {"controls",           TryBuildControlsOverlayRenderElements(exact_text_elements, exact_control_elements)},
         {"settings",           TryBuildSettingsOverlayRenderElements(exact_text_elements, exact_control_elements)},
         {"create",             TryBuildCreateOverlayRenderElements()},
@@ -145,7 +148,15 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         }
     }
 
-    if (dialog_snapshot.has_value() && higher_priority_surface_name[0] != '\0' &&
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    const bool dialog_was_just_captured =
+        dialog_snapshot.has_value() &&
+        now_ms >= dialog_snapshot->captured_at &&
+        now_ms - dialog_snapshot->captured_at <=
+            kFreshTrackedDialogPriorityMs;
+    if (dialog_snapshot.has_value() &&
+        !dialog_was_just_captured &&
+        higher_priority_surface_name[0] != '\0' &&
         std::strcmp(higher_priority_surface_name, "main_menu") != 0) {
         ClearTrackedDialogBecauseHigherPrioritySurfaceBecameDominant(higher_priority_surface_name);
         dialog_snapshot.reset();

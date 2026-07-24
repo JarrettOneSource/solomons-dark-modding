@@ -1,5 +1,61 @@
 void SortOverlayRenderElementsByTopLeft(std::vector<OverlayRenderElement>* render_elements);
 
+std::vector<OverlayRenderElement>
+TryBuildControlSchemePickerOverlayRenderElements() {
+    uintptr_t picker_address = 0;
+    if (!TryGetCurrentControlSchemePicker(&picker_address) ||
+        picker_address == 0) {
+        return {};
+    }
+
+    const auto* surface =
+        FindUiSurfaceDefinition("control_scheme_picker");
+    if (surface == nullptr || surface->action_ids.size() != 1) {
+        return {};
+    }
+    const auto* action =
+        FindUiActionDefinition(surface->action_ids.front());
+    if (action == nullptr || action->label.empty()) {
+        return {};
+    }
+
+    const auto control_offset =
+        GetDefinitionAddress(action->addresses, "control_offset");
+    if (control_offset == 0) {
+        return {};
+    }
+    const auto control_address = picker_address + control_offset;
+
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 1.0f;
+    float bottom = 1.0f;
+    (void)TryReadExactControlRect(
+        g_debug_ui_overlay_state.config,
+        reinterpret_cast<const void*>(control_address),
+        &left,
+        &top,
+        &right,
+        &bottom);
+
+    OverlayRenderElement element;
+    element.surface_id = "control_scheme_picker";
+    element.surface_title =
+        surface->title.empty()
+            ? std::string("Control Scheme Picker")
+            : surface->title;
+    element.label = action->label;
+    element.action_id = action->id;
+    element.source_object_ptr = control_address;
+    element.surface_object_ptr = picker_address;
+    element.show_label = true;
+    element.left = left;
+    element.top = top;
+    element.right = right;
+    element.bottom = bottom;
+    return {std::move(element)};
+}
+
 std::vector<OverlayRenderElement> TryBuildCreateOverlayRenderElements() {
     const auto* create_surface = FindUiSurfaceDefinition("create");
     if (create_surface == nullptr || create_surface->action_ids.empty()) {

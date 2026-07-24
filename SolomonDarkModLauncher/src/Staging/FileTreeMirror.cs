@@ -8,7 +8,10 @@ internal static class FileTreeMirror
 {
     private const string PreservedStageMetadataDirectoryName = ".sdmod";
 
-    public static StageMirrorResult Synchronize(string sourceRootPath, string destinationRootPath)
+    public static StageMirrorResult Synchronize(
+        string sourceRootPath,
+        string destinationRootPath,
+        bool excludeSandbox = false)
     {
         var sourceRoot = new DirectoryInfo(sourceRootPath);
         if (!sourceRoot.Exists)
@@ -18,7 +21,12 @@ internal static class FileTreeMirror
 
         var destinationRoot = new DirectoryInfo(destinationRootPath);
         var counters = new MirrorCounters();
-        SynchronizeDirectory(sourceRoot, destinationRoot, preserveMetadataDirectory: true, counters);
+        SynchronizeDirectory(
+            sourceRoot,
+            destinationRoot,
+            preserveMetadataDirectory: true,
+            excludeSandbox,
+            counters);
         return counters.ToResult();
     }
 
@@ -26,6 +34,7 @@ internal static class FileTreeMirror
         DirectoryInfo sourceDirectory,
         DirectoryInfo destinationDirectory,
         bool preserveMetadataDirectory,
+        bool excludeSandbox,
         MirrorCounters counters)
     {
         if (!destinationDirectory.Exists)
@@ -35,6 +44,13 @@ internal static class FileTreeMirror
         }
 
         var sourceDirectories = EnumerateDirectories(sourceDirectory)
+            .Where(directory =>
+                !preserveMetadataDirectory ||
+                !excludeSandbox ||
+                !string.Equals(
+                    directory.Name,
+                    "sandbox",
+                    StringComparison.OrdinalIgnoreCase))
             .ToDictionary(directory => directory.Name, StringComparer.OrdinalIgnoreCase);
         var sourceFiles = EnumerateFiles(sourceDirectory)
             .ToDictionary(file => file.Name, StringComparer.OrdinalIgnoreCase);
@@ -68,7 +84,12 @@ internal static class FileTreeMirror
         foreach (var sourceSubdirectory in sourceDirectories.Values)
         {
             var synchronizedDirectory = new DirectoryInfo(Path.Combine(destinationDirectory.FullName, sourceSubdirectory.Name));
-            SynchronizeDirectory(sourceSubdirectory, synchronizedDirectory, preserveMetadataDirectory: false, counters);
+            SynchronizeDirectory(
+                sourceSubdirectory,
+                synchronizedDirectory,
+                preserveMetadataDirectory: false,
+                excludeSandbox: false,
+                counters);
         }
 
         foreach (var sourceFile in sourceFiles.Values)

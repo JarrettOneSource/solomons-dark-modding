@@ -64,6 +64,7 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "lua_engine_bindings_spells_runtime.inl",
         "registered_spell_input.inl",
         "player_secondary_spell_cast_hook.inl",
+        "tick_state_machine.inl",
     }
 )
 

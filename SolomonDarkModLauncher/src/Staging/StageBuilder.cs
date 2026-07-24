@@ -8,12 +8,14 @@ internal static class StageBuilder
 {
     public static StageBuildResult Build(
         LauncherConfiguration configuration,
-        ModCatalog catalog)
+        ModCatalog catalog,
+        bool freshInstall = false)
     {
         StageRootProcessCleaner.TerminateProcessesUsingStage(configuration.Workspace.StageRootPath);
         var stageMirror = FileTreeMirror.Synchronize(
             configuration.Game.InstallDirectory,
-            configuration.Workspace.StageRootPath);
+            configuration.Workspace.StageRootPath,
+            excludeSandbox: freshInstall);
         StageSandboxCompatibilityLinks.Materialize(configuration.Workspace.StageRootPath);
 
         var appliedOverlayCount = OverlayStageMaterializer.Materialize(

@@ -118,7 +118,10 @@ internal static class LauncherCommandExecutor
         WebsiteModUpdateResult? modUpdate,
         LobbyModSyncResult? lobbyModSync)
     {
-        var stageResult = StageBuilder.Build(configuration, catalog);
+        var stageResult = StageBuilder.Build(
+            configuration,
+            catalog,
+            command.FreshInstall);
         return new LauncherCommandExecution(
             command,
             configuration,
@@ -135,7 +138,10 @@ internal static class LauncherCommandExecutor
         WebsiteModUpdateResult? modUpdate,
         LobbyModSyncResult? lobbyModSync)
     {
-        var stageResult = StageBuilder.Build(configuration, catalog);
+        var stageResult = StageBuilder.Build(
+            configuration,
+            catalog,
+            command.FreshInstall);
         RequireHostCompatibleStage(lobbyModSync, stageResult);
         var multiplayer = MultiplayerLaunchOptions.Create(
             command.MultiplayerMode,
@@ -158,6 +164,7 @@ internal static class LauncherCommandExecutor
             stageResult,
             configuration,
             command.TemporaryProfile,
+            command.FreshInstall,
             multiplayer,
             command.SavegamesRootOverride);
         return new LauncherCommandExecution(

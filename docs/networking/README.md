@@ -386,6 +386,9 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   LOCALAPPDATA, and the staged `savegames` compatibility path into a fresh
   runtime-local temporary profile so joining a multiplayer host cannot mutate
   the user's single-player save files.
+  `-FreshInstall` applies the stronger first-run contract to every peer: the
+  launcher resets only that instance's temporary profile, imports no retail
+  APPDATA, and excludes all source `sandbox` data from the staged game.
   This validates participant connection plus movement/heading materialization
   without Steam identity constraints. The harness assigns
   `SDMOD_MULTIPLAYER_PLAYER_NAME` and unique `SDMOD_LUA_EXEC_PIPE_NAME` values
@@ -395,6 +398,19 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   run-start blocking, idle movement/heading convergence, player/player
   native-remote overlap stability without cross-instance push feedback, and
   remote nameplate resolution.
+  `scripts/Verify-FreshInstallMultiplayer.ps1` is the permanent no-saves
+  acceptance gate. It requires previously absent runtime/evidence roots and
+  explicit `-AcceptJoinPreview`, checks the join-preview and prepare-without-
+  launch boundary, requires zero enabled mods and no pre-staged mod state,
+  launches a fresh host/client pair, waits until both native remote players
+  materialize, dispatches stock Create actions on the game thread without a Lua
+  mod, and queues the existing host-authoritative stock gameplay transition
+  after preserving the joined-hub evidence. It validates exactly one stock
+  control-picker action and one pre-construction
+  tutorial bypass per peer, and captures every required screenshot and log. The
+  opt-in native run request waits for a materialized remote player and never
+  requires a Lua mod or focus-stealing input. Cleanup is limited to its recorded
+  PIDs after matching each live executable path.
 	  `tools/verify_multiplayer_progression_ledger_sync.py` verifies bidirectional
 	  local UDP replication of participant-owned gold and gold revision state through
 	  `StatePacket`.

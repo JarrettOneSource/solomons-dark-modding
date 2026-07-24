@@ -463,6 +463,18 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     }
     Log("Debug UI overlay: D3D9 frame hook installed.");
 
+    Log(
+        "Debug UI overlay: installing control-scheme picker render hook.");
+    if (InstallControlSchemePickerRenderHook(&hook_error)) {
+        Log(
+            "Debug UI overlay: control-scheme picker render hook installed.");
+    } else {
+        Log(
+            "Debug UI overlay control-scheme picker render hook failed "
+            "(non-fatal). " +
+            hook_error);
+    }
+
     g_debug_ui_overlay_state.initialized = true;
     Log("Debug UI overlay initialized.");
     Log("Debug UI text draw helper: " + HexString(config->text_draw_helper));

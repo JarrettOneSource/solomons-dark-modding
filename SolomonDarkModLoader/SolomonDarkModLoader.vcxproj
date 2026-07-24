@@ -117,6 +117,7 @@
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
+    <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_ui_action_sync.inl" />

@@ -16,33 +16,57 @@ param(
     [string]$InstancePrefix = "local-mp",
     [string]$GameDirectory = "",
     [string]$RuntimeRoot = "",
+    [string]$LauncherPath = "",
     [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
     [switch]$TemporaryHostProfile,
+    [switch]$FreshInstall,
+    [switch]$NoLuaAutomation,
     [switch]$GodMode,
     [string]$TestSurvivalBoneyardOverride = "",
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
     [switch]$NoTileWindows,
     [switch]$QuickStart,
+    [switch]$QuickStartRun,
     [switch]$AllowFocusSteal,
     [string]$ProcessIdOutputPath = "",
-    [string]$ExactModIds = ""
+    [string]$ExactModIds = "",
+    [string]$HostFirstLaunchScreenshotPath = "",
+    [string]$HostHubScreenshotPath = "",
+    [string]$ClientJoinedScreenshotPath = ""
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
-$launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
+$launcher = if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
+    Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
+} else {
+    (Get-Item -LiteralPath $LauncherPath -ErrorAction Stop).FullName
+}
 $launcherDir = Split-Path $launcher -Parent
 $luaExecScript = Join-Path $PSScriptRoot "Invoke-LuaExec.ps1"
 $clickWindowScript = Join-Path $PSScriptRoot "click_window.py"
+$captureWindowScript = Join-Path $PSScriptRoot "capture_window.py"
 $launcherProcessHelpers = Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
 
 if ($InstancePrefix -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$') {
     throw "InstancePrefix must be 1-48 filename-safe characters."
+}
+if ($NoLuaAutomation -and -not $QuickStart) {
+    throw "-NoLuaAutomation requires -QuickStart."
+}
+if ($QuickStartRun -and -not $QuickStart) {
+    throw "-QuickStartRun requires -QuickStart."
+}
+if ($QuickStartRun -and $DisableMultiplayerTransport) {
+    throw "-QuickStartRun requires multiplayer transport."
+}
+if ($NoLuaAutomation -and $GodMode) {
+    throw "-NoLuaAutomation cannot be combined with -GodMode."
 }
 $hostInstance = "$InstancePrefix-host"
 $clientInstance = "$InstancePrefix-client"
@@ -60,11 +84,127 @@ if (-not (Test-Path $luaExecScript)) {
 if (-not (Test-Path $clickWindowScript)) {
     throw "Window click helper was not found at $clickWindowScript."
 }
+if ((-not [string]::IsNullOrWhiteSpace($HostFirstLaunchScreenshotPath) -or
+     -not [string]::IsNullOrWhiteSpace($HostHubScreenshotPath) -or
+     -not [string]::IsNullOrWhiteSpace($ClientJoinedScreenshotPath)) -and
+    -not (Test-Path $captureWindowScript)) {
+    throw "Window capture helper was not found at $captureWindowScript."
+}
 if (-not (Test-Path $launcherProcessHelpers)) {
     throw "Launcher process helpers were not found at $launcherProcessHelpers."
 }
 
 . $launcherProcessHelpers
+
+function Wait-LogContains {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Text,
+        [int]$TimeoutSeconds = 15
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-Path -LiteralPath $LogPath) {
+            try {
+                $logText = [string](Get-Content `
+                    -LiteralPath $LogPath `
+                    -Raw `
+                    -ErrorAction Stop)
+                if ($logText.IndexOf(
+                        $Text,
+                        [System.StringComparison]::Ordinal) -ge 0) {
+                    return
+                }
+            } catch [System.IO.IOException] {
+                # The loader may be flushing the live log between polls.
+            }
+        }
+        Start-Sleep -Milliseconds 50
+    }
+    throw "Timed out waiting for '$Text' in $LogPath."
+}
+
+function Capture-InstanceWindow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId,
+        [Parameter(Mandatory = $true)]
+        [string]$OutputPath
+    )
+
+    $outputDirectory = Split-Path -Parent $OutputPath
+    if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
+        [System.IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
+    }
+    & py.exe $captureWindowScript `
+        --pid $ProcessId `
+        --output $OutputPath `
+        --method window
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $OutputPath)) {
+        throw "Failed to capture Solomon Dark PID $ProcessId to $OutputPath."
+    }
+}
+
+function Wait-NativeQuickStartSelection {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Element,
+        [Parameter(Mandatory = $true)]
+        [string]$Discipline
+    )
+
+    Wait-LogContains `
+        -LogPath $LogPath `
+        -Text "target=create.select_element_$Element surface=create" `
+        -TimeoutSeconds 30
+    Wait-LogContains `
+        -LogPath $LogPath `
+        -Text "target=create.select_discipline_$Discipline surface=create" `
+        -TimeoutSeconds 30
+    Wait-LogContains `
+        -LogPath $LogPath `
+        -Text "Multiplayer join flow: selecting_loadout ->" `
+        -TimeoutSeconds 30
+}
+
+function Wait-LogDrivenHub {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId
+    )
+
+    Wait-LogContains `
+        -LogPath $LogPath `
+        -Text "Multiplayer join flow: connecting -> hub" `
+        -TimeoutSeconds 45
+    Start-Sleep -Milliseconds 3500
+    if ($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
+        throw "Solomon Dark PID $ProcessId exited after reaching the hub."
+    }
+}
+
+function Convert-ParticipantIdToDecimalText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ParticipantId
+    )
+
+    if ($ParticipantId -match '^0[xX]') {
+        return [Convert]::ToUInt64($ParticipantId.Substring(2), 16).ToString(
+            [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+    return [UInt64]::Parse(
+        $ParticipantId,
+        [System.Globalization.CultureInfo]::InvariantCulture).ToString(
+            [System.Globalization.CultureInfo]::InvariantCulture)
+}
 
 $runtimeRootOverride = Resolve-MultiplayerRuntimeRootOverride `
     -RootPath $root `
@@ -162,13 +302,24 @@ function Start-MultiplayerInstance {
         [UInt16]$RemotePort,
         [string]$ParticipantId,
         [string]$PlayerName,
-        [string]$RemotePlayerName
+        [string]$RemotePlayerName,
+        [object]$CreateSelection = $null
     )
 
     $env = @{
         SDMOD_UI_SANDBOX_PRESET = $InstanceLaunchPreset
         SDMOD_LUA_EXEC_PIPE_NAME = "SolomonDarkModLoader_LuaExec_$Instance"
         SDMOD_MULTIPLAYER_QUICK_START = $(if ($QuickStart) { "1" } else { "" })
+        SDMOD_MULTIPLAYER_QUICK_START_ELEMENT = ""
+        SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE = ""
+        SDMOD_MULTIPLAYER_QUICK_START_RUN = $(if (
+            $QuickStartRun -and $Role -eq "host") { "1" } else { "" })
+    }
+    if ($NoLuaAutomation -and $null -ne $CreateSelection) {
+        $env.SDMOD_MULTIPLAYER_QUICK_START_ELEMENT =
+            [string]$CreateSelection.Element
+        $env.SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE =
+            [string]$CreateSelection.Discipline
     }
     if ($GodMode) {
         $env.SDMOD_MULTIPLAYER_GODMODE = "1"
@@ -206,7 +357,9 @@ function Start-MultiplayerInstance {
         "--instance", $Instance,
         "--runtime-flag", "multiplayer.steam_bootstrap=false"
     )
-    if ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
+    if ($FreshInstall) {
+        $args += "--fresh-install"
+    } elseif ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
         $args += "--temporary-profile"
     }
     if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
@@ -975,6 +1128,37 @@ function Wait-InstanceHub {
         -Code "local s=sd.world.get_scene(); return tostring(s and (s.name or s.kind) or '')"
 }
 
+function Wait-InstanceRemoteParticipant {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PipeName,
+        [Parameter(Mandatory = $true)]
+        [string]$ParticipantId,
+        [int]$TimeoutSeconds = 30
+    )
+
+    if ($ParticipantId -notmatch '^(0[xX][0-9A-Fa-f]{1,16}|[0-9]{1,20})$') {
+        throw "ParticipantId is not a Lua-safe integer literal: $ParticipantId"
+    }
+    Wait-InstanceLuaValue `
+        -PipeName $PipeName `
+        -ExpectedValue "true" `
+        -TimeoutSeconds $TimeoutSeconds `
+        -Code @"
+local expected = $ParticipantId
+for _, participant in ipairs(sd.bots.get_participants()) do
+  if participant.id == expected and
+     participant.entity_materialized and
+     participant.transform_valid and
+     participant.actor_address ~= nil and
+     participant.actor_address ~= 0 then
+    return "true"
+  end
+end
+return "false"
+"@
+}
+
 $effectiveHostPreset = if ([string]::IsNullOrWhiteSpace($HostPreset)) { $Preset } else { $HostPreset }
 $effectiveClientPreset = if ([string]::IsNullOrWhiteSpace($ClientPreset)) { $Preset } else { $ClientPreset }
 $effectiveThirdPreset = if ([string]::IsNullOrWhiteSpace($ThirdPreset)) { $Preset } else { $ThirdPreset }
@@ -1024,23 +1208,51 @@ $hostResult = Start-MultiplayerInstance `
     -RemotePort $ClientPort `
     -ParticipantId $HostParticipantId `
     -PlayerName $HostName `
-    -RemotePlayerName $ClientName
+    -RemotePlayerName $ClientName `
+    -CreateSelection $hostSelection
 
 Write-LaunchedProcessIds -HostResult $hostResult
+
+if (-not [string]::IsNullOrWhiteSpace($HostFirstLaunchScreenshotPath)) {
+    Wait-LogContains `
+        -LogPath ([string]$hostResult.launch.startupLogPath) `
+        -Text "Debug UI ControlSchemePicker element"
+    Capture-InstanceWindow `
+        -ProcessId ([int]$hostResult.launch.processId) `
+        -OutputPath $HostFirstLaunchScreenshotPath
+}
 
 if ($GodMode) {
     Enable-InstanceGodMode -PipeName $hostLuaPipe | Out-Null
 }
 
 if ($null -ne $hostSelection -and -not $UseSandboxPresetFlow) {
-    Invoke-CreateSelection `
-        -PipeName $hostLuaPipe `
-        -Element $hostSelection.Element `
-        -Discipline $hostSelection.Discipline `
-        -ProcessId ([int]$hostResult.launch.processId)
+    if ($NoLuaAutomation) {
+        Wait-NativeQuickStartSelection `
+            -LogPath ([string]$hostResult.launch.startupLogPath) `
+            -Element $hostSelection.Element `
+            -Discipline $hostSelection.Discipline
+    } else {
+        Invoke-CreateSelection `
+            -PipeName $hostLuaPipe `
+            -Element $hostSelection.Element `
+            -Discipline $hostSelection.Discipline `
+            -ProcessId ([int]$hostResult.launch.processId)
+    }
 }
 if ($hostWaitForHub) {
-    Wait-InstanceHub -PipeName $hostLuaPipe
+    if ($NoLuaAutomation) {
+        Wait-LogDrivenHub `
+            -LogPath ([string]$hostResult.launch.startupLogPath) `
+            -ProcessId ([int]$hostResult.launch.processId)
+    } else {
+        Wait-InstanceHub -PipeName $hostLuaPipe
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($HostHubScreenshotPath)) {
+    Capture-InstanceWindow `
+        -ProcessId ([int]$hostResult.launch.processId) `
+        -OutputPath $HostHubScreenshotPath
 }
 
 Start-Sleep -Seconds 2
@@ -1053,7 +1265,8 @@ $clientResult = Start-MultiplayerInstance `
     -RemotePort $HostPort `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName `
-    -RemotePlayerName $HostName
+    -RemotePlayerName $HostName `
+    -CreateSelection $clientSelection
 
 Write-LaunchedProcessIds `
     -HostResult $hostResult `
@@ -1064,14 +1277,53 @@ if ($GodMode) {
 }
 
 if ($null -ne $clientSelection -and -not $UseSandboxPresetFlow) {
-    Invoke-CreateSelection `
-        -PipeName $clientLuaPipe `
-        -Element $clientSelection.Element `
-        -Discipline $clientSelection.Discipline `
-        -ProcessId ([int]$clientResult.launch.processId)
+    if ($NoLuaAutomation) {
+        Wait-NativeQuickStartSelection `
+            -LogPath ([string]$clientResult.launch.startupLogPath) `
+            -Element $clientSelection.Element `
+            -Discipline $clientSelection.Discipline
+    } else {
+        Invoke-CreateSelection `
+            -PipeName $clientLuaPipe `
+            -Element $clientSelection.Element `
+            -Discipline $clientSelection.Discipline `
+            -ProcessId ([int]$clientResult.launch.processId)
+    }
 }
 if ($clientWaitForHub) {
-    Wait-InstanceHub -PipeName $clientLuaPipe
+    if ($NoLuaAutomation) {
+        Wait-LogDrivenHub `
+            -LogPath ([string]$clientResult.launch.startupLogPath) `
+            -ProcessId ([int]$clientResult.launch.processId)
+    } else {
+        Wait-InstanceHub -PipeName $clientLuaPipe
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($ClientJoinedScreenshotPath)) {
+    if ($NoLuaAutomation) {
+        $hostParticipantDecimal =
+            Convert-ParticipantIdToDecimalText $HostParticipantId
+        $clientParticipantDecimal =
+            Convert-ParticipantIdToDecimalText $ClientParticipantId
+        Wait-LogContains `
+            -LogPath ([string]$hostResult.launch.startupLogPath) `
+            -Text "created gameplay-slot wizard actor. bot_id=$clientParticipantDecimal" `
+            -TimeoutSeconds 30
+        Wait-LogContains `
+            -LogPath ([string]$clientResult.launch.startupLogPath) `
+            -Text "created gameplay-slot wizard actor. bot_id=$hostParticipantDecimal" `
+            -TimeoutSeconds 30
+    } else {
+        Wait-InstanceRemoteParticipant `
+            -PipeName $hostLuaPipe `
+            -ParticipantId $ClientParticipantId
+        Wait-InstanceRemoteParticipant `
+            -PipeName $clientLuaPipe `
+            -ParticipantId $HostParticipantId
+    }
+    Capture-InstanceWindow `
+        -ProcessId ([int]$clientResult.launch.processId) `
+        -OutputPath $ClientJoinedScreenshotPath
 }
 
 $thirdResult = $null
@@ -1086,7 +1338,8 @@ if ($EnableThird) {
         -RemotePort $HostPort `
         -ParticipantId $ThirdParticipantId `
         -PlayerName $ThirdName `
-        -RemotePlayerName $HostName
+        -RemotePlayerName $HostName `
+        -CreateSelection $thirdSelection
 
     Write-LaunchedProcessIds `
         -HostResult $hostResult `
@@ -1098,14 +1351,27 @@ if ($EnableThird) {
     }
 
     if ($null -ne $thirdSelection -and -not $UseSandboxPresetFlow) {
-        Invoke-CreateSelection `
-            -PipeName $thirdLuaPipe `
-            -Element $thirdSelection.Element `
-            -Discipline $thirdSelection.Discipline `
-            -ProcessId ([int]$thirdResult.launch.processId)
+        if ($NoLuaAutomation) {
+            Wait-NativeQuickStartSelection `
+                -LogPath ([string]$thirdResult.launch.startupLogPath) `
+                -Element $thirdSelection.Element `
+                -Discipline $thirdSelection.Discipline
+        } else {
+            Invoke-CreateSelection `
+                -PipeName $thirdLuaPipe `
+                -Element $thirdSelection.Element `
+                -Discipline $thirdSelection.Discipline `
+                -ProcessId ([int]$thirdResult.launch.processId)
+        }
     }
     if ($thirdWaitForHub) {
-        Wait-InstanceHub -PipeName $thirdLuaPipe
+        if ($NoLuaAutomation) {
+            Wait-LogDrivenHub `
+                -LogPath ([string]$thirdResult.launch.startupLogPath) `
+                -ProcessId ([int]$thirdResult.launch.processId)
+        } else {
+            Wait-InstanceHub -PipeName $thirdLuaPipe
+        }
     }
 }
 
@@ -1139,12 +1405,15 @@ if (-not $NoTileWindows) {
     multiplayerTransportEnabled = -not $DisableMultiplayerTransport
     sandboxPresetFlowEnabled = [bool]$UseSandboxPresetFlow
     temporaryHostProfile = [bool]$TemporaryHostProfile
+    freshInstall = [bool]$FreshInstall
+    noLuaAutomation = [bool]$NoLuaAutomation
     godModeEnabled = [bool]$GodMode
     testSurvivalBoneyardOverride = $resolvedTestSurvivalBoneyardOverride
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedTestWaveOverride
     allowFocusSteal = [bool]$AllowFocusSteal
     quickStartEnabled = [bool]$QuickStart
+    quickStartRunEnabled = [bool]$QuickStartRun
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId
     thirdParticipantId = if ($EnableThird) { $ThirdParticipantId } else { $null }
@@ -1159,6 +1428,9 @@ if (-not $NoTileWindows) {
     hostLog = $hostResult.launch.startupLogPath
     clientLog = $clientResult.launch.startupLogPath
     thirdLog = if ($null -ne $thirdResult) { $thirdResult.launch.startupLogPath } else { $null }
+    hostFirstLaunchScreenshot = if ([string]::IsNullOrWhiteSpace($HostFirstLaunchScreenshotPath)) { $null } else { $HostFirstLaunchScreenshotPath }
+    hostHubScreenshot = if ([string]::IsNullOrWhiteSpace($HostHubScreenshotPath)) { $null } else { $HostHubScreenshotPath }
+    clientJoinedScreenshot = if ([string]::IsNullOrWhiteSpace($ClientJoinedScreenshotPath)) { $null } else { $ClientJoinedScreenshotPath }
     graphicsResolution = $stagedGraphicsResolution
     windowLayout = $windowLayout
     windowLayoutError = $windowLayoutError

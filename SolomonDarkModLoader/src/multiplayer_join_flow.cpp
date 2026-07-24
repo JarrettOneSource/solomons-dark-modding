@@ -1,10 +1,13 @@
 #include "multiplayer_join_flow.h"
 
 #include "debug_ui_overlay.h"
+#include "gameplay_seams.h"
 #include "logger.h"
+#include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
+#include "x86_hook.h"
 
 #include <Windows.h>
 
@@ -19,14 +22,28 @@ namespace {
 
 constexpr char kQuickStartEnvironmentVariable[] =
     "SDMOD_MULTIPLAYER_QUICK_START";
+constexpr char kQuickStartElementEnvironmentVariable[] =
+    "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT";
+constexpr char kQuickStartDisciplineEnvironmentVariable[] =
+    "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE";
+constexpr char kQuickStartRunEnvironmentVariable[] =
+    "SDMOD_MULTIPLAYER_QUICK_START_RUN";
 constexpr std::uint64_t kMainMenuDialogWindowMs = 1000;
 constexpr std::uint64_t kActionRetryDelayMs = 100;
 constexpr std::uint64_t kCreateSurfaceExitStabilityMs = 100;
 constexpr std::uint64_t kTransitionPresentationMinimumMs = 750;
+constexpr std::uint64_t kQuickStartRunMaterializedDelayMs = 12000;
+constexpr std::size_t kTutorialGameplayBootstrapMinimumPatchSize = 5;
+constexpr std::size_t kCreateElementEnabledOffset = 0x18C;
+constexpr std::size_t kCreateElementSelectedOffset = 0x1A4;
+constexpr std::size_t kCreateDisciplineEnabledOffset = 0x228;
+constexpr std::size_t kCreateDisciplineSelectedOffset = 0x22C;
+constexpr std::uint32_t kCreateSelectionUnset = 0xFFFFFFFFu;
 
 enum class JoinFlowPhase {
     Disabled,
     AdvancingMenus,
+    BypassingTutorial,
     PrivateGameplay,
     AwaitingLoadout,
     SelectingLoadout,
@@ -46,6 +63,15 @@ struct JoinFlowState {
     std::uint64_t pending_action_request_id = 0;
     std::uint64_t pending_action_generation = 0;
     std::string pending_action_id;
+    std::string quick_start_element_action_id;
+    std::string quick_start_discipline_action_id;
+    std::uint32_t quick_start_element_id = kCreateSelectionUnset;
+    bool quick_start_element_dispatched = false;
+    bool quick_start_discipline_dispatched = false;
+    bool quick_start_run = false;
+    bool quick_start_run_requested = false;
+    std::uint64_t quick_start_run_ready_since_ms = 0;
+    std::string quick_start_run_last_error;
     bool create_scene_valid = false;
     std::uintptr_t create_gameplay_scene_address = 0;
     std::uintptr_t create_world_address = 0;
@@ -54,11 +80,46 @@ struct JoinFlowState {
 };
 
 JoinFlowState g_join_flow;
+X86Hook g_tutorial_gameplay_bootstrap_hook;
+
+using TutorialGameplayBootstrapFn = void(__thiscall*)(void* app);
+using StartStandardGameplayFn = void(__thiscall*)(void* app);
+
+StartStandardGameplayFn g_start_standard_gameplay = nullptr;
+
+void ClearPendingActionUnlocked();
+void SetPhaseUnlocked(JoinFlowPhase phase);
+
+void __fastcall HookTutorialGameplayBootstrap(
+    void* app,
+    void* /*unused_edx*/) {
+    if (g_start_standard_gameplay == nullptr) {
+        const auto original =
+            GetX86HookTrampoline<TutorialGameplayBootstrapFn>(
+                g_tutorial_gameplay_bootstrap_hook);
+        if (original != nullptr) {
+            original(app);
+        }
+        return;
+    }
+
+    {
+        std::scoped_lock lock(g_join_flow.mutex);
+        ClearPendingActionUnlocked();
+        SetPhaseUnlocked(JoinFlowPhase::BypassingTutorial);
+    }
+    Log(
+        "Multiplayer join flow bypassed the stock fresh-save tutorial "
+        "before construction.");
+    g_start_standard_gameplay(app);
+}
 
 const char* PhaseLabel(JoinFlowPhase phase) {
     switch (phase) {
     case JoinFlowPhase::AdvancingMenus:
         return "advancing_menus";
+    case JoinFlowPhase::BypassingTutorial:
+        return "bypassing_tutorial";
     case JoinFlowPhase::PrivateGameplay:
         return "private_gameplay";
     case JoinFlowPhase::AwaitingLoadout:
@@ -81,13 +142,58 @@ const char* PhaseLabel(JoinFlowPhase phase) {
     }
 }
 
-bool ReadQuickStartEnvironment() {
+bool ReadEnabledEnvironmentVariable(const char* name) {
     char value[2] = {};
     return GetEnvironmentVariableA(
-               kQuickStartEnvironmentVariable,
+               name,
                value,
                static_cast<DWORD>(sizeof(value))) == 1 &&
            value[0] == '1';
+}
+
+std::string ReadShortEnvironmentVariable(const char* name) {
+    char value[16] = {};
+    const auto length = GetEnvironmentVariableA(
+        name,
+        value,
+        static_cast<DWORD>(sizeof(value)));
+    if (length == 0 || length >= sizeof(value)) {
+        return {};
+    }
+    return std::string(value, length);
+}
+
+bool IsSupportedQuickStartElement(std::string_view value) {
+    return value == "ether" ||
+           value == "fire" ||
+           value == "air" ||
+           value == "water" ||
+           value == "earth";
+}
+
+std::uint32_t QuickStartElementId(std::string_view value) {
+    if (value == "ether") {
+        return 0;
+    }
+    if (value == "fire") {
+        return 1;
+    }
+    if (value == "air") {
+        return 2;
+    }
+    if (value == "water") {
+        return 3;
+    }
+    if (value == "earth") {
+        return 4;
+    }
+    return kCreateSelectionUnset;
+}
+
+bool IsSupportedQuickStartDiscipline(std::string_view value) {
+    return value == "mind" ||
+           value == "body" ||
+           value == "arcane";
 }
 
 void ResetStateUnlocked(JoinFlowState* state) {
@@ -99,6 +205,15 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->pending_action_request_id = 0;
     state->pending_action_generation = 0;
     state->pending_action_id.clear();
+    state->quick_start_element_action_id.clear();
+    state->quick_start_discipline_action_id.clear();
+    state->quick_start_element_id = kCreateSelectionUnset;
+    state->quick_start_element_dispatched = false;
+    state->quick_start_discipline_dispatched = false;
+    state->quick_start_run = false;
+    state->quick_start_run_requested = false;
+    state->quick_start_run_ready_since_ms = 0;
+    state->quick_start_run_last_error.clear();
     state->create_scene_valid = false;
     state->create_gameplay_scene_address = 0;
     state->create_world_address = 0;
@@ -126,6 +241,12 @@ bool IsHubScene(const SDModSceneState& scene) {
 bool IsBoneyardScene(const SDModSceneState& scene) {
     return scene.valid &&
            (scene.kind == "arena" || scene.name == "testrun");
+}
+
+bool IsTutorialReady(const SDModSceneState& scene) {
+    return scene.valid &&
+           scene.world_address != 0 &&
+           (scene.kind == "tutorial" || scene.name == "tutorial");
 }
 
 bool IsHubReady(const SDModSceneState& scene) {
@@ -173,10 +294,31 @@ bool IsHostCharacterReady(const multiplayer::RuntimeState& runtime) {
            host_character.actor_address != 0;
 }
 
+bool HasMaterializedRemoteCharacter(
+    const multiplayer::RuntimeState& runtime) {
+    return std::any_of(
+        runtime.participants.begin(),
+        runtime.participants.end(),
+        [](const multiplayer::ParticipantInfo& participant) {
+            if (participant.kind !=
+                    multiplayer::ParticipantKind::RemoteParticipant ||
+                !participant.transport_connected) {
+                return false;
+            }
+            SDModParticipantGameplayState character;
+            return TryGetParticipantGameplayState(
+                       participant.participant_id,
+                       &character) &&
+                   character.entity_materialized &&
+                   character.actor_address != 0;
+        });
+}
+
 bool IsPrivateGameplayReady(const SDModSceneState& scene) {
     return scene.valid &&
            scene.world_address != 0 &&
            !IsHubScene(scene) &&
+           !IsTutorialReady(scene) &&
            !IsBoneyardScene(scene);
 }
 
@@ -189,6 +331,43 @@ bool HasAction(
         [&](const DebugUiSnapshotElement& element) {
             return element.action_id == action_id;
         });
+}
+
+bool TryReadCreateSelectionState(
+    const DebugUiSurfaceSnapshot* snapshot,
+    std::uint32_t* element_enabled,
+    std::uint32_t* element_selected,
+    std::uint32_t* discipline_enabled,
+    std::uint32_t* discipline_selected) {
+    if (snapshot == nullptr ||
+        snapshot->surface_id != "create" ||
+        snapshot->elements.empty() ||
+        element_enabled == nullptr ||
+        element_selected == nullptr ||
+        discipline_enabled == nullptr ||
+        discipline_selected == nullptr) {
+        return false;
+    }
+
+    const auto owner = snapshot->elements.front().surface_object_ptr;
+    auto& memory = ProcessMemory::Instance();
+    return owner != 0 &&
+           memory.TryReadField(
+               owner,
+               kCreateElementEnabledOffset,
+               element_enabled) &&
+           memory.TryReadField(
+               owner,
+               kCreateElementSelectedOffset,
+               element_selected) &&
+           memory.TryReadField(
+               owner,
+               kCreateDisciplineEnabledOffset,
+               discipline_enabled) &&
+           memory.TryReadField(
+               owner,
+               kCreateDisciplineSelectedOffset,
+               discipline_selected);
 }
 
 void ClearPendingActionUnlocked() {
@@ -252,12 +431,30 @@ bool ResolvePendingActionUnlocked(
         return false;
     }
 
-    if (snapshot != nullptr &&
+    const bool dispatched_quick_start_loadout_action =
+        g_join_flow.phase == JoinFlowPhase::SelectingLoadout &&
+        (g_join_flow.pending_action_id ==
+             g_join_flow.quick_start_element_action_id ||
+         g_join_flow.pending_action_id ==
+             g_join_flow.quick_start_discipline_action_id);
+    if (!dispatched_quick_start_loadout_action &&
+        snapshot != nullptr &&
         snapshot->generation == g_join_flow.pending_action_generation) {
         return false;
     }
 
+    const auto dispatched_action_id = g_join_flow.pending_action_id;
     ClearPendingActionUnlocked();
+    if (g_join_flow.phase == JoinFlowPhase::SelectingLoadout) {
+        if (dispatched_action_id ==
+            g_join_flow.quick_start_element_action_id) {
+            g_join_flow.quick_start_element_dispatched = true;
+        } else if (
+            dispatched_action_id ==
+            g_join_flow.quick_start_discipline_action_id) {
+            g_join_flow.quick_start_discipline_dispatched = true;
+        }
+    }
     return true;
 }
 
@@ -268,6 +465,8 @@ void EnterLoadoutSelectionUnlocked(const SDModSceneState& scene) {
         scene.gameplay_scene_address;
     g_join_flow.create_world_address = scene.world_address;
     g_join_flow.create_surface_absent_since_ms = 0;
+    g_join_flow.quick_start_element_dispatched = false;
+    g_join_flow.quick_start_discipline_dispatched = false;
     SetPhaseUnlocked(JoinFlowPhase::SelectingLoadout);
 }
 
@@ -319,8 +518,72 @@ bool IsRunRequested(const multiplayer::RuntimeState& runtime) {
 bool InitializeMultiplayerJoinFlow() {
     std::scoped_lock lock(g_join_flow.mutex);
     ResetStateUnlocked(&g_join_flow);
-    if (!ReadQuickStartEnvironment()) {
+    g_start_standard_gameplay = nullptr;
+    if (!ReadEnabledEnvironmentVariable(
+            kQuickStartEnvironmentVariable)) {
         return false;
+    }
+
+    const auto tutorial_bootstrap_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kTutorialGameplayBootstrap);
+    const auto standard_gameplay_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kStartStandardGameplay);
+    std::string hook_error;
+    if (tutorial_bootstrap_address == 0 ||
+        standard_gameplay_address == 0 ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(tutorial_bootstrap_address),
+            reinterpret_cast<void*>(&HookTutorialGameplayBootstrap),
+            kTutorialGameplayBootstrapMinimumPatchSize,
+            &g_tutorial_gameplay_bootstrap_hook,
+            &hook_error)) {
+        Log(
+            "Multiplayer join flow could not install the stock tutorial "
+            "bootstrap guard. error=" +
+            (hook_error.empty()
+                 ? std::string("unresolved native target")
+                 : hook_error));
+        return false;
+    }
+    g_start_standard_gameplay =
+        reinterpret_cast<StartStandardGameplayFn>(
+            standard_gameplay_address);
+    const auto quick_start_element =
+        ReadShortEnvironmentVariable(
+            kQuickStartElementEnvironmentVariable);
+    const auto quick_start_discipline =
+        ReadShortEnvironmentVariable(
+            kQuickStartDisciplineEnvironmentVariable);
+    if (IsSupportedQuickStartElement(quick_start_element) &&
+        IsSupportedQuickStartDiscipline(quick_start_discipline)) {
+        g_join_flow.quick_start_element_action_id =
+            "create.select_element_" + quick_start_element;
+        g_join_flow.quick_start_discipline_action_id =
+            "create.select_discipline_" + quick_start_discipline;
+        g_join_flow.quick_start_element_id =
+            QuickStartElementId(quick_start_element);
+        Log(
+            "Multiplayer join flow configured stock quick-start loadout. "
+            "element=" +
+            quick_start_element +
+            " discipline=" +
+            quick_start_discipline);
+    } else if (
+        !quick_start_element.empty() ||
+        !quick_start_discipline.empty()) {
+        Log(
+            "Multiplayer join flow ignored an incomplete or unsupported "
+            "quick-start loadout.");
+    }
+    g_join_flow.quick_start_run =
+        ReadEnabledEnvironmentVariable(
+            kQuickStartRunEnvironmentVariable);
+    if (g_join_flow.quick_start_run) {
+        Log(
+            "Multiplayer join flow configured a native quick-start run "
+            "after remote-player materialization.");
     }
 
     g_join_flow.enabled = true;
@@ -332,6 +595,8 @@ bool InitializeMultiplayerJoinFlow() {
 }
 
 void ShutdownMultiplayerJoinFlow() {
+    RemoveX86Hook(&g_tutorial_gameplay_bootstrap_hook);
+    g_start_standard_gameplay = nullptr;
     std::scoped_lock lock(g_join_flow.mutex);
     const bool was_enabled = g_join_flow.enabled;
     ResetStateUnlocked(&g_join_flow);
@@ -340,189 +605,7 @@ void ShutdownMultiplayerJoinFlow() {
     }
 }
 
-void TickMultiplayerJoinFlow() {
-    std::scoped_lock lock(g_join_flow.mutex);
-    if (!g_join_flow.enabled) {
-        return;
-    }
-
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    const auto runtime = multiplayer::SnapshotRuntimeState();
-    if (runtime.session_status == multiplayer::SessionStatus::Error) {
-        SetPhaseUnlocked(JoinFlowPhase::Failed);
-        return;
-    }
-
-    SDModSceneState scene;
-    (void)TryGetSceneState(&scene);
-    const bool hub_ready = IsHubReady(scene);
-    const bool boneyard_ready = IsBoneyardReady(scene);
-    const bool private_gameplay_ready =
-        IsPrivateGameplayReady(scene);
-
-    DebugUiSurfaceSnapshot current_snapshot;
-    const bool snapshot_available =
-        TryGetLatestDebugUiSurfaceSnapshot(&current_snapshot);
-    const auto* snapshot =
-        snapshot_available ? &current_snapshot : nullptr;
-
-    switch (g_join_flow.phase) {
-    case JoinFlowPhase::AdvancingMenus:
-        if (boneyard_ready) {
-            ClearPendingActionUnlocked();
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-            return;
-        }
-        if (hub_ready) {
-            ClearPendingActionUnlocked();
-            SetPhaseUnlocked(JoinFlowPhase::Connecting);
-            return;
-        }
-        if (private_gameplay_ready) {
-            ClearPendingActionUnlocked();
-            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
-            return;
-        }
-        if (!ResolvePendingActionUnlocked(snapshot, now_ms)) {
-            return;
-        }
-        if (snapshot == nullptr) {
-            return;
-        }
-        if (snapshot->surface_id == "create") {
-            EnterLoadoutSelectionUnlocked(scene);
-            return;
-        }
-        if (snapshot->surface_id == "dialog" &&
-            HasAction(*snapshot, "dialog.primary")) {
-            (void)QueueActionUnlocked(
-                *snapshot,
-                "dialog.primary",
-                now_ms);
-            return;
-        }
-        if (snapshot->surface_id != "main_menu") {
-            return;
-        }
-        if (g_join_flow.main_menu_first_seen_ms == 0) {
-            g_join_flow.main_menu_first_seen_ms = now_ms;
-        }
-        if (now_ms <
-            g_join_flow.main_menu_first_seen_ms +
-                kMainMenuDialogWindowMs) {
-            return;
-        }
-        if (now_ms < g_join_flow.action_retry_not_before_ms) {
-            return;
-        }
-        if (HasAction(*snapshot, "main_menu.play")) {
-            (void)QueueActionUnlocked(
-                *snapshot,
-                "main_menu.play",
-                now_ms);
-        } else if (HasAction(*snapshot, "main_menu.new_game")) {
-            (void)QueueActionUnlocked(
-                *snapshot,
-                "main_menu.new_game",
-                now_ms);
-        }
-        return;
-
-    case JoinFlowPhase::PrivateGameplay:
-        if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        } else if (hub_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Connecting);
-        } else if (
-            !private_gameplay_ready &&
-            snapshot != nullptr &&
-            snapshot->captured_at_milliseconds >
-                g_join_flow.phase_entered_ms) {
-            g_join_flow.main_menu_first_seen_ms = 0;
-            g_join_flow.action_retry_not_before_ms = 0;
-            SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
-        }
-        return;
-
-    case JoinFlowPhase::AwaitingLoadout:
-        if (snapshot != nullptr &&
-            snapshot->surface_id == "create") {
-            EnterLoadoutSelectionUnlocked(scene);
-        } else if (private_gameplay_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
-        } else if (hub_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Connecting);
-        } else if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        }
-        return;
-
-    case JoinFlowPhase::SelectingLoadout:
-        if (!HasLoadoutSelectionFinished(scene, now_ms)) {
-            return;
-        }
-        if (private_gameplay_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
-        } else {
-            SetPhaseUnlocked(JoinFlowPhase::Connecting);
-        }
-        return;
-
-    case JoinFlowPhase::Connecting:
-        if (private_gameplay_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::PrivateGameplay);
-            return;
-        }
-        if (now_ms <
-            g_join_flow.phase_entered_ms +
-                kTransitionPresentationMinimumMs) {
-            return;
-        }
-        if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        } else if (
-            hub_ready &&
-            runtime.transport_ready &&
-            runtime.session_status ==
-                multiplayer::SessionStatus::Ready &&
-            IsHostCharacterReady(runtime)) {
-            SetPhaseUnlocked(JoinFlowPhase::Hub);
-        }
-        return;
-
-    case JoinFlowPhase::Hub:
-        if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        } else if (IsRunRequested(runtime)) {
-            SetPhaseUnlocked(JoinFlowPhase::LoadingBoneyard);
-        }
-        return;
-
-    case JoinFlowPhase::LoadingBoneyard:
-        if (now_ms <
-            g_join_flow.phase_entered_ms +
-                kTransitionPresentationMinimumMs) {
-            return;
-        }
-        if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
-        } else if (hub_ready && !IsRunRequested(runtime)) {
-            SetPhaseUnlocked(JoinFlowPhase::Hub);
-        }
-        return;
-
-    case JoinFlowPhase::Run:
-        if (hub_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Hub);
-        }
-        return;
-
-    case JoinFlowPhase::Failed:
-    case JoinFlowPhase::Disabled:
-    default:
-        return;
-    }
-}
+#include "multiplayer_join_flow/tick_state_machine.inl"
 
 void ObserveMultiplayerJoinFlowSurface(
     std::string_view surface_id) {
@@ -558,6 +641,8 @@ GetMultiplayerJoinFlowPresentation() {
             g_join_flow.main_menu_first_seen_ms != 0,
             {},
         };
+    case JoinFlowPhase::BypassingTutorial:
+        return {true, "Preparing multiplayer hub"};
     case JoinFlowPhase::PrivateGameplay:
         return {};
     case JoinFlowPhase::AwaitingLoadout:

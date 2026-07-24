@@ -341,6 +341,39 @@ bool InstallSpellPickerRenderHook(const DebugUiOverlayConfig& config, std::strin
     return GetX86HookTrampoline<SurfaceRenderHelperFn>(g_debug_ui_overlay_state.spell_picker_render_hook) != nullptr;
 }
 
+bool InstallControlSchemePickerRenderHook(std::string* error_message) {
+    const auto* surface =
+        FindUiSurfaceDefinition("control_scheme_picker");
+    const auto renderer =
+        surface == nullptr
+            ? 0
+            : GetDefinitionAddress(surface->addresses, "renderer");
+    const auto helper_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(renderer);
+    if (helper_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the configured control-scheme picker "
+                "renderer address.";
+        }
+        return false;
+    }
+
+    if (!InstallX86Hook(
+            reinterpret_cast<void*>(helper_address),
+            reinterpret_cast<void*>(
+                &HookControlSchemePickerRenderHelper),
+            kControlSchemePickerRenderHookPatchSize,
+            &g_debug_ui_overlay_state.control_scheme_picker_render_hook,
+            error_message)) {
+        return false;
+    }
+
+    return GetX86HookTrampoline<SurfaceRenderHelperFn>(
+               g_debug_ui_overlay_state
+                   .control_scheme_picker_render_hook) != nullptr;
+}
+
 bool InstallMainMenuRenderHook(const DebugUiOverlayConfig& config, std::string* error_message) {
     if (config.main_menu_render_helper == 0) {
         return false;

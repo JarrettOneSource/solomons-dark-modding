@@ -29,7 +29,7 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         ROOT
         / "SolomonDarkModLoader/include/multiplayer_join_flow.h"
     )
-    flow_text = read_text(
+    flow_text = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
     )
@@ -302,10 +302,169 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
 
 
 def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
-    flow_text = read_text(
+    flow_text = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
     )
+    gameplay_seams_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams.h"
+    )
+    address_bindings_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
+    )
+    binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
+    debug_surface_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_surface_registry_and_frame_render.inl"
+    )
+    pair_script_text = read_text(
+        ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
+    )
+    acceptance_script_text = read_text(
+        ROOT / "scripts/Verify-FreshInstallMultiplayer.ps1"
+    )
+    launcher_parser_text = read_text(
+        ROOT
+        / "SolomonDarkModLauncher/src/Commands/LauncherCommandParser.cs"
+    )
+    profile_bootstrap_text = read_text(
+        ROOT
+        / "SolomonDarkModLauncher/src/Launch/IsolatedProfileBootstrapper.cs"
+    )
+    file_mirror_text = read_text(
+        ROOT
+        / "SolomonDarkModLauncher/src/Staging/FileTreeMirror.cs"
+    )
+
+    bypass_tokens = (
+        "kTutorialGameplayBootstrapMinimumPatchSize = 5",
+        "JoinFlowPhase::BypassingTutorial",
+        "void __fastcall HookTutorialGameplayBootstrap(",
+        "SetPhaseUnlocked(JoinFlowPhase::BypassingTutorial);",
+        "Multiplayer join flow bypassed the stock fresh-save tutorial",
+        "before construction.",
+        "g_start_standard_gameplay(app);",
+        "kTutorialGameplayBootstrap",
+        "kStartStandardGameplay",
+        "InstallSafeX86Hook(",
+        "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT",
+        "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE",
+        "SDMOD_MULTIPLAYER_QUICK_START_RUN",
+        "g_join_flow.quick_start_element_action_id",
+        "g_join_flow.quick_start_discipline_action_id",
+        "g_join_flow.quick_start_element_dispatched",
+        "g_join_flow.quick_start_discipline_dispatched",
+        "dispatched_quick_start_loadout_action",
+        "kCreateElementSelectedOffset = 0x1A4",
+        "kCreateDisciplineEnabledOffset = 0x228",
+        "TryReadCreateSelectionState(",
+        "HasMaterializedRemoteCharacter(runtime)",
+        "kQuickStartRunMaterializedDelayMs",
+        "QueueHubStartTestrun(&error_message)",
+    )
+    missing_bypass = [
+        token for token in bypass_tokens if token not in flow_text
+    ]
+    if missing_bypass:
+        raise StaticReTestFailure(
+            "fresh-save quick-start bypass is missing token(s): "
+            + ", ".join(missing_bypass)
+        )
+
+    hook_start = flow_text.find(
+        "void __fastcall HookTutorialGameplayBootstrap("
+    )
+    hook_end = flow_text.find("\n}\n", hook_start)
+    hook_body = flow_text[hook_start:hook_end]
+    bypass_phase = hook_body.find(
+        "SetPhaseUnlocked(JoinFlowPhase::BypassingTutorial);"
+    )
+    standard_start = hook_body.find("g_start_standard_gameplay(app);")
+    if not 0 <= bypass_phase < standard_start:
+        raise StaticReTestFailure(
+            "the tutorial hook must enter the bypass phase before starting "
+            "stock standard gameplay"
+        )
+    forbidden_late_transition_tokens = (
+        "Gameplay_SwitchRegion",
+        "QueueGameplaySwitchRegion",
+        "kGameplaySwitchRegion",
+    )
+    present_late_transitions = [
+        token
+        for token in forbidden_late_transition_tokens
+        if token in hook_body
+    ]
+    if present_late_transitions:
+        raise StaticReTestFailure(
+            "the fresh-save bypass must replace tutorial construction, not "
+            "perform a late region transition: "
+            + ", ".join(present_late_transitions)
+        )
+
+    initialize_start = flow_text.find(
+        "bool InitializeMultiplayerJoinFlow()"
+    )
+    initialize_end = flow_text.find(
+        "void ShutdownMultiplayerJoinFlow()", initialize_start
+    )
+    initialize_body = flow_text[initialize_start:initialize_end]
+    quick_start_check = initialize_body.find(
+        "if (!ReadEnabledEnvironmentVariable("
+    )
+    install_hook = initialize_body.find("InstallSafeX86Hook(")
+    if not 0 <= quick_start_check < install_hook:
+        raise StaticReTestFailure(
+            "the tutorial bootstrap hook must only be installed for an "
+            "explicit quick-start launch"
+        )
+
+    for token in (
+        "extern uintptr_t kStartStandardGameplay;",
+        "extern uintptr_t kTutorialGameplayBootstrap;",
+    ):
+        if token not in gameplay_seams_text:
+            raise StaticReTestFailure(
+                f"gameplay seam declaration is missing: {token}"
+            )
+    for token in (
+        '"start_standard_gameplay", kStartStandardGameplay',
+        '"tutorial_gameplay_bootstrap", kTutorialGameplayBootstrap',
+    ):
+        if token not in address_bindings_text:
+            raise StaticReTestFailure(
+                f"gameplay seam binding is missing: {token}"
+            )
+    for token in (
+        "start_standard_gameplay=0x005BBBB0",
+        "tutorial_gameplay_bootstrap=0x005B6B00",
+    ):
+        if token not in binary_layout_text:
+            raise StaticReTestFailure(
+                f"verified first-play native address is missing: {token}"
+            )
+
+    if (
+        '"control_scheme_picker", "ControlSchemePicker"'
+        not in debug_surface_text
+        or "control_scheme_picker.select_wasd" not in flow_text
+    ):
+        raise StaticReTestFailure(
+            "fresh quick-start must select the stock control scheme through "
+            "the semantic UI action surface"
+        )
+    for token in (
+        "kFreshTrackedDialogPriorityMs = 250",
+        "now_ms - dialog_snapshot->captured_at <=",
+        "!dialog_was_just_captured",
+    ):
+        if token not in debug_surface_text:
+            raise StaticReTestFailure(
+                "a freshly captured stock first-run dialog must take priority "
+                f"over the control picker until it can be dismissed: {token}"
+            )
 
     required_tokens = (
         "JoinFlowPhase::PrivateGameplay",
@@ -356,6 +515,15 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
         raise StaticReTestFailure(
             "private gameplay must be an explicit quick-start phase"
         )
+    loading_start = flow_text.find(
+        "case JoinFlowPhase::LoadingBoneyard:", hub_start
+    )
+    hub_body = flow_text[hub_start:loading_start]
+    if "authenticated_peer_count" in hub_body:
+        raise StaticReTestFailure(
+            "local UDP quick-start must gate on the materialized remote "
+            "character, not the Steam-only authenticated peer count"
+        )
 
     advancing_body = flow_text[advancing_start:private_start]
     private_transition = advancing_body.find(
@@ -399,7 +567,8 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
     )
     if not 0 <= loadout_finished < selecting_private < connecting_transition:
         raise StaticReTestFailure(
-            "a new-save tutorial reached from loadout selection must stay visible"
+            "non-tutorial private gameplay reached from loadout selection "
+            "must remain visible"
         )
 
     connecting_body = flow_text[connecting_start:hub_start]
@@ -456,9 +625,104 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
             "active private gameplay must render without a quick-start cover"
         )
 
+    bypassing_start = flow_text.find(
+        "case JoinFlowPhase::BypassingTutorial:", advancing_start
+    )
+    bypassing_end = flow_text.find(
+        "case JoinFlowPhase::PrivateGameplay:", bypassing_start
+    )
+    bypassing_body = flow_text[bypassing_start:bypassing_end]
+    for token in (
+        "!tutorial_ready",
+        'snapshot->surface_id != "control_scheme_picker"',
+        "snapshot->captured_at_milliseconds >",
+        "g_join_flow.phase_entered_ms",
+    ):
+        if token not in bypassing_body:
+            raise StaticReTestFailure(
+                "the tutorial bypass must wait for a fresh non-picker "
+                f"surface before resuming menu actions: {token}"
+            )
+
+    launcher_contracts = (
+        (
+            launcher_parser_text,
+            'if (arg == "--fresh-install")',
+            "launcher parser fresh-install flag",
+        ),
+        (
+            launcher_parser_text,
+            "--fresh-install cannot be combined with --savegames-root.",
+            "launcher parser real-save isolation",
+        ),
+        (
+            profile_bootstrap_text,
+            "freshInstall ? null : retailGameAppDataPath",
+            "fresh profile retail-data exclusion",
+        ),
+        (
+            profile_bootstrap_text,
+            'Path.Combine(workspace.RuntimeRootPath, "temporary-client-profile")',
+            "fresh profile instance-local root",
+        ),
+        (
+            file_mirror_text,
+            '"sandbox",\n                    StringComparison.OrdinalIgnoreCase',
+            "fresh stage source-sandbox exclusion",
+        ),
+        (
+            pair_script_text,
+            "[switch]$FreshInstall",
+            "pair fresh-install option",
+        ),
+        (
+            pair_script_text,
+            '$args += "--fresh-install"',
+            "pair fresh-install launcher forwarding",
+        ),
+    )
+    for text, token, label in launcher_contracts:
+        if token not in text:
+            raise StaticReTestFailure(f"{label} is missing")
+
+    acceptance_tokens = (
+        "[switch]$AcceptJoinPreview",
+        '"join-preview"',
+        '"--fresh-install"',
+        "Join Game preparation auto-launched the client",
+        "preparedWithoutGame = $true",
+        "enabledModCountBeforeLaunch = 0",
+        "modStateAbsentBeforeLaunch = $true",
+        "-NoLuaAutomation",
+        "-QuickStartRun",
+        "Lua runtime mods loaded: 0",
+        "Wait-SharedRunFromNativeQuickStart",
+        "control-picker dispatches; expected exactly one",
+        "first-run dialog dispatches; expected exactly one",
+        "stock element dispatches; expected exactly one",
+        "stock discipline dispatches; expected exactly one",
+        "Stop-ExactGameProcess",
+        "HostFirstLaunchScreenshotPath",
+        "ClientJoinedScreenshotPath",
+        "Assert-ScreenshotSceneCoverage",
+        "dark transition frame",
+    )
+    missing_acceptance = [
+        token
+        for token in acceptance_tokens
+        if token not in acceptance_script_text
+    ]
+    if missing_acceptance:
+        raise StaticReTestFailure(
+            "permanent fresh-install multiplayer gate is incomplete: "
+            + ", ".join(missing_acceptance)
+        )
+
     return (
-        "Fresh-save tutorial and other private gameplay remain visible, then "
-        "resume quick-start only when hub, run, or menu state is live"
+        "Fresh quick-start selects the stock controls, replaces tutorial "
+        "construction with the stock standard-gameplay transition, keeps "
+        "other private gameplay visible, and is covered by the isolated "
+        "two-player acceptance gate"
     )
 
 

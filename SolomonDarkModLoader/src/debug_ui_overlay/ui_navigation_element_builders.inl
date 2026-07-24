@@ -14,6 +14,7 @@ std::string ResolveUiScene(const DebugUiSurfaceSnapshot& snapshot) {
     const auto& sid = snapshot.surface_id;
     if (sid == "main_menu" || sid == "dialog" || sid == "settings" ||
         sid == "create" ||
+        sid == "control_scheme_picker" ||
         sid == "controls" || sid == "dark_cloud_browser" ||
         sid == "dark_cloud_search" || sid == "simple_menu" ||
         sid == "myquick_panel") {

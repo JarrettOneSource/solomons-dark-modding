@@ -43,6 +43,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
+    ("fresh install isolation", TestFreshInstallIsolationAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
@@ -293,6 +294,118 @@ static Task TestSelectedSaveLaunchRoutingAsync()
             "proton-updated-save",
             "Proton stage copy-back lost the updated save");
         Require(!File.Exists(staleFile), "Proton stage copy-back retained stale local files");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestFreshInstallIsolationAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var sourceRoot = Path.Combine(root, "source-game");
+        var stageRoot = Path.Combine(root, "stage");
+        var sourceSandboxFile = Path.Combine(
+            sourceRoot,
+            "sandbox",
+            "savegames",
+            "solomondark",
+            "retail.sav");
+        var staleStageFile = Path.Combine(
+            stageRoot,
+            "sandbox",
+            "savegames",
+            "solomondark",
+            "stale.sav");
+        var stageMetadataFile = Path.Combine(stageRoot, ".sdmod", "keep.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceSandboxFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(staleStageFile)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(stageMetadataFile)!);
+        File.WriteAllText(Path.Combine(sourceRoot, "SolomonDark.exe"), "game");
+        File.WriteAllText(sourceSandboxFile, "retail-save");
+        File.WriteAllText(staleStageFile, "stale-stage-save");
+        File.WriteAllText(stageMetadataFile, "metadata");
+
+        FileTreeMirror.Synchronize(
+            sourceRoot,
+            stageRoot,
+            excludeSandbox: true);
+        Require(
+            File.Exists(Path.Combine(stageRoot, "SolomonDark.exe")),
+            "fresh-install staging lost the base game");
+        Require(
+            !Directory.Exists(Path.Combine(stageRoot, "sandbox")),
+            "fresh-install staging retained source or stale sandbox data");
+        Require(
+            File.ReadAllText(stageMetadataFile) == "metadata",
+            "fresh-install staging removed launcher metadata");
+        Require(
+            File.ReadAllText(sourceSandboxFile) == "retail-save",
+            "fresh-install staging changed source sandbox data");
+
+        var retailAppDataRoot = Path.Combine(root, "retail-appdata");
+        var retailProfileFile = Path.Combine(retailAppDataRoot, "retail-profile.dat");
+        Directory.CreateDirectory(retailAppDataRoot);
+        File.WriteAllText(retailProfileFile, "retail-profile");
+
+        var workspace = WorkspacePaths.Create(
+            Path.Combine(root, "workspace"),
+            modsRootOverride: null,
+            runtimeRootOverride: null,
+            stageRootOverride: null);
+        var first = IsolatedProfileBootstrapper.CreateLaunchOptions(
+            workspace,
+            retailGameAppDataPath: retailAppDataRoot,
+            freshInstall: true);
+        Require(first.TemporaryProfile, "fresh install did not force a temporary profile");
+        Require(
+            first.ProfileRootPath is not null &&
+            Path.GetFullPath(first.ProfileRootPath).StartsWith(
+                Path.GetFullPath(workspace.RuntimeRootPath) +
+                    Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase),
+            "fresh-install profile escaped the isolated runtime root");
+        Require(
+            first.SavegamesRootPath is not null &&
+            !Directory.EnumerateFileSystemEntries(first.SavegamesRootPath).Any(),
+            "fresh-install save root was not empty");
+        Require(
+            !File.Exists(
+                Path.Combine(
+                    first.ProfileRootPath!,
+                    "AppData",
+                    "Roaming",
+                    "solomondark",
+                    "retail-profile.dat")),
+            "fresh install imported the retail APPDATA profile");
+
+        var isolatedSentinel = Path.Combine(first.ProfileRootPath!, "stale-profile.dat");
+        File.WriteAllText(isolatedSentinel, "stale-isolated-data");
+        _ = IsolatedProfileBootstrapper.CreateLaunchOptions(
+            workspace,
+            retailGameAppDataPath: retailAppDataRoot,
+            freshInstall: true);
+        Require(
+            !File.Exists(isolatedSentinel),
+            "fresh install did not reset its own isolated profile");
+        Require(
+            File.ReadAllText(retailProfileFile) == "retail-profile",
+            "fresh install changed the retail APPDATA profile");
+
+        var command = LauncherCommandParser.Parse(["launch", "--fresh-install"]);
+        Require(command.FreshInstall, "launcher parser lost --fresh-install");
+        Require(
+            command.TemporaryProfile,
+            "--fresh-install did not imply --temporary-profile");
+        RequireThrows<InvalidOperationException>(
+            () => LauncherCommandParser.Parse(
+                ["launch", "--fresh-install", "--savegames-root", Path.Combine(root, "external")]),
+            "--fresh-install accepted an external savegames root");
     }
     finally
     {
