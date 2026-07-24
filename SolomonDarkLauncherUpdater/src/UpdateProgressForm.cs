@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using SolomonDarkModding.Updates;
 
 namespace SolomonDarkLauncherUpdater;
@@ -5,20 +6,32 @@ namespace SolomonDarkLauncherUpdater;
 internal sealed class UpdateProgressForm : Form
 {
     private static readonly Color WindowBackground = Color.FromArgb(23, 21, 28);
-    private static readonly Color CardBackground = Color.FromArgb(33, 30, 40);
+    private static readonly Color TitleBarBackground = Color.FromArgb(16, 14, 20);
+    private static readonly Color GoldOutline = Color.FromArgb(121, 100, 58);
+    private static readonly Color GoldOutlineText = Color.FromArgb(214, 188, 124);
+    private static readonly Color GoldOutlineHover = Color.FromArgb(43, 36, 22);
+    private static readonly Color BorderSubtle = Color.FromArgb(50, 45, 61);
     private static readonly Color Accent = Color.FromArgb(199, 164, 78);
+    private static readonly Color AccentHover = Color.FromArgb(219, 186, 102);
+    private static readonly Color AccentPressed = Color.FromArgb(165, 133, 60);
+    private static readonly Color AccentText = Color.FromArgb(30, 22, 8);
     private static readonly Color TextPrimary = Color.FromArgb(237, 232, 220);
     private static readonly Color TextSecondary = Color.FromArgb(168, 160, 147);
     private static readonly Color TextMuted = Color.FromArgb(111, 106, 97);
     private static readonly Color Success = Color.FromArgb(79, 193, 166);
     private static readonly Color Error = Color.FromArgb(224, 106, 87);
 
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x2;
+
     private readonly Label statusLabel_;
+    private readonly Label completeGlyph_;
     private readonly Label detailLabel_;
     private readonly UpdateProgressBar progressBar_;
     private readonly FlowLayoutPanel actions_;
     private readonly Button restartButton_;
     private readonly Button closeButton_;
+    private readonly Button closeGlyph_;
     private bool canClose_;
 
     public UpdateProgressForm()
@@ -27,70 +40,119 @@ internal sealed class UpdateProgressForm : Form
         AccessibleName = Text;
         BackColor = WindowBackground;
         ForeColor = TextPrimary;
-        ClientSize = new Size(540, 230);
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
-        MinimizeBox = false;
+        ClientSize = new Size(560, 210);
+        FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
 
-        var card = new Panel
+        var titleBar = new Panel
         {
-            BackColor = CardBackground,
-            Location = new Point(24, 22),
-            Size = new Size(492, 184),
+            BackColor = TitleBarBackground,
+            Location = new Point(1, 1),
+            Size = new Size(558, 42),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        Controls.Add(card);
+        titleBar.MouseDown += DragWindow;
+        Controls.Add(titleBar);
 
-        var heading = new Label
+        var brandGlyph = new Label
         {
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI", 9f),
             ForeColor = Accent,
-            Location = new Point(22, 18),
-            Text = "SOLOMON DARK REVIVED"
+            Location = new Point(16, 13),
+            Text = "◆"
         };
-        card.Controls.Add(heading);
+        brandGlyph.MouseDown += DragWindow;
+        titleBar.Controls.Add(brandGlyph);
+
+        var titleLabel = new Label
+        {
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI Semibold", 9.5f),
+            ForeColor = TextPrimary,
+            Location = new Point(38, 12),
+            Text = "Solomon Dark Revived Update"
+        };
+        titleLabel.MouseDown += DragWindow;
+        titleBar.Controls.Add(titleLabel);
+
+        closeGlyph_ = new Button
+        {
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            BackColor = TitleBarBackground,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10f),
+            ForeColor = TextMuted,
+            Location = new Point(512, 0),
+            Size = new Size(46, 42),
+            TabStop = false,
+            Text = "✕",
+            UseVisualStyleBackColor = false
+        };
+        closeGlyph_.FlatAppearance.BorderSize = 0;
+        closeGlyph_.FlatAppearance.MouseOverBackColor = Color.FromArgb(196, 43, 28);
+        closeGlyph_.FlatAppearance.MouseDownBackColor = Color.FromArgb(178, 42, 26);
+        closeGlyph_.Click += (_, _) =>
+        {
+            if (canClose_)
+            {
+                Close();
+            }
+        };
+        titleBar.Controls.Add(closeGlyph_);
+
+        completeGlyph_ = new Label
+        {
+            AutoSize = true,
+            Font = new Font("Segoe UI", 12.5f, FontStyle.Bold),
+            ForeColor = Success,
+            Location = new Point(24, 58),
+            Text = "✓",
+            Visible = false
+        };
+        Controls.Add(completeGlyph_);
 
         statusLabel_ = new Label
         {
             AutoEllipsis = true,
-            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 12.5f),
             ForeColor = TextPrimary,
-            Location = new Point(22, 48),
-            Size = new Size(448, 26),
+            Location = new Point(24, 58),
+            Size = new Size(512, 28),
             Text = "Preparing launcher update…"
         };
-        card.Controls.Add(statusLabel_);
+        Controls.Add(statusLabel_);
 
         detailLabel_ = new Label
         {
             AutoEllipsis = true,
-            Font = new Font("Segoe UI", 9),
-            ForeColor = TextMuted,
-            Location = new Point(22, 78),
-            Size = new Size(448, 36),
+            Font = new Font("Segoe UI", 9.5f),
+            ForeColor = TextSecondary,
+            Location = new Point(24, 90),
+            Size = new Size(512, 20),
             Text = "The launcher will restart automatically."
         };
-        card.Controls.Add(detailLabel_);
+        Controls.Add(detailLabel_);
 
         progressBar_ = new UpdateProgressBar
         {
-            Location = new Point(22, 116),
-            Size = new Size(448, 12)
+            Location = new Point(24, 122),
+            Size = new Size(512, 14)
         };
-        card.Controls.Add(progressBar_);
+        Controls.Add(progressBar_);
 
         actions_ = new FlowLayoutPanel
         {
-            AutoSize = true,
+            AutoSize = false,
             FlowDirection = FlowDirection.RightToLeft,
-            Location = new Point(236, 139),
-            Size = new Size(234, 34),
+            Location = new Point(24, 154),
+            Size = new Size(512, 40),
             Visible = false,
             WrapContents = false
         };
-        card.Controls.Add(actions_);
+        Controls.Add(actions_);
 
         closeButton_ = CreateButton("Close", primary: false);
         closeButton_.Click += (_, _) =>
@@ -117,14 +179,24 @@ internal sealed class UpdateProgressForm : Form
     public void Report(UpdateProgress progress)
     {
         statusLabel_.Text = progress.StatusText;
+        detailLabel_.ForeColor = TextSecondary;
         detailLabel_.Text = FormatDetail(progress);
-        progressBar_.Value = CalculateValue(progress);
-        progressBar_.ForeColor = progress.Phase switch
-        {
-            UpdateProgressPhase.Completed => Success,
-            UpdateProgressPhase.Failed => Error,
-            _ => Accent
-        };
+
+        var value = CalculateValue(progress);
+        progressBar_.Value = value;
+        progressBar_.Indeterminate =
+            progress.Phase is not
+                (UpdateProgressPhase.Completed or UpdateProgressPhase.Failed) &&
+            value <= 0;
+        progressBar_.ForeColor =
+            progress.Phase == UpdateProgressPhase.Failed ? Error : Accent;
+
+        var complete = progress.Phase == UpdateProgressPhase.Completed;
+        completeGlyph_.Visible = complete;
+        statusLabel_.Location = new Point(complete ? 48 : 24, statusLabel_.Top);
+        statusLabel_.Width = complete ? 488 : 512;
+        statusLabel_.ForeColor =
+            progress.Phase == UpdateProgressPhase.Failed ? Error : TextPrimary;
     }
 
     public void ShowFailure(string message, Action restart)
@@ -150,30 +222,66 @@ internal sealed class UpdateProgressForm : Form
         };
         actions_.Visible = true;
         canClose_ = true;
+        closeGlyph_.ForeColor = TextSecondary;
     }
 
     public void CloseAfterSuccess()
     {
         ExitCode = 0;
         canClose_ = true;
+        closeGlyph_.ForeColor = TextSecondary;
         Close();
     }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var border = new Pen(GoldOutline);
+        e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+        using var divider = new Pen(BorderSubtle);
+        e.Graphics.DrawLine(divider, 1, 43, Width - 2, 43);
+    }
+
+    private void DragWindow(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left)
+        {
+            return;
+        }
+        ReleaseCapture();
+        _ = SendMessage(Handle, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(
+        IntPtr hWnd,
+        int msg,
+        IntPtr wParam,
+        IntPtr lParam);
 
     private static Button CreateButton(string text, bool primary)
     {
         var button = new Button
         {
             AutoSize = true,
-            BackColor = primary ? Accent : Color.FromArgb(46, 41, 56),
+            BackColor = primary ? Accent : WindowBackground,
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            ForeColor = primary ? Color.FromArgb(30, 22, 8) : TextSecondary,
-            Margin = new Padding(8, 0, 0, 0),
-            Padding = new Padding(10, 3, 10, 3),
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+            ForeColor = primary ? AccentText : GoldOutlineText,
+            Margin = new Padding(10, 4, 0, 4),
+            Padding = new Padding(12, 5, 12, 5),
             Text = text,
             UseVisualStyleBackColor = false
         };
-        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.BorderSize = primary ? 0 : 1;
+        button.FlatAppearance.BorderColor = GoldOutline;
+        button.FlatAppearance.MouseOverBackColor =
+            primary ? AccentHover : GoldOutlineHover;
+        button.FlatAppearance.MouseDownBackColor =
+            primary ? AccentPressed : GoldOutlineHover;
         return button;
     }
 

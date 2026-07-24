@@ -67,11 +67,24 @@
         <Setter Property="CornerRadius" Value="10" />
     </Style>
 
+    <!-- Weathered-gold progress fill matching the title lettering, dark-to-bright
+         left to right so the leading edge of the bar carries the shine. -->
+    <LinearGradientBrush x:Key="GoldProgressFillBrush" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="{StaticResource AccentPressedColor}" Offset="0" />
+        <GradientStop Color="{StaticResource AccentColor}" Offset="0.55" />
+        <GradientStop Color="{StaticResource AccentHoverColor}" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GoldShimmerBrush" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#00C7A44E" Offset="0" />
+        <GradientStop Color="#66DBBA66" Offset="0.5" />
+        <GradientStop Color="#00C7A44E" Offset="1" />
+    </LinearGradientBrush>
+
     <Style x:Key="UpdateProgressBarStyle" TargetType="ProgressBar">
-        <Setter Property="Height" Value="7" />
+        <Setter Property="Height" Value="8" />
         <Setter Property="Minimum" Value="0" />
         <Setter Property="Maximum" Value="100" />
-        <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource GoldProgressFillBrush}" />
         <Setter Property="Background" Value="{StaticResource InputBackgroundBrush}" />
         <Setter Property="Template">
             <Setter.Value>
@@ -79,15 +92,65 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{StaticResource InputBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="3"
+                            CornerRadius="4"
                             ClipToBounds="True">
                         <Grid x:Name="PART_Track">
+                            <!-- Shimmer sweep shown while a phase is active but has no
+                                 measurable total yet (verifying, installing, restarting). -->
+                            <Border x:Name="Shimmer"
+                                    Width="140"
+                                    HorizontalAlignment="Left"
+                                    Background="{StaticResource GoldShimmerBrush}"
+                                    Opacity="0">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="ShimmerSlide" X="-150" />
+                                </Border.RenderTransform>
+                            </Border>
                             <Border x:Name="PART_Indicator"
                                     HorizontalAlignment="Left"
                                     Background="{TemplateBinding Foreground}"
-                                    CornerRadius="2" />
+                                    CornerRadius="3">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="9"
+                                                      ShadowDepth="0"
+                                                      Color="{StaticResource AccentColor}"
+                                                      Opacity="0.35" />
+                                </Border.Effect>
+                                <Border Height="1"
+                                        Margin="3,1,3,0"
+                                        VerticalAlignment="Top"
+                                        Background="#26FFFFFF"
+                                        CornerRadius="1" />
+                            </Border>
                         </Grid>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding UpdateProgressValue}" Value="0" />
+                                <Condition Binding="{Binding IsUpdateProgressError}" Value="False" />
+                                <Condition Binding="{Binding IsUpdateProgressComplete}" Value="False" />
+                            </MultiDataTrigger.Conditions>
+                            <MultiDataTrigger.EnterActions>
+                                <BeginStoryboard x:Name="ShimmerStory">
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="Shimmer"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1"
+                                                         Duration="0:0:0.25" />
+                                        <DoubleAnimation Storyboard.TargetName="ShimmerSlide"
+                                                         Storyboard.TargetProperty="X"
+                                                         From="-150"
+                                                         To="860"
+                                                         Duration="0:0:1.7" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </MultiDataTrigger.EnterActions>
+                            <MultiDataTrigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="ShimmerStory" />
+                            </MultiDataTrigger.ExitActions>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
