@@ -45,7 +45,7 @@ struct DebugUiActionDispatchSnapshot {
     std::string error_message;
 };
 
-bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled = true);
+bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled);
 void ShutdownDebugUiOverlay();
 bool IsDebugUiOverlayInitialized();
 void BeginDebugUiGameplayParticipantNameplateCapture(

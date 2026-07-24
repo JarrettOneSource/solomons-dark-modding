@@ -45,6 +45,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("fresh install isolation", TestFreshInstallIsolationAsync),
     ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
+    ("normal runtime hides diagnostic UI", TestNormalRuntimeHidesDiagnosticUiAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
@@ -68,6 +69,24 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestNormalRuntimeHidesDiagnosticUiAsync()
+{
+    var normal = RuntimeStageFlags.Create(RuntimeStageOptions.Default);
+    Require(
+        !normal.LoaderDebugUi,
+        "the normal full runtime enabled diagnostic UI surfaces");
+
+    var diagnostic = RuntimeStageFlags.Create(
+        RuntimeStageOptions.Create(
+            "full",
+            [RuntimeStageFlags.LoaderDebugUiKey + "=true"]));
+    Require(
+        diagnostic.LoaderDebugUi,
+        "the explicit diagnostic UI runtime override was ignored");
+
+    return Task.CompletedTask;
+}
 
 static Task TestIsolatedLocalSaveCatalogAsync()
 {

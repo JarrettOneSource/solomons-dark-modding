@@ -52,6 +52,9 @@ from verify_player_health_death_sync import (
     query_local_player_vitals,
     set_local_player_vitals,
 )
+from normal_gameplay_debug_surface_guard import (
+    assert_launch_debug_surfaces_empty,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -485,10 +488,10 @@ def verify_normal_barrier(
     )
     waiting_host = summarize_wait(waiting["host"])
     waiting_client = summarize_wait(waiting["client"])
-    if waiting_host["display_text"] != "Choose your skill upgrade":
+    if waiting_host["display_text"]:
         raise VerifyFailure(
-            "unresolved host did not retain its choice prompt while the client "
-            f"waited: {waiting_host}"
+            "the host's stock picker was obscured by a loader-owned choice "
+            f"surface while the client waited: {waiting_host}"
         )
     client_wait_hud = wait_for_hud_draw(
         CLIENT_LOG,
@@ -932,8 +935,15 @@ def main() -> int:
             normal_only=args.normal_only,
         )
         output.update(prepared)
+        output["debug_surface_guard"] = (
+            assert_launch_debug_surfaces_empty(output["launch"])
+        )
         output["ok"] = True
-    except (VerifyFailure, subprocess.TimeoutExpired) as exc:
+    except (
+        AssertionError,
+        VerifyFailure,
+        subprocess.TimeoutExpired,
+    ) as exc:
         output["error"] = str(exc)
     finally:
         if not args.keep_open:

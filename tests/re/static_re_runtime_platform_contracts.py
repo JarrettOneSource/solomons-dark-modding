@@ -117,6 +117,7 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         (flow_text, "multiplayer::ParticipantSceneIntentKind::Run"),
         (loader_text, "InitializeMultiplayerJoinFlow();"),
         (loader_text, "!multiplayer_join_flow_enabled"),
+        (loader_text, "const bool native_ui_bridge_required"),
         (loader_text, "InitializeDebugUiOverlay(diagnostic_ui_enabled)"),
         (app_tick_text, "TickMultiplayerJoinFlow();"),
         (app_tick_text, "DispatchPendingDebugUiActionOnAppTick();"),
@@ -259,6 +260,9 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
             "Loading Boneyard must remain until the native arena is ready"
         )
 
+    diagnostic_registration = render_text.find(
+        "const auto diagnostic_surface_frame"
+    )
     render_start = render_text.find(
         "const auto join_flow_presentation"
     )
@@ -266,22 +270,31 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         "DrawMultiplayerJoinFlowPresentation(", render_start
     )
     transition_return = render_text.find("return;", draw_black)
-    diagnostics = render_text.find(
-        "if (!diagnostic_visuals_enabled)", transition_return
+    diagnostic_draw = render_text.find(
+        "diagnostic_surface_frame.render_elements)",
+        transition_return,
     )
-    if not 0 <= render_start < draw_black < transition_return < diagnostics:
+    if not (
+        0 <= diagnostic_registration < render_start < draw_black <
+        transition_return < diagnostic_draw
+    ):
         raise StaticReTestFailure(
             "join-flow presentation must cover the frame before optional diagnostics render"
         )
-    diagnostics_end = render_text.find("\n    }", diagnostics)
-    diagnostics_body = render_text[diagnostics:diagnostics_end]
+
+    gate_start = render_text.find(
+        "DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame("
+    )
+    gate_end = render_text.find("\n}", gate_start)
+    gate_body = render_text[gate_start:gate_end]
     if (
-        "render_elements.clear();" not in diagnostics_body
-        or "return;" in diagnostics_body
+        "if (!diagnostic_visuals_enabled)" not in gate_body
+        or "return {};" not in gate_body
+        or "render_elements.clear();" in render_text
     ):
         raise StaticReTestFailure(
-            "quick-start mode must hide diagnostic surfaces without suppressing "
-            "functional multiplayer overlays"
+            "diagnostic surfaces must remain unregistered while the semantic "
+            "UI bridge and functional multiplayer overlays stay active"
         )
 
     hook_start = run_hooks_text.find("void __fastcall HookStartGame(")

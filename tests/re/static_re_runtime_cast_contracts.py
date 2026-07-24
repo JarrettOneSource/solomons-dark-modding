@@ -1135,7 +1135,8 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         'source=dx9_nameplate_healthbar',
         '" ok=" + std::string(drew_bar ? "1" : "0")',
         '" health_percent=" + std::to_string(health_percent)',
-        "render_elements.empty() && gameplay_health_bars.empty()",
+        "diagnostic_surface_frame.render_elements.empty() &&\n"
+        "        gameplay_health_bars.empty()",
         "for (const auto& health_bar : gameplay_health_bars)",
         "DrawFilledRect(",
         "DrawRectOutline(",

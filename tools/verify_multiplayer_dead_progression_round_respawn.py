@@ -19,6 +19,9 @@ import verify_multiplayer_inventory_audit as inventory
 import verify_multiplayer_level_up_offer_sync as level_up
 from multiplayer_frame_capture import capture_game_backbuffer
 from multiplayer_progression_probe import query_progression_snapshot
+from normal_gameplay_debug_surface_guard import (
+    assert_launch_debug_surfaces_empty,
+)
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -985,6 +988,8 @@ def _launch_scenario(
     instance_prefix: str,
     ports: tuple[int, int],
     game_directory: Path | None,
+    launcher_path: Path | None,
+    runtime_root: Path | None,
 ) -> tuple[dict[str, object], str, str, list[int]]:
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
@@ -998,6 +1003,8 @@ def _launch_scenario(
         host_port=ports[0],
         client_port=ports[1],
         game_directory=game_directory,
+        launcher_path=launcher_path,
+        runtime_root=runtime_root,
         exact_mod_id=ACCEPTANCE_MOD_ID,
     )
     process_ids = game_process_ids(launch)
@@ -1211,11 +1218,15 @@ def run_dead_progression_scenario(
     instance_prefix: str,
     ports: tuple[int, int],
     game_directory: Path | None,
+    launcher_path: Path | None = None,
+    runtime_root: Path | None = None,
 ) -> dict[str, Any]:
     launch, host_pipe, client_pipe, process_ids = _launch_scenario(
         instance_prefix=instance_prefix,
         ports=ports,
         game_directory=game_directory,
+        launcher_path=launcher_path,
+        runtime_root=runtime_root,
     )
     pipes = [host_pipe, client_pipe]
     result: dict[str, Any] = {
@@ -1346,6 +1357,9 @@ def run_dead_progression_scenario(
                 option_id=selected_option_id,
                 expected_active=expected_active,
             )
+        )
+        result["debug_surface_guard"] = (
+            assert_launch_debug_surfaces_empty(launch)
         )
 
         after_choice_dead = capture_local_actor_state(
@@ -1489,11 +1503,15 @@ def run_immediate_round_scenario(
     instance_prefix: str,
     ports: tuple[int, int],
     game_directory: Path | None,
+    launcher_path: Path | None = None,
+    runtime_root: Path | None = None,
 ) -> dict[str, Any]:
     launch, host_pipe, client_pipe, process_ids = _launch_scenario(
         instance_prefix=instance_prefix,
         ports=ports,
         game_directory=game_directory,
+        launcher_path=launcher_path,
+        runtime_root=runtime_root,
     )
     pipes = [host_pipe, client_pipe]
     result: dict[str, Any] = {
@@ -1714,6 +1732,8 @@ def run_live_verification(
     instance_prefix: str,
     ports: list[int],
     game_directory: Path | None,
+    launcher_path: Path | None = None,
+    runtime_root: Path | None = None,
 ) -> dict[str, Any]:
     return {
         "instance_prefix": instance_prefix,
@@ -1722,11 +1742,15 @@ def run_live_verification(
             instance_prefix=instance_prefix + "-p",
             ports=(ports[0], ports[1]),
             game_directory=game_directory,
+            launcher_path=launcher_path,
+            runtime_root=runtime_root,
         ),
         "immediate_round": run_immediate_round_scenario(
             instance_prefix=instance_prefix + "-r",
             ports=(ports[2], ports[3]),
             game_directory=game_directory,
+            launcher_path=launcher_path,
+            runtime_root=runtime_root,
         ),
         "ok": True,
     }
@@ -1744,6 +1768,18 @@ def main() -> int:
         type=Path,
         default=None,
         help="Retail game directory override for isolated worktrees.",
+    )
+    parser.add_argument(
+        "--launcher",
+        type=Path,
+        default=None,
+        help="Built launcher override.",
+    )
+    parser.add_argument(
+        "--runtime-root",
+        type=Path,
+        default=None,
+        help="Short isolated launcher runtime root.",
     )
     parser.add_argument(
         "--ports",
@@ -1767,6 +1803,8 @@ def main() -> int:
             instance_prefix=instance_prefix,
             ports=_resolve_ports(args.ports),
             game_directory=args.game_dir,
+            launcher_path=args.launcher,
+            runtime_root=args.runtime_root,
         )
         exit_code = 0
     except Exception as exc:  # noqa: BLE001 - preserve live evidence.

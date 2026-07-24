@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// Surface registry: table-driven priority cascade replacing per-surface
-// if-else branches.  Each entry defines a builder that returns overlay
-// elements for a surface, plus metadata controlling first-frame logging
-// and which tracked state to clear when the surface becomes dominant.
+// Semantic surface registry: table-driven priority cascade replacing
+// per-surface if-else branches. Each entry describes observed stock UI used by
+// sd.ui and launcher automation. Diagnostic rendering is registered separately
+// and only after the explicit diagnostic gate below.
 // ---------------------------------------------------------------------------
 
-struct SurfaceRegistryEntry {
+struct SemanticSurfaceRegistryEntry {
     const char* surface_id;
     const char* log_name;
     bool clear_main_menu_tracking;
@@ -14,7 +14,7 @@ struct SurfaceRegistryEntry {
     bool first_frame_logged;
 };
 
-static SurfaceRegistryEntry s_surface_registry[] = {
+static SemanticSurfaceRegistryEntry s_semantic_surface_registry[] = {
     // Priority order: first match wins.
     {"control_scheme_picker", "ControlSchemePicker", true, true, true, false},
     {"controls",            "Controls",             true,  false, true,  false},
@@ -29,11 +29,13 @@ static SurfaceRegistryEntry s_surface_registry[] = {
     {"main_menu",           "MainMenu",             false, true,  true,  false},
 };
 
-static constexpr std::size_t kSurfaceRegistrySize = sizeof(s_surface_registry) / sizeof(s_surface_registry[0]);
+static constexpr std::size_t kSemanticSurfaceRegistrySize =
+    sizeof(s_semantic_surface_registry) /
+    sizeof(s_semantic_surface_registry[0]);
 static constexpr std::uint64_t kFreshTrackedDialogPriorityMs = 250;
 
 void ResetSurfaceRegistryFirstFrameFlags() {
-    for (auto& entry : s_surface_registry) {
+    for (auto& entry : s_semantic_surface_registry) {
         entry.first_frame_logged = false;
     }
 }
@@ -44,6 +46,62 @@ struct SurfaceRegistryInitializer {
     }
 };
 static SurfaceRegistryInitializer s_surface_registry_initializer;
+
+struct DiagnosticSurfaceFrame {
+    std::vector<OverlayRenderElement> render_elements;
+    std::size_t registered_surface_count = 0;
+};
+
+DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(
+    bool diagnostic_visuals_enabled,
+    const std::vector<OverlayRenderElement>& semantic_surface_elements) {
+    if (!diagnostic_visuals_enabled) {
+        return {};
+    }
+
+    DiagnosticSurfaceFrame frame;
+    if (!semantic_surface_elements.empty()) {
+        frame.render_elements = semantic_surface_elements;
+        frame.registered_surface_count = 1;
+    }
+    return frame;
+}
+
+void LogDiagnosticSurfaceFrameState(
+    bool enabled,
+    std::size_t registered_surface_count,
+    std::size_t rendered_element_count) {
+    bool changed = false;
+    {
+        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+        changed =
+            !g_debug_ui_overlay_state.diagnostic_surface_state_logged ||
+            g_debug_ui_overlay_state.diagnostic_surface_state_enabled !=
+                enabled ||
+            g_debug_ui_overlay_state.diagnostic_surface_registered_count !=
+                registered_surface_count ||
+            g_debug_ui_overlay_state.diagnostic_surface_rendered_count !=
+                rendered_element_count;
+        if (changed) {
+            g_debug_ui_overlay_state.diagnostic_surface_state_logged = true;
+            g_debug_ui_overlay_state.diagnostic_surface_state_enabled =
+                enabled;
+            g_debug_ui_overlay_state.diagnostic_surface_registered_count =
+                registered_surface_count;
+            g_debug_ui_overlay_state.diagnostic_surface_rendered_count =
+                rendered_element_count;
+        }
+    }
+    if (!changed) {
+        return;
+    }
+
+    Log(
+        "Debug UI diagnostic surface set. enabled=" +
+        std::to_string(enabled ? 1 : 0) +
+        " registered=" + std::to_string(registered_surface_count) +
+        " rendered=" + std::to_string(rendered_element_count));
+}
 
 void DrawMultiplayerJoinFlowPresentation(
     IDirect3DDevice9* device,
@@ -92,11 +150,18 @@ void DrawMultiplayerJoinFlowPresentation(
 }
 
 void RenderOverlayFrame(IDirect3DDevice9* device) {
+    bool diagnostic_visuals_enabled = false;
+    {
+        std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+        diagnostic_visuals_enabled =
+            g_debug_ui_overlay_state.diagnostic_visuals_enabled;
+    }
+
     auto raw_elements = TakeObservedFrameElements();
     auto exact_text_elements = TakeExactTextFrameElements();
     auto exact_control_elements = TakeExactControlFrameElements();
     auto elements = FilterElementsToDominantSurface(raw_elements);
-    std::vector<OverlayRenderElement> render_elements;
+    std::vector<OverlayRenderElement> semantic_surface_elements;
     const auto gameplay_health_bars =
         BuildGameplayParticipantHealthBarRenderItems(
             exact_text_elements);
@@ -141,9 +206,10 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     auto dialog_snapshot = TryBuildTrackedDialogOverlaySnapshot(device, elements, exact_text_elements);
 
     const char* higher_priority_surface_name = "";
-    for (std::size_t i = 0; i < kSurfaceRegistrySize; ++i) {
+    for (std::size_t i = 0; i < kSemanticSurfaceRegistrySize; ++i) {
         if (!built[i].elems.empty()) {
-            higher_priority_surface_name = s_surface_registry[i].surface_id;
+            higher_priority_surface_name =
+                s_semantic_surface_registry[i].surface_id;
             break;
         }
     }
@@ -163,11 +229,13 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     }
 
     if (dialog_snapshot.has_value()) {
-        render_elements = BuildDialogOverlayRenderElements(*dialog_snapshot);
+        semantic_surface_elements =
+            BuildDialogOverlayRenderElements(*dialog_snapshot);
         elements.clear();
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
         g_debug_ui_overlay_state.settings_render.tracked_object_ptr = 0;
-        if (!g_debug_ui_overlay_state.first_tracked_dialog_frame_logged) {
+        if (diagnostic_visuals_enabled &&
+            !g_debug_ui_overlay_state.first_tracked_dialog_frame_logged) {
             g_debug_ui_overlay_state.first_tracked_dialog_frame_logged = true;
             Log(
                 "Debug UI overlay rendered its first tracked dialog frame. left=" +
@@ -177,14 +245,16 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
                 std::to_string(dialog_snapshot->buttons.size()));
         }
     } else {
-        for (std::size_t i = 0; i < kSurfaceRegistrySize; ++i) {
+        for (std::size_t i = 0;
+             i < kSemanticSurfaceRegistrySize;
+             ++i) {
             if (built[i].elems.empty()) {
                 continue;
             }
 
-            render_elements = std::move(built[i].elems);
+            semantic_surface_elements = std::move(built[i].elems);
             elements.clear();
-            auto& entry = s_surface_registry[i];
+            auto& entry = s_semantic_surface_registry[i];
 
             std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
             if (entry.clear_main_menu_tracking) {
@@ -193,39 +263,52 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             if (entry.clear_settings_tracking) {
                 g_debug_ui_overlay_state.settings_render.tracked_object_ptr = 0;
             }
-            if (!entry.first_frame_logged) {
+            if (diagnostic_visuals_enabled &&
+                !entry.first_frame_logged) {
                 entry.first_frame_logged = true;
                 Log(
                     "Debug UI overlay rendered its first " + std::string(entry.log_name) +
-                    " frame. elements=" + std::to_string(render_elements.size()));
+                    " frame. elements=" +
+                    std::to_string(semantic_surface_elements.size()));
                 if (entry.log_element_summary) {
-                    LogOverlayRenderElementsSummary(entry.log_name, render_elements);
+                    LogOverlayRenderElementsSummary(
+                        entry.log_name,
+                        semantic_surface_elements);
                 }
             }
             break;
         }
 
-        if (render_elements.empty() && !elements.empty()) {
-            render_elements = BuildOverlayRenderElements(elements, g_debug_ui_overlay_state.font_atlas);
+        if (semantic_surface_elements.empty() && !elements.empty()) {
+            semantic_surface_elements = BuildOverlayRenderElements(
+                elements,
+                g_debug_ui_overlay_state.font_atlas);
         }
     }
 
-    bool diagnostic_visuals_enabled = false;
-    const auto observed_surface_id = render_elements.empty()
+    const auto observed_surface_id = semantic_surface_elements.empty()
         ? std::string{}
         : GetOverlaySurfaceRootId(
-              render_elements.front().surface_id);
+              semantic_surface_elements.front().surface_id);
     ObserveMultiplayerJoinFlowSurface(observed_surface_id);
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-        StoreLatestSurfaceSnapshotUnlocked(&g_debug_ui_overlay_state, render_elements);
-        diagnostic_visuals_enabled =
-            g_debug_ui_overlay_state.diagnostic_visuals_enabled;
+        StoreLatestSurfaceSnapshotUnlocked(
+            &g_debug_ui_overlay_state,
+            semantic_surface_elements);
     }
+    const auto diagnostic_surface_frame =
+        RegisterDiagnosticSurfaceFrame(
+            diagnostic_visuals_enabled,
+            semantic_surface_elements);
 
     const auto join_flow_presentation =
         GetMultiplayerJoinFlowPresentation();
     if (join_flow_presentation.visible) {
+        LogDiagnosticSurfaceFrameState(
+            diagnostic_visuals_enabled,
+            diagnostic_surface_frame.registered_surface_count,
+            0);
         ConfigureOverlayRenderState(device);
         DrawMultiplayerJoinFlowPresentation(
             device,
@@ -233,11 +316,12 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         return;
     }
 
-    if (!diagnostic_visuals_enabled) {
-        render_elements.clear();
-    }
-
-    if (render_elements.empty() && gameplay_health_bars.empty() &&
+    LogDiagnosticSurfaceFrameState(
+        diagnostic_visuals_enabled,
+        diagnostic_surface_frame.registered_surface_count,
+        diagnostic_surface_frame.render_elements.size());
+    if (diagnostic_surface_frame.render_elements.empty() &&
+        gameplay_health_bars.empty() &&
         gameplay_dampen_presentations.empty() &&
         gameplay_level_up_wait_text.empty() &&
         gameplay_death_spectator_text.empty()) {
@@ -246,7 +330,8 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
 
     ConfigureOverlayRenderState(device);
 
-    for (const auto& element : render_elements) {
+    for (const auto& element :
+         diagnostic_surface_frame.render_elements) {
         DrawObservedOverlayElement(device, g_debug_ui_overlay_state.font_atlas, element);
     }
     for (const auto& health_bar : gameplay_health_bars) {
@@ -282,7 +367,9 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         g_debug_ui_overlay_state.first_frame_logged = true;
         Log(
             "Debug UI overlay observed " + std::to_string(elements.size()) + " raw UI draw candidate(s) and rendered " +
-            std::to_string(render_elements.size()) + " element overlay region(s) plus " +
+            std::to_string(
+                diagnostic_surface_frame.render_elements.size()) +
+            " diagnostic element overlay region(s) plus " +
             std::to_string(gameplay_health_bars.size()) +
             " gameplay participant health bar(s) and " +
             std::to_string(gameplay_dampen_presentations.size()) +

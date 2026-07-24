@@ -559,6 +559,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "resumed_position_drift",
         'source=dx9_level_up_barrier ok=1 ',
         "through the native DX9 overlay",
+        "assert_launch_debug_surfaces_empty(output[\"launch\"])",
     ):
         assert token in verifier, f"live exact-rank regression lacks: {token}"
 

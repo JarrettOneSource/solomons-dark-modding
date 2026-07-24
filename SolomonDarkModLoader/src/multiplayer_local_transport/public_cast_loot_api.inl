@@ -674,11 +674,6 @@ bool TryBuildLevelUpWaitStatusText(std::string* text) {
     }
 
     const auto runtime_state = SnapshotRuntimeState();
-    if (HasPendingLocalLevelUpChoice(runtime_state)) {
-        *text = "Choose your skill upgrade";
-        return true;
-    }
-
     std::vector<std::uint64_t> waiting_participant_ids;
     if (g_local_transport.is_host) {
         waiting_participant_ids = CollectUnresolvedLevelUpOfferParticipantIds();
@@ -687,6 +682,12 @@ bool TryBuildLevelUpWaitStatusText(std::string* text) {
         waiting_participant_ids = runtime_state.level_up_wait_status.waiting_participant_ids;
     }
 
+    waiting_participant_ids.erase(
+        std::remove(
+            waiting_participant_ids.begin(),
+            waiting_participant_ids.end(),
+            g_local_transport.local_peer_id),
+        waiting_participant_ids.end());
     if (waiting_participant_ids.empty()) {
         return false;
     }

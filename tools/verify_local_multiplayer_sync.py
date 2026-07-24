@@ -353,6 +353,7 @@ def launch_pair(
     client_remote_port: int | None = None,
     game_directory: Path | None = None,
     launcher_path: Path | None = None,
+    runtime_root: Path | None = None,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
@@ -440,6 +441,11 @@ def launch_pair(
         args.extend([
             "-LauncherPath",
             path_for_powershell(launcher_path),
+        ])
+    if runtime_root is not None:
+        args.extend([
+            "-RuntimeRoot",
+            path_for_powershell(runtime_root),
         ])
     if serialized_exact_mod_ids is not None:
         args.extend(["-ExactModIds", serialized_exact_mod_ids])

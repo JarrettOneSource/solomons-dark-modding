@@ -291,7 +291,7 @@ void Initialize(HMODULE module_handle) {
             if (const auto* debug_ui_config = TryGetDebugUiOverlayConfig(); debug_ui_config != nullptr) {
                 Log("Debug UI config loaded.");
                 Log("Debug UI config path: " + debug_ui_config->source_path.string());
-                Log("Debug UI overlay enabled: " + std::string(debug_ui_config->enabled ? "true" : "false"));
+                Log("Debug UI diagnostic visuals configured: " + std::string(debug_ui_config->enabled ? "true" : "false"));
             }
         } else {
             Log("Debug UI config failed to load. " + GetDebugUiOverlayConfigLoadError());
@@ -429,8 +429,11 @@ void Initialize(HMODULE module_handle) {
             !multiplayer_join_flow_enabled &&
             join_flow_ui_config != nullptr &&
             join_flow_ui_config->enabled;
-        if (diagnostic_ui_enabled ||
-            multiplayer_join_flow_enabled) {
+        const bool native_ui_bridge_required =
+            runtime_flags.loader.lua_engine ||
+            runtime_flags.multiplayer.foundation ||
+            multiplayer_join_flow_enabled;
+        if (native_ui_bridge_required || diagnostic_ui_enabled) {
             if (!InitializeDebugUiOverlay(diagnostic_ui_enabled)) {
                 if (multiplayer_join_flow_enabled) {
                     const std::string message =
@@ -442,10 +445,10 @@ void Initialize(HMODULE module_handle) {
                         message);
                     return;
                 }
-                Log("Debug UI overlay requested but failed to initialize.");
+                Log("Native UI bridge requested but failed to initialize.");
             }
-        } else if (!runtime_flags.loader.debug_ui) {
-            Log("Debug UI overlay disabled by runtime flags.");
+        } else {
+            Log("Native UI bridge disabled by runtime flags.");
         }
 
         if (runtime_flags.loader.lua_engine) {

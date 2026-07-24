@@ -434,6 +434,10 @@ constexpr ULONGLONG kTrackedDarkCloudBrowserModalMaximumIdleMs = 250;
 struct DebugUiOverlayState {
     bool initialized = false;
     bool diagnostic_visuals_enabled = false;
+    bool diagnostic_surface_state_logged = false;
+    bool diagnostic_surface_state_enabled = false;
+    std::size_t diagnostic_surface_registered_count = 0;
+    std::size_t diagnostic_surface_rendered_count = 0;
     bool first_frame_logged = false;
     bool first_d3d_frame_logged = false;
     bool first_font_atlas_ready_logged = false;

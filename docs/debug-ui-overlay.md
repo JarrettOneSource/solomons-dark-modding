@@ -52,7 +52,17 @@ The overlay is intentionally structured to keep the hot path light when enabled:
 2. Element observations are aggregated by stable widget identity when available, then filtered to the dominant active surface before a frame is rendered.
 3. The dialog hooks track `MsgBox` line and button construction into a durable modal snapshot, while the tracked dialog renderer rereads the live root `MsgBox` object for exact panel and primary-button rectangles.
 4. The D3D9 `EndScene` hook prewarms the font atlas once and renders overlay primitives once per frame.
-5. The overlay is disabled by default so the normal launcher and loader path pay no render cost.
+5. The native UI bridge may stay active for semantic `sd.ui` snapshots and
+   functional multiplayer HUDs, but diagnostic surface registration is a
+   separate capability. The `full` runtime profile sets
+   `loader.debug_ui=false`; only an explicit runtime-flag override can register
+   and draw the observed diagnostic surfaces.
+
+This separation is structural: normal gameplay can observe a stock surface for
+automation without turning that surface into a loader-owned quad. In
+particular, the owner of the stock level-up picker never receives a loader
+choice banner; only other participants may receive the functional
+`Waiting on N players` barrier HUD.
 
 This keeps resource setup and draw submission out of the text helper path and leaves the loader with one render pass per frame instead of many immediate draws.
 
@@ -73,7 +83,19 @@ Default-off workspace verification:
 pwsh ./scripts/Verify-Workspace.ps1 -Configuration Debug -LaunchAndVerifyLoader
 ```
 
-When `config/debug-ui.ini` is temporarily set to `enabled=true`, a live launch should produce loader log markers showing:
+Normal live acceptance also checks each staged loader log with
+`tools/normal_gameplay_debug_surface_guard.py`. Every normal process must
+report:
+
+```text
+Debug UI diagnostic surface set. enabled=0 registered=0 rendered=0
+```
+
+The gate fails if the marker is missing or if any diagnostic surface is enabled,
+registered, or rendered.
+
+When `config/debug-ui.ini` is enabled and the staged runtime explicitly sets
+`loader.debug_ui=true`, a live launch should produce loader log markers showing:
 
 - debug UI config load
 - D3D9 hook installation

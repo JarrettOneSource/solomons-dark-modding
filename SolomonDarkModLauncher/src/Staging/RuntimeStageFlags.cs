@@ -115,7 +115,7 @@ internal sealed class RuntimeStageFlags
             Profile = RuntimeStageProfile.Full,
             LoaderLuaEngine = true,
             LoaderRuntimeTickService = true,
-            LoaderDebugUi = true,
+            LoaderDebugUi = false,
             MultiplayerSteamBootstrap = true,
             MultiplayerFoundation = true,
             MultiplayerServiceLoop = true

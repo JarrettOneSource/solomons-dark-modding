@@ -275,6 +275,7 @@ def test_live_gate_is_isolated_and_reads_exact_actor_state() -> None:
         "exact_pid_stock_window_click",
         'launch["clientProcessId"]',
         '"--global-only"',
+        "assert_launch_debug_surfaces_empty(launch)",
     ):
         assert token in verifier
     assert "stop_games(" not in verifier

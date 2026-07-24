@@ -968,12 +968,12 @@ def verify_bonus_skill(
         {owner_id},
         timeout,
         host_display_text=(
-            "Choose your skill upgrade"
+            ""
             if owner_id == HOST_ID
             else "Waiting on 1 player"
         ),
         client_display_text=(
-            "Choose your skill upgrade"
+            ""
             if owner_id == CLIENT_ID
             else "Waiting on 1 player"
         ),

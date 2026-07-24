@@ -4,12 +4,21 @@
 from __future__ import annotations
 
 import re
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LOADER_SOURCE = ROOT / "SolomonDarkModLoader" / "src"
+TOOLS_ROOT = ROOT / "tools"
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+
+from normal_gameplay_debug_surface_guard import (  # noqa: E402
+    assert_debug_surfaces_empty,
+)
 
 
 def read(relative_path: str) -> str:
@@ -17,6 +26,154 @@ def read(relative_path: str) -> str:
 
 
 class OverlayRendererContractTests(unittest.TestCase):
+    def test_live_log_guard_rejects_any_diagnostic_surface_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = Path(directory) / "solomondarkmodloader.log"
+            log_path.write_text(
+                "Debug UI diagnostic surface set. "
+                "enabled=0 registered=0 rendered=0\n",
+                encoding="utf-8",
+            )
+            result = assert_debug_surfaces_empty([log_path])
+            self.assertTrue(result["all_states_empty"])
+
+            log_path.write_text(
+                "Debug UI diagnostic surface set. "
+                "enabled=1 registered=5 rendered=5\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                AssertionError,
+                "registered or rendered",
+            ):
+                assert_debug_surfaces_empty([log_path])
+
+    def test_live_log_guard_requires_runtime_state_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = Path(directory) / "solomondarkmodloader.log"
+            log_path.write_text("ordinary loader log\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                AssertionError,
+                "did not report",
+            ):
+                assert_debug_surfaces_empty([log_path])
+
+    def test_normal_runtime_cannot_register_diagnostic_surfaces(self) -> None:
+        runtime_flags = read(
+            "SolomonDarkModLauncher/src/Staging/RuntimeStageFlags.cs"
+        )
+        loader = read("SolomonDarkModLoader/src/mod_loader.cpp")
+        overlay_header = read(
+            "SolomonDarkModLoader/include/debug_ui_overlay.h"
+        )
+        frame_renderer = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "label_resolution_surface_registry_and_frame_render.inl"
+        )
+
+        full_defaults = runtime_flags[
+            runtime_flags.index(
+                "private static RuntimeStageFlags CreateFullDefaults()"
+            ) :
+            runtime_flags.index(
+                "private static RuntimeStageFlags "
+                "CreateBootstrapOnlyDefaults()"
+            )
+        ]
+        self.assertIn("LoaderDebugUi = false", full_defaults)
+        self.assertIn(
+            "const bool native_ui_bridge_required",
+            loader,
+        )
+        self.assertIn(
+            "native_ui_bridge_required || diagnostic_ui_enabled",
+            loader,
+        )
+        self.assertIn(
+            "InitializeDebugUiOverlay(diagnostic_ui_enabled)",
+            loader,
+        )
+        self.assertNotIn(
+            "diagnostic_visuals_enabled = true",
+            overlay_header,
+        )
+
+        gate_start = frame_renderer.index(
+            "DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame("
+        )
+        gate_end = frame_renderer.index(
+            "\n}", gate_start
+        )
+        gate = frame_renderer[gate_start:gate_end]
+        self.assertIn(
+            "if (!diagnostic_visuals_enabled)",
+            gate,
+        )
+        self.assertIn("return {};", gate)
+        self.assertIn(
+            "Debug UI diagnostic surface set. enabled=",
+            frame_renderer,
+        )
+        self.assertIn(
+            "diagnostic_surface_frame.registered_surface_count",
+            frame_renderer,
+        )
+        self.assertIn(
+            "diagnostic_surface_frame.render_elements",
+            frame_renderer,
+        )
+        self.assertNotIn(
+            "render_elements.clear();",
+            frame_renderer,
+        )
+
+        draw_start = frame_renderer.index(
+            "for (const auto& element :\n"
+            "         diagnostic_surface_frame.render_elements)"
+        )
+        draw_end = frame_renderer.index(
+            "for (const auto& health_bar", draw_start
+        )
+        self.assertIn(
+            "DrawObservedOverlayElement(",
+            frame_renderer[draw_start:draw_end],
+        )
+        native_overlay_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (LOADER_SOURCE / "debug_ui_overlay").glob("*.inl")
+        )
+        self.assertEqual(
+            native_overlay_source.count("DrawObservedOverlayElement("),
+            2,
+            "diagnostic elements gained a draw path outside the gated "
+            "definition and single registered-surface loop",
+        )
+
+    def test_native_picker_owner_never_gets_a_loader_choice_surface(self) -> None:
+        transport = read(
+            "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "public_cast_loot_api.inl"
+        )
+        function_start = transport.index(
+            "bool TryBuildLevelUpWaitStatusText("
+        )
+        function_end = transport.index("\n}", function_start)
+        function = transport[function_start:function_end]
+
+        self.assertNotIn("Choose your skill upgrade", function)
+        self.assertIn(
+            "g_local_transport.local_peer_id",
+            function,
+        )
+        self.assertIn(
+            "waiting_participant_ids.erase(",
+            function,
+        )
+        self.assertIn(
+            "BuildLevelUpWaitStatusTextFromIds(",
+            function,
+        )
+
     def test_one_reset_aware_state_block_owns_all_overlay_callbacks(self) -> None:
         hook = read("SolomonDarkModLoader/src/d3d9_end_scene_hook.cpp")
         all_native_source = "\n".join(

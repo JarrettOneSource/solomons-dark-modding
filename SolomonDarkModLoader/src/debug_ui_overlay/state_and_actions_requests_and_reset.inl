@@ -487,6 +487,10 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->font_device = nullptr;
     state->initialized = false;
     state->diagnostic_visuals_enabled = false;
+    state->diagnostic_surface_state_logged = false;
+    state->diagnostic_surface_state_enabled = false;
+    state->diagnostic_surface_registered_count = 0;
+    state->diagnostic_surface_rendered_count = 0;
     state->first_frame_logged = false;
     state->first_d3d_frame_logged = false;
     state->first_font_atlas_ready_logged = false;
