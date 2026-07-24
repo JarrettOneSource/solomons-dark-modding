@@ -9,28 +9,16 @@ struct CompleteWorldMotionSnapshotPacketState {
     std::vector<WorldActorMotionPacketState> actors;
 };
 
-struct PendingWorldMotionSnapshotAssembly {
-    std::uint64_t authority_participant_id = 0;
-    std::uint32_t scene_epoch = 0;
-    std::uint32_t run_nonce = 0;
-    std::uint32_t snapshot_id = 0;
-    WorldSceneKind scene_kind = WorldSceneKind::Unknown;
-    std::uint16_t fragment_count = 0;
-    std::uint16_t received_fragment_count = 0;
-    std::uint32_t actor_total_count = 0;
-    std::uint64_t first_received_ms = 0;
-    std::vector<std::uint8_t> received_fragments;
-    std::vector<WorldActorMotionPacketState> actors;
+struct WorldMotionSnapshotMergeState {
+    // Motion is disposable per fragment. Keep one identity-backed overlay so a
+    // missing fragment cannot withhold actors updated by the fragments received.
+    bool initialized = false;
+    std::uint32_t identity_snapshot_id = 0;
+    CompleteWorldSnapshotPacketState snapshot;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        last_snapshot_id_by_actor;
 };
 
-struct PendingWorldMotionSnapshotAssemblies {
-    bool has_completed_snapshot = false;
-    std::uint32_t last_completed_snapshot_id = 0;
-    std::deque<PendingWorldMotionSnapshotAssembly> assemblies;
-};
-
-constexpr std::size_t kPendingWorldMotionSnapshotAssemblyLimit = 8;
-constexpr std::uint64_t kPendingWorldMotionSnapshotAssemblyMaxAgeMs = 500;
 constexpr std::uint8_t kWorldActorMotionFlags =
     WorldActorSnapshotFlagDead |
     WorldActorSnapshotFlagTargetAuthoritative;
@@ -251,159 +239,6 @@ bool BuildWorldMotionSnapshotFragmentPackets(
     return true;
 }
 
-bool WorldMotionSnapshotFragmentMatchesPendingAssembly(
-    const WorldMotionSnapshotPacket& packet,
-    const PendingWorldMotionSnapshotAssembly& pending) {
-    return packet.authority_participant_id ==
-            pending.authority_participant_id &&
-        packet.scene_epoch == pending.scene_epoch &&
-        packet.run_nonce == pending.run_nonce &&
-        packet.snapshot_id == pending.snapshot_id &&
-        static_cast<WorldSceneKind>(packet.scene_kind) ==
-            pending.scene_kind &&
-        packet.fragment_count == pending.fragment_count &&
-        packet.actor_total_count == pending.actor_total_count;
-}
-
-void BeginPendingWorldMotionSnapshotAssembly(
-    const WorldMotionSnapshotPacket& packet,
-    std::uint64_t now_ms,
-    PendingWorldMotionSnapshotAssembly* pending) {
-    pending->authority_participant_id =
-        packet.authority_participant_id;
-    pending->scene_epoch = packet.scene_epoch;
-    pending->run_nonce = packet.run_nonce;
-    pending->snapshot_id = packet.snapshot_id;
-    pending->scene_kind =
-        static_cast<WorldSceneKind>(packet.scene_kind);
-    pending->fragment_count = packet.fragment_count;
-    pending->received_fragment_count = 0;
-    pending->actor_total_count = packet.actor_total_count;
-    pending->first_received_ms = now_ms;
-    pending->received_fragments.assign(
-        packet.fragment_count,
-        std::uint8_t{0});
-    pending->actors.assign(
-        packet.actor_total_count,
-        WorldActorMotionPacketState{});
-}
-
-void PrunePendingWorldMotionSnapshotAssemblies(
-    PendingWorldMotionSnapshotAssemblies* pending,
-    std::uint64_t now_ms) {
-    for (auto it = pending->assemblies.begin();
-         it != pending->assemblies.end();) {
-        if (now_ms < it->first_received_ms ||
-            now_ms - it->first_received_ms >
-                kPendingWorldMotionSnapshotAssemblyMaxAgeMs) {
-            it = pending->assemblies.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    while (pending->assemblies.size() >=
-           kPendingWorldMotionSnapshotAssemblyLimit) {
-        pending->assemblies.pop_front();
-    }
-}
-
-bool TryAcceptWorldMotionSnapshotFragment(
-    const WorldMotionSnapshotPacket& packet,
-    std::uint64_t now_ms,
-    PendingWorldMotionSnapshotAssemblies* pending,
-    CompleteWorldMotionSnapshotPacketState* out_snapshot) {
-    if (pending == nullptr ||
-        out_snapshot == nullptr ||
-        !IsValidWorldMotionSnapshotFragmentMetadata(packet)) {
-        return false;
-    }
-    *out_snapshot = {};
-    PrunePendingWorldMotionSnapshotAssemblies(
-        pending,
-        now_ms);
-
-    if (pending->has_completed_snapshot &&
-        !IsPacketSequenceNewer(
-            packet.snapshot_id,
-            pending->last_completed_snapshot_id)) {
-        return false;
-    }
-
-    auto assembly = std::find_if(
-        pending->assemblies.begin(),
-        pending->assemblies.end(),
-        [&](const PendingWorldMotionSnapshotAssembly& candidate) {
-            return candidate.snapshot_id == packet.snapshot_id;
-        });
-    if (assembly == pending->assemblies.end()) {
-        pending->assemblies.emplace_back();
-        assembly = std::prev(pending->assemblies.end());
-        BeginPendingWorldMotionSnapshotAssembly(
-            packet,
-            now_ms,
-            &*assembly);
-    } else if (!WorldMotionSnapshotFragmentMatchesPendingAssembly(
-                   packet,
-                   *assembly)) {
-        return false;
-    }
-
-    if (assembly->received_fragments[packet.fragment_index] != 0) {
-        return false;
-    }
-
-    const auto actor_start =
-        static_cast<std::size_t>(packet.actor_start_index);
-    for (std::uint16_t actor_index = 0;
-         actor_index < packet.actor_count;
-         ++actor_index) {
-        assembly->actors[actor_start + actor_index] =
-            packet.actors[actor_index];
-    }
-    assembly->received_fragments[packet.fragment_index] = 1;
-    ++assembly->received_fragment_count;
-    if (assembly->received_fragment_count !=
-        assembly->fragment_count) {
-        return false;
-    }
-
-    std::unordered_set<std::uint64_t> actor_ids;
-    actor_ids.reserve(assembly->actors.size());
-    for (const auto& actor : assembly->actors) {
-        if (!IsValidWorldActorMotionPacketState(actor) ||
-            !actor_ids.insert(actor.network_actor_id).second) {
-            pending->assemblies.erase(assembly);
-            return false;
-        }
-    }
-
-    out_snapshot->authority_participant_id =
-        assembly->authority_participant_id;
-    out_snapshot->scene_epoch = assembly->scene_epoch;
-    out_snapshot->run_nonce = assembly->run_nonce;
-    out_snapshot->snapshot_id = assembly->snapshot_id;
-    out_snapshot->scene_kind = assembly->scene_kind;
-    out_snapshot->actors = std::move(assembly->actors);
-
-    const auto completed_snapshot_id =
-        assembly->snapshot_id;
-    pending->has_completed_snapshot = true;
-    pending->last_completed_snapshot_id =
-        completed_snapshot_id;
-    for (auto it = pending->assemblies.begin();
-         it != pending->assemblies.end();) {
-        if (it->snapshot_id == completed_snapshot_id ||
-            !IsPacketSequenceNewer(
-                it->snapshot_id,
-                completed_snapshot_id)) {
-            it = pending->assemblies.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    return true;
-}
-
 void ApplyWorldActorMotionPacketState(
     const WorldActorMotionPacketState& motion,
     WorldActorSnapshotPacketState* actor) {
@@ -448,45 +283,200 @@ void ApplyWorldActorMotionPacketState(
         motion.turn_undead_activation_scalar;
 }
 
-bool MergeWorldMotionSnapshotWithIdentity(
-    const CompleteWorldMotionSnapshotPacketState& motion,
+bool WorldMotionSnapshotMetadataMatchesIdentity(
+    const WorldMotionSnapshotPacket& motion,
+    const CompleteWorldSnapshotPacketState& identity) {
+    return
+        motion.authority_participant_id ==
+            identity.authority_participant_id &&
+        motion.scene_epoch == identity.scene_epoch &&
+        motion.run_nonce == identity.run_nonce &&
+        static_cast<WorldSceneKind>(motion.scene_kind) ==
+            WorldSceneKind::Run &&
+        identity.scene_kind == WorldSceneKind::Run &&
+        motion.actor_total_count == identity.actors.size();
+}
+
+void ResetWorldMotionSnapshotMergeState(
     const CompleteWorldSnapshotPacketState& identity,
-    CompleteWorldSnapshotPacketState* snapshot) {
-    if (snapshot == nullptr ||
-        motion.authority_participant_id !=
+    WorldMotionSnapshotMergeState* merge_state) {
+    merge_state->initialized = true;
+    merge_state->identity_snapshot_id =
+        identity.snapshot_id;
+    merge_state->snapshot = identity;
+    merge_state->last_snapshot_id_by_actor.clear();
+    merge_state->last_snapshot_id_by_actor.reserve(
+        identity.actors.size());
+    for (const auto& actor : identity.actors) {
+        merge_state->last_snapshot_id_by_actor.emplace(
+            actor.network_actor_id,
+            identity.snapshot_id);
+    }
+}
+
+void RefreshWorldMotionSnapshotIdentity(
+    const CompleteWorldSnapshotPacketState& identity,
+    WorldMotionSnapshotMergeState* merge_state) {
+    if (!merge_state->initialized ||
+        merge_state->snapshot.authority_participant_id !=
             identity.authority_participant_id ||
-        motion.scene_epoch != identity.scene_epoch ||
-        motion.run_nonce != identity.run_nonce ||
-        motion.scene_kind != WorldSceneKind::Run ||
-        identity.scene_kind != WorldSceneKind::Run ||
-        motion.actors.size() != identity.actors.size()) {
+        merge_state->snapshot.scene_epoch !=
+            identity.scene_epoch ||
+        merge_state->snapshot.run_nonce != identity.run_nonce ||
+        merge_state->snapshot.scene_kind != identity.scene_kind) {
+        ResetWorldMotionSnapshotMergeState(
+            identity,
+            merge_state);
+        return;
+    }
+    if (merge_state->identity_snapshot_id ==
+        identity.snapshot_id) {
+        return;
+    }
+
+    std::unordered_map<
+        std::uint64_t,
+        const WorldActorSnapshotPacketState*> old_actors_by_id;
+    old_actors_by_id.reserve(
+        merge_state->snapshot.actors.size());
+    for (const auto& actor : merge_state->snapshot.actors) {
+        old_actors_by_id.emplace(
+            actor.network_actor_id,
+            &actor);
+    }
+
+    // A reliable identity checkpoint can arrive behind newer disposable
+    // motion. Refresh structural fields without regressing those actors.
+    CompleteWorldSnapshotPacketState refreshed = identity;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        refreshed_snapshot_ids;
+    refreshed_snapshot_ids.reserve(identity.actors.size());
+    for (auto& actor : refreshed.actors) {
+        const auto last_snapshot =
+            merge_state->last_snapshot_id_by_actor.find(
+                actor.network_actor_id);
+        const auto old_actor = old_actors_by_id.find(
+            actor.network_actor_id);
+        if (last_snapshot !=
+                merge_state->last_snapshot_id_by_actor.end() &&
+            old_actor != old_actors_by_id.end() &&
+            IsPacketSequenceNewer(
+                last_snapshot->second,
+                identity.snapshot_id)) {
+            const auto motion =
+                BuildWorldActorMotionPacketState(
+                    *old_actor->second);
+            ApplyWorldActorMotionPacketState(
+                motion,
+                &actor);
+            refreshed_snapshot_ids.emplace(
+                actor.network_actor_id,
+                last_snapshot->second);
+        } else {
+            refreshed_snapshot_ids.emplace(
+                actor.network_actor_id,
+                identity.snapshot_id);
+        }
+    }
+    if (IsPacketSequenceNewer(
+            merge_state->snapshot.snapshot_id,
+            refreshed.snapshot_id)) {
+        refreshed.snapshot_id =
+            merge_state->snapshot.snapshot_id;
+    }
+    merge_state->identity_snapshot_id =
+        identity.snapshot_id;
+    merge_state->snapshot = std::move(refreshed);
+    merge_state->last_snapshot_id_by_actor =
+        std::move(refreshed_snapshot_ids);
+}
+
+bool TryApplyWorldMotionSnapshotFragment(
+    const WorldMotionSnapshotPacket& packet,
+    const CompleteWorldSnapshotPacketState& identity,
+    WorldMotionSnapshotMergeState* merge_state,
+    CompleteWorldSnapshotPacketState* out_snapshot) {
+    if (merge_state == nullptr ||
+        out_snapshot == nullptr ||
+        !IsValidWorldMotionSnapshotFragmentMetadata(packet)) {
+        return false;
+    }
+    *out_snapshot = {};
+    if (!WorldMotionSnapshotMetadataMatchesIdentity(
+            packet,
+            identity)) {
         return false;
     }
 
-    *snapshot = identity;
-    snapshot->snapshot_id = motion.snapshot_id;
+    RefreshWorldMotionSnapshotIdentity(
+        identity,
+        merge_state);
     std::unordered_map<
         std::uint64_t,
         WorldActorSnapshotPacketState*> actors_by_id;
-    actors_by_id.reserve(snapshot->actors.size());
-    for (auto& actor : snapshot->actors) {
-        actors_by_id.emplace(actor.network_actor_id, &actor);
+    actors_by_id.reserve(
+        merge_state->snapshot.actors.size());
+    for (auto& actor : merge_state->snapshot.actors) {
+        actors_by_id.emplace(
+            actor.network_actor_id,
+            &actor);
     }
-    for (const auto& actor_motion : motion.actors) {
+
+    std::unordered_set<std::uint64_t> fragment_actor_ids;
+    fragment_actor_ids.reserve(packet.actor_count);
+    for (std::uint16_t actor_index = 0;
+         actor_index < packet.actor_count;
+         ++actor_index) {
+        const auto& motion = packet.actors[actor_index];
         const auto actor = actors_by_id.find(
-            actor_motion.network_actor_id);
+            motion.network_actor_id);
         if (actor == actors_by_id.end() ||
-            actor->second == nullptr) {
+            actor->second == nullptr ||
+            !fragment_actor_ids.insert(
+                motion.network_actor_id).second) {
             return false;
         }
-        ApplyWorldActorMotionPacketState(
-            actor_motion,
-            actor->second);
     }
-    return std::all_of(
-        snapshot->actors.begin(),
-        snapshot->actors.end(),
-        IsValidWorldSnapshotActorPacketState);
+
+    bool applied = false;
+    for (std::uint16_t actor_index = 0;
+         actor_index < packet.actor_count;
+         ++actor_index) {
+        const auto& motion = packet.actors[actor_index];
+        const auto actor = actors_by_id.find(
+            motion.network_actor_id);
+        auto& last_snapshot_id =
+            merge_state->last_snapshot_id_by_actor[
+                motion.network_actor_id];
+        if (last_snapshot_id != 0 &&
+            !IsPacketSequenceNewer(
+                packet.snapshot_id,
+                last_snapshot_id)) {
+            continue;
+        }
+        ApplyWorldActorMotionPacketState(
+            motion,
+            actor->second);
+        last_snapshot_id = packet.snapshot_id;
+        applied = true;
+    }
+    if (!applied) {
+        return false;
+    }
+    if (IsPacketSequenceNewer(
+            packet.snapshot_id,
+            merge_state->snapshot.snapshot_id)) {
+        merge_state->snapshot.snapshot_id =
+            packet.snapshot_id;
+    }
+    if (!std::all_of(
+            merge_state->snapshot.actors.begin(),
+            merge_state->snapshot.actors.end(),
+            IsValidWorldSnapshotActorPacketState)) {
+        return false;
+    }
+    *out_snapshot = merge_state->snapshot;
+    return true;
 }
 
 bool SameWorldActorIdentity(

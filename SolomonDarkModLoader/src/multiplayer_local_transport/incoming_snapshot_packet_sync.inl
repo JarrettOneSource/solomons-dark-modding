@@ -229,6 +229,7 @@ void ApplyWorldSnapshotPacket(
         complete_snapshot.scene_kind != WorldSceneKind::Run) {
         g_local_transport.have_latest_world_identity_snapshot =
             false;
+        g_local_transport.world_motion_snapshot_merge = {};
     }
     PublishWorldSnapshotRuntimeInfo(complete_snapshot, now_ms);
 }
@@ -249,20 +250,15 @@ void ApplyWorldMotionSnapshotPacket(
         from,
         packet.authority_participant_id,
         now_ms);
-    CompleteWorldMotionSnapshotPacketState motion_snapshot;
-    if (!TryAcceptWorldMotionSnapshotFragment(
-            packet,
-            now_ms,
-            &g_local_transport.pending_world_motion_snapshots,
-            &motion_snapshot) ||
-        !g_local_transport.have_latest_world_identity_snapshot) {
+    if (!g_local_transport.have_latest_world_identity_snapshot) {
         return;
     }
 
     CompleteWorldSnapshotPacketState complete_snapshot;
-    if (!MergeWorldMotionSnapshotWithIdentity(
-            motion_snapshot,
+    if (!TryApplyWorldMotionSnapshotFragment(
+            packet,
             g_local_transport.latest_world_identity_snapshot,
+            &g_local_transport.world_motion_snapshot_merge,
             &complete_snapshot)) {
         return;
     }

@@ -299,7 +299,24 @@ void SendCastPacketToEndpoints(
     const CastPacket& packet,
     const std::vector<TransportPeerEndpoint>& endpoints) {
     for (const auto& endpoint : endpoints) {
-        SendPacketToEndpoint(packet, endpoint);
+        if (static_cast<CastInputPhase>(packet.input_phase) ==
+            CastInputPhase::Held) {
+            SendPacketToEndpoint(
+                packet,
+                endpoint,
+                SteamNetworkSendMode::UnreliableNoDelay);
+            continue;
+        }
+        // Input edges must bypass reliable-channel retransmission ordering, but
+        // the reliable copy still owns eventual convergence after packet loss.
+        SendPacketToEndpoint(
+            packet,
+            endpoint,
+            SteamNetworkSendMode::UnreliableNoDelay);
+        SendPacketToEndpoint(
+            packet,
+            endpoint,
+            SteamNetworkSendMode::ReliableNoNagle);
     }
     Log(
         "Multiplayer local cast sent. participant_id=" +

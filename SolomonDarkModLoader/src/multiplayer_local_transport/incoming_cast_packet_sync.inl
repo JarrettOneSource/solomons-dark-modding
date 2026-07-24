@@ -47,7 +47,6 @@ void ApplyRemoteCastPacket(
     }
 
     UpsertPeerEndpoint(from, packet.participant_id, now_ms);
-    RelayPacketToPeers(packet, from);
 
     const auto last_sequence_it =
         g_local_transport.last_cast_sequence_by_participant.find(packet.participant_id);
@@ -76,6 +75,7 @@ void ApplyRemoteCastPacket(
     }
     input_tracker.last_packet_sequence = packet.header.sequence;
     input_tracker.last_packet_ms = now_ms;
+    RelayCastPacketToPeers(packet, from);
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* participant = FindParticipant(runtime_state, packet.participant_id);

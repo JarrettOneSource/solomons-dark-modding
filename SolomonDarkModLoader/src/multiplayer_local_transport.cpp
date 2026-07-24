@@ -962,8 +962,8 @@ struct LocalTransportState {
     bool have_last_sent_wave_summary = false;
     WaveSummaryPacket last_sent_wave_summary;
     PendingWorldSnapshotAssemblies pending_world_snapshots;
-    PendingWorldMotionSnapshotAssemblies
-        pending_world_motion_snapshots;
+    WorldMotionSnapshotMergeState
+        world_motion_snapshot_merge;
     bool have_latest_world_identity_snapshot = false;
     CompleteWorldSnapshotPacketState
         latest_world_identity_snapshot;

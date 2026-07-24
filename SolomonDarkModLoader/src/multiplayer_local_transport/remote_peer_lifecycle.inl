@@ -262,7 +262,7 @@ void ResetRemoteParticipantSessionEpoch(
         g_local_transport.have_latest_world_identity_snapshot =
             false;
         g_local_transport.latest_world_identity_snapshot = {};
-        g_local_transport.pending_world_motion_snapshots = {};
+        g_local_transport.world_motion_snapshot_merge = {};
     }
 
     Log(

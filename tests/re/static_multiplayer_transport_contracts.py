@@ -182,6 +182,14 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_packet_sync.inl"
     )
+    outgoing_cast = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_cast_packet_sync.inl"
+    )
+    incoming_cast = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_cast_packet_sync.inl"
+    )
     incoming = read_source_units(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_packet_sync.inl",
@@ -205,6 +213,13 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     large_world_verifier = _read(
         "tools/verify_steam_friend_large_enemy_sync.py"
     )
+    organic_verifier = _read(
+        "tools/verify_multiplayer_organic_enemy_cast_timing.py"
+    )
+    motion_native_test = _read(
+        "tests/native/world_motion_fragment_merge_tests.cpp"
+    )
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
         "constexpr std::uint16_t kProtocolVersion = 82;",
@@ -252,8 +267,9 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         assert token in outgoing, f"run-world split send path lacks: {token}"
     for token in (
         "ApplyWorldMotionSnapshotPacket(",
-        "TryAcceptWorldMotionSnapshotFragment(",
-        "MergeWorldMotionSnapshotWithIdentity(",
+        "TryApplyWorldMotionSnapshotFragment(",
+        "WorldMotionSnapshotMergeState",
+        "last_snapshot_id_by_actor",
     ):
         assert token in incoming, f"run-world split receive path lacks: {token}"
     for function_name in (
@@ -270,7 +286,51 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         assert "!IsConfiguredRemoteAuthorityEndpoint(from)" in authority_guard.group(0), (
             f"{function_name} accepts packets outside the configured authority endpoint"
         )
-    assert "pending_world_motion_snapshots" in lifecycle
+    assert "world_motion_snapshot_merge" in lifecycle
+    assert "pending_world_motion_snapshots" not in transport
+    for token in (
+        "MissingFragmentsDoNotWithholdOtherEnemies",
+        "TryApplyWorldMotionSnapshotFragment(",
+        "later fragment could not independently update enemies",
+        "out-of-order fragment regressed enemy motion",
+    ):
+        assert token in motion_native_test, (
+            f"partial world-motion merge regression lacks: {token}"
+        )
+    for token in (
+        "tests/native/world_motion_fragment_merge_tests.cpp",
+        "tests.test_multiplayer_organic_enemy_cast_timing_verifier",
+    ):
+        assert token in workflow, (
+            f"protocol-82 regression is not wired into CI: {token}"
+        )
+    cast_send = outgoing_cast[
+        outgoing_cast.index("void SendCastPacketToEndpoints(") :
+        outgoing_cast.index("bool SendLocalEnemyDamageClaim(")
+    ]
+    _require_in_order(
+        cast_send,
+        "SteamNetworkSendMode::UnreliableNoDelay",
+        "SteamNetworkSendMode::ReliableNoNagle",
+    )
+    _require_in_order(
+        incoming_cast,
+        "input_tracker.last_packet_sequence = packet.header.sequence;",
+        "RelayCastPacketToPeers(packet, from);",
+    )
+    for token in (
+        "MINIMUM_LIVE_ENEMIES = 6",
+        "MAXIMUM_CLIENT_ARRIVAL_GAP_MS = 300.0",
+        "AIR_SKILL_ID = 24",
+        "MAXIMUM_CAST_START_LATENCY_MS = 150.0",
+        "MAXIMUM_CAST_STOP_LATENCY_MS = 150.0",
+        "analyze_enemy_sync(",
+        "analyze_air_cast_timing(",
+        "stop_game_processes(process_ids)",
+    ):
+        assert token in organic_verifier, (
+            f"organic enemy/Air timing acceptance gate lacks: {token}"
+        )
     for function_name in (
         "ApplyParticipantInventorySnapshotPacket",
         "ApplyParticipantProgressionBookSnapshotPacket",

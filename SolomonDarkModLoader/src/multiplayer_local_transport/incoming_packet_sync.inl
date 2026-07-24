@@ -67,6 +67,30 @@ void RelayPacketToPeers(
         SteamSendModeForPacket(packet));
 }
 
+void RelayCastPacketToPeers(
+    const CastPacket& packet,
+    const TransportPeerEndpoint& source) {
+    if (static_cast<CastInputPhase>(packet.input_phase) ==
+        CastInputPhase::Held) {
+        RelayPacketBufferToPeers(
+            &packet,
+            sizeof(packet),
+            source,
+            SteamNetworkSendMode::UnreliableNoDelay);
+        return;
+    }
+    RelayPacketBufferToPeers(
+        &packet,
+        sizeof(packet),
+        source,
+        SteamNetworkSendMode::UnreliableNoDelay);
+    RelayPacketBufferToPeers(
+        &packet,
+        sizeof(packet),
+        source,
+        SteamNetworkSendMode::ReliableNoNagle);
+}
+
 bool IsConfiguredRemoteAuthorityEndpoint(const TransportPeerEndpoint& from) {
     return g_local_transport.configured_remote_valid &&
            SameEndpoint(from, g_local_transport.configured_remote);

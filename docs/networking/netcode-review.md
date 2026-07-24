@@ -39,7 +39,7 @@ compile-time sizes live in
 | Loot snapshot | variable | 250 ms; 50 ms while animated | UnreliableNoDelay |
 | Native spell effects | 32 B + 124 B/effect | one coalesced generation per 16 ms tick | UnreliableNoDelay |
 | Lua mod state | variable fragments | 5,000 ms checkpoint | ReliableNoNagle |
-| Cast input | 128 B | held update every 50 ms | held unreliable; press/release reliable |
+| Cast input | 128 B | held update every 50 ms | held unreliable; press/release immediate unreliable plus reliable convergence |
 
 The world-motion budget is 96 KiB/s, auxiliary snapshots use 48 KiB/s, and
 reliable world-identity checkpoints use 24 KiB/s. The limiter increases a
@@ -62,15 +62,61 @@ Run actors now use two packet families:
   and as a convergence checkpoint.
 - `WorldMotionSnapshot` is the hot record. Its 92-byte actor rows carry network
   identity, target, transform, health, animation, locomotion, and transient
-  status. A receiver accepts a complete generation only after bounded fragment
-  validation, then merges it with the most recent full identity generation.
+  status. Each validated fragment independently updates the matching actors in
+  a rolling identity-backed snapshot. Per-actor generation checks prevent a
+  late fragment from regressing newer motion.
 
 Shared-hub NPCs retain the full snapshot path because their rich presentation
 identity is part of the state being animated and their actor count is small.
 
-Both families retain generation-consistent fragment assembly and reject stale
-or mixed scene/run timelines. A motion generation without a matching full
-identity generation cannot invent an actor.
+Structural snapshots retain generation-consistent fragment assembly. Disposable
+motion fragments reject stale actors and mixed scene/run timelines individually;
+a motion fragment without a matching full identity cannot invent an actor.
+
+## Protocol-82 regression follow-up — 2026-07-24
+
+### Test gap
+
+The original acceptance matrix used scripted single-enemy damage probes, final
+pose convergence, and eventual Fire cast release. It never sampled sustained
+organic combat with enough live enemies to fragment a motion generation, and it
+never timestamped the start and stop edges of a short client-owned Air
+(Lightning) cast. Green results from that matrix therefore did not cover either
+reported regression.
+
+### Findings and correction
+
+- Multi-enemy state was neither corrupted nor routed through the 400 ms wave
+  summary lane. Run motion remained on its approximately 15 Hz disposable lane,
+  but the receiver withheld an entire generation until every motion fragment
+  arrived. Losing one fragment from a two-or-more-fragment organic generation
+  discarded useful updates for all other enemies and produced long client
+  stalls. The receiver now applies each validated fragment immediately to its
+  matching actor subset. A rolling identity-backed snapshot retains the newest
+  state for actors in other fragments, and per-actor snapshot IDs reject late
+  regressions.
+- Cast input was not coalesced with participant frames or wave summaries.
+  Press and release were one-shot `ReliableNoNagle` messages on Steam channel
+  zero, so either edge could wait behind retransmission of a fragmented
+  structural checkpoint. Held input and Air terminal frames used the
+  low-latency lane, but an Air terminal frame did not release the remote native
+  input lifecycle. Press and release now send an immediate
+  `UnreliableNoDelay` copy before the reliable convergence copy. Receivers
+  deduplicate the shared packet sequence before playback and relay, preserving
+  one semantic edge without a retry timer.
+- Participant-frame slimming, the change-driven/400 ms wave summary, and the
+  variable level-up barrier are not on either failing application path and were
+  retained.
+
+The isolated pre-fix organic loopback sample reached a 704 ms client motion
+arrival gap and 65.756 units of native-clone error even though every completed
+authoritative payload matched the host. After partial-fragment application, the
+same live gate held at 125 ms maximum arrival gap, 26.313 units maximum clone
+error, zero authoritative position/HP/state error, and 12–16 simultaneously
+compared moving enemies. Both players took real enemy damage. The 12-frame
+client Air cast reached the host in 24 ms, stopped there 16 ms after client
+release, differed in observed duration by 8 ms, and completed 22 ms after
+release.
 
 ## Interpolation and correction
 
@@ -166,3 +212,15 @@ suite checks the packet split, send modes, authority validation, project
 membership, and documentation contracts. The normal Windows loader build keeps
 all packet `static_assert` sizes enforced by MSVC, while CI also compiles and
 runs the native runtime-state regression on Linux.
+
+`tests/native/world_motion_fragment_merge_tests.cpp` drops alternating fragments
+from 12-actor generations and proves that received enemy subsets advance while
+untouched actors remain stable; it also rejects a late fragment without
+regression. `tools/verify_multiplayer_organic_enemy_cast_timing.py` is the live
+two-instance loopback gate. It requires at least six natural enemies and four
+moving enemies, bounds host/client authoritative and client-native position,
+HP, animation, target, and arrival-gap measurements throughout organic combat,
+and confirms that enemies actually damage a player. The same run casts client
+Air for 12 frames and requires both host-observed start and stop within 150 ms,
+host/client duration error within 100 ms, and native completion within 250 ms
+of the client release.

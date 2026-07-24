@@ -44,6 +44,17 @@ jobs:
           tests/native/multiplayer_runtime_state_tests.cpp
           -o /tmp/multiplayer-runtime-state-tests
           && /tmp/multiplayer-runtime-state-tests
+      - name: Test partial multi-enemy motion fragments
+        run: >-
+          g++ -std=c++17
+          -ISolomonDarkModLoader/include
+          tests/native/world_motion_fragment_merge_tests.cpp
+          -o /tmp/world-motion-fragment-merge-tests
+          && /tmp/world-motion-fragment-merge-tests
+      - name: Test organic enemy and Air timing verifier
+        run: >-
+          python -m unittest
+          tests.test_multiplayer_organic_enemy_cast_timing_verifier
       - name: Test isolated local multiplayer cleanup
         run: python -m unittest tests.test_local_multiplayer_process_isolation
       - name: Test Lua multiplayer net verifier
