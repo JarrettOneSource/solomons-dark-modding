@@ -12,6 +12,12 @@
     <ProjectReference Include="..\..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJoinUri.cs"
              Link="LauncherJoinUri.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherUiCommandMode.cs"
+             Link="LauncherUiCommandMode.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherUiCommandRouting.cs"
+             Link="LauncherUiCommandRouting.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\ViewModels\LobbyLaunchState.cs"
+             Link="LobbyLaunchState.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherCliResponse.cs"
              Link="LauncherCliResponse.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJsonResponseReader.cs"

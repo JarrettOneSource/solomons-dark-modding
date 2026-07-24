@@ -18,6 +18,7 @@ internal sealed class SteamManualDispatchSession : IDisposable
     private SteamManualDispatchRunFrame? runFrame_;
     private SteamManualDispatchGetNextCallback? getNextCallback_;
     private SteamManualDispatchFreeLastCallback? freeLastCallback_;
+    private SteamManualDispatchGetApiCallResult? getApiCallResult_;
     private bool initialized_;
 
     public SteamManualDispatchSession(string steamApiPath, string appId)
@@ -42,6 +43,8 @@ internal sealed class SteamManualDispatchSession : IDisposable
                 "SteamAPI_ManualDispatch_GetNextCallback");
             freeLastCallback_ = Load<SteamManualDispatchFreeLastCallback>(
                 "SteamAPI_ManualDispatch_FreeLastCallback");
+            getApiCallResult_ = Load<SteamManualDispatchGetApiCallResult>(
+                "SteamAPI_ManualDispatch_GetAPICallResult");
 
             var previousAppId = Environment.GetEnvironmentVariable("SteamAppId");
             var previousGameId = Environment.GetEnvironmentVariable("SteamGameId");
@@ -116,6 +119,48 @@ internal sealed class SteamManualDispatchSession : IDisposable
         }
     }
 
+    public bool TryGetApiCallResult(
+        ulong apiCall,
+        int callbackId,
+        int parameterSize,
+        out byte[] result)
+    {
+        if (!initialized_ || getApiCallResult_ is null)
+        {
+            throw new ObjectDisposedException(nameof(SteamManualDispatchSession));
+        }
+        if (apiCall == 0 || parameterSize <= 0 || parameterSize > 1024)
+        {
+            result = [];
+            return false;
+        }
+
+        var buffer = Marshal.AllocHGlobal(parameterSize);
+        try
+        {
+            var succeeded = getApiCallResult_(
+                Pipe,
+                apiCall,
+                buffer,
+                parameterSize,
+                callbackId,
+                out var failed);
+            if (!succeeded || failed != 0)
+            {
+                result = [];
+                return false;
+            }
+
+            result = new byte[parameterSize];
+            Marshal.Copy(buffer, result, 0, parameterSize);
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     public void Dispose()
     {
         if (initialized_)
@@ -154,6 +199,16 @@ internal sealed class SteamManualDispatchSession : IDisposable
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void SteamManualDispatchFreeLastCallback(int pipe);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool SteamManualDispatchGetApiCallResult(
+        int pipe,
+        ulong apiCall,
+        nint callback,
+        int callbackSize,
+        int expectedCallbackId,
+        out byte failed);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nint SteamInterfaceAccessor();

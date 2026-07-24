@@ -16,8 +16,9 @@ credentials.
   ready, share the Lobby ID, or use the website listing.
 - A Release join launch initializes Steam under AppID 3362180, enters the requested
   lobby, and completes the host compatibility handshake. The desktop launcher
-  listens for accepted Steam invitations while it is open and launches this
-  join path automatically.
+  listens for accepted Steam invitations while it is open, prepares the host's
+  mods, and joins the lobby without starting the game. The player starts this
+  join launch explicitly with **Launch Game**.
 - Protocol v65 statically covers lobby membership checks, host ownership,
   compatibility handshake, authenticated gameplay routing, goodbye/timeout
   cleanup, automatic re-handshake after silent route loss, and no host
@@ -160,8 +161,11 @@ selected local slot, and only then uploads the backup.
 The host launcher displays its lobby ID after `LobbyReady`. The CLI reports the
 same value at `launch.multiplayerSession.lobbyId`, and the host loader log
 records it after `Steam multiplayer lobby ready`. Share it privately, paste it
-into the joining launcher, and click **Join Lobby ID**. The join does not report
-success until the host compatibility handshake authenticates.
+into the joining launcher, and click **Join Game**. The launcher checks and
+prepares the host's mods, joins the Steam lobby, and changes the button to
+**Launch Game** without starting Solomon Dark. Click **Launch Game** when ready;
+the in-game join does not report success until the host compatibility handshake
+authenticates.
 
 The website lists public lobbies and the friends-only lobbies that the signed-in
 Steam user can enter. A lobby appears after its host reaches the hub. Its

@@ -14,6 +14,11 @@ internal static class LauncherApplication
             return inviteListenerExitCode;
         }
 
+        if (SteamLobbySession.TryRun(args, out var lobbySessionExitCode))
+        {
+            return lobbySessionExitCode;
+        }
+
         if (LobbyDirectoryPublisher.TryRun(args, out var publisherExitCode))
         {
             return publisherExitCode;

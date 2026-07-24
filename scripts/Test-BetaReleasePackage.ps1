@@ -260,7 +260,7 @@ try {
             '^Enabled mods: \d+ of ' + [regex]::Escape([string]$result.modCount) + '$'
         $requiredMultiplayerActions = @(
             "Host Game",
-            "Join Lobby ID",
+            "Join Game",
             "Play Solo",
             "How to Play",
             "Settings"

@@ -806,11 +806,20 @@ def test_packaged_ui_does_not_inherit_test_world_overrides() -> str:
     return "desktop launches cannot inherit test-only Boneyard or wave overrides"
 
 
-def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
+def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str:
     parser = _read("SolomonDarkModLauncher/src/Commands/LauncherCommandParser.cs")
     listener = _read("SolomonDarkModLauncher/src/Steam/SteamInviteListener.cs")
     listener_client = _read(
         "SolomonDarkModLauncher.UI/src/Infrastructure/SteamInviteListenerClient.cs"
+    )
+    lobby_client = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/SteamLobbySessionClient.cs"
+    )
+    lobby_session = _read(
+        "SolomonDarkModLauncher/src/Steam/SteamLobbySession.cs"
+    )
+    command_routing = _read(
+        "SolomonDarkModLauncher.UI/src/Infrastructure/LauncherUiCommandRouting.cs"
     )
     view_model = _read(
         "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
@@ -846,13 +855,58 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
     for token in (
         "pendingLobbyJoinId_",
         "QueueLobbyJoin(acceptedLobbyId)",
-        "TryLaunchPendingLobbyJoin",
+        "TryStartPendingLobbyJoin",
         "The launcher joins lobby",
-        "LauncherUiCommandMode.JoinSteam",
+        "LauncherUiCommandMode.PrepareSteamJoin",
+        "LauncherUiCommandMode.LaunchSteamJoin",
+        "LobbyLaunchState",
+        "PrimaryButtonText",
+        "StartSteamLobbyMembership",
+        "LeaveLobbyCommand",
         "DescribeLobbyConnection",
         "response.Stage?.StageRoot",
     ):
-        assert token in view_model, f"launcher auto-join flow lacks: {token}"
+        assert token in view_model, f"launcher manual-launch flow lacks: {token}"
+    for token in (
+        "__join-steam-lobby",
+        "NotificationReceived",
+        "Environment.ProcessId",
+    ):
+        assert token in lobby_client, f"launcher lobby client lacks: {token}"
+    for token in (
+        "SteamAPI_ISteamMatchmaking_JoinLobby",
+        "SteamAPI_ISteamMatchmaking_LeaveLobby",
+        "SteamAPI_ISteamMatchmaking_GetLobbyOwner",
+        "SteamAPI_ISteamMatchmaking_GetNumLobbyMembers",
+        "SteamAPI_ISteamMatchmaking_GetLobbyMemberByIndex",
+        "Task.Run(Console.In.ReadLine)",
+        '"hostDeparted"',
+        '"disconnected"',
+    ):
+        assert token in lobby_session, f"launcher lobby membership lacks: {token}"
+    assert "Console.In.ReadLineAsync()" not in lobby_session, (
+        "the lobby helper can block its Steam callback pump while waiting for Leave"
+    )
+    for token in (
+        "LauncherUiCommandMode.PrepareSteamJoin => \"stage\"",
+        "LauncherUiCommandMode.LaunchSteamJoin => \"launch\"",
+    ):
+        assert token in command_routing, f"launcher join routing lacks: {token}"
+    preview_start = view_model.index(
+        "private async Task JoinLobbyWithModCheckAsync"
+    )
+    preview_end = view_model.index(
+        "private void ConfirmModDownload", preview_start
+    )
+    preview_flow = view_model[preview_start:preview_end]
+    assert "LauncherUiCommandMode.LaunchSteamJoin" not in preview_flow, (
+        "join preview still launches the game before explicit Launch Game"
+    )
+    _require_in_order(
+        preview_flow,
+        "LauncherUiCommandMode.JoinPreview",
+        "PrepareLobbyJoinAsync(",
+    )
     assert 'Path.Combine(stageRootPath, ".sdmod", StatusFileName)' in status_reader
     assert "StageRuntimeRootPath" not in view_model[
         view_model.index("private void StartSteamSessionMonitoring"):
@@ -874,8 +928,8 @@ def test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery() -> str:
         assert token in native_status, f"native lobby status lacks: {token}"
 
     return (
-        "accepted Steam callbacks auto-launch lobby-ID joins, connection details "
-        "are visible, and website discovery begins only after a real hub state"
+        "accepted Steam callbacks prepare and join the lobby without launching "
+        "the game, while the existing host hub gate remains intact"
     )
 
 
@@ -935,7 +989,7 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
     for token in (
         "public void QueueLobbyJoin(ulong lobbyId)",
         "pendingLobbyJoinId_ = lobbyId;",
-        "TryLaunchPendingLobbyJoin();",
+        "TryStartPendingLobbyJoin();",
     ):
         assert token in view_model, f"unified pending lobby join lacks: {token}"
     _require_in_order(
@@ -967,7 +1021,8 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
             "SolomonDarkModLauncher/src/Mods/LobbyModSynchronizer.cs"
         ), f"automatic P2P mod sync lacks offline fallback: {token}"
     for token in (
-        "preservePendingLobbyMods: mode == LauncherUiCommandMode.JoinSteam",
+        "preservePendingLobbyMods:",
+        "mode == LauncherUiCommandMode.PrepareSteamJoin",
         "if (!preservePendingLobbyMods)",
     ):
         assert token in view_model, (
@@ -978,7 +1033,7 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         view_model.index("private async Task MonitorGameProcessExitAsync") :
         view_model.index("private void StartSteamSessionMonitoring")
     ]
-    assert "TryLaunchPendingLobbyJoin();" in process_exit_monitor, (
+    assert "TryStartPendingLobbyJoin();" in process_exit_monitor, (
         "a website lobby link queued during gameplay is not retried after exit"
     )
     for token in (

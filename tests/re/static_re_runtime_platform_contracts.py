@@ -700,7 +700,7 @@ def test_launcher_saves_are_isolated_link_gated_and_proton_persisted() -> str:
 
     host_start = command_client_text.find("case LauncherUiCommandMode.HostSteam:")
     host_end = command_client_text.find(
-        "case LauncherUiCommandMode.JoinSteam:", host_start)
+        "case LauncherUiCommandMode.PrepareSteamJoin:", host_start)
     host_body = command_client_text[host_start:host_end]
     if host_start == -1 or host_end == -1 or '"--no-invite-dialog"' not in host_body:
         raise StaticReTestFailure(

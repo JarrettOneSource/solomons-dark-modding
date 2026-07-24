@@ -4,7 +4,8 @@ internal enum LauncherUiCommandMode
 {
     LaunchSinglePlayer,
     HostSteam,
-    JoinSteam,
+    PrepareSteamJoin,
+    LaunchSteamJoin,
     JoinPreview,
     Stage,
     ListMods,

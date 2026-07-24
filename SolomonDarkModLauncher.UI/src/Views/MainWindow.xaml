@@ -194,7 +194,7 @@
                                 Padding="8,10"
                                 Style="{StaticResource PrimaryButtonStyle}" />
                         <Button Command="{Binding JoinSteamCommand}"
-                                Content="Join Lobby ID"
+                                Content="{Binding JoinGameButtonText}"
                                 Margin="4,4"
                                 Padding="8,10"
                                 Style="{StaticResource OutlineButtonStyle}" />
@@ -247,6 +247,23 @@
                 </Border.Style>
                 <StackPanel>
                     <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding LeaveLobbyCommand}"
+                                Content="Leave Lobby"
+                                Margin="12,0,0,0"
+                                Padding="10,4">
+                            <Button.Style>
+                                <Style TargetType="Button"
+                                       BasedOn="{StaticResource OutlineButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CanLeaveLobby}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                         <TextBlock DockPanel.Dock="Right"
                                    Margin="12,0,0,0"
                                    VerticalAlignment="Center"
@@ -816,7 +833,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Select the lobby on the website, join through Steam, or use a Lobby ID.&#x0a;2. Pick a loadout.&#x0a;3. Enter the hub."
+                               Text="1. Select the lobby on the website, join through Steam, or enter a Lobby ID and click Join Game.&#x0a;2. Confirm any host mods, then click Launch Game.&#x0a;3. Pick a loadout and enter the hub."
                                TextWrapping="Wrap" />
 
                     <Button Margin="0,18,0,0"

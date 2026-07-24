@@ -135,7 +135,7 @@ from static_multiplayer_platform_contracts import (
     test_defense_probes_follow_host_damage_authority,
     test_explicit_blank_boneyard_removes_native_scenery_and_collision,
     test_host_run_exit_is_authoritative_and_self_correcting,
-    test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
+    test_launcher_accepts_steam_invites_without_auto_launching_the_game,
     test_native_local_player_keeps_stock_input_and_equipment_ownership,
     test_packaged_ui_uses_proton_compatible_launcher,
     test_packaged_ui_does_not_inherit_test_world_overrides,
@@ -623,8 +623,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_packaged_ui_does_not_inherit_test_world_overrides,
     ),
     (
-        "launcher auto-accepts Steam invites and hub-gates discovery",
-        test_launcher_auto_accepts_steam_invites_and_hub_gates_discovery,
+        "launcher joins Steam lobbies without auto-launching the game",
+        test_launcher_accepts_steam_invites_without_auto_launching_the_game,
     ),
     (
         "website lobby links register and route to the launcher",

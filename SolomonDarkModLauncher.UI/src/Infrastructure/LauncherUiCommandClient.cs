@@ -207,7 +207,7 @@ internal sealed class LauncherUiCommandClient
     {
         var arguments = new List<string>
         {
-            GetModeToken(mode),
+            LauncherUiCommandRouting.GetModeToken(mode),
             "--json",
             "--progress-json"
         };
@@ -262,7 +262,8 @@ internal sealed class LauncherUiCommandClient
                 arguments.Add((hostOptions?.MaxPlayers ?? 4).ToString());
                 arguments.Add("--no-invite-dialog");
                 break;
-            case LauncherUiCommandMode.JoinSteam:
+            case LauncherUiCommandMode.PrepareSteamJoin:
+            case LauncherUiCommandMode.LaunchSteamJoin:
                 arguments.Add("--multiplayer");
                 arguments.Add("join");
                 if (!string.IsNullOrWhiteSpace(lobbyId_))
@@ -290,22 +291,6 @@ internal sealed class LauncherUiCommandClient
         }
 
         return arguments;
-    }
-
-    private static string GetModeToken(LauncherUiCommandMode mode)
-    {
-        return mode switch
-        {
-            LauncherUiCommandMode.LaunchSinglePlayer => "launch",
-            LauncherUiCommandMode.HostSteam => "launch",
-            LauncherUiCommandMode.JoinSteam => "launch",
-            LauncherUiCommandMode.JoinPreview => "join-preview",
-            LauncherUiCommandMode.Stage => "stage",
-            LauncherUiCommandMode.ListMods => "list-mods",
-            LauncherUiCommandMode.EnableMod => "enable-mod",
-            LauncherUiCommandMode.DisableMod => "disable-mod",
-            _ => throw new InvalidOperationException($"Unsupported mode: {mode}")
-        };
     }
 
     private static string NormalizeInstanceName(string? instanceName)

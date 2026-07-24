@@ -13,6 +13,7 @@ using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
 using SolomonDarkModLauncher.Target;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.UI.ViewModels;
 using SolomonDarkModLauncher.Workspace;
 using SolomonDarkLauncherUpdater;
 
@@ -43,6 +44,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("cloud save archive integrity", TestCloudSaveArchiveIntegrityAsync),
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
+    ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
     ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync)
@@ -332,7 +334,7 @@ static Task TestMultiplayerQuickStartLaunchRoutingAsync()
             openInviteDialog: true));
     Require(
         join.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == "1",
-        "Join Game did not enable multiplayer quick start");
+        "explicit multiplayer join launch did not enable quick start");
 
     var disabled = MultiplayerLaunchEnvironment.Apply(
         host,
@@ -345,6 +347,47 @@ static Task TestMultiplayerQuickStartLaunchRoutingAsync()
     Require(
         disabled.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == string.Empty,
         "single-player launch did not clear multiplayer quick start");
+
+    return Task.CompletedTask;
+}
+
+static Task TestManualLobbyLaunchStateAsync()
+{
+    var state = new LobbyLaunchState();
+    Require(state.PrimaryButtonText == "Join Game", "pre-join button text changed");
+    Require(
+        state.PrimaryAction == LobbyPrimaryAction.JoinLobby,
+        "pre-join button no longer starts lobby membership");
+    Require(
+        LauncherUiCommandRouting.GetModeToken(
+            LauncherUiCommandMode.PrepareSteamJoin) == "stage",
+        "joining a lobby still routes through the game-launch command");
+    Require(
+        !LauncherUiCommandRouting.LaunchesGame(
+            LauncherUiCommandMode.PrepareSteamJoin),
+        "joining a lobby is still classified as a game launch");
+
+    state.MarkJoined(123);
+    Require(state.JoinedLobbyId == 123, "joined lobby identity was not retained");
+    Require(state.PrimaryButtonText == "Launch Game", "joined button did not become Launch Game");
+    Require(
+        state.PrimaryAction == LobbyPrimaryAction.LaunchGame,
+        "joined button does not explicitly launch the game");
+    Require(
+        LauncherUiCommandRouting.GetModeToken(
+            LauncherUiCommandMode.LaunchSteamJoin) == "launch",
+        "explicit Launch Game does not route through the game-launch command");
+    Require(
+        LauncherUiCommandRouting.LaunchesGame(
+            LauncherUiCommandMode.LaunchSteamJoin),
+        "explicit Launch Game is not classified as a game launch");
+
+    state.Reset();
+    Require(state.JoinedLobbyId is null, "leaving retained the old lobby identity");
+    Require(state.PrimaryButtonText == "Join Game", "leaving did not restore Join Game");
+    Require(
+        state.PrimaryAction == LobbyPrimaryAction.JoinLobby,
+        "disconnect did not restore the join action");
 
     return Task.CompletedTask;
 }

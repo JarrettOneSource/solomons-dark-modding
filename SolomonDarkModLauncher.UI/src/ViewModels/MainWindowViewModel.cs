@@ -21,6 +21,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly CloudSaveBackupCoordinator cloudSaveBackupCoordinator_;
     private readonly DiagnosticLogUploader diagnosticLogUploader_;
     private readonly SteamInviteListenerClient steamInviteListener_ = new();
+    private readonly SteamLobbySessionClient steamLobbySession_ = new();
+    private readonly LobbyLaunchState lobbyLaunchState_ = new();
     private readonly StringBuilder transcriptBuilder_ = new();
     private readonly CancellationTokenSource lifetimeCancellation_ = new();
     private LauncherCliResponse? lastResponse_;
@@ -82,6 +84,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string modDownloadPromptText_ = string.Empty;
     private string? consentedJoinStatusText_;
     private IReadOnlyList<string>? pendingLobbyMods_;
+    private bool isJoiningLobby_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -104,15 +107,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
         HowToPlayCommand = new RelayCommand(_ => IsHowToPlayOpen = true);
-        HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanLaunch());
+        HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanStartNewGame());
         JoinSteamCommand = new RelayCommand(
-            _ => JoinLobbyDirect(),
+            _ => ExecuteLobbyPrimaryAction(),
             _ => CanJoinLobbyId());
+        LeaveLobbyCommand = new RelayCommand(
+            _ => LeaveLobby(),
+            _ => CanLeaveLobby);
         LaunchSinglePlayerCommand = new RelayCommand(
             _ => _ = ExecuteActionAsync(
                 LauncherUiCommandMode.LaunchSinglePlayer,
                 "The launcher starts the game."),
-            _ => CanLaunch());
+            _ => CanStartNewGame());
         StageCommand = new RelayCommand(_ => _ = ExecuteActionAsync(LauncherUiCommandMode.Stage, "The launcher prepares the mods."), _ => CanLaunch());
         ApplyInstanceCommand = new RelayCommand(_ => _ = ApplyInstanceAsync(), _ => CanInteract());
         ChooseGameFolderCommand = new RelayCommand(_ => ChooseGameFolder(), _ => CanInteract());
@@ -154,6 +160,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             _ => IsLauncherUpdatePromptOpen && !IsBusy);
 
         steamInviteListener_.NotificationReceived += OnSteamInviteNotification;
+        steamLobbySession_.NotificationReceived += OnSteamLobbySessionNotification;
         steamInviteListener_.Start();
 
         UpdateLaunchPreview();
@@ -198,6 +205,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref isBusy_, value))
             {
                 OnPropertyChanged(nameof(HostButtonText));
+                OnPropertyChanged(nameof(CanLeaveLobby));
                 RaiseCommandStates();
             }
         }
@@ -260,7 +268,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public bool IsInLobby
     {
         get => isInLobby_;
-        private set => SetProperty(ref isInLobby_, value);
+        private set
+        {
+            if (SetProperty(ref isInLobby_, value))
+            {
+                OnPropertyChanged(nameof(CanLeaveLobby));
+            }
+        }
     }
 
     public string LobbyTitleText
@@ -545,6 +559,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public string HostButtonText => IsBusy ? "Wait" : "Host Game";
 
+    public string JoinGameButtonText => lobbyLaunchState_.PrimaryButtonText;
+
+    public bool CanLeaveLobby =>
+        lobbyLaunchState_.JoinedLobbyId.HasValue &&
+        activeGameProcessId_ == 0 &&
+        !IsBusy;
+
     public string ActiveSaveName
     {
         get => activeSaveName_;
@@ -606,6 +627,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public RelayCommand HowToPlayCommand { get; }
     public RelayCommand HostSteamCommand { get; }
     public RelayCommand JoinSteamCommand { get; }
+    public RelayCommand LeaveLobbyCommand { get; }
     public RelayCommand LaunchSinglePlayerCommand { get; }
     public RelayCommand StageCommand { get; }
     public RelayCommand ApplyInstanceCommand { get; }
@@ -640,10 +662,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool CanLaunch() =>
         CanInteract() && isGameReady_ && activeGameProcessId_ == 0;
 
+    private bool CanStartNewGame() =>
+        CanLaunch() &&
+        !isJoiningLobby_ &&
+        !lobbyLaunchState_.JoinedLobbyId.HasValue;
+
     private bool CanManageSaves() => CanInteractInSettings() && activeGameProcessId_ == 0;
 
     private bool CanJoinLobbyId() =>
-        CanLaunch() && ulong.TryParse(LobbyId, out var lobbyId) && lobbyId != 0;
+        CanLaunch() &&
+        !isJoiningLobby_ &&
+        (lobbyLaunchState_.JoinedLobbyId.HasValue ||
+         ulong.TryParse(LobbyId, out var lobbyId) && lobbyId != 0);
 
     private void ChooseGameFolder()
     {
@@ -848,28 +878,31 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         await ExecuteUiCommandAsync(mode, statusText);
     }
 
-    private async Task ExecuteUiCommandAsync(
+    private async Task<bool> ExecuteUiCommandAsync(
         LauncherUiCommandMode mode,
         string statusText,
         string? targetModId = null,
         LauncherHostOptions? hostOptions = null)
     {
-        var launchesGame = mode is LauncherUiCommandMode.HostSteam or
-            LauncherUiCommandMode.JoinSteam or
-            LauncherUiCommandMode.LaunchSinglePlayer;
+        var launchesGame = LauncherUiCommandRouting.LaunchesGame(mode);
         if (launchesGame)
         {
             StopSteamInviteListener();
         }
 
         if (mode is LauncherUiCommandMode.HostSteam or
-            LauncherUiCommandMode.JoinSteam or
+            LauncherUiCommandMode.PrepareSteamJoin or
             LauncherUiCommandMode.LaunchSinglePlayer or
             LauncherUiCommandMode.Stage)
         {
             StopSteamSessionMonitoring(
                 clearStatus: true,
-                preservePendingLobbyMods: mode == LauncherUiCommandMode.JoinSteam);
+                preservePendingLobbyMods:
+                    mode == LauncherUiCommandMode.PrepareSteamJoin);
+        }
+        else if (mode == LauncherUiCommandMode.LaunchSteamJoin)
+        {
+            StopSteamSessionMonitoring(clearStatus: false);
         }
 
         IsBusy = true;
@@ -895,8 +928,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 StartSteamInviteListener();
             }
-            TryLaunchPendingLobbyJoin();
-            return;
+            TryStartPendingLobbyJoin();
+            return false;
         }
 
         AppendTranscript(invocation);
@@ -915,8 +948,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 StartSteamInviteListener();
             }
-            TryLaunchPendingLobbyJoin();
-            return;
+            TryStartPendingLobbyJoin();
+            return false;
         }
 
         var modUpdateError = invocation.Response.ModUpdate?.Error;
@@ -960,7 +993,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 .Select(mod => $"{mod.Name} {mod.Version}")
                 .ToArray();
         }
-        if (mode is LauncherUiCommandMode.HostSteam or LauncherUiCommandMode.JoinSteam &&
+        if (mode is LauncherUiCommandMode.HostSteam or
+                LauncherUiCommandMode.LaunchSteamJoin &&
             multiplayer is not null)
         {
             StartSteamSessionMonitoring(invocation.Response, multiplayer);
@@ -970,6 +1004,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             activeGameProcessId_ = processId;
             OnPropertyChanged(nameof(HasActiveGame));
+            OnPropertyChanged(nameof(CanLeaveLobby));
             RaiseCommandStates();
             try
             {
@@ -1000,18 +1035,20 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             LauncherUiCommandMode.Stage => "Stage ready",
             LauncherUiCommandMode.LaunchSinglePlayer => "Game started",
             LauncherUiCommandMode.HostSteam => "Ready",
-            LauncherUiCommandMode.JoinSteam =>
+            LauncherUiCommandMode.PrepareSteamJoin =>
                 invocation.Response.LobbyModSync is { DownloadedModCount: > 0 } sync
                     ? $"Downloaded {sync.DownloadedModCount} host " +
                       (sync.DownloadedModCount == 1 ? "mod" : "mods") +
                       " from the website."
-                    : "Ready",
+                    : "Lobby prepared",
+            LauncherUiCommandMode.LaunchSteamJoin => "Game started",
             LauncherUiCommandMode.EnableMod => "Ready",
             LauncherUiCommandMode.DisableMod => "Ready",
             _ => "Ready"
         };
         IsBusy = false;
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
+        return true;
     }
 
     private async Task MonitorGameProcessExitAsync(LauncherCliResponse response)
@@ -1082,6 +1119,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
             activeGameProcessId_ = 0;
             OnPropertyChanged(nameof(HasActiveGame));
+            OnPropertyChanged(nameof(CanLeaveLobby));
+            ClearSteamSessionStatus();
             UpdateActiveSaveSummary();
             RaiseCommandStates();
             StartSteamInviteListener();
@@ -1095,7 +1134,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 PresentCrashReport(crashReport);
             }
-            TryLaunchPendingLobbyJoin();
+            TryStartPendingLobbyJoin();
         });
     }
 
@@ -1144,7 +1183,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             pendingCrashReport_ = null;
             IsCrashPromptOpen = false;
             StatusText = $"Crash report {receipt.ReportId} was submitted. Thank you.";
-            TryLaunchPendingLobbyJoin();
+            TryStartPendingLobbyJoin();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1179,7 +1218,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         CrashSubmissionError = string.Empty;
         IsCrashPromptOpen = false;
         StatusText = "Crash report not sent.";
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
     }
 
     private async Task RefreshCloudAccountAsync(bool forceRefresh)
@@ -1380,6 +1419,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ClearLobbyDetails()
     {
+        isJoiningLobby_ = false;
+        lobbyLaunchState_.Reset();
+        OnPropertyChanged(nameof(JoinGameButtonText));
+        OnPropertyChanged(nameof(CanLeaveLobby));
         IsInLobby = false;
         LobbyTitleText = string.Empty;
         LobbyIdText = string.Empty;
@@ -1389,6 +1432,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         lobbyMembersSignature_ = string.Empty;
         LobbyMembers.Clear();
         LobbySharedMods.Clear();
+        RaiseCommandStates();
     }
 
     private void OpenHostSetup()
@@ -1452,7 +1496,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         client_.UseDirectLobbyJoin();
         LobbyId = lobbyId.ToString();
         pendingLobbyJoinId_ = lobbyId;
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
     }
 
     public void QueueWebsiteLobbyJoin(LauncherJoinActivation activation)
@@ -1461,7 +1505,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         LobbyId = activation.LobbyId.ToString();
         client_.UseWebsiteLobbyJoin(activation.DirectoryBaseUrl, activation.Ticket);
         pendingLobbyJoinId_ = activation.LobbyId;
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
     }
 
     public void OfferLauncherUpdate(string version)
@@ -1490,7 +1534,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         IsLauncherUpdatePromptOpen = false;
         StatusText = "Launcher update postponed.";
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
     }
 
     public void BeginLauncherUpdate(string version)
@@ -1522,7 +1566,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         SetError(message);
         IsBusy = false;
         StatusText = "The launcher update failed. You can keep using this version.";
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
+    }
+
+    private void ExecuteLobbyPrimaryAction()
+    {
+        if (lobbyLaunchState_.PrimaryAction == LobbyPrimaryAction.LaunchGame)
+        {
+            _ = LaunchJoinedLobbyAsync();
+            return;
+        }
+
+        JoinLobbyDirect();
     }
 
     private void JoinLobbyDirect()
@@ -1531,9 +1586,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         _ = JoinLobbyWithModCheckAsync($"The launcher joins lobby {LobbyId}.");
     }
 
-    private void TryLaunchPendingLobbyJoin()
+    private void TryStartPendingLobbyJoin()
     {
-        if (pendingLobbyJoinId_ is not { } lobbyId || !CanLaunch())
+        if (pendingLobbyJoinId_ is not { } lobbyId ||
+            !CanLaunch() ||
+            IsInLobby ||
+            isJoiningLobby_)
         {
             return;
         }
@@ -1577,7 +1635,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             StatusText = string.IsNullOrWhiteSpace(reason)
                 ? "The website has no mod list for this lobby. Joining with your current mods."
                 : $"Mod check unavailable ({reason.TrimEnd('.')}). Joining with your current mods.";
-            await ExecuteUiCommandAsync(LauncherUiCommandMode.JoinSteam, joinStatusText);
+            await PrepareLobbyJoinAsync(joinStatusText);
             return;
         }
 
@@ -1639,7 +1697,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         StatusText = preview.Mods.Count == 0
             ? "The host plays without mods."
             : "Your mods already match the host.";
-        await ExecuteUiCommandAsync(LauncherUiCommandMode.JoinSteam, joinStatusText);
+        await PrepareLobbyJoinAsync(joinStatusText);
     }
 
     private void ConfirmModDownload()
@@ -1653,9 +1711,186 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             $"The launcher joins lobby {LobbyId}.";
         consentedJoinStatusText_ = null;
         IsModDownloadPromptOpen = false;
-        _ = ExecuteUiCommandAsync(
-            LauncherUiCommandMode.JoinSteam,
-            joinStatusText);
+        _ = PrepareLobbyJoinAsync(joinStatusText);
+    }
+
+    private async Task PrepareLobbyJoinAsync(string joinStatusText)
+    {
+        if (!await ExecuteUiCommandAsync(
+                LauncherUiCommandMode.PrepareSteamJoin,
+                joinStatusText))
+        {
+            return;
+        }
+
+        StartSteamLobbyMembership();
+    }
+
+    private void StartSteamLobbyMembership()
+    {
+        if (!ulong.TryParse(LobbyId, out var lobbyId) || lobbyId == 0)
+        {
+            SetError("Enter a valid Steam lobby ID.");
+            StatusText = "The lobby was not joined.";
+            return;
+        }
+
+        isJoiningLobby_ = true;
+        OnPropertyChanged(nameof(CanLeaveLobby));
+        RaiseCommandStates();
+        StopSteamInviteListener();
+        StatusText = $"Connecting to lobby {lobbyId}…";
+        try
+        {
+            steamLobbySession_.Join(lobbyId);
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or
+            IOException or
+            System.ComponentModel.Win32Exception)
+        {
+            isJoiningLobby_ = false;
+            SetError(exception.Message);
+            StatusText = "The lobby was not joined.";
+            RaiseCommandStates();
+            StartSteamInviteListener();
+        }
+    }
+
+    private async Task LaunchJoinedLobbyAsync()
+    {
+        if (lobbyLaunchState_.JoinedLobbyId is not { } lobbyId || !CanLaunch())
+        {
+            return;
+        }
+
+        LobbyId = lobbyId.ToString();
+        steamLobbySession_.Leave();
+        StatusText = $"Launching game for lobby {lobbyId}…";
+        var launched = await ExecuteUiCommandAsync(
+            LauncherUiCommandMode.LaunchSteamJoin,
+            StatusText);
+        if (launched)
+        {
+            return;
+        }
+
+        ClearLobbyDetails();
+        StartSteamInviteListener();
+    }
+
+    private void LeaveLobby()
+    {
+        if (!CanLeaveLobby)
+        {
+            return;
+        }
+
+        steamLobbySession_.Leave();
+        pendingLobbyMods_ = null;
+        ClearLobbyDetails();
+        ClearError();
+        StatusText = "You left the lobby.";
+        StartSteamInviteListener();
+        TryStartPendingLobbyJoin();
+    }
+
+    private void OnSteamLobbySessionNotification(
+        object? sender,
+        SteamLobbySessionNotification notification)
+    {
+        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+            ApplySteamLobbySessionNotification(notification));
+    }
+
+    private void ApplySteamLobbySessionNotification(
+        SteamLobbySessionNotification notification)
+    {
+        if (notification.LobbyId is { } notificationLobbyId &&
+            ulong.TryParse(LobbyId, out var currentLobbyId) &&
+            currentLobbyId != notificationLobbyId)
+        {
+            return;
+        }
+
+        if (notification.Kind is "joined" or "status" &&
+            notification.LobbyId is { } lobbyId)
+        {
+            isJoiningLobby_ = false;
+            lobbyLaunchState_.MarkJoined(lobbyId);
+            OnPropertyChanged(nameof(JoinGameButtonText));
+            OnPropertyChanged(nameof(CanLeaveLobby));
+            UpdateLauncherLobbyDetails(notification);
+            ClearError();
+            StatusText =
+                $"Joined lobby {lobbyId}. Click Launch Game when you are ready.";
+            RaiseCommandStates();
+            return;
+        }
+
+        if (notification.Kind is not ("error" or "disconnected" or "hostDeparted"))
+        {
+            return;
+        }
+
+        steamLobbySession_.Leave();
+        isJoiningLobby_ = false;
+        pendingLobbyMods_ = null;
+        ClearLobbyDetails();
+        var message = string.IsNullOrWhiteSpace(notification.Error)
+            ? "The Steam lobby connection ended before launch."
+            : notification.Error;
+        SetError(message);
+        StatusText = message;
+        StartSteamInviteListener();
+        RaiseCommandStates();
+    }
+
+    private void UpdateLauncherLobbyDetails(
+        SteamLobbySessionNotification notification)
+    {
+        var host = notification.Members.FirstOrDefault(member => member.IsHost);
+        var hostName = host is null || string.IsNullOrWhiteSpace(host.Name)
+            ? "Remote Wizard"
+            : host.Name;
+        LobbyTitleText = $"{hostName}'s lobby";
+        LobbyIdText = $"Lobby {notification.LobbyId}";
+        LobbyPlayersLabel = notification.MaxParticipants > 0
+            ? $"Players: {notification.Members.Count} of {notification.MaxParticipants}"
+            : "Players";
+        var privacy = notification.Privacy switch
+        {
+            "public" => "Public",
+            "friendsOnly" => "Friends Only",
+            _ => "Steam Lobby"
+        };
+        LobbyConnectionDetailsText =
+            $"{privacy} · Joined · Game not launched";
+
+        var membersSignature = string.Join(
+            "\n",
+            notification.Members.Select(member =>
+                $"{member.SteamId}|{member.IsHost}|{member.IsLocal}|{member.Name}"));
+        if (membersSignature != lobbyMembersSignature_)
+        {
+            lobbyMembersSignature_ = membersSignature;
+            LobbyMembers.Clear();
+            foreach (var member in notification.Members)
+            {
+                LobbyMembers.Add(new LobbyMemberViewModel(member));
+            }
+        }
+
+        if (LobbySharedMods.Count == 0 &&
+            pendingLobbyMods_ is { Count: > 0 } sharedMods)
+        {
+            foreach (var sharedMod in sharedMods)
+            {
+                LobbySharedMods.Add(sharedMod);
+            }
+        }
+
+        IsInLobby = true;
     }
 
     private void DeclineModDownload()
@@ -1669,7 +1904,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         pendingLobbyMods_ = null;
         IsModDownloadPromptOpen = false;
         StatusText = "Join canceled. No mods were downloaded.";
-        TryLaunchPendingLobbyJoin();
+        TryStartPendingLobbyJoin();
     }
 
     private static string FormatSize(long bytes) => bytes switch
@@ -1686,7 +1921,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void StartSteamInviteListener()
     {
-        if (activeGameProcessId_ == 0)
+        if (activeGameProcessId_ == 0 &&
+            !isJoiningLobby_ &&
+            !lobbyLaunchState_.JoinedLobbyId.HasValue)
         {
             steamInviteListener_.Start();
         }
@@ -1737,6 +1974,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
         StopSteamSessionMonitoring(clearStatus: false);
         steamInviteListener_.NotificationReceived -= OnSteamInviteNotification;
+        steamLobbySession_.NotificationReceived -= OnSteamLobbySessionNotification;
+        steamLobbySession_.Dispose();
         steamInviteListener_.Dispose();
         lifetimeCancellation_.Dispose();
     }
@@ -1878,6 +2117,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RefreshCommand.RaiseCanExecuteChanged();
         HostSteamCommand.RaiseCanExecuteChanged();
         JoinSteamCommand.RaiseCanExecuteChanged();
+        LeaveLobbyCommand.RaiseCanExecuteChanged();
         LaunchSinglePlayerCommand.RaiseCanExecuteChanged();
         StageCommand.RaiseCanExecuteChanged();
         ApplyInstanceCommand.RaiseCanExecuteChanged();
