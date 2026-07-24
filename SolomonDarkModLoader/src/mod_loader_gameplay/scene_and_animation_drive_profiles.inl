@@ -71,6 +71,24 @@ void ClearLiveWizardActorAnimationDriveState(uintptr_t actor_address) {
         0);
 }
 
+bool RestoreWizardActorAliveRegistrationState(uintptr_t actor_address) {
+    if (actor_address == 0 ||
+        kActorGridMemberFlagOffset == 0 ||
+        kActorRenderSortBiasOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    return memory.TryWriteField<float>(
+               actor_address,
+               kActorRenderSortBiasOffset,
+               0.0f) &&
+           memory.TryWriteField<std::uint8_t>(
+               actor_address,
+               kActorGridMemberFlagOffset,
+               1);
+}
+
 void CaptureObservedPlayerAnimationDriveProfile(uintptr_t actor_address, bool moving_now) {
     ObservedActorAnimationDriveProfile profile;
     if (!CaptureActorAnimationDriveProfile(actor_address, &profile)) {

@@ -36,7 +36,9 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         kActorTerminalDispatchPendingOffset == 0 ||
         kActorTerminalDispatchCountdownOffset == 0 ||
         kActorAnimationDriveStateByteOffset == 0 ||
-        kActorAnimationMoveDurationTicksOffset == 0) {
+        kActorAnimationMoveDurationTicksOffset == 0 ||
+        kActorGridMemberFlagOffset == 0 ||
+        kActorRenderSortBiasOffset == 0) {
         return false;
     }
 
@@ -59,22 +61,24 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
                 actor_address,
                 kActorTerminalDispatchCountdownOffset,
                 0);
-        if (binding->native_remote_death_epoch_active) {
-            wrote =
-                memory.TryWriteField<std::uint8_t>(
-                    actor_address,
-                    kActorAnimationDriveStateByteOffset,
-                    0) &&
-                memory.TryWriteField<std::int32_t>(
-                    actor_address,
-                    kActorAnimationMoveDurationTicksOffset,
+        wrote =
+            memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorAnimationDriveStateByteOffset,
                 0) &&
-                wrote;
+            memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorAnimationMoveDurationTicksOffset,
+                0) &&
+            RestoreWizardActorAliveRegistrationState(actor_address) &&
+            wrote;
+        if (!wrote) {
+            return false;
         }
         binding->native_remote_death_epoch_active = false;
         binding->native_remote_death_attachment_actor_address = 0;
         binding->death_transition_stock_tick_seen = false;
-        return wrote;
+        return true;
     }
 
     if (!binding->native_remote_death_epoch_active) {

@@ -871,7 +871,7 @@ int LuaPlayerGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 62);
+    lua_createtable(state, 0, 65);
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(player_state.local_player_tick_count));
@@ -939,6 +939,10 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_subject_address");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.world_address));
     lua_setfield(state, -2, "world_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.grid_cell_address));
+    lua_setfield(state, -2, "grid_cell_address");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.progression_address));
     lua_setfield(state, -2, "progression_address");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.animation_state_ptr));
@@ -983,6 +987,10 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_drive_flags");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.render_subject_drive_flags));
     lua_setfield(state, -2, "render_subject_drive_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(player_state.grid_member_flag));
+    lua_setfield(state, -2, "grid_member_flag");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
     lua_pushinteger(state, static_cast<lua_Integer>(player_state.anim_drive_state_word));
@@ -1031,6 +1039,10 @@ int LuaPlayerGetState(lua_State* state) {
     lua_setfield(state, -2, "render_drive_overlay_alpha");
     lua_pushnumber(state, static_cast<lua_Number>(player_state.render_drive_move_blend));
     lua_setfield(state, -2, "render_drive_move_blend");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(player_state.render_sort_bias));
+    lua_setfield(state, -2, "render_sort_bias");
     lua_pushboolean(state, player_state.gameplay_attach_applied ? 1 : 0);
     lua_setfield(state, -2, "gameplay_attach_applied");
     PushEquipVisualLaneState(state, player_state.primary_visual_lane);
@@ -1180,7 +1192,7 @@ int LuaWorldGetState(lua_State* state) {
         return 1;
     }
 
-    lua_createtable(state, 0, 4);
+    lua_createtable(state, 0, 10);
     lua_pushinteger(state, static_cast<lua_Integer>(world_state.wave));
     lua_setfield(state, -2, "wave");
     lua_pushinteger(state, static_cast<lua_Integer>(world_state.enemy_count));
@@ -1189,6 +1201,24 @@ int LuaWorldGetState(lua_State* state) {
     lua_setfield(state, -2, "time_elapsed_ms");
     lua_pushnumber(state, static_cast<lua_Number>(world_state.time_elapsed_ms) / 1000.0);
     lua_setfield(state, -2, "time_elapsed");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(world_state.arena_address));
+    lua_setfield(state, -2, "arena_address");
+    lua_pushboolean(state, world_state.player_spawn_valid ? 1 : 0);
+    lua_setfield(state, -2, "player_spawn_valid");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(world_state.player_spawn_x));
+    lua_setfield(state, -2, "player_spawn_x");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(world_state.player_spawn_y));
+    lua_setfield(state, -2, "player_spawn_y");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(world_state.player_spawn_facing));
+    lua_setfield(state, -2, "player_spawn_facing");
     return 1;
 }
 

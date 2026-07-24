@@ -539,6 +539,10 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     }
     state->render_subject_address = actor_address;
     state->world_address = world_address;
+    (void)memory.TryReadField(
+        actor_address,
+        kActorGridCellPtrOffset,
+        &state->grid_cell_address);
     state->progression_address = progression_address;
     (void)memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &state->animation_state_ptr);
     (void)memory.TryReadField(actor_address, kActorRenderFrameTableOffset, &state->render_frame_table);
@@ -560,6 +564,10 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     state->resolved_animation_state_id = ResolveActorAnimationStateId(actor_address);
     (void)memory.TryReadField(actor_address, kActorHubVisualSourceKindOffset, &state->hub_visual_source_kind);
     (void)memory.TryReadField(actor_address, kActorRenderDriveFlagsOffset, &state->render_drive_flags);
+    (void)memory.TryReadField(
+        actor_address,
+        kActorGridMemberFlagOffset,
+        &state->grid_member_flag);
     (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state);
     (void)memory.TryReadField(actor_address, kActorAnimationDriveStateByteOffset, &state->anim_drive_state_word);
     (void)memory.TryReadField(actor_address, kActorRenderVariantPrimaryOffset, &state->render_variant_primary);
@@ -578,6 +586,10 @@ bool TryGetPlayerState(SDModPlayerState* state) {
     (void)TryReadFiniteFloatField(actor_address, kActorMagicShieldHitFlashOffset, &state->magic_shield_hit_flash);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveOverlayAlphaOffset, &state->render_drive_overlay_alpha);
     (void)TryReadFiniteFloatField(actor_address, kActorRenderDriveMoveBlendOffset, &state->render_drive_move_blend);
+    (void)TryReadFiniteFloatField(
+        actor_address,
+        kActorRenderSortBiasOffset,
+        &state->render_sort_bias);
     if (state->equip_runtime_state_address != 0) {
         state->primary_visual_lane = ReadEquipVisualLaneState(
             state->equip_runtime_state_address,
@@ -839,6 +851,24 @@ bool TryGetWorldState(SDModWorldState* state) {
     }
 
     state->valid = true;
+    state->arena_address = arena_address;
+    if (kArenaPlayerSpawnXOffset != 0 &&
+        kArenaPlayerSpawnYOffset != 0 &&
+        kArenaPlayerSpawnFacingOffset != 0 &&
+        TryReadFiniteFloatField(
+            arena_address,
+            kArenaPlayerSpawnXOffset,
+            &state->player_spawn_x) &&
+        TryReadFiniteFloatField(
+            arena_address,
+            kArenaPlayerSpawnYOffset,
+            &state->player_spawn_y) &&
+        TryReadFiniteFloatField(
+            arena_address,
+            kArenaPlayerSpawnFacingOffset,
+            &state->player_spawn_facing)) {
+        state->player_spawn_valid = true;
+    }
     state->wave = GetRunLifecycleCurrentWave();
     if (state->wave <= 0) {
         if (!ProcessMemory::Instance().TryReadField(

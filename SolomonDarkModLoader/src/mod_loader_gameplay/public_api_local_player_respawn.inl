@@ -33,7 +33,10 @@ bool TryRespawnLocalPlayerAt(
         kActorAnimationDriveStateByteOffset == 0 ||
         kActorAnimationMoveDurationTicksOffset == 0 ||
         kActorTerminalDispatchPendingOffset == 0 ||
-        kActorTerminalDispatchCountdownOffset == 0) {
+        kActorTerminalDispatchCountdownOffset == 0 ||
+        kActorGridCellPtrOffset == 0 ||
+        kActorGridMemberFlagOffset == 0 ||
+        kActorRenderSortBiasOffset == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "A live local run player with valid progression is required.";
@@ -117,6 +120,14 @@ bool TryRespawnLocalPlayerAt(
     }
 
     ClearLiveWizardActorAnimationDriveState(player.actor_address);
+    if (!RestoreWizardActorAliveRegistrationState(
+            player.actor_address)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The native corpse registration fields could not be restored.";
+        }
+        return false;
+    }
     std::string rebind_error;
     if (!RebindSceneActorCell(
             player.actor_address,
@@ -131,8 +142,12 @@ bool TryRespawnLocalPlayerAt(
 
     SDModPlayerState verified;
     std::uint8_t verified_terminal_pending = 1;
+    std::uint8_t verified_grid_member = 0;
     std::int32_t verified_terminal_countdown = -1;
     std::int32_t verified_death_presentation_ticks = -1;
+    uintptr_t verified_grid_cell = 0;
+    float verified_render_sort_bias =
+        (std::numeric_limits<float>::quiet_NaN)();
     constexpr float kRespawnReadbackTolerance = 0.05f;
     if (!TryGetPlayerState(&verified) ||
         !verified.valid ||
@@ -148,6 +163,18 @@ bool TryRespawnLocalPlayerAt(
             player.actor_address,
             kActorAnimationMoveDurationTicksOffset,
             &verified_death_presentation_ticks) ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorGridCellPtrOffset,
+            &verified_grid_cell) ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorGridMemberFlagOffset,
+            &verified_grid_member) ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorRenderSortBiasOffset,
+            &verified_render_sort_bias) ||
         verified.actor_address != player.actor_address ||
         std::abs(verified.hp - verified.max_hp) >
             kRespawnReadbackTolerance ||
@@ -160,7 +187,10 @@ bool TryRespawnLocalPlayerAt(
         verified.anim_drive_state != 0 ||
         verified_terminal_pending != 0 ||
         verified_terminal_countdown != 0 ||
-        verified_death_presentation_ticks != 0) {
+        verified_death_presentation_ticks != 0 ||
+        verified_grid_cell == 0 ||
+        verified_grid_member != 1 ||
+        verified_render_sort_bias != 0.0f) {
         if (error_message != nullptr) {
             *error_message =
                 "Native respawn fields did not converge after writeback.";
@@ -173,6 +203,7 @@ bool TryRespawnLocalPlayerAt(
         HexString(player.actor_address) +
         " position=(" + std::to_string(world_x) + "," +
         std::to_string(world_y) + ")" +
+        " grid_cell=" + HexString(verified_grid_cell) +
         " hp=" + std::to_string(verified.hp) +
         " mp=" + std::to_string(verified.mp));
     return true;

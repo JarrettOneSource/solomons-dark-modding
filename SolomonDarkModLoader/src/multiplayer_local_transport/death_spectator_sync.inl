@@ -57,7 +57,7 @@ struct WaveRespawnCommand {
 };
 
 struct HostWaveRespawnState {
-    bool spawn_anchor_valid = false;
+    bool spawn_valid = false;
     float spawn_x = 0.0f;
     float spawn_y = 0.0f;
     std::uint32_t run_nonce = 0;
@@ -225,41 +225,43 @@ void RetirePreRespawnHostParticipantVitalsCorrections() {
         .clear();
 }
 
-void CaptureHostWaveRespawnAnchorIfNeeded() {
+void CaptureHostWaveRespawnSpawnIfNeeded() {
     if (!g_local_transport.is_host ||
-        g_host_wave_respawn.spawn_anchor_valid) {
+        g_host_wave_respawn.spawn_valid) {
         return;
     }
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
-    SDModPlayerState player;
+    SDModWorldState world;
     if (local == nullptr ||
         !local->runtime.valid ||
         !local->runtime.in_run ||
         local->runtime.run_nonce == 0 ||
-        !TryGetPlayerState(&player) ||
-        !player.valid ||
-        !std::isfinite(player.x) ||
-        !std::isfinite(player.y)) {
+        !TryGetWorldState(&world) ||
+        !world.valid ||
+        !world.player_spawn_valid ||
+        !std::isfinite(world.player_spawn_x) ||
+        !std::isfinite(world.player_spawn_y)) {
         return;
     }
-    g_host_wave_respawn.spawn_anchor_valid = true;
-    g_host_wave_respawn.spawn_x = player.x;
-    g_host_wave_respawn.spawn_y = player.y;
+    g_host_wave_respawn.spawn_valid = true;
+    g_host_wave_respawn.spawn_x = world.player_spawn_x;
+    g_host_wave_respawn.spawn_y = world.player_spawn_y;
     g_host_wave_respawn.run_nonce = local->runtime.run_nonce;
     Log(
-        "Multiplayer captured run respawn anchor. run_nonce=" +
+        "Multiplayer captured Arena player respawn. run_nonce=" +
         std::to_string(g_host_wave_respawn.run_nonce) +
-        " position=(" + std::to_string(player.x) + "," +
-        std::to_string(player.y) + ")");
+        " arena=" + HexString(world.arena_address) +
+        " position=(" + std::to_string(world.player_spawn_x) + "," +
+        std::to_string(world.player_spawn_y) + ")");
 }
 
 void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
     if (!g_local_transport.is_host) {
         return;
     }
-    CaptureHostWaveRespawnAnchorIfNeeded();
-    if (!g_host_wave_respawn.spawn_anchor_valid) {
+    CaptureHostWaveRespawnSpawnIfNeeded();
+    if (!g_host_wave_respawn.spawn_valid) {
         return;
     }
 

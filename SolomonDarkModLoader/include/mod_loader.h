@@ -138,6 +138,7 @@ struct SDModPlayerState {
     uintptr_t actor_address = 0;
     uintptr_t render_subject_address = 0;
     uintptr_t world_address = 0;
+    uintptr_t grid_cell_address = 0;
     uintptr_t progression_address = 0;
     uintptr_t animation_state_ptr = 0;
     uintptr_t render_frame_table = 0;
@@ -158,6 +159,7 @@ struct SDModPlayerState {
     int render_subject_hub_visual_source_kind = 0;
     std::uint32_t render_drive_flags = 0;
     std::uint32_t render_subject_drive_flags = 0;
+    std::uint8_t grid_member_flag = 0;
     std::uint8_t anim_drive_state = 0;
     std::uint32_t anim_drive_state_word = 0;
     std::uint8_t render_subject_anim_drive_state = 0;
@@ -182,6 +184,7 @@ struct SDModPlayerState {
     float magic_shield_hit_flash = 0.0f;
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
+    float render_sort_bias = 0.0f;
     bool gameplay_attach_applied = false;
     SDModEquipVisualLaneState primary_visual_lane;
     SDModEquipVisualLaneState secondary_visual_lane;
@@ -207,9 +210,14 @@ struct SDModNativeModifierState {
 
 struct SDModWorldState {
     bool valid = false;
+    bool player_spawn_valid = false;
     int wave = 0;
     int enemy_count = 0;
     std::uint64_t time_elapsed_ms = 0;
+    uintptr_t arena_address = 0;
+    float player_spawn_x = 0.0f;
+    float player_spawn_y = 0.0f;
+    float player_spawn_facing = 0.0f;
 };
 
 struct SDModGameplayCombatState {
