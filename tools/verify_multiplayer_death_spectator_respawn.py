@@ -7,7 +7,6 @@ import argparse
 import json
 import math
 import os
-import socket
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -26,6 +25,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
+    select_available_windows_udp_ports,
     start_testrun,
     stop_game_processes,
     wait_for_remote,
@@ -276,19 +276,27 @@ def respawn_state_matches(
 
 
 def _reserve_udp_ports(count: int) -> list[int]:
-    sockets: list[socket.socket] = []
-    try:
-        for _ in range(count):
-            handle = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            handle.bind(("127.0.0.1", 0))
-            sockets.append(handle)
-        return [
-            int(handle.getsockname()[1])
-            for handle in sockets
-        ]
-    finally:
-        for handle in sockets:
-            handle.close()
+    return select_available_windows_udp_ports(count)
+
+
+def _resolve_udp_ports(
+    host_port: int | None,
+    client_port: int | None,
+    third_port: int | None,
+) -> list[int]:
+    explicit = [host_port, client_port, third_port]
+    if all(port is None for port in explicit):
+        return _reserve_udp_ports(3)
+    if any(port is None for port in explicit):
+        raise ValueError(
+            "all three ports must be provided together"
+        )
+    ports = [int(port) for port in explicit if port is not None]
+    if any(port < 1 or port > 0xFFFF for port in ports):
+        raise ValueError("explicit UDP ports must be between 1 and 65535")
+    if len(set(ports)) != 3:
+        raise ValueError("explicit UDP ports must be distinct")
+    return ports
 
 
 def _default_instance_prefix() -> str:
@@ -633,6 +641,9 @@ def main() -> int:
         default=None,
         help="Retail game directory override for isolated worktrees.",
     )
+    parser.add_argument("--host-port", type=int, default=None)
+    parser.add_argument("--client-port", type=int, default=None)
+    parser.add_argument("--third-port", type=int, default=None)
     args = parser.parse_args()
 
     instance_prefix = args.instance_prefix or _default_instance_prefix()
@@ -640,7 +651,11 @@ def main() -> int:
     try:
         result = run_live_verification(
             instance_prefix=instance_prefix,
-            ports=_reserve_udp_ports(3),
+            ports=_resolve_udp_ports(
+                args.host_port,
+                args.client_port,
+                args.third_port,
+            ),
             game_directory=args.game_dir,
         )
         exit_code = 0

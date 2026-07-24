@@ -8,7 +8,6 @@ import json
 import math
 import os
 import re
-import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +30,7 @@ from verify_local_multiplayer_sync import (
     lua,
     place_player,
     query,
+    select_available_windows_udp_ports,
     start_testrun,
     stop_game_processes,
     wait_for_remote,
@@ -105,16 +105,7 @@ def _configure_participants(instance_prefix: str) -> None:
 
 
 def _reserve_udp_ports(count: int) -> list[int]:
-    sockets: list[socket.socket] = []
-    try:
-        for _ in range(count):
-            handle = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            handle.bind(("127.0.0.1", 0))
-            sockets.append(handle)
-        return [int(handle.getsockname()[1]) for handle in sockets]
-    finally:
-        for handle in sockets:
-            handle.close()
+    return select_available_windows_udp_ports(count)
 
 
 def _default_instance_prefix() -> str:

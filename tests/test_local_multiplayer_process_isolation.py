@@ -6,6 +6,8 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -178,6 +180,60 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
             verifier.stop_game_processes([])
 
         run.assert_not_called()
+
+    def test_parallel_ports_are_selected_in_the_windows_socket_namespace(
+        self,
+    ) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps([23111, 23112, 23113]),
+            stderr="",
+        )
+        with mock.patch.object(
+            verifier.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            ports = verifier.select_available_windows_udp_ports(
+                3,
+                excluded_ports=(23110,),
+            )
+
+        self.assertEqual(ports, [23111, 23112, 23113])
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+        ])
+        script = command[-1]
+        self.assertIn("$minimum = 20000", script)
+        self.assertIn("$maximum = 45000", script)
+        self.assertIn("$excluded = @(23110)", script)
+        self.assertIn("$socket.ExclusiveAddressUse = $true", script)
+
+    def test_parallel_port_selection_rejects_invalid_windows_results(
+        self,
+    ) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps([23111, 23111]),
+            stderr="",
+        )
+        with (
+            mock.patch.object(
+                verifier.subprocess,
+                "run",
+                return_value=completed,
+            ),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "did not return 2 distinct ports",
+            ),
+        ):
+            verifier.select_available_windows_udp_ports(2)
 
     def test_exact_cleanup_never_uses_a_machine_wide_process_query(self) -> None:
         with mock.patch.object(verifier.subprocess, "run") as run:

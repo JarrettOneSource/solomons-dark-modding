@@ -32,6 +32,8 @@ HOST_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-host"
 CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-client"
 THIRD_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-third"
 NATIVE_UI_LUA_TIMEOUT_SECONDS = 35.0
+WINDOWS_VERIFIER_UDP_PORT_MIN = 20000
+WINDOWS_VERIFIER_UDP_PORT_MAX = 45000
 REMOTE_PRIMARY_VISUAL_TYPE_ID = 0x1B5E
 REMOTE_SECONDARY_VISUAL_TYPE_ID = 0x1B5D
 REMOTE_ATTACHMENT_VISUAL_TYPE_ID = 0x1B5C
@@ -83,6 +85,113 @@ def path_for_powershell(path: Path) -> str:
     if completed.returncode != 0 or not converted:
         raise VerifyFailure(f"could not convert path for PowerShell: {resolved}: {completed.stdout}")
     return converted
+
+
+def select_available_windows_udp_ports(
+    count: int,
+    *,
+    excluded_ports: Iterable[int] = (),
+) -> list[int]:
+    """Select distinct low UDP ports in the namespace used by the game."""
+    if isinstance(count, bool) or count < 1:
+        raise ValueError("UDP port count must be a positive integer")
+
+    excluded = sorted({
+        int(port)
+        for port in excluded_ports
+        if not isinstance(port, bool) and 0 < int(port) <= 0xFFFF
+    })
+    excluded_literal = ",".join(str(port) for port in excluded)
+    script = f"""
+$ErrorActionPreference = "Stop"
+$minimum = {WINDOWS_VERIFIER_UDP_PORT_MIN}
+$maximum = {WINDOWS_VERIFIER_UDP_PORT_MAX}
+$required = {count}
+$excluded = @({excluded_literal})
+$selected = [System.Collections.Generic.List[int]]::new()
+$sockets = [System.Collections.Generic.List[System.Net.Sockets.Socket]]::new()
+$random = [System.Random]::new()
+try {{
+    for ($attempt = 0;
+         $attempt -lt 2000 -and $selected.Count -lt $required;
+         $attempt += 1) {{
+        $candidate = $random.Next($minimum, $maximum)
+        if ($excluded -contains $candidate -or
+            $selected.Contains($candidate)) {{
+            continue
+        }}
+        $socket = [System.Net.Sockets.Socket]::new(
+            [System.Net.Sockets.AddressFamily]::InterNetwork,
+            [System.Net.Sockets.SocketType]::Dgram,
+            [System.Net.Sockets.ProtocolType]::Udp)
+        try {{
+            $socket.ExclusiveAddressUse = $true
+            $socket.Bind([System.Net.IPEndPoint]::new(
+                [System.Net.IPAddress]::Loopback,
+                $candidate))
+            $sockets.Add($socket)
+            $selected.Add($candidate)
+        }} catch {{
+            $socket.Dispose()
+        }}
+    }}
+    if ($selected.Count -ne $required) {{
+        throw "Could not select $required distinct UDP ports."
+    }}
+    [Console]::Write(
+        (ConvertTo-Json -InputObject $selected.ToArray() -Compress))
+}} finally {{
+    foreach ($socket in $sockets) {{
+        $socket.Dispose()
+    }}
+}}
+"""
+    completed = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(
+            "Windows UDP port selection failed"
+            + (f": {detail}" if detail else "")
+        )
+    try:
+        selected = json.loads(completed.stdout.strip())
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "Windows UDP port selection returned invalid JSON: "
+            f"{completed.stdout!r}"
+        ) from exc
+    if (
+        not isinstance(selected, list)
+        or len(selected) != count
+        or len(set(selected)) != count
+        or any(
+            isinstance(port, bool)
+            or not isinstance(port, int)
+            or port < WINDOWS_VERIFIER_UDP_PORT_MIN
+            or port >= WINDOWS_VERIFIER_UDP_PORT_MAX
+            or port in excluded
+            for port in selected
+        )
+    ):
+        raise RuntimeError(
+            "Windows UDP port selection did not return "
+            f"{count} distinct ports: {selected!r}"
+        )
+    return selected
 
 
 def stop_games() -> None:

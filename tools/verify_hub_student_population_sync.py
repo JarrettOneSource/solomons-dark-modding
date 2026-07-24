@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import socket
 import time
 import traceback
 import uuid
@@ -20,6 +19,7 @@ from verify_local_multiplayer_sync import (
     VerifyFailure,
     game_process_ids,
     launch_pair,
+    select_available_windows_udp_ports,
     stop_game_processes,
 )
 
@@ -110,9 +110,7 @@ emit(
 
 
 def _reserve_udp_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+    return select_available_windows_udp_ports(1)[0]
 
 
 def _default_instance_prefix() -> str:

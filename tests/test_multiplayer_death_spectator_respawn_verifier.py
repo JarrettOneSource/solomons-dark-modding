@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,29 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
         prefix = verifier._default_instance_prefix()
         self.assertLessEqual(len(prefix), 18)
         self.assertRegex(prefix, r"^ds-[0-9a-f]+-[0-9a-f]{4}$")
+
+    def test_explicit_ports_keep_the_verifier_in_its_assigned_group(
+        self,
+    ) -> None:
+        with mock.patch.object(verifier, "_reserve_udp_ports") as reserve:
+            ports = verifier._resolve_udp_ports(23111, 23112, 23113)
+
+        self.assertEqual(ports, [23111, 23112, 23113])
+        reserve.assert_not_called()
+
+    def test_partial_or_duplicate_explicit_port_groups_are_rejected(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "all three ports",
+        ):
+            verifier._resolve_udp_ports(23111, None, 23113)
+        with self.assertRaisesRegex(
+            ValueError,
+            "must be distinct",
+        ):
+            verifier._resolve_udp_ports(23111, 23111, 23113)
 
     def test_death_presentation_stays_in_run_without_game_over_surface(self) -> None:
         values = {
