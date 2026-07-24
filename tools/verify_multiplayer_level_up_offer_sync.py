@@ -76,11 +76,14 @@ local scene = sd.world and sd.world.get_scene and sd.world.get_scene() or nil
 local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
 local mode_offset = sd.debug and sd.debug.layout_offset and sd.debug.layout_offset("progression_nonlocal_mode_flag") or nil
 local picker_screen_offset = sd.debug and sd.debug.layout_offset and sd.debug.layout_offset("progression_local_skill_picker_screen") or nil
+local drive_offset = sd.debug and sd.debug.layout_offset and sd.debug.layout_offset("actor_animation_drive_state_byte") or nil
 emit("scene", scene and (scene.name or scene.kind) or "")
 emit("player.level", player and player.level or 0)
 emit("player.xp", player and player.xp or 0)
 emit("player.progression", player and player.progression_address or 0)
 emit("player.progression_mode", (player and player.progression_address and player.progression_address ~= 0 and mode_offset and sd.debug.read_u8(player.progression_address + mode_offset)) or -1)
+emit("player.actor", player and player.actor_address or 0)
+emit("player.drive_state", (player and player.actor_address and player.actor_address ~= 0 and drive_offset and sd.debug.read_u8(player.actor_address + drive_offset)) or -1)
 
 local picker_screen = 0
 if player and player.progression_address and player.progression_address ~= 0 and picker_screen_offset then
@@ -88,10 +91,23 @@ if player and player.progression_address and player.progression_address ~= 0 and
 end
 emit("player.skill_picker_screen", picker_screen)
 if picker_screen ~= 0 then
+  local ui_stack_slot = sd.debug.resolve_game_address(0x0081F674) or 0
+  local ui_stack = ui_stack_slot ~= 0 and (sd.debug.read_ptr(ui_stack_slot) or 0) or 0
+  local ui_count = ui_stack ~= 0 and (sd.debug.read_i32(ui_stack + 0x08) or -1) or -1
+  local ui_values = ui_stack ~= 0 and (sd.debug.read_ptr(ui_stack + 0x14) or 0) or 0
+  local ui_top = ui_values ~= 0 and ui_count > 0 and (sd.debug.read_ptr(ui_values + ((ui_count - 1) * 4)) or 0) or 0
+  emit("picker.vtable", sd.debug.read_ptr(picker_screen) or 0)
+  emit("picker.reveal_countdown", sd.debug.read_i32(picker_screen + 0x78) or -1)
+  emit("picker.delay_countdown", sd.debug.read_i32(picker_screen + 0x80) or -1)
+  emit("picker.intro_countdown", sd.debug.read_i32(picker_screen + 0x84) or -1)
   local desired_count = sd.debug.read_i32(picker_screen + 0x88) or -1
+  emit("picker.option_array_vtable", sd.debug.read_ptr(picker_screen + 0x8C) or 0)
   local option_values = sd.debug.read_ptr(picker_screen + 0x90) or 0
   local option_count = sd.debug.read_i32(picker_screen + 0x94) or -1
   local selected_index = sd.debug.read_i32(picker_screen + 0x5F8) or -1
+  emit("picker.ui_stack_count", ui_count)
+  emit("picker.ui_stack_top", ui_top)
+  emit("picker.is_ui_stack_top", ui_top == picker_screen)
   emit("picker.desired_count", desired_count)
   emit("picker.option_values", option_values)
   emit("picker.option_count", option_count)

@@ -204,6 +204,12 @@ from static_multiplayer_behavior_contracts import (
 from static_multiplayer_vitals_contracts import (
     test_client_owned_magic_shield_consumption_is_host_authoritative,
 )
+from static_dead_progression_round_respawn_contracts import (
+    test_dead_picker_uses_only_the_stock_screen_virtual_gate,
+    test_live_gate_is_isolated_and_reads_exact_actor_state,
+    test_re_note_records_picker_respawn_and_same_actor_findings,
+    test_wave_respawn_is_a_transport_sequence_barrier,
+)
 from static_re_primary_combat_contracts import (
     test_active_cast_movement_clears_stale_vector_before_stock_tick,
     test_bot_cast_admission_refreshes_live_mana_before_queue,
@@ -1078,6 +1084,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "death spectator has isolated three-owner live regression",
         test_death_spectator_has_isolated_three_owner_live_regression,
+    ),
+    (
+        "dead picker advances only through its stock screen virtual",
+        test_dead_picker_uses_only_the_stock_screen_virtual_gate,
+    ),
+    (
+        "wave respawn rejects pre-respawn vitals authority",
+        test_wave_respawn_is_a_transport_sequence_barrier,
+    ),
+    (
+        "dead progression RE note records lifecycle findings",
+        test_re_note_records_picker_respawn_and_same_actor_findings,
+    ),
+    (
+        "dead progression live gate uses stock input and exact actor reads",
+        test_live_gate_is_isolated_and_reads_exact_actor_state,
     ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     (
