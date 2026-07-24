@@ -274,6 +274,114 @@ while resetting and holding `+0x1BC` below the render threshold after grace
 expiry. Respawn is the operation that clears the selector and returns the actor
 to its alive presentation.
 
+## Dead-player level-up presentation
+
+Follow-up headless decompilation mapped why a participant can level while dead
+without receiving a usable picker. Multiplayer authority is already
+participant-specific: the host advances the dead participant's materialized
+progression and rolls against that progression's own skill book. In the
+pre-fix loopback trace, the client and the host-owned client progression both
+advanced from level 1 to level 2 at 135 XP.
+
+`FUN_0065F480` still creates the normal level-up screen for that progression:
+
+- it merges the incoming pick count at `progression +0x48` into the pending
+  count at `+0x44`;
+- it allocates the `0x628`-byte screen through `FUN_00658620`;
+- it stores the screen at `progression +0x83C`;
+- it installs the screen in the normal UI owner.
+
+The stall is in the screen's native tick, not its creation or multiplayer
+authority. The level-up screen vtable begins at `0x0079FD4C`; slot `+0x08`
+resolves to `FUN_0066F920`. Its entry gate is:
+
+```text
+if gameplay local-player pointer is null:
+    run base screen tick
+else if local PlayerWizard +0x160 == 0:
+    advance reveal timers, roll options, build children, and process selection
+else:
+    skip the complete level-up screen state machine
+```
+
+The authoritative picker object observed while spectating therefore had a
+valid screen and `desired_count=3`, but its option array remained
+`values=0/count=0`. The multiplayer option-roll hook could not run because the
+native tick never reached the progression vtable call at `+0x74`.
+
+The correct bridge is narrowly scoped to this UI virtual: while a connected
+dead participant has an unresolved local offer, invoke the screen tick with
+the actor's `+0x160` selector temporarily cleared, then restore the exact
+selector before returning to gameplay. The spectator lifecycle remains dead
+for damage, rendering, and replication; only the stock picker virtual sees the
+alive selector it requires. Spectator target cycling must also yield ownership
+of left/right input until the picker closes, including its release debounce,
+so a skill click cannot be consumed as a camera-target click.
+
+## Wave completion respawn and stale death authority
+
+There is no retail round-respawn constructor in this multiplayer path. The
+loader derives one command from the host's validated `WavePhase::Completed`
+summary and applies it once per authenticated `wave_respawn_epoch`. Every
+process calls `TryRespawnLocalPlayerAt` on its existing local PlayerWizard and
+existing progression. The operation changes only current HP/MP, position,
+cast/input state, and the native terminal/death fields `+0x94`, `+0x98`,
+`+0x160`, and `+0x1BC`; it does not construct or replace the actor,
+progression, inventory, skill book, stat book, or equipment.
+
+The pre-fix immediate-transition trace exposed an authority ordering race:
+
+```text
+client death presentation begins
+  |
+  +-- host completes wave and publishes respawn epoch 1
+  |
+  +-- client applies epoch 1 to the same actor
+  |     HP/MP restored; +0x94/+0x98/+0x160/+0x1BC cleared
+  |     spectator phase retired
+  |
+  `-- an older host ParticipantVitalsCorrection(HP=0) arrives
+        TryApplyAuthoritativeLocalPlayerDeath replays stock lethal damage
+        FUN_00534120 runs a second time
+        a second staff bouncer is allocated
+        death presentation and red effect restart
+```
+
+The isolated trace completed the wave 0.694 seconds after lethal damage. The
+client recorded `last_applied_respawn_epoch=1`, then crossed from 50 HP back to
+zero, and both `FUN_00534120` and the exact staff allocation trace reached two
+hits. Resetting the presentation fields again would only hide this second
+authoritative death.
+
+The respawn command must instead be an authority barrier. On wave completion,
+the host retires pending pre-respawn vitals corrections before publishing the
+command. The client records the host packet sequence that carried the accepted
+respawn and rejects any correction packet from that authority whose transport
+sequence is not newer. Packet header sequences are shared across packet kinds,
+so a genuine post-respawn hit remains newer and legal while an in-flight
+pre-respawn death correction cannot cross the boundary.
+
+## Loadout identity across respawn
+
+The same-actor boundary is also the preservation mechanism. `FUN_00534120`
+consumes the held attachment for its one visual bouncer, but it does not remove
+the staff recipe from the progression-owned inventory or replace the
+progression. `TryRespawnLocalPlayerAt` does not grant, clone, equip, or rebuild
+items and does not mutate skill/stat rows. A respawn restore table would be
+incorrect: it could duplicate the retained staff or overwrite a skill acquired
+while dead.
+
+Acceptance must compare stable identities and contents on the owning actor:
+
+- actor and progression addresses remain identical;
+- every inventory row and equipped slot, including the staff recipe, is
+  identical;
+- skill/stat books are identical except for the selected dead-time level-up
+  row and its native derived-stat consequences;
+- the staff inventory count is unchanged while the death-epoch allocation
+  trace remains exactly one;
+- level, XP, and the chosen skill survive the same-actor respawn.
+
 ## Required implementation and acceptance boundaries
 
 The native findings impose these constraints:
@@ -300,6 +408,13 @@ The native findings impose these constraints:
   invoking the side-effectful complete PlayerWizard death virtual.
 - Respawn clears the death epoch, native death selector/timer, terminal pending
   state, and the consumed-attachment guard.
+- A dead participant's native level-up screen advances through its stock
+  build/input virtual without weakening the actor's death guard outside that
+  call, and spectator input does not consume picker input.
+- A wave-respawn packet is a sequencing barrier for older authoritative death
+  corrections; the same epoch cannot respawn or terminalize an owner twice.
+- Respawn preserves the existing actor-owned progression, inventory, stat
+  book, skill book, and equipment rather than reconstructing them.
 
 The live gate must kill the host as well as a client, observe world/wave
 sequences advancing on every peer while the host spectates, respawn the host,
