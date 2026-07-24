@@ -395,6 +395,114 @@ Acceptance must compare stable identities and contents on the owning actor:
   trace remains exactly one;
 - level, XP, and the chosen skill survive the same-actor respawn.
 
+## Stock Boneyard spawn publication and run-start placement
+
+Follow-up headless decompilation mapped the authoritative run-start placement
+path before changing respawn coordinates. The Boneyard `RegionLayout` player
+spawn tuple is not inferred from the first actor position. `FUN_0046DC60`
+publishes the loaded tuple into the live Arena:
+
+| Arena offset | Native role |
+|---:|---|
+| `+0x88F4` | loaded `RegionLayout` player-spawn X |
+| `+0x88F8` | loaded `RegionLayout` player-spawn Y |
+| `+0x88FC` | loaded player-spawn facing |
+| `+0x8ED0/+0x8ED4` | effective player-spawn slot 0 position |
+| `+0x8EF0` | effective player-spawn slot 0 facing |
+
+At the end of the load, `FUN_0046DC60` copies the loaded tuple to all four
+effective position slots at `+0x8ED0`, `+0x8ED8`, `+0x8EE0`, and `+0x8EE8`
+and copies the facing to `+0x8EF0` through `+0x8EFC`. The generated-arena
+startup path in `Game_OnStartGame` (`FUN_004BED40`) can first synthesize the
+loaded tuple from the arena bounds, but the same Arena fields remain the
+published authority after loading.
+
+`FUN_00462410` is the exact run-start actor placement consumer:
+
+```text
+Arena +0x8ED0/+0x8ED4
+  |
+  +-- copy to actor +0x18/+0x1C
+  +-- copy Arena +0x8EF0 to actor +0x6C
+  |
+  `-- if multiplayer slots overlap:
+        apply the stock per-slot collision-separation offset
+
+">>>> Place %d at %.0f,%.0f"
+```
+
+The Boneyard spawn authority to reuse for a respawn command is therefore the
+live Arena's effective slot-0 tuple, not a sampled PlayerWizard coordinate.
+The command intentionally carries that exact tuple: respawn acceptance asks
+for the Boneyard player spawn itself, while `FUN_00462410`'s later overlap
+offset is a run-start separation policy rather than part of the serialized
+spawn point.
+
+The pre-fix loader instead captured the host actor's current X/Y once and
+called it a run spawn anchor. An isolated two-process run demonstrated the
+error directly: a client that died at `(750,150)` respawned at the host's
+sampled `(707.675,150)`. Neither value was read from the Arena spawn tuple.
+
+## Corpse registration and participant-scoped retirement
+
+The persistent corpse is the dead PlayerWizard itself, not an independently
+owned corpse entity. `FUN_00533520` changes two base-actor fields at death
+timer tick 159:
+
+```text
+actor +0x36 = 0
+actor +0xA0 = DAT_007DE974 = -1000.0f
+```
+
+The base actor constructor `FUN_006287D0` initializes the packed flags at
+`+0x34` to `0x01010000`, which makes the grid-member byte at `+0x36` equal to
+one, and initializes the render/sort field at `+0xA0` to zero. Tick 159
+therefore deliberately changes a live actor into its corpse presentation:
+the actor retains its grid-cell pointer at `+0x54`, but subsequent world-grid
+rebinding is disabled and its render/sort bias becomes `-1000.0f`.
+
+`WorldCellGrid_RebindActor` (`FUN_005217B0`) begins with:
+
+```text
+if actor +0x36 == 0:
+    return
+```
+
+When the flag is enabled, it computes the cell from actor `+0x18/+0x1C`,
+removes the actor from the old `+0x54` cell when the cell changed, inserts it
+into the new cell, and updates `+0x54`. The existing respawn path wrote a new
+position and called this function while `+0x36` was still zero. The call
+returned successfully but did no work, leaving the old death-location cell
+with the corpse registration and leaving the spawn cell without the actor.
+
+The objects created later in the tick-159 block are
+`Anim_FadeMoveAdditive_Perspective` bursts, not corpse owners.
+`FUN_00452F20` decreases each burst's finite alpha/lifetime and invokes its
+retirement virtual when the value reaches zero. Deleting or sweeping that
+world lane would therefore target the wrong lifecycle and could disturb
+unrelated player effects.
+
+The foundational respawn transition is the inverse of the native tick-159
+corpse transition on the same participant actor:
+
+1. write the Arena-authored respawn position and clear terminal/death state;
+2. restore `actor +0xA0` to the constructor value `0.0f`;
+3. restore `actor +0x36` to the constructor value `1`;
+4. call `WorldCellGrid_RebindActor` so it removes only that actor from its old
+   cell and inserts it at the spawn cell.
+
+The same reset is required when a remote participant changes from its death
+epoch back to alive, before normal remote playback performs its grid rebind.
+It is keyed to that participant's alive transition and actor address; it does
+not enumerate world cells, delete other dead actors, or modify the staff
+bouncer trace lane.
+
+An isolated pre-fix live probe after grace expiry corroborated the recovered
+fields on the owning actor: `+0x36` was zero, `+0x54` remained non-null, and
+`+0xA0` contained `0xC47A0000` (`-1000.0f`). The loader had already bounded
+`+0x1BC` for the red-effect fix, showing that corpse registration is a
+separate native lifecycle that must be reversed explicitly on respawn.
+
 ## Required implementation and acceptance boundaries
 
 The native findings impose these constraints:
@@ -426,6 +534,11 @@ The native findings impose these constraints:
   call, and spectator input does not consume picker input.
 - A wave-respawn packet is a sequencing barrier for older authoritative death
   corrections; the same epoch cannot respawn or terminalize an owner twice.
+- The host reads the effective Boneyard slot-0 spawn from the live Arena and
+  carries that exact state-derived coordinate in every wave-respawn command.
+- Local and remote alive transitions restore the tick-159 grid-member and
+  render/sort fields before rebinding the participant actor, removing only
+  that participant's death-location corpse registration.
 - Respawn preserves the existing actor-owned progression, inventory, stat
   book, skill book, and equipment rather than reconstructing them.
 
