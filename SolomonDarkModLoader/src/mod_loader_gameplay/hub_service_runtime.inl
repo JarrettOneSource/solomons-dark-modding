@@ -283,6 +283,91 @@ bool CallHubServiceDispatchSafe(
     }
 }
 
+bool CallCourtyardTickSafe(
+    uintptr_t tick_address,
+    uintptr_t courtyard_address,
+    DWORD* exception_code) {
+    using CourtyardTickFn = void(__thiscall*)(void*);
+    auto* tick = reinterpret_cast<CourtyardTickFn>(tick_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    __try {
+        tick(reinterpret_cast<void*>(courtyard_address));
+        return true;
+    } __except (CaptureHubServiceDispatchException(
+        GetExceptionInformation(),
+        exception_code)) {
+        return false;
+    }
+}
+
+void TickDormantSharedHubOnGameThread() {
+    if (!multiplayer::IsLocalTransportHost()) {
+        return;
+    }
+
+    uintptr_t gameplay_address = 0;
+    SceneContextSnapshot local_context;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) ||
+        gameplay_address == 0 ||
+        !TryBuildSceneContextSnapshot(
+            gameplay_address,
+            &local_context) ||
+        local_context.world_address == 0 ||
+        local_context.current_region_index <= kHubRegionIndex ||
+        local_context.current_region_index >= kArenaRegionIndex) {
+        return;
+    }
+
+    SceneContextSnapshot hub_context;
+    if (!TryBuildGameplayRegionSceneContextSnapshot(
+            gameplay_address,
+            kHubRegionIndex,
+            &hub_context) ||
+        !IsSharedHubSceneContext(hub_context) ||
+        hub_context.world_address == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t published_courtyard = 0;
+    uintptr_t courtyard_vtable = 0;
+    const auto expected_courtyard_vtable =
+        memory.ResolveGameAddressOrZero(kHubCourtyardVtable);
+    const auto courtyard_tick =
+        memory.ResolveGameAddressOrZero(kCourtyardRegionTick);
+    if (!TryReadResolvedGamePointerAbsolute(
+            kHubCourtyardGlobal,
+            &published_courtyard) ||
+        published_courtyard != hub_context.world_address ||
+        !memory.TryReadValue(
+            hub_context.world_address,
+            &courtyard_vtable) ||
+        expected_courtyard_vtable == 0 ||
+        courtyard_vtable != expected_courtyard_vtable ||
+        courtyard_tick == 0 ||
+        !memory.IsExecutableRange(courtyard_tick, 1)) {
+        return;
+    }
+
+    DWORD exception_code = 0;
+    if (!CallCourtyardTickSafe(
+            courtyard_tick,
+            hub_context.world_address,
+            &exception_code)) {
+        static std::uint64_t last_failure_log_ms = 0;
+        const auto now_ms =
+            static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms >= last_failure_log_ms + 1000) {
+            last_failure_log_ms = now_ms;
+            Log(
+                "Dormant shared-hub tick raised exception " +
+                HexString(exception_code) + ".");
+        }
+    }
+}
+
 
 void TryDispatchPendingHubServiceOnGameThread() {
     const auto raw_kind =

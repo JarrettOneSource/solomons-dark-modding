@@ -897,20 +897,15 @@ bool IsArenaCombatActiveForUntrackedSceneActor() {
     return combat_state.combat_active != 0 || combat_state.combat_wave_index > 0;
 }
 
-bool TryGetSceneState(SDModSceneState* state) {
+bool TryPopulateSceneState(
+    uintptr_t gameplay_scene_address,
+    const SceneContextSnapshot& scene_context,
+    SDModSceneState* state) {
     if (state == nullptr) {
         return false;
     }
 
     *state = SDModSceneState{};
-
-    uintptr_t gameplay_scene_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) || gameplay_scene_address == 0) {
-        return false;
-    }
-
-    SceneContextSnapshot scene_context;
-    (void)TryBuildSceneContextSnapshot(gameplay_scene_address, &scene_context);
     int pending_level_kind = 0;
     int transition_target_a = 0;
     int transition_target_b = 0;
@@ -933,6 +928,42 @@ bool TryGetSceneState(SDModSceneState* state) {
     state->transition_target_a = transition_target_a;
     state->transition_target_b = transition_target_b;
     return true;
+}
+
+bool TryGetSceneState(SDModSceneState* state) {
+    uintptr_t gameplay_scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) ||
+        gameplay_scene_address == 0) {
+        return false;
+    }
+
+    SceneContextSnapshot scene_context;
+    return TryBuildSceneContextSnapshot(
+               gameplay_scene_address,
+               &scene_context) &&
+           TryPopulateSceneState(
+               gameplay_scene_address,
+               scene_context,
+               state);
+}
+
+bool TryGetSharedHubSceneState(SDModSceneState* state) {
+    uintptr_t gameplay_scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) ||
+        gameplay_scene_address == 0) {
+        return false;
+    }
+
+    SceneContextSnapshot hub_context;
+    return TryBuildGameplayRegionSceneContextSnapshot(
+               gameplay_scene_address,
+               kHubRegionIndex,
+               &hub_context) &&
+           IsSharedHubSceneContext(hub_context) &&
+           TryPopulateSceneState(
+               gameplay_scene_address,
+               hub_context,
+               state);
 }
 
 bool TryBuildSceneActorState(
@@ -1110,23 +1141,15 @@ void AppendTransientRewardActors(
     }
 }
 
-bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
-    if (actors == nullptr) {
+bool TryListSceneActorsForContext(
+    const SceneContextSnapshot& scene_context,
+    bool include_tracked_enemies,
+    std::vector<SDModSceneActorState>* actors) {
+    if (actors == nullptr || scene_context.world_address == 0) {
         return false;
     }
 
     actors->clear();
-
-    uintptr_t gameplay_scene_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) || gameplay_scene_address == 0) {
-        return false;
-    }
-
-    SceneContextSnapshot scene_context;
-    if (!TryBuildSceneContextSnapshot(gameplay_scene_address, &scene_context) ||
-        scene_context.world_address == 0) {
-        return false;
-    }
 
     auto& memory = ProcessMemory::Instance();
     std::unordered_set<uintptr_t> seen;
@@ -1150,22 +1173,25 @@ bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
 
     AppendTransientRewardActors(scene_context, &seen, actors);
 
-    std::vector<SDModTrackedEnemyState> tracked_enemies;
-    GetRunLifecycleTrackedEnemies(&tracked_enemies);
-    for (const auto& tracked_enemy : tracked_enemies) {
-        if (tracked_enemy.actor_address == 0 || !seen.insert(tracked_enemy.actor_address).second) {
-            continue;
-        }
+    if (include_tracked_enemies) {
+        std::vector<SDModTrackedEnemyState> tracked_enemies;
+        GetRunLifecycleTrackedEnemies(&tracked_enemies);
+        for (const auto& tracked_enemy : tracked_enemies) {
+            if (tracked_enemy.actor_address == 0 ||
+                !seen.insert(tracked_enemy.actor_address).second) {
+                continue;
+            }
 
-        SDModSceneActorState actor_state{};
-        if (TryBuildSceneActorState(
-                tracked_enemy.actor_address,
-                scene_context,
-                false,
-                true,
-                tracked_enemy.enemy_type,
-                &actor_state)) {
-            actors->push_back(actor_state);
+            SDModSceneActorState actor_state{};
+            if (TryBuildSceneActorState(
+                    tracked_enemy.actor_address,
+                    scene_context,
+                    false,
+                    true,
+                    tracked_enemy.enemy_type,
+                    &actor_state)) {
+                actors->push_back(actor_state);
+            }
         }
     }
 
@@ -1182,4 +1208,40 @@ bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
             return a.actor_address < b.actor_address;
         });
     return true;
+}
+
+bool TryListSceneActors(std::vector<SDModSceneActorState>* actors) {
+    uintptr_t gameplay_scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) ||
+        gameplay_scene_address == 0) {
+        return false;
+    }
+
+    SceneContextSnapshot scene_context;
+    return TryBuildSceneContextSnapshot(
+               gameplay_scene_address,
+               &scene_context) &&
+           TryListSceneActorsForContext(
+               scene_context,
+               true,
+               actors);
+}
+
+bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors) {
+    uintptr_t gameplay_scene_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_scene_address) ||
+        gameplay_scene_address == 0) {
+        return false;
+    }
+
+    SceneContextSnapshot hub_context;
+    return TryBuildGameplayRegionSceneContextSnapshot(
+               gameplay_scene_address,
+               kHubRegionIndex,
+               &hub_context) &&
+           IsSharedHubSceneContext(hub_context) &&
+           TryListSceneActorsForContext(
+               hub_context,
+               false,
+               actors);
 }

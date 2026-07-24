@@ -5,20 +5,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import socket
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from multiplayer_lua_probe import DEFAULT_CLIENTS, parse_client, run_lua_client
+from multiplayer_lua_probe import parse_client, run_lua_client
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
-    CLIENT_PIPE,
     HOST_ID,
     HOST_NAME,
-    HOST_PIPE,
-    disable_bots,
     game_process_ids,
     launch_pair,
     stop_game_processes,
@@ -27,9 +26,9 @@ from verify_local_multiplayer_sync import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "runtime" / "lua_scene_multiplayer_verification.json"
 ACCEPTANCE_MOD_ID = "sample.lua.scene_lab"
 PRIVATE_REGION_INDEX = 2
+CLIENT_PRIVATE_REGION_INDEX = 3
 HUB_REGION_INDEX = 0
 ARENA_REGION_INDEX = 5
 
@@ -143,6 +142,63 @@ print("queued=" .. tostring(sd.scene.switch_region({HUB_REGION_INDEX})))
 """
 
 
+CLIENT_PRIVATE_SWITCH_PROBE = f"""
+print("queued=" .. tostring(
+  sd.debug.switch_region({CLIENT_PRIVATE_REGION_INDEX})))
+"""
+
+
+CLIENT_HUB_SWITCH_PROBE = f"""
+print("queued=" .. tostring(sd.debug.switch_region({HUB_REGION_INDEX})))
+"""
+
+
+DISABLE_BOTS_PROBE = """
+lua_bots_disable_tick = true
+sd.bots.clear()
+print("count=" .. tostring(sd.bots.get_count()))
+"""
+
+
+HUB_WORLD_PROBE = """
+local snapshot = assert(
+  sd.world.get_replicated_actors(),
+  "replicated world snapshot unavailable")
+local motion_checksum = 0.0
+local identity_checksum = 0
+local student_count = 0
+local named_npc_count = 0
+for _, actor in ipairs(snapshot.actors or {}) do
+  local type_id = tonumber(actor.object_type_id) or 0
+  if type_id == 5002 then student_count = student_count + 1 end
+  if type_id >= 5001 and type_id <= 5008 then
+    named_npc_count = named_npc_count + 1
+  end
+  motion_checksum = motion_checksum +
+    (tonumber(actor.x) or 0) * 0.001 +
+    (tonumber(actor.y) or 0) * 0.0001 +
+    (tonumber(actor.heading) or 0) * 0.00001 +
+    (tonumber(actor.anim_drive_state) or 0) * 0.01 +
+    (tonumber(actor.named_hub_npc_idle_frame) or 0) * 0.1 +
+    (tonumber(actor.named_hub_npc_motion_position) or 0) * 0.01 +
+    (tonumber(actor.named_hub_npc_timer) or 0) * 0.001
+  identity_checksum = (
+    identity_checksum +
+    ((tonumber(actor.network_actor_id) or 0) % 1000003)
+  ) % 2147483647
+end
+print("sequence=" .. tostring(snapshot.sequence))
+print("scene_epoch=" .. tostring(snapshot.scene_epoch))
+print("scene_kind=" .. tostring(snapshot.scene_kind))
+print("actor_count=" .. tostring(snapshot.actor_count))
+print("apply_valid=" .. tostring(snapshot.apply_valid))
+print("student_count=" .. tostring(student_count))
+print("named_npc_count=" .. tostring(named_npc_count))
+print("identity_checksum=" .. tostring(identity_checksum))
+print("motion_checksum=" .. string.format("%.6f", motion_checksum))
+"""
+
+
 RUN_SWITCH_PROBE = f"""
 assert(sd.state.is_authority(), "run switch probe is not the authority")
 print("queued=" .. tostring(sd.scene.switch_region({ARENA_REGION_INDEX})))
@@ -183,6 +239,13 @@ def _values(result: dict[str, Any]) -> dict[str, str]:
 def _int_value(values: dict[str, str], name: str) -> int:
     try:
         return int(values.get(name, ""))
+    except ValueError as error:
+        raise RuntimeError(f"invalid {name}: {values}") from error
+
+
+def _float_value(values: dict[str, str], name: str) -> float:
+    try:
+        return float(values.get(name, ""))
     except ValueError as error:
         raise RuntimeError(f"invalid {name}: {values}") from error
 
@@ -249,6 +312,96 @@ def private_state_matches(
             and values.get("host_scene_kind") == "PrivateRegion"
             and _int_value(values, "host_scene_region_index")
             == PRIVATE_REGION_INDEX
+        )
+    except RuntimeError:
+        return False
+
+
+def hub_observing_private_host_state_matches(
+    values: dict[str, str],
+) -> bool:
+    try:
+        return (
+            _base_state_matches(values, authority=False)
+            and values.get("kind") == "hub"
+            and values.get("name") == "hub"
+            and _int_value(values, "region_index") == HUB_REGION_INDEX
+            and values.get("can_switch_region") == "false"
+            and values.get("can_enter_run") == "false"
+            and values.get("host_scene_kind") == "PrivateRegion"
+            and _int_value(values, "host_scene_region_index")
+            == PRIVATE_REGION_INDEX
+        )
+    except RuntimeError:
+        return False
+
+
+def client_private_observing_host_private_state_matches(
+    values: dict[str, str],
+) -> bool:
+    try:
+        return (
+            _base_state_matches(values, authority=False)
+            and values.get("kind") in ("region", "shop")
+            and bool(values.get("name"))
+            and values.get("name") != "transition"
+            and _int_value(values, "region_index")
+            == CLIENT_PRIVATE_REGION_INDEX
+            and values.get("can_switch_region") == "false"
+            and values.get("can_enter_run") == "false"
+            and values.get("host_scene_kind") == "PrivateRegion"
+            and _int_value(values, "host_scene_region_index")
+            == PRIVATE_REGION_INDEX
+        )
+    except RuntimeError:
+        return False
+
+
+def different_private_rooms_state_matches(
+    host_values: dict[str, str],
+    client_values: dict[str, str],
+) -> bool:
+    return (
+        private_state_matches(host_values, authority=True)
+        and client_private_observing_host_private_state_matches(
+            client_values
+        )
+    )
+
+
+def hub_world_stream_ready(values: dict[str, str]) -> bool:
+    try:
+        return (
+            values.get("scene_kind") == "SharedHub"
+            and values.get("apply_valid") == "true"
+            and _int_value(values, "actor_count") > 0
+            and _int_value(values, "student_count") > 0
+            and _int_value(values, "named_npc_count") > 0
+        )
+    except RuntimeError:
+        return False
+
+
+def hub_world_stream_advanced(
+    before: dict[str, str],
+    after: dict[str, str],
+) -> bool:
+    try:
+        return (
+            after.get("scene_kind") == "SharedHub"
+            and after.get("apply_valid") == "true"
+            and _int_value(after, "sequence")
+            != _int_value(before, "sequence")
+            and _int_value(after, "scene_epoch")
+            == _int_value(before, "scene_epoch")
+            and _int_value(after, "actor_count") > 0
+            and _int_value(after, "student_count") > 0
+            and _int_value(after, "named_npc_count") > 0
+            and abs(
+                _float_value(after, "motion_checksum")
+                - _float_value(before, "motion_checksum")
+            )
+            > 0.000001
         )
     except RuntimeError:
         return False
@@ -366,11 +519,57 @@ def _poll_states(
     ]
 
 
+def clients_for_instance(
+    instance_prefix: str,
+) -> list[tuple[str, str]]:
+    return [
+        (
+            "host",
+            f"SolomonDarkModLoader_LuaExec_{instance_prefix}-host",
+        ),
+        (
+            "client",
+            f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client",
+        ),
+    ]
+
+
+def _reserve_udp_ports(count: int) -> list[int]:
+    reservations: list[socket.socket] = []
+    try:
+        for _ in range(count):
+            reservation = socket.socket(
+                socket.AF_INET,
+                socket.SOCK_DGRAM,
+            )
+            reservation.bind(("127.0.0.1", 0))
+            reservations.append(reservation)
+        return [
+            int(reservation.getsockname()[1])
+            for reservation in reservations
+        ]
+    finally:
+        for reservation in reservations:
+            reservation.close()
+
+
+def _disable_bots(peers: list[tuple[str, str]]) -> None:
+    for peer in peers:
+        result = _run_probe(peer, DISABLE_BOTS_PROBE)
+        if _values(result).get("count") != "0":
+            raise RuntimeError(
+                f"failed to disable Lua bots for {peer[0]}: {result}"
+            )
+
+
 def run(
     clients: list[tuple[str, str]],
     *,
     launch: bool,
     timeout: float,
+    instance_prefix: str,
+    ports: tuple[int, int],
+    game_directory: Path | None = None,
 ) -> dict[str, Any]:
     if not launch:
         raise RuntimeError("Lua scene acceptance requires --launch-pair")
@@ -384,6 +583,9 @@ def run(
         "launched_pair": True,
         "host": host[0],
         "client": client[0],
+        "instance_prefix": instance_prefix,
+        "host_port": ports[0],
+        "client_port": ports[1],
     }
     launched_process_ids: list[int] = []
     try:
@@ -392,6 +594,11 @@ def run(
             tile_windows=False,
             kill_existing=False,
             exact_mod_id=ACCEPTANCE_MOD_ID,
+            instance_prefix=instance_prefix,
+            host_port=ports[0],
+            client_port=ports[1],
+            game_directory=game_directory,
+            quick_start=True,
         )
         launched_process_ids.extend(game_process_ids(result["pair"]))
         if len(set(launched_process_ids)) != 2:
@@ -399,9 +606,9 @@ def run(
                 "local pair did not report two exact process IDs: "
                 f"{launched_process_ids}"
             )
-        disable_bots()
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
+        _disable_bots(peers)
+        wait_for_remote(host[1], CLIENT_ID, CLIENT_NAME, "hub")
+        wait_for_remote(client[1], HOST_ID, HOST_NAME, "hub")
 
         result["initial_hub"] = _poll_states(
             peers,
@@ -409,6 +616,14 @@ def run(
             timeout=timeout,
             description="initial shared hub scene",
         )
+        initial_hub_world = _poll_probe(
+            client,
+            HUB_WORLD_PROBE,
+            hub_world_stream_ready,
+            timeout=timeout,
+            description="initial authoritative shared-hub world",
+        )
+        result["initial_hub_world"] = initial_hub_world
 
         client_rejection = _run_probe(client, CLIENT_REJECTION_PROBE)
         result["client_rejection"] = client_rejection
@@ -434,12 +649,107 @@ def run(
             raise RuntimeError(
                 f"authority private-region request failed: {private_request}"
             )
-        result["private_region"] = _poll_states(
-            peers,
-            private_state_matches,
+        private_host = _poll_probe(
+            host,
+            STATE_PROBE,
+            lambda values: private_state_matches(
+                values,
+                authority=True,
+            ),
             timeout=timeout,
-            description="authenticated private-region convergence",
+            description="host private-region entry",
         )
+        client_hub = _poll_probe(
+            client,
+            STATE_PROBE,
+            hub_observing_private_host_state_matches,
+            timeout=timeout,
+            description="client remaining in the shared hub",
+        )
+        result["host_private_client_hub"] = [
+            private_host,
+            client_hub,
+        ]
+        result["dormant_hub_world"] = _poll_probe(
+            client,
+            HUB_WORLD_PROBE,
+            lambda values: hub_world_stream_advanced(
+                _values(initial_hub_world),
+                values,
+            ),
+            timeout=timeout,
+            description="host-authoritative dormant hub simulation",
+        )
+
+        client_private_request = _run_probe(
+            client,
+            CLIENT_PRIVATE_SWITCH_PROBE,
+        )
+        result["client_private_request"] = client_private_request
+        if not switch_request_matches(
+            _values(client_private_request)
+        ):
+            raise RuntimeError(
+                "client-local private-region request failed: "
+                f"{client_private_request}"
+            )
+        different_host = _poll_probe(
+            host,
+            STATE_PROBE,
+            lambda values: private_state_matches(
+                values,
+                authority=True,
+            ),
+            timeout=timeout,
+            description="host remaining in private region 2",
+        )
+        different_client = _poll_probe(
+            client,
+            STATE_PROBE,
+            client_private_observing_host_private_state_matches,
+            timeout=timeout,
+            description="client entering private region 3",
+        )
+        if not different_private_rooms_state_matches(
+            _values(different_host),
+            _values(different_client),
+        ):
+            raise RuntimeError(
+                "host and client did not remain in different private rooms"
+            )
+        result["different_private_rooms"] = [
+            different_host,
+            different_client,
+        ]
+
+        client_hub_request = _run_probe(
+            client,
+            CLIENT_HUB_SWITCH_PROBE,
+        )
+        result["client_hub_request"] = client_hub_request
+        if not switch_request_matches(_values(client_hub_request)):
+            raise RuntimeError(
+                f"client-local shared-hub request failed: {client_hub_request}"
+            )
+        result["host_private_client_returned_hub"] = [
+            _poll_probe(
+                host,
+                STATE_PROBE,
+                lambda values: private_state_matches(
+                    values,
+                    authority=True,
+                ),
+                timeout=timeout,
+                description="host remaining private during client return",
+            ),
+            _poll_probe(
+                client,
+                STATE_PROBE,
+                hub_observing_private_host_state_matches,
+                timeout=timeout,
+                description="client independent shared-hub return",
+            ),
+        ]
 
         hub_request = _run_probe(host, HUB_SWITCH_PROBE)
         result["hub_request"] = hub_request
@@ -466,8 +776,8 @@ def run(
             timeout=timeout,
             description="authenticated arena convergence",
         )
-        wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "testrun")
-        wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "testrun")
+        wait_for_remote(host[1], CLIENT_ID, CLIENT_NAME, "testrun")
+        wait_for_remote(client[1], HOST_ID, HOST_NAME, "testrun")
 
         result["arena_exit_rejections"] = [
             _run_probe(peer, ARENA_EXIT_REJECTION_PROBE) for peer in peers
@@ -505,10 +815,35 @@ def main() -> int:
         action="store_true",
         help="confirm that the verifier may switch scenes in one isolated pair",
     )
+    parser.add_argument(
+        "--instance-prefix",
+        help=(
+            "isolated launcher/stage/profile group name; defaults to "
+            "a process-specific prefix"
+        ),
+    )
+    parser.add_argument("--host-port", type=int)
+    parser.add_argument("--client-port", type=int)
+    parser.add_argument(
+        "--game-directory",
+        type=Path,
+        help="source game directory copied into the isolated instance stages",
+    )
     parser.add_argument("--timeout", type=float, default=45.0)
-    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
+    instance_prefix = (
+        args.instance_prefix
+        or f"lua-scene-{os.getpid()}"
+    )
+    output = args.output or (
+        ROOT
+        / "runtime"
+        / "instances"
+        / instance_prefix
+        / "lua_scene_multiplayer_verification.json"
+    )
     result: dict[str, Any] = {"ok": False}
     if not args.confirm_mutation:
         result["error"] = "refusing scene mutations without --confirm-mutation"
@@ -516,20 +851,44 @@ def main() -> int:
     elif not args.launch_pair:
         result["error"] = "Lua scene acceptance requires --launch-pair"
         return_code = 2
+    elif (args.host_port is None) != (args.client_port is None):
+        result["error"] = (
+            "--host-port and --client-port must be provided together"
+        )
+        return_code = 2
     else:
         try:
+            reserved_ports = (
+                [args.host_port, args.client_port]
+                if args.host_port is not None
+                else _reserve_udp_ports(2)
+            )
+            ports = (
+                int(reserved_ports[0]),
+                int(reserved_ports[1]),
+            )
+            expected_clients = clients_for_instance(instance_prefix)
+            clients = args.client or expected_clients
+            if clients != expected_clients:
+                raise RuntimeError(
+                    "--client endpoints must match the launched "
+                    f"instance prefix {instance_prefix!r}"
+                )
             result = run(
-                args.client or list(DEFAULT_CLIENTS),
+                clients,
                 launch=True,
                 timeout=max(1.0, args.timeout),
+                instance_prefix=instance_prefix,
+                ports=ports,
+                game_directory=args.game_directory,
             )
             return_code = 0 if result.get("ok") else 1
         except Exception as error:  # noqa: BLE001 - preserve exact live evidence.
             result["error"] = str(error)
             return_code = 1
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

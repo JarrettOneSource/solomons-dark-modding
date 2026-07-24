@@ -92,7 +92,7 @@ from static_lua_foundations_contracts import (
     test_lua_run_seed_is_authority_owned_and_native_applied,
 )
 from static_lua_scene_contracts import (
-    test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+    test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_local,
 )
 from static_lua_waves_contracts import (
     test_lua_waves_parse_track_and_replicate_semantic_summaries,
@@ -370,8 +370,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_lua_nav_is_bounded_read_only_and_native_backed,
     ),
     (
-        "Lua scene control is semantic, authority-owned, and peer-followed",
-        test_lua_scene_is_address_free_authority_owned_and_peer_followed,
+        "Lua scene control is semantic, authority-owned, and participant-local",
+        test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_local,
     ),
     (
         "Lua wave intelligence is parsed, tracked, and authority-replicated",

@@ -87,8 +87,8 @@ shared state; simulation calls auto-route to the owner).
   pass, carried to peers through the run nonce.
 - **`sd.nav`** — bounded address-free native grid snapshots and player-sized path-segment
   tests.
-- **`sd.scene`** — semantic address-free scene state plus authority-owned region switches;
-  authenticated host intent moves connected clients and Lua-controlled participants.
+- **`sd.scene`** — semantic address-free scene state plus authority-owned authored
+  switches; hub rooms remain participant-local while arena entry is synchronized.
 - **`sd.waves`** — effective schedule plus authority-replicated wave state, composition,
   and spawn/death accounting.
 - **`sd.spells`** — deterministic registration, local input selection, owner-routed
@@ -502,12 +502,15 @@ authority-only stock wave start, identical sorted live summaries, and matching
   paired with `.boneyard` overlays. *MP:* authority-routed; scene epochs already replicate.
 
   **Implemented 2026-07-22.** `sd.scene` provides address-free `get_state/switch_region`.
-  Only the offline/host simulation authority can switch; arena entry reuses the seeded
-  shared-hub run path, while authenticated participant frames make clients follow host
-  hub/private-region intent. Raw arena exits remain owned by the stock synchronized Leave
-  Game flow. The opt-in two-peer acceptance covers client rejection, private-region and
-  shared-hub follow, `sd.scene` arena entry, participant-intent convergence, and the raw
-  arena-exit guard. See `lua-scene.md` and the disabled `sample.lua.scene_lab` mod.
+  Only the offline/host simulation authority can use the authored switch API. Stock hub
+  navigation remains participant-local, so host and client may stay in the courtyard or
+  occupy different private rooms independently. While the host player is private, the host
+  continues ticking and publishing the authoritative shared courtyard for clients left
+  there. Arena entry still reuses the synchronized seeded shared-hub run path, and raw
+  arena exits remain owned by the stock synchronized Leave Game flow. The opt-in two-peer
+  acceptance covers client API rejection, independent private-room navigation, dormant-hub
+  simulation, `sd.scene` arena entry, participant-intent convergence, and the raw arena-exit
+  guard. See `lua-scene.md` and the disabled `sample.lua.scene_lab` mod.
 - **`sd.camera`** — cutscenes, boss intros, shake. *MP:* presentation-local.
 
   **Implemented 2026-07-22.** `sd.camera` provides bounded local view inspection,

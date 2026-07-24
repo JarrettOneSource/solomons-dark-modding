@@ -509,13 +509,17 @@ const char* LevelUpChoiceResultCodeLabel(LevelUpChoiceResultCode code) {
     return "Unknown";
 }
 
-std::string BuildWorldSceneKey(const SDModSceneState& scene_state) {
+std::string BuildWorldSceneKey(
+    const SDModSceneState& scene_state,
+    ParticipantSceneIntentKind scene_kind) {
     std::ostringstream stream;
-    stream << scene_state.kind
+    stream << static_cast<int>(scene_kind)
+           << ":" << scene_state.kind
            << ":" << scene_state.name
            << ":" << scene_state.current_region_index
            << ":" << scene_state.region_type_id
-           << ":" << scene_state.gameplay_scene_address;
+           << ":" << scene_state.gameplay_scene_address
+           << ":" << scene_state.world_address;
     return stream.str();
 }
 

@@ -175,7 +175,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             game_phase = "session";
             break;
         case ParticipantSceneIntentKind::PrivateRegion:
-            game_phase = "loading";
+            game_phase = "hub";
             break;
         }
     }

@@ -20,6 +20,31 @@ bool TryBuildSceneContextSnapshot(uintptr_t gameplay_address, SceneContextSnapsh
     return true;
 }
 
+bool TryBuildGameplayRegionSceneContextSnapshot(
+    uintptr_t gameplay_address,
+    int region_index,
+    SceneContextSnapshot* snapshot) {
+    if (snapshot == nullptr || gameplay_address == 0) {
+        return false;
+    }
+
+    *snapshot = SceneContextSnapshot{};
+    snapshot->gameplay_scene_address = gameplay_address;
+    snapshot->current_region_index = region_index;
+    (void)TryResolveArena(&snapshot->arena_address);
+    (void)TryResolveGameplayIndexState(
+        &snapshot->region_state_address,
+        nullptr);
+    return TryResolveGameplayRegionObject(
+               gameplay_address,
+               region_index,
+               &snapshot->world_address) &&
+           TryReadGameplayRegionTypeId(
+               gameplay_address,
+               region_index,
+               &snapshot->region_type_id);
+}
+
 std::string DescribeSceneKind(const SceneContextSnapshot& snapshot) {
     if (snapshot.world_address == 0) {
         return "transition";

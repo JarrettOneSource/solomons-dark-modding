@@ -368,7 +368,9 @@ bool BuildLocalSpellEffectSnapshotPacket(
             actors.push_back(actor);
         }
     }
-    RefreshWorldSceneTracking(scene_state);
+    RefreshWorldSceneTracking(
+        scene_state,
+        ParticipantSceneIntentKind::Run);
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);

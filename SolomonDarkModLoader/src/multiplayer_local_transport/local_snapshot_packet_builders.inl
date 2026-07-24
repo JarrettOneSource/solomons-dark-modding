@@ -11,25 +11,42 @@ bool BuildLocalWorldSnapshot(
         return false;
     }
 
+    const auto local_scene_intent = SceneIntentFromLocalScene();
+    auto authoritative_scene_intent = local_scene_intent;
     std::vector<SDModSceneActorState> actors;
-    if (!TryListSceneActors(&actors)) {
+    if (local_scene_intent.kind ==
+        ParticipantSceneIntentKind::PrivateRegion) {
+        authoritative_scene_intent.kind =
+            ParticipantSceneIntentKind::SharedHub;
+        authoritative_scene_intent.region_index = -1;
+        authoritative_scene_intent.region_type_id = -1;
+        if (!TryGetSharedHubSceneState(&scene_state) ||
+            !TryListSharedHubActors(&actors)) {
+            return false;
+        }
+    } else if (
+        local_scene_intent.kind ==
+            ParticipantSceneIntentKind::SharedHub ||
+        local_scene_intent.kind == ParticipantSceneIntentKind::Run) {
+        if (!TryListSceneActors(&actors)) {
+            return false;
+        }
+    } else {
         return false;
     }
 
-    const auto scene_intent = SceneIntentFromLocalScene();
-    if (scene_intent.kind != ParticipantSceneIntentKind::SharedHub &&
-        scene_intent.kind != ParticipantSceneIntentKind::Run) {
-        return false;
-    }
-
-    RefreshWorldSceneTracking(scene_state);
-    PruneHubWorldActorNetworkIds(actors, scene_intent.kind);
-    PruneRunHostLocalWorldActorNetworkIds(actors, scene_intent.kind);
+    RefreshWorldSceneTracking(
+        scene_state, authoritative_scene_intent.kind);
+    PruneHubWorldActorNetworkIds(
+        actors, authoritative_scene_intent.kind);
+    PruneRunHostLocalWorldActorNetworkIds(
+        actors, authoritative_scene_intent.kind);
 
     CompleteWorldSnapshotPacketState built;
     built.authority_participant_id = g_local_transport.local_peer_id;
     built.scene_epoch = g_local_transport.world_scene_epoch;
-    built.scene_kind = WorldSceneKindFromSceneIntent(scene_intent);
+    built.scene_kind =
+        WorldSceneKindFromSceneIntent(authoritative_scene_intent);
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
@@ -37,7 +54,9 @@ bool BuildLocalWorldSnapshot(
         built.run_nonce = local->runtime.run_nonce;
     }
 
-    const bool run_scene = scene_intent.kind == ParticipantSceneIntentKind::Run;
+    const bool run_scene =
+        authoritative_scene_intent.kind ==
+        ParticipantSceneIntentKind::Run;
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     if (run_scene) {
         PruneRecentRunEnemyDeathSnapshots(now_ms);
@@ -50,7 +69,8 @@ bool BuildLocalWorldSnapshot(
                     .recent_run_enemy_deaths_by_network_id.size(),
             kWorldSnapshotMaxLogicalActors));
     for (const auto& actor : actors) {
-        if (!ShouldReplicateWorldActor(actor, scene_intent.kind)) {
+        if (!ShouldReplicateWorldActor(
+                actor, authoritative_scene_intent.kind)) {
             continue;
         }
         if (run_scene &&
@@ -140,7 +160,7 @@ bool BuildLocalWorldSnapshot(
         PopulateWorldActorPresentationSnapshot(
             actor.actor_address,
             actor.object_type_id,
-            scene_intent.kind,
+            authoritative_scene_intent.kind,
             actor.tracked_enemy,
             &snapshot);
         if (actor.dead) {
@@ -273,7 +293,7 @@ bool BuildLocalLootSnapshotPacket(LootSnapshotPacket* packet) {
         return false;
     }
 
-    RefreshWorldSceneTracking(scene_state);
+    RefreshWorldSceneTracking(scene_state, scene_intent.kind);
     PruneRunLootDropNetworkIds(actors, scene_intent.kind);
 
     LootSnapshotPacket built{};

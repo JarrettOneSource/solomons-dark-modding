@@ -33,11 +33,13 @@ Queues the stock gameplay-thread region switch. `region_index` must be an intege
 - `1` through `4` are private stock/overlaid regions;
 - `5` is the arena run.
 
-Only the offline player or multiplayer host simulation authority can call this function. Region `5` may be
-entered only from the shared hub and uses the existing seeded run-start path. A raw switch
-cannot leave an active arena; use the stock Leave Game UI action so run teardown and peer
-cleanup remain synchronized. Calls during a transition are rejected instead of stacking
-ambiguous targets.
+Only the offline player or multiplayer host simulation authority can call this
+function. This is the authored scene-control API; ordinary host and client
+players still enter and leave hub rooms through their own stock navigation.
+Region `5` may be entered only from the shared hub and uses the existing seeded
+run-start path. A raw switch cannot leave an active arena; use the stock Leave Game UI action
+so run teardown and peer cleanup remain synchronized. Calls during a transition
+are rejected instead of stacking ambiguous targets.
 
 ```lua
 assert(sd.runtime.has_capability("scene.read"))
@@ -50,15 +52,23 @@ end
 
 ## Multiplayer ownership
 
-The host authors scene changes. Participant frames already carry a scene intent and are
-accepted only from the configured authenticated authority endpoint. Clients follow host
-intent for the shared hub and private regions through the same bounded gameplay-thread
-queue. Run entry continues through the authenticated run-intent and run-nonce path.
+Hub rooms are participant-local. Each host or client may remain in the shared
+hub, enter one of regions `1` through `4`, or occupy different private rooms
+without forcing another player to transition. Authenticated participant frames
+communicate that local scene intent for visibility; they do not grant one
+participant ownership of another participant's hub navigation. Remote player
+actors materialize only when their local and remote scene intents match.
 
-Lua-controlled participants receive the queued target intent at the same time, so their
-materialization follows the new world. A client cannot invoke `switch_region`, and a client
-never follows a raw region request out of an arena; the existing synchronized Leave Game
-flow owns that transition.
+The host keeps the shared courtyard simulation authoritative even while its
+player is in a private room. It continues ticking the dormant courtyard and
+publishes shared-hub students, traders, and other actors to clients that remain
+there. Consequently, entering a room does not pause or replace the main hub
+world for another participant.
+
+Run entry remains synchronized and host-authored through the authenticated run
+intent and run-nonce path. A client cannot invoke `sd.scene.switch_region`, and
+neither peer can use a raw region request to leave an arena; the existing
+synchronized stock Leave Game flow owns that transition.
 
 ## Two-peer acceptance
 
@@ -68,12 +78,18 @@ Use a disposable local pair for the full authority and scene-follow matrix:
 py tools/verify_lua_scene_multiplayer.py --launch-pair --confirm-mutation
 ```
 
-The verifier stages only `sample.lua.scene_lab`, suppresses window tiling, and
-does not kill or attach to unrelated Solomon Dark processes. It proves the
-exact host/client authority flags in the shared hub, rejects a client-authored
-switch, and follows one host-authored transition to private region 2 and back
-to the shared hub. It then enters region 5 through `sd.scene.switch_region`,
-requires both peers and the authenticated host participant intent to converge
-on the arena, and proves that the host receives the stock Leave Game guard
-while the client remains authority-rejected. Only the two process IDs returned
-by the verifier's own launch are stopped.
+The verifier creates a process-specific instance prefix, private stage and
+profile directories, unique Lua pipes, and reserved transport ports. It stages
+only `sample.lua.scene_lab`, suppresses window tiling, and does not kill or
+attach to unrelated Solomon Dark processes.
+
+It proves the exact host/client authority flags in the shared hub and rejects a
+client-authored `sd.scene` switch. The host then enters private region `2` while
+the client stays in the hub. The verifier requires the client's replicated hub
+world to retain the same scene epoch while its student and named-NPC motion
+advances. The client independently enters region `3`, proving that the peers can
+occupy different private rooms, then returns to the hub while the host remains
+in region `2`. After the host returns, region `5` entry must still converge
+through the authenticated host participant intent. Finally, the host must
+receive the stock Leave Game guard while the client remains authority-rejected.
+Only the two process IDs returned by the verifier's own launch are stopped.

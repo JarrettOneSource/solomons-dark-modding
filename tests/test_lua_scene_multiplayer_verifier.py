@@ -56,21 +56,68 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
             "host_scene_region_type_id": "-1",
         }
 
-    def test_private_state_requires_exact_host_intent_and_local_region(self) -> None:
+    def test_client_hub_can_observe_host_private_room(self) -> None:
         values = self._state(
             authority=False,
+            kind="hub",
+            name="hub",
+            region_index=verifier.HUB_REGION_INDEX,
+            host_scene_kind="PrivateRegion",
+            host_scene_region_index=verifier.PRIVATE_REGION_INDEX,
+        )
+        self.assertTrue(
+            verifier.hub_observing_private_host_state_matches(values)
+        )
+        values["host_scene_region_index"] = "3"
+        self.assertFalse(
+            verifier.hub_observing_private_host_state_matches(values)
+        )
+
+    def test_host_and_client_can_occupy_different_private_rooms(self) -> None:
+        host = self._state(
+            authority=True,
             kind="region",
             name="region_2",
             region_index=verifier.PRIVATE_REGION_INDEX,
             host_scene_kind="PrivateRegion",
             host_scene_region_index=verifier.PRIVATE_REGION_INDEX,
         )
-        self.assertTrue(
-            verifier.private_state_matches(values, authority=False)
+        client = self._state(
+            authority=False,
+            kind="shop",
+            name="region_3",
+            region_index=3,
+            host_scene_kind="PrivateRegion",
+            host_scene_region_index=verifier.PRIVATE_REGION_INDEX,
         )
-        values["host_scene_region_index"] = "3"
+        self.assertTrue(
+            verifier.different_private_rooms_state_matches(host, client)
+        )
+        client["region_index"] = str(verifier.PRIVATE_REGION_INDEX)
         self.assertFalse(
-            verifier.private_state_matches(values, authority=False)
+            verifier.different_private_rooms_state_matches(host, client)
+        )
+
+    def test_dormant_hub_world_requires_motion_in_the_same_epoch(self) -> None:
+        before = {
+            "sequence": "40",
+            "scene_epoch": "7",
+            "scene_kind": "SharedHub",
+            "actor_count": "9",
+            "apply_valid": "true",
+            "student_count": "2",
+            "named_npc_count": "8",
+            "motion_checksum": "100.000000",
+        }
+        after = dict(before)
+        after["sequence"] = "44"
+        after["motion_checksum"] = "100.250000"
+        self.assertTrue(
+            verifier.hub_world_stream_advanced(before, after)
+        )
+        after["scene_epoch"] = "8"
+        self.assertFalse(
+            verifier.hub_world_stream_advanced(before, after)
         )
 
     def test_arena_exit_rejection_distinguishes_host_and_client(self) -> None:
@@ -148,7 +195,13 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
             mock.patch.object(verifier, "stop_game_processes") as stop,
         ):
             with self.assertRaisesRegex(RuntimeError, "launch failed"):
-                verifier.run(clients, launch=True, timeout=1.0)
+                verifier.run(
+                    clients,
+                    launch=True,
+                    timeout=1.0,
+                    instance_prefix="scene-test",
+                    ports=(48001, 48002),
+                )
 
         run_probe.assert_not_called()
         poll_probe.assert_not_called()
@@ -193,12 +246,45 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
             "returncode": 0,
             "values": self._state(
                 authority=False,
-                kind="region",
-                name="region_2",
-                region_index=verifier.PRIVATE_REGION_INDEX,
+                kind="hub",
+                name="hub",
+                region_index=verifier.HUB_REGION_INDEX,
                 host_scene_kind="PrivateRegion",
                 host_scene_region_index=verifier.PRIVATE_REGION_INDEX,
             ),
+        }
+        different_private_client = {
+            "returncode": 0,
+            "values": self._state(
+                authority=False,
+                kind="shop",
+                name="region_3",
+                region_index=verifier.CLIENT_PRIVATE_REGION_INDEX,
+                host_scene_kind="PrivateRegion",
+                host_scene_region_index=verifier.PRIVATE_REGION_INDEX,
+            ),
+        }
+        hub_world_before = {
+            "returncode": 0,
+            "values": {
+                "sequence": "40",
+                "scene_epoch": "7",
+                "scene_kind": "SharedHub",
+                "actor_count": "9",
+                "apply_valid": "true",
+                "student_count": "2",
+                "named_npc_count": "8",
+                "identity_checksum": "1234",
+                "motion_checksum": "100.000000",
+            },
+        }
+        hub_world_after = {
+            "returncode": 0,
+            "values": {
+                **hub_world_before["values"],
+                "sequence": "44",
+                "motion_checksum": "100.250000",
+            },
         }
         arena_host = {
             "returncode": 0,
@@ -269,7 +355,6 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
                 "launch_pair",
                 return_value={"hostProcessId": 61, "clientProcessId": 62},
             ) as launch_pair,
-            mock.patch.object(verifier, "disable_bots"),
             mock.patch.object(verifier, "wait_for_remote") as wait_remote,
             mock.patch.object(
                 verifier,
@@ -277,6 +362,8 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
                 side_effect=[
                     client_rejection,
                     private_request,
+                    queued,
+                    queued,
                     queued,
                     queued,
                     host_exit,
@@ -289,6 +376,12 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
                 side_effect=[
                     hub_host,
                     hub_client,
+                    hub_world_before,
+                    private_host,
+                    private_client,
+                    hub_world_after,
+                    private_host,
+                    different_private_client,
                     private_host,
                     private_client,
                     hub_host,
@@ -297,9 +390,16 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
                     arena_client,
                 ],
             ) as poll,
+            mock.patch.object(verifier, "_disable_bots"),
             mock.patch.object(verifier, "stop_game_processes") as stop,
         ):
-            result = verifier.run(clients, launch=True, timeout=1.0)
+            result = verifier.run(
+                clients,
+                launch=True,
+                timeout=1.0,
+                instance_prefix="scene-test",
+                ports=(48001, 48002),
+            )
 
         self.assertTrue(result["ok"])
         launch_pair.assert_called_once_with(
@@ -307,10 +407,15 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
             tile_windows=False,
             kill_existing=False,
             exact_mod_id=verifier.ACCEPTANCE_MOD_ID,
+            instance_prefix="scene-test",
+            host_port=48001,
+            client_port=48002,
+            game_directory=None,
+            quick_start=True,
         )
         self.assertEqual(wait_remote.call_count, 4)
-        self.assertEqual(run_probe.call_count, 6)
-        self.assertEqual(poll.call_count, 8)
+        self.assertEqual(run_probe.call_count, 8)
+        self.assertEqual(poll.call_count, 14)
         stop.assert_called_once_with([61, 62])
 
 

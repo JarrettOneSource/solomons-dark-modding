@@ -111,7 +111,9 @@ bool TryGetWorldState(SDModWorldState* state);
 bool TryGetGameplayCombatState(SDModGameplayCombatState* state);
 bool IsArenaCombatActorType(std::uint32_t object_type_id);
 bool TryGetSceneState(SDModSceneState* state);
+bool TryGetSharedHubSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
+bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors);
 bool TryListNativeActorModifiers(
     uintptr_t actor_address,
     std::vector<SDModNativeModifierState>* modifiers);

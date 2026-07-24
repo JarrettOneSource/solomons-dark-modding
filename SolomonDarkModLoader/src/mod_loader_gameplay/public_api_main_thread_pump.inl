@@ -14,5 +14,6 @@ void PumpGameplayPostStockTickWork() {
         return;
     }
 
+    TickDormantSharedHubOnGameThread();
     PumpHostLootDropDeactivation();
 }

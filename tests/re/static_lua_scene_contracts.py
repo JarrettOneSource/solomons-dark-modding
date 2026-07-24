@@ -5,7 +5,7 @@ from __future__ import annotations
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
-def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
+def test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_local() -> str:
     bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
     scene = _read("SolomonDarkModLoader/src/lua_engine_bindings_scene.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
@@ -20,6 +20,22 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
     participant_sync = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_participant_state_sync.inl"
+    )
+    snapshot_builders = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_snapshot_packet_builders.inl"
+    )
+    snapshot_capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "world_snapshot_capture.inl"
+    )
+    gameplay_pump = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_main_thread_pump.inl"
+    )
+    steam_session = _read(
+        "SolomonDarkModLoader/src/multiplayer_steam_session/"
+        "lobby_and_events.inl"
     )
     bot_intents = _read(
         "SolomonDarkModLoader/src/bot_runtime/public_api/scene_intents_api.inl"
@@ -60,16 +76,32 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
     ):
         assert raw_field not in scene, f"semantic scene API leaks {raw_field}"
 
+    assert "MaybeQueueClientHostRegionFollow" not in transport
+    assert "MaybeQueueClientHostRegionFollow" not in participant_sync
+    assert "kClientHostMaximumPrivateRegionIndex" not in transport
+    assert "kClientHostSharedHubRegionIndex" not in transport
+    assert "MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms)" in (
+        participant_sync
+    )
     for token in (
-        "MaybeQueueClientHostRegionFollow",
-        "IsAuthoritativeHostParticipantPacket(packet, from)",
-        "DoesLocalSceneMatchParticipantIntent(scene_intent)",
-        "IsLocalSceneAlreadyRun(scene_state)",
-        "QueueGameplaySwitchRegion(target_region",
-        "kClientHostMaximumPrivateRegionIndex",
+        "TryListSharedHubActors(&actors)",
+        "authoritative_scene_intent.kind =",
+        "ParticipantSceneIntentKind::SharedHub;",
+        "RefreshWorldSceneTracking(",
+        "scene_state, authoritative_scene_intent.kind)",
     ):
-        assert token in transport, f"client region follow lacks: {token}"
-    assert participant_sync.count("MaybeQueueClientHostRegionFollow(") == 1
+        assert token in snapshot_builders, (
+            f"dormant shared-hub snapshot ownership lacks: {token}"
+        )
+    assert "BuildWorldSceneKey(scene_state, scene_kind)" in snapshot_capture
+    assert "TickDormantSharedHubOnGameThread();" in gameplay_pump
+    private_region_case = steam_session.index(
+        "case ParticipantSceneIntentKind::PrivateRegion:"
+    )
+    assert (
+        'game_phase = "hub";'
+        in steam_session[private_region_case : private_region_case + 160]
+    )
     assert "SetAllBotSceneIntentsToPrivateRegion(region_index)" in queue
     assert "SetAllBotSceneIntentsToSharedHub()" in queue
     assert "ParticipantSceneIntentKind::PrivateRegion" in bot_intents
@@ -82,11 +114,12 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
     for token in (
         "No gameplay-scene, world, arena, region-state, or other process address",
         "simulation authority",
-        "authenticated authority endpoint",
+        "participant-local",
+        "host keeps the shared courtyard simulation authoritative",
         "stock Leave Game UI action",
         "scene.switch.authority",
         "verify_lua_scene_multiplayer.py --launch-pair --confirm-mutation",
-        "private region 2 and back",
+        "different private rooms",
         "authenticated host participant intent",
         "Only the two process IDs",
     ):
@@ -119,10 +152,17 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
         "PRIVATE_SWITCH_PROBE",
         "RUN_SWITCH_PROBE",
         "ARENA_EXIT_REJECTION_PROBE",
+        "CLIENT_PRIVATE_SWITCH_PROBE",
+        "hub_observing_private_host_state_matches",
+        "different_private_rooms_state_matches",
         "host_scene_region_index",
+        "instance_prefix=instance_prefix",
+        "game_directory=game_directory",
         "--confirm-mutation",
+        "--game-directory",
         "tile_windows=False",
         "kill_existing=False",
+        "quick_start=True",
         "exact_mod_id=ACCEPTANCE_MOD_ID",
         "stop_game_processes(launched_process_ids)",
     ):
@@ -130,7 +170,8 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
             f"Lua scene multiplayer verifier lacks: {token}"
         )
     for token in (
-        "test_private_state_requires_exact_host_intent_and_local_region",
+        "test_client_hub_can_observe_host_private_room",
+        "test_host_and_client_can_occupy_different_private_rooms",
         "test_arena_exit_rejection_distinguishes_host_and_client",
         "test_mutation_confirmation_is_required_before_contact",
         "test_disposable_pair_is_required_before_contact",
@@ -147,5 +188,6 @@ def test_lua_scene_is_address_free_authority_owned_and_peer_followed() -> str:
 
     return (
         "sd.scene exposes semantic state, routes switches through the simulation "
-        "authority, with exact two-peer follow and arena-exit acceptance"
+        "authority, keeps hub rooms participant-local, and preserves synchronized "
+        "run entry"
     )

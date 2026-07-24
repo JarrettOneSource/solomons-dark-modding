@@ -142,8 +142,11 @@ void ClearRunLootDropNetworkIds() {
     g_local_transport.next_run_loot_drop_serial = 1;
 }
 
-void RefreshWorldSceneTracking(const SDModSceneState& scene_state) {
-    const auto scene_key = BuildWorldSceneKey(scene_state);
+void RefreshWorldSceneTracking(
+    const SDModSceneState& scene_state,
+    ParticipantSceneIntentKind scene_kind) {
+    const auto scene_key =
+        BuildWorldSceneKey(scene_state, scene_kind);
     if (scene_key == g_local_transport.world_scene_key) {
         return;
     }
