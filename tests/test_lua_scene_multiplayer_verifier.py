@@ -20,6 +20,18 @@ import verify_lua_scene_multiplayer as verifier  # noqa: E402
 
 
 class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
+    def test_host_state_probe_accepts_the_local_owner_runtime_row(self) -> None:
+        self.assertIn(
+            "sd.state.is_authority() and participant.is_owner",
+            verifier.STATE_PROBE,
+        )
+
+    def test_host_state_probe_normalizes_shared_hub_region_zero(self) -> None:
+        self.assertIn(
+            'host_scene_kind == "SharedHub" and 0',
+            verifier.STATE_PROBE,
+        )
+
     @staticmethod
     def _state(
         *,
@@ -361,15 +373,21 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
                 "_run_probe",
                 side_effect=[
                     client_rejection,
+                    host_exit,
+                    client_exit,
+                ],
+            ) as run_probe,
+            mock.patch.object(
+                verifier,
+                "_poll_switch_request",
+                side_effect=[
                     private_request,
                     queued,
                     queued,
                     queued,
                     queued,
-                    host_exit,
-                    client_exit,
                 ],
-            ) as run_probe,
+            ) as poll_switch,
             mock.patch.object(
                 verifier,
                 "_poll_probe",
@@ -414,7 +432,8 @@ class LuaSceneMultiplayerVerifierTests(unittest.TestCase):
             quick_start=True,
         )
         self.assertEqual(wait_remote.call_count, 4)
-        self.assertEqual(run_probe.call_count, 8)
+        self.assertEqual(run_probe.call_count, 3)
+        self.assertEqual(poll_switch.call_count, 5)
         self.assertEqual(poll.call_count, 14)
         stop.assert_called_once_with([61, 62])
 

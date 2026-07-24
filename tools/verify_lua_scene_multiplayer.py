@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import socket
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -20,6 +19,7 @@ from verify_local_multiplayer_sync import (
     HOST_NAME,
     game_process_ids,
     launch_pair,
+    select_available_windows_udp_ports,
     stop_game_processes,
     wait_for_remote,
 )
@@ -40,7 +40,8 @@ local host_participant = sd.bots.get_participant_state({HOST_ID})
 local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local host_runtime = nil
 for _, participant in ipairs(multiplayer.participants or {{}}) do
-  if tonumber(participant.participant_id) == {HOST_ID} then
+  if tonumber(participant.participant_id) == {HOST_ID} or
+      (sd.state.is_authority() and participant.is_owner) then
     host_runtime = participant
     break
   end
@@ -62,10 +63,13 @@ local host_scene_kind =
   host_participant.scene.kind or
   host_runtime and host_runtime.scene_kind or local_host_scene_kind
 local host_scene_region_index =
+  host_scene_kind == "SharedHub" and 0 or
+  host_scene_kind == "Run" and -1 or
   host_participant and host_participant.scene and
   host_participant.scene.region_index or
   sd.state.is_authority() and local_host_scene_region_index or -999
 local host_scene_region_type_id =
+  host_scene_kind == "Run" and -1 or
   host_participant and host_participant.scene and
   host_participant.scene.region_type_id or
   sd.state.is_authority() and local_host_scene_region_type_id or -999
@@ -519,6 +523,26 @@ def _poll_states(
     ]
 
 
+def _poll_switch_request(
+    client: tuple[str, str],
+    code: str,
+    *,
+    timeout: float,
+    description: str,
+    validate_range: bool = False,
+) -> dict[str, Any]:
+    return _poll_probe(
+        client,
+        code,
+        lambda values: switch_request_matches(
+            values,
+            validate_range=validate_range,
+        ),
+        timeout=timeout,
+        description=description,
+    )
+
+
 def clients_for_instance(
     instance_prefix: str,
 ) -> list[tuple[str, str]]:
@@ -532,25 +556,6 @@ def clients_for_instance(
             f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client",
         ),
     ]
-
-
-def _reserve_udp_ports(count: int) -> list[int]:
-    reservations: list[socket.socket] = []
-    try:
-        for _ in range(count):
-            reservation = socket.socket(
-                socket.AF_INET,
-                socket.SOCK_DGRAM,
-            )
-            reservation.bind(("127.0.0.1", 0))
-            reservations.append(reservation)
-        return [
-            int(reservation.getsockname()[1])
-            for reservation in reservations
-        ]
-    finally:
-        for reservation in reservations:
-            reservation.close()
 
 
 def _disable_bots(peers: list[tuple[str, str]]) -> None:
@@ -640,7 +645,13 @@ def run(
                 f"{client_rejection}"
             )
 
-        private_request = _run_probe(host, PRIVATE_SWITCH_PROBE)
+        private_request = _poll_switch_request(
+            host,
+            PRIVATE_SWITCH_PROBE,
+            timeout=timeout,
+            description="host private-region request",
+            validate_range=True,
+        )
         result["private_request"] = private_request
         if not switch_request_matches(
             _values(private_request),
@@ -681,9 +692,11 @@ def run(
             description="host-authoritative dormant hub simulation",
         )
 
-        client_private_request = _run_probe(
+        client_private_request = _poll_switch_request(
             client,
             CLIENT_PRIVATE_SWITCH_PROBE,
+            timeout=timeout,
+            description="client-local private-region request",
         )
         result["client_private_request"] = client_private_request
         if not switch_request_matches(
@@ -722,9 +735,11 @@ def run(
             different_client,
         ]
 
-        client_hub_request = _run_probe(
+        client_hub_request = _poll_switch_request(
             client,
             CLIENT_HUB_SWITCH_PROBE,
+            timeout=timeout,
+            description="client-local shared-hub request",
         )
         result["client_hub_request"] = client_hub_request
         if not switch_request_matches(_values(client_hub_request)):
@@ -751,7 +766,12 @@ def run(
             ),
         ]
 
-        hub_request = _run_probe(host, HUB_SWITCH_PROBE)
+        hub_request = _poll_switch_request(
+            host,
+            HUB_SWITCH_PROBE,
+            timeout=timeout,
+            description="host shared-hub request",
+        )
         result["hub_request"] = hub_request
         if not switch_request_matches(_values(hub_request)):
             raise RuntimeError(
@@ -764,7 +784,12 @@ def run(
             description="authenticated shared-hub convergence",
         )
 
-        run_request = _run_probe(host, RUN_SWITCH_PROBE)
+        run_request = _poll_switch_request(
+            host,
+            RUN_SWITCH_PROBE,
+            timeout=timeout,
+            description="host run-entry request",
+        )
         result["run_request"] = run_request
         if not switch_request_matches(_values(run_request)):
             raise RuntimeError(
@@ -861,7 +886,7 @@ def main() -> int:
             reserved_ports = (
                 [args.host_port, args.client_port]
                 if args.host_port is not None
-                else _reserve_udp_ports(2)
+                else select_available_windows_udp_ports(2)
             )
             ports = (
                 int(reserved_ports[0]),
