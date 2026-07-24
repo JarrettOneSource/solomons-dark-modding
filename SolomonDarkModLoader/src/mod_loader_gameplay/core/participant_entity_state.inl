@@ -126,6 +126,8 @@ struct ParticipantEntityBinding {
     float stock_tick_facing_origin_y = 0.0f;
     bool suppress_next_stock_tick_after_spell_filter_cancel = false;
     bool death_transition_stock_tick_seen = false;
+    bool native_remote_death_epoch_active = false;
+    uintptr_t native_remote_death_attachment_actor_address = 0;
     bool native_remote_vital_baseline_valid = false;
     float native_remote_last_written_hp = 0.0f;
     float native_remote_last_written_max_hp = 0.0f;

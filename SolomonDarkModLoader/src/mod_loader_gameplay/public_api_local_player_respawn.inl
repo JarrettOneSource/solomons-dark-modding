@@ -30,7 +30,10 @@ bool TryRespawnLocalPlayerAt(
         kProgressionMpOffset == 0 ||
         kActorPositionXOffset == 0 ||
         kActorPositionYOffset == 0 ||
-        kActorAnimationDriveStateByteOffset == 0) {
+        kActorAnimationDriveStateByteOffset == 0 ||
+        kActorAnimationMoveDurationTicksOffset == 0 ||
+        kActorTerminalDispatchPendingOffset == 0 ||
+        kActorTerminalDispatchCountdownOffset == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "A live local run player with valid progression is required.";
@@ -93,6 +96,14 @@ bool TryRespawnLocalPlayerAt(
             player.actor_address,
             kActorAnimationDriveParameterOffset,
             0.0f) &&
+        memory.TryWriteField<std::uint8_t>(
+            player.actor_address,
+            kActorTerminalDispatchPendingOffset,
+            0) &&
+        memory.TryWriteField<std::int32_t>(
+            player.actor_address,
+            kActorTerminalDispatchCountdownOffset,
+            0) &&
         memory.TryWriteField<std::int32_t>(
             player.actor_address,
             kActorAnimationMoveDurationTicksOffset,
@@ -119,9 +130,24 @@ bool TryRespawnLocalPlayerAt(
     }
 
     SDModPlayerState verified;
+    std::uint8_t verified_terminal_pending = 1;
+    std::int32_t verified_terminal_countdown = -1;
+    std::int32_t verified_death_presentation_ticks = -1;
     constexpr float kRespawnReadbackTolerance = 0.05f;
     if (!TryGetPlayerState(&verified) ||
         !verified.valid ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorTerminalDispatchPendingOffset,
+            &verified_terminal_pending) ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorTerminalDispatchCountdownOffset,
+            &verified_terminal_countdown) ||
+        !memory.TryReadField(
+            player.actor_address,
+            kActorAnimationMoveDurationTicksOffset,
+            &verified_death_presentation_ticks) ||
         verified.actor_address != player.actor_address ||
         std::abs(verified.hp - verified.max_hp) >
             kRespawnReadbackTolerance ||
@@ -131,7 +157,10 @@ bool TryRespawnLocalPlayerAt(
             kRespawnReadbackTolerance ||
         std::abs(verified.y - world_y) >
             kRespawnReadbackTolerance ||
-        verified.anim_drive_state != 0) {
+        verified.anim_drive_state != 0 ||
+        verified_terminal_pending != 0 ||
+        verified_terminal_countdown != 0 ||
+        verified_death_presentation_ticks != 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Native respawn fields did not converge after writeback.";

@@ -222,7 +222,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 82;",
+        "constexpr std::uint16_t kProtocolVersion = 83;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
         "static_assert(sizeof(ParticipantFramePacket) == 322",

@@ -349,6 +349,16 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.presentation_flags =
             ParticipantPresentationFlagAnimationDriveWord |
             ParticipantPresentationFlagRenderDriveFloats;
+        if (g_local_death_spectator.phase ==
+            DeathSpectatorPhase::DeathPresentation) {
+            local->runtime.presentation_flags |=
+                ParticipantPresentationFlagDeathPresentation;
+            local->runtime.death_presentation_tick =
+                CurrentLocalDeathPresentationTick(
+                    static_cast<std::uint64_t>(::GetTickCount64()));
+        } else {
+            local->runtime.death_presentation_tick = 0;
+        }
         // The staff attachment tail field at +0x84 is native-owned and can hold
         // process-local/pointer-like data in run scenes. Do not mirror it across
         // clients; remote cast playback and local materialization own staff glow.
@@ -474,6 +484,17 @@ void PopulateLocalParticipantFrameFields(
     packet->movement_intent_y = local.runtime.movement_intent_y;
     packet->anim_drive_state = local.runtime.anim_drive_state;
     packet->presentation_flags = local.runtime.presentation_flags;
+    packet->death_presentation_tick =
+        CurrentLocalDeathPresentationTick(
+            static_cast<std::uint64_t>(::GetTickCount64()));
+    if (g_local_death_spectator.phase ==
+        DeathSpectatorPhase::DeathPresentation) {
+        packet->presentation_flags |=
+            ParticipantPresentationFlagDeathPresentation;
+    } else {
+        packet->presentation_flags &=
+            ~ParticipantPresentationFlagDeathPresentation;
+    }
     packet->attachment_staff_visual_state =
         local.runtime.attachment_staff_visual_state;
     packet->render_variant_primary = local.runtime.render_variant_primary;

@@ -1,4 +1,5 @@
-constexpr std::uint64_t kDeathPresentationDurationMs = 3000;
+constexpr std::uint64_t kDeathPresentationDurationMs =
+    kParticipantDeathPresentationDurationMs;
 constexpr std::uint64_t kSpectatorClickReleaseDebounceMs = 150;
 constexpr std::string_view kDeathSpectatorCameraOwner =
     "multiplayer.death_spectator";
@@ -14,6 +15,17 @@ struct LocalDeathSpectatorState {
 };
 
 LocalDeathSpectatorState g_local_death_spectator;
+
+std::uint16_t CurrentLocalDeathPresentationTick(
+    std::uint64_t now_ms) {
+    if (g_local_death_spectator.phase !=
+            DeathSpectatorPhase::DeathPresentation ||
+        now_ms < g_local_death_spectator.death_started_ms) {
+        return 0;
+    }
+    return ResolveParticipantDeathPresentationTick(
+        now_ms - g_local_death_spectator.death_started_ms);
+}
 
 struct WaveRespawnCommand {
     std::uint32_t epoch = 0;
@@ -316,7 +328,7 @@ bool HoldLocalSpectatorDeathVitals() {
         player.max_mp <= 0.0f) {
         return false;
     }
-    if (player.hp > 0.0f &&
+    if (player.hp != 0.0f &&
         !TryWriteLocalPlayerOrbResource(
             static_cast<std::int32_t>(
                 LootOrbResourceKind::Health),
@@ -509,6 +521,17 @@ void TickLocalDeathSpectator(std::uint64_t now_ms) {
     if (g_local_death_spectator.phase !=
         DeathSpectatorPhase::Inactive) {
         (void)HoldLocalSpectatorDeathVitals();
+        const bool presentation_active =
+            g_local_death_spectator.phase ==
+                DeathSpectatorPhase::DeathPresentation &&
+            now_ms >= g_local_death_spectator.death_started_ms &&
+            now_ms - g_local_death_spectator.death_started_ms <
+                kDeathPresentationDurationMs;
+        (void)HoldLocalPlayerMultiplayerDeathPresentation(
+            presentation_active,
+            now_ms >= g_local_death_spectator.death_started_ms
+                ? now_ms - g_local_death_spectator.death_started_ms
+                : 0);
     }
     if (g_local_death_spectator.phase ==
             DeathSpectatorPhase::DeathPresentation &&

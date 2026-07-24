@@ -12,6 +12,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from multiplayer_defense_behavior_harness import invoke_native_magic_hit_trial
+from multiplayer_frame_capture import capture_game_backbuffer
+from verify_player_health_death_sync import set_local_player_vitals
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -33,7 +35,11 @@ from verify_local_multiplayer_sync import (
 )
 POSITION_TOLERANCE = 0.25
 VITAL_TOLERANCE = 0.05
+DEATH_TRANSITION_ADDRESS = 0x00534120
+STAFF_DROP_ADDRESS = 0x00534270
+DEATH_PRESENTATION_FLAG = 1 << 6
 OUTPUT = ROOT / "runtime" / "multiplayer_death_spectator_respawn.json"
+SCREENSHOT_ROOT = ROOT / "runtime" / "multiplayer_death_spectator_respawn"
 ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
 WAVE_FIXTURE = (
     ROOT
@@ -51,6 +57,7 @@ end
 local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local spectator = assert(multiplayer.death_spectator)
 local player = sd.player.get_state()
+local actor = player and tonumber(player.actor_address) or 0
 local scene = sd.world.get_scene()
 local ui = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot() or nil
 local camera_ok, camera = false, nil
@@ -70,6 +77,22 @@ if spectator.target_participant_id ~= nil and
   target_gameplay = sd.bots.get_participant_state(
     spectator.target_participant_id)
 end
+local death_drive_state = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
+local death_presentation_ticks = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_animation_move_duration_ticks")) or 0) or 0
+local terminal_pending = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
+local terminal_countdown = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_countdown")) or 0) or 0
+local death_transition_hits =
+  sd.debug.get_trace_hits("player_death_transition") or {}
+local staff_drop_hits =
+  sd.debug.get_trace_hits("player_staff_drop") or {}
 emit("active", spectator.active)
 emit("phase", spectator.phase)
 emit("death_started_ms", spectator.death_started_ms)
@@ -89,6 +112,20 @@ emit("max_hp", player and player.max_hp or 0)
 emit("mp", player and player.mp or 0)
 emit("max_mp", player and player.max_mp or 0)
 emit("anim_drive_state", player and player.anim_drive_state or -1)
+emit("materialized", actor ~= 0)
+emit("actor_address", actor)
+emit("death_drive_state", death_drive_state)
+emit("death_presentation_ticks", death_presentation_ticks)
+emit("terminal_pending", terminal_pending)
+emit("terminal_countdown", terminal_countdown)
+emit("presentation_active", spectator.phase == "DeathPresentation")
+emit("red_effect_active",
+  death_drive_state ~= 0 and death_presentation_ticks > 150)
+emit("death_transition_hits", #death_transition_hits)
+emit("staff_drop_hits", #staff_drop_hits)
+emit("attachment_type_id",
+  player and player.attachment_visual_lane and
+    player.attachment_visual_lane.current_object_type_id or 0)
 emit("x", player and player.x or 0)
 emit("y", player and player.y or 0)
 emit("target_alive", target ~= nil and
@@ -98,6 +135,151 @@ emit("target_y", target_gameplay and target_gameplay.y or 0)
 emit("camera_focus_active", camera_ok and camera.focus_active or false)
 emit("camera_center_x", camera_ok and camera.center_x or 0)
 emit("camera_center_y", camera_ok and camera.center_y or 0)
+"""
+
+
+REMOTE_DEATH_STATE_PROBE = r"""
+local participant_id = __PARTICIPANT_ID__
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local participant = nil
+for _, candidate in ipairs(multiplayer.participants or {}) do
+  if candidate.participant_id == participant_id then
+    participant = candidate
+    break
+  end
+end
+local gameplay = sd.bots.get_participant_state(participant_id)
+local actor = gameplay and tonumber(gameplay.actor_address) or 0
+local death_drive_state = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
+local death_presentation_ticks = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_animation_move_duration_ticks")) or 0) or 0
+local terminal_pending = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
+local terminal_countdown = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_countdown")) or 0) or 0
+local presentation_flags = participant and participant.presentation_flags or 0
+local death_transition_hits =
+  sd.debug.get_trace_hits("player_death_transition") or {}
+local staff_drop_hits =
+  sd.debug.get_trace_hits("player_staff_drop") or {}
+emit("materialized",
+  gameplay ~= nil and gameplay.entity_materialized and actor ~= 0)
+emit("actor_address", actor)
+emit("hp",
+  gameplay and gameplay.hp or
+    (participant and participant.life_current or 0))
+emit("max_hp",
+  gameplay and gameplay.max_hp or
+    (participant and participant.life_max or 0))
+emit("death_drive_state", death_drive_state)
+emit("death_presentation_ticks", death_presentation_ticks)
+emit("terminal_pending", terminal_pending)
+emit("terminal_countdown", terminal_countdown)
+emit("presentation_flags", presentation_flags)
+emit("authoritative_death_presentation_ticks",
+  participant and participant.death_presentation_tick or 0)
+emit("presentation_active",
+  math.floor(presentation_flags / __DEATH_PRESENTATION_FLAG__) % 2 == 1)
+emit("red_effect_active",
+  death_drive_state ~= 0 and death_presentation_ticks > 150)
+emit("death_transition_hits", #death_transition_hits)
+emit("staff_drop_hits", #staff_drop_hits)
+emit("attachment_type_id",
+  gameplay and gameplay.attachment_visual_lane and
+    gameplay.attachment_visual_lane.current_object_type_id or 0)
+"""
+
+
+LOCAL_DEATH_VISUAL_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local spectator = assert(multiplayer.death_spectator)
+local player = sd.player.get_state()
+local actor = player and tonumber(player.actor_address) or 0
+local death_drive_state = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
+local death_presentation_ticks = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_animation_move_duration_ticks")) or 0) or 0
+local terminal_pending = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
+emit("materialized", actor ~= 0)
+emit("hp", player and player.hp or 0)
+emit("death_drive_state", death_drive_state)
+emit("death_presentation_ticks", death_presentation_ticks)
+emit("terminal_pending", terminal_pending)
+emit("presentation_active", spectator.phase == "DeathPresentation")
+emit("red_effect_active",
+  death_drive_state ~= 0 and death_presentation_ticks > 150)
+"""
+
+
+REMOTE_DEATH_VISUAL_PROBE = r"""
+local participant_id = __PARTICIPANT_ID__
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local participant = nil
+for _, candidate in ipairs(multiplayer.participants or {}) do
+  if candidate.participant_id == participant_id then
+    participant = candidate
+    break
+  end
+end
+local gameplay = sd.bots.get_participant_state(participant_id)
+local actor = gameplay and tonumber(gameplay.actor_address) or 0
+local death_drive_state = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_animation_drive_state_byte")) or 0) or 0
+local death_presentation_ticks = actor ~= 0 and
+  (sd.debug.read_u32(actor +
+    sd.debug.layout_offset("actor_animation_move_duration_ticks")) or 0) or 0
+local terminal_pending = actor ~= 0 and
+  (sd.debug.read_u8(actor +
+    sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
+local presentation_flags = participant and participant.presentation_flags or 0
+emit("materialized",
+  gameplay ~= nil and gameplay.entity_materialized and actor ~= 0)
+emit("hp",
+  gameplay and gameplay.hp or
+    (participant and participant.life_current or 0))
+emit("death_drive_state", death_drive_state)
+emit("death_presentation_ticks", death_presentation_ticks)
+emit("terminal_pending", terminal_pending)
+emit("presentation_active",
+  math.floor(presentation_flags / __DEATH_PRESENTATION_FLAG__) % 2 == 1)
+emit("red_effect_active",
+  death_drive_state ~= 0 and death_presentation_ticks > 150)
+"""
+
+
+ARM_DEATH_TRACES = f"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+sd.debug.clear_trace_hits("player_death_transition")
+sd.debug.clear_trace_hits("player_staff_drop")
+local death_ok, death_error = sd.debug.trace_function(
+  0x{DEATH_TRANSITION_ADDRESS:08X}, "player_death_transition", 7)
+local staff_ok, staff_error = sd.debug.trace_function(
+  0x{STAFF_DROP_ADDRESS:08X}, "player_staff_drop", 7)
+emit("death_ok", death_ok)
+emit("death_error", death_error or "")
+emit("staff_ok", staff_ok)
+emit("staff_error", staff_error or "")
 """
 
 
@@ -148,6 +330,27 @@ emit("triggered", triggered)
 """
 
 
+def _apply_authoritative_host_lethal_hit(
+    host_pipe: str,
+) -> dict[str, object]:
+    trial = invoke_native_magic_hit_trial(
+        host_pipe,
+        projectile_damage=0.0,
+        magic_damage=1000.0,
+        attempts=8,
+        label="host death spectator",
+        timeout=8.0,
+        target_participant_id=0,
+    )
+    hp_after = float(trial["hp_after"])
+    if not math.isfinite(hp_after) or hp_after > VITAL_TOLERANCE:
+        raise VerifyFailure(
+            "authoritative host lethal hit did not reach zero life: "
+            f"{trial}"
+        )
+    return trial
+
+
 def _apply_authoritative_client_lethal_hit(
     host_pipe: str,
 ) -> dict[str, object]:
@@ -169,6 +372,40 @@ def _apply_authoritative_client_lethal_hit(
     return trial
 
 
+def _establish_local_lethal_precondition(
+    pipe_name: str,
+    owner_label: str,
+) -> dict[str, str]:
+    values = set_local_player_vitals(
+        pipe_name,
+        1.0,
+        50.0,
+        mp=50.0,
+        max_mp=50.0,
+    )
+    hp = _number(values, "after.hp")
+    max_hp = _number(values, "after.max_hp")
+    if (
+        not math.isfinite(hp)
+        or abs(hp - 1.0) > VITAL_TOLERANCE
+        or not math.isfinite(max_hp)
+        or abs(max_hp - 50.0) > VITAL_TOLERANCE
+        or _integer(values, "after.anim_drive_state") != 0
+    ):
+        raise VerifyFailure(
+            f"{owner_label} lethal precondition did not preserve a living "
+            "actor: "
+            f"{values}"
+        )
+    return values
+
+
+def _establish_host_lethal_precondition(
+    host_pipe: str,
+) -> dict[str, str]:
+    return _establish_local_lethal_precondition(host_pipe, "host")
+
+
 def _number(values: Mapping[str, str], key: str) -> float:
     try:
         value = float(values.get(key, "nan"))
@@ -186,6 +423,94 @@ def _integer(values: Mapping[str, str], key: str) -> int:
             return int(float(raw))
         except (TypeError, ValueError, OverflowError):
             return -1
+
+
+def death_animation_sync_matches(
+    states: list[Mapping[str, str]],
+    *,
+    presentation_active: bool,
+) -> bool:
+    if not states:
+        return False
+    for values in states:
+        hp = _number(values, "hp")
+        presentation_ticks = _integer(
+            values,
+            "death_presentation_ticks",
+        )
+        if (
+            values.get("materialized") != "true"
+            or not math.isfinite(hp)
+            or hp > VITAL_TOLERANCE
+            or _integer(values, "death_drive_state") != 1
+            or _integer(values, "terminal_pending") != 0
+            or values.get("presentation_active")
+            != ("true" if presentation_active else "false")
+            or presentation_ticks < 0
+            or presentation_ticks > 298
+        ):
+            return False
+        if not presentation_active and (
+            presentation_ticks > 150
+            or values.get("red_effect_active") != "false"
+        ):
+            return False
+    return True
+
+
+def death_animation_clock_sync_matches(
+    states: list[Mapping[str, str]],
+) -> bool:
+    if not states:
+        return False
+    presentation_ticks = [
+        _integer(values, "death_presentation_ticks")
+        for values in states
+    ]
+    return (
+        min(presentation_ticks) >= 0
+        and max(presentation_ticks) - min(presentation_ticks) <= 40
+    )
+
+
+def red_death_effect_matches(
+    values: Mapping[str, str],
+    *,
+    active: bool,
+) -> bool:
+    presentation_ticks = _integer(
+        values,
+        "death_presentation_ticks",
+    )
+    if active:
+        return (
+            values.get("presentation_active") == "true"
+            and _integer(values, "death_drive_state") == 1
+            and 150 < presentation_ticks <= 298
+            and values.get("red_effect_active") == "true"
+        )
+    return (
+        values.get("presentation_active") == "false"
+        and presentation_ticks <= 150
+        and values.get("red_effect_active") == "false"
+    )
+
+
+def staff_drop_once_matches(
+    states: Mapping[str, Mapping[str, str]],
+    *,
+    owner_label: str,
+) -> bool:
+    if owner_label not in states:
+        return False
+    for label, values in states.items():
+        expected = 1 if label == owner_label else 0
+        if (
+            _integer(values, "death_transition_hits") != expected
+            or _integer(values, "staff_drop_hits") != expected
+        ):
+            return False
+    return True
 
 
 def spectator_state_matches(values: Mapping[str, str]) -> bool:
@@ -231,7 +556,7 @@ def death_presentation_state_matches(
         and values.get("scene") == "testrun"
         and values.get("game_over_surface") == "false"
         and math.isfinite(hp)
-        and hp <= 0.0
+        and hp <= VITAL_TOLERANCE
         and _integer(values, "anim_drive_state") == 1
         and values.get("display_text", "") == ""
     )
@@ -266,6 +591,8 @@ def respawn_state_matches(
         and max_mp > 0.0
         and abs(mp - max_mp) <= VITAL_TOLERANCE
         and _integer(values, "anim_drive_state") == 0
+        and _integer(values, "death_presentation_ticks") == 0
+        and _integer(values, "terminal_pending") == 0
         and math.isfinite(x)
         and math.isfinite(y)
         and math.isfinite(respawn_x)
@@ -309,6 +636,74 @@ def query_spectator_state(pipe_name: str) -> dict[str, str]:
     )
 
 
+def query_remote_death_state(
+    pipe_name: str,
+    participant_id: int,
+) -> dict[str, str]:
+    code = REMOTE_DEATH_STATE_PROBE.replace(
+        "__PARTICIPANT_ID__",
+        str(participant_id),
+    ).replace(
+        "__DEATH_PRESENTATION_FLAG__",
+        str(DEATH_PRESENTATION_FLAG),
+    )
+    return parse_key_values(lua(pipe_name, code, timeout=8.0))
+
+
+def query_local_death_visual_state(
+    pipe_name: str,
+) -> dict[str, str]:
+    return parse_key_values(
+        lua(pipe_name, LOCAL_DEATH_VISUAL_PROBE, timeout=8.0)
+    )
+
+
+def query_remote_death_visual_state(
+    pipe_name: str,
+    participant_id: int,
+) -> dict[str, str]:
+    code = REMOTE_DEATH_VISUAL_PROBE.replace(
+        "__PARTICIPANT_ID__",
+        str(participant_id),
+    ).replace(
+        "__DEATH_PRESENTATION_FLAG__",
+        str(DEATH_PRESENTATION_FLAG),
+    )
+    return parse_key_values(lua(pipe_name, code, timeout=8.0))
+
+
+def _arm_death_traces(pipe_names: list[str]) -> dict[str, dict[str, str]]:
+    armed: dict[str, dict[str, str]] = {}
+    for pipe_name in pipe_names:
+        values = parse_key_values(
+            lua(pipe_name, ARM_DEATH_TRACES, timeout=8.0)
+        )
+        if (
+            values.get("death_ok") != "true"
+            or values.get("staff_ok") != "true"
+        ):
+            raise VerifyFailure(
+                f"native death trace arm failed on {pipe_name}: {values}"
+            )
+        armed[pipe_name] = values
+    return armed
+
+
+def _disarm_death_traces(pipe_names: list[str]) -> None:
+    for pipe_name in pipe_names:
+        try:
+            lua(
+                pipe_name,
+                "sd.debug.untrace_function("
+                f"0x{STAFF_DROP_ADDRESS:08X}); "
+                "sd.debug.untrace_function("
+                f"0x{DEATH_TRANSITION_ADDRESS:08X}); return 'ok'",
+                timeout=3.0,
+            )
+        except Exception:
+            pass
+
+
 def _wait_for_values(
     pipe_name: str,
     predicate,
@@ -331,6 +726,83 @@ def _wait_for_values(
     suffix = f" last_error={last_error}" if last_error else ""
     raise VerifyFailure(
         f"timed out waiting for {description} on {pipe_name}; "
+        f"last={last}.{suffix}"
+    )
+
+
+def _wait_for_remote_death_values(
+    pipe_name: str,
+    participant_id: int,
+    predicate,
+    *,
+    timeout: float,
+    description: str,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            last = query_remote_death_state(
+                pipe_name,
+                participant_id,
+            )
+            last_error = ""
+            if predicate(last):
+                return last
+        except Exception as exc:  # noqa: BLE001 - preserve probe evidence.
+            last_error = str(exc)
+        time.sleep(0.05)
+    suffix = f" last_error={last_error}" if last_error else ""
+    raise VerifyFailure(
+        f"timed out waiting for {description} on {pipe_name}; "
+        f"last={last}.{suffix}"
+    )
+
+
+def _wait_for_participant_death_visual_phase(
+    owner_label: str,
+    owner_pipe: str,
+    participant_id: int,
+    observer_pipes: Mapping[str, str],
+    *,
+    active: bool,
+    timeout: float,
+) -> dict[str, dict[str, str]]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, dict[str, str]] = {}
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            last = {
+                owner_label: query_local_death_visual_state(owner_pipe),
+                **{
+                    label: query_remote_death_visual_state(
+                        pipe_name,
+                        participant_id,
+                    )
+                    for label, pipe_name in observer_pipes.items()
+                },
+            }
+            last_error = ""
+            if all(
+                red_death_effect_matches(values, active=active)
+                for values in last.values()
+            ) and (
+                not active
+                or death_animation_clock_sync_matches(
+                    list(last.values())
+                )
+            ):
+                return last
+        except Exception as exc:  # noqa: BLE001 - preserve probe evidence.
+            last_error = str(exc)
+        time.sleep(0.02)
+    suffix = f" last_error={last_error}" if last_error else ""
+    phase = "active" if active else "cleared"
+    raise VerifyFailure(
+        f"timed out waiting for synchronized {owner_label} red death "
+        f"effect {phase}; "
         f"last={last}.{suffix}"
     )
 
@@ -447,6 +919,144 @@ def _cycle_spectator_target(
     )
 
 
+def _verify_client_death_regression(
+    host_pipe: str,
+    client_pipe: str,
+    third_pipe: str,
+    pipe_names: list[str],
+) -> dict[str, object]:
+    result: dict[str, object] = {}
+    _disarm_death_traces(pipe_names)
+    result["death_traces_armed"] = _arm_death_traces(pipe_names)
+    result["predeath_client"] = _wait_for_values(
+        client_pipe,
+        lambda values: _integer(values, "attachment_type_id") == 0x1B5C,
+        timeout=8.0,
+        description="client staff attachment before death",
+    )
+    result["lethal_precondition"] = _establish_local_lethal_precondition(
+        client_pipe,
+        "client",
+    )
+    death_written_at = time.monotonic()
+    result["lethal_hit"] = _apply_authoritative_client_lethal_hit(host_pipe)
+    death_presentation = _wait_for_values(
+        client_pipe,
+        death_presentation_state_matches,
+        timeout=5.0,
+        description="client native death presentation without Game Over",
+    )
+    result["death_presentation"] = death_presentation
+
+    red_effect_during_grace = (
+        _wait_for_participant_death_visual_phase(
+            "client",
+            client_pipe,
+            CLIENT_ID,
+            {
+                "host": host_pipe,
+                "third": third_pipe,
+            },
+            active=True,
+            timeout=3.2,
+        )
+    )
+    result["death_animation_grace"] = red_effect_during_grace
+    if not death_animation_sync_matches(
+        list(red_effect_during_grace.values()),
+        presentation_active=True,
+    ) or not death_animation_clock_sync_matches(
+        list(red_effect_during_grace.values())
+    ):
+        raise VerifyFailure(
+            "client death presentation clocks diverged across owner and "
+            f"observers: {red_effect_during_grace}"
+        )
+    result["red_effect_during_grace"] = red_effect_during_grace
+
+    spectating = _wait_for_values(
+        client_pipe,
+        spectator_state_matches,
+        timeout=6.0,
+        description="client spectator mode with a live target",
+    )
+    spectator_delay = time.monotonic() - death_written_at
+    if spectator_delay < 2.8:
+        raise VerifyFailure(
+            "client spectator mode started before the three-second native "
+            f"death presentation elapsed: {spectator_delay:.3f}s"
+        )
+    result["spectator_delay_seconds"] = spectator_delay
+    result["spectating_initial"] = spectating
+
+    red_effect_after_grace = _wait_for_participant_death_visual_phase(
+        "client",
+        client_pipe,
+        CLIENT_ID,
+        {
+            "host": host_pipe,
+            "third": third_pipe,
+        },
+        active=False,
+        timeout=5.0,
+    )
+    if not death_animation_sync_matches(
+        list(red_effect_after_grace.values()),
+        presentation_active=False,
+    ):
+        raise VerifyFailure(
+            "client death effect remained active after the three-second "
+            f"grace period: {red_effect_after_grace}"
+        )
+    result["death_animation_after_grace"] = red_effect_after_grace
+
+    initial_target = _integer(spectating, "target_participant_id")
+    after_left = _cycle_spectator_target(
+        client_pipe,
+        previous_target_id=initial_target,
+        input_code="return tostring(sd.input.click_normalized(0.5, 0.5))",
+        description="client left-click spectator cycle",
+    )
+    result["spectating_after_left"] = after_left
+    time.sleep(0.25)
+    result["spectating_after_right"] = _cycle_spectator_target(
+        client_pipe,
+        previous_target_id=_integer(
+            after_left,
+            "target_participant_id",
+        ),
+        input_code="return tostring(sd.input.hold_mouse_right_frames(1))",
+        description="client right-click spectator cycle",
+    )
+
+    result["repeat_lethal_hit"] = invoke_native_magic_hit_trial(
+        host_pipe,
+        projectile_damage=0.0,
+        magic_damage=1000.0,
+        attempts=2,
+        label="dead client repeated lethal hit",
+        timeout=8.0,
+        require_life_loss=False,
+        target_participant_id=CLIENT_ID,
+    )
+    time.sleep(0.5)
+    drop_trace_states = {
+        "client": query_spectator_state(client_pipe),
+        "host": query_remote_death_state(host_pipe, CLIENT_ID),
+        "third": query_remote_death_state(third_pipe, CLIENT_ID),
+    }
+    if not staff_drop_once_matches(
+        drop_trace_states,
+        owner_label="client",
+    ):
+        raise VerifyFailure(
+            "staff drop did not remain exactly once for the client death "
+            f"epoch: {drop_trace_states}"
+        )
+    result["staff_drop_once"] = drop_trace_states
+    return result
+
+
 def run_live_verification(
     *,
     instance_prefix: str,
@@ -512,23 +1122,102 @@ def run_live_verification(
                 )
         result["relationships"] = relationships
 
+        result["death_traces_armed"] = _arm_death_traces(pipe_names)
+        predeath_host = _wait_for_values(
+            host_pipe,
+            lambda values: _integer(values, "attachment_type_id")
+            == 0x1B5C,
+            timeout=8.0,
+            description="host staff attachment before death",
+        )
+        result["predeath_host"] = predeath_host
+
+        result["host_lethal_precondition"] = (
+            _establish_host_lethal_precondition(host_pipe)
+        )
         death_written_at = time.monotonic()
-        result["lethal_hit"] = _apply_authoritative_client_lethal_hit(
+        result["lethal_hit"] = _apply_authoritative_host_lethal_hit(
             host_pipe
         )
         death_presentation = _wait_for_values(
-            client_pipe,
+            host_pipe,
             death_presentation_state_matches,
             timeout=5.0,
-            description="native death presentation without Game Over",
+            description="host native death presentation without Game Over",
         )
         result["death_presentation"] = death_presentation
 
+        grace_observers = {
+            "client": _wait_for_remote_death_values(
+                client_pipe,
+                HOST_ID,
+                lambda values: death_animation_sync_matches(
+                    [values],
+                    presentation_active=True,
+                ),
+                timeout=5.0,
+                description="client view of host death presentation",
+            ),
+            "third": _wait_for_remote_death_values(
+                third_pipe,
+                HOST_ID,
+                lambda values: death_animation_sync_matches(
+                    [values],
+                    presentation_active=True,
+                ),
+                timeout=5.0,
+                description="third view of host death presentation",
+            ),
+        }
+        grace_states = [
+            death_presentation,
+            grace_observers["client"],
+            grace_observers["third"],
+        ]
+        if not death_animation_sync_matches(
+            grace_states,
+            presentation_active=True,
+        ):
+            raise VerifyFailure(
+                "host death animation phase did not agree across owner and "
+                f"observers: {grace_states}"
+            )
+        result["death_animation_grace"] = {
+            "host": death_presentation,
+            **grace_observers,
+        }
+
+        red_effect_during_grace = _wait_for_participant_death_visual_phase(
+            "host",
+            host_pipe,
+            HOST_ID,
+            {
+                "client": client_pipe,
+                "third": third_pipe,
+            },
+            active=True,
+            timeout=3.2,
+        )
+        if not death_animation_sync_matches(
+            list(red_effect_during_grace.values()),
+            presentation_active=True,
+        ) or not death_animation_clock_sync_matches(
+            list(red_effect_during_grace.values())
+        ):
+            raise VerifyFailure(
+                "host death presentation clocks diverged across owner and "
+                f"observers: {red_effect_during_grace}"
+            )
+        result["red_effect_during_grace"] = red_effect_during_grace
+        result["red_effect_observed_delay_seconds"] = (
+            time.monotonic() - death_written_at
+        )
+
         spectating = _wait_for_values(
-            client_pipe,
+            host_pipe,
             spectator_state_matches,
-            timeout=5.0,
-            description="spectator mode with a live target",
+            timeout=6.0,
+            description="host spectator mode with a live target",
         )
         spectator_delay = time.monotonic() - death_written_at
         if spectator_delay < 2.8:
@@ -536,15 +1225,65 @@ def run_live_verification(
                 "spectator mode started before the three-second native "
                 f"death presentation elapsed: {spectator_delay:.3f}s"
             )
+        if spectator_delay > 4.0:
+            raise VerifyFailure(
+                "spectator mode did not start when the three-second native "
+                f"death presentation elapsed: {spectator_delay:.3f}s"
+            )
         result["spectator_delay_seconds"] = spectator_delay
         result["spectating_initial"] = spectating
+
+        red_effect_after_grace = _wait_for_participant_death_visual_phase(
+            "host",
+            host_pipe,
+            HOST_ID,
+            {
+                "client": client_pipe,
+                "third": third_pipe,
+            },
+            active=False,
+            timeout=5.0,
+        )
+        post_grace_observers = {
+            "client": red_effect_after_grace["client"],
+            "third": red_effect_after_grace["third"],
+        }
+        post_grace_states = [
+            red_effect_after_grace["host"],
+            post_grace_observers["client"],
+            post_grace_observers["third"],
+        ]
+        if not death_animation_sync_matches(
+            post_grace_states,
+            presentation_active=False,
+        ):
+            raise VerifyFailure(
+                "death effect remained active after the three-second grace "
+                f"period: {post_grace_states}"
+            )
+        result["death_animation_after_grace"] = {
+            "host": red_effect_after_grace["host"],
+            **post_grace_observers,
+        }
+        screenshot_directory = SCREENSHOT_ROOT / instance_prefix
+        result["screenshots"] = {
+            "spectating_host_owner": capture_game_backbuffer(
+                host_pipe,
+                screenshot_directory / "host-spectating-owner.png",
+            ),
+            "spectating_client_observer": capture_game_backbuffer(
+                client_pipe,
+                screenshot_directory
+                / "host-spectating-client-observer.png",
+            ),
+        }
 
         initial_target = _integer(
             spectating,
             "target_participant_id",
         )
         after_left = _cycle_spectator_target(
-            client_pipe,
+            host_pipe,
             previous_target_id=initial_target,
             input_code=(
                 "return tostring(sd.input.click_normalized(0.5, 0.5))"
@@ -554,7 +1293,7 @@ def run_live_verification(
         result["spectating_after_left"] = after_left
         time.sleep(0.25)
         after_right = _cycle_spectator_target(
-            client_pipe,
+            host_pipe,
             previous_target_id=_integer(
                 after_left,
                 "target_participant_id",
@@ -565,6 +1304,32 @@ def run_live_verification(
             description="right-click spectator cycle",
         )
         result["spectating_after_right"] = after_right
+
+        result["repeat_lethal_hit"] = invoke_native_magic_hit_trial(
+            host_pipe,
+            projectile_damage=0.0,
+            magic_damage=1000.0,
+            attempts=5,
+            label="dead host repeated lethal hit",
+            timeout=8.0,
+            require_life_loss=False,
+            target_participant_id=0,
+        )
+        time.sleep(0.5)
+        drop_trace_states = {
+            "host": query_spectator_state(host_pipe),
+            "client": query_remote_death_state(client_pipe, HOST_ID),
+            "third": query_remote_death_state(third_pipe, HOST_ID),
+        }
+        if not staff_drop_once_matches(
+            drop_trace_states,
+            owner_label="host",
+        ):
+            raise VerifyFailure(
+                "staff drop did not remain exactly once for the host death "
+                f"epoch: {drop_trace_states}"
+            )
+        result["staff_drop_once"] = drop_trace_states
 
         previous_epochs = {
             pipe_name: _integer(
@@ -583,12 +1348,21 @@ def run_live_verification(
             raise VerifyFailure(
                 f"host could not start the respawn wave: {start_values}"
             )
-        result["wave_spawning"] = _wait_for_wave(
-            host_pipe,
-            lambda values: int(values.get("alive", "0")) > 0,
-            timeout=15.0,
-            description="wave enemy spawn",
-        )
+        host_authority_observers: dict[str, dict[str, str]] = {}
+        for label, pipe_name in (
+            ("host", host_pipe),
+            ("client", client_pipe),
+            ("third", third_pipe),
+        ):
+            host_authority_observers[label] = _wait_for_wave(
+                pipe_name,
+                lambda values: int(values.get("alive", "0")) > 0,
+                timeout=15.0,
+                description=(
+                    f"{label} observing host-authored wave while host dead"
+                ),
+            )
+        result["host_authority_observers"] = host_authority_observers
         result["enemy_death_triggers"] = (
             _trigger_all_live_wave_enemy_deaths(host_pipe)
         )
@@ -601,6 +1375,22 @@ def run_live_verification(
         )
         completed_wave = int(completed["wave"])
         result["wave_completed"] = completed
+        result["wave_completed_observers"] = {
+            label: _wait_for_wave(
+                pipe_name,
+                lambda values, wave=completed_wave:
+                    values.get("phase") == "completed"
+                    and int(values.get("wave", "0")) == wave,
+                timeout=8.0,
+                description=(
+                    f"{label} observing host-authored wave completion"
+                ),
+            )
+            for label, pipe_name in (
+                ("client", client_pipe),
+                ("third", third_pipe),
+            )
+        }
 
         respawned: dict[str, dict[str, str]] = {}
         for pipe_name in pipe_names:
@@ -617,9 +1407,19 @@ def run_live_verification(
                 ),
             )
         result["respawned"] = respawned
+        result["host_respawned"] = respawned[host_pipe]
+        result["client_death_regression"] = (
+            _verify_client_death_regression(
+                host_pipe,
+                client_pipe,
+                third_pipe,
+                pipe_names,
+            )
+        )
         result["ok"] = True
         return result
     finally:
+        _disarm_death_traces(pipe_names)
         stop_game_processes(process_ids)
 
 

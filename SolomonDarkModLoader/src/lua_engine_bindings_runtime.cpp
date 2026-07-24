@@ -552,7 +552,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 27);
+        lua_createtable(state, 0, 30);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -599,6 +599,21 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "mana_max");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.move_speed));
         lua_setfield(state, -2, "move_speed");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.anim_drive_state));
+        lua_setfield(state, -2, "anim_drive_state");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.presentation_flags));
+        lua_setfield(state, -2, "presentation_flags");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.runtime.death_presentation_tick));
+        lua_setfield(state, -2, "death_presentation_tick");
         lua_pushinteger(
             state,
             static_cast<lua_Integer>(

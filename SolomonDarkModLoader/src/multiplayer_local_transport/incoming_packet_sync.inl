@@ -249,6 +249,7 @@ struct NormalizedParticipantFrameState {
     std::uint8_t transient_status_flags = 0;
     std::int32_t poison_remaining_ticks = 0;
     std::int32_t damage_x4_remaining_ticks = 0;
+    std::uint16_t death_presentation_tick = 0;
 };
 
 template <typename Packet>
@@ -315,6 +316,13 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
               std::int32_t{1},
               kParticipantDamageX4MaxDurationTicks)
         : 0;
+    normalized.death_presentation_tick =
+        (packet.presentation_flags &
+         ParticipantPresentationFlagDeathPresentation) != 0
+            ? (std::min)(
+                  packet.death_presentation_tick,
+                  kNativeDeathPresentationMaximumHeldTick)
+            : 0;
     normalized.life_current = packet.life_current;
     normalized.life_max = packet.life_max;
 
@@ -448,6 +456,8 @@ void ApplyParticipantFrameToRuntime(
     participant->runtime.presentation_flags =
         packet.presentation_flags &
         ~ParticipantPresentationFlagStaffVisualState;
+    participant->runtime.death_presentation_tick =
+        normalized.death_presentation_tick;
     participant->runtime.attachment_staff_visual_state = 0;
     participant->runtime.render_variant_primary =
         packet.render_variant_primary;
@@ -522,6 +532,8 @@ void ApplyParticipantFrameToRuntime(
     sample.presentation_flags =
         packet.presentation_flags &
         ~ParticipantPresentationFlagStaffVisualState;
+    sample.death_presentation_tick =
+        normalized.death_presentation_tick;
     sample.attachment_staff_visual_state = 0;
     sample.render_variant_primary = packet.render_variant_primary;
     sample.render_variant_secondary = packet.render_variant_secondary;

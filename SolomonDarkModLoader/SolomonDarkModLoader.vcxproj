@@ -395,6 +395,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_hub.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_death_presentation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />

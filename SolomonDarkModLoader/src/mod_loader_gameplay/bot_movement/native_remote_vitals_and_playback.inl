@@ -23,6 +23,134 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
     return dx * dx + dy * dy > 2.25f || std::fabs(heading_delta) > 2.0f;
 }
 
+bool ApplyNativeRemoteParticipantDeathPresentationState(
+    ParticipantEntityBinding* binding,
+    uintptr_t actor_address,
+    const multiplayer::ParticipantInfo& participant,
+    std::uint64_t now_ms) {
+    if (!IsNativeRemoteParticipantBinding(binding) ||
+        actor_address == 0 ||
+        !multiplayer::IsRemoteParticipant(participant) ||
+        !multiplayer::IsNativeControlledParticipant(participant) ||
+        !participant.runtime.valid ||
+        kActorTerminalDispatchPendingOffset == 0 ||
+        kActorTerminalDispatchCountdownOffset == 0 ||
+        kActorAnimationDriveStateByteOffset == 0 ||
+        kActorAnimationMoveDurationTicksOffset == 0) {
+        return false;
+    }
+
+    const bool authoritative_dead =
+        std::isfinite(participant.runtime.life_current) &&
+        std::isfinite(participant.runtime.life_max) &&
+        participant.runtime.life_max > 0.0f &&
+        participant.runtime.life_current <= 0.0f;
+    auto& memory = ProcessMemory::Instance();
+    if (!authoritative_dead) {
+        if (!binding->native_remote_death_epoch_active) {
+            return true;
+        }
+        bool wrote =
+            memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorTerminalDispatchPendingOffset,
+                0) &&
+            memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorTerminalDispatchCountdownOffset,
+                0);
+        if (binding->native_remote_death_epoch_active) {
+            wrote =
+                memory.TryWriteField<std::uint8_t>(
+                    actor_address,
+                    kActorAnimationDriveStateByteOffset,
+                    0) &&
+                memory.TryWriteField<std::int32_t>(
+                    actor_address,
+                    kActorAnimationMoveDurationTicksOffset,
+                0) &&
+                wrote;
+        }
+        binding->native_remote_death_epoch_active = false;
+        binding->native_remote_death_attachment_actor_address = 0;
+        binding->death_transition_stock_tick_seen = false;
+        return wrote;
+    }
+
+    if (!binding->native_remote_death_epoch_active) {
+        binding->native_remote_death_epoch_active = true;
+        binding->native_remote_death_attachment_actor_address = 0;
+        Log(
+            "[bots] native remote death epoch started. participant_id=" +
+            std::to_string(binding->bot_id) +
+            " actor=" + HexString(actor_address));
+    }
+
+    binding->death_transition_stock_tick_seen = true;
+    const bool presentation_active =
+        (participant.runtime.presentation_flags &
+         multiplayer::ParticipantPresentationFlagDeathPresentation) != 0;
+    std::uint16_t presentation_ticks = 0;
+    if (presentation_active) {
+        const auto packet_age_ms =
+            participant.last_packet_ms != 0 &&
+                now_ms >= participant.last_packet_ms
+                ? now_ms - participant.last_packet_ms
+                : 0;
+        const auto packet_age_ticks =
+            multiplayer::ResolveParticipantDeathPresentationTick(
+                packet_age_ms);
+        const auto extrapolated_ticks =
+            static_cast<std::uint32_t>(
+                participant.runtime.death_presentation_tick) +
+            packet_age_ticks;
+        presentation_ticks = static_cast<std::uint16_t>(
+            (std::min)(
+                extrapolated_ticks,
+                static_cast<std::uint32_t>(
+                    multiplayer::
+                        kNativeDeathPresentationMaximumHeldTick)));
+    }
+
+    bool wrote =
+        memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorTerminalDispatchPendingOffset,
+            0) &&
+        memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorTerminalDispatchCountdownOffset,
+            0) &&
+        memory.TryWriteField<std::uint8_t>(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            1) &&
+        memory.TryWriteField<std::int32_t>(
+            actor_address,
+            kActorAnimationMoveDurationTicksOffset,
+            presentation_ticks);
+
+    if (binding->native_remote_death_attachment_actor_address !=
+        actor_address) {
+        const bool detached =
+            ReconcileNativeRemoteParticipantEquipmentLane(
+                actor_address,
+                kActorEquipRuntimeVisualLinkAttachmentOffset,
+                0,
+                0,
+                nullptr,
+                "death_attachment",
+                nullptr,
+                nullptr);
+        if (detached) {
+            binding->native_remote_death_attachment_actor_address =
+                actor_address;
+        }
+        wrote = detached && wrote;
+    }
+    return wrote;
+}
+
 NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
@@ -218,6 +346,13 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
             binding->native_remote_vital_baseline_valid = false;
         }
         result.dead = result.wrote_health && hp <= 0.0f;
+        if (result.wrote_health) {
+            (void)ApplyNativeRemoteParticipantDeathPresentationState(
+                binding,
+                actor_address,
+                *participant,
+                static_cast<std::uint64_t>(GetTickCount64()));
+        }
     }
 
     if (std::isfinite(participant->runtime.mana_max) &&

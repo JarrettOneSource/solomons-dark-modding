@@ -91,6 +91,7 @@ struct ParticipantRuntimeInfo {
     std::int32_t poison_remaining_ticks = 0;
     std::int32_t damage_x4_remaining_ticks = 0;
     std::uint16_t presentation_flags = 0;
+    std::uint16_t death_presentation_tick = 0;
     std::uint32_t attachment_staff_visual_state = 0;
     std::uint8_t render_variant_primary = 0;
     std::uint8_t render_variant_secondary = 0;
@@ -309,6 +310,7 @@ struct ParticipantTransformSample {
     float heading = 0.0f;
     std::uint8_t anim_drive_state = 0;
     std::uint16_t presentation_flags = 0;
+    std::uint16_t death_presentation_tick = 0;
     std::uint32_t attachment_staff_visual_state = 0;
     std::uint8_t render_variant_primary = 0;
     std::uint8_t render_variant_secondary = 0;

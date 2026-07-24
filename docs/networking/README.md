@@ -25,7 +25,7 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-The current wire version is protocol 82. See
+The current wire version is protocol 83. See
 [`netcode-review.md`](netcode-review.md) for current packet sizes, cadence,
 interpolation, and bandwidth accounting.
 

@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 82;
+constexpr std::uint16_t kProtocolVersion = 83;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -297,7 +297,29 @@ enum ParticipantPresentationFlags : std::uint16_t {
     ParticipantPresentationFlagRenderSelectorBytes = 1 << 3,
     ParticipantPresentationFlagVisualLinkColorBlocks = 1 << 4,
     ParticipantPresentationFlagEquipmentState = 1 << 5,
+    ParticipantPresentationFlagDeathPresentation = 1 << 6,
 };
+
+constexpr std::uint64_t kParticipantDeathPresentationDurationMs = 3000;
+constexpr std::uint16_t kNativeDeathPresentationTerminalTick = 300;
+constexpr std::uint16_t kNativeDeathPresentationMaximumHeldTick = 298;
+
+constexpr std::uint16_t ResolveParticipantDeathPresentationTick(
+    std::uint64_t elapsed_ms) {
+    const auto bounded_elapsed_ms =
+        elapsed_ms > kParticipantDeathPresentationDurationMs
+            ? kParticipantDeathPresentationDurationMs
+            : elapsed_ms;
+    const auto scaled_tick =
+        bounded_elapsed_ms *
+        static_cast<std::uint64_t>(
+            kNativeDeathPresentationTerminalTick) /
+        kParticipantDeathPresentationDurationMs;
+    return static_cast<std::uint16_t>(
+        scaled_tick > kNativeDeathPresentationMaximumHeldTick
+            ? kNativeDeathPresentationMaximumHeldTick
+            : scaled_tick);
+}
 
 enum ParticipantPersistentStatusFlags : std::uint8_t {
     ParticipantPersistentStatusFlagFirewalker = 1 << 0,
@@ -506,7 +528,8 @@ struct StatePacket {
     std::uint8_t render_weapon_type;
     std::uint8_t render_selection_byte;
     std::uint8_t render_variant_tertiary;
-    std::uint8_t visual_link_reserved[3] = {};
+    std::uint8_t visual_link_reserved = 0;
+    std::uint16_t death_presentation_tick = 0;
     std::uint32_t primary_visual_link_type_id;
     std::uint32_t secondary_visual_link_type_id;
     std::uint32_t primary_visual_link_recipe_uid;
@@ -609,7 +632,8 @@ struct ParticipantFramePacket {
     std::uint8_t render_weapon_type;
     std::uint8_t render_selection_byte;
     std::uint8_t render_variant_tertiary;
-    std::uint8_t visual_link_reserved[3] = {};
+    std::uint8_t visual_link_reserved = 0;
+    std::uint16_t death_presentation_tick = 0;
     std::uint32_t primary_visual_link_type_id;
     std::uint32_t secondary_visual_link_type_id;
     std::uint32_t primary_visual_link_recipe_uid;

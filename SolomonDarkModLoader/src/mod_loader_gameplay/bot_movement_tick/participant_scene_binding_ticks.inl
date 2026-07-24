@@ -66,6 +66,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
 
     SceneContextSnapshot scene_context;
     const bool have_scene_context = TryBuildSceneContextSnapshot(gameplay_address, &scene_context);
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
     std::vector<ParticipantRematerializationRequest> rematerialization_requests;
     std::vector<std::uint64_t> dematerialize_requests;
     std::vector<PendingParticipantEntitySyncRequest> materialize_requests;
@@ -121,6 +122,17 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                 (void)RefreshNativeRemoteParticipantTransformTarget(
                     &binding,
                     now_ms);
+                if (const auto* participant =
+                        multiplayer::FindParticipant(
+                            runtime_state,
+                            binding.bot_id);
+                    participant != nullptr) {
+                    (void)ApplyNativeRemoteParticipantDeathPresentationState(
+                        &binding,
+                        binding.actor_address,
+                        *participant,
+                        now_ms);
+                }
                 if (!IsActorRuntimeDead(binding.actor_address)) {
                     (void)ApplyNativeRemoteParticipantPlayback(
                         &binding,

@@ -119,12 +119,15 @@ def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() ->
     assert "TryApplyAuthoritativeLocalPlayerDeath(" in vitals_correction
 
     for token in (
-        "kDeathPresentationDurationMs = 3000",
+        "kDeathPresentationDurationMs =",
+        "kParticipantDeathPresentationDurationMs",
         "DeathSpectatorPhase::DeathPresentation",
         "DeathSpectatorPhase::Spectating",
         "presentation_remaining_ms",
     ):
         assert token in transport_text, f"death spectator lifecycle lacks: {token}"
+    assert "player.anim_drive_state == 0" in transport_text
+    assert "player.hp > 0.0f" not in transport_text
 
     hook_start = run_hook_text.index("void __cdecl HookRunEnded()")
     hook_end = run_hook_text.index(
@@ -149,6 +152,172 @@ def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() ->
     return (
         "connected deaths preserve stock pre-hook audio, suppress only Game Over, "
         "and enter spectator mode after a three-second presentation"
+    )
+
+
+def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
+    """Death presentation is phase-replicated and cannot replay on actor churn."""
+
+    protocol_text = read_text(MULTIPLAYER_PROTOCOL)
+    layout_text = read_text(ROOT / "config/binary-layout.ini")
+    seams_text = "\n".join(
+        (
+            read_text(ROOT / "SolomonDarkModLoader/src/gameplay_seams.h"),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+            ),
+        )
+    )
+    transport_text = "\n".join(
+        (
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
+            ),
+        )
+    )
+    dead_motion_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/locomotion_and_animation.inl"
+    )
+    local_presentation_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_death_presentation.inl"
+    )
+    binding_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/core/participant_entity_state.inl"
+    )
+    lifecycle_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"
+    )
+    remote_vitals_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_vitals_and_playback.inl"
+    )
+    tick_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
+    )
+    damage_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_damage_authority_hook.inl"
+    )
+    scene_tick_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/participant_scene_binding_ticks.inl"
+    )
+    respawn_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
+    )
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_death_spectator_respawn.py"
+    )
+
+    assert "ParticipantPresentationFlagDeathPresentation = 1 << 6" in protocol_text
+    for token in (
+        "actor_terminal_dispatch_pending=0x94",
+        "actor_terminal_dispatch_countdown=0x98",
+    ):
+        assert token in layout_text, f"native death layout lacks: {token}"
+    for token in (
+        "kActorTerminalDispatchPendingOffset",
+        "kActorTerminalDispatchCountdownOffset",
+    ):
+        assert token in seams_text, f"native death seam lacks: {token}"
+
+    for token in (
+        "HoldLocalPlayerMultiplayerDeathPresentation(",
+        "ParticipantPresentationFlagDeathPresentation",
+        "CurrentLocalDeathPresentationTick(",
+        "player.hp != 0.0f",
+    ):
+        assert token in transport_text, f"local death presentation lacks: {token}"
+
+    for token in (
+        "kParticipantDeathPresentationDurationMs = 3000",
+        "kNativeDeathPresentationTerminalTick = 300",
+        "kNativeDeathPresentationMaximumHeldTick = 298",
+        "ResolveParticipantDeathPresentationTick(",
+    ):
+        assert token in protocol_text, (
+            f"bounded native death clock lacks: {token}"
+        )
+    assert "presentation_elapsed_ms" in local_presentation_text
+    assert "ResolveParticipantDeathPresentationTick(" in local_presentation_text
+    assert "preserve_death_presentation_timer" in dead_motion_text
+    assert "if (!preserve_death_presentation_timer)" in dead_motion_text
+
+    for token in (
+        "native_remote_death_epoch_active",
+        "native_remote_death_attachment_actor_address",
+    ):
+        assert token in binding_text, f"participant death epoch lacks: {token}"
+        reset_start = lifecycle_text.index(
+            "void ResetParticipantEntityMaterializationState("
+        )
+        reset_end = lifecycle_text.index(
+            "void MarkParticipantEntityWorldUnregistered(",
+            reset_start,
+        )
+        assert token not in lifecycle_text[reset_start:reset_end], (
+            f"actor materialization reset incorrectly retires {token}"
+        )
+
+    for token in (
+        "ApplyNativeRemoteParticipantDeathPresentationState(",
+        "ParticipantPresentationFlagDeathPresentation",
+        "kActorAnimationMoveDurationTicksOffset",
+        "kActorTerminalDispatchPendingOffset",
+        "kActorTerminalDispatchCountdownOffset",
+        "native_remote_death_attachment_actor_address",
+        "participant.runtime.death_presentation_tick",
+        "participant.last_packet_ms",
+    ):
+        assert token in remote_vitals_text, (
+            f"remote death presentation lacks: {token}"
+        )
+    assert "tracked_actor_native_remote" in tick_text
+    assert "run_stock_death_transition = !tracked_actor_native_remote" in tick_text
+    assert re.search(
+        r"StopDeadWizardBotActorMotion\s*\(\s*"
+        r"actor_address\s*,\s*tracked_actor_native_remote\s*\)",
+        tick_text,
+    )
+    assert "ApplyNativeRemoteParticipantDeathPresentationState(" in scene_tick_text
+    assert "SnapshotRuntimeState()" in scene_tick_text
+    assert "SuppressNativeRemoteParticipantTerminalDispatch(" in damage_hook_text
+    assert damage_hook_text.count(
+        "SuppressNativeRemoteParticipantTerminalDispatch("
+    ) == 3
+
+    for token in (
+        "kActorTerminalDispatchPendingOffset",
+        "kActorTerminalDispatchCountdownOffset",
+        "kActorAnimationMoveDurationTicksOffset",
+    ):
+        assert token in respawn_text, f"native respawn cleanup lacks: {token}"
+
+    for token in (
+        "HOST_ID",
+        "0x00534270",
+        "staff_drop_once_matches",
+        "death_animation_sync_matches",
+        "host_authority_observers",
+        "capture_game_backbuffer",
+    ):
+        assert token in verifier_text, f"host-death live gate lacks: {token}"
+
+    return (
+        "one participant death epoch drives owner and observer presentation, "
+        "survives actor churn, and permits exactly one owner staff drop"
     )
 
 
@@ -259,7 +428,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 82" in protocol_text
+    assert "kProtocolVersion = 83" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -351,6 +520,7 @@ def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
         "sd.input.hold_mouse_right_frames(1)",
         "invoke_native_magic_hit_trial(",
         "target_participant_id=CLIENT_ID",
+        "target_participant_id=0",
         "attempts=2",
         "_start_testrun_when_ready(host_pipe)",
         "sd.world.trigger_enemy_death(address)",
@@ -785,7 +955,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 82;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 83;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),

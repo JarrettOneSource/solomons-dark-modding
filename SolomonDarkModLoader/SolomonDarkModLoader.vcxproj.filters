@@ -1022,6 +1022,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_death_presentation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>

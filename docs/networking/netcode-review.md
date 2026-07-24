@@ -3,7 +3,7 @@
 This is a source-level review of the current multiplayer transport, protocol,
 interpolation, and steady-state packet cost. It also records the disposition of
 each optimization identified during the review. The code and packet sizes below
-are for protocol 82.
+are for protocol 83.
 
 ## Verdict
 
@@ -12,7 +12,7 @@ their player state, the host owns world actors and shared progression
 lifecycles, and receivers reject packets that do not match the expected
 endpoint, participant session, scene epoch, or run nonce. The original review
 did find a real world-motion cadence problem and three unnecessarily hot payload
-families. Protocol 82 addresses those without changing the authority model.
+families. Protocol 83 addresses those without changing the authority model.
 
 The remaining scaling boundary is gameplay, not a hidden eight-player wire
 limit. The level-up barrier now carries a variable-length list of as many as 250

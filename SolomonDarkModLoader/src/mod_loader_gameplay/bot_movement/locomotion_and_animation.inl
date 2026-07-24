@@ -169,7 +169,9 @@ void StopWizardBotActorMotion(uintptr_t actor_address) {
     ApplyActorAnimationDriveState(actor_address, false);
 }
 
-void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
+void StopDeadWizardBotActorMotion(
+    uintptr_t actor_address,
+    bool preserve_death_presentation_timer) {
     if (actor_address == 0) {
         return;
     }
@@ -184,7 +186,12 @@ void StopDeadWizardBotActorMotion(uintptr_t actor_address) {
         actor_address,
         kActorAnimationDriveStateByteOffset,
         kDeadWizardBotCorpseDriveState);
-    (void)memory.TryWriteField(actor_address, kActorAnimationMoveDurationTicksOffset, 0);
+    if (!preserve_death_presentation_timer) {
+        (void)memory.TryWriteField(
+            actor_address,
+            kActorAnimationMoveDurationTicksOffset,
+            0);
+    }
     (void)memory.TryWriteField(actor_address, kActorMoveStepScaleOffset, 0.0f);
     ResetStandaloneWizardControlBrain(actor_address);
 

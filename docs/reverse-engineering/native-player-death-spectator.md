@@ -279,12 +279,21 @@ to its alive presentation.
 The native findings impose these constraints:
 
 - Game Over suppression applies identically to host and clients.
+- The exact native Game Over hook admits a connected death from the asserted
+  `+0x160` selector, not from a volatile HP sample that authoritative replay or
+  stock regeneration can change before the terminal countdown completes.
 - Host transport/world/wave authority must continue independently of the dead
   actor's normal gameplay actions.
 - A participant death epoch survives actor replacement and owns exactly one
   native terminal/drop transition.
+- Host-authoritative damage on a native remote clone clears that clone's
+  `+0x94/+0x98` terminal dispatch immediately after stock damage capture; only
+  the owning process may execute the side-effectful death virtual and create
+  the staff bouncer.
 - Owner and observers use the same death-presentation epoch and agree on
-  `+0x160` plus whether the grace presentation is active.
+  `+0x160`, the owner-authored bounded `+0x1BC` clock, and whether the grace
+  presentation is active. Protocol 83 carries that clock explicitly rather
+  than starting a peer-local timer when the death packet arrives.
 - After 3,000 ms, `+0x1BC` is held below the Arena red-effect threshold and can
   never reach the stock tick-300 end-of-life path.
 - Dead remote presentation is reconciled explicitly; it is not obtained by

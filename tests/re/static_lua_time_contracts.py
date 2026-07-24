@@ -98,7 +98,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         assert token in bindings, f"Lua time scheduler lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 82;",
+        "constexpr std::uint16_t kProtocolVersion = 83;",
         "LuaTimeControl = 27",
         "struct LuaTimeControlPacket",
         "authority_session_nonce",
@@ -167,7 +167,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "fixed-point",
         "minimum active",
         "take precedence",
-        "Protocol 82",
+        "Protocol 83",
         "reliable no-Nagle",
         "kGameTimingScaleGlobal",
         "cannot synthesize extra",

@@ -5,7 +5,9 @@ ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 bool TryRebindActorToOwnerWorld(uintptr_t actor_address, DWORD* exception_code);
 void StopWizardBotActorMotion(uintptr_t actor_address);
-void StopDeadWizardBotActorMotion(uintptr_t actor_address);
+void StopDeadWizardBotActorMotion(
+    uintptr_t actor_address,
+    bool preserve_death_presentation_timer = false);
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);

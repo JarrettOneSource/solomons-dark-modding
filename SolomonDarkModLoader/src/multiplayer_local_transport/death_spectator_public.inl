@@ -20,7 +20,7 @@ bool BeginLocalDeathSpectatorPresentation() {
         !std::isfinite(player.hp) ||
         !std::isfinite(player.max_hp) ||
         player.max_hp <= 0.0f ||
-        player.hp > 0.0f) {
+        player.anim_drive_state == 0) {
         return false;
     }
 

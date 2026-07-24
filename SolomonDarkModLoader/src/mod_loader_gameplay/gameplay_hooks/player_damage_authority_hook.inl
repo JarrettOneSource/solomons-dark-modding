@@ -12,6 +12,32 @@ constexpr std::uint32_t kMaximumLuaDamageFilterHookLogCount = 4;
 std::atomic<std::uint32_t> g_lua_damage_filter_capture_log_count{0};
 std::atomic<std::uint32_t> g_lua_damage_filter_write_log_count{0};
 
+bool SuppressNativeRemoteParticipantTerminalDispatch(
+    uintptr_t actor_address) {
+    if (actor_address == 0 ||
+        kActorTerminalDispatchPendingOffset == 0 ||
+        kActorTerminalDispatchCountdownOffset == 0) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(
+        g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntityForActor(actor_address);
+    if (!IsNativeRemoteParticipantBinding(binding)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    return memory.TryWriteField<std::uint8_t>(
+               actor_address,
+               kActorTerminalDispatchPendingOffset,
+               0) &&
+           memory.TryWriteField<std::int32_t>(
+               actor_address,
+               kActorTerminalDispatchCountdownOffset,
+               0);
+}
+
 enum class LuaDamageLaneWriteResult {
     Applied,
     RestoredAfterFailure,
@@ -543,7 +569,10 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
         return 0;
     }
     if (!shield_authority.applicable) {
-        return original(self);
+        const auto result = original(self);
+        (void)SuppressNativeRemoteParticipantTerminalDispatch(
+            actor_address);
+        return result;
     }
 
     ScopedGameplayPlayerActorSlotContext player_slot_context(
@@ -564,6 +593,8 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
     const auto result = original(self);
     actor_slot_context.Restore();
     player_slot_context.Restore();
+    (void)SuppressNativeRemoteParticipantTerminalDispatch(
+        actor_address);
     if (!actor_slot_context.restored || !player_slot_context.restored) {
         Log(
             "[gameplay] remote Magic Shield slot transaction restore failed. actor=" +

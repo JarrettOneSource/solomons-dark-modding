@@ -248,7 +248,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             tracked_actor_dead = IsActorRuntimeDead(actor_address);
             if (tracked_actor_dead) {
                 QuiesceDeadWizardBinding(binding);
-                StopDeadWizardBotActorMotion(actor_address);
+                StopDeadWizardBotActorMotion(
+                    actor_address,
+                    tracked_actor_native_remote);
                 (void)ClearHostileTargetsForDeadWizardActor(actor_address);
             } else {
                 binding->death_transition_stock_tick_seen = false;
@@ -577,10 +579,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
                     std::string cast_error_message;
                     QuiesceDeadWizardBinding(binding);
-                    StopDeadWizardBotActorMotion(actor_address);
+                    StopDeadWizardBotActorMotion(
+                        actor_address,
+                        tracked_actor_native_remote);
                     (void)ClearHostileTargetsForDeadWizardActor(actor_address);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
-                    run_stock_death_transition = !binding->death_transition_stock_tick_seen;
+                    run_stock_death_transition = !tracked_actor_native_remote &&
+                        !binding->death_transition_stock_tick_seen;
                     binding->death_transition_stock_tick_seen = true;
                     PublishParticipantGameplaySnapshot(*binding);
                 }
@@ -761,9 +766,12 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 binding->stock_tick_facing_origin_x = position_before_x;
                 binding->stock_tick_facing_origin_y = position_before_y;
                 if (tracked_actor_dead) {
-                    const bool run_stock_death_transition = !binding->death_transition_stock_tick_seen;
+                    const bool run_stock_death_transition = !tracked_actor_native_remote &&
+                        !binding->death_transition_stock_tick_seen;
                     QuiesceDeadWizardBinding(binding);
-                    StopDeadWizardBotActorMotion(actor_address);
+                    StopDeadWizardBotActorMotion(
+                        actor_address,
+                        tracked_actor_native_remote);
                     (void)ClearHostileTargetsForDeadWizardActor(actor_address);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
                     binding->death_transition_stock_tick_seen = true;

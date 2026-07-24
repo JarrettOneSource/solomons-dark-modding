@@ -267,6 +267,7 @@ from static_re_transport_core_contracts import (
     test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
     test_misc_ground_items_replicate_without_recipe_identity,
     test_local_multiplayer_udp_transport_is_wired,
+    test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
     test_wave_completion_respawns_every_owner_from_reliable_host_command,
 )
@@ -1051,6 +1052,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "multiplayer death preserves stock audio then enters spectator mode",
         test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
+    ),
+    (
+        "multiplayer death epoch owns presentation and staff drop once",
+        test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     ),
     (
         "dead client spectates alive players with local camera and HUD",

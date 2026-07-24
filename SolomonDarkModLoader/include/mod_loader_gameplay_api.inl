@@ -158,6 +158,9 @@ bool TryGetGameplayHudParticipantDisplayNameForActor(
     std::uint64_t* participant_id = nullptr,
     float* health_ratio = nullptr);
 bool RebindSceneActorCell(uintptr_t actor_address, std::string* error_message);
+bool HoldLocalPlayerMultiplayerDeathPresentation(
+    bool presentation_active,
+    std::uint64_t presentation_elapsed_ms);
 bool TryRespawnLocalPlayerAt(
     float world_x,
     float world_y,

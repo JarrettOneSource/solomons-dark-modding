@@ -244,7 +244,7 @@ mod-defined events delivered to all peers in stream order.
 multiplayer-native contract. Build it early so Tier-1 seams are born MP-native.
 *Multiplayer:* this *is* the multiplayer story.
 
-**Implemented 2026-07-22.** Protocol 82 provides a bounded, deterministic Lua value
+**Implemented 2026-07-22.** Protocol 83 provides a bounded, deterministic Lua value
 codec; per-mod authority-owned state; ordered custom events; fragmented reliable Steam
 delivery; periodic and first-peer state checkpoints; and a three-peer late-join
 acceptance verifier. See `lua-state-and-events.md`.
@@ -278,7 +278,7 @@ identities are removed with their owning Lua state. See `lua-content-identity.md
 **Item registration and grants implemented 2026-07-22.** `sd.items.register`, `get`, and
 `list` bind stable content keys to exact recipe name/type pairs in the effective item
 catalog. `sd.items.grant` is authority-only, routes a stable content ID to a selected
-participant over protocol 82, and lets that owner resolve its peer-local recipe UID just
+participant over protocol 83, and lets that owner resolve its peer-local recipe UID just
 before verified stock inventory insertion. Recipe UIDs and addresses never become wire
 identity; reliable target authentication and request deduplication make the mutation
 multiplayer-safe. See `lua-items.md`.
@@ -288,7 +288,7 @@ registration binds stable content identity to a mod-owned sprite, stock-facing
 name/help text, duration metadata, an owner-only `on_consume` callback, and an
 optional native `SpellGlow` request. `sd.loot.register` independently rolls
 normal and exact stock-boss chances at the authority's enemy-death seam.
-Protocol 82 carries stable content IDs through drops, pickup results, inventory,
+Protocol 83 carries stable content IDs through drops, pickup results, inventory,
 and deduplicated use events while each peer resolves its own native subtype.
 The `canary.lua.invincibility_potion` mod exercises the complete path with a
 baked-green potion, 50/100 percent loot policy, stock inventory use, replicated
@@ -299,7 +299,7 @@ three-minute invincibility, and owner-side infinite mana.
 Authority-only `sd.enemies.spawn` queues the verified exact-group stock spawner with a
 valid modifier array, transactionally composes per-spawn HP/speed/scale with ordered
 spawn filters, and attaches per-actor loot policy without mutating shared config.
-Protocol 82 carries the content ID and effective constructor values through world
+Protocol 83 carries the content ID and effective constructor values through world
 snapshots and death tombstones; spawn/death notify events expose the same stable ID on
 every peer. The opt-in two-peer acceptance covers authority rejection, exact construction,
 client materialization, lifecycle notifications, tombstone identity, and `none` loot
@@ -308,7 +308,7 @@ suppression. See `lua-enemies.md`.
 **Spell catalog, input selection, owner runtime, and generic effect replication implemented
 2026-07-22.** `sd.spells.register`, `get`, `list`, `select`, `clear_selection`,
 `get_selection`, `cast`, and `get_effects` bind deterministic
-identities to bounded immutable config and owner-state callbacks. Protocol 82 routes host
+identities to bounded immutable config and owner-state callbacks. Protocol 83 routes host
 commands to the affected participant's owner, where `on_cast`, timed `on_tick`, and
 once-per-actor `on_hit` callbacks drive a bounded address-free effect lifecycle. The same
 protocol fragments and relays complete per-owner effect generations, including explicit
@@ -448,7 +448,7 @@ budget. `get_schedule(n)` parses the effective staged `wave.txt`; because random
 group selection has no RNG-free exact future composition, planned rows use a
 documented deterministic largest-remainder projection that sums to `SPAWN`.
 Spawner identities attribute overlapping births and deaths, `wave.started`
-includes planned composition, and protocol 82 carries a bounded validated
+includes planned composition, and protocol 83 carries a bounded validated
 summary in a dedicated authenticated authority wave packet for identical peer
 reads.
 The opt-in two-peer acceptance covers exact schedule parity, clean idle state,
@@ -473,7 +473,7 @@ authority-only stock wave start, identical sorted live summaries, and matching
   fixed-point scale, bounds paused frame-step work, and releases requests on unload and
   run reset. One scoped actor-world frame decision gates nested player and wave ticks while
   the Lua/replication pump remains responsive. Only the offline or host authority may
-  mutate time; protocol 82 repeats scale/revision state and sends prompt authenticated
+  mutate time; protocol 83 repeats scale/revision state and sends prompt authenticated
   reliable control updates with deduplicated step sequences. Shared menu and level-up
   pauses take precedence, and values above native speed are rejected. See `lua-time.md`
   and the disabled `sample.lua.time_lab` mod.

@@ -394,6 +394,8 @@ extern std::size_t kMage3F2DampenDisruptTicksOffset;
 extern std::size_t kActorTargetRepathCadenceOffset;
 extern std::size_t kActorMoveStepScaleOffset;
 extern std::size_t kActorCastDiagnosticContextOffset;
+extern std::size_t kActorTerminalDispatchPendingOffset;
+extern std::size_t kActorTerminalDispatchCountdownOffset;
 extern std::size_t kActorAnimationDriveStateByteOffset;
 extern std::size_t kNamedHubNpcIdleAnimationBlockOffset;
 extern std::size_t kNamedHubNpcTypeSpecificStateBlockOffset;
