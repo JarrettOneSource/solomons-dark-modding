@@ -96,6 +96,13 @@ void ApplyParticipantVitalsCorrectionPacket(
         return;
     }
 
+    if (g_last_applied_wave_respawn_authority_packet_sequence != 0 &&
+        !IsPacketSequenceNewer(
+            packet.header.sequence,
+            g_last_applied_wave_respawn_authority_packet_sequence)) {
+        return;
+    }
+
     const auto last_it =
         g_local_transport.last_participant_vitals_correction_sequence_by_authority.find(
             packet.authority_participant_id);

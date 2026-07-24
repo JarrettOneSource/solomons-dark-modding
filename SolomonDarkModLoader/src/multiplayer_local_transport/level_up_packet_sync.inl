@@ -16,6 +16,7 @@ void DisarmLocalLevelUpOptionRollForOffer(std::uint64_t offer_id) {
         0,
         std::memory_order_acq_rel,
         std::memory_order_acquire);
+    DisarmDeadLevelUpScreenTickBridgeForOffer(offer_id);
 }
 
 void PublishLevelUpChoiceResultRuntimeInfo(

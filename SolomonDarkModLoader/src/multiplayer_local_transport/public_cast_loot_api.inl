@@ -263,6 +263,7 @@ bool InitializeLocalTransport() {
 
 void ShutdownLocalTransport() {
     ShutdownLocalLevelUpOptionRollHook();
+    ShutdownDeadLevelUpScreenTickHook();
     ResetRunGameOverState("transport_shutdown");
     ResetLocalDeathSpectatorState("transport_shutdown");
     ResetWaveRespawnState();

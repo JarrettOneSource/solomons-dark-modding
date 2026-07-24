@@ -281,9 +281,11 @@ constexpr std::size_t kLevelUpScreenDesiredChoiceCountOffset = 0x88;
 constexpr std::size_t kLevelUpScreenOptionValuesOffset = 0x90;
 constexpr std::size_t kLevelUpScreenOptionCountOffset = 0x94;
 constexpr std::size_t kLevelUpScreenSelectedOptionIndexOffset = 0x5F8;
+constexpr std::size_t kLevelUpScreenTickVtableOffset = 0x08;
 constexpr std::size_t kLevelUpScreenCloseVtableOffset = 0x18;
 
 using NativeLevelUpScreenCreateFn = void(__thiscall*)(void* progression, char preserve_existing_flag);
+using NativeLevelUpScreenTickFn = void(__thiscall*)(void* screen);
 using NativeLevelUpScreenCloseFn = void(__thiscall*)(void* screen);
 struct NativeLevelUpOptionArray {
     uintptr_t vtable = 0;
@@ -306,6 +308,7 @@ struct ArmedLocalLevelUpOptionRoll {
 };
 
 X86Hook g_local_level_up_option_roll_hook;
+X86Hook g_dead_level_up_screen_tick_hook;
 std::mutex g_local_level_up_option_roll_mutex;
 // Serializes native picker presentation with local offer creation, selection,
 // cleanup, and retirement. Reconciliation can synchronously queue a choice,
@@ -315,8 +318,12 @@ std::mutex g_local_level_up_option_roll_mutex;
 std::recursive_mutex g_local_level_up_picker_mutex;
 ArmedLocalLevelUpOptionRoll g_armed_local_level_up_option_roll;
 std::atomic<std::uint64_t> g_last_applied_local_level_up_option_roll_offer_id{0};
+std::atomic<std::uint64_t> g_dead_level_up_screen_tick_offer_id{0};
+std::atomic<uintptr_t> g_dead_level_up_screen_tick_screen_address{0};
+std::atomic<uintptr_t> g_dead_level_up_screen_tick_actor_address{0};
 
 void ShutdownLocalLevelUpOptionRollHook();
+void ShutdownDeadLevelUpScreenTickHook();
 
 struct MagicShieldState {
     float absorb_remaining = 0.0f;
@@ -1400,6 +1407,9 @@ void SendLocalParticipantProgressionSnapshots(
     const std::vector<TransportPeerEndpoint>& endpoints,
     std::uint64_t now_ms);
 bool IsRunGameOverAccepted(std::uint32_t run_nonce);
+bool HasPendingLocalLevelUpChoice(const RuntimeState& runtime_state);
+void DisarmDeadLevelUpScreenTickBridgeForOffer(
+    std::uint64_t offer_id);
 bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;

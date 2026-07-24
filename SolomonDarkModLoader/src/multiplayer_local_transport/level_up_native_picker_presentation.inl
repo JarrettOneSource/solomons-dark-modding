@@ -28,6 +28,160 @@ bool CallLevelUpScreenCreateSafe(
     }
 }
 
+namespace {
+
+void __fastcall HookDeadLevelUpScreenTick(
+    void* screen,
+    void* /*unused_edx*/) {
+    const auto original =
+        GetX86HookTrampoline<NativeLevelUpScreenTickFn>(
+            g_dead_level_up_screen_tick_hook);
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto offer_id =
+        g_dead_level_up_screen_tick_offer_id.load(
+            std::memory_order_acquire);
+    if (offer_id == 0 ||
+        reinterpret_cast<uintptr_t>(screen) !=
+            g_dead_level_up_screen_tick_screen_address.load(
+                std::memory_order_acquire) ||
+        g_local_death_spectator.phase ==
+            DeathSpectatorPhase::Inactive) {
+        original(screen);
+        return;
+    }
+
+    const auto actor_address =
+        g_dead_level_up_screen_tick_actor_address.load(
+            std::memory_order_acquire);
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t saved_drive_state = 0;
+    const std::uint8_t alive_drive_state = 0;
+    if (actor_address == 0 ||
+        kActorAnimationDriveStateByteOffset == 0 ||
+        !memory.TryReadField(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            &saved_drive_state) ||
+        !memory.TryWriteField(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            alive_drive_state)) {
+        original(screen);
+        return;
+    }
+
+    original(screen);
+    (void)memory.TryWriteField(
+        actor_address,
+        kActorAnimationDriveStateByteOffset,
+        saved_drive_state);
+}
+
+bool ArmDeadLevelUpScreenTickBridge(
+    uintptr_t screen_address,
+    uintptr_t actor_address,
+    std::uint64_t offer_id,
+    std::string* error_message) {
+    auto fail = [&](std::string message) {
+        if (error_message != nullptr) {
+            *error_message = std::move(message);
+        }
+        return false;
+    };
+    if (screen_address == 0 ||
+        actor_address == 0 ||
+        offer_id == 0 ||
+        kActorAnimationDriveStateByteOffset == 0) {
+        return fail(
+            "dead-player picker bridge requires a live screen, actor, and offer");
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t vtable_address = 0;
+    uintptr_t tick_address = 0;
+    if (!memory.TryReadValue(screen_address, &vtable_address) ||
+        vtable_address == 0 ||
+        !memory.TryReadValue(
+            vtable_address + kLevelUpScreenTickVtableOffset,
+            &tick_address) ||
+        tick_address == 0) {
+        return fail(
+            "dead-player picker screen tick virtual is unavailable");
+    }
+
+    if (g_dead_level_up_screen_tick_hook.installed) {
+        if (reinterpret_cast<uintptr_t>(
+                g_dead_level_up_screen_tick_hook.target) !=
+            tick_address) {
+            return fail(
+                "dead-player picker screen tick implementation changed while hooked");
+        }
+    } else {
+        std::string hook_error;
+        if (!InstallSafeX86Hook(
+                reinterpret_cast<void*>(tick_address),
+                reinterpret_cast<void*>(
+                    &HookDeadLevelUpScreenTick),
+                5,
+                &g_dead_level_up_screen_tick_hook,
+                &hook_error)) {
+            return fail(
+                "dead-player picker screen tick hook install failed: " +
+                hook_error);
+        }
+        Log(
+            "Multiplayer dead-player level-up screen tick bridge installed. target=" +
+            HexString(tick_address));
+    }
+
+    g_dead_level_up_screen_tick_actor_address.store(
+        actor_address,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_screen_address.store(
+        screen_address,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_offer_id.store(
+        offer_id,
+        std::memory_order_release);
+    return true;
+}
+
+void DisarmDeadLevelUpScreenTickBridgeForOffer(
+    std::uint64_t offer_id) {
+    if (offer_id == 0 ||
+        g_dead_level_up_screen_tick_offer_id.load(
+            std::memory_order_acquire) != offer_id) {
+        return;
+    }
+    g_dead_level_up_screen_tick_offer_id.store(
+        0,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_screen_address.store(
+        0,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_actor_address.store(
+        0,
+        std::memory_order_release);
+}
+
+void ShutdownDeadLevelUpScreenTickHook() {
+    g_dead_level_up_screen_tick_offer_id.store(
+        0,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_screen_address.store(
+        0,
+        std::memory_order_release);
+    g_dead_level_up_screen_tick_actor_address.store(
+        0,
+        std::memory_order_release);
+    RemoveX86Hook(&g_dead_level_up_screen_tick_hook);
+}
+
+}  // namespace
+
 bool TryReadLocalLevelUpScreen(
     uintptr_t progression_address,
     uintptr_t* screen_address) {
@@ -239,6 +393,25 @@ void ReconcileLocalLevelUpOfferPresentation(std::uint64_t now_ms, bool allow_nat
                 " now_ms=" + std::to_string(now_ms));
         }
         return;
+    }
+
+    if (g_local_death_spectator.phase !=
+        DeathSpectatorPhase::Inactive) {
+        std::string bridge_error;
+        if (!ArmDeadLevelUpScreenTickBridge(
+                screen_address,
+                player_state.actor_address,
+                offer.offer_id,
+                &bridge_error)) {
+            if (allow_native_create) {
+                Log(
+                    "Multiplayer dead-player level-up picker bridge pending. offer_id=" +
+                    std::to_string(offer.offer_id) +
+                    " screen=" + HexString(screen_address) +
+                    " error=" + bridge_error);
+            }
+            return;
+        }
     }
 
     const bool options_pinned = TryPinLevelUpPickerOptions(screen_address, offer.options);

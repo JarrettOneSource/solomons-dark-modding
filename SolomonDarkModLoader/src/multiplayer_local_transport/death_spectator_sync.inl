@@ -68,6 +68,8 @@ struct HostWaveRespawnState {
 
 HostWaveRespawnState g_host_wave_respawn;
 std::uint32_t g_last_applied_wave_respawn_epoch = 0;
+std::uint32_t
+    g_last_applied_wave_respawn_authority_packet_sequence = 0;
 std::uint64_t g_last_wave_respawn_failure_log_ms = 0;
 
 void ResetLocalDeathSpectatorState(std::string_view reason);
@@ -75,6 +77,7 @@ void ResetLocalDeathSpectatorState(std::string_view reason);
 void ResetWaveRespawnState() {
     g_host_wave_respawn = HostWaveRespawnState{};
     g_last_applied_wave_respawn_epoch = 0;
+    g_last_applied_wave_respawn_authority_packet_sequence = 0;
     g_last_wave_respawn_failure_log_ms = 0;
     UpdateRuntimeState([](RuntimeState& state) {
         state.death_spectator.last_applied_respawn_epoch = 0;
@@ -128,7 +131,8 @@ bool IsValidWaveRespawnCommand(
 bool TryApplyWaveRespawnCommand(
     const WaveRespawnCommand& command,
     std::uint64_t now_ms,
-    std::string_view source) {
+    std::string_view source,
+    std::uint32_t authority_packet_sequence = 0) {
     if (!IsValidWaveRespawnCommand(command) ||
         (g_last_applied_wave_respawn_epoch != 0 &&
          !IsPacketSequenceNewer(
@@ -167,6 +171,8 @@ bool TryApplyWaveRespawnCommand(
     }
 
     g_last_applied_wave_respawn_epoch = command.epoch;
+    g_last_applied_wave_respawn_authority_packet_sequence =
+        authority_packet_sequence;
     g_last_wave_respawn_failure_log_ms = 0;
     ResetLocalDeathSpectatorState("wave_respawn");
     SDModPlayerState player;
@@ -198,9 +204,25 @@ bool TryApplyWaveRespawnCommand(
         std::string(source) +
         " epoch=" + std::to_string(command.epoch) +
         " wave=" + std::to_string(command.wave) +
+        " authority_packet_sequence=" +
+        std::to_string(authority_packet_sequence) +
         " position=(" + std::to_string(command.world_x) + "," +
         std::to_string(command.world_y) + ")");
     return true;
+}
+
+void RetirePreRespawnHostParticipantVitalsCorrections() {
+    {
+        std::lock_guard<std::mutex> lock(
+            g_local_transport_event_mutex);
+        g_queued_host_participant_vitals_corrections.clear();
+    }
+    g_local_transport
+        .pending_participant_vitals_corrections_by_participant
+        .clear();
+    g_local_transport
+        .last_participant_vitals_correction_send_ms_by_participant
+        .clear();
 }
 
 void CaptureHostWaveRespawnAnchorIfNeeded() {
@@ -253,6 +275,7 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
     if (epoch == 0) {
         epoch = g_host_wave_respawn.next_epoch++;
     }
+    RetirePreRespawnHostParticipantVitalsCorrections();
     g_host_wave_respawn.last_completed_wave = summary.wave;
     g_host_wave_respawn.command = WaveRespawnCommand{
         epoch,
@@ -320,7 +343,8 @@ void ApplyAuthoritativeWaveRespawn(
     (void)TryApplyWaveRespawnCommand(
         command,
         now_ms,
-        "authenticated_host_packet");
+        "authenticated_host_packet",
+        packet.header.sequence);
 }
 
 void ResetLocalDeathSpectatorState(std::string_view reason) {
@@ -476,7 +500,19 @@ void TickLocalSpectatorTarget(std::uint64_t now_ms) {
         mouse_right_edge_serial !=
         g_local_death_spectator.observed_mouse_right_edge_serial;
     bool advance = false;
-    if (g_local_death_spectator.click_armed &&
+    if (HasPendingLocalLevelUpChoice(runtime_state)) {
+        g_local_death_spectator.observed_mouse_left_edge_serial =
+            mouse_left_edge_serial;
+        g_local_death_spectator.observed_mouse_right_edge_serial =
+            mouse_right_edge_serial;
+        if (mouse_left_edge ||
+            mouse_right_edge ||
+            mouse_left_down ||
+            mouse_right_down) {
+            g_local_death_spectator.click_armed = false;
+            g_local_death_spectator.click_consumed_ms = now_ms;
+        }
+    } else if (g_local_death_spectator.click_armed &&
         (mouse_left_edge ||
          mouse_right_edge ||
          mouse_left_down ||
