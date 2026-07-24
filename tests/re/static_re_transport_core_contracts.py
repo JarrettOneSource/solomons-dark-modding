@@ -418,9 +418,9 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/run_exit_sync.inl"
     )
-    run_lifecycle_text = read_text(
+    game_over_dispatch_text = read_text(
         ROOT
-        / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
+        / "SolomonDarkModLoader/src/run_lifecycle/game_over_dispatch.inl"
     )
     app_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
@@ -482,14 +482,10 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
     ):
         assert token in run_exit_text, f"run-exit race remains: {token}"
 
-    dispatch_start = run_lifecycle_text.index(
+    dispatch_start = game_over_dispatch_text.index(
         "void DispatchPendingMultiplayerGameOverOnAppTick()"
     )
-    dispatch_end = run_lifecycle_text.index(
-        "int GetRunLifecycleCurrentWave()",
-        dispatch_start,
-    )
-    dispatch_body = run_lifecycle_text[dispatch_start:dispatch_end]
+    dispatch_body = game_over_dispatch_text[dispatch_start:]
     for earlier, later in (
         ("ConsumePendingNativeGameOverDispatch()", "original();"),
         ("original();", '"all_players_dead"'),

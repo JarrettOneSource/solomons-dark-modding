@@ -42,6 +42,7 @@ namespace {
 
 }  // namespace
 
+#include "run_lifecycle/game_over_dispatch.inl"
 #include "run_lifecycle/public_api_and_install.inl"
 #include "run_lifecycle/lua_enemy_spawn_api.inl"
 

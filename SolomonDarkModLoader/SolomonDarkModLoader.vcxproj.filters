@@ -1397,6 +1397,9 @@
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>
+    <ClInclude Include="src\run_lifecycle\game_over_dispatch.inl">
+      <Filter>Header Files\Run Lifecycle</Filter>
+    </ClInclude>
     <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl">
       <Filter>Header Files\Run Lifecycle</Filter>
     </ClInclude>

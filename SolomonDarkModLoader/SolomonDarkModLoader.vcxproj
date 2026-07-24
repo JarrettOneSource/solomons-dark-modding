@@ -512,6 +512,7 @@
     <ClInclude Include="src\runtime_debug\hde32_impl.inl" />
     <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl" />
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />
+    <ClInclude Include="src\run_lifecycle\game_over_dispatch.inl" />
     <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl" />
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />
