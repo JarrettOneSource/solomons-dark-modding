@@ -113,6 +113,7 @@
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
+    <ClInclude Include="include\launch_audio_disable.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
@@ -614,6 +615,7 @@
     <ClCompile Include="src\memory_access_io.cpp" />
     <ClCompile Include="src\memory_access_regions.cpp" />
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
+    <ClCompile Include="src\launch_audio_disable.cpp" />
     <ClCompile Include="src\mod_loader.cpp" />
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />

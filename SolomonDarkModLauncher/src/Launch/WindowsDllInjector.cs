@@ -10,7 +10,10 @@ internal static class WindowsDllInjector
 {
     private const uint InjectionTimeoutMilliseconds = 15000;
 
-    public static void Inject(Process process, string dllPath)
+    public static void Inject(
+        Process process,
+        string dllPath,
+        bool waitForInputIdle = true)
     {
         if (process.HasExited)
         {
@@ -25,7 +28,10 @@ internal static class WindowsDllInjector
                 fullDllPath);
         }
 
-        TryWaitForInputIdle(process);
+        if (waitForInputIdle)
+        {
+            TryWaitForInputIdle(process);
+        }
 
         using var processHandle = Kernel32.OpenProcess(Kernel32.ProcessAccess, false, (uint)process.Id);
         if (processHandle.IsInvalid)

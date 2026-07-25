@@ -62,6 +62,13 @@ internal sealed class LauncherUiSettingsStore
         Save(Load() with { ShowStockTutorial = showStockTutorial });
     }
 
+    public bool LoadDisableAudio() => Load().DisableAudio;
+
+    public void SaveDisableAudio(bool disableAudio)
+    {
+        Save(Load() with { DisableAudio = disableAudio });
+    }
+
     public int LoadActiveSaveSlot()
     {
         var slot = Load().ActiveSaveSlot;
@@ -104,5 +111,6 @@ internal sealed class LauncherUiSettingsStore
         public string? DirectoryUrl { get; init; }
         public int ActiveSaveSlot { get; init; }
         public bool ShowStockTutorial { get; init; }
+        public bool DisableAudio { get; init; }
     }
 }

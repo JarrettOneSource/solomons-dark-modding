@@ -1,6 +1,9 @@
 param(
-    [string]$Preset = "map_create_fire_mind"
+    [string]$Preset = "map_create_fire_mind",
+    [switch]$EnableAudio
 )
+
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 Get-Process SolomonDark* -ErrorAction SilentlyContinue | Stop-Process -Force
 Remove-Item "runtime/stage/.sdmod/logs/solomondarkmodloader.log" -ErrorAction SilentlyContinue
@@ -14,9 +17,14 @@ Remove-Item Env:SDMOD_TEST_AUTOSPAWN_BOT_WIZARD_ID -ErrorAction SilentlyContinue
 Remove-Item Env:SDMOD_TEST_AUTOSPAWN_BOT_TRACE -ErrorAction SilentlyContinue
 Remove-Item Env:SDMOD_EXPERIMENTAL_REMOTE_WIZARD_SPAWN -ErrorAction SilentlyContinue
 
+$launchArguments = @("launch")
+if (-not $audioEnabled) {
+    $launchArguments += "--disable-audio"
+}
+
 $process = Start-Process `
     -FilePath "dist\\launcher\\SolomonDarkModLauncher.exe" `
-    -ArgumentList "launch" `
+    -ArgumentList $launchArguments `
     -WorkingDirectory "dist\\launcher" `
     -PassThru
 

@@ -13,11 +13,13 @@ param(
     [int]$FreezeFailureThreshold = 2,
     [switch]$RequireAttachmentLane,
     [string]$BotSet = "fire",
+    [switch]$EnableAudio,
     [switch]$KeepRunning
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
@@ -313,6 +315,15 @@ try {
         -Arguments @("enable-mod", "sample.lua.bots", "--json", "--runtime-root", $testRuntimeRoot) `
         -TimeoutSeconds $ReadyTimeoutSeconds)
 
+    $launchArguments = @(
+        "launch",
+        "--json",
+        "--runtime-root", $testRuntimeRoot,
+        "--temporary-profile"
+    )
+    if (-not $audioEnabled) {
+        $launchArguments += "--disable-audio"
+    }
     $launch = Invoke-LauncherWithEnvironment `
         -LauncherPath $launcher `
         -WorkingDirectory $root `
@@ -320,7 +331,7 @@ try {
             SDMOD_UI_SANDBOX_PRESET = $Preset
             SDMOD_LUA_BOTS_ACTIVE = $BotSet
         } `
-        -Arguments @("launch", "--json", "--runtime-root", $testRuntimeRoot, "--temporary-profile") `
+        -Arguments $launchArguments `
         -TimeoutSeconds $ReadyTimeoutSeconds
     $launchOutput = $launch | ConvertTo-Json -Depth 16
 

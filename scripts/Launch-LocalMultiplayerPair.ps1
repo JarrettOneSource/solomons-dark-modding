@@ -32,6 +32,7 @@ param(
     [switch]$NoTileWindows,
     [switch]$QuickStart,
     [switch]$QuickStartRun,
+    [switch]$EnableAudio,
     [switch]$AllowFocusSteal,
     [string]$ProcessIdOutputPath = "",
     [string]$ExactModIds = "",
@@ -42,6 +43,7 @@ param(
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $effectiveHostRemotePort = if ($HostRemotePort -ne 0) {
     $HostRemotePort
@@ -370,6 +372,9 @@ function Start-MultiplayerInstance {
         "--instance", $Instance,
         "--runtime-flag", "multiplayer.steam_bootstrap=false"
     )
+    if (-not $audioEnabled) {
+        $args += "--disable-audio"
+    }
     if ($FreshInstall) {
         $args += "--fresh-install"
     } elseif ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
@@ -1427,6 +1432,7 @@ if (-not $NoTileWindows) {
     allowFocusSteal = [bool]$AllowFocusSteal
     quickStartEnabled = [bool]$QuickStart
     quickStartRunEnabled = [bool]$QuickStartRun
+    audioDisabled = -not [bool]$audioEnabled
     hostParticipantId = $HostParticipantId
     clientParticipantId = $ClientParticipantId
     thirdParticipantId = if ($EnableThird) { $ThirdParticipantId } else { $null }

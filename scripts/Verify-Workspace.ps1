@@ -2,11 +2,13 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
     [switch]$LaunchAndVerifyLoader,
+    [switch]$EnableAudio,
     [string]$GameDirectory = "",
     [string]$InstanceName = ""
 )
 
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = Split-Path -Parent $PSScriptRoot
 $buildScript = Join-Path $PSScriptRoot "Build-All.ps1"
@@ -161,10 +163,14 @@ if (-not (Test-Path $stageDebugUiConfig)) {
 if ($LaunchAndVerifyLoader) {
     $gameProcessId = 0
     try {
-        $launchResult = Invoke-LauncherJson -Arguments @(
+        $launchArguments = @(
             "launch",
             "--temporary-profile"
         )
+        if (-not $audioEnabled) {
+            $launchArguments += "--disable-audio"
+        }
+        $launchResult = Invoke-LauncherJson -Arguments $launchArguments
         $gameProcessId = [int]$launchResult.launch.processId
         $loaderLog = [string]$launchResult.launch.startupLogPath
         if ([string]::IsNullOrWhiteSpace($loaderLog)) {

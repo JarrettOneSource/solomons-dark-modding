@@ -90,6 +90,13 @@ only lifetime boundary. Per-source muting is neither necessary nor complete.
 The corresponding versioned entries live in `[audio.hooks]` and
 `[audio.globals]` in `config/binary-layout.ini`.
 
+`SDMOD_DISABLE_AUDIO=1` activates this boundary for one process. The loader
+intercepts the initializer and, if the stock startup won the injection race,
+performs the same gate-clear plus `BASS_Free` shutdown sequence. With the
+variable absent, the seam returns before resolving an address or installing a
+hook. The launcher explicitly clears an inherited value for ordinary player
+launches, so the environment switch cannot leak in from a parent process.
+
 ### One-shot sample path
 
 `Sound_Load (0x004076D0)` accepts an extensionless base path. Its confirmed

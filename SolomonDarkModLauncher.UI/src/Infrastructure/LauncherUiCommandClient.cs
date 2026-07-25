@@ -33,6 +33,7 @@ internal sealed class LauncherUiCommandClient
     private string instanceName_ = "default";
     private bool debugUiEnabled_ = true;
     private bool showStockTutorial_;
+    private bool disableAudio_;
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
     private string directoryUrl_;
@@ -48,6 +49,7 @@ internal sealed class LauncherUiCommandClient
         directoryUrl_ = settingsStore_.LoadDirectoryUrl() ??
             DefaultDirectoryUrl;
         showStockTutorial_ = settingsStore_.LoadShowStockTutorial();
+        disableAudio_ = settingsStore_.LoadDisableAudio();
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -59,6 +61,7 @@ internal sealed class LauncherUiCommandClient
     public string InstanceName => instanceName_;
     public bool DebugUiEnabled => debugUiEnabled_;
     public bool ShowStockTutorial => showStockTutorial_;
+    public bool DisableAudio => disableAudio_;
 
     public string LobbyId => lobbyId_;
 
@@ -80,6 +83,12 @@ internal sealed class LauncherUiCommandClient
     {
         showStockTutorial_ = showStockTutorial;
         settingsStore_.SaveShowStockTutorial(showStockTutorial);
+    }
+
+    public void UpdateDisableAudio(bool disableAudio)
+    {
+        disableAudio_ = disableAudio;
+        settingsStore_.SaveDisableAudio(disableAudio);
     }
 
     public void UpdateLobbyId(string? lobbyId)
@@ -242,6 +251,12 @@ internal sealed class LauncherUiCommandClient
             LauncherUiCommandRouting.LaunchesGame(mode))
         {
             arguments.Add("--show-stock-tutorial");
+        }
+
+        if (disableAudio_ &&
+            LauncherUiCommandRouting.LaunchesGame(mode))
+        {
+            arguments.Add("--disable-audio");
         }
 
         if (!string.IsNullOrWhiteSpace(gameDirectory_))

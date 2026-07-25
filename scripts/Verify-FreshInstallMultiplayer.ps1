@@ -22,11 +22,13 @@ param(
     [string]$HostParticipantId = "0x2000000000001601",
     [string]$ClientParticipantId = "0x2000000000001602",
     [string]$HostName = "Fresh Host",
-    [string]$ClientName = "Fresh Client"
+    [string]$ClientName = "Fresh Client",
+    [switch]$EnableAudio
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $pairScript = Join-Path $PSScriptRoot "Launch-LocalMultiplayerPair.ps1"
 $captureWindowScript = Join-Path $PSScriptRoot "capture_window.py"
@@ -775,6 +777,7 @@ try {
         -QuickStart `
         -QuickStartRun `
         -NoTileWindows `
+        -EnableAudio:$audioEnabled `
         -ProcessIdOutputPath $pidLedgerPath `
         -HostFirstLaunchScreenshotPath $hostFirstLaunchScreenshot `
         -HostHubScreenshotPath $hostHubScreenshot `
@@ -784,7 +787,8 @@ try {
     if ($null -eq $pair -or
         -not $pair.freshInstall -or
         -not $pair.noLuaAutomation -or
-        -not $pair.quickStartRunEnabled) {
+        -not $pair.quickStartRunEnabled -or
+        [bool]$pair.audioDisabled -eq [bool]$audioEnabled) {
         throw "Local multiplayer pair did not report fresh zero-mod UI automation."
     }
     foreach ($modStatePath in @(

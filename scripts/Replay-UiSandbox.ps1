@@ -13,10 +13,12 @@ param(
     [ValidateRange(0, 10000)]
     [int]$PostKeySettleMs = 1500,
     [string]$BotSet = "",
+    [switch]$EnableAudio,
     [switch]$KeepRunning
 )
 
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $root "dist/launcher/SolomonDarkModLauncher.exe"
@@ -646,9 +648,14 @@ function Start-LauncherLaunchCommand {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
 
+    $launchArguments = @("launch")
+    if (-not $audioEnabled) {
+        $launchArguments += "--disable-audio"
+    }
+
     $process = Start-Process `
         -FilePath $launcher `
-        -ArgumentList @("launch") `
+        -ArgumentList $launchArguments `
         -WorkingDirectory $root `
         -PassThru `
         -NoNewWindow `

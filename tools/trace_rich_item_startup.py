@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -207,7 +208,12 @@ emit_hits("rich_clone", rich_clone_hits)
     return parse_key_values(run_lua(code))
 
 
-def launch_game() -> None:
+def launch_game(enable_audio: bool = False) -> None:
+    launch_arguments = (
+        "launch"
+        if enable_audio
+        else "launch --disable-audio"
+    )
     command = (
         "Get-Process SolomonDark,SolomonDarkModLauncher -ErrorAction SilentlyContinue | "
         "Stop-Process -Force -ErrorAction SilentlyContinue; "
@@ -215,7 +221,8 @@ def launch_game() -> None:
         f"Set-Location '{ROOT}'; "
         "$env:SDMOD_UI_SANDBOX_PRESET='diagnostic_get_state'; "
         "Start-Process -FilePath 'dist\\launcher\\SolomonDarkModLauncher.exe' "
-        "-ArgumentList 'launch' -WorkingDirectory 'dist\\launcher' | Out-Null"
+        f"-ArgumentList '{launch_arguments}' "
+        "-WorkingDirectory 'dist\\launcher' | Out-Null"
     )
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-Command", command],
@@ -233,8 +240,16 @@ def launch_game() -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Opt out of the automation default and allow game audio.",
+    )
+    args = parser.parse_args()
+
     print("[trace-startup] launch", flush=True)
-    launch_game()
+    launch_game(enable_audio=args.enable_audio)
     print("[trace-startup] wait dialog/main_menu", flush=True)
     first_surface = wait_for_any_surface(["dialog", "main_menu"], 20.0)
     arm_traces()

@@ -55,6 +55,7 @@ internal static class LauncherJsonConsole
                 TemporaryProfile = execution.Command.TemporaryProfile,
                 FreshInstall = execution.Command.FreshInstall,
                 ShowStockTutorial = execution.Command.ShowStockTutorial,
+                DisableAudio = execution.Command.DisableAudio,
                 LoaderDebugUi = runtimeFlags.LoaderDebugUi,
                 SteamAppId = execution.Configuration.Steam.AppId,
                 SteamApiOverride = execution.Configuration.Steam.ApiDllOverridePath
@@ -364,6 +365,7 @@ internal static class LauncherJsonConsole
         public required bool TemporaryProfile { get; init; }
         public required bool FreshInstall { get; init; }
         public required bool ShowStockTutorial { get; init; }
+        public required bool DisableAudio { get; init; }
         public required bool LoaderDebugUi { get; init; }
         public required string SteamAppId { get; init; }
         public required string? SteamApiOverride { get; init; }

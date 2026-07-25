@@ -8,11 +8,13 @@ param(
     [string]$PlayerName = "Solo Player",
     [string]$GameDirectory = "",
     [string]$ExactModIds = "",
+    [switch]$EnableAudio,
     [string]$ProcessIdOutputPath = ""
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
@@ -72,6 +74,9 @@ $arguments = @(
     "--runtime-flag", "multiplayer.steam_bootstrap=false",
     "--temporary-profile"
 )
+if (-not $audioEnabled) {
+    $arguments += "--disable-audio"
+}
 if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
     $arguments += @("--game-dir", $GameDirectory)
 }
@@ -107,6 +112,7 @@ $instanceRoot = Join-Path $effectiveRuntimeRoot (
     unusedRemotePort = [int]$UnusedRemotePort
     luaPipe = $pipeName
     startupLogPath = $result.launch.startupLogPath
+    audioDisabled = -not [bool]$audioEnabled
     runtimeRoot = $effectiveRuntimeRoot
     executablePath = Join-Path $instanceRoot "stage\SolomonDark.exe"
 } | ConvertTo-Json -Depth 4 -Compress

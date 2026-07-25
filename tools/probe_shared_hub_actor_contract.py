@@ -125,10 +125,13 @@ def stop_game() -> None:
     )
 
 
-def launch_game() -> None:
+def launch_game(enable_audio: bool = False) -> None:
     try:
+        arguments = [str(LAUNCHER), "launch"]
+        if not enable_audio:
+            arguments.append("--disable-audio")
         subprocess.Popen(
-            [str(LAUNCHER), "launch"],
+            arguments,
             cwd=ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -721,6 +724,11 @@ def annotate_probe(probe: dict[str, object]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--launch", action="store_true", help="Stop existing game processes and launch a fresh staged session.")
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Opt out of the automation default and allow game audio.",
+    )
     parser.add_argument("--preset", default=DEFAULT_PRESET, help="UI sandbox preset to activate before launch.")
     parser.add_argument("--settle-ms", type=int, default=750, help="Extra settle delay after bot materialization before sampling.")
     parser.add_argument("--watch-seconds", type=float, default=0.0, help="Optional post-capture watch duration.")
@@ -732,7 +740,7 @@ def main() -> int:
         set_active_preset(args.preset)
         if args.launch:
             stop_game()
-            launch_game()
+            launch_game(enable_audio=args.enable_audio)
         wait_for_lua_pipe()
         wait_for_shared_hub()
         wait_for_bot_materialized()

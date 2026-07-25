@@ -1058,7 +1058,6 @@
                                     Padding="16,8" />
                         </Grid>
                     </Border>
-
                     <TextBlock Margin="0,16,0,2"
                                Style="{StaticResource FieldLabelStyle}"
                                Text="Gameplay" />
@@ -1079,6 +1078,30 @@
                                            FontWeight="SemiBold" />
                                 <TextBlock Margin="0,4,0,0"
                                            Text="Show the original tutorial whenever a fresh save is launched."
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Margin="0,8,0,0"
+                            Padding="14,12"
+                            Background="{StaticResource InputBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <DockPanel LastChildFill="True">
+                            <CheckBox DockPanel.Dock="Right"
+                                      Margin="16,0,0,0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding DisableAudio}"
+                                      Style="{StaticResource ToggleSwitchStyle}" />
+                            <StackPanel>
+                                <TextBlock Text="Disable all audio"
+                                           FontSize="13"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Margin="0,4,0,0"
+                                           Text="Mute music, effects, ambience, and interface sounds for each launch."
                                            FontSize="11"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            TextWrapping="Wrap" />

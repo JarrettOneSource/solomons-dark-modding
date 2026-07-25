@@ -84,6 +84,15 @@ tutorial, enable **Show stock tutorial** in launcher Settings or pass
 starting `SolomonDark.exe` outside the launcher keeps the stock behavior, and
 the multiplayer quick-start automation remains a separate test harness.
 
+Normal player launches keep all stock audio enabled. To make one launcher
+configuration silent, enable **Disable all audio** in Settings or pass
+`--disable-audio` to the CLI. The launcher sets `SDMOD_DISABLE_AUDIO=1` only
+in the child game process; it does not change or save the game's sound and
+music volume preferences. Repo automation launches silent by default. Their
+PowerShell entry points accept `-EnableAudio`, Python launch probes accept
+`--enable-audio`, and nested harnesses can set `SDMOD_ENABLE_AUDIO=1` when
+audio itself is under test.
+
 ## Runtime contract
 
 The launcher stages these files into `runtime/stage/.sdmod/`:
@@ -177,6 +186,7 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 ./dist/launcher/SolomonDarkModLauncher.exe stage
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
 ./dist/launcher/SolomonDarkModLauncher.exe launch
+./dist/launcher/SolomonDarkModLauncher.exe launch --disable-audio
 ./dist/launcher/SolomonDarkModLauncher.exe launch --fresh-install
 ./dist/launcher/SolomonDarkModLauncher.exe launch --savegames-root path\to\launcher-savegames
 ./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll

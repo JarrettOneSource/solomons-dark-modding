@@ -324,6 +324,8 @@ from static_re_runtime_cast_contracts import (
     test_write_watches_are_transparent_to_loader_memory_access,
 )
 from static_re_audio_disable_contracts import (
+    test_automation_launch_surfaces_default_to_disabled_audio,
+    test_launch_audio_disable_is_engine_level_and_player_opt_in,
     test_stock_audio_bootstrap_and_settings_are_layout_backed,
 )
 from static_re_runtime_platform_contracts import (
@@ -1216,6 +1218,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "stock audio bootstrap and settings are layout-backed",
         test_stock_audio_bootstrap_and_settings_are_layout_backed,
+    ),
+    (
+        "launch audio disable is engine-level and player opt-in",
+        test_launch_audio_disable_is_engine_level_and_player_opt_in,
+    ),
+    (
+        "automation launch surfaces default to disabled audio",
+        test_automation_launch_surfaces_default_to_disabled_audio,
     ),
     ("binary layout identity is staged", test_binary_layout_matches_staged_layout_identity),
     ("residual probe and skill-choice offsets are layout-backed", test_residual_probe_and_skill_choice_offsets_are_layout_backed),

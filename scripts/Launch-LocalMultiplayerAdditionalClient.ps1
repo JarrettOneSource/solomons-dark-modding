@@ -12,12 +12,14 @@ param(
     [string]$TestSurvivalBoneyardOverride = "",
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
+    [switch]$EnableAudio,
     [string]$ProcessIdOutputPath = "",
     [string]$ExactModIds = ""
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
+$audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
@@ -100,6 +102,9 @@ $arguments = @(
     "--runtime-flag", "multiplayer.steam_bootstrap=false",
     "--temporary-profile"
 )
+if (-not $audioEnabled) {
+    $arguments += "--disable-audio"
+}
 if (-not [string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
     $arguments += @("--runtime-root", $runtimeRootOverride)
 }
@@ -132,5 +137,6 @@ if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     testSurvivalBoneyardOverride = $resolvedOverride
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedWaveOverride
+    audioDisabled = -not [bool]$audioEnabled
     runtimeRoot = $effectiveRuntimeRoot
 } | ConvertTo-Json -Depth 4 -Compress

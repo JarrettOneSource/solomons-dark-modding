@@ -357,6 +357,7 @@ def launch_pair(
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
+    enable_audio: bool | None = None,
 ) -> dict[str, object]:
     if kill_existing:
         raise ValueError(
@@ -367,6 +368,8 @@ def launch_pair(
         exact_mod_id=exact_mod_id,
         exact_mod_ids=exact_mod_ids,
     )
+    if enable_audio is None:
+        enable_audio = os.environ.get("SDMOD_ENABLE_AUDIO") == "1"
     args = [
         "powershell.exe",
         "-NoProfile",
@@ -432,6 +435,8 @@ def launch_pair(
         args.append("-AllowFocusSteal")
     if quick_start:
         args.append("-QuickStart")
+    if enable_audio:
+        args.append("-EnableAudio")
     if game_directory is not None:
         args.extend([
             "-GameDirectory",

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -38,8 +39,11 @@ def stop_game() -> None:
     )
 
 
-def launch_game() -> None:
-    result = run_command([str(LAUNCHER), "launch"], timeout=120.0)
+def launch_game(enable_audio: bool = False) -> None:
+    arguments = [str(LAUNCHER), "launch"]
+    if not enable_audio:
+        arguments.append("--disable-audio")
+    result = run_command(arguments, timeout=120.0)
     sys.stdout.write(result.stdout)
     sys.stderr.write(result.stderr)
     if result.returncode != 0:
@@ -141,9 +145,17 @@ def switch_region(region_index: int) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Opt out of the automation default and allow game audio.",
+    )
+    args = parser.parse_args()
+
     try:
         stop_game()
-        launch_game()
+        launch_game(enable_audio=args.enable_audio)
         wait_for_lua_pipe()
         wait_for_scene("hub")
 

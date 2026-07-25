@@ -23,6 +23,7 @@ internal static class LauncherCommandParser
         var temporaryProfile = false;
         var freshInstall = false;
         var showStockTutorial = false;
+        var disableAudio = false;
         string? steamAppId = null;
         string? steamApiDll = null;
         var multiplayerMode = MultiplayerLaunchMode.Unspecified;
@@ -132,6 +133,12 @@ internal static class LauncherCommandParser
             if (arg == "--show-stock-tutorial")
             {
                 showStockTutorial = true;
+                continue;
+            }
+
+            if (arg == "--disable-audio")
+            {
+                disableAudio = true;
                 continue;
             }
 
@@ -251,6 +258,7 @@ internal static class LauncherCommandParser
             temporaryProfile,
             freshInstall,
             showStockTutorial,
+            disableAudio,
             steamAppId,
             steamApiDll,
             multiplayer.Mode,

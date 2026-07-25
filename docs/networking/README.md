@@ -383,6 +383,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
   and profile data under a workspace-scoped Windows temporary runtime root.
   Junction-dependent game copies therefore stay on a local Windows volume;
   `-RuntimeRoot` selects another Windows-local base when needed.
+  Both processes disable all audio by default; pass `-EnableAudio` only for an
+  audio-focused run.
   The client launch uses `--temporary-profile`, which redirects APPDATA,
   LOCALAPPDATA, and the staged `savegames` compatibility path into a fresh
   runtime-local temporary profile so joining a multiplayer host cannot mutate

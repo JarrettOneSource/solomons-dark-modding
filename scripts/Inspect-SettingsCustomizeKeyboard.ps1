@@ -4,6 +4,7 @@ param(
     [int]$StartTimeoutSeconds = 30,
     [ValidateRange(1, 30)]
     [int]$ProbeTimeoutSeconds = 10,
+    [switch]$EnableAudio,
     [switch]$KeepGameOpen
 )
 
@@ -178,9 +179,19 @@ try {
         Remove-Item -LiteralPath $loaderLog -Force -ErrorAction SilentlyContinue
     }
 
+    $replayArguments = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", ('"{0}"' -f $replayScript),
+        "-Preset", $Preset,
+        "-KeepRunning"
+    )
+    if ($EnableAudio) {
+        $replayArguments += "-EnableAudio"
+    }
     $replayProcess = Start-Process `
         -FilePath "powershell.exe" `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ('"{0}"' -f $replayScript), "-Preset", $Preset, "-KeepRunning") `
+        -ArgumentList $replayArguments `
         -WorkingDirectory $root `
         -PassThru `
         -RedirectStandardOutput $replayStdoutPath `

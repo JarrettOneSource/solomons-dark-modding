@@ -42,6 +42,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private string instanceName_;
     private bool debugUiEnabled_;
     private bool showStockTutorial_;
+    private bool disableAudio_;
     private string lobbyId_;
     private string gameDirectory_;
     private bool isGameReady_;
@@ -103,6 +104,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         instanceName_ = client.InstanceName;
         debugUiEnabled_ = client.DebugUiEnabled;
         showStockTutorial_ = client.ShowStockTutorial;
+        disableAudio_ = client.DisableAudio;
         lobbyId_ = client.LobbyId;
         gameDirectory_ = client.GameDirectory;
         directoryUrl_ = client.DirectoryUrl;
@@ -553,6 +555,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref showStockTutorial_, value))
             {
                 client_.UpdateShowStockTutorial(value);
+                UpdateLaunchPreview();
+            }
+        }
+    }
+
+    public bool DisableAudio
+    {
+        get => disableAudio_;
+        set
+        {
+            if (SetProperty(ref disableAudio_, value))
+            {
+                client_.UpdateDisableAudio(value);
                 UpdateLaunchPreview();
             }
         }

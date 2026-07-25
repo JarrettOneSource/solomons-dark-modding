@@ -45,6 +45,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("selected save launch routing", TestSelectedSaveLaunchRoutingAsync),
     ("fresh install isolation", TestFreshInstallIsolationAsync),
     ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
+    ("audio disable launch routing", TestAudioDisableLaunchRoutingAsync),
     ("normal runtime hides diagnostic UI", TestNormalRuntimeHidesDiagnosticUiAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
@@ -592,6 +593,120 @@ static Task TestTutorialBypassLaunchRoutingAsync()
             TutorialLaunchEnvironment.SkipFreshSaveTutorialVariable !=
                 MultiplayerLaunchEnvironment.QuickStartVariable,
             "tutorial bypass and multiplayer quick start share one environment gate");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestAudioDisableLaunchRoutingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var defaultCommand = LauncherCommandParser.Parse(["launch"]);
+        Require(
+            !defaultCommand.DisableAudio,
+            "normal player launch unexpectedly disabled audio");
+        var silentCommand = LauncherCommandParser.Parse(
+            ["launch", "--disable-audio"]);
+        Require(
+            silentCommand.DisableAudio,
+            "launcher parser lost --disable-audio");
+
+        var settingsRoot = Path.Combine(root, "ui-settings");
+        var settings = new LauncherUiSettingsStore(settingsRoot);
+        Require(
+            !settings.LoadDisableAudio(),
+            "desktop launcher settings defaulted to disabled audio");
+        settings.SaveDisableAudio(true);
+        Require(
+            new LauncherUiSettingsStore(settingsRoot)
+                .LoadDisableAudio(),
+            "desktop launcher did not persist the audio opt-out");
+
+        var workspace = WorkspacePaths.Create(
+            Path.Combine(root, "workspace"),
+            modsRootOverride: null,
+            runtimeRootOverride: null,
+            stageRootOverride: null);
+        var profileCases = new[]
+        {
+            (Name: "normal", Temporary: false, Fresh: false),
+            (Name: "temporary", Temporary: true, Fresh: false),
+            (Name: "fresh-install", Temporary: false, Fresh: true)
+        };
+        var launchModes = new[]
+        {
+            MultiplayerLaunchMode.Unspecified,
+            MultiplayerLaunchMode.Off,
+            MultiplayerLaunchMode.Host,
+            MultiplayerLaunchMode.Join
+        };
+
+        foreach (var profileCase in profileCases)
+        {
+            var profileOptions =
+                IsolatedProfileBootstrapper.CreateLaunchOptions(
+                    workspace,
+                    new Dictionary<string, string>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["PRESERVED"] = profileCase.Name,
+                        [AudioLaunchEnvironment.DisableAudioVariable] = "1"
+                    },
+                    temporaryProfile: profileCase.Temporary,
+                    freshInstall: profileCase.Fresh);
+
+            foreach (var mode in launchModes)
+            {
+                var multiplayer = MultiplayerLaunchOptions.Create(
+                    mode,
+                    lobbyId: null,
+                    inviteSteamId: null,
+                    MultiplayerLaunchOptions.DefaultMaxParticipants,
+                    openInviteDialog:
+                        mode != MultiplayerLaunchMode.Host);
+                var normalLaunch = MultiplayerLaunchEnvironment.Apply(
+                    AudioLaunchEnvironment.Apply(
+                        profileOptions,
+                        disableAudio: false),
+                    multiplayer);
+                Require(
+                    normalLaunch.EnvironmentOverrides?[
+                        AudioLaunchEnvironment.DisableAudioVariable] ==
+                        string.Empty,
+                    $"{profileCase.Name} {mode} normal player launch inherited the audio-disable signal");
+                Require(
+                    normalLaunch.EnvironmentOverrides?["PRESERVED"] ==
+                        profileCase.Name,
+                    $"{profileCase.Name} {mode} launch discarded existing environment overrides");
+                Require(
+                    normalLaunch.EnvironmentOverrides?["APPDATA"] is not null &&
+                    normalLaunch.EnvironmentOverrides?["LOCALAPPDATA"] is not null,
+                    $"{profileCase.Name} {mode} launch lost its isolated profile environment");
+
+                var silentLaunch = MultiplayerLaunchEnvironment.Apply(
+                    AudioLaunchEnvironment.Apply(
+                        profileOptions,
+                        disableAudio: true),
+                    multiplayer);
+                Require(
+                    silentLaunch.EnvironmentOverrides?[
+                        AudioLaunchEnvironment.DisableAudioVariable] == "1",
+                    $"{profileCase.Name} {mode} silent launch omitted the audio-disable signal");
+            }
+        }
+
+        Require(
+            AudioLaunchEnvironment.DisableAudioVariable !=
+                TutorialLaunchEnvironment.SkipFreshSaveTutorialVariable &&
+            AudioLaunchEnvironment.DisableAudioVariable !=
+                MultiplayerLaunchEnvironment.QuickStartVariable,
+            "audio disable shares an environment gate with another launch behavior");
     }
     finally
     {

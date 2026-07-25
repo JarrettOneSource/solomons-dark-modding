@@ -11,6 +11,7 @@ proton="${SDMOD_PROTON_PATH:-$proton_root/proton}"
 compat_data="${SDMOD_STEAM_COMPAT_DATA:-$HOME/.local/share/Steam/steamapps/compatdata/3362180}"
 steam_api="${SDMOD_STEAM_API_DLL:-/mnt/c/Program Files (x86)/Steam/steamapps/common/SteamVR/bin/win32/steam_api.dll}"
 test_boneyard_override="${SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE:-}"
+enable_audio="${SDMOD_ENABLE_AUDIO:-0}"
 publish_dir="$root/runtime/wsl-steam-launcher"
 build_artifacts="$root/runtime/wsl-steam-build-artifacts"
 launcher="$publish_dir/SolomonDarkModLauncher.exe"
@@ -75,6 +76,9 @@ args=(
     --multiplayer join
     --temporary-profile
 )
+if [[ "$enable_audio" != "1" ]]; then
+    args+=(--disable-audio)
+fi
 if [[ -n "$lobby_id" ]]; then
     [[ "$lobby_id" =~ ^[0-9]+$ ]] || fail "lobby id must be numeric"
     args+=(--lobby-id "$lobby_id")

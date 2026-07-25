@@ -19,6 +19,7 @@ internal sealed record LauncherCommand(
     bool TemporaryProfile,
     bool FreshInstall,
     bool ShowStockTutorial,
+    bool DisableAudio,
     string? SteamAppIdOverride,
     string? SteamApiDllOverride,
     MultiplayerLaunchMode MultiplayerMode,

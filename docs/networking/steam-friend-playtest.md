@@ -105,6 +105,8 @@ flow. Pass the host lobby ID as its only argument to test a direct lobby-ID
 join. `SDMOD_PROTON_PATH`, `SDMOD_STEAM_API_DLL`, `SDMOD_GAME_DIR`, and
 `SDMOD_WSL_STEAM_INSTANCE` override machine-specific defaults. No account name,
 password, refresh token, or Steam Guard code is read or copied by the script.
+The game client is silent by default; set `SDMOD_ENABLE_AUDIO=1` only when
+validating audio.
 
 If the WSLg Steam client aborts while cleaning up PulseAudio, restart that
 client with audio disabled; multiplayer transport and the Steam UI do not

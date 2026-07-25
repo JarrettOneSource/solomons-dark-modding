@@ -272,8 +272,10 @@ def normalize_launcher_path(raw_path: str) -> str:
     return to_windows_path((ROOT / path).resolve())
 
 
-def build_launcher_arguments() -> list[str]:
+def build_launcher_arguments(enable_audio: bool = False) -> list[str]:
     args = ["launch"]
+    if not enable_audio:
+        args.append("--disable-audio")
 
     game_dir = os.environ.get("SD_PROBE_GAME_DIR")
     if game_dir:
@@ -350,11 +352,15 @@ def clear_loader_log() -> None:
         )
 
 
-def launch_game() -> None:
+def launch_game(enable_audio: bool = False) -> None:
     ensure_required_lua_mods_enabled()
     launcher_path = to_windows_path(LAUNCHER).replace("'", "''")
     working_directory = to_windows_path(LAUNCHER.parent).replace("'", "''")
-    arguments = powershell_quote(subprocess.list2cmdline(build_launcher_arguments()))
+    arguments = powershell_quote(
+        subprocess.list2cmdline(
+            build_launcher_arguments(enable_audio=enable_audio)
+        )
+    )
     result = run_powershell(
         f"Start-Process -FilePath '{launcher_path}' -ArgumentList {arguments} "
         f"-WorkingDirectory '{working_directory}' | Out-Null",
@@ -1344,6 +1350,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bot-skill-id", type=lambda v: int(v, 0), default=DEFAULT_BOT_SKILL_ID)
     parser.add_argument("--player-key", default="", help="Optional sd.input.press_key binding to fire after bot cast, e.g. belt_slot_1.")
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Opt out of the automation default and allow game audio.",
+    )
     parser.add_argument("--keep-running", action="store_true")
     return parser
 
@@ -1359,7 +1370,7 @@ def main() -> int:
         stop_game()
         clear_loader_log()
 
-        launch_game()
+        launch_game(enable_audio=args.enable_audio)
         process_id = wait_for_game_process()
         result["process_id"] = process_id
         wait_for_lua_pipe()

@@ -7,6 +7,7 @@
 
 #include "bot_runtime.h"
 #include "fresh_save_tutorial_bypass.h"
+#include "launch_audio_disable.h"
 #include "logger.h"
 #include "lua_camera_runtime.h"
 #include "lua_developer_console.h"
@@ -153,6 +154,7 @@ void ShutdownPartialRuntime() {
     RuntimeDebug_Shutdown();
     ShutdownMultiplayerJoinFlow();
     ShutdownFreshSaveTutorialBypass();
+    ShutdownLaunchAudioDisable();
     ShutdownDebugUiOverlay();
     multiplayer::ShutdownBotRuntime();
     multiplayer::ShutdownFoundation();
@@ -271,6 +273,21 @@ void Initialize(HMODULE module_handle) {
             startup_status.binary_layout_loaded = false;
             Log("Binary layout failed to load. " + GetBinaryLayoutLoadError());
             Log("Config-driven address resolution and UI seam discovery are unavailable.");
+        }
+
+        {
+            std::string audio_disable_error;
+            if (!InitializeLaunchAudioDisable(
+                    &audio_disable_error)) {
+                const auto message = audio_disable_error.empty()
+                    ? std::string(
+                        "Launch audio disable failed to initialize.")
+                    : audio_disable_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("audio-disable-failed", message);
+                return;
+            }
         }
 
         {
@@ -526,6 +543,7 @@ void Shutdown() {
     RunShutdownStep(
         "fresh-save tutorial bypass",
         &ShutdownFreshSaveTutorialBypass);
+    RunShutdownStep("launch audio disable", &ShutdownLaunchAudioDisable);
     RunShutdownStep("debug ui overlay", &ShutdownDebugUiOverlay);
     RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);

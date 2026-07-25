@@ -40,8 +40,11 @@ def stop_game() -> None:
     )
 
 
-def launch_game() -> None:
-    result = run_command([str(LAUNCHER), "launch"], timeout=120.0)
+def launch_game(enable_audio: bool = False) -> None:
+    arguments = [str(LAUNCHER), "launch"]
+    if not enable_audio:
+        arguments.append("--disable-audio")
+    result = run_command(arguments, timeout=120.0)
     sys.stdout.write(result.stdout)
     sys.stderr.write(result.stderr)
     if result.returncode != 0:
@@ -246,12 +249,17 @@ def print_log_tail() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--launch", action="store_true", help="stop existing game processes and launch a fresh session")
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Opt out of the automation default and allow game audio.",
+    )
     args = parser.parse_args()
 
     try:
         if args.launch:
             stop_game()
-            launch_game()
+            launch_game(enable_audio=args.enable_audio)
         wait_for_lua_pipe()
 
         hub = wait_for_scene("hub")

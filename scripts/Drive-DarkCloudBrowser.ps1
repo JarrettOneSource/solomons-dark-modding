@@ -7,6 +7,7 @@ param(
     [string]$CaptureMethod = "screen",
     [ValidateRange(10, 300)]
     [int]$CompletionTimeoutSeconds = 90,
+    [switch]$EnableAudio,
     [switch]$KeepRunning
 )
 
@@ -38,6 +39,7 @@ if ([string]::IsNullOrWhiteSpace($resolvedPreset)) {
 $invokeArguments = @{
     Preset = $resolvedPreset
     CompletionTimeoutSeconds = $CompletionTimeoutSeconds
+    EnableAudio = $EnableAudio
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ScreenshotPath)) {
