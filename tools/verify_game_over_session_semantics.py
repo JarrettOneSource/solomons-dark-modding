@@ -1516,8 +1516,26 @@ def run_loading_timeout_verification(
             [host_pipe, client_pipe]
         )
         _start_testrun_when_ready(host_pipe)
-        result["kill_delay_seconds"] = 0.15
-        time.sleep(0.15)
+        result["host_barrier_before_peer_kill"] = (
+            _wait_for_state(
+                host_pipe,
+                lambda values: (
+                    loading_barrier_wait_state_matches(
+                        values,
+                        2,
+                    )
+                    and _integer(
+                        values,
+                        "loading_ready_participant_count",
+                    )
+                    < 2
+                ),
+                timeout=20.0,
+                description=(
+                    "host barrier frozen with both peers before kill"
+                ),
+            )
+        )
         killed_at = time.monotonic()
         stop_owned_processes(client_owned)
         if _query_process_executable(client_process_id) is not None:
