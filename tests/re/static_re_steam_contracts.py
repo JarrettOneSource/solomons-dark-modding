@@ -521,7 +521,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
                 "WPF launcher retains the global Steam status: " + removed_status
             )
     return (
-        "Steam friends-only lobby, authenticated v84 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v85 handshake, idle keepalive, owner-checked gameplay "
         "routing, Solomon Dark AppID launch, x86 runtime staging, and a live launch-token-bound "
         "lobby connection panel are wired"
     )
