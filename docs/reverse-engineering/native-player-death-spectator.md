@@ -758,6 +758,61 @@ device backbuffer. Frame observation bookkeeping may continue on other passes,
 but the spectator HUD must never be drawn into a texture that the game later
 places in world space.
 
+### Native wave loading and organic-damage provenance
+
+The original organic-death gate supplied a one-record `wave.txt` fragment and
+then accepted the first live actor whose reported object type matched the
+requested fixture. That does not prove the attacker came from the requested
+native wave:
+
+- `WaveData_LoadFromFile` at `0x006387F0` resolves and loads
+  `data\wave.txt`, then enters `WaveData_Parse` at `0x00632730`.
+- The module-directory resolver at `0x00444D50` calls
+  `GetModuleFileNameA(NULL, ...)`; the path combiner at `0x00423A30` appends
+  the relative data path. A live PID/path trace confirmed that each isolated
+  process read the staged executable directory rather than the retail source
+  directory.
+- The parser's line reader at `0x00422470` accepts either CRLF or LF. Newline
+  conversion therefore cannot explain selection of a stock-looking enemy.
+- `WaveFlag_ParseModifiers` at `0x0062E070` maps `FLAG_CASTPOISON` to native
+  modifier `0x24`; the poison fixture syntax reaches the stock flag parser.
+- The retail file contains 42 `WAVE` records connected by their `NEXT:` graph
+  plus one redundant trailing `ENDWAVE` token that the stock parser tolerates.
+  One `WAVE` marker carries trailing tabs, so an exact-line text count reports
+  only 41 even though the native grammar and headless parser both admit 42.
+  Replacing one record cannot constrain whichever record the active Arena
+  selects. A deterministic acceptance schedule must preserve every record and
+  every `NEXT:` edge while replacing each record's spawn budget and group; the
+  redundant terminator is not another record.
+
+There is a second, independent provenance trap. Run construction creates nine
+tracked Boneyard skeleton-family actors before `sd.gameplay.start_waves()`.
+In the failed poison trace those actors had spawn serials 1 through 9. The
+first actor selected by the verifier was `0x16628138`, spawned at
+`00:46:59.107`; `start_waves` was not accepted until `00:47:03.632`, and the
+first actor created after that boundary had spawn serial 10 at
+`00:47:04.105`. The gate had therefore aimed a seeded melee skeleton at the
+victim while claiming poison-wave coverage.
+
+Skeleton variants also cannot be distinguished by the public actor object type
+alone. `HookEnemySpawned` first calls `TryReadEnemyTypeFromActor`; the actor
+reports the shared skeleton-family base type 1001, so the config fallback that
+contains `SKELETONMAGE` and its cast flag is not consulted. Exact organic
+provenance consequently requires all three conditions:
+
+1. materialize a full staged schedule from the untouched retail schedule,
+   preserving the complete `NEXT:` graph and replacing every group with the
+   requested stock enemy/flag token;
+2. snapshot all tracked enemy addresses before native wave start and select
+   only an address absent from that snapshot; and
+3. observe a real loss of victim HP while that exact new actor is the bound
+   attacker before lowering the victim to a naturally lethal threshold.
+
+The harness may reposition actors and raise the attacker's life to isolate the
+trial, but it must not invoke a player-damage helper. Lethality must still pass
+through the stock melee, projectile, or poison enemy behavior selected by the
+materialized native schedule.
+
 ## Required implementation and acceptance boundaries
 
 The native findings impose these constraints:
@@ -804,6 +859,10 @@ The native findings impose these constraints:
   mutation, or world effect.
 - Spectator HUD rendering is restricted to the active D3D9 backbuffer; summons
   and other offscreen passes cannot duplicate or relocate it.
+- Organic acceptance rewrites all 42 staged wave records while preserving the
+  native `NEXT:` graph, excludes every pre-wave Boneyard actor by address, and
+  observes a real HP decrement from the selected post-start actor before
+  arming lethal life.
 - Dead remote presentation is reconciled explicitly; it is not obtained by
   invoking the side-effectful complete PlayerWizard death virtual.
 - Respawn clears the death epoch, native death selector/timer, terminal pending
