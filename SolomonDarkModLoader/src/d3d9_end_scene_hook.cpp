@@ -313,12 +313,18 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
     }
 
     std::scoped_lock lock(g_hook_mutex);
+    bool callback_registered = false;
     for (std::size_t index = 0; index < g_callback_count; ++index) {
         if (g_callbacks[index] == callback) {
-            return true;
+            callback_registered = true;
+            break;
         }
     }
-    if (g_callback_count >= g_callbacks.size()) {
+    if (callback_registered && g_hook_installed) {
+        return true;
+    }
+    if (!callback_registered &&
+        g_callback_count >= g_callbacks.size()) {
         if (error_message != nullptr) {
             *error_message = "D3D9 frame callback capacity was exhausted.";
         }
@@ -326,13 +332,24 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
     }
 
     if (g_hook_installed) {
-        g_callbacks[g_callback_count++] = callback;
+        if (!callback_registered) {
+            g_callbacks[g_callback_count++] = callback;
+        }
         return true;
     }
 
     IDirect3DDevice9* device = nullptr;
     if (!TryAcquireDevicePointer(device_pointer_global, &device, error_message)) {
-        return false;
+        if (!callback_registered) {
+            g_callbacks[g_callback_count++] = callback;
+        }
+        if (error_message != nullptr) {
+            error_message->clear();
+        }
+        Log(
+            "D3D9 frame hook: deferred callback until the next subscriber "
+            "can acquire the live device.");
+        return true;
     }
 
     auto** vtable = *reinterpret_cast<void***>(device);
@@ -373,7 +390,9 @@ bool InstallD3d9FrameHook(uintptr_t device_pointer_global, D3d9FrameCallback cal
         return false;
     }
 
-    g_callbacks[g_callback_count++] = callback;
+    if (!callback_registered) {
+        g_callbacks[g_callback_count++] = callback;
+    }
     g_hook_installed = true;
     Log("D3D9 frame hook: Reset and EndScene slots patched on the live device.");
     return true;

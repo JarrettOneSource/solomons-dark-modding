@@ -339,6 +339,31 @@ class OverlayRendererContractTests(unittest.TestCase):
             hook,
         )
 
+    def test_frame_hook_preserves_an_early_subscriber_for_device_retry(
+        self,
+    ) -> None:
+        hook = read("SolomonDarkModLoader/src/d3d9_end_scene_hook.cpp")
+        install = hook[
+            hook.index("bool InstallD3d9FrameHook(") :
+            hook.index("void RemoveD3d9FrameCallback(")
+        ]
+
+        self.assertIn("bool callback_registered = false;", install)
+        self.assertIn(
+            "if (callback_registered && g_hook_installed)",
+            install,
+        )
+        acquire_failure = install[
+            install.index("if (!TryAcquireDevicePointer(") :
+            install.index("auto** vtable")
+        ]
+        self.assertIn(
+            "g_callbacks[g_callback_count++] = callback;",
+            acquire_failure,
+        )
+        self.assertIn("deferred callback until the next subscriber", install)
+        self.assertIn("return true;", acquire_failure)
+
     def test_lua_draw_batches_runs_and_filters_sprites_linearly(self) -> None:
         renderer = read(
             "SolomonDarkModLoader/src/lua_draw_renderer/"
