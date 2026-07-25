@@ -60,6 +60,7 @@ from verify_multiplayer_organic_player_death import (
     _sample_lifecycle,
     _set_enemy_attack,
     _set_enemy_idle,
+    _small_state,
     _stabilize_enemy,
     _start_testrun_when_ready,
     _start_waves,
@@ -120,11 +121,9 @@ def _assert_spectated_target_hold(
     presentation_samples = [
         sample
         for sample in lifecycle
-        if (
-            sample.get("owner", {}).get("phase") == "DeathPresentation"
-            or sample.get("observer", {}).get("presentation_active")
-                == "true"
-        )
+        if sample.get("spectator_hold", {}).get(
+            "expected_target_presentation_active"
+        ) == "true"
     ]
     if not presentation_samples:
         raise VerifyFailure(

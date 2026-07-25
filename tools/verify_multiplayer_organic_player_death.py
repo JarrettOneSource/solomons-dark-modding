@@ -43,6 +43,7 @@ from verify_multiplayer_death_spectator_respawn import (
     _disarm_death_traces,
     query_remote_death_state,
     query_spectator_state,
+    query_spectator_target_death_state,
 )
 from verify_player_health_death_sync import set_local_player_vitals
 from verify_real_input_spell_cast_sync import (
@@ -922,6 +923,9 @@ def _small_state(values: dict[str, str]) -> dict[str, str]:
         "y",
         "target_participant_id",
         "target_name",
+        "expected_target_participant_id",
+        "expected_target_presentation_active",
+        "expected_target_death_presentation_tick",
         "display_text",
     )
     return {key: values[key] for key in keys if key in values}
@@ -952,7 +956,10 @@ def _sample_lifecycle(
         }
         if spectator_hold_pipe is not None:
             sample["spectator_hold"] = _small_state(
-                query_spectator_state(spectator_hold_pipe)
+                query_spectator_target_death_state(
+                    spectator_hold_pipe,
+                    victim_id,
+                )
             )
         samples.append(sample)
         owner_hp = float(owner.get("hp", "0"))

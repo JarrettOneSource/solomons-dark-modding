@@ -992,3 +992,30 @@ The terminal-corpse captures for `orgsf-fix5` are
 death-location captures for both respawn paths are under
 `runtime/multiplayer_dead_progression_round_respawn/dpr-fix2-p/` and
 `runtime/multiplayer_dead_progression_round_respawn/dpr-fix2-r/`.
+
+## Spectator-target acceptance sampling
+
+The spectator hold assertion must observe the selected target and that
+target's replicated death-presentation flag from one runtime snapshot. Two
+separate Lua exec calls can straddle the five-second transition: the first
+call may still report the old target's presentation flag, while the gameplay
+thread processes the terminal participant frame and legitimately retargets
+before the second call. Treating those two different instants as one sample
+produces a false early-retarget failure.
+
+`query_spectator_target_death_state` therefore snapshots both values inside
+one Lua execution. The hold gate includes only samples where that atomic view
+still marks the expected target's presentation active, then requires the
+spectator target ID to remain that participant for the entire sample set.
+This preserves the strict early-handoff assertion without admitting a
+boundary race in the harness.
+
+Post-rebase `orgsf-rb4` held the organically dying selected target for 4.967
+seconds across 82 atomic presentation samples. Its first and selected-target
+grace intervals were 5.037 and 5.059 seconds, all three peers materialized
+the Ether summon, and the target remained attached through its final
+presentation sample. The complementary `orgdf-rb1`, `orgdf-rb2`, and
+`orgdf-rb4` runs covered host melee/idle, client projectile/casting, and host
+poison/idle respectively; every owner reached logical tick 298, every stored
+`+0x1BC` value stayed at or below 150, both corpse-position deltas were zero,
+and each owning death/drop trace delta was exactly one.

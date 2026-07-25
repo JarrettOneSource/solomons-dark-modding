@@ -417,6 +417,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         "Call Leviathan",
         "0x07F2",
         "_assert_spectated_target_hold",
+        "expected_target_presentation_active",
         "terminal_frame_callback",
         "assert_launch_debug_surfaces_empty",
         'context="spectating_after_ether_minion"',

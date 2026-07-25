@@ -156,6 +156,33 @@ emit("camera_center_x", camera_ok and camera.center_x or 0)
 emit("camera_center_y", camera_ok and camera.center_y or 0)
 """
 
+SPECTATOR_TARGET_DEATH_STATE_PROBE = r"""
+local expected_participant_id = __PARTICIPANT_ID__
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local spectator = assert(multiplayer.death_spectator)
+local expected = nil
+for _, participant in ipairs(multiplayer.participants or {}) do
+  if participant.participant_id == expected_participant_id then
+    expected = participant
+    break
+  end
+end
+local presentation_flags =
+  expected and expected.presentation_flags or 0
+emit("target_participant_id", spectator.target_participant_id)
+emit("target_name", spectator.target_name)
+emit("expected_target_participant_id", expected_participant_id)
+emit("expected_target_presentation_active",
+  math.floor(presentation_flags / __DEATH_PRESENTATION_FLAG__) % 2 == 1)
+emit("expected_target_death_presentation_tick",
+  expected and expected.death_presentation_tick or 0)
+emit("expected_target_life_current",
+  expected and expected.life_current or 0)
+"""
+
 
 REMOTE_DEATH_STATE_PROBE = r"""
 local participant_id = __PARTICIPANT_ID__
@@ -713,6 +740,20 @@ def query_spectator_state(pipe_name: str) -> dict[str, str]:
     return parse_key_values(
         lua(pipe_name, SPECTATOR_STATE_PROBE, timeout=8.0)
     )
+
+
+def query_spectator_target_death_state(
+    pipe_name: str,
+    participant_id: int,
+) -> dict[str, str]:
+    code = SPECTATOR_TARGET_DEATH_STATE_PROBE.replace(
+        "__PARTICIPANT_ID__",
+        str(participant_id),
+    ).replace(
+        "__DEATH_PRESENTATION_FLAG__",
+        str(DEATH_PRESENTATION_FLAG),
+    )
+    return parse_key_values(lua(pipe_name, code, timeout=8.0))
 
 
 def query_remote_death_state(

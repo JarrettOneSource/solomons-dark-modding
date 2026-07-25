@@ -28,6 +28,7 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 "spectator_hold": {
                     "target_participant_id": "23",
                     "target_name": "Ether Player",
+                    "expected_target_presentation_active": "true",
                 },
             },
             {
@@ -37,6 +38,7 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 "spectator_hold": {
                     "target_participant_id": "23",
                     "target_name": "Ether Player",
+                    "expected_target_presentation_active": "true",
                 },
             },
             {
@@ -46,6 +48,7 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 "spectator_hold": {
                     "target_participant_id": "11",
                     "target_name": "Host Player",
+                    "expected_target_presentation_active": "false",
                 },
             },
         ]
@@ -70,6 +73,7 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 "spectator_hold": {
                     "target_participant_id": "23",
                     "target_name": "Ether Player",
+                    "expected_target_presentation_active": "true",
                 },
             },
             {
@@ -79,6 +83,7 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 "spectator_hold": {
                     "target_participant_id": "11",
                     "target_name": "Host Player",
+                    "expected_target_presentation_active": "true",
                 },
             },
         ]
@@ -91,6 +96,72 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 lifecycle,
                 expected_participant_id=23,
             )
+
+    def test_boundary_samples_use_atomic_spectator_view(self) -> None:
+        lifecycle = [
+            {
+                "elapsed_seconds": 0.1,
+                "owner": {"phase": "DeathPresentation"},
+                "observer": {"presentation_active": "true"},
+                "spectator_hold": {
+                    "target_participant_id": "23",
+                    "target_name": "Ether Player",
+                    "expected_target_presentation_active": "true",
+                },
+            },
+            {
+                "elapsed_seconds": 4.9,
+                "owner": {"phase": "DeathPresentation"},
+                "observer": {"presentation_active": "true"},
+                "spectator_hold": {
+                    "target_participant_id": "23",
+                    "target_name": "Ether Player",
+                    "expected_target_presentation_active": "true",
+                },
+            },
+            {
+                # The old remote probe ran before the presentation edge while
+                # the atomic spectator probe ran after it. This is a sampling
+                # boundary, not a target migration during presentation.
+                "elapsed_seconds": 5.2,
+                "owner": {"phase": "Spectating"},
+                "observer": {"presentation_active": "true"},
+                "spectator_hold": {
+                    "target_participant_id": "11",
+                    "target_name": "Host Player",
+                    "expected_target_presentation_active": "false",
+                },
+            },
+        ]
+
+        evidence = verifier._assert_spectated_target_hold(
+            lifecycle,
+            expected_participant_id=23,
+        )
+
+        self.assertEqual(evidence["sample_count"], 2)
+        self.assertAlmostEqual(evidence["span_seconds"], 4.8)
+
+    def test_lifecycle_compaction_keeps_atomic_target_state(self) -> None:
+        compact = verifier._small_state(
+            {
+                "target_participant_id": "23",
+                "expected_target_participant_id": "23",
+                "expected_target_presentation_active": "true",
+                "expected_target_death_presentation_tick": "159",
+                "unrelated": "discarded",
+            }
+        )
+
+        self.assertEqual(
+            compact,
+            {
+                "target_participant_id": "23",
+                "expected_target_participant_id": "23",
+                "expected_target_presentation_active": "true",
+                "expected_target_death_presentation_tick": "159",
+            },
+        )
 
     def test_ether_minion_must_materialize_on_every_peer(self) -> None:
         counts = {
