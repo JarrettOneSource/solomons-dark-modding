@@ -199,6 +199,8 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
             "target_ineligible_state",
             "target_participant_id",
             "target_native_type_id",
+            "authority_target_participant_id",
+            "authority_target_native_type_id",
             "analyze_retarget_samples(",
             "_wait_for_logical_death(",
             "focus.cast_secondary_belt_slot(",
@@ -225,6 +227,7 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
             "test_idle_enemy_fails_even_when_the_old_gate_has_no_mismatch",
             "test_dead_or_ineligible_player_never_satisfies_target_match",
             "test_native_minion_identity_must_converge_on_both_peers",
+            "test_native_minion_identity_rejects_the_wrong_owner",
             "test_participant_reacquisition_requires_stable_host_and_client_match",
         ),
     )

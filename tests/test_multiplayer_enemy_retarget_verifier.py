@@ -18,6 +18,9 @@ def _record(
     participant_id: int = 0,
     native_type_id: int = 0,
     ineligible: int = 0,
+    authority_participant_id: int = 0,
+    authority_native_type_id: int = 0,
+    authority_target: int = 0,
 ) -> dict[str, int]:
     return {
         "target_actor_address":
@@ -25,6 +28,9 @@ def _record(
         "target_participant_id": participant_id,
         "target_native_type_id": native_type_id,
         "target_ineligible_state": ineligible,
+        "authority_target_participant_id": authority_participant_id,
+        "authority_target_native_type_id": authority_native_type_id,
+        "authority_target_authoritative": authority_target,
     }
 
 
@@ -119,17 +125,27 @@ class EnemyRetargetVerifierTests(unittest.TestCase):
             {
                 "elapsed_seconds": index * 0.05,
                 "host": _record(
+                    participant_id=verifier.CLIENT_ID,
                     native_type_id=verifier.ETHER_MINION_NATIVE_TYPE_ID,
+                    authority_participant_id=verifier.CLIENT_ID,
+                    authority_native_type_id=
+                        verifier.ETHER_MINION_NATIVE_TYPE_ID,
+                    authority_target=1,
                 ),
                 "client": _record(
+                    participant_id=verifier.CLIENT_ID,
                     native_type_id=verifier.ETHER_MINION_NATIVE_TYPE_ID,
+                    authority_participant_id=verifier.CLIENT_ID,
+                    authority_native_type_id=
+                        verifier.ETHER_MINION_NATIVE_TYPE_ID,
+                    authority_target=1,
                 ),
             }
             for index in range(8)
         ]
         analysis = verifier.analyze_retarget_samples(
             samples,
-            expected_participant_id=0,
+            expected_participant_id=verifier.CLIENT_ID,
             expected_native_type_id=
                 verifier.ETHER_MINION_NATIVE_TYPE_ID,
             dead_participant_id=0,
@@ -139,6 +155,32 @@ class EnemyRetargetVerifierTests(unittest.TestCase):
             analysis["final_host"]["target_native_type_id"],
             verifier.ETHER_MINION_NATIVE_TYPE_ID,
         )
+
+    def test_native_minion_identity_rejects_the_wrong_owner(self) -> None:
+        wrong_owner = _record(
+            participant_id=verifier.HOST_ID,
+            native_type_id=verifier.ETHER_MINION_NATIVE_TYPE_ID,
+            authority_participant_id=verifier.HOST_ID,
+            authority_native_type_id=
+                verifier.ETHER_MINION_NATIVE_TYPE_ID,
+            authority_target=1,
+        )
+        samples = [
+            {
+                "elapsed_seconds": index * 0.05,
+                "host": wrong_owner,
+                "client": wrong_owner,
+            }
+            for index in range(8)
+        ]
+        analysis = verifier.analyze_retarget_samples(
+            samples,
+            expected_participant_id=verifier.CLIENT_ID,
+            expected_native_type_id=
+                verifier.ETHER_MINION_NATIVE_TYPE_ID,
+            dead_participant_id=0,
+        )
+        self.assertFalse(analysis["passed"])
 
 
 if __name__ == "__main__":

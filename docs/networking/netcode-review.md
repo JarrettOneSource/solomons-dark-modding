@@ -298,6 +298,11 @@ isolated runtime roots and exact launcher-returned process identities. It:
 - stores host/client backbuffer captures plus every authority target-ID sample
   under `runtime/multiplayer_enemy_retarget`.
 
+The summon case requires the target's owner participant and native type on
+both peers, and checks that same composite identity in the host-authored world
+snapshot. Matching the native type alone is insufficient because two players
+may own the same summon class in different peer-local ActorWorld slots.
+
 The death cases begin their latency window at authoritative
 `life_current <= 0`, then disarm the damage harness before sampling. They do
 not wait on the longer native death-presentation countdown, so a presentation

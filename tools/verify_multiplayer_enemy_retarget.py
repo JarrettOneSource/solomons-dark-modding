@@ -108,12 +108,18 @@ local ineligible_offset =
   sd.debug.layout_offset("actor_hostile_target_ineligible_state")
 
 local participant_by_actor = {}
+local participant_by_group = {}
 local player = sd.player and sd.player.get_state and
   sd.player.get_state() or nil
 if player and tonumber(player.actor_address) and
     local_participant_id ~= 0 then
-  participant_by_actor[tonumber(player.actor_address)] =
-    local_participant_id
+  local address = tonumber(player.actor_address)
+  participant_by_actor[address] = local_participant_id
+  local group = actor_slot_offset and
+    read_i8(address + actor_slot_offset) or -1
+  if group >= 0 then
+    participant_by_group[group] = local_participant_id
+  end
 end
 for _, peer in ipairs(
     sd.bots and sd.bots.get_participants and
@@ -122,6 +128,11 @@ for _, peer in ipairs(
   local participant_id = tonumber(peer.id) or 0
   if address ~= 0 and participant_id ~= 0 then
     participant_by_actor[address] = participant_id
+    local group = actor_slot_offset and
+      read_i8(address + actor_slot_offset) or -1
+    if group >= 0 then
+      participant_by_group[group] = participant_id
+    end
   end
 end
 
@@ -129,6 +140,7 @@ local replicated = sd.world and sd.world.get_replicated_actors and
   sd.world.get_replicated_actors() or nil
 local network_by_local = {}
 local network_by_key = {}
+local authority_target_by_network = {}
 local function key(type_id, actor_slot, world_slot)
   return table.concat({
     tostring(type_id or 0),
@@ -154,6 +166,13 @@ if replicated and replicated.actors then
         tonumber(actor.object_type_id) or 0,
         tonumber(actor.actor_slot) or -1,
         tonumber(actor.world_slot) or -1)] = network_id
+      authority_target_by_network[network_id] = {
+        participant_id =
+          tonumber(actor.target_participant_id) or 0,
+        native_type_id =
+          tonumber(actor.target_native_type_id) or 0,
+        authoritative = actor.target_authoritative and 1 or 0,
+      }
     end
   end
 end
@@ -186,13 +205,24 @@ for _, actor in ipairs(
       target_actor ~= 0 and ineligible_offset and
         (tonumber(sd.debug.read_u8(
           target_actor + ineligible_offset)) or 0) or 0
+    local target_participant_id =
+      participant_by_actor[target_actor] or 0
+    if target_participant_id == 0 and
+        (target_type_id == 0x03ED or
+         target_type_id == 0x07F2 or
+         target_type_id == 0x07F4) then
+      target_participant_id =
+        participant_by_group[target_actor_slot] or 0
+    end
+    local authority_target =
+      authority_target_by_network[network_id] or {}
     print(table.concat({
       "E",
       tostring(network_id),
       tostring(address),
       tostring(type_id),
       tostring(target_actor),
-      tostring(participant_by_actor[target_actor] or 0),
+      tostring(target_participant_id),
       tostring(target_type_id),
       tostring(actor_slot),
       tostring(world_slot),
@@ -201,6 +231,9 @@ for _, actor in ipairs(
       tostring(bucket_offset and
         read_i32(address + bucket_offset) or 0),
       tostring(target_ineligible),
+      tostring(authority_target.participant_id or 0),
+      tostring(authority_target.native_type_id or 0),
+      tostring(authority_target.authoritative or 0),
     }, "|"))
   end
 end
@@ -316,7 +349,7 @@ def _parse_target_records(text: str) -> dict[int, dict[str, int]]:
         if not line.startswith("E|"):
             continue
         parts = line.split("|")
-        if len(parts) != 13:
+        if len(parts) != 16:
             raise VerifyFailure(f"malformed enemy target record: {line!r}")
         values = [int(part) for part in parts[1:]]
         record = {
@@ -332,6 +365,9 @@ def _parse_target_records(text: str) -> dict[int, dict[str, int]]:
             "target_world_slot": values[9],
             "target_bucket_delta": values[10],
             "target_ineligible_state": values[11],
+            "authority_target_participant_id": values[12],
+            "authority_target_native_type_id": values[13],
+            "authority_target_authoritative": values[14],
         }
         records[record["network_id"]] = record
     return records
@@ -356,18 +392,28 @@ def _target_matches(
 ) -> bool:
     if not isinstance(record, dict):
         return False
-    if expected_participant_id != 0:
-        return (
-            record.get("target_participant_id") ==
-                expected_participant_id
-            and record.get("target_actor_address", 0) != 0
-            and record.get("target_ineligible_state", 1) == 0
-        )
-    return (
+    if expected_participant_id == 0 and expected_native_type_id == 0:
+        return False
+    if (
+        expected_participant_id != 0
+        and record.get("target_participant_id") != expected_participant_id
+    ):
+        return False
+    if (
         expected_native_type_id != 0
-        and record.get("target_native_type_id") ==
+        and record.get("target_native_type_id") != expected_native_type_id
+    ):
+        return False
+    if expected_native_type_id != 0 and (
+        record.get("authority_target_participant_id") !=
+            expected_participant_id
+        or record.get("authority_target_native_type_id") !=
             expected_native_type_id
-        and record.get("target_actor_address", 0) != 0
+        or record.get("authority_target_authoritative") != 1
+    ):
+        return False
+    return (
+        record.get("target_actor_address", 0) != 0
         and record.get("target_ineligible_state", 1) == 0
     )
 
@@ -969,7 +1015,7 @@ def _run_minion_case(
         result["target_samples"] = samples
         result["summary"] = analyze_retarget_samples(
             samples,
-            expected_participant_id=0,
+            expected_participant_id=CLIENT_ID,
             expected_native_type_id=ETHER_MINION_NATIVE_TYPE_ID,
             dead_participant_id=0,
         )
