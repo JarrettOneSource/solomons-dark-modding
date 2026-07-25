@@ -13,6 +13,9 @@ from static_re_boneyard_contracts import (
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
     test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
+from static_re_boneyard_lighting_contracts import (
+    test_boneyard_tree_last_writer_render_path_is_registered,
+)
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
 )
@@ -510,6 +513,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Multiplayer Boneyard scenery shares the host generation boundary",
         test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
+    ),
+    (
+        "Boneyard Tree last-writer render path is registered",
+        test_boneyard_tree_last_writer_render_path_is_registered,
     ),
     (
         "Repository history uses approved project identities",

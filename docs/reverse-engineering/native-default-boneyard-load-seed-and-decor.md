@@ -59,9 +59,11 @@ paths outside that old seven-site table:
    process-global RNG decisions that can spawn transient ground effects. Those
    effects do not exist in the compact table or any replicated snapshot.
 5. The common Puppet/scenery constructor at `0x006287D0` does not initialize
-   `+0xCC`. Tree's complex-lighting overlay reads that scalar at `0x00608912`,
-   so allocator residue can change the Tree overlay even when every
-   Tree-specific field matches.
+   `+0xCC`, and the common scenery render dispatcher at `0x00624B40`
+   subsequently rewrites it from peer-local visibility and lighting queries.
+   Tree's complex-lighting overlay reads that scalar at `0x00608912`, so
+   allocator residue or a different local light query can change the Tree
+   overlay even when every Tree-specific field matches.
 6. `Arena_Render` also draws four Arena marker glyphs in two passes. The tint
    draws at `0x004712BB` and `0x004726E3` consume the process-global floating
    RNG during rendering, outside the compact and scenery tables.
@@ -201,7 +203,7 @@ framework sends the field over multiplayer.
 
 | Family / native type | Creation and materialization | Render-relevant selectors | Ownership finding |
 | --- | --- | --- | --- |
-| Tree `2001` | `0x0062CB00` creates the record; `0x005E46D0` constructs it; `0x006531B0` materializes it. | Position/radius, materialization key `+0x10`, common tint/scale/color, common lighting scalar `+0xCC`, Tree variant `+0x140`, overlay `+0x142/+0x144`, render parameter `+0x13C`, sway target/current `+0x14C/+0x150`. Main/overlay/foreground renderers are `0x00608480`, `0x00608830`, and `0x00608AB0`. | Position, type, variants, overlay, and serialized common draw state match from the seed. Sway does not: `0x005F1C50` decrements local `+0x148`, scans peer-local nearby actors, and changes `+0x14C/+0x150`. The base constructor `0x006287D0` also leaves `+0xCC` unwritten; `0x00608912` consumes it when complex lighting is enabled. |
+| Tree `2001` | `0x0062CB00` creates the record; `0x005E46D0` constructs it; `0x006531B0` materializes it. | Position/radius, materialization key `+0x10`, common tint/scale/color, common lighting scalar `+0xCC`, Tree variant `+0x140`, overlay `+0x142/+0x144`, render parameter `+0x13C`, sway target/current `+0x14C/+0x150`. Main/overlay/foreground renderers are `0x00608480`, `0x00608830`, and `0x00608AB0`. | Position, type, variants, overlay, and serialized common draw state match from the seed. Sway does not: `0x005F1C50` decrements local `+0x148`, scans peer-local nearby actors, and changes `+0x14C/+0x150`. The base constructor `0x006287D0` leaves `+0xCC` unwritten, and `0x00624B40` later derives it from peer-local lighting; `0x00608912` consumes it when complex lighting is enabled. |
 | Scrub `2062` | Tree variants 15–18 are replaced by Scrub in `0x006531B0`; constructor/setup are `0x005E4040`/`0x005E40D0`. | Position, variant `+0x140`, phase `+0x134`, orientation/deformation `+0x144/+0x148`, collision flag `+0x14C`; renderer `0x00620120`. | Variant and geometry are deterministic. Constructor RNG calls at `0x005E40A4` and `0x005E40E2` and common tick `0x00624AC0` produce a local phase. `0x005E40F0` omits `+0x134`, while the renderer uses it. |
 | Monument `2009` | Constructor `0x005E0DB0`, setup `0x005E5BB0`. | Serialized simple variant `+0x140` and common scenery draw state; renderers `0x0060E210`/`0x0060E280`. | Deterministically generated and serialized. |
 | Gravestone `2029` | Constructor `0x005E5C30`, setup `0x005F2EB0`. | Variant `+0x140`, overlay `+0x142`, tint `+0x144..+0x150`; renderers `0x0060F0F0`, `0x0060F1F0`, and `0x0060F260`. | Constructor RNG at `0x005E5CCC` is overwritten by serialized values in `0x005E0F60`; render inputs match. |
@@ -229,6 +231,29 @@ Tree's overlay renderer multiplies those two words at
 renderers in the inventory do not read object `+0xCC`. Excluding the word
 globally because the Gravestone renderer does not consume it was therefore a
 digest bug: it must be included and canonicalized for Tree.
+
+Constructor canonicalization alone is insufficient. Headless decompilation
+and instruction inspection recovered the common scenery render dispatcher
+`0x00624B40`, which runs before the object's virtual draw. It writes `+0xCC`
+at all six of these instructions:
+
+| Address | Recovered render-time source |
+| ---: | --- |
+| `0x00624C2F` | Initial zero while visibility is evaluated. |
+| `0x00624C4E` | Zero on the early culled return. |
+| `0x00624C89` | Forced `1.0` for the unconditional render branch. |
+| `0x00624D3E` | Result of the local transformed-light query `0x0057E490`. |
+| `0x00624DAD` | Result of local light queries `0x0057F980` or `0x0057F0E0`. |
+| `0x00624DC7` | Forced `1.0` when the owning Arena lighting lane is disabled. |
+
+The dispatcher then calls the Tree virtual renderer. The overlay entry
+`0x00608830` reads the final value at `0x00608912`, after every constructor
+and tick hook has already run. A live expanded-table capture caught exactly
+this last-writer failure: one otherwise identical Tree had host bits
+`0x3DD62F07` and client bits `0x3E145B97`. Therefore the multiplayer repair
+must canonicalize the Tree scalar both as persistent dump state and at the
+Tree overlay entry immediately before its final read. Patching only allocation
+or generation cannot close this render-time path.
 
 ### Roads, fences, and terrain
 
