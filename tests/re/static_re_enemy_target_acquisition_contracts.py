@@ -160,3 +160,74 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
         "native hostile acquisition, candidate ownership, host-death "
         "invalidation, and unsafe relocation boundaries are layout-backed"
     )
+
+
+def test_enemy_retarget_acceptance_gate_is_wired() -> str:
+    verifier = read_text(
+        ROOT / "tools/verify_multiplayer_enemy_retarget.py"
+    )
+    unit_tests = read_text(
+        ROOT / "tests/test_multiplayer_enemy_retarget_verifier.py"
+    )
+    workflow = read_text(
+        ROOT / ".github/workflows/lua-authoring-contracts.yml"
+    )
+    netcode_doc = read_text(
+        ROOT / "docs/networking/netcode-review.md"
+    )
+
+    _require_tokens(
+        "enemy retarget live verifier",
+        verifier,
+        (
+            'choices=("host-death", "client-death", "ether-minion")',
+            "MAX_HOST_REACQUIRE_LATENCY_MS = 1_500.0",
+            "MAX_CLIENT_REACQUIRE_LATENCY_MS = 2_000.0",
+            "MINIMUM_STABLE_MATCH_SAMPLES = 5",
+            "target_ineligible_state",
+            "target_participant_id",
+            "target_native_type_id",
+            "analyze_retarget_samples(",
+            "_wait_for_death_transition(",
+            "focus.cast_secondary_belt_slot(",
+            "ETHER_MINION_NATIVE_TYPE_ID",
+            "capture_game_backbuffer",
+            "_stop_exact_owned_processes(",
+            "pathMatched = $matches",
+            "test_blank_boneyard=True",
+            "_path_from_powershell(runtime_root_value)",
+        ),
+    )
+    _require_tokens(
+        "enemy retarget verifier unit tests",
+        unit_tests,
+        (
+            "test_idle_enemy_fails_even_when_the_old_gate_has_no_mismatch",
+            "test_dead_or_ineligible_player_never_satisfies_target_match",
+            "test_native_minion_identity_must_converge_on_both_peers",
+            "test_participant_reacquisition_requires_stable_host_and_client_match",
+        ),
+    )
+    _require_tokens(
+        "CI workflow",
+        workflow,
+        (
+            "Test enemy retarget acceptance verifier",
+            "tests.test_multiplayer_enemy_retarget_verifier",
+        ),
+    )
+    _require_tokens(
+        "netcode review",
+        netcode_doc,
+        (
+            "Enemy-motion fidelity and enemy-target validity are a joint live acceptance",
+            "tools/verify_multiplayer_enemy_retarget.py",
+            "both live artifacts report `ok: true`",
+            "The prior target-authority check could accept two matching zero targets",
+        ),
+    )
+
+    return (
+        "two-peer death/summon target convergence is a mandatory companion "
+        "to the enemy authority-fidelity gate"
+    )

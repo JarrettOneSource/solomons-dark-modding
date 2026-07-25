@@ -66,6 +66,10 @@ jobs:
         run: >-
           python -m unittest
           tests.test_multiplayer_organic_enemy_cast_timing_verifier
+      - name: Test enemy retarget acceptance verifier
+        run: >-
+          python -m unittest
+          tests.test_multiplayer_enemy_retarget_verifier
       - name: Test isolated local multiplayer cleanup
         run: python -m unittest tests.test_local_multiplayer_process_isolation
       - name: Test Lua multiplayer net verifier

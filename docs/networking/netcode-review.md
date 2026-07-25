@@ -279,3 +279,26 @@ organic combat; and confirms that enemies actually damage a player. The same run
 Air for 12 frames and requires both host-observed start and stop within 150 ms,
 host/client duration error within 100 ms, and native completion within 250 ms
 of the client release.
+
+Enemy-motion fidelity and enemy-target validity are a joint live acceptance
+boundary. `tools/verify_multiplayer_enemy_retarget.py` is the second mandatory
+two-instance impaired-surface gate; the loopback enemy acceptance is green only
+when both live artifacts report `ok: true`. The retarget gate uses fresh,
+isolated runtime roots and exact launcher-returned process identities. It:
+
+- lets a stock wave enemy kill the host while the client remains alive, then
+  requires host authority to select the client within 1,500 ms and the client
+  to apply that target within 2,000 ms;
+- repeats the direction symmetrically with the client dead and host alive;
+- casts the native Ether `Call Leviathan` summon, places the registered
+  Leviathan nearest, and requires the host-authored native target identity to
+  resolve on both peers;
+- rejects dead/ineligible participant targets and requires five consecutive
+  matching target samples; and
+- stores host/client backbuffer captures plus every authority target-ID sample
+  under `runtime/multiplayer_enemy_retarget`.
+
+The prior target-authority check could accept two matching zero targets, so it
+was blind to enemies idling after a target death. The new gate explicitly
+fails that state: a cleared host and cleared client are agreement, but not
+valid acquisition.
