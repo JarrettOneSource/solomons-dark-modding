@@ -285,10 +285,15 @@ the render-input digest even though only the first `0x19` bytes are serialized.
 No additional persistent compact creator outside the Tree helper and
 `BoneyardGenerator` was found. The missing family was instead transient:
 
+- At `0x004717E9`, the first branch admits Arena render-list records whose
+  object-local byte at `+0x8F20` is 1 or 2. This is the only native guard
+  immediately before the first random spawn decision.
 - At `0x00471805`, `Arena_Render` performs a 1-in-2 global-RNG draw while
   traversing compact types 25–29. It draws X, Y, and lifetime at
   `0x0047182A`, `0x0047184A`, and `0x004718D5`, then calls effect spawn
   `0x00649D10` at `0x0047191C`.
+- At `0x004723A6`, the second branch applies the same object-local byte
+  test before its random spawn decision.
 - At `0x004723C2`, a second Arena ambient list performs a 1-in-8 global-RNG
   draw. It draws position/lifetime/scale at `0x004723F1`, `0x0047240D`,
   `0x00472479`, and `0x00472493`, then calls the same effect spawn at
@@ -297,7 +302,12 @@ No additional persistent compact creator outside the Tree helper and
 These draws happen during rendering, consume whatever process-global RNG state
 each peer has at that frame, and create no serialized or replicated record.
 They can therefore change boulder/rock/clutter pixels while every compact row
-and its digest remains equal.
+and its digest remains equal. Instruction inspection also rules out the
+runtime enhanced-effects option as an authority input for these two branches:
+their immediate guards are the Arena object's `+0x8F20` byte, not the
+enhanced-effects global. A visual acceptance profile may disable enhanced
+effects to remove unrelated peer-local rain and weather from the comparison
+without bypassing either Boneyard ambient RNG callsite.
 
 ### Arena marker glyph tint
 
