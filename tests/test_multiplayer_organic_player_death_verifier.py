@@ -22,6 +22,8 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
     return [
         {
             "owner": {
+                "phase": "Inactive",
+                "presentation_active": "false",
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
                 "death_presentation_ticks": "0",
@@ -34,6 +36,7 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
                 "y": "384.0",
             },
             "observer": {
+                "presentation_active": "false",
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
                 "death_presentation_ticks": "0",
@@ -48,6 +51,8 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
         },
         {
             "owner": {
+                "phase": "DeathPresentation",
+                "presentation_active": "true",
                 "death_transition_hits": "1",
                 "staff_drop_hits": "1",
                 "death_presentation_ticks": "150",
@@ -60,6 +65,7 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
                 "y": "384.0",
             },
             "observer": {
+                "presentation_active": "false",
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
                 "death_presentation_ticks": "0",
@@ -74,6 +80,8 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
         },
         {
             "owner": {
+                "phase": "DeathPresentation",
+                "presentation_active": "true",
                 "death_transition_hits": "1",
                 "staff_drop_hits": "1",
                 "death_presentation_ticks": "150",
@@ -86,6 +94,7 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
                 "y": "384.0",
             },
             "observer": {
+                "presentation_active": "true",
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
                 "death_presentation_ticks": "150",
@@ -125,6 +134,88 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
         prefix = verifier._default_instance_prefix()
         self.assertLessEqual(len(prefix), 18)
         self.assertRegex(prefix, r"^orgd-[0-9a-f]+-[0-9a-f]{4}$")
+
+    def test_death_targets_are_separated_symmetrically(self) -> None:
+        host_victim = verifier._death_target_positions("host")
+        client_victim = verifier._death_target_positions("client")
+
+        self.assertEqual(
+            host_victim["host"],
+            client_victim["client"],
+        )
+        self.assertEqual(
+            host_victim["client"],
+            client_victim["host"],
+        )
+        self.assertGreaterEqual(
+            abs(host_victim["host"][0] - host_victim["client"][0]),
+            verifier.TARGET_LAYOUT_MINIMUM_X_SEPARATION,
+        )
+
+    def test_death_target_placement_retries_after_run_entry_formation(
+        self,
+    ) -> None:
+        placements = [
+            {"after.x": "1850"},
+            {"after.x": "2350"},
+            {"after.x": "1850"},
+            {"after.x": "2350"},
+        ]
+        with (
+            patch.object(
+                verifier,
+                "place_player",
+                side_effect=placements,
+            ) as place,
+            patch.object(
+                verifier,
+                "_wait_for_host_native_target_layout",
+                side_effect=[
+                    verifier.VerifyFailure("formation reapplied"),
+                    {"stable_samples": 3},
+                ],
+            ) as wait,
+        ):
+            result = verifier._place_and_wait_for_death_target_layout(
+                host_pipe="host",
+                client_pipe="client",
+                victim_role="host",
+            )
+
+        self.assertEqual(place.call_count, 4)
+        self.assertEqual(wait.call_count, 2)
+        self.assertEqual(len(result["placement_attempts"]), 2)
+        self.assertIn(
+            "formation reapplied",
+            result["placement_attempts"][0]["authority_error"],
+        )
+        self.assertEqual(
+            result["host_authority"]["stable_samples"],
+            3,
+        )
+
+    def test_gate_reads_disposable_log_paths_reported_by_launcher(
+        self,
+    ) -> None:
+        launch = {
+            "hostLog": "/tmp/disposable-pair/host/loader.log",
+            "clientLog": "/tmp/disposable-pair/client/loader.log",
+        }
+        self.assertEqual(
+            verifier._launch_log_path(launch, "hostLog"),
+            Path("/tmp/disposable-pair/host/loader.log"),
+        )
+        self.assertEqual(
+            verifier._launch_log_path(launch, "clientLog"),
+            Path("/tmp/disposable-pair/client/loader.log"),
+        )
+
+    def test_gate_rejects_pair_without_reported_log_paths(self) -> None:
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "pair launch omitted hostLog",
+        ):
+            verifier._launch_log_path({}, "hostLog")
 
     def test_damage_probe_parser_preserves_enemy_damage_fields(self) -> None:
         events = verifier._parse_damage_probe(
@@ -361,6 +452,20 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
     ) -> None:
         grace = verifier._assert_lifecycle(
             _completed_lifecycle(),
+            _completed_milestones(),
+        )
+
+        self.assertAlmostEqual(grace, 5.0)
+
+    def test_stock_regeneration_during_death_presentation_is_accepted(
+        self,
+    ) -> None:
+        lifecycle = _completed_lifecycle()
+        for sample in lifecycle[1:]:
+            sample["owner"]["hp"] = "0.001"
+
+        grace = verifier._assert_lifecycle(
+            lifecycle,
             _completed_milestones(),
         )
 

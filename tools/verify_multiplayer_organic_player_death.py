@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import time
 import traceback
 import uuid
@@ -45,9 +46,10 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
+    place_player,
     select_available_windows_udp_ports,
     start_testrun,
-    stop_game_processes,
+    stop_exact_game_processes,
     wait_for_remote,
     wait_for_scene,
 )
@@ -83,6 +85,39 @@ SPECTATOR_CAMERA_TOLERANCE = 0.25
 SINGLE_TARGET_SAMPLE_SECONDS = 0.8
 DEAD_INPUT_SETTLE_SECONDS = 1.0
 ATTACKER_STABILIZED_HP = 5000.0
+VICTIM_TARGET_X = 1850.0
+VICTIM_TARGET_Y = 1750.0
+HOST_SURVIVOR_TARGET_X = 2350.0
+PLAYER_TARGET_HEADING = 180.0
+TARGET_LAYOUT_STABLE_SAMPLES = 3
+TARGET_LAYOUT_STABLE_TOLERANCE = 1.0
+TARGET_LAYOUT_MINIMUM_X_SEPARATION = 192.0
+TARGET_LAYOUT_PLACEMENT_ATTEMPTS = 4
+TARGET_LAYOUT_ATTEMPT_TIMEOUT_SECONDS = 2.0
+
+HOST_NATIVE_TARGET_LAYOUT_LUA = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local player = sd.player and sd.player.get_state and
+  sd.player.get_state() or nil
+local client = sd.bots and sd.bots.get_participant_state and
+  sd.bots.get_participant_state(__CLIENT_PARTICIPANT_ID__) or nil
+local ox = sd.debug.layout_offset("actor_position_x")
+local oy = sd.debug.layout_offset("actor_position_y")
+local host_actor = tonumber(player and player.actor_address) or 0
+local client_actor = tonumber(client and client.actor_address) or 0
+local function native_position(actor, offset)
+  if actor == 0 or offset == nil then return 0 end
+  return tonumber(sd.debug.read_float(actor + offset)) or 0
+end
+emit("host_actor", host_actor)
+emit("host_x", native_position(host_actor, ox))
+emit("host_y", native_position(host_actor, oy))
+emit("client_actor", client_actor)
+emit("client_x", native_position(client_actor, ox))
+emit("client_y", native_position(client_actor, oy))
+"""
 
 WAVE_FIXTURES = {
     "melee": (
@@ -531,6 +566,153 @@ def _select_new_wave_enemy(
 
 def _default_instance_prefix() -> str:
     return f"orgd-{os.getpid():x}-{uuid.uuid4().hex[:4]}"
+
+
+def _death_target_positions(
+    victim_role: str,
+) -> dict[str, tuple[float, float]]:
+    victim = (VICTIM_TARGET_X, VICTIM_TARGET_Y)
+    survivor = (HOST_SURVIVOR_TARGET_X, VICTIM_TARGET_Y)
+    if victim_role == "host":
+        return {"host": victim, "client": survivor}
+    if victim_role == "client":
+        return {"host": survivor, "client": victim}
+    raise ValueError(f"unsupported victim role: {victim_role}")
+
+
+def _launch_log_path(
+    launch: dict[str, object],
+    key: str,
+) -> Path:
+    raw_path = launch.get(key)
+    if not isinstance(raw_path, str) or not raw_path:
+        raise VerifyFailure(f"pair launch omitted {key}: {launch}")
+    if os.name == "nt" or raw_path.startswith("/"):
+        return Path(raw_path)
+    completed = subprocess.run(
+        ["wslpath", "-u", raw_path],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5.0,
+        check=False,
+    )
+    converted = completed.stdout.strip()
+    if completed.returncode != 0 or not converted:
+        raise VerifyFailure(
+            f"could not convert pair-launch {key} {raw_path!r}: "
+            f"{completed.stderr or completed.stdout}"
+        )
+    return Path(converted)
+
+
+def _wait_for_host_native_target_layout(
+    host_pipe: str,
+    timeout: float = 6.0,
+) -> dict[str, Any]:
+    code = HOST_NATIVE_TARGET_LAYOUT_LUA.replace(
+        "__CLIENT_PARTICIPANT_ID__",
+        str(CLIENT_ID),
+    )
+    deadline = time.monotonic() + timeout
+    stable_samples = 0
+    attempts = 0
+    previous: tuple[float, float, float, float] | None = None
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        values = parse_key_values(lua(host_pipe, code, timeout=5.0))
+        attempts += 1
+        positions = (
+            float(values.get("host_x", "nan")),
+            float(values.get("host_y", "nan")),
+            float(values.get("client_x", "nan")),
+            float(values.get("client_y", "nan")),
+        )
+        host_x, host_y, client_x, client_y = positions
+        settled = (
+            previous is not None
+            and math.hypot(host_x - previous[0], host_y - previous[1])
+                <= TARGET_LAYOUT_STABLE_TOLERANCE
+            and math.hypot(client_x - previous[2], client_y - previous[3])
+                <= TARGET_LAYOUT_STABLE_TOLERANCE
+        )
+        x_separation = abs(host_x - client_x)
+        last = {
+            **values,
+            "attempts": attempts,
+            "x_separation": x_separation,
+        }
+        if (
+            int(values.get("host_actor", "0")) != 0
+            and int(values.get("client_actor", "0")) != 0
+            and all(math.isfinite(value) for value in positions)
+            and x_separation >= TARGET_LAYOUT_MINIMUM_X_SEPARATION
+            and settled
+        ):
+            stable_samples += 1
+            if stable_samples >= TARGET_LAYOUT_STABLE_SAMPLES:
+                return {
+                    **last,
+                    "stable_samples": stable_samples,
+                    "stable_tolerance":
+                        TARGET_LAYOUT_STABLE_TOLERANCE,
+                    "minimum_x_separation":
+                        TARGET_LAYOUT_MINIMUM_X_SEPARATION,
+                }
+        else:
+            stable_samples = 0
+        previous = positions
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "host authority did not observe separated stable death targets: "
+        f"{last}"
+    )
+
+
+def _place_and_wait_for_death_target_layout(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+    victim_role: str,
+) -> dict[str, Any]:
+    target_positions = _death_target_positions(victim_role)
+    placement_attempts: list[dict[str, Any]] = []
+    last_error = ""
+    for attempt in range(1, TARGET_LAYOUT_PLACEMENT_ATTEMPTS + 1):
+        placement = {
+            "attempt": attempt,
+            "host": place_player(
+                host_pipe,
+                *target_positions["host"],
+                PLAYER_TARGET_HEADING,
+            ),
+            "client": place_player(
+                client_pipe,
+                *target_positions["client"],
+                PLAYER_TARGET_HEADING,
+            ),
+        }
+        placement_attempts.append(placement)
+        try:
+            authority = _wait_for_host_native_target_layout(
+                host_pipe,
+                timeout=TARGET_LAYOUT_ATTEMPT_TIMEOUT_SECONDS,
+            )
+        except VerifyFailure as exc:
+            last_error = str(exc)
+            placement["authority_error"] = last_error
+            continue
+        return {
+            "host": placement["host"],
+            "client": placement["client"],
+            "host_authority": authority,
+            "placement_attempts": placement_attempts,
+        }
+    raise VerifyFailure(
+        "host-authoritative run-entry formation kept overriding the "
+        f"separated death target layout: {last_error}"
+    )
 
 
 def _start_testrun_when_ready(host_pipe: str, timeout: float = 30.0) -> None:
@@ -1307,12 +1489,15 @@ def _assert_lifecycle(
         sample
         for sample in lifecycle
         if int(sample["owner"].get("death_drive_state", "0")) != 0
-        and float(sample["owner"].get("hp", "0")) <= 0.0
+        and sample["owner"].get("phase") == "DeathPresentation"
+        and sample["owner"].get("presentation_active") == "true"
+        and int(sample["owner"].get("death_transition_hits", "0")) > 0
     ]
     observer_death_samples = [
         sample
         for sample in lifecycle
         if int(sample["observer"].get("death_drive_state", "0")) != 0
+        and sample["observer"].get("presentation_active") == "true"
         and float(sample["observer"].get("hp", "0")) <= 0.0
     ]
     if not owner_death_samples or not observer_death_samples:
@@ -1539,7 +1724,7 @@ def run_live_verification(
     )
     process_ids = game_process_ids(launch)
     if len(process_ids) != 2:
-        stop_game_processes(process_ids)
+        stop_exact_game_processes(launch)
         raise VerifyFailure(
             f"isolated pair did not report two process IDs: {launch}"
         )
@@ -1555,25 +1740,13 @@ def run_live_verification(
         observer_pipe = host_pipe
         victim_id = CLIENT_ID
     observer_role = "client" if victim_role == "host" else "host"
-    victim_log = (
-        ROOT
-        / "runtime"
-        / "instances"
-        / f"{instance_prefix}-{victim_role}"
-        / "stage"
-        / ".sdmod"
-        / "logs"
-        / "solomondarkmodloader.log"
+    victim_log = _launch_log_path(
+        launch,
+        f"{victim_role}Log",
     )
-    observer_log = (
-        ROOT
-        / "runtime"
-        / "instances"
-        / f"{instance_prefix}-{observer_role}"
-        / "stage"
-        / ".sdmod"
-        / "logs"
-        / "solomondarkmodloader.log"
+    observer_log = _launch_log_path(
+        launch,
+        f"{observer_role}Log",
     )
     direction = Direction(
         name=f"{victim_role}_organic_death_cast",
@@ -1633,6 +1806,13 @@ def run_live_verification(
                 45.0,
             ),
         }
+        result["target_layout"] = (
+            _place_and_wait_for_death_target_layout(
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
+                victim_role=victim_role,
+            )
+        )
         result["alive_precondition"] = {
             "host": _small_state(query_spectator_state(host_pipe)),
             "client": _small_state(query_spectator_state(client_pipe)),
@@ -1690,13 +1870,40 @@ def run_live_verification(
         )
         result["enemy"] = enemy
         victim_before = query_spectator_state(victim_pipe)
-        victim_x = float(victim_before["x"])
-        victim_y = float(victim_before["y"])
         result["victim_before_attack"] = _small_state(victim_before)
+        authority_layout = result["target_layout"]["host_authority"]
+        host_authority_xy = (
+            float(authority_layout["host_x"]),
+            float(authority_layout["host_y"]),
+        )
+        client_authority_xy = (
+            float(authority_layout["client_x"]),
+            float(authority_layout["client_y"]),
+        )
+        authority_victim_xy = (
+            host_authority_xy
+            if victim_role == "host"
+            else client_authority_xy
+        )
+        authority_survivor_xy = (
+            client_authority_xy
+            if victim_role == "host"
+            else host_authority_xy
+        )
+        attack_magnitude = 64.0 if kill_type == "melee" else 240.0
+        attack_distance = (
+            -attack_magnitude
+            if authority_survivor_xy[0] >= authority_victim_xy[0]
+            else attack_magnitude
+        )
+        result["host_authority_attack_geometry"] = {
+            "victim": authority_victim_xy,
+            "survivor": authority_survivor_xy,
+            "attack_distance": attack_distance,
+        }
         result["enemy_arena"] = _arm_enemy_arena(
             host_pipe,
-            victim_x,
-            victim_y,
+            *authority_victim_xy,
         )
         result["enemy_stabilized"] = _stabilize_enemy(
             host_pipe,
@@ -1704,14 +1911,13 @@ def run_live_verification(
         )
 
         enemy_attack_kwargs = {
-            "target_x": victim_x,
-            "target_y": victim_y,
+            "target_x": authority_victim_xy[0],
+            "target_y": authority_victim_xy[1],
             "target_participant_id":
                 0 if victim_role == "host" else victim_id,
             "enemy_actor_address":
                 int(enemy["actor_address"]),
-            "attack_distance":
-                64.0 if kill_type == "melee" else 240.0,
+            "attack_distance": attack_distance,
         }
         damage_baseline = query_spectator_state(victim_pipe)
         result["enemy_attack"] = _set_enemy_attack(
@@ -1932,7 +2138,7 @@ def run_live_verification(
         raise OrganicDeathFailure(str(exc), result) from exc
     finally:
         _disarm_death_traces(pipes)
-        stop_game_processes(process_ids)
+        result["cleanup"] = stop_exact_game_processes(launch)
 
 
 def main() -> int:

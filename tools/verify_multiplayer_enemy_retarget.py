@@ -38,7 +38,6 @@ from verify_multiplayer_organic_player_death import (
     ACCEPTANCE_MOD_ID,
     ATTACKER_STABILIZED_HP,
     SURVIVOR_HP,
-    VICTIM_ARMING_HP,
     VICTIM_MAX_HP,
     WAVE_FIXTURES,
     _arm_enemy_arena,
@@ -50,7 +49,6 @@ from verify_multiplayer_organic_player_death import (
     _start_testrun_when_ready,
     _start_waves,
     _wait_for_new_wave_enemy,
-    _wait_for_victim_damage,
 )
 from verify_multiplayer_death_spectator_respawn import (
     query_spectator_state,
@@ -67,6 +65,10 @@ TARGET_SAMPLE_WINDOW_SECONDS = 2.5
 MAX_HOST_REACQUIRE_LATENCY_MS = 1_500.0
 MAX_CLIENT_REACQUIRE_LATENCY_MS = 2_000.0
 MINIMUM_STABLE_MATCH_SAMPLES = 5
+TARGET_LAYOUT_TOLERANCE = 8.0
+TARGET_LAYOUT_STABLE_TOLERANCE = 1.0
+TARGET_LAYOUT_STABLE_SAMPLES = 3
+TARGET_DEATH_HP = -50.0
 
 
 class EnemyRetargetFailure(VerifyFailure):
@@ -307,6 +309,31 @@ print("distance=" .. string.format(
   "%.3f", math.sqrt(
     (enemy_x - minion_x) * (enemy_x - minion_x) +
     (enemy_y - minion_y) * (enemy_y - minion_y))))
+"""
+
+
+HOST_TARGET_LAYOUT_LUA = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local player = sd.player and sd.player.get_state and
+  sd.player.get_state() or nil
+local client = sd.bots and sd.bots.get_participant_state and
+  sd.bots.get_participant_state(__CLIENT_PARTICIPANT_ID__) or nil
+local ox = sd.debug.layout_offset("actor_position_x")
+local oy = sd.debug.layout_offset("actor_position_y")
+local host_actor = tonumber(player and player.actor_address) or 0
+local client_actor = tonumber(client and client.actor_address) or 0
+local function native_position(actor, offset)
+  if actor == 0 or offset == nil then return 0 end
+  return tonumber(sd.debug.read_float(actor + offset)) or 0
+end
+emit("host_actor", host_actor)
+emit("host_x", native_position(host_actor, ox))
+emit("host_y", native_position(host_actor, oy))
+emit("client_actor", client_actor)
+emit("client_x", native_position(client_actor, ox))
+emit("client_y", native_position(client_actor, oy))
 """
 
 
@@ -634,6 +661,41 @@ def _sample_target_pair(
     return samples
 
 
+def _wait_for_stable_host_target(
+    *,
+    host_pipe: str,
+    network_id: int,
+    expected_participant_id: int,
+    timeout: float = 3.0,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    stable_samples = 0
+    records: list[dict[str, int] | None] = []
+    while time.monotonic() < deadline:
+        record = _capture_targets(host_pipe, HOST_ID).get(network_id)
+        records.append(record)
+        if _target_matches(
+            record,
+            expected_participant_id=expected_participant_id,
+            expected_native_type_id=0,
+        ):
+            stable_samples += 1
+            if stable_samples >= TARGET_LAYOUT_STABLE_SAMPLES:
+                return {
+                    "passed": True,
+                    "stable_samples": stable_samples,
+                    "records": records,
+                }
+        else:
+            stable_samples = 0
+        time.sleep(TARGET_SAMPLE_INTERVAL_SECONDS)
+    raise VerifyFailure(
+        "selected enemy did not stably target the controlled nearest "
+        f"victim before death: expected={expected_participant_id} "
+        f"records={records}"
+    )
+
+
 def _capture_frame(
     pipe_name: str,
     output_path: Path,
@@ -653,6 +715,82 @@ def _capture_frame(
                 time.sleep(0.1)
     raise VerifyFailure(
         f"could not capture rendered frame from {pipe_name}: {errors}"
+    )
+
+
+def _wait_for_host_target_layout(
+    host_pipe: str,
+    *,
+    host_xy: tuple[float, float],
+    client_xy: tuple[float, float],
+    timeout: float = 6.0,
+) -> dict[str, Any]:
+    code = HOST_TARGET_LAYOUT_LUA.replace(
+        "__CLIENT_PARTICIPANT_ID__",
+        str(CLIENT_ID),
+    )
+    deadline = time.monotonic() + timeout
+    stable_samples = 0
+    attempts = 0
+    previous_positions: tuple[float, float, float, float] | None = None
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        values = parse_key_values(lua(host_pipe, code, timeout=5.0))
+        attempts += 1
+        host_x = float(values.get("host_x", "nan"))
+        host_y = float(values.get("host_y", "nan"))
+        client_x = float(values.get("client_x", "nan"))
+        client_y = float(values.get("client_y", "nan"))
+        host_distance = math.hypot(
+            host_x - host_xy[0],
+            host_y - host_xy[1],
+        )
+        client_distance = math.hypot(
+            client_x - client_xy[0],
+            client_y - client_xy[1],
+        )
+        positions = (host_x, host_y, client_x, client_y)
+        settled = (
+            previous_positions is not None
+            and math.hypot(
+                host_x - previous_positions[0],
+                host_y - previous_positions[1],
+            ) <= TARGET_LAYOUT_STABLE_TOLERANCE
+            and math.hypot(
+                client_x - previous_positions[2],
+                client_y - previous_positions[3],
+            ) <= TARGET_LAYOUT_STABLE_TOLERANCE
+        )
+        last = {
+            **values,
+            "host_distance": host_distance,
+            "client_distance": client_distance,
+            "attempts": attempts,
+        }
+        if (
+            int(values.get("host_actor", "0")) != 0
+            and int(values.get("client_actor", "0")) != 0
+            and math.isfinite(host_distance)
+            and math.isfinite(client_distance)
+            and host_distance <= TARGET_LAYOUT_TOLERANCE
+            and settled
+        ):
+            stable_samples += 1
+            if stable_samples >= TARGET_LAYOUT_STABLE_SAMPLES:
+                return {
+                    **last,
+                    "stable_samples": stable_samples,
+                    "tolerance": TARGET_LAYOUT_TOLERANCE,
+                    "stable_tolerance":
+                        TARGET_LAYOUT_STABLE_TOLERANCE,
+                }
+        else:
+            stable_samples = 0
+        previous_positions = positions
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "host authority did not observe the controlled target layout: "
+        f"expected_host={host_xy} expected_client={client_xy} last={last}"
     )
 
 
@@ -803,7 +941,7 @@ def _run_death_case(
         victim_id = HOST_ID if victim_role == "host" else CLIENT_ID
         survivor_id = CLIENT_ID if victim_role == "host" else HOST_ID
         victim_x, victim_y = 1850.0, 1750.0
-        survivor_x, survivor_y = 2050.0, 1750.0
+        survivor_x, survivor_y = 2350.0, 1750.0
         result["placement"] = {
             "victim": place_player(
                 victim_pipe,
@@ -822,6 +960,74 @@ def _run_death_case(
                 survivor_y - victim_y,
             ),
         }
+        controlled_host_xy = (
+            (victim_x, victim_y)
+            if victim_role == "host"
+            else (survivor_x, survivor_y)
+        )
+        controlled_client_xy = (
+            (survivor_x, survivor_y)
+            if victim_role == "host"
+            else (victim_x, victim_y)
+        )
+        result["placement"]["host_authority_convergence"] = (
+            _wait_for_host_target_layout(
+                host_pipe,
+                host_xy=controlled_host_xy,
+                client_xy=controlled_client_xy,
+            )
+        )
+        authority_layout = result["placement"][
+            "host_authority_convergence"
+        ]
+        host_authority_xy = (
+            float(authority_layout["host_x"]),
+            float(authority_layout["host_y"]),
+        )
+        client_authority_xy = (
+            float(authority_layout["client_x"]),
+            float(authority_layout["client_y"]),
+        )
+        authority_victim_xy = (
+            host_authority_xy
+            if victim_role == "host"
+            else client_authority_xy
+        )
+        authority_survivor_xy = (
+            client_authority_xy
+            if victim_role == "host"
+            else host_authority_xy
+        )
+        attack_distance = (
+            -64.0
+            if authority_survivor_xy[0] >= authority_victim_xy[0]
+            else 64.0
+        )
+        attacker_xy = (
+            authority_victim_xy[0] + attack_distance,
+            authority_victim_xy[1],
+        )
+        victim_distance = math.hypot(
+            attacker_xy[0] - authority_victim_xy[0],
+            attacker_xy[1] - authority_victim_xy[1],
+        )
+        survivor_distance = math.hypot(
+            attacker_xy[0] - authority_survivor_xy[0],
+            attacker_xy[1] - authority_survivor_xy[1],
+        )
+        result["placement"]["host_authority_attack_geometry"] = {
+            "victim": authority_victim_xy,
+            "survivor": authority_survivor_xy,
+            "attacker": attacker_xy,
+            "victim_distance": victim_distance,
+            "survivor_distance": survivor_distance,
+        }
+        if survivor_distance <= victim_distance + TARGET_LAYOUT_TOLERANCE:
+            raise VerifyFailure(
+                "controlled attacker geometry did not make the victim "
+                "strictly nearest on host authority: "
+                f"{result['placement']['host_authority_attack_geometry']}"
+            )
         enemy, wave_evidence = _start_single_enemy_wave(host_pipe)
         result["wave"] = wave_evidence
         result["enemy"] = enemy
@@ -834,28 +1040,29 @@ def _run_death_case(
         result["initial_target_record"] = initial_target
         result["arena"] = _arm_enemy_arena(
             host_pipe,
-            victim_x,
-            victim_y,
+            authority_victim_xy[0],
+            authority_victim_xy[1],
         )
-        victim_before = query_spectator_state(victim_pipe)
         result["attack"] = _set_enemy_attack(
             host_pipe,
-            target_x=victim_x,
-            target_y=victim_y,
+            target_x=authority_victim_xy[0],
+            target_y=authority_victim_xy[1],
             target_participant_id=(
                 0 if victim_role == "host" else victim_id
             ),
             enemy_actor_address=enemy_address,
-            attack_distance=64.0,
+            attack_distance=attack_distance,
         )
-        result["damage_observed"] = _wait_for_victim_damage(
-            victim_pipe,
-            baseline_hp=float(victim_before["hp"]),
-            timeout=18.0,
+        result["victim_target_before_death"] = (
+            _wait_for_stable_host_target(
+                host_pipe=host_pipe,
+                network_id=network_id,
+                expected_participant_id=victim_id,
+            )
         )
-        result["victim_armed"] = set_local_player_vitals(
+        result["victim_zeroed"] = set_local_player_vitals(
             victim_pipe,
-            VICTIM_ARMING_HP,
+            TARGET_DEATH_HP,
             VICTIM_MAX_HP,
         )
         result["logical_death"] = _wait_for_logical_death(
@@ -937,8 +1144,20 @@ def _run_minion_case(
         )
         result["launch"] = launch
         result["process_ids"] = game_process_ids(launch)
-        place_player(host_pipe, 2300.0, 1750.0, 180.0)
-        place_player(client_pipe, 2500.0, 1750.0, 180.0)
+        result["placement"] = {
+            "host": place_player(
+                host_pipe,
+                2300.0,
+                1750.0,
+                180.0,
+            ),
+            "client": place_player(
+                client_pipe,
+                2500.0,
+                1750.0,
+                180.0,
+            ),
+        }
         enemy, wave_evidence = _start_single_enemy_wave(host_pipe)
         result["wave"] = wave_evidence
         result["enemy"] = enemy

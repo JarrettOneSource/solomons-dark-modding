@@ -292,7 +292,9 @@ isolated runtime roots and exact launcher-returned process identities. It:
 - repeats the direction symmetrically with the client dead and host alive;
 - casts the native Ether `Call Leviathan` summon, places the registered
   Leviathan nearest, and requires the host-authored native target identity to
-  resolve on both peers;
+  resolve on both peers; this case does not depend on a native selector call
+  happening after placement, so it also enforces the host's bounded 100 ms
+  nearest-target maintenance cadence;
 - rejects dead/ineligible participant targets and requires five consecutive
   matching target samples; and
 - stores host/client backbuffer captures plus every authority target-ID sample
@@ -303,10 +305,28 @@ both peers, and checks that same composite identity in the host-authored world
 snapshot. Matching the native type alone is insufficient because two players
 may own the same summon class in different peer-local ActorWorld slots.
 
-The death cases begin their latency window at authoritative
-`life_current <= 0`, then disarm the damage harness before sampling. They do
-not wait on the longer native death-presentation countdown, so a presentation
-flake cannot hide or fail the independent target-validity contract.
+The death cases first require three consecutive host-authority samples showing
+that the selected wave enemy targets the controlled nearest victim. The gate
+then drives that participant to authoritative `life_current <= 0`, begins its
+latency window, and disarms the positioning harness before sampling. It does
+not wait on the longer native death-presentation countdown, so presentation or
+random contact-damage timing cannot hide or fail the independent target-
+validity contract. Natural enemy damage and death stay covered by the separate
+organic player-death regression. That companion gate is also an ordering
+contract: life-zero target invalidation is captured immediately but target
+mutation for local slot 0 waits for the native ineligible/death-animation
+signal at `actor + 0x160`, so retargeting cannot preempt
+`Player_DeathTransition`. The general animation-drive byte is explicitly not
+a death signal because ordinary damage and cast animations also set it.
+
+Before spawning the attacker, the gate requires three consecutive stable host
+authority observations of both players' native actor position fields, with the
+controlled local host position within eight world units. It deliberately does
+not use the remote participant's network target transform, which can lead the
+native proxy actually compared by acquisition. The gate derives the attack
+point from those native positions and proves the nominal victim is strictly
+nearer than the survivor. A test-only target-pointer writer therefore cannot
+force a victim that host authority actually observes as farther away.
 
 The prior target-authority check could accept two matching zero targets, so it
 was blind to enemies idling after a target death. The new gate explicitly
@@ -319,3 +339,26 @@ zero for the rest of a 34-sample window. Reacquisition latency was unbounded
 (`null`) and stable eligible-target agreement was `0/5`, even though the old
 agreement-only predicate saw matching zero targets. The generated baseline is
 `runtime/multiplayer_enemy_retarget/beta17-host-death-baseline.json`.
+
+The final 2026-07-25 two-peer run passed all three target cases:
+
+| Case | Host acquisition | Client application | Stable agreement |
+|---|---:|---:|---:|
+| Host dies, client survives | 0.002 ms | 157.3 ms | 31 samples |
+| Client dies, host survives | 81.2 ms | 235.0 ms | 30 samples |
+| Client-owned Ether minion nearest | 159.2 ms | 237.2 ms | 33 samples |
+
+The target artifact is
+`runtime/multiplayer_enemy_retarget/all-final-cadence-v4.json`; its sibling
+directory contains both-peer backbuffer captures and authority target-ID
+samples. Three additional isolated Ether-minion repetitions acquired on the
+host in 80.4–157.5 ms and converged on the client in 156.2–377.0 ms.
+
+The companion authority-fidelity run remained above the restored-baseline bar:
+21.765 units p95 and 26.063 units maximum native divergence, 272 ms p95 native
+latency, 150 ms p95 presentation-source age, and zero teleport, rubber-band,
+freeze, or persistent-ghost episodes. This is better than both the
+pre-optimization `a1132f0` result (30.761 p95 / 41.365 maximum / 304 ms /
+188 ms) and the prior fixed-delay result (29.242 / 36.207 / 288 ms / 150 ms).
+The evidence is
+`runtime/multiplayer_enemy_retarget/fidelity-final-cadence-v1.json`.
