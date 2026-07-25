@@ -1262,6 +1262,9 @@
     <ClInclude Include="src\multiplayer_local_transport\run_game_over_public.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\run_loading_barrier_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
