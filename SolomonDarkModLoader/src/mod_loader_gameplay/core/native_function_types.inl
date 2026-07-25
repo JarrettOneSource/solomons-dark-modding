@@ -42,7 +42,11 @@ using ActorWorldRegisterGameplaySlotActorFn = void(__thiscall*)(void* self, int 
 using ActorWorldUnregisterGameplaySlotActorFn = void(__thiscall*)(void* self, int slot_index);
 using ActorWorldLookupObjectByHandleFn = uintptr_t(__thiscall*)(void* self, void* handle);
 using WorldCellGridRebindActorFn = void(__thiscall*)(void* self, void* actor);
+using MonsterPathfindingSelectNearestTargetFn =
+    void(__fastcall*)(void* self, void* unused_edx);
 using MonsterPathfindingRefreshTargetFn = void(__fastcall*)(void* self, void* unused_edx);
+using BadguyCommonChaseTickFn =
+    std::uint32_t(__fastcall*)(void* self, void* unused_edx);
 using BadguyMoveStepFn = std::uint32_t(__thiscall*)(
     void* movement_context,
     void* actor,

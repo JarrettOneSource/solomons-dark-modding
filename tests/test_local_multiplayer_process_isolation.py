@@ -278,6 +278,56 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
 
         run.assert_not_called()
 
+    def test_exact_pair_cleanup_uses_pid_and_staged_executable_path(
+        self,
+    ) -> None:
+        targets = verifier._exact_game_process_targets(
+            {
+                "hostProcessId": 4311,
+                "hostLog": (
+                    r"C:\acceptance\instances\pair-host\stage"
+                    r"\.sdmod\logs\solomondarkmodloader.log"
+                ),
+                "clientProcessId": 4312,
+                "clientLog": (
+                    r"C:\acceptance\instances\pair-client\stage"
+                    r"\.sdmod\logs\solomondarkmodloader.log"
+                ),
+            }
+        )
+        self.assertEqual(
+            targets,
+            [
+                {
+                    "role": "host",
+                    "pid": 4311,
+                    "expected_path": (
+                        r"C:\acceptance\instances\pair-host"
+                        r"\stage\SolomonDark.exe"
+                    ),
+                },
+                {
+                    "role": "client",
+                    "pid": 4312,
+                    "expected_path": (
+                        r"C:\acceptance\instances\pair-client"
+                        r"\stage\SolomonDark.exe"
+                    ),
+                },
+            ],
+        )
+
+    def test_exact_pair_cleanup_rejects_pid_without_log_identity(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "hostProcessId without hostLog",
+        ):
+            verifier._exact_game_process_targets(
+                {"hostProcessId": 4311}
+            )
+
     def test_parallel_ports_are_selected_in_the_windows_socket_namespace(
         self,
     ) -> None:

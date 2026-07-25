@@ -34,7 +34,7 @@ from verify_local_multiplayer_sync import (
     path_for_powershell,
     select_available_windows_udp_ports,
     start_testrun,
-    stop_game_processes,
+    stop_exact_game_processes,
     wait_for_remote,
     wait_for_scene,
 )
@@ -265,17 +265,31 @@ def _default_instance_prefix() -> str:
     return f"n82-{os.getpid():x}-{uuid.uuid4().hex[:4]}"
 
 
-def _log_path(instance_prefix: str, role: str) -> Path:
-    return (
-        ROOT
-        / "runtime"
-        / "instances"
-        / f"{instance_prefix}-{role}"
-        / "stage"
-        / ".sdmod"
-        / "logs"
-        / "solomondarkmodloader.log"
+def _launch_log_path(
+    launch: dict[str, object],
+    key: str,
+) -> Path:
+    raw_path = launch.get(key)
+    if not isinstance(raw_path, str) or not raw_path:
+        raise VerifyFailure(f"pair launch omitted {key}: {launch}")
+    if os.name == "nt" or raw_path.startswith("/"):
+        return Path(raw_path)
+    completed = subprocess.run(
+        ["wslpath", "-u", raw_path],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5.0,
+        check=False,
     )
+    converted = completed.stdout.strip()
+    if completed.returncode != 0 or not converted:
+        raise VerifyFailure(
+            f"could not convert pair-launch {key} {raw_path!r}: "
+            f"{completed.stderr or completed.stdout}"
+        )
+    return Path(converted)
 
 
 def _read_log_after(path: Path, offset: int) -> str:
@@ -1512,6 +1526,7 @@ def run_live_verification(
     enforce_enemy_bounds: bool,
     include_cast: bool,
     build_label: str,
+    enable_audio: bool,
 ) -> dict[str, Any]:
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
@@ -1535,18 +1550,19 @@ def run_live_verification(
         game_directory=game_directory,
         launcher_path=launcher_path,
         exact_mod_id=ACCEPTANCE_MOD_ID,
+        enable_audio=enable_audio,
     )
     process_ids = game_process_ids(launch)
     if len(process_ids) != 2:
-        stop_game_processes(process_ids)
+        stop_exact_game_processes(launch)
         raise VerifyFailure(
             f"isolated pair did not report two process IDs: {launch}"
         )
 
     host_pipe = str(launch["hostLuaPipe"])
     client_pipe = str(launch["clientLuaPipe"])
-    host_log = _log_path(instance_prefix, "host")
-    client_log = _log_path(instance_prefix, "client")
+    host_log = _launch_log_path(launch, "hostLog")
+    client_log = _launch_log_path(launch, "clientLog")
     result: dict[str, Any] = {
         "launch": launch,
         "process_ids": process_ids,
@@ -1673,7 +1689,7 @@ def run_live_verification(
         result["ok"] = True
         return result
     finally:
-        stop_game_processes(process_ids)
+        result["cleanup"] = stop_exact_game_processes(launch)
 
 
 def main() -> int:
@@ -1713,6 +1729,11 @@ def main() -> int:
         "--skip-cast",
         action="store_true",
         help="Measure enemy replication without exercising the Air cast gate.",
+    )
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Keep stock audio enabled in both isolated game instances.",
     )
     parser.add_argument("--host-port", type=int, default=None)
     parser.add_argument("--client-port", type=int, default=None)
@@ -1799,6 +1820,7 @@ def main() -> int:
             enforce_enemy_bounds=not args.measure_only,
             include_cast=not args.skip_cast,
             build_label=args.build_label,
+            enable_audio=args.enable_audio,
         )
         return_code = 0
     except Exception as exc:

@@ -207,7 +207,9 @@ struct GameplayKeyboardInjectionState {
     X86Hook pointer_list_delete_batch_hook;
     X86Hook actor_world_unregister_hook;
     X86Hook gameplay_switch_region_hook;
+    X86Hook monster_pathfinding_select_nearest_target_hook;
     X86Hook monster_pathfinding_refresh_target_hook;
+    X86Hook badguy_common_chase_tick_hook;
     X86Hook badguy_move_step_hook;
     X86Hook gold_pickup_hook;
     X86Hook orb_pickup_hook;

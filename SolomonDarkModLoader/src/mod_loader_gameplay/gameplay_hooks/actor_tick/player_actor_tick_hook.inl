@@ -248,6 +248,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         }
         if (local_player_actor) {
             TickParticipantSceneBindingsIfActive();
+            MaintainInvalidatedHostileTargetsAfterLocalPlayerTick();
             ApplyReplicatedWorldSnapshotIfActive(
                 gameplay_address_for_pump,
                 pause_now_ms);
@@ -1049,6 +1050,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
         ResolveWizardParticipantActorCollisions();
         TickParticipantSceneBindingsIfActive();
+        MaintainInvalidatedHostileTargetsAfterLocalPlayerTick();
         ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()));
         ApplyReplicatedSpellEffectSnapshotsIfActive(
             static_cast<std::uint64_t>(::GetTickCount64()));

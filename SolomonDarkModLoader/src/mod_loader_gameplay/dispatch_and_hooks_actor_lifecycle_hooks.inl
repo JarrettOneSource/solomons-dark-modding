@@ -514,12 +514,27 @@ void __fastcall HookActorWorldUnregister(
         }
     }
 
+    std::vector<uintptr_t> hostiles_targeting_removed_actor;
+    if (actor_address != 0 &&
+        !multiplayer::IsLocalTransportClient()) {
+        (void)CaptureLiveHostilesTargetingActor(
+            actor_address,
+            &hostiles_targeting_removed_actor);
+    }
+
     ForgetAuthoritativeTurnUndeadTargetLocksForActor(actor_address);
     if (actor_address != 0 && remove_from_container == 1) {
         multiplayer::NotifyLocalWorldActorUnregistered(actor_address);
         ForgetRunLifecycleEnemyTracking(actor_address);
     }
     original(self, actor, remove_from_container);
+    for (const auto hostile_actor_address :
+         hostiles_targeting_removed_actor) {
+        (void)ReacquireHostileTargetAfterInvalidation(
+            hostile_actor_address,
+            actor_address,
+            "target_removal");
+    }
     if (tracked_standalone_scene_churn_actor ||
         (actor_address != 0 && remove_from_container == 1 && now_ms < scene_churn_until)) {
         MarkParticipantEntityWorldUnregistered(actor_address);

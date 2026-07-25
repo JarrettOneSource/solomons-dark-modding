@@ -971,6 +971,12 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\monster_pathfinding_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\hostile_target_acquisition.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\hostile_target_invalidation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\lua_enemy_ai_runtime.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>

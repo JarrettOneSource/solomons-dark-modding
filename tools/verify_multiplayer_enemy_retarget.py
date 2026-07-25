@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import math
 import os
@@ -31,6 +30,7 @@ from verify_local_multiplayer_sync import (
     path_for_powershell,
     place_player,
     select_available_windows_udp_ports,
+    stop_exact_game_processes,
     wait_for_remote,
     wait_for_scene,
 )
@@ -545,7 +545,7 @@ def _wait_for_enemy_network_id(
     )
 
 
-def _wait_for_death_transition(
+def _wait_for_logical_death(
     victim_pipe: str,
     *,
     timeout: float,
@@ -555,12 +555,11 @@ def _wait_for_death_transition(
     while time.monotonic() < deadline:
         last = query_spectator_state(victim_pipe)
         hp = float(last.get("hp", "0"))
-        drive = int(last.get("death_drive_state", "0"))
-        if hp <= 0.0 and drive != 0:
+        if hp <= 0.0:
             return last
         time.sleep(0.025)
     raise VerifyFailure(
-        f"victim never entered the native death transition: {last}"
+        f"victim never reached authoritative life zero: {last}"
     )
 
 
@@ -609,114 +608,6 @@ def _capture_frame(
     raise VerifyFailure(
         f"could not capture rendered frame from {pipe_name}: {errors}"
     )
-
-
-def _stop_exact_owned_processes(
-    *,
-    launch: dict[str, object],
-    runtime_root: Path,
-    instance_prefix: str,
-) -> list[dict[str, Any]]:
-    role_targets: list[dict[str, object]] = []
-    for role, key in (
-        ("host", "hostProcessId"),
-        ("client", "clientProcessId"),
-    ):
-        process_id = launch.get(key)
-        if (
-            isinstance(process_id, bool)
-            or not isinstance(process_id, int)
-            or process_id <= 0
-        ):
-            continue
-        expected_path = (
-            runtime_root
-            / "instances"
-            / f"{instance_prefix}-{role}"
-            / "stage"
-            / "SolomonDark.exe"
-        )
-        role_targets.append(
-            {
-                "role": role,
-                "pid": process_id,
-                "expected_path": path_for_powershell(expected_path),
-            }
-        )
-    payload = base64.b64encode(
-        json.dumps(role_targets).encode("utf-8")
-    ).decode("ascii")
-    script = r"""
-$ErrorActionPreference = "Stop"
-$payload = [System.Text.Encoding]::UTF8.GetString(
-    [System.Convert]::FromBase64String("__PAYLOAD__"))
-$targets = ConvertFrom-Json -InputObject $payload
-$results = @()
-foreach ($target in @($targets)) {
-    $process = Get-Process -Id ([int]$target.pid) `
-        -ErrorAction SilentlyContinue
-    if ($null -eq $process) {
-        $results += [pscustomobject]@{
-            role = [string]$target.role
-            pid = [int]$target.pid
-            expectedPath = [string]$target.expected_path
-            actualPath = $null
-            stopped = $false
-            alreadyExited = $true
-            pathMatched = $false
-        }
-        continue
-    }
-    $actual = [System.IO.Path]::GetFullPath([string]$process.Path)
-    $expected = [System.IO.Path]::GetFullPath(
-        [string]$target.expected_path)
-    $matches = [string]::Equals(
-        $actual,
-        $expected,
-        [System.StringComparison]::OrdinalIgnoreCase)
-    if ($matches) {
-        Stop-Process -Id ([int]$target.pid) -Force
-    }
-    $results += [pscustomobject]@{
-        role = [string]$target.role
-        pid = [int]$target.pid
-        expectedPath = $expected
-        actualPath = $actual
-        stopped = $matches
-        alreadyExited = $false
-        pathMatched = $matches
-    }
-}
-[Console]::Write((ConvertTo-Json -InputObject @($results) -Compress))
-""".replace("__PAYLOAD__", payload)
-    completed = subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            script,
-        ],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=15.0,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise VerifyFailure(
-            "exact owned-process cleanup failed: "
-            f"{completed.stderr or completed.stdout}"
-        )
-    parsed = json.loads(completed.stdout or "[]")
-    if isinstance(parsed, dict):
-        return [parsed]
-    if not isinstance(parsed, list):
-        raise VerifyFailure(
-            f"exact owned-process cleanup returned {parsed!r}"
-        )
-    return parsed
 
 
 def _prepare_wave_schedule(
@@ -769,11 +660,7 @@ def _launch_ready_pair(
     runtime_root = _path_from_powershell(runtime_root_value)
     process_ids = game_process_ids(launch)
     if len(process_ids) != 2:
-        _stop_exact_owned_processes(
-            launch=launch,
-            runtime_root=runtime_root,
-            instance_prefix=instance_prefix,
-        )
+        stop_exact_game_processes(launch)
         raise VerifyFailure(
             f"isolated enemy-retarget pair did not report two PIDs: "
             f"{launch}"
@@ -925,7 +812,7 @@ def _run_death_case(
             VICTIM_ARMING_HP,
             VICTIM_MAX_HP,
         )
-        result["death_transition"] = _wait_for_death_transition(
+        result["logical_death"] = _wait_for_logical_death(
             victim_pipe,
             timeout=18.0,
         )
@@ -967,11 +854,7 @@ def _run_death_case(
         raise EnemyRetargetFailure(str(exc), result) from exc
     finally:
         if launch:
-            cleanup = _stop_exact_owned_processes(
-                launch=launch,
-                runtime_root=runtime_root,
-                instance_prefix=instance_prefix,
-            )
+            cleanup = stop_exact_game_processes(launch)
         result["cleanup"] = cleanup
 
 
@@ -1113,11 +996,7 @@ def _run_minion_case(
         raise EnemyRetargetFailure(str(exc), result) from exc
     finally:
         if launch:
-            cleanup = _stop_exact_owned_processes(
-                launch=launch,
-                runtime_root=runtime_root,
-                instance_prefix=instance_prefix,
-            )
+            cleanup = stop_exact_game_processes(launch)
         result["cleanup"] = cleanup
 
 

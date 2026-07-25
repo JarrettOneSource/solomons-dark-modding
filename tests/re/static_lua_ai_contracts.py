@@ -129,11 +129,13 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
     assert "kGameNpcSetMoveGoal" not in hostile_hooks
     _require_in_order(
         hostile_hooks,
+        "bool ApplyHigherPriorityHostileTargetPolicy(",
         "ApplyAuthoritativeTurnUndeadCasterTargetLock",
         "multiplayer::IsLocalTransportClient()",
-        "original(self, nullptr)",
         "ApplyLuaEnemyAiTargetOverride(hostile_actor_address)",
-        "selector promoted wizard participant",
+        "HookMonsterPathfindingSelectNearestTarget",
+        "original(self, nullptr)",
+        "ApplyNearestValidHostileTarget(",
     )
 
     assert actor_ids.count("if (IsLuaModSimulationAuthority())") >= 2

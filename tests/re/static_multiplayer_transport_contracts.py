@@ -328,6 +328,10 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "MINIMUM_PERSISTENT_GHOST_MS = 500.0",
         "DEFAULT_NETWORK_LATENCY_MS = 40.0",
         "DEFAULT_NETWORK_JITTER_MS = 12.0",
+        '"--enable-audio"',
+        "enable_audio=enable_audio",
+        '_launch_log_path(launch, "hostLog")',
+        '_launch_log_path(launch, "clientLog")',
         '"teleport_event_count"',
         '"rubber_band_event_count"',
         '"freeze_episode_count"',
@@ -337,7 +341,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "MAXIMUM_CAST_STOP_LATENCY_MS = 150.0",
         "analyze_enemy_sync(",
         "analyze_air_cast_timing(",
-        "stop_game_processes(process_ids)",
+        "stop_exact_game_processes(launch)",
     ):
         assert token in organic_verifier, (
             f"organic enemy/Air timing acceptance gate lacks: {token}"
@@ -1080,7 +1084,7 @@ def test_client_replicated_enemy_movement_is_host_authored() -> str:
 
     hook = movement_hook[
         movement_hook.index("std::uint32_t __fastcall HookBadguyMoveStep(") :
-        movement_hook.index("bool ClearHostileTargetsForDeadWizardActor(")
+        movement_hook.index("bool WriteLuaEnemyAiNativeTarget(")
     ]
     _require_in_order(
         hook,

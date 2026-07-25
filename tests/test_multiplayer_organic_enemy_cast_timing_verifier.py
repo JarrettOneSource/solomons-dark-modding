@@ -131,6 +131,29 @@ class OrganicEnemyCastTimingVerifierTests(unittest.TestCase):
         self.assertLessEqual(len(prefix), 18)
         self.assertRegex(prefix, r"^n82-[0-9a-f]+-[0-9a-f]{4}$")
 
+    def test_gate_reads_the_disposable_log_paths_reported_by_launcher(
+        self,
+    ) -> None:
+        launch = {
+            "hostLog": "/tmp/disposable-pair/host/loader.log",
+            "clientLog": "/tmp/disposable-pair/client/loader.log",
+        }
+        self.assertEqual(
+            verifier._launch_log_path(launch, "hostLog"),
+            Path("/tmp/disposable-pair/host/loader.log"),
+        )
+        self.assertEqual(
+            verifier._launch_log_path(launch, "clientLog"),
+            Path("/tmp/disposable-pair/client/loader.log"),
+        )
+
+    def test_gate_rejects_a_pair_without_reported_log_paths(self) -> None:
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "pair launch omitted hostLog",
+        ):
+            verifier._launch_log_path({}, "hostLog")
+
     def test_multi_enemy_motion_analysis_accepts_bounded_organic_motion(
         self,
     ) -> None:

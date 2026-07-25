@@ -92,6 +92,7 @@ extern uintptr_t kOfficeRegionTick;
 extern uintptr_t kRegionApplyCameraShake;
 extern uintptr_t kMonsterPathfindingSelectNearestTarget;
 extern uintptr_t kMonsterPathfindingRefreshTarget;
+extern uintptr_t kBadguyCommonChaseTick;
 extern uintptr_t kBadguyMoveStep;
 extern uintptr_t kActorProgressionRefresh;
 extern uintptr_t kActorProgressionApplyHagathaPerk;

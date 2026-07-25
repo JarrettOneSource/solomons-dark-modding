@@ -54,26 +54,92 @@ uintptr_t ResolveReplicatedRunEnemyNativeTargetActor(
         return 0;
     }
 
+    std::int32_t owner_actor_group = -1;
+    if (IsExplicitPlayerOwnedHostileTargetType(
+            authoritative_actor.target_native_type_id) &&
+        authoritative_actor.target_participant_id != 0) {
+        const auto owner_actor_address =
+            ResolveReplicatedRunEnemyTargetActor(
+                authoritative_actor.target_participant_id);
+        uintptr_t owner_world = 0;
+        std::int32_t owner_world_slot = -1;
+        if (!TryReadActorWorldTargetSlotState(
+                owner_actor_address,
+                &owner_world,
+                &owner_actor_group,
+                &owner_world_slot) ||
+            owner_world != hostile_world) {
+            owner_actor_group = -1;
+        }
+    }
+
+    float hostile_x = 0.0f;
+    float hostile_y = 0.0f;
+    const bool have_hostile_position =
+        TryReadFiniteFloatField(
+            hostile_actor_address,
+            kActorPositionXOffset,
+            &hostile_x) &&
+        TryReadFiniteFloatField(
+            hostile_actor_address,
+            kActorPositionYOffset,
+            &hostile_y);
+
     std::vector<SDModSceneActorState> actors;
     if (!TryListSceneActors(&actors)) {
         return 0;
     }
 
+    uintptr_t nearest_equivalent_actor = 0;
+    float nearest_equivalent_distance_squared =
+        (std::numeric_limits<float>::max)();
     for (const auto& actor : actors) {
+        std::uint8_t ineligible_state = 0;
         if (!actor.valid ||
             actor.actor_address == 0 ||
             actor.actor_address == hostile_actor_address ||
             actor.owner_address != hostile_world ||
             actor.object_type_id != authoritative_actor.target_native_type_id ||
-            actor.actor_slot != authoritative_actor.target_actor_slot ||
-            actor.world_slot != authoritative_actor.target_world_slot ||
+            !ProcessMemory::Instance().TryReadField(
+                actor.actor_address,
+                kActorHostileTargetIneligibleStateOffset,
+                &ineligible_state) ||
+            ineligible_state != 0 ||
             IsActorRuntimeDead(actor.actor_address)) {
             continue;
         }
-        return actor.actor_address;
+
+        if (actor.actor_slot == authoritative_actor.target_actor_slot &&
+            actor.world_slot == authoritative_actor.target_world_slot) {
+            return actor.actor_address;
+        }
+        if (!have_hostile_position ||
+            !IsExplicitPlayerOwnedHostileTargetType(
+                authoritative_actor.target_native_type_id) ||
+            (owner_actor_group >= 0 &&
+             actor.actor_slot != owner_actor_group)) {
+            continue;
+        }
+
+        const float delta_x = hostile_x - actor.x;
+        const float delta_y = hostile_y - actor.y;
+        const float candidate_distance_squared =
+            delta_x * delta_x + delta_y * delta_y;
+        if (!std::isfinite(candidate_distance_squared) ||
+            candidate_distance_squared >
+                nearest_equivalent_distance_squared ||
+            (candidate_distance_squared ==
+                 nearest_equivalent_distance_squared &&
+             nearest_equivalent_actor != 0 &&
+             actor.actor_address >= nearest_equivalent_actor)) {
+            continue;
+        }
+        nearest_equivalent_actor = actor.actor_address;
+        nearest_equivalent_distance_squared =
+            candidate_distance_squared;
     }
 
-    return 0;
+    return nearest_equivalent_actor;
 }
 
 bool ClearRunEnemyNativeTargetFields(uintptr_t actor_address) {
@@ -125,8 +191,12 @@ bool ApplyReplicatedRunEnemyTarget(
     (void)memory.TryReadField(actor_address, kActorCurrentTargetActorOffset, &current_target_actor);
     (void)memory.TryReadField(actor_address, kHostileTargetBucketDeltaOffset, &current_bucket_delta);
 
+    const bool participant_actor_target =
+        authoritative_actor.target_participant_id != 0 &&
+        (authoritative_actor.target_native_type_id == 0 ||
+         authoritative_actor.target_native_type_id == 1);
     const uintptr_t target_actor =
-        authoritative_actor.target_participant_id != 0
+        participant_actor_target
             ? ResolveReplicatedRunEnemyTargetActor(authoritative_actor.target_participant_id)
             : ResolveReplicatedRunEnemyNativeTargetActor(actor_address, authoritative_actor);
     if (target_actor == 0 || IsActorRuntimeDead(target_actor)) {

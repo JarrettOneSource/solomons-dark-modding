@@ -61,11 +61,17 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             "Golem (0x7F4)",
             "MonsterPathfinding_RefreshTarget (0x00483480)",
             "Badguy_CommonChaseTick (0x004835F0)",
+            "`uint __fastcall(int* hostile)`",
+            "six-byte instruction boundary",
+            "`0x00483895`",
+            "unconditionally writes zero to",
             "Badguy_RefreshTargetThenDispatch (0x00484AA0)",
             "Badguy_RefreshTargetLongCadence (0x00487F60)",
             "Badguy_ContactTargetScan (0x004881A0)",
             "Badguy_ClearLinkedTargetAndNotifySlots",
             "clients must not independently choose a nearest target",
+            "Player-owned summon ActorWorld slots are peer-local",
+            "owner participant plus the native ally type",
             "never relocate or",
             "promote the target actor",
         ),
@@ -115,6 +121,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
         seam_header,
         (
             "kMonsterPathfindingSelectNearestTarget",
+            "kBadguyCommonChaseTick",
             "kGameplayHostileTargetCandidateListOffset",
             "kActorWorldRegionIndexOffset",
             "kActorHostileTargetIneligibleStateOffset",
@@ -127,6 +134,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
         seam_storage,
         (
             "uintptr_t kMonsterPathfindingSelectNearestTarget = 0;",
+            "uintptr_t kBadguyCommonChaseTick = 0;",
             "std::size_t kGameplayHostileTargetCandidateListOffset = 0;",
             "std::size_t kActorWorldRegionIndexOffset = 0;",
             "std::size_t kActorHostileTargetIneligibleStateOffset = 0;",
@@ -140,6 +148,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
         (
             '"monster_pathfinding_select_nearest_target", '
             "kMonsterPathfindingSelectNearestTarget",
+            '"badguy_common_chase_tick", kBadguyCommonChaseTick',
         ),
     )
     _require_tokens(
@@ -166,6 +175,9 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
     verifier = read_text(
         ROOT / "tools/verify_multiplayer_enemy_retarget.py"
     )
+    process_cleanup = read_text(
+        ROOT / "tools/verify_local_multiplayer_sync.py"
+    )
     unit_tests = read_text(
         ROOT / "tests/test_multiplayer_enemy_retarget_verifier.py"
     )
@@ -188,14 +200,22 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
             "target_participant_id",
             "target_native_type_id",
             "analyze_retarget_samples(",
-            "_wait_for_death_transition(",
+            "_wait_for_logical_death(",
             "focus.cast_secondary_belt_slot(",
             "ETHER_MINION_NATIVE_TYPE_ID",
             "capture_game_backbuffer",
-            "_stop_exact_owned_processes(",
-            "pathMatched = $matches",
+            "stop_exact_game_processes(",
             "test_blank_boneyard=True",
             "_path_from_powershell(runtime_root_value)",
+        ),
+    )
+    _require_tokens(
+        "exact pair-process cleanup",
+        process_cleanup,
+        (
+            "def stop_exact_game_processes(",
+            "pathMatched = $matches",
+            "refused to stop launcher PID with a different executable",
         ),
     )
     _require_tokens(
@@ -230,4 +250,217 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
     return (
         "two-peer death/summon target convergence is a mandatory companion "
         "to the enemy authority-fidelity gate"
+    )
+
+
+def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
+    acquisition = "".join(
+        read_text(
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+            / source_name
+        )
+        for source_name in (
+            "hostile_target_acquisition.inl",
+            "hostile_target_invalidation.inl",
+        )
+    )
+    monster_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "monster_pathfinding_hook.inl"
+    )
+    lifecycle_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    installation = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_keyboard_injection.inl"
+    )
+    runtime_state = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
+        "runtime_request_state.inl"
+    )
+    player_tick = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/player_actor_tick_hook.inl"
+    )
+    resource_state = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/"
+        "resource_state.inl"
+    )
+    world_target_reconciliation = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/"
+        "run_enemy_targeting_and_retirement.inl"
+    )
+    world_snapshot_capture = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "world_snapshot_capture.inl"
+    )
+    _require_tokens(
+        "authoritative hostile target acquisition",
+        acquisition,
+        (
+            "TryReadNativeHostileTargetCandidateList(",
+            "AppendWizardParticipantTargetCandidates(",
+            "kGoodImpHostileTargetTypeId = 0x03ED",
+            "kLeviathanHostileTargetTypeId = 0x07F2",
+            "kGolemHostileTargetTypeId = 0x07F4",
+            "kActorHostileTargetIneligibleStateOffset",
+            "IsActorRuntimeDead(candidate_actor_address)",
+            "IsDeadWizardParticipantActor(candidate_actor_address)",
+            "bucket_actor_address != candidate_actor_address",
+            "static_cast<uintptr_t>(bucket_index) * sizeof(uintptr_t)",
+            "TryReadGameplayIndexStateValue(",
+            "extended_slot_or_ally_candidate",
+            "mapped_region_index != static_cast<int>(world_region_index) &&",
+            "IsPreferredHostileTargetCandidate(",
+            "ApplyNearestValidHostileTarget(",
+            "IsParticipantRuntimeDeadForHostileTargeting(",
+            "RefreshHostileTargetParticipantDeathLatches(",
+            '"participant_life_zero"',
+            "MaintainInvalidatedHostileTargetAfterNativeTick(",
+            "MaintainMissingOrInvalidHostileTargetAfterNativeTick(",
+            '"participant_death_maintenance"',
+            "MaintainInvalidatedHostileTargetsAfterLocalPlayerTick(",
+            '"participant_death_post_player_tick"',
+            "target_participant_id=",
+            "target_native_type_id=",
+        ),
+    )
+    _require_tokens(
+        "hostile target selector hook",
+        monster_hook,
+        (
+            "ApplyHigherPriorityHostileTargetPolicy(",
+            "HookMonsterPathfindingSelectNearestTarget(",
+            "GetX86HookTrampoline<MonsterPathfindingSelectNearestTargetFn>",
+            "original(self, nullptr);",
+            '"native_selector"',
+            '"native_refresh"',
+            "HookBadguyCommonChaseTick(",
+            "GetX86HookTrampoline<BadguyCommonChaseTickFn>",
+            "MaintainInvalidatedHostileTargetAfterNativeTick(",
+            "MaintainMissingOrInvalidHostileTargetAfterNativeTick(",
+            "ClearHostileTargetsForDeadWizardActor(",
+            '"target_death"',
+            "ReacquireHostileTargetAfterInvalidation(",
+            "ApplyLatestReplicatedRunEnemyTargetForLocalActor(",
+        ),
+    )
+    selector = monster_hook[
+        monster_hook.index("void __fastcall HookMonsterPathfindingSelectNearestTarget(") :
+        monster_hook.index("void __fastcall HookMonsterPathfindingRefreshTarget(")
+    ]
+    assert selector.index("ApplyHigherPriorityHostileTargetPolicy(") < (
+        selector.index("original(self, nullptr);")
+    )
+    assert selector.index("original(self, nullptr);") < selector.index(
+        "ApplyNearestValidHostileTarget("
+    )
+
+    _require_tokens(
+        "ActorWorld target-removal lifecycle",
+        lifecycle_hook,
+        (
+            "CaptureLiveHostilesTargetingActor(",
+            "hostiles_targeting_removed_actor",
+            '"target_removal"',
+            "ReacquireHostileTargetAfterInvalidation(",
+        ),
+    )
+    capture = lifecycle_hook.index("CaptureLiveHostilesTargetingActor(")
+    unregister = lifecycle_hook.index(
+        "original(self, actor, remove_from_container);",
+        capture,
+    )
+    reacquire = lifecycle_hook.index(
+        "ReacquireHostileTargetAfterInvalidation(",
+        unregister,
+    )
+    assert capture < unregister < reacquire
+
+    _require_tokens(
+        "local-player death-transition maintenance",
+        player_tick,
+        ("MaintainInvalidatedHostileTargetsAfterLocalPlayerTick();",),
+    )
+    _require_tokens(
+        "actor runtime-death type ownership",
+        resource_state,
+        (
+            "if (IsArenaEnemyActorHealthType(object_type_id)) {",
+            "kEnemyDeathHandledOffset",
+            "object_type_id == 1 &&",
+            "TryReadActorProgressionHealth(actor_address, &health)",
+            "Other actors do not own the",
+        ),
+    )
+    _require_tokens(
+        "player-owned target snapshot identity",
+        world_snapshot_capture,
+        (
+            "ResolvePlayerOwnedTargetParticipantId(",
+            "kLeviathanTargetNativeTypeId = 0x07F2",
+            "target_participant_id",
+        ),
+    )
+    _require_tokens(
+        "player-owned target peer-local resolution",
+        world_target_reconciliation,
+        (
+            "ResolveReplicatedRunEnemyNativeTargetActor(",
+            "owner_actor_group",
+            "IsExplicitPlayerOwnedHostileTargetType(",
+            "candidate_distance_squared",
+        ),
+    )
+
+    _require_tokens(
+        "nearest-target selector installation",
+        installation,
+        (
+            "ResolveGameAddressOrZero(\n"
+            "            kMonsterPathfindingSelectNearestTarget)",
+            "HookMonsterPathfindingSelectNearestTarget",
+            "kMonsterPathfindingSelectNearestTargetHookMinimumPatchSize",
+            "monster_pathfinding_select_nearest_target_hook",
+            "ResolveGameAddressOrZero(\n"
+            "            kBadguyCommonChaseTick)",
+            "HookBadguyCommonChaseTick",
+            "kBadguyCommonChaseTickHookMinimumPatchSize",
+            "badguy_common_chase_tick_hook",
+        ),
+    )
+    assert (
+        "X86Hook monster_pathfinding_select_nearest_target_hook;"
+        in runtime_state
+    )
+    assert "X86Hook badguy_common_chase_tick_hook;" in runtime_state
+
+    behavior = acquisition + monster_hook
+    for forbidden in (
+        "ActorWorld_RelocateHostileToGroupZero",
+        "HookMonsterPathfindingRefreshTarget promotion",
+        "CallActorWorldRegisterSafe",
+        "CallActorWorldUnregisterSafe",
+    ):
+        assert forbidden not in behavior, (
+            "nearest-target policy must never promote or relocate a target: "
+            + forbidden
+        )
+
+    return (
+        "host authority chooses the nearest live native, participant, or "
+        "player-owned ally and death/removal edges force reacquisition "
+        "without ActorWorld promotion"
     )

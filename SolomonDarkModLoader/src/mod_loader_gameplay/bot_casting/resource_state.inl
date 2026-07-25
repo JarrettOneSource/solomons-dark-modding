@@ -389,19 +389,25 @@ bool IsActorRuntimeDead(uintptr_t actor_address) {
     if (!memory.TryReadField(actor_address, kGameObjectTypeIdOffset, &object_type_id)) {
         return false;
     }
-    if (IsArenaEnemyActorHealthType(object_type_id) &&
-        TryReadArenaEnemyActorHealth(actor_address, &health)) {
+    if (IsArenaEnemyActorHealthType(object_type_id)) {
+        if (TryReadArenaEnemyActorHealth(actor_address, &health)) {
+            return health.max_hp > 0.0f && health.hp <= 0.0f;
+        }
+        std::uint8_t death_handled = 0;
+        return memory.TryReadField(
+                   actor_address,
+                   kEnemyDeathHandledOffset,
+                   &death_handled) &&
+               death_handled != 0;
+    }
+
+    // Native type 1 is the player family. Other actors do not own the
+    // progression fields, even when adjacent heap bytes happen to decode as a
+    // readable progression pointer.
+    if (object_type_id == 1 &&
+        TryReadActorProgressionHealth(actor_address, &health)) {
         return health.max_hp > 0.0f && health.hp <= 0.0f;
     }
 
-    if (TryReadActorProgressionHealth(actor_address, &health)) {
-        return health.max_hp > 0.0f && health.hp <= 0.0f;
-    }
-
-    std::uint8_t death_handled = 0;
-    if (memory.TryReadField(actor_address, kEnemyDeathHandledOffset, &death_handled) &&
-        death_handled != 0) {
-        return true;
-    }
     return false;
 }

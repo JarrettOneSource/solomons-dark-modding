@@ -88,8 +88,14 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     const auto actor_world_unregister = ProcessMemory::Instance().ResolveGameAddressOrZero(kActorWorldUnregister);
     const auto gameplay_switch_region =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplaySwitchRegion);
+    const auto monster_pathfinding_select_nearest_target =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kMonsterPathfindingSelectNearestTarget);
     const auto monster_pathfinding_refresh_target =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kMonsterPathfindingRefreshTarget);
+    const auto badguy_common_chase_tick =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kBadguyCommonChaseTick);
     const auto badguy_move_step =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kBadguyMoveStep);
     const auto gold_pickup = ProcessMemory::Instance().ResolveGameAddressOrZero(kGoldPickupCaller);
@@ -138,7 +144,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         pointer_list_delete_batch == 0 ||
         actor_world_unregister == 0 ||
         gameplay_switch_region == 0 ||
+        monster_pathfinding_select_nearest_target == 0 ||
         monster_pathfinding_refresh_target == 0 ||
+        badguy_common_chase_tick == 0 ||
         badguy_move_step == 0 ||
         gold_pickup == 0 ||
         orb_pickup == 0 ||
@@ -436,6 +444,39 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     }
 
     if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(
+                monster_pathfinding_select_nearest_target),
+            reinterpret_cast<void*>(
+                &HookMonsterPathfindingSelectNearestTarget),
+            kMonsterPathfindingSelectNearestTargetHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.puppet_manager_delete_puppet_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.actor_animation_advance_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_hud_render_dispatch_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
+        RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install hostile nearest-target selector hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(monster_pathfinding_refresh_target),
             reinterpret_cast<void*>(&HookMonsterPathfindingRefreshTarget),
             kMonsterPathfindingRefreshTargetHookMinimumPatchSize,
@@ -445,6 +486,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_spell_start_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.spell_cast_dispatcher_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -490,6 +534,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -525,6 +572,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -561,6 +611,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -598,6 +651,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -636,6 +692,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -676,6 +735,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -712,6 +774,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         RemoveX86Hook(&g_gameplay_keyboard_injection.pure_primary_post_builder_hook);
         g_pure_primary_post_builder_trampoline = nullptr;
         RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+        RemoveX86Hook(
+            &g_gameplay_keyboard_injection
+                 .monster_pathfinding_select_nearest_target_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
         RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
@@ -895,6 +960,22 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(badguy_common_chase_tick),
+            reinterpret_cast<void*>(&HookBadguyCommonChaseTick),
+            kBadguyCommonChaseTickHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection
+                 .badguy_common_chase_tick_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install Badguy common-chase tick hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
     std::string boneyard_patch_error;
     if (!InstallBoneyardGeneratorPatch(&boneyard_patch_error)) {
         ShutdownGameplayKeyboardInjection();
@@ -1027,6 +1108,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " world_unregister=" + HexString(actor_world_unregister) +
         " gameplay_switch_region=" + HexString(gameplay_switch_region) +
         " hostile_target_refresh=" + HexString(monster_pathfinding_refresh_target) +
+        " hostile_common_chase_tick=" + HexString(badguy_common_chase_tick) +
         " hostile_move_step=" + HexString(badguy_move_step) +
         " gold_pickup=" + HexString(gold_pickup) +
         " orb_pickup=" + HexString(orb_pickup) +
@@ -1071,7 +1153,12 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.pointer_list_delete_batch_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.actor_world_unregister_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gameplay_switch_region_hook);
+    RemoveX86Hook(
+        &g_gameplay_keyboard_injection.badguy_common_chase_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.monster_pathfinding_refresh_target_hook);
+    RemoveX86Hook(
+        &g_gameplay_keyboard_injection
+             .monster_pathfinding_select_nearest_target_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.badguy_move_step_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.gold_pickup_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.orb_pickup_hook);

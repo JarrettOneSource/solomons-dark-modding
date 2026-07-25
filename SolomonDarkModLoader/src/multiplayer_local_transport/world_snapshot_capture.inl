@@ -1,6 +1,60 @@
 constexpr std::uint32_t kSyntheticWizardSourceActorNativeTypeId = 0x1397;
+constexpr std::uint32_t kGoodImpTargetNativeTypeId = 0x03ED;
+constexpr std::uint32_t kLeviathanTargetNativeTypeId = 0x07F2;
+constexpr std::uint32_t kGolemTargetNativeTypeId = 0x07F4;
 
 bool IsSharedHubFactoryActorType(std::uint32_t native_type_id);
+
+bool IsPlayerOwnedTargetNativeType(std::uint32_t native_type_id) {
+    return native_type_id == kGoodImpTargetNativeTypeId ||
+           native_type_id == kLeviathanTargetNativeTypeId ||
+           native_type_id == kGolemTargetNativeTypeId;
+}
+
+std::uint64_t ResolvePlayerOwnedTargetParticipantId(
+    uintptr_t target_actor_address,
+    std::uint32_t target_native_type_id) {
+    if (target_actor_address == 0 ||
+        !IsPlayerOwnedTargetNativeType(target_native_type_id)) {
+        return 0;
+    }
+
+    std::int8_t target_actor_group = -1;
+    if (!ProcessMemory::Instance().TryReadField(
+            target_actor_address,
+            kActorSlotOffset,
+            &target_actor_group) ||
+        target_actor_group < 0) {
+        return 0;
+    }
+
+    SDModPlayerState local_player;
+    if (g_local_transport.local_peer_id != 0 &&
+        TryGetPlayerState(&local_player) &&
+        local_player.valid &&
+        local_player.actor_slot == target_actor_group) {
+        return g_local_transport.local_peer_id;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    for (const auto& participant : runtime_state.participants) {
+        if (participant.participant_id == 0 ||
+            participant.participant_id ==
+                g_local_transport.local_peer_id) {
+            continue;
+        }
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(
+                participant.participant_id,
+                &gameplay_state) &&
+            gameplay_state.available &&
+            gameplay_state.entity_materialized &&
+            gameplay_state.actor_slot == target_actor_group) {
+            return participant.participant_id;
+        }
+    }
+    return 0;
+}
 
 bool ShouldReplicateWorldActor(
     const SDModSceneActorState& actor,
@@ -309,6 +363,13 @@ std::uint64_t ResolveRunEnemyTargetParticipantId(uintptr_t actor_address) {
                 &target_actor_slot) &&
             target_actor_slot == 0) {
             return g_local_transport.local_peer_id;
+        }
+        const auto owner_participant_id =
+            ResolvePlayerOwnedTargetParticipantId(
+                target_actor_address,
+                target_native_type_id);
+        if (owner_participant_id != 0) {
+            return owner_participant_id;
         }
     }
 

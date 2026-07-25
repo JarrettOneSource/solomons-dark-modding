@@ -55,7 +55,10 @@ constexpr int kWizardSourceActorFactoryTypeId = 0x1397;
 // one 8-byte instruction followed by a 7-byte instruction, so the detour must
 // stop exactly at the 8-byte boundary.
 constexpr std::size_t kActorAnimationAdvanceHookPatchSize = 8;
+constexpr std::size_t
+    kMonsterPathfindingSelectNearestTargetHookMinimumPatchSize = 5;
 constexpr std::size_t kMonsterPathfindingRefreshTargetHookMinimumPatchSize = 5;
+constexpr std::size_t kBadguyCommonChaseTickHookMinimumPatchSize = 6;
 constexpr std::size_t kBadguyMoveStepHookMinimumPatchSize = 5;
 constexpr std::size_t kGoldPickupHookMinimumPatchSize = 5;
 constexpr std::size_t kOrbPickupHookMinimumPatchSize = 5;

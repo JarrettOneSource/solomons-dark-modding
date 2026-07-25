@@ -170,6 +170,8 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                 " error=" + error_message);
         }
     }
+
+    RefreshHostileTargetParticipantDeathLatches(runtime_state);
 }
 
 void TickParticipantSceneBindingsIfActive() {

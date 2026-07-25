@@ -17,7 +17,7 @@ import threading
 import time
 import uuid
 from collections.abc import Iterable
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
@@ -265,6 +265,166 @@ def stop_game_processes(process_ids: Iterable[int]) -> None:
         timeout=15.0,
         check=False,
     )
+
+
+def _exact_game_process_targets(
+    launch: dict[str, object],
+) -> list[dict[str, object]]:
+    targets: list[dict[str, object]] = []
+    for role, process_key, log_key in (
+        ("host", "hostProcessId", "hostLog"),
+        ("client", "clientProcessId", "clientLog"),
+        ("third", "thirdProcessId", "thirdLog"),
+    ):
+        process_id = launch.get(process_key)
+        if (
+            isinstance(process_id, bool)
+            or not isinstance(process_id, int)
+            or process_id <= 0
+        ):
+            continue
+        raw_log_path = launch.get(log_key)
+        if not isinstance(raw_log_path, str) or not raw_log_path:
+            raise VerifyFailure(
+                f"pair launch reported {process_key} without {log_key}"
+            )
+
+        if re.match(r"^[A-Za-z]:[\\/]", raw_log_path) or raw_log_path.startswith(
+            "\\\\"
+        ):
+            log_path = PureWindowsPath(raw_log_path)
+            if (
+                len(log_path.parents) < 3
+                or log_path.parent.name.casefold() != "logs"
+                or log_path.parent.parent.name.casefold() != ".sdmod"
+            ):
+                raise VerifyFailure(
+                    f"pair launch reported an unexpected {log_key}: "
+                    f"{raw_log_path}"
+                )
+            expected_path = str(
+                log_path.parents[2] / "SolomonDark.exe"
+            )
+        else:
+            log_path = Path(raw_log_path)
+            if (
+                len(log_path.parents) < 3
+                or log_path.parent.name.casefold() != "logs"
+                or log_path.parent.parent.name.casefold() != ".sdmod"
+            ):
+                raise VerifyFailure(
+                    f"pair launch reported an unexpected {log_key}: "
+                    f"{raw_log_path}"
+                )
+            expected_path = path_for_powershell(
+                log_path.parents[2] / "SolomonDark.exe"
+            )
+        targets.append(
+            {
+                "role": role,
+                "pid": process_id,
+                "expected_path": expected_path,
+            }
+        )
+    return targets
+
+
+def stop_exact_game_processes(
+    launch: dict[str, object],
+) -> list[dict[str, object]]:
+    """Stop only launcher-owned PIDs whose executable path also matches."""
+    targets = _exact_game_process_targets(launch)
+    if not targets:
+        return []
+
+    payload = base64.b64encode(
+        json.dumps(targets).encode("utf-8")
+    ).decode("ascii")
+    script = r"""
+$ErrorActionPreference = "Stop"
+$payload = [System.Text.Encoding]::UTF8.GetString(
+    [System.Convert]::FromBase64String("__PAYLOAD__"))
+$targets = ConvertFrom-Json -InputObject $payload
+$results = @()
+foreach ($target in @($targets)) {
+    $process = Get-Process -Id ([int]$target.pid) `
+        -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        $results += [pscustomobject]@{
+            role = [string]$target.role
+            pid = [int]$target.pid
+            expectedPath = [string]$target.expected_path
+            actualPath = $null
+            stopped = $false
+            alreadyExited = $true
+            pathMatched = $false
+        }
+        continue
+    }
+    $actual = [System.IO.Path]::GetFullPath([string]$process.Path)
+    $expected = [System.IO.Path]::GetFullPath(
+        [string]$target.expected_path)
+    $matches = [string]::Equals(
+        $actual,
+        $expected,
+        [System.StringComparison]::OrdinalIgnoreCase)
+    if ($matches) {
+        Stop-Process -Id ([int]$target.pid) -Force
+    }
+    $results += [pscustomobject]@{
+        role = [string]$target.role
+        pid = [int]$target.pid
+        expectedPath = $expected
+        actualPath = $actual
+        stopped = $matches
+        alreadyExited = $false
+        pathMatched = $matches
+    }
+}
+[Console]::Write((ConvertTo-Json -InputObject @($results) -Compress))
+""".replace("__PAYLOAD__", payload)
+    completed = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=15.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise VerifyFailure(
+            "exact owned-process cleanup failed: "
+            f"{completed.stderr or completed.stdout}"
+        )
+    parsed = json.loads(completed.stdout or "[]")
+    if isinstance(parsed, dict):
+        results = [parsed]
+    elif isinstance(parsed, list):
+        results = parsed
+    else:
+        raise VerifyFailure(
+            f"exact owned-process cleanup returned {parsed!r}"
+        )
+    mismatches = [
+        result
+        for result in results
+        if isinstance(result, dict)
+        and not result.get("alreadyExited")
+        and not result.get("pathMatched")
+    ]
+    if mismatches:
+        raise VerifyFailure(
+            "refused to stop launcher PID with a different executable: "
+            f"{mismatches}"
+        )
+    return results
 
 
 def _read_process_id_ledger(path: Path | None) -> dict[str, object]:

@@ -298,7 +298,19 @@ isolated runtime roots and exact launcher-returned process identities. It:
 - stores host/client backbuffer captures plus every authority target-ID sample
   under `runtime/multiplayer_enemy_retarget`.
 
+The death cases begin their latency window at authoritative
+`life_current <= 0`, then disarm the damage harness before sampling. They do
+not wait on the longer native death-presentation countdown, so a presentation
+flake cannot hide or fail the independent target-validity contract.
+
 The prior target-authority check could accept two matching zero targets, so it
 was blind to enemies idling after a target death. The new gate explicitly
 fails that state: a cleared host and cleared client are agreement, but not
 valid acquisition.
+
+The beta.17 host-death baseline demonstrates the hole: the authority retained
+the ineligible host corpse for 23 samples, then both peers converged to target
+zero for the rest of a 34-sample window. Reacquisition latency was unbounded
+(`null`) and stable eligible-target agreement was `0/5`, even though the old
+agreement-only predicate saw matching zero targets. The generated baseline is
+`runtime/multiplayer_enemy_retarget/beta17-host-death-baseline.json`.

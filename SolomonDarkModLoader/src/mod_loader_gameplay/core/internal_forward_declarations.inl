@@ -8,6 +8,12 @@ void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(
     uintptr_t actor_address,
     bool preserve_death_presentation_timer = false);
+bool ReacquireHostileTargetAfterInvalidation(
+    uintptr_t hostile_actor_address,
+    uintptr_t invalidated_target_actor_address,
+    std::string_view reason);
+void RefreshHostileTargetParticipantDeathLatches(
+    const multiplayer::RuntimeState& runtime_state);
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);

@@ -75,6 +75,7 @@ uintptr_t kOfficeRegionTick = 0;
 uintptr_t kRegionApplyCameraShake = 0;
 uintptr_t kMonsterPathfindingSelectNearestTarget = 0;
 uintptr_t kMonsterPathfindingRefreshTarget = 0;
+uintptr_t kBadguyCommonChaseTick = 0;
 uintptr_t kBadguyMoveStep = 0;
 uintptr_t kActorProgressionRefresh = 0;
 uintptr_t kActorProgressionApplyHagathaPerk = 0;
