@@ -94,6 +94,34 @@ class LobbySessionStateTransitionsVerifierTests(unittest.TestCase):
             ["not-in-game", "in-hub"],
         )
 
+    def test_transition_capture_upgrades_pre_lobby_status_to_membership(
+        self,
+    ) -> None:
+        transitions: list[dict[str, object]] = []
+        verifier._append_transition(
+            transitions,
+            {
+                "sessionState": "not-in-game",
+                "lobbyId": 0,
+                "members": [],
+            },
+        )
+        verifier._append_transition(
+            transitions,
+            {
+                "sessionState": "not-in-game",
+                "lobbyId": 42,
+                "members": [{"steamId": "1"}],
+            },
+        )
+
+        self.assertEqual(len(transitions), 1)
+        self.assertEqual(transitions[0]["status"]["lobbyId"], 42)
+        self.assertEqual(
+            transitions[0]["status"]["members"],
+            [{"steamId": "1"}],
+        )
+
     def test_invalid_session_state_is_rejected_immediately(self) -> None:
         with self.assertRaisesRegex(
             verifier.VerifyFailure,

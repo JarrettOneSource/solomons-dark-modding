@@ -106,15 +106,27 @@ def _append_transition(
         raise VerifyFailure(
             f"session status published an invalid sessionState: {state!r}"
         )
+    transition = {
+        "observedAtUnixMs": int(time.time() * 1000),
+        "sessionState": state,
+        "status": status,
+    }
     if transitions and transitions[-1]["sessionState"] == state:
+        previous_status = transitions[-1]["status"]
+        previous_members = previous_status.get("members")
+        current_members = status.get("members")
+        if (
+            (
+                not isinstance(previous_members, list)
+                or not previous_members
+            )
+            and isinstance(current_members, list)
+            and current_members
+            and int(status.get("lobbyId", 0)) > 0
+        ):
+            transitions[-1] = transition
         return
-    transitions.append(
-        {
-            "observedAtUnixMs": int(time.time() * 1000),
-            "sessionState": state,
-            "status": status,
-        }
-    )
+    transitions.append(transition)
 
 
 def _wait_for_status(
