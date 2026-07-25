@@ -614,3 +614,38 @@ Evidence is retained locally under:
 
 The verifier stops only processes it launched after validating exact PIDs and
 executable paths. It never performs machine-wide Solomon Dark cleanup.
+
+## Visual acceptance status at the 2026-07-25 landing
+
+This branch landed with the render-input work complete and the lit
+matched-camera pixel gate incomplete for environmental reasons. The evidence
+at landing time:
+
+- Render-input digests (the corrected digest above) matched exactly between
+  host and client across all three renewed seeds, for every decor family:
+  Trees, large rocks, boulders, and ground clutter.
+- Every lit pixel comparison that reached a valid comparison window found
+  zero stable-pixel and zero temporal-envelope differences. The strongest
+  completed window (`renderfix-lit69`, seed `0x03D3E45F`) compared 17,232
+  visible stable Tree pixels with zero differing pixels; a second partial
+  pass (`renderfix-lit71`) matched seven frames with zero differences.
+- No pass found any decor divergence of any kind. No access violation
+  occurred; the shared-run-entry AV class this branch once activated is
+  fixed on main (`hde32` double-consume) and guarded by
+  `tools/verify_multiplayer_run_entry_stability.py`.
+
+What kept the gate from completing was the harness, not the product: the
+navigation snap parked the fixed comparison actors at 265 units instead of
+the intended ~320, leaving the central Tree region outside stable
+player-light range, which drove low frame-stability percentages and one
+host-camera reset. The designed correction — selecting the shared
+traversable parking point by actual radial distance, restricted to 310-330
+units and nearest 320, with camera, digests, and comparators unchanged —
+was approved but not executed because the fleet account reached its usage
+window before the renewed passes could run.
+
+Debts owed by the decor-seam owner at next resume: execute the radial
+parking correction and complete one three-seed lit gate, and split
+`boneyard_generator_patch.inl` behind the accepted source-organization
+exception. Live play on the next published beta remains the final arbiter
+for residual visual divergence.
