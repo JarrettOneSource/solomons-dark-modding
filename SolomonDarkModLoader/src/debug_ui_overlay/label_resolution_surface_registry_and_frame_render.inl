@@ -49,6 +49,8 @@ static SurfaceRegistryInitializer s_surface_registry_initializer;
 
 struct DiagnosticSurfaceFrame {
     std::vector<OverlayRenderElement> render_elements;
+    std::string level_up_wait_text;
+    std::string death_spectator_text;
     std::size_t registered_surface_count = 0;
 };
 
@@ -62,7 +64,17 @@ DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(
     DiagnosticSurfaceFrame frame;
     if (!semantic_surface_elements.empty()) {
         frame.render_elements = semantic_surface_elements;
-        frame.registered_surface_count = 1;
+        ++frame.registered_surface_count;
+    }
+    if (multiplayer::TryBuildLevelUpWaitStatusText(
+            &frame.level_up_wait_text) &&
+        !frame.level_up_wait_text.empty()) {
+        ++frame.registered_surface_count;
+    }
+    if (multiplayer::TryBuildDeathSpectatorStatusText(
+            &frame.death_spectator_text) &&
+        !frame.death_spectator_text.empty()) {
+        ++frame.registered_surface_count;
     }
     return frame;
 }
@@ -70,7 +82,7 @@ DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(
 void LogDiagnosticSurfaceFrameState(
     bool enabled,
     std::size_t registered_surface_count,
-    std::size_t rendered_element_count) {
+    std::size_t rendered_surface_count) {
     bool changed = false;
     {
         std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
@@ -81,7 +93,7 @@ void LogDiagnosticSurfaceFrameState(
             g_debug_ui_overlay_state.diagnostic_surface_registered_count !=
                 registered_surface_count ||
             g_debug_ui_overlay_state.diagnostic_surface_rendered_count !=
-                rendered_element_count;
+                rendered_surface_count;
         if (changed) {
             g_debug_ui_overlay_state.diagnostic_surface_state_logged = true;
             g_debug_ui_overlay_state.diagnostic_surface_state_enabled =
@@ -89,7 +101,7 @@ void LogDiagnosticSurfaceFrameState(
             g_debug_ui_overlay_state.diagnostic_surface_registered_count =
                 registered_surface_count;
             g_debug_ui_overlay_state.diagnostic_surface_rendered_count =
-                rendered_element_count;
+                rendered_surface_count;
         }
     }
     if (!changed) {
@@ -100,7 +112,7 @@ void LogDiagnosticSurfaceFrameState(
         "Debug UI diagnostic surface set. enabled=" +
         std::to_string(enabled ? 1 : 0) +
         " registered=" + std::to_string(registered_surface_count) +
-        " rendered=" + std::to_string(rendered_element_count));
+        " rendered=" + std::to_string(rendered_surface_count));
 }
 
 void DrawMultiplayerJoinFlowPresentation(
@@ -169,23 +181,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         BuildGameplayDampenPresentationRenderItems(
             device,
             exact_text_elements);
-    std::string gameplay_level_up_wait_text;
-    (void)multiplayer::TryBuildLevelUpWaitStatusText(
-        &gameplay_level_up_wait_text);
-    if (gameplay_level_up_wait_text.empty()) {
-        LogGameplayLevelUpWaitStatusDraw(
-            {},
-            GameplayLevelUpWaitDrawResult::Hidden);
-    }
-    std::string gameplay_death_spectator_text;
-    (void)multiplayer::TryBuildDeathSpectatorStatusText(
-        &gameplay_death_spectator_text);
-    if (gameplay_death_spectator_text.empty()) {
-        LogGameplayDeathSpectatorStatusDraw(
-            {},
-            GameplayDeathSpectatorDrawResult::Hidden);
-    }
-
     const auto quick_panel_render_elements =
         TryBuildQuickPanelOverlayRenderElements(exact_text_elements, exact_control_elements);
 
@@ -301,6 +296,10 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
         RegisterDiagnosticSurfaceFrame(
             diagnostic_visuals_enabled,
             semantic_surface_elements);
+    const auto& gameplay_level_up_wait_text =
+        diagnostic_surface_frame.level_up_wait_text;
+    const auto& gameplay_death_spectator_text =
+        diagnostic_surface_frame.death_spectator_text;
 
     const auto join_flow_presentation =
         GetMultiplayerJoinFlowPresentation();
@@ -319,7 +318,17 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     LogDiagnosticSurfaceFrameState(
         diagnostic_visuals_enabled,
         diagnostic_surface_frame.registered_surface_count,
-        diagnostic_surface_frame.render_elements.size());
+        diagnostic_surface_frame.registered_surface_count);
+    if (gameplay_level_up_wait_text.empty()) {
+        LogGameplayLevelUpWaitStatusDraw(
+            {},
+            GameplayLevelUpWaitDrawResult::Hidden);
+    }
+    if (gameplay_death_spectator_text.empty()) {
+        LogGameplayDeathSpectatorStatusDraw(
+            {},
+            GameplayDeathSpectatorDrawResult::Hidden);
+    }
     if (diagnostic_surface_frame.render_elements.empty() &&
         gameplay_health_bars.empty() &&
         gameplay_dampen_presentations.empty() &&

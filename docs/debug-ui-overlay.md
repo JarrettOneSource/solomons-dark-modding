@@ -56,13 +56,26 @@ The overlay is intentionally structured to keep the hot path light when enabled:
    functional multiplayer HUDs, but diagnostic surface registration is a
    separate capability. The `full` runtime profile sets
    `loader.debug_ui=false`; only an explicit runtime-flag override can register
-   and draw the observed diagnostic surfaces.
+   and draw observed diagnostic surfaces or loader status text.
 
 This separation is structural: normal gameplay can observe a stock surface for
 automation without turning that surface into a loader-owned quad. In
-particular, the owner of the stock level-up picker never receives a loader
-choice banner; only other participants may receive the functional
-`Waiting on N players` barrier HUD.
+particular, level-up barrier text and death-spectator hints are constructed
+inside the same diagnostic registration function as observed stock-surface
+overlays. When `loader.debug_ui=false`, that function returns before any of
+those surfaces are constructed. Their semantic state remains available through
+`sd.runtime`; it is not drawn over a real player session.
+
+The complete native D3D9 surface audit is:
+
+| Surface class | Normal-session policy | Reason |
+| --- | --- | --- |
+| Observed stock UI labels and panels | Diagnostic gate | Automation and acceptance observability |
+| Level-up barrier wait text | Diagnostic gate | Loader status text; stock picker remains authoritative |
+| Death-spectator target/click hint | Diagnostic gate | Loader status text; spectator state remains semantic |
+| Participant health bars | Functional | Multiplayer combat information |
+| Dampen rings | Functional | Replicated gameplay effect |
+| Join consent and loading covers | Functional | Required launcher join-flow interaction |
 
 This keeps resource setup and draw submission out of the text helper path and leaves the loader with one render pass per frame instead of many immediate draws.
 
@@ -92,7 +105,11 @@ Debug UI diagnostic surface set. enabled=0 registered=0 rendered=0
 ```
 
 The gate fails if the marker is missing or if any diagnostic surface is enabled,
-registered, or rendered.
+registered, or rendered. It also rejects any successful level-up-wait or
+death-spectator status draw even if the diagnostic-set counters claim zero.
+The guard exposes the complete normal-session context matrix—menu, join/lobby,
+alive, dead, and spectating—so live gates can record the same invariant for
+every peer.
 
 When `config/debug-ui.ini` is enabled and the staged runtime explicitly sets
 `loader.debug_ui=true`, a live launch should produce loader log markers showing:

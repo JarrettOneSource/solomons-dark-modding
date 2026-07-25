@@ -557,19 +557,34 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
         "world_activity_probe",
         "pause_position_drift",
         "resumed_position_drift",
-        'source=dx9_level_up_barrier ok=1 ',
-        "through the native DX9 overlay",
+        '"rendered": False',
+        '"client_status": client_wait_status',
+        '"host_wait_status": host_wait_status',
         "assert_launch_debug_surfaces_empty(output[\"launch\"])",
     ):
         assert token in verifier, f"live exact-rank regression lacks: {token}"
 
     for token in (
-        "multiplayer::TryBuildLevelUpWaitStatusText(",
-        "gameplay_level_up_wait_text.empty()",
+        "DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(",
+        "frame.level_up_wait_text",
+        "diagnostic_surface_frame.level_up_wait_text",
         "DrawGameplayLevelUpWaitStatus(",
         "LogGameplayLevelUpWaitStatusDraw(",
     ):
         assert token in overlay_frame, f"DX9 level-up wait frame path lacks: {token}"
+    gate_start = overlay_frame.index(
+        "DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame("
+    )
+    gate_end = overlay_frame.index("\n}", gate_start)
+    gate = overlay_frame[gate_start:gate_end]
+    assert gate.index("if (!diagnostic_visuals_enabled)") < gate.index(
+        "multiplayer::TryBuildLevelUpWaitStatusText("
+    )
+    assert (
+        "gameplay_level_up_wait_text =\n"
+        "        diagnostic_surface_frame.level_up_wait_text"
+        in overlay_frame
+    )
     for token in (
         "GameplayLevelUpWaitDrawResult DrawGameplayLevelUpWaitStatus(",
         "DrawFilledRect(",

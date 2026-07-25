@@ -17,6 +17,7 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 from normal_gameplay_debug_surface_guard import (  # noqa: E402
+    NORMAL_PLAYER_SESSION_CONTEXTS,
     assert_debug_surfaces_empty,
 )
 
@@ -57,6 +58,58 @@ class OverlayRendererContractTests(unittest.TestCase):
                 "did not report",
             ):
                 assert_debug_surfaces_empty([log_path])
+
+    def test_live_log_guard_rejects_independent_status_surface_draws(
+        self,
+    ) -> None:
+        leaked_draws = (
+            "Multiplayer spectator HUD draw. ok=1 "
+            'text="Spectating Client Player  |  '
+            'Left / Right click: next player"',
+            "Multiplayer level-up wait HUD draw. "
+            "source=dx9_level_up_barrier ok=1 "
+            'text="Waiting for Client Player"',
+        )
+        for leaked_draw in leaked_draws:
+            with self.subTest(leaked_draw=leaked_draw):
+                with tempfile.TemporaryDirectory() as directory:
+                    log_path = (
+                        Path(directory) / "solomondarkmodloader.log"
+                    )
+                    log_path.write_text(
+                        "Debug UI diagnostic surface set. "
+                        "enabled=0 registered=0 rendered=0\n"
+                        f"{leaked_draw}\n",
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(
+                        AssertionError,
+                        "status surface",
+                    ):
+                        assert_debug_surfaces_empty([log_path])
+
+    def test_guard_enforces_every_normal_player_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = Path(directory) / "solomondarkmodloader.log"
+            log_path.write_text(
+                "Debug UI diagnostic surface set. "
+                "enabled=0 registered=0 rendered=0\n",
+                encoding="utf-8",
+            )
+            for context in NORMAL_PLAYER_SESSION_CONTEXTS:
+                with self.subTest(context=context):
+                    result = assert_debug_surfaces_empty(
+                        [log_path],
+                        context=context,
+                    )
+                    self.assertEqual(context, result["context"])
+                    self.assertTrue(result["all_states_empty"])
+                    self.assertEqual(
+                        [],
+                        result["logs_checked"][0][
+                            "status_surface_draws"
+                        ],
+                    )
 
     def test_normal_runtime_cannot_register_diagnostic_surfaces(self) -> None:
         runtime_flags = read(
@@ -147,6 +200,62 @@ class OverlayRendererContractTests(unittest.TestCase):
             2,
             "diagnostic elements gained a draw path outside the gated "
             "definition and single registered-surface loop",
+        )
+
+    def test_loader_status_surfaces_share_the_diagnostic_registration_gate(
+        self,
+    ) -> None:
+        frame_renderer = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "label_resolution_surface_registry_and_frame_render.inl"
+        )
+        gate_start = frame_renderer.index(
+            "DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame("
+        )
+        gate_end = frame_renderer.index("\n}", gate_start)
+        gate = frame_renderer[gate_start:gate_end]
+
+        for token in (
+            "multiplayer::TryBuildLevelUpWaitStatusText(",
+            "multiplayer::TryBuildDeathSpectatorStatusText(",
+            "frame.level_up_wait_text",
+            "frame.death_spectator_text",
+        ):
+            self.assertIn(token, gate)
+        self.assertLess(
+            gate.index("if (!diagnostic_visuals_enabled)"),
+            gate.index(
+                "multiplayer::TryBuildLevelUpWaitStatusText("
+            ),
+        )
+        self.assertLess(
+            gate.index("if (!diagnostic_visuals_enabled)"),
+            gate.index(
+                "multiplayer::TryBuildDeathSpectatorStatusText("
+            ),
+        )
+
+        self.assertIn(
+            "gameplay_level_up_wait_text =\n"
+            "        diagnostic_surface_frame.level_up_wait_text",
+            frame_renderer,
+        )
+        self.assertIn(
+            "gameplay_death_spectator_text =\n"
+            "        diagnostic_surface_frame.death_spectator_text",
+            frame_renderer,
+        )
+        self.assertEqual(
+            1,
+            frame_renderer.count(
+                "multiplayer::TryBuildLevelUpWaitStatusText("
+            ),
+        )
+        self.assertEqual(
+            1,
+            frame_renderer.count(
+                "multiplayer::TryBuildDeathSpectatorStatusText("
+            ),
         )
 
     def test_native_picker_owner_never_gets_a_loader_choice_surface(self) -> None:

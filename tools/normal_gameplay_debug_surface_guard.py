@@ -16,6 +16,19 @@ STATE_PATTERN = re.compile(
     r"registered=(?P<registered>\d+) "
     r"rendered=(?P<rendered>\d+)"
 )
+STATUS_SURFACE_DRAW_PATTERNS = (
+    re.compile(r"Multiplayer spectator HUD draw\. ok=1\b"),
+    re.compile(
+        r"Multiplayer level-up wait HUD draw\..*\bok=1\b"
+    ),
+)
+NORMAL_PLAYER_SESSION_CONTEXTS = (
+    "menu",
+    "join_lobby",
+    "alive",
+    "dead",
+    "spectating",
+)
 
 
 def _local_path(path_text: str) -> Path:
@@ -33,6 +46,8 @@ def _local_path(path_text: str) -> Path:
 
 def assert_debug_surfaces_empty(
     log_paths: Iterable[Path],
+    *,
+    context: str = "",
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for log_path in log_paths:
@@ -63,13 +78,29 @@ def assert_debug_surfaces_empty(
                 "normal gameplay registered or rendered diagnostic overlay "
                 f"surfaces: {log_path}: {leaked}"
             )
+        leaked_status_draws = [
+            line
+            for line in text.splitlines()
+            if any(
+                pattern.search(line)
+                for pattern in STATUS_SURFACE_DRAW_PATTERNS
+            )
+        ]
+        if leaked_status_draws:
+            raise AssertionError(
+                "normal gameplay rendered a loader status surface outside "
+                f"the diagnostic set: {log_path}: "
+                f"{leaked_status_draws}"
+            )
         results.append(
             {
                 "log": str(log_path),
                 "state_samples": states,
+                "status_surface_draws": [],
             }
         )
     return {
+        "context": context,
         "logs_checked": results,
         "all_states_empty": True,
     }
@@ -79,6 +110,7 @@ def assert_launch_debug_surfaces_empty(
     launch: Mapping[str, object],
     *,
     roles: Iterable[str] = ("host", "client"),
+    context: str = "",
 ) -> dict[str, Any]:
     log_paths: list[Path] = []
     for role in roles:
@@ -89,4 +121,7 @@ def assert_launch_debug_surfaces_empty(
                 f"pair launch did not report {key}"
             )
         log_paths.append(_local_path(value))
-    return assert_debug_surfaces_empty(log_paths)
+    return assert_debug_surfaces_empty(
+        log_paths,
+        context=context,
+    )

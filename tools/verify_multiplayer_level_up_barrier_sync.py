@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify all-player level-up pause, waiting UI, resume, and timeout auto-pick."""
+"""Verify all-player level-up pause, waiting state, resume, and timeout auto-pick."""
 
 from __future__ import annotations
 
@@ -77,32 +77,6 @@ def read_log_from(path: Path, offset: int) -> str:
     with path.open("rb") as handle:
         handle.seek(offset)
         return handle.read().decode("utf-8", errors="replace")
-
-
-def wait_for_hud_draw(
-    path: Path,
-    offset: int,
-    text: str,
-    timeout: float,
-) -> dict[str, Any]:
-    prefix = (
-        "Multiplayer level-up wait HUD draw. "
-        "source=dx9_level_up_barrier ok=1 "
-    )
-    text_token = f'text="{text}"'
-    deadline = time.monotonic() + timeout
-    tail = ""
-    while time.monotonic() < deadline:
-        tail = read_log_from(path, offset)
-        if any(
-            prefix in line and text_token in line
-            for line in tail.splitlines()
-        ):
-            return {"text": text, "draw_ok": True}
-        time.sleep(0.05)
-    raise VerifyFailure(
-        f"level-up HUD did not draw {text!r} through the native DX9 overlay"
-    )
 
 
 def next_shared_level() -> tuple[int, int, dict[str, Any]]:
@@ -367,7 +341,6 @@ def verify_normal_barrier(
     timeout: float,
     world_activity_probe: dict[str, Any],
 ) -> dict[str, Any]:
-    client_log_offset = CLIENT_LOG.stat().st_size if CLIENT_LOG.exists() else 0
     level, experience, before = next_shared_level()
     publish = publish_barrier_offer(level, experience)
     host_offer = wait_for_host_offer(level, timeout)
@@ -493,12 +466,10 @@ def verify_normal_barrier(
             "the host's stock picker was obscured by a loader-owned choice "
             f"surface while the client waited: {waiting_host}"
         )
-    client_wait_hud = wait_for_hud_draw(
-        CLIENT_LOG,
-        client_log_offset,
-        "Waiting on 1 player",
-        timeout,
-    )
+    client_wait_status = {
+        "text": waiting_client["display_text"],
+        "rendered": False,
+    }
 
     paused_world_activity = verify_world_activity_paused(world_activity_probe)
 
@@ -587,7 +558,7 @@ def verify_normal_barrier(
         "client_waiting_for_host": {
             "host": waiting_host,
             "client": waiting_client,
-            "client_hud": client_wait_hud,
+            "client_status": client_wait_status,
         },
         "world_activity": {
             "probe": world_activity_probe,
@@ -732,12 +703,10 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
         require_timed_out=False,
     )
     waiting_host = summarize_wait(waiting["host"])
-    host_wait_hud = wait_for_hud_draw(
-        HOST_LOG,
-        host_log_offset,
-        "Waiting on 1 player",
-        setup_timeout,
-    )
+    host_wait_status = {
+        "text": waiting_host["display_text"],
+        "rendered": False,
+    }
 
     auto_result = wait_for_timeout_auto_pick(
         barrier_id=active_host["barrier_id"],
@@ -822,7 +791,7 @@ def verify_timeout_barrier(setup_timeout: float, auto_timeout: float) -> dict[st
         "host_choice": host_choice,
         "host_result_option_id": host_result["result_option_id"],
         "waiting_for_client": waiting_host,
-        "host_wait_hud": host_wait_hud,
+        "host_wait_status": host_wait_status,
         "auto_result": {
             "option_id": option_id,
             "resulting_active": resulting_active,
