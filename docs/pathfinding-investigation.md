@@ -329,30 +329,30 @@ the recomputed envelope.
 
 ### 7. Hostile Target Selection Versus Multiplayer Bots
 
-- current stock hostile selection path is now concrete enough to explain the
-  multiplayer-bot targeting problem
-  - `MonsterPathfinding_SelectNearestTarget` scans the live global actor list
-    at `g_pGameplayScene + 0x1390/+0x139C`
-  - it rejects candidates whose `candidate + 0x160 != 0`
-  - it also rejects candidates whose mapped region from
-    `DAT_00819E84[candidate + 0x5C]` does not match `world + 0x78`
-  - it chooses the nearest surviving candidate
-  - but it only commits that candidate when the chosen `candidate + 0x5C`
-    value is `0`
-- loader/runtime evidence lines up with that gate
-  - seam config exposes:
-    - `actor_slot = 0x5C`
-    - `actor_world_slot = 0x5E`
-    - `actor_registered_slot_mirror = 0x164`
-  - multiplayer bot runtime logs already showed:
-    - gameplay-slot bots materialize with `actor_slot = 1`
-    - second bot materializes with `actor_slot = 2`
-- current conclusion:
-  - stock hostile selection is effectively biased toward slot-0 participants
-    in this build
-  - custom multiplayer bots published into gameplay slots `1..3` can be fully
-    registered and visible, yet still be ignored by enemies because they never
-    satisfy the stock final commit gate
+- the candidate source is now proven to be the `PointerList` embedded at
+  `gameplay + 0x1388`, not the ActorWorld's flat all-actor array
+  - `Gameplay_Ctor (0x005CC800)` constructs it
+  - `Player_HostileCandidateRegister (0x0052A500)` and
+    `Player_HostileCandidateUnregister (0x00529410)` add/remove players
+  - `Golem_HostileCandidateRegister (0x005F57E0)` and
+    `Golem_HostileCandidateUnregister (0x005F5A20)` add/remove Golems
+- `Player_DeathTransition (0x00534120)` proves the host-death asymmetry
+  - every dead player receives candidate-ineligible state `+0x160 = 1`
+  - non-host players are removed from the candidate list
+  - the slot-0 player at `gameplay + 0x1358` remains resident but filtered
+- native selector refresh is periodic rather than a guaranteed death/removal
+  event, and ActorWorld unregister does not repair every hostile target
+  pointer/bucket pair
+- player-owned ally coverage is class-specific
+  - Golem (`0x7F4`) already has stock candidate-list ownership
+  - GoodImp (`0x3ED`) and Leviathan (`0x7F2`) require an explicit, validated
+    sidecar candidate path
+- `ActorWorld_RelocateHostileToGroupZero (0x0063F7A0)` relocates the hostile;
+  it is not a safe way to promote a target actor and must never be used for
+  standalone allies or summons
+- the complete decompile, invalidation map, address table, and multiplayer
+  authority rules are recorded in
+  `docs/reverse-engineering/native-enemy-target-acquisition.md`
 
 ### 8. Runtime Cutover
 

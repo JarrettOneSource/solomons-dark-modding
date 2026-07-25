@@ -260,6 +260,9 @@ from static_re_native_actor_contracts import (
     test_player_gamenpc_movement_seed_layout_is_named_and_documented,
     test_synthetic_source_profile_blocker_is_documented,
 )
+from static_re_enemy_target_acquisition_contracts import (
+    test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
+)
 from static_re_native_movement_contracts import (
     test_accepted_native_shims_are_documented,
     test_active_sources_reject_read_or_and_stale_path_language,
@@ -1054,6 +1057,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Participant transform updates preserve exact hub sync", test_participant_transform_updates_preserve_exact_hub_sync),
     ("Enemy spawn scaling native wave seam is documented", test_enemy_spawn_scaling_native_wave_seam_is_documented),
     ("Pathfinding movement layout is named and documented", test_pathfinding_movement_layout_is_named_and_documented),
+    (
+        "Native enemy target acquisition is recovered and layout-backed",
+        test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
+    ),
     ("Player/GameNpc movement seed layout is named and documented", test_player_gamenpc_movement_seed_layout_is_named_and_documented),
     ("Bot movement speed uses native live envelope", test_bot_movement_speed_uses_native_live_envelope),
     ("Participant collision resolver is documented and live-probed", test_participant_collision_resolver_is_documented_and_live_probed),
