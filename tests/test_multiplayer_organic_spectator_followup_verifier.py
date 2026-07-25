@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import unittest
 from pathlib import Path
 
@@ -223,6 +224,28 @@ class OrganicSpectatorFollowupVerifierTests(unittest.TestCase):
                 attempts=2,
                 retry_delay=0.0,
             )
+
+    def test_terminal_corpse_frames_capture_both_peers_concurrently(
+        self,
+    ) -> None:
+        barrier = threading.Barrier(2)
+
+        def capture(pipe: str, path: Path) -> dict[str, object]:
+            barrier.wait(timeout=1.0)
+            return {"pipe": pipe, "path": str(path)}
+
+        evidence = verifier._capture_terminal_corpse_frames(
+            spectator_pipe="spectator-pipe",
+            owner_pipe="owner-pipe",
+            artifact_directory=Path("evidence"),
+            capture=capture,
+        )
+
+        self.assertEqual(
+            "spectator-pipe",
+            evidence["spectator"]["pipe"],
+        )
+        self.assertEqual("owner-pipe", evidence["owner"]["pipe"])
 
 
 if __name__ == "__main__":

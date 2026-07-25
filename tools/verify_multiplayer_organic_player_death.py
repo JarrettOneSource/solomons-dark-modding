@@ -1155,9 +1155,18 @@ def _sample_lifecycle(
             )
                 >= NATIVE_TERMINAL_CORPSE_TICK
         ):
+            callback_started = time.monotonic()
             terminal_frame_callback()
+            callback_duration = time.monotonic() - callback_started
+            # Terminal-frame evidence is captured synchronously while the
+            # game continues. Do not let that verifier work consume the
+            # remaining lifecycle polling budget.
+            deadline += callback_duration
             terminal_frame_callback_invoked = True
             milestones["terminal_frame_callback_seconds"] = elapsed
+            milestones["terminal_frame_callback_duration_seconds"] = (
+                callback_duration
+            )
         if (
             "spectator_seconds" in milestones
             and owner.get("red_effect_active") == "false"

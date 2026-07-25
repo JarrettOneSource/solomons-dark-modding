@@ -130,7 +130,11 @@ must remain `registered=rendered=0`; living observer peers must never report a
 visible product spectator surface. Live gates also inspect the normalized
 backbuffer HUD region for the native gold text pixels. This makes a successful
 state marker insufficient by itself: clipped, invisible, or actor-migrated
-output fails the acceptance run.
+output fails the acceptance run. The visible contract requires at least 500
+native-gold pixels in the product band. A hidden frame allows at most 400
+because a stock player-name label near the top edge measured 307 pixels in
+live acceptance; real spectator product text measured more than 2,000. The
+independent state contract must still report `registered=rendered=0`.
 
 When `config/debug-ui.ini` is enabled and the staged runtime explicitly sets
 `loader.debug_ui=true`, a live launch should produce loader log markers showing:

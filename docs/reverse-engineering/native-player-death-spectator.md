@@ -1102,3 +1102,14 @@ presentation sample. The complementary `orgdf-rb1`, `orgdf-rb2`, and
 poison/idle respectively; every owner reached logical tick 298, every stored
 `+0x1BC` value stayed at or below 150, both corpse-position deltas were zero,
 and each owning death/drop trace delta was exactly one.
+
+Terminal-corpse backbuffer capture must not consume the lifecycle poller's
+deadline. The owner and spectator captures target different processes and run
+concurrently; the bounded capture duration is added to the remaining polling
+budget so the next sample can still observe `Spectating` and red-effect
+retirement. The stock wave is also started immediately after the host enters
+`testrun`, before remote relationship waits can let the short fixture spawn
+ahead of the pre-wave address snapshot. The selected attacker is stabilized
+and idled while the other peers finish joining. These are acceptance-harness
+ordering rules only; they do not change the runtime presentation clock or its
+five-second assertion.

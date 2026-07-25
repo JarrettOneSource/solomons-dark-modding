@@ -13,7 +13,10 @@ from verify_local_multiplayer_sync import VerifyFailure
 
 HUD_REGION = (0.20, 0.04, 0.80, 0.16)
 MINIMUM_VISIBLE_GOLD_PIXELS = 500
-MAXIMUM_HIDDEN_GOLD_PIXELS = 200
+# A stock player-name label can enter this screen-space band when its actor is
+# near the top edge. It measured 307 pixels in live acceptance; the product
+# HUD text is consistently above 2,000 pixels.
+MAXIMUM_HIDDEN_GOLD_PIXELS = 400
 
 
 def _is_product_gold(red: int, green: int, blue: int) -> bool:

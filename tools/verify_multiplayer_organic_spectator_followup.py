@@ -9,6 +9,7 @@ import json
 import time
 import traceback
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
@@ -233,6 +234,36 @@ def _capture_rendered_backbuffer(
     )
 
 
+def _capture_terminal_corpse_frames(
+    *,
+    spectator_pipe: str,
+    owner_pipe: str,
+    artifact_directory: Path,
+    capture: Callable[[str, Path], dict[str, Any]] =
+        _capture_rendered_backbuffer,
+) -> dict[str, dict[str, Any]]:
+    paths = {
+        "spectator":
+            artifact_directory / "spectated-target-terminal-corpse.png",
+        "owner":
+            artifact_directory
+            / "spectated-target-owner-terminal-corpse.png",
+    }
+    pipes = {
+        "spectator": spectator_pipe,
+        "owner": owner_pipe,
+    }
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            role: executor.submit(capture, pipes[role], path)
+            for role, path in paths.items()
+        }
+        return {
+            role: future.result()
+            for role, future in futures.items()
+        }
+
+
 def _wait_for_native_type_counts(
     pipes: dict[str, str],
     *,
@@ -422,7 +453,47 @@ def run_live_verification(
     try:
         _disable_companion_bots(list(pipes.values()))
         _start_testrun_when_ready(host_pipe)
-        for pipe_name in pipes.values():
+        wait_for_scene(host_pipe, "testrun", 45.0)
+        set_local_player_vitals(
+            host_pipe,
+            SURVIVOR_HP,
+            SURVIVOR_HP,
+        )
+        # Arm the stock wave immediately after host run entry. Waiting for
+        # every remote relationship first lets the short acceptance schedule
+        # spawn before the "pre-wave" snapshot, so every genuine wave enemy
+        # is then incorrectly excluded as arena population.
+        pre_wave_enemies = _query_live_enemies(host_pipe)
+        pre_wave_actor_addresses = {
+            int(actor["actor_address"])
+            for actor in pre_wave_enemies
+        }
+        result["pre_wave_actor_addresses"] = sorted(
+            pre_wave_actor_addresses
+        )
+        result["wave_start"] = _start_waves(host_pipe)
+        enemy = _wait_for_new_wave_enemy(
+            host_pipe,
+            pre_wave_actor_addresses=pre_wave_actor_addresses,
+        )
+        result["enemy"] = enemy
+        host_before_peer_join = query_spectator_state(host_pipe)
+        result["enemy_arena_during_peer_join"] = _arm_enemy_arena(
+            host_pipe,
+            float(host_before_peer_join["x"]),
+            float(host_before_peer_join["y"]),
+        )
+        result["enemy_stabilized_during_peer_join"] = (
+            _stabilize_enemy(
+                host_pipe,
+                enemy_actor_address=int(enemy["actor_address"]),
+            )
+        )
+        result["enemy_idle_during_peer_join"] = _set_enemy_idle(
+            host_pipe
+        )
+
+        for pipe_name in (client_pipe, third_pipe):
             wait_for_scene(pipe_name, "testrun", 45.0)
 
         for pipe_name in pipes.values():
@@ -466,21 +537,6 @@ def run_live_verification(
         result["death_traces_armed"] = _arm_death_traces(
             list(pipes.values())
         )
-
-        pre_wave_enemies = _query_live_enemies(host_pipe)
-        pre_wave_actor_addresses = {
-            int(actor["actor_address"])
-            for actor in pre_wave_enemies
-        }
-        result["pre_wave_actor_addresses"] = sorted(
-            pre_wave_actor_addresses
-        )
-        result["wave_start"] = _start_waves(host_pipe)
-        enemy = _wait_for_new_wave_enemy(
-            host_pipe,
-            pre_wave_actor_addresses=pre_wave_actor_addresses,
-        )
-        result["enemy"] = enemy
 
         client_before = query_spectator_state(client_pipe)
         result["enemy_arena"] = _arm_enemy_arena(
@@ -677,17 +733,12 @@ def run_live_verification(
         terminal_screenshots: dict[str, Any] = {}
 
         def capture_terminal_corpse_frames() -> None:
-            terminal_screenshots["spectator"] = (
-                _capture_rendered_backbuffer(
-                    client_pipe,
-                    artifact_directory
-                    / "spectated-target-terminal-corpse.png",
+            terminal_screenshots.update(
+                _capture_terminal_corpse_frames(
+                    spectator_pipe=client_pipe,
+                    owner_pipe=third_pipe,
+                    artifact_directory=artifact_directory,
                 )
-            )
-            terminal_screenshots["owner"] = _capture_rendered_backbuffer(
-                third_pipe,
-                artifact_directory
-                / "spectated-target-owner-terminal-corpse.png",
             )
 
         target_lifecycle, target_milestones = _sample_lifecycle(

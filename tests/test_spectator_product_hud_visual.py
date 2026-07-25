@@ -80,6 +80,24 @@ class SpectatorProductHudVisualTests(unittest.TestCase):
                     expected_visible=False,
                 )
 
+    def test_hidden_contract_allows_stock_player_name_label_budget(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "player-label.png"
+            self._write_image(
+                path,
+                gold_region=(90, 20, 116, 30),
+            )
+
+            result = inspect_spectator_product_hud_pixels(
+                path,
+                expected_visible=False,
+            )
+
+            self.assertTrue(result["matches"])
+            self.assertLessEqual(result["gold_pixels"], 400)
+
     def test_gold_pixels_on_a_world_actor_do_not_satisfy_hud_region(
         self,
     ) -> None:

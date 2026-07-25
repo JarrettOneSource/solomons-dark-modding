@@ -286,6 +286,76 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
         self.assertEqual(2.0, milestones["spectator_seconds"])
         self.assertEqual(2.0, milestones["red_cleared_seconds"])
 
+    def test_terminal_capture_time_does_not_consume_lifecycle_deadline(
+        self,
+    ) -> None:
+        clock = [0.0]
+        presentation = {
+            "active": "true",
+            "phase": "DeathPresentation",
+            "hp": "0",
+            "death_drive_state": "1",
+            "red_effect_active": "true",
+            "death_transition_hits": "1",
+            "staff_drop_hits": "1",
+            "authoritative_death_presentation_ticks": "298",
+        }
+        spectating = {
+            **presentation,
+            "phase": "Spectating",
+            "red_effect_active": "false",
+            "authoritative_death_presentation_ticks": "298",
+        }
+        observer_presentation = {
+            "hp": "0",
+            "death_drive_state": "1",
+            "presentation_active": "true",
+            "red_effect_active": "true",
+            "authoritative_death_presentation_ticks": "298",
+        }
+        observer_retired = {
+            **observer_presentation,
+            "presentation_active": "false",
+            "red_effect_active": "false",
+        }
+
+        def capture_terminal_frame() -> None:
+            clock[0] += 20.0
+
+        with (
+            patch.object(
+                verifier.time,
+                "monotonic",
+                side_effect=lambda: clock[0],
+            ),
+            patch.object(verifier.time, "sleep"),
+            patch.object(
+                verifier,
+                "query_spectator_state",
+                side_effect=(presentation, spectating),
+            ),
+            patch.object(
+                verifier,
+                "query_remote_death_state",
+                side_effect=(observer_presentation, observer_retired),
+            ),
+        ):
+            samples, milestones = verifier._sample_lifecycle(
+                victim_pipe="victim",
+                observer_pipe="observer",
+                victim_id=23,
+                timeout=10.0,
+                terminal_frame_callback=capture_terminal_frame,
+            )
+
+        self.assertEqual(2, len(samples))
+        self.assertEqual(
+            20.0,
+            milestones["terminal_frame_callback_duration_seconds"],
+        )
+        self.assertEqual(20.0, milestones["spectator_seconds"])
+        self.assertEqual(20.0, milestones["red_cleared_seconds"])
+
     def test_completed_organic_lifecycle_requires_owner_only_drop(
         self,
     ) -> None:
