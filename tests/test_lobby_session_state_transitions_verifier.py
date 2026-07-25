@@ -18,6 +18,27 @@ import verify_lobby_session_state_transitions as verifier  # noqa: E402
 
 
 class LobbySessionStateTransitionsVerifierTests(unittest.TestCase):
+    def test_windows_environment_exports_preserve_existing_wsl_entries(
+        self,
+    ) -> None:
+        environment = {
+            "WSLENV": "EXISTING/u:SDMOD_MULTIPLAYER_QUICK_START",
+        }
+
+        verifier._export_to_windows_environment(
+            environment,
+            (
+                "SDMOD_MULTIPLAYER_QUICK_START",
+                "SDMOD_LUA_EXEC_PIPE_NAME",
+            ),
+        )
+
+        self.assertEqual(
+            environment["WSLENV"],
+            "EXISTING/u:SDMOD_MULTIPLAYER_QUICK_START:"
+            "SDMOD_LUA_EXEC_PIPE_NAME",
+        )
+
     def test_transition_capture_deduplicates_consecutive_states(self) -> None:
         transitions: list[dict[str, object]] = []
         status = {

@@ -33,6 +33,26 @@ INSTANCE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")
 EXPECTED_STATES = ("not-in-game", "in-hub", "in-boneyard")
 
 
+def _export_to_windows_environment(
+    environment: dict[str, str],
+    variable_names: tuple[str, ...],
+) -> None:
+    entries = [
+        entry
+        for entry in environment.get("WSLENV", "").split(":")
+        if entry
+    ]
+    exported_names = {
+        entry.split("/", 1)[0]
+        for entry in entries
+    }
+    for variable_name in variable_names:
+        if variable_name not in exported_names:
+            entries.append(variable_name)
+            exported_names.add(variable_name)
+    environment["WSLENV"] = ":".join(entries)
+
+
 def _write_result(path: Path, result: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -256,6 +276,16 @@ def run_verification(
             "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT": "fire",
             "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE": "mind",
         }
+    )
+    _export_to_windows_environment(
+        environment,
+        (
+            "SDMOD_UI_SANDBOX_PRESET",
+            "SDMOD_LUA_EXEC_PIPE_NAME",
+            "SDMOD_MULTIPLAYER_QUICK_START",
+            "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT",
+            "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE",
+        ),
     )
     arguments = [
         str(launcher_path.resolve()),
