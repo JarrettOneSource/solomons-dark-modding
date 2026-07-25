@@ -245,9 +245,7 @@ void RefreshHostileTargetParticipantDeathLatches(
             hostile_actor_addresses);
         if (!hostile_actor_addresses.empty()) {
             Log(
-                std::string(
-                    "[hostile_ai] participant life-zero captured for "
-                    "native-transition-safe reacquisition") +
+                std::string("[hostile_ai] participant life-zero captured for native-transition-safe reacquisition") +
                 ". dead_target=" + HexString(dead_actor_address) +
                 " affected=" +
                     std::to_string(hostile_actor_addresses.size()));

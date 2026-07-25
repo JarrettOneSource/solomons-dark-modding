@@ -402,7 +402,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         "owner and observer death presentation phase diverged",
         "owner organic staff drop trace delta was not 1",
         "capture_game_backbuffer",
-        "stop_game_processes(process_ids)",
+        "stop_exact_game_processes(launch)",
     ):
         assert token in organic_verifier_text, (
             f"organic player-death live gate lacks: {token}"

@@ -1032,7 +1032,7 @@ def test_player_gamenpc_movement_seed_layout_is_named_and_documented() -> str:
         (stock_restore_live_probe_text, "stock tick restore live probe", "page-guard"),
         (stock_restore_live_probe_text, "stock tick restore live probe", "live_stock_tick_restore_probe.json"),
         (monster_hook_text, "monster hook", "ClearHostileTargetsForDeadWizardActor"),
-        (monster_hook_text, "monster hook", "target death forced reacquisition"),
+        (monster_hook_text, "monster hook", "target death captured for transition-safe"),
         (monster_hook_text, "monster hook", "kHostileTargetBucketDeltaOffset"),
         (monster_hook_text, "monster hook", "kActorCurrentTargetActorOffset"),
         (player_tick_text, "player tick", "ClearHostileTargetsForDeadWizardActor(actor_address)"),
