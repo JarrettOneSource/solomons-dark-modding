@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -18,6 +20,37 @@ import verify_lobby_session_state_transitions as verifier  # noqa: E402
 
 
 class LobbySessionStateTransitionsVerifierTests(unittest.TestCase):
+    def test_acceptance_mod_state_is_isolated_to_the_owned_instance(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_root = Path(directory)
+
+            state_path = verifier._prepare_acceptance_mod_state(
+                runtime_root,
+                "Slc-State",
+            )
+
+            self.assertEqual(
+                state_path,
+                runtime_root
+                / "instances"
+                / "slc-state"
+                / "mod-manager-state.json",
+            )
+            self.assertEqual(
+                json.loads(
+                    state_path.read_text(encoding="utf-8")
+                ),
+                {
+                    "Mods": {
+                        verifier.ACCEPTANCE_MOD_ID: {
+                            "Enabled": True,
+                        },
+                    },
+                },
+            )
+
     def test_windows_environment_exports_preserve_existing_wsl_entries(
         self,
     ) -> None:

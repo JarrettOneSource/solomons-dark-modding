@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from verify_game_over_session_semantics import (
+    ACCEPTANCE_MOD_ID,
     _query_process_executable,
     _windows_path_equal,
     stop_owned_processes,
@@ -59,6 +60,34 @@ def _write_result(path: Path, result: dict[str, Any]) -> None:
         json.dumps(result, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _prepare_acceptance_mod_state(
+    runtime_root: Path,
+    instance: str,
+) -> Path:
+    state_path = (
+        runtime_root
+        / "instances"
+        / instance.lower()
+        / "mod-manager-state.json"
+    )
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "Mods": {
+                    ACCEPTANCE_MOD_ID: {
+                        "Enabled": True,
+                    },
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return state_path
 
 
 def _read_status(path: Path) -> dict[str, Any] | None:
@@ -250,6 +279,10 @@ def run_verification(
         raise VerifyFailure(f"invalid isolated instance name: {instance!r}")
 
     runtime_root.mkdir(parents=True, exist_ok=True)
+    acceptance_mod_state_path = _prepare_acceptance_mod_state(
+        runtime_root,
+        instance,
+    )
     status_path = (
         runtime_root
         / "instances"
@@ -321,6 +354,8 @@ def run_verification(
         "instance": instance,
         "runtimeRoot": str(runtime_root),
         "statusPath": str(status_path),
+        "acceptanceModId": ACCEPTANCE_MOD_ID,
+        "acceptanceModStatePath": str(acceptance_mod_state_path),
         "expectedExecutable": expected_executable,
         "transitions": transitions,
     }

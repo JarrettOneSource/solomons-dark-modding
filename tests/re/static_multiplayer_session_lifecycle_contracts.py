@@ -193,6 +193,8 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             '"multiplayer-session-status.json"',
             '"members"',
             '"--fresh-install"',
+            "ACCEPTANCE_MOD_ID",
+            "_prepare_acceptance_mod_state(",
             '"--multiplayer"',
             '"host"',
             "timeout=60.0",
