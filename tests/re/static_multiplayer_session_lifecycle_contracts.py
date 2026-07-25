@@ -156,8 +156,10 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         verifier,
         (
             '"-FreshInstall"',
+            '"--launcher-path"',
             "fresh_install=True",
             "quick_start=True",
+            "launcher_path=launcher_path",
             '"same_lobby_hub_state"',
             '"same_lobby_hub_relationships"',
             '"second_run_relationships"',
@@ -181,6 +183,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         (
             "[switch]$FreshInstall",
             "[switch]$QuickStart",
+            '[string]$LauncherPath = ""',
             '$arguments += "--fresh-install"',
             '$arguments += "--temporary-profile"',
             "SDMOD_MULTIPLAYER_QUICK_START",

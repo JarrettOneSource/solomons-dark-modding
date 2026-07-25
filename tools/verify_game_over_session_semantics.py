@@ -340,6 +340,7 @@ def launch_solo(
     local_port: int,
     unused_remote_port: int,
     game_directory: Path,
+    launcher_path: Path | None = None,
 ) -> dict[str, object]:
     ledger = ROOT / "runtime" / f".game-over-solo-{os.getpid()}-{time.time_ns()}.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -371,6 +372,13 @@ def launch_solo(
         "-ProcessIdOutputPath",
         path_for_powershell(ledger),
     ]
+    if launcher_path is not None:
+        args.extend(
+            [
+                "-LauncherPath",
+                path_for_powershell(launcher_path),
+            ]
+        )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -1038,6 +1046,7 @@ def run_solo_verification(
     instance_prefix: str,
     ports: list[int],
     game_directory: Path,
+    launcher_path: Path | None = None,
 ) -> dict[str, object]:
     instance = f"{instance_prefix}-solo"
     launch = launch_solo(
@@ -1045,6 +1054,7 @@ def run_solo_verification(
         local_port=ports[0],
         unused_remote_port=ports[1],
         game_directory=game_directory,
+        launcher_path=launcher_path,
     )
     owned = _owned_solo_processes(launch)
     result: dict[str, object] = {
@@ -1114,6 +1124,7 @@ def run_trio_verification(
     instance_prefix: str,
     ports: list[int],
     game_directory: Path,
+    launcher_path: Path | None = None,
 ) -> dict[str, object]:
     trio_prefix = f"{instance_prefix}-mp"
     launch = launch_pair(
@@ -1130,6 +1141,7 @@ def run_trio_verification(
         client_port=ports[3],
         third_port=ports[4],
         game_directory=game_directory,
+        launcher_path=launcher_path,
         exact_mod_id=ACCEPTANCE_MOD_ID,
         quick_start=True,
     )
@@ -1462,6 +1474,7 @@ def run_loading_timeout_verification(
     instance_prefix: str,
     ports: list[int],
     game_directory: Path,
+    launcher_path: Path | None = None,
 ) -> dict[str, object]:
     pair_prefix = f"{instance_prefix}-timeout"
     launch = launch_pair(
@@ -1476,6 +1489,7 @@ def run_loading_timeout_verification(
         host_port=ports[5],
         client_port=ports[6],
         game_directory=game_directory,
+        launcher_path=launcher_path,
         exact_mod_id=ACCEPTANCE_MOD_ID,
         quick_start=True,
     )
@@ -1637,6 +1651,7 @@ def run_live_verification(
     instance_prefix: str,
     ports: list[int],
     game_directory: Path,
+    launcher_path: Path | None = None,
 ) -> dict[str, object]:
     return {
         "instance_prefix": instance_prefix,
@@ -1645,16 +1660,19 @@ def run_live_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
+            launcher_path=launcher_path,
         ),
         "trio": run_trio_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
+            launcher_path=launcher_path,
         ),
         "timeout_drill": run_loading_timeout_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
+            launcher_path=launcher_path,
         ),
         "ok": True,
     }
@@ -1672,6 +1690,12 @@ def main() -> int:
         type=Path,
         required=True,
         help="Retail game directory used by isolated worktrees.",
+    )
+    parser.add_argument(
+        "--launcher-path",
+        type=Path,
+        default=None,
+        help="Exact built launcher used to stage every isolated instance.",
     )
     parser.add_argument("--solo-port", type=int, default=None)
     parser.add_argument("--solo-unused-port", type=int, default=None)
@@ -1703,6 +1727,7 @@ def main() -> int:
                 ]
             ),
             game_directory=args.game_dir,
+            launcher_path=args.launcher_path,
         )
         exit_code = 0
     except Exception as exc:  # noqa: BLE001 - preserve full verifier failure.

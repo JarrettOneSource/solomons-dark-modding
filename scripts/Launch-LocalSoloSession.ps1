@@ -7,6 +7,7 @@ param(
     [string]$ParticipantId = "0x2000000000001A01",
     [string]$PlayerName = "Solo Player",
     [string]$GameDirectory = "",
+    [string]$LauncherPath = "",
     [switch]$FreshInstall,
     [switch]$QuickStart,
     [string]$QuickStartElement = "fire",
@@ -21,7 +22,11 @@ $ErrorActionPreference = "Stop"
 $audioEnabled = $EnableAudio -or $env:SDMOD_ENABLE_AUDIO -eq "1"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
-$launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
+$launcher = if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
+    Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
+} else {
+    (Resolve-Path -LiteralPath $LauncherPath).ProviderPath
+}
 $launcherDir = Split-Path $launcher -Parent
 $launcherProcessHelpers =
     Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1"
