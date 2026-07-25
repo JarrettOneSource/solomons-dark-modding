@@ -269,7 +269,7 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
         "earth_damage_projection.projected_hp_damage + 0.001f >= earth_damage_projection.target_hp",
         "target_lethal_released",
         "projection_target_in_impact",
-        "kBoundedHeldPostReleaseWorldUpdateTicks =\n            kBoundedHeldNativeReleaseEdgeTicks + 8",
+        "kBoundedHeldPostReleaseWorldUpdateTicks =\n            kBoundedHeldNativeReleaseCleanupTicks + 8",
     )
     missing = [token for token in required_projection_tokens if token not in projection_text]
     missing += [token for token in required_processing_tokens if token not in processing_text]

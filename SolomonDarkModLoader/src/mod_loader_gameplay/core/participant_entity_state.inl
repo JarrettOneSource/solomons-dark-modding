@@ -233,6 +233,7 @@ struct ParticipantEntityBinding {
         bool saw_activity = false;
         bool saw_live_handle = false;
         bool bounded_release_requested = false;
+        bool bounded_release_edge_pending = false;
         bool bounded_release_at_max_size = false;
         bool bounded_release_target_lethal = false;
         float bounded_release_charge = 0.0f;

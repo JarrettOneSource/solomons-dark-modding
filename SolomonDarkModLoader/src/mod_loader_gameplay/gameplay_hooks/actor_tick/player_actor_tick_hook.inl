@@ -492,6 +492,30 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 remote_firewalker_profile,
                 kWizardProfileFirewalkerActiveOffset,
                 0);
+        // ProcessPendingBotCast observes the release after a stock tick. Present
+        // that edge once, immediately before the following stock tick, so the
+        // native current/previous transition owns the matching loop stop.
+        const bool apply_bounded_release_edge =
+            binding->ongoing_cast.active &&
+            OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(
+                binding->ongoing_cast) &&
+            binding->ongoing_cast.bounded_release_requested &&
+            binding->ongoing_cast.bounded_release_edge_pending;
+        if (apply_bounded_release_edge) {
+            binding->ongoing_cast.bounded_release_edge_pending = false;
+            // A replicated caster uses an authored control-brain target to
+            // produce the held action. Retaining that target makes stock select
+            // Earth again at 0x0054964A before it compares current/previous.
+            // Move that control brain to its ordinary idle state for the rest
+            // of the release lifecycle; cast cleanup restores the prior
+            // selection state.
+            ClearSelectionBrainTarget(
+                binding->ongoing_cast.selection_state_pointer);
+            (void)memory.TryWriteField<std::int32_t>(
+                binding->ongoing_cast.selection_state_pointer,
+                kActorControlBrainStateIdOffset,
+                kUnknownAnimationStateId);
+        }
         InvokeWithParticipantConcentrationContext(
             binding,
             [&] {

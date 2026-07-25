@@ -117,6 +117,10 @@ a single global playback cursor.
 sets the BASS loop flag (`4`). The loop owns explicit gain and transition
 state:
 
+- `SoundLoop_Start (0x00408320)` starts the BASS channel only when the
+  reference count at `+0x4C` is zero, then increments that count;
+- `SoundLoop_Stop (0x00408350)` decrements the count and stops the BASS
+  channel when the result is zero or negative;
 - state 1 adds the fade-in increment until gain reaches 1;
 - state 2 subtracts the fade-out increment until gain reaches 0, then stops;
 - every tick writes `base volume * transition gain` to BASS attribute 2.
@@ -126,6 +130,116 @@ the next repeat's gain, and self-terminates after its repeat count. A delayed
 sound uses the narrower countdown at `0x00408690` and destroys itself when
 the counter expires. These are transient manager-owned playback controllers,
 not entries in the compiled asset registry.
+
+### Earth boulder audio lifecycle
+
+Earth's primary has three distinct stock audio lifecycles. They must not be
+collapsed into "sound on boulder creation":
+
+| Event | Native path | Registry entry | Lifetime |
+| --- | --- | --- | --- |
+| Boulder created | Earth dispatcher `0x00544C60`; play call `0x00544FA8` | 87, `sounds\startboulder` | One `Sound` trigger after the type `0x7D5` actor is allocated, registered, and stored in the caster's `+0x27C/+0x27E` handle. |
+| Earth gather begins/ends | `PlayerActorTick (0x00548B00)`; start call `0x00549F57`; primary-transition stop call `0x00549758`; charge-cap stop call `0x0054AD12` | 159, `sounds\gatherrocksloop__loop` | One `SoundLoop_Start` while skill `0x28` is entered, balanced by `SoundLoop_Stop` when the primary changes or the boulder reaches its charge bound. |
+| Boulder moves/contacts | boulder/rock tick `0x00620B60`; impact call `0x0062141B` | ambient wrapper `0x0081CBCC` over 168, `sounds\rollingstoneloop__loop`; 77, `sounds\rockhit` | Motion renews wrapper requested gain at `0x0081CBD0` each frame; the ambient zero crossing starts/stops the rolling loop. A contact accumulator crossing its threshold emits the `rockhit` one-shot. |
+
+The type `0x7D5` constructor at `0x005FA270`, destructor at `0x005FA3F0`,
+and release finalizer at `0x005E5450` contain no direct audio calls. The
+rolling loop therefore follows real per-frame boulder motion, while the
+gather loop follows the caster's primary-skill transition. Reconstructing a
+boulder actor is not itself permission to replay any of these events.
+
+Live tracing also exposes a useful failure signature. `SoundLoop_Start`
+returns to `0x00549F5C`, the primary-transition `SoundLoop_Stop` returns to
+`0x0054975D`, and the start's `BASS_ChannelPlay(channel, 1)` returns to
+`0x00408343`. Before the replicated-cast repair, the observer produced nine
+gather starts and nine BASS channel restarts: two starts 12 ms apart at
+startup, then seven more 6-15 ms apart beginning at the release edge. The
+remote type `0x7D5` constructor and `startboulder` one-shot still each fired
+exactly once. The cast packet's press and release were also each accepted
+once. This distinguishes a native-frame primary-transition replay from actor
+re-creation, packet coalescing, pose snapshots, the 400 ms summary lane, or
+the ambient rolling-stone producer.
+
+The replay came from loader state ownership after the stock tick.
+`ProcessPendingBotCast` rewrote the caster's current and previous primary
+fields at `+0x270/+0x274` after stock had already consumed the transition.
+On the next `PlayerActorTick`, stock cleared current at `0x00549602`, called
+the control-brain selector at `0x0052DA40`, wrote its returned Earth state
+`0x28` back at `0x0054964A`, and compared current with previous at
+`0x005496D8`. Rewriting those fields after every stock pass therefore made
+one network event look like a fresh native transition on following frames.
+At release, clearing only the target was insufficient because the remote
+control brain still returned Earth.
+
+The repaired ownership rule is event based:
+
+- after stock produces native cast activity, current and previous primary
+  state remain stock-owned; the loader may re-arm only a startup for which
+  stock produced no activity;
+- an accepted remote Earth release latches one pre-stock edge; that adapter
+  clears the authored selection target and puts the control-brain state at
+  `+0x21C` into its normal idle value `-1`;
+- stock then produces the real `0x28 -> 0` transition and owns the matching
+  gather-loop stop; ordinary cast cleanup restores the saved selection state.
+
+No audio function is called by the repair, and no network or convergence
+timer changes. In an audio-enabled isolated run, host-to-client,
+client-to-host, and solo casts each produced the same event counts:
+
+| Native event | Source | Observer | Solo |
+| --- | ---: | ---: | ---: |
+| type `0x7D5` constructor | 1 | 1 | 1 |
+| `startboulder` one-shot | 1 | 1 | 1 |
+| gather-loop start | 1 | 1 | 1 |
+| gather-loop stop call | 2 | 2 | 2 |
+| gather `BASS_ChannelPlay` | 1 | 1 | 1 |
+| rolling-loop start | 1 | 1 | 1 |
+| `rockhit` one-shot | 1 | 1 | 1 |
+
+The first gather stop is stock's harmless selection-transition call while
+the loop reference count is zero; the second is the real release stop that
+balances the single start. Every final gather reference count was zero. All
+owned processes exposed an active Windows audio session in all six samples
+per case.
+
+### Replication audio class audit
+
+The repeated-transition defect was not Earth-specific even though Earth's
+loop made it conspicuous. The repaired post-stock ownership is in the shared
+remote primary-cast path, so Fire, Air, Ether, Water, Earth, Light, and Dark
+all stop replaying stock primary transitions after native activity begins.
+The multiplayer replication sources contain no direct calls to `Sound`,
+`SoundLoop`, or BASS; stock actor events remain the only producers of stock
+audio.
+
+The surrounding replicated actor classes preserve event identity as follows:
+
+- Fire, Ether, and Water primary projectiles are born from the remote
+  participant's stock cast. The first per-cast native emission is latched and
+  later duplicate dispatches are suppressed. Spell-effect reconciliation
+  binds by owner plus `effect_serial`; it neither materializes nor overwrites
+  the motion of those replay-driven primary projectiles. Only missing Ember
+  and Firewalker child effects can be materialized, behind a pending-serial
+  guard.
+- Raise Golem (`0x7F4`) is likewise created by the stock spell on each
+  machine. World reconciliation binds the existing summon to one network
+  actor identity and updates that persistent actor. Snapshot omission releases
+  only the network binding; it deliberately does not unregister and recreate
+  the summon, so native summon audio and teardown retain stock ownership.
+- Run enemies are bound to persistent network actor identities. A genuinely
+  missing lifecycle-owned enemy can queue one guarded catch-up
+  materialization; subsequent snapshots update the bound actor's transform,
+  health, transient status, target, and presentation instead of constructing
+  it again. The audit found no snapshot path writing enemy audio objects or
+  replaying primary transition fields.
+
+The prior acceptance matrix had a corresponding gap: it exercised scripted
+single-enemy damage probes and pose convergence, but did not bound organic
+multi-enemy behavior, remote cast start/stop latency, or native audio event
+counts. Those green gates could not detect this native-frame replay. The live
+network gates now cover organic multi-enemy convergence and Air/lightning
+press/release timing, while the audio gate compares native Earth trigger
+counts in both multiplayer directions and against solo.
 
 ### Global ambient loop mix
 

@@ -218,7 +218,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         // Bounded held Earth follows the bot's live target while the boulder is
         // charging; once release is requested, target refresh stops so damage
         // projection and release cleanup stay tied to the same victim.
-        const auto native_active_skill_id = ResolveOngoingNativeTickSkillId(ongoing);
         const bool refresh_ongoing_target_state =
             OngoingCastShouldRefreshNativeTargetState(ongoing);
         bool target_refreshed = false;
@@ -245,40 +244,47 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             (void)memory.TryWriteField<std::uint32_t>(actor_address, kActorAimTargetAux1Offset, 0);
         }
         (void)memory.TryWriteField<std::uint8_t>(actor_address, kActorCastSpreadModeByteOffset, 0);
-        constexpr int kBoundedHeldNativeReleaseEdgeTicks = 3;
+        BotCastActivitySnapshot post_stock_activity{};
+        const bool native_activity_after_stock =
+            TryReadBotCastActivitySnapshot(
+                memory,
+                actor_address,
+                &post_stock_activity) &&
+            HasBotNativeCastActivity(post_stock_activity);
+        constexpr int kBoundedHeldNativeReleaseCleanupTicks = 3;
         constexpr int kBoundedHeldPostReleaseWorldUpdateTicks =
-            kBoundedHeldNativeReleaseEdgeTicks + 8;
-        const bool preserve_bounded_release_edge =
-            ongoing.bounded_release_requested &&
-            ongoing.bounded_post_release_ticks_waiting < kBoundedHeldNativeReleaseEdgeTicks;
-        const bool publish_ongoing_skill_id =
+            kBoundedHeldNativeReleaseCleanupTicks + 8;
+        // ProcessPendingBotCast runs after stock. Re-arm only a startup that
+        // produced no native activity; once stock has accepted the cast, its
+        // current/previous primary fields are transition state and must remain
+        // stock-owned. Replaying them here re-fires element audio and effects
+        // on the next frame.
+        const bool rearm_missing_startup =
+            ongoing.startup_in_progress &&
             ongoing.uses_dispatcher_skill_id &&
-            !(OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing) &&
-              ongoing.bounded_release_requested &&
-              !preserve_bounded_release_edge);
-        (void)memory.TryWriteField<std::int32_t>(
-            actor_address,
-            kActorPrimarySkillIdOffset,
-            publish_ongoing_skill_id ? ongoing.dispatcher_skill_id : 0);
-        if (ongoing.bounded_release_requested) {
+            !ongoing.post_stock_dispatch_attempted &&
+            !native_activity_after_stock;
+        if (rearm_missing_startup) {
             (void)memory.TryWriteField<std::int32_t>(
                 actor_address,
-                kActorPreviousSkillIdOffset,
-                preserve_bounded_release_edge ? native_active_skill_id : 0);
-            if (!preserve_bounded_release_edge) {
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorPrimaryActionLatchE4Offset,
-                    0);
-                (void)memory.TryWriteField<std::uint32_t>(
-                    actor_address,
-                    kActorPrimaryActionLatchE8Offset,
-                    0);
-                (void)memory.TryWriteField<std::uint8_t>(
-                    actor_address,
-                    kActorPostGateActiveByteOffset,
-                    0);
-            }
+                kActorPrimarySkillIdOffset,
+                ongoing.dispatcher_skill_id);
+        }
+        if (ongoing.bounded_release_requested &&
+            ongoing.bounded_post_release_ticks_waiting >=
+                kBoundedHeldNativeReleaseCleanupTicks) {
+            (void)memory.TryWriteField<std::uint32_t>(
+                actor_address,
+                kActorPrimaryActionLatchE4Offset,
+                0);
+            (void)memory.TryWriteField<std::uint32_t>(
+                actor_address,
+                kActorPrimaryActionLatchE8Offset,
+                0);
+            (void)memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorPostGateActiveByteOffset,
+                0);
         }
         if (refresh_ongoing_target_state) {
             RefreshSelectionBrainTargetForOngoingCast(ongoing);
@@ -313,7 +319,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                             std::to_string(native_mana_rate_config.max_allowed_rate) +
                         " ticks=" + std::to_string(ongoing.startup_ticks_waiting));
                 }
-            } else if (ongoing.uses_dispatcher_skill_id) {
+            } else if (
+                ongoing.uses_dispatcher_skill_id &&
+                !native_activity_after_stock) {
                 PrimeGameplaySlotPostGateDispatchState(actor_address, ongoing);
                 const auto native_target_actor_address =
                     ResolveOngoingCastNativeTargetActor(binding, ongoing);
@@ -339,11 +347,12 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 bool gameplay_mouse_left_readable = false;
                 BotCastActivitySnapshot activity_before_dispatch{};
                 const bool native_activity_before_dispatch =
-                    TryReadBotCastActivitySnapshot(
-                        memory,
-                        actor_address,
-                        &activity_before_dispatch) &&
-                    HasBotNativeCastActivity(activity_before_dispatch);
+                    native_activity_after_stock ||
+                    (TryReadBotCastActivitySnapshot(
+                         memory,
+                         actor_address,
+                         &activity_before_dispatch) &&
+                     HasBotNativeCastActivity(activity_before_dispatch));
                 if (!native_activity_before_dispatch &&
                     TryResolveCurrentGameplayScene(&startup_gameplay_address) &&
                     startup_gameplay_address != 0) {
@@ -866,6 +875,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 release_projected_hp_damage = release_projected_release_damage;
             }
             ongoing.bounded_release_requested = true;
+            ongoing.bounded_release_edge_pending = true;
             ongoing.bounded_max_size_reached = earth_max_size_reached;
             ongoing.bounded_release_at_max_size = earth_max_size_reached;
             ongoing.bounded_release_target_lethal =
@@ -903,8 +913,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 kBoundedHeldPostReleaseWorldUpdateTicks &&
             !has_live_handle;
         // ProcessPendingBotCast runs after the stock tick. After the held
-        // release edge, keep the lifecycle alive for several passes so stock
-        // sees input released and can drive the native Boulder impact path.
+        // release request, keep the lifecycle alive for several passes. The
+        // following pre-stock adapter presents an idle control-brain input
+        // once, then stock owns the native current/previous transition,
+        // Boulder release, and impact path.
         const bool bounded_held_release_tick_processed =
             bounded_held_native_cast &&
             ongoing.bounded_release_requested &&
@@ -1036,11 +1048,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     active_spell_state,
                     finalized_release_charge,
                     true);
-            (void)memory.TryWriteField<std::int32_t>(actor_address, kActorPrimarySkillIdOffset, 0);
-            (void)memory.TryWriteField<std::int32_t>(
-                actor_address,
-                kActorPreviousSkillIdOffset,
-                native_active_skill_id);
             const std::string release_reason =
                 ongoing.bounded_release_at_max_size
                     ? std::string("max_size")
