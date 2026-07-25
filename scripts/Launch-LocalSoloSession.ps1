@@ -7,6 +7,10 @@ param(
     [string]$ParticipantId = "0x2000000000001A01",
     [string]$PlayerName = "Solo Player",
     [string]$GameDirectory = "",
+    [switch]$FreshInstall,
+    [switch]$QuickStart,
+    [string]$QuickStartElement = "fire",
+    [string]$QuickStartDiscipline = "mind",
     [string]$ExactModIds = "",
     [switch]$EnableAudio,
     [string]$ProcessIdOutputPath = ""
@@ -66,14 +70,23 @@ $environment = @{
     SDMOD_MULTIPLAYER_REMOTE_PORT = [string]$UnusedRemotePort
     SDMOD_MULTIPLAYER_PARTICIPANT_ID = $ParticipantId
     SDMOD_MULTIPLAYER_PLAYER_NAME = $PlayerName
+    SDMOD_MULTIPLAYER_QUICK_START = $(if ($QuickStart) { "1" } else { "" })
+    SDMOD_MULTIPLAYER_QUICK_START_ELEMENT = $(if (
+        $QuickStart) { $QuickStartElement } else { "" })
+    SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE = $(if (
+        $QuickStart) { $QuickStartDiscipline } else { "" })
 }
 $arguments = @(
     "--json",
     "launch",
     "--instance", $Instance,
-    "--runtime-flag", "multiplayer.steam_bootstrap=false",
-    "--temporary-profile"
+    "--runtime-flag", "multiplayer.steam_bootstrap=false"
 )
+if ($FreshInstall) {
+    $arguments += "--fresh-install"
+} else {
+    $arguments += "--temporary-profile"
+}
 if (-not $audioEnabled) {
     $arguments += "--disable-audio"
 }

@@ -28,7 +28,10 @@ void TickMultiplayerJoinFlow() {
     case JoinFlowPhase::AdvancingMenus:
         if (boneyard_ready) {
             ClearPendingActionUnlocked();
-            SetPhaseUnlocked(JoinFlowPhase::Run);
+            SetPhaseUnlocked(
+                IsRunLoadingBarrierReleased(runtime)
+                    ? JoinFlowPhase::Run
+                    : JoinFlowPhase::LoadingBoneyard);
             return;
         }
         if (hub_ready) {
@@ -98,7 +101,10 @@ void TickMultiplayerJoinFlow() {
 
     case JoinFlowPhase::PrivateGameplay:
         if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
+            SetPhaseUnlocked(
+                IsRunLoadingBarrierReleased(runtime)
+                    ? JoinFlowPhase::Run
+                    : JoinFlowPhase::LoadingBoneyard);
         } else if (hub_ready) {
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
         } else if (
@@ -121,7 +127,10 @@ void TickMultiplayerJoinFlow() {
         } else if (hub_ready) {
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
         } else if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
+            SetPhaseUnlocked(
+                IsRunLoadingBarrierReleased(runtime)
+                    ? JoinFlowPhase::Run
+                    : JoinFlowPhase::LoadingBoneyard);
         }
         return;
 
@@ -193,7 +202,10 @@ void TickMultiplayerJoinFlow() {
             return;
         }
         if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
+            SetPhaseUnlocked(
+                IsRunLoadingBarrierReleased(runtime)
+                    ? JoinFlowPhase::Run
+                    : JoinFlowPhase::LoadingBoneyard);
         } else if (
             hub_ready &&
             runtime.transport_ready &&
@@ -206,7 +218,10 @@ void TickMultiplayerJoinFlow() {
 
     case JoinFlowPhase::Hub:
         if (boneyard_ready) {
-            SetPhaseUnlocked(JoinFlowPhase::Run);
+            SetPhaseUnlocked(
+                IsRunLoadingBarrierReleased(runtime)
+                    ? JoinFlowPhase::Run
+                    : JoinFlowPhase::LoadingBoneyard);
         } else if (IsRunRequested(runtime)) {
             SetPhaseUnlocked(JoinFlowPhase::LoadingBoneyard);
         } else if (
@@ -253,12 +268,18 @@ void TickMultiplayerJoinFlow() {
         return;
 
     case JoinFlowPhase::LoadingBoneyard:
+        if (HasLocalRunTerminated(runtime)) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::PostRun);
+            return;
+        }
         if (now_ms <
             g_join_flow.phase_entered_ms +
                 kTransitionPresentationMinimumMs) {
             return;
         }
-        if (boneyard_ready) {
+        if (boneyard_ready &&
+            IsRunLoadingBarrierReleased(runtime)) {
             SetPhaseUnlocked(JoinFlowPhase::Run);
         } else if (hub_ready && !IsRunRequested(runtime)) {
             SetPhaseUnlocked(JoinFlowPhase::Hub);
@@ -266,9 +287,30 @@ void TickMultiplayerJoinFlow() {
         return;
 
     case JoinFlowPhase::Run:
-        if (hub_ready) {
+        if (HasLocalRunTerminated(runtime)) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::PostRun);
+        } else if (hub_ready) {
             SetPhaseUnlocked(JoinFlowPhase::Hub);
         }
+        return;
+
+    case JoinFlowPhase::PostRun:
+        if (hub_ready) {
+            ClearPendingActionUnlocked();
+            SetPhaseUnlocked(JoinFlowPhase::Connecting);
+            return;
+        }
+        if (snapshot == nullptr ||
+            snapshot->captured_at_milliseconds <=
+                g_join_flow.phase_entered_ms ||
+            snapshot->surface_id != "main_menu") {
+            return;
+        }
+        ClearPendingActionUnlocked();
+        g_join_flow.main_menu_first_seen_ms = 0;
+        g_join_flow.action_retry_not_before_ms = 0;
+        SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
         return;
 
     case JoinFlowPhase::Failed:

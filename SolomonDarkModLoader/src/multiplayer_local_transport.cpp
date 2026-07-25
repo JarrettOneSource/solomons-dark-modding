@@ -1446,6 +1446,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
 #include "multiplayer_local_transport/death_spectator_sync.inl"
 #include "multiplayer_local_transport/run_game_over_sync.inl"
+#include "multiplayer_local_transport/run_loading_barrier_sync.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
@@ -1575,6 +1576,10 @@ void NotifyLocalRunStarted() {
     ResetLocalDeathSpectatorState("new_run");
     ResetWaveRespawnState();
     ResetRunGameOverState("new_run");
+    ResetRunLoadingBarrierState("new_run");
+    UpdateRuntimeState([](RuntimeState& state) {
+        state.run_end_pending_lobby_return = false;
+    });
     const auto previous_exit_nonce =
         g_local_run_exit_latched_nonce.exchange(0, std::memory_order_acq_rel);
     const bool cleared_client_exit_follow =
@@ -1597,6 +1602,7 @@ void NotifyLocalRunEnded(std::string_view reason) {
 
     ResetLocalDeathSpectatorState(reason);
     ResetWaveRespawnState();
+    ResetRunLoadingBarrierState(reason);
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
     const auto current_nonce =
@@ -1612,6 +1618,7 @@ void NotifyLocalRunEnded(std::string_view reason) {
     }
 
     UpdateRuntimeState([&](RuntimeState& state) {
+        state.run_end_pending_lobby_return = true;
         auto* mutable_local = FindLocalParticipant(state);
         if (mutable_local == nullptr) {
             return;

@@ -308,6 +308,27 @@ struct RunGameOverRuntimeInfo {
     std::uint32_t dispatch_count = 0;
 };
 
+struct RunLoadingBarrierRuntimeInfo {
+    bool active = false;
+    bool local_mutual_visibility = false;
+    bool released = false;
+    bool timed_out = false;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t local_ack_nonce = 0;
+    std::uint32_t release_nonce = 0;
+    std::uint32_t deadline_remaining_ms = 0;
+    std::uint64_t visible_participant_set_hash = 0;
+    std::uint64_t expected_participant_set_hash = 0;
+    std::uint16_t visible_participant_count = 0;
+    std::uint16_t expected_participant_count = 0;
+    std::uint16_t ready_participant_count = 0;
+    RunLoadingReleaseReason release_reason =
+        RunLoadingReleaseReason::None;
+    std::vector<std::uint64_t> expected_participant_ids;
+    std::vector<std::uint64_t> ready_participant_ids;
+    std::vector<std::uint64_t> waiting_participant_ids;
+};
+
 struct ParticipantTransformSample {
     bool valid = false;
     std::uint64_t received_ms = 0;

@@ -2006,13 +2006,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             "friendsOnly" => "Friends Only",
             _ => "Steam Lobby"
         };
-        var gamePhase = status.GamePhase switch
+        var gamePhase = status.SessionState switch
         {
-            "hub" => "In Hub",
-            "session" => "In Match",
-            "loading" => "Loading",
-            "results" => "Results",
-            _ => "Starting"
+            "in-hub" => "In Hub",
+            "in-boneyard" => "In Boneyard",
+            "not-in-game" => "Not In Game",
+            _ => status.GamePhase switch
+            {
+                "hub" => "In Hub",
+                "session" => "In Match",
+                "loading" => "Loading",
+                "results" => "Results",
+                _ => "Starting"
+            }
         };
         var connection = status.Phase == "Connected"
             ? "Connected"

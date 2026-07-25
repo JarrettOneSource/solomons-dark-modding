@@ -95,12 +95,13 @@ def test_lua_scene_is_address_free_authority_owned_and_rooms_are_participant_loc
         )
     assert "BuildWorldSceneKey(scene_state, scene_kind)" in snapshot_capture
     assert "TickDormantSharedHubOnGameThread();" in gameplay_pump
-    private_region_case = steam_session.index(
-        "case ParticipantSceneIntentKind::PrivateRegion:"
+    assert "switch (runtime_state.lobby_session_state)" in steam_session
+    in_hub_case = steam_session.index(
+        "case LobbySessionState::InHub:"
     )
     assert (
         'game_phase = "hub";'
-        in steam_session[private_region_case : private_region_case + 160]
+        in steam_session[in_hub_case : in_hub_case + 120]
     )
     assert "SetAllBotSceneIntentsToPrivateRegion(region_index)" in queue
     assert "SetAllBotSceneIntentsToSharedHub()" in queue

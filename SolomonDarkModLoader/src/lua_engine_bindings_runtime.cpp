@@ -547,6 +547,134 @@ void PushRunGameOverRuntimeInfo(
     lua_setfield(state, -2, "dispatch_count");
 }
 
+void PushRunLoadingParticipantIds(
+    lua_State* state,
+    const std::vector<std::uint64_t>& participant_ids) {
+    lua_createtable(
+        state,
+        static_cast<int>(participant_ids.size()),
+        0);
+    for (std::size_t index = 0;
+         index < participant_ids.size();
+         ++index) {
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant_ids[index]));
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+}
+
+void PushRunLoadingBarrierRuntimeInfo(
+    lua_State* state,
+    const multiplayer::RunLoadingBarrierRuntimeInfo& barrier) {
+    lua_createtable(state, 0, 15);
+    lua_pushboolean(state, barrier.active ? 1 : 0);
+    lua_setfield(state, -2, "active");
+    lua_pushboolean(
+        state,
+        barrier.local_mutual_visibility ? 1 : 0);
+    lua_setfield(
+        state,
+        -2,
+        "local_mutual_visibility");
+    lua_pushboolean(state, barrier.released ? 1 : 0);
+    lua_setfield(state, -2, "released");
+    lua_pushboolean(state, barrier.timed_out ? 1 : 0);
+    lua_setfield(state, -2, "timed_out");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(barrier.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.local_ack_nonce));
+    lua_setfield(state, -2, "local_ack_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.release_nonce));
+    lua_setfield(state, -2, "release_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.deadline_remaining_ms));
+    lua_setfield(
+        state,
+        -2,
+        "deadline_remaining_ms");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.visible_participant_set_hash));
+    lua_setfield(
+        state,
+        -2,
+        "visible_participant_set_hash");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.expected_participant_set_hash));
+    lua_setfield(
+        state,
+        -2,
+        "expected_participant_set_hash");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.visible_participant_count));
+    lua_setfield(
+        state,
+        -2,
+        "visible_participant_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.expected_participant_count));
+    lua_setfield(
+        state,
+        -2,
+        "expected_participant_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            barrier.ready_participant_count));
+    lua_setfield(
+        state,
+        -2,
+        "ready_participant_count");
+    lua_pushstring(
+        state,
+        multiplayer::RunLoadingReleaseReasonLabel(
+            barrier.release_reason));
+    lua_setfield(state, -2, "release_reason");
+    PushRunLoadingParticipantIds(
+        state,
+        barrier.expected_participant_ids);
+    lua_setfield(
+        state,
+        -2,
+        "expected_participant_ids");
+    PushRunLoadingParticipantIds(
+        state,
+        barrier.ready_participant_ids);
+    lua_setfield(
+        state,
+        -2,
+        "ready_participant_ids");
+    PushRunLoadingParticipantIds(
+        state,
+        barrier.waiting_participant_ids);
+    lua_setfield(
+        state,
+        -2,
+        "waiting_participant_ids");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
@@ -561,6 +689,18 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_setfield(state, -2, "session_status");
     lua_pushstring(state, multiplayer::SessionTransportLabel(runtime.session_transport));
     lua_setfield(state, -2, "session_transport");
+    lua_pushstring(
+        state,
+        multiplayer::LobbySessionStateLabel(
+            runtime.lobby_session_state));
+    lua_setfield(state, -2, "session_state");
+    lua_pushboolean(
+        state,
+        runtime.run_end_pending_lobby_return ? 1 : 0);
+    lua_setfield(
+        state,
+        -2,
+        "run_end_pending_lobby_return");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.local_steam_id));
     lua_setfield(state, -2, "local_steam_id");
     lua_pushinteger(state, static_cast<lua_Integer>(runtime.participants.size()));
@@ -711,6 +851,13 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         state,
         runtime.game_over);
     lua_setfield(state, -2, "game_over");
+    PushRunLoadingBarrierRuntimeInfo(
+        state,
+        runtime.run_loading_barrier);
+    lua_setfield(
+        state,
+        -2,
+        "run_loading_barrier");
 
     return 1;
 }

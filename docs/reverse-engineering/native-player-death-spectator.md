@@ -966,7 +966,7 @@ The native findings impose these constraints:
   owner-authored death-presentation flag starts the participant death epoch.
 - Owner and observers use the same death-presentation epoch and agree on
   `+0x160`, the owner-authored bounded `+0x1BC` clock, and whether the grace
-  presentation is active. Protocol 84 carries that clock explicitly rather
+  presentation is active. Protocol 85 carries that clock explicitly rather
   than starting a peer-local timer when the death packet arrives.
 - Presentation acceptance compares the native bounded clock on the first
   observer frame against the owner's clock, not packet-arrival wall time. A

@@ -84,6 +84,10 @@ void ApplyRemoteStatePacket(
         packet,
         packet_from_configured_authority);
     RecordRunGameOverAcknowledgement(packet);
+    ApplyRunLoadingBarrierPacket(
+        packet,
+        packet_from_configured_authority,
+        now_ms);
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
             packet.participant_id,
@@ -294,6 +298,10 @@ void ApplyRemoteParticipantFramePacket(
         packet,
         packet_from_configured_authority);
     RecordRunGameOverAcknowledgement(packet);
+    ApplyRunLoadingBarrierPacket(
+        packet,
+        packet_from_configured_authority,
+        now_ms);
     if (IsLocalTransportHost()) {
         ApplyHostMenuPauseRequest(
             packet.participant_id,

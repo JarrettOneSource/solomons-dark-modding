@@ -137,6 +137,12 @@ enum class SessionTransportKind {
     LocalUdp,
 };
 
+enum class LobbySessionState {
+    NotInGame,
+    InHub,
+    InBoneyard,
+};
+
 struct RuntimeState {
     bool shutting_down = false;
     bool foundation_ready = false;
@@ -167,6 +173,8 @@ struct RuntimeState {
     std::uint32_t next_outbound_sequence = 1;
     SessionStatus session_status = SessionStatus::Idle;
     SessionTransportKind session_transport = SessionTransportKind::None;
+    LobbySessionState lobby_session_state = LobbySessionState::NotInGame;
+    bool run_end_pending_lobby_return = false;
     std::string status_text;
     std::string error_text;
     std::vector<ParticipantInfo> participants;
@@ -188,6 +196,7 @@ struct RuntimeState {
     SharedGameplayPauseRuntimeInfo shared_gameplay_pause;
     DeathSpectatorRuntimeInfo death_spectator;
     RunGameOverRuntimeInfo game_over;
+    RunLoadingBarrierRuntimeInfo run_loading_barrier;
 };
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
@@ -247,6 +256,9 @@ bool IsNativeControlledParticipant(const ParticipantInfo& participant);
 
 const char* SessionStatusLabel(SessionStatus status);
 const char* SessionTransportLabel(SessionTransportKind kind);
+const char* LobbySessionStateLabel(LobbySessionState state);
+const char* RunLoadingReleaseReasonLabel(
+    RunLoadingReleaseReason reason);
 const char* DeathSpectatorPhaseLabel(DeathSpectatorPhase phase);
 const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);

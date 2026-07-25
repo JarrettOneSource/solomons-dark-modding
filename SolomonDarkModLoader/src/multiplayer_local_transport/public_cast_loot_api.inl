@@ -161,6 +161,7 @@ void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
 
 bool InitializeLocalTransport() {
     ResetRunGameOverState("transport_initialize");
+    ResetRunLoadingBarrierState("transport_initialize");
     if (!ConfigureLocalTransport()) {
         g_local_transport_authority_participant_id.store(
             0,
@@ -265,6 +266,7 @@ void ShutdownLocalTransport() {
     ShutdownLocalLevelUpOptionRollHook();
     ShutdownDeadLevelUpScreenTickHook();
     ResetRunGameOverState("transport_shutdown");
+    ResetRunLoadingBarrierState("transport_shutdown");
     ResetLocalDeathSpectatorState("transport_shutdown");
     ResetWaveRespawnState();
     sdmod::ClearHostLootDropDeactivationState();
@@ -331,6 +333,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
+    ServiceRunLoadingBarrier(now_ms);
     TickLocalDeathSpectator(now_ms);
     RefreshHostRunGameOverCommand();
     RefreshHostSharedGameplayPause(now_ms);

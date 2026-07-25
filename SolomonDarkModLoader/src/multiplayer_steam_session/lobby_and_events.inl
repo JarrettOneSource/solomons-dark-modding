@@ -164,20 +164,28 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
     }
 
     const auto steam_snapshot = GetSteamBootstrapSnapshot();
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto session_state =
+        LobbySessionStateLabel(runtime_state.lobby_session_state);
     std::string game_phase = "loading";
-    ParticipantRuntimeInfo local_runtime;
-    if (TryGetLocalParticipantRuntimeInfo(&local_runtime)) {
-        switch (local_runtime.scene_intent.kind) {
-        case ParticipantSceneIntentKind::SharedHub:
-            game_phase = "hub";
-            break;
-        case ParticipantSceneIntentKind::Run:
-            game_phase = "session";
-            break;
-        case ParticipantSceneIntentKind::PrivateRegion:
-            game_phase = "hub";
-            break;
-        }
+    switch (runtime_state.lobby_session_state) {
+    case LobbySessionState::NotInGame:
+        game_phase =
+            runtime_state.run_end_pending_lobby_return ||
+                runtime_state.game_over.accepted_epoch != 0
+            ? "results"
+            : "loading";
+        break;
+    case LobbySessionState::InHub:
+        game_phase = "hub";
+        break;
+    case LobbySessionState::InBoneyard:
+        game_phase =
+            !runtime_state.run_loading_barrier.active ||
+                !runtime_state.run_loading_barrier.released
+            ? "loading"
+            : "session";
+        break;
     }
 
     if (g_session.is_host &&
@@ -365,6 +373,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
               << g_session.local_steam_id << '|'
               << g_session.privacy << '|'
               << game_phase << '|'
+              << session_state << '|'
               << authenticated_count << '|'
               << (g_session.overlay_enabled ? 1 : 0) << '|'
               << (g_session.invite_dialog_opened ? 1 : 0) << '|'
@@ -389,6 +398,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         snapshot.is_host = g_session.is_host;
         snapshot.phase = SteamSessionPhaseLabel(g_session.phase);
         snapshot.game_phase = game_phase;
+        snapshot.session_state = session_state;
         snapshot.app_id = g_session.app_id;
         snapshot.lobby_id = g_session.lobby_id;
         snapshot.host_steam_id = g_session.host_steam_id;

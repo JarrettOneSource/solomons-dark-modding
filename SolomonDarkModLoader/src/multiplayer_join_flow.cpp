@@ -47,6 +47,7 @@ enum class JoinFlowPhase {
     Hub,
     LoadingBoneyard,
     Run,
+    PostRun,
     Failed,
 };
 
@@ -98,6 +99,8 @@ const char* PhaseLabel(JoinFlowPhase phase) {
         return "loading_boneyard";
     case JoinFlowPhase::Run:
         return "run";
+    case JoinFlowPhase::PostRun:
+        return "post_run";
     case JoinFlowPhase::Failed:
         return "failed";
     case JoinFlowPhase::Disabled:
@@ -475,6 +478,26 @@ bool IsRunRequested(const multiplayer::RuntimeState& runtime) {
                    participant.runtime.scene_intent.kind ==
                        multiplayer::ParticipantSceneIntentKind::Run;
         });
+}
+
+bool IsRunLoadingBarrierReleased(
+    const multiplayer::RuntimeState& runtime) {
+    const auto* local =
+        multiplayer::FindLocalParticipant(runtime);
+    return local != nullptr &&
+           local->runtime.run_nonce != 0 &&
+           runtime.run_loading_barrier.active &&
+           runtime.run_loading_barrier.released &&
+           runtime.run_loading_barrier.run_nonce ==
+               local->runtime.run_nonce &&
+           runtime.run_loading_barrier.release_nonce ==
+               local->runtime.run_nonce;
+}
+
+bool HasLocalRunTerminated(
+    const multiplayer::RuntimeState& runtime) {
+    return runtime.game_over.accepted_epoch != 0 ||
+           runtime.run_end_pending_lobby_return;
 }
 
 }  // namespace

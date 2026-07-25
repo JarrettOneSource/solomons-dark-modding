@@ -53,6 +53,31 @@ const char* SessionTransportLabel(SessionTransportKind kind) {
     return "Unknown";
 }
 
+const char* LobbySessionStateLabel(LobbySessionState state) {
+    switch (state) {
+    case LobbySessionState::NotInGame:
+        return "not-in-game";
+    case LobbySessionState::InHub:
+        return "in-hub";
+    case LobbySessionState::InBoneyard:
+        return "in-boneyard";
+    }
+    return "not-in-game";
+}
+
+const char* RunLoadingReleaseReasonLabel(
+    RunLoadingReleaseReason reason) {
+    switch (reason) {
+    case RunLoadingReleaseReason::None:
+        return "none";
+    case RunLoadingReleaseReason::AllParticipantsReady:
+        return "all-participants-ready";
+    case RunLoadingReleaseReason::Timeout:
+        return "timeout";
+    }
+    return "none";
+}
+
 const char* DeathSpectatorPhaseLabel(DeathSpectatorPhase phase) {
     switch (phase) {
     case DeathSpectatorPhase::Inactive:

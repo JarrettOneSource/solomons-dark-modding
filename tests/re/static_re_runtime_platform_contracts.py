@@ -879,7 +879,8 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
     private_body = flow_text[private_start:awaiting_start]
     private_requirements = (
         "SetPhaseUnlocked(JoinFlowPhase::Connecting)",
-        "SetPhaseUnlocked(JoinFlowPhase::Run)",
+        "IsRunLoadingBarrierReleased(runtime)",
+        "JoinFlowPhase::LoadingBoneyard",
         "snapshot->captured_at_milliseconds >",
         "g_join_flow.phase_entered_ms",
         "SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus)",

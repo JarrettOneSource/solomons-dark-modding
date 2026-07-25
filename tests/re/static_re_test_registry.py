@@ -289,6 +289,10 @@ from static_re_transport_core_contracts import (
     test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
     test_wave_completion_respawns_every_owner_from_reliable_host_command,
 )
+from static_multiplayer_session_lifecycle_contracts import (
+    test_match_end_preserves_lobby_and_reports_explicit_activity_state,
+    test_run_loading_waits_for_every_peer_visibility_and_is_bounded,
+)
 from static_re_steam_contracts import (
     test_manual_enemy_test_mode_logging_is_transition_only,
     test_packet_send_mode_dispatch_is_type_safe,
@@ -1112,6 +1116,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "all dead dispatches native Game Over once per participant",
         test_all_dead_dispatches_native_game_over_once_per_participant,
+    ),
+    (
+        "match end preserves lobby and reports explicit activity state",
+        test_match_end_preserves_lobby_and_reports_explicit_activity_state,
+    ),
+    (
+        "run loading waits for every peer visibility and is bounded",
+        test_run_loading_waits_for_every_peer_visibility_and_is_bounded,
     ),
     (
         "dead client spectates alive players with local camera and HUD",

@@ -193,16 +193,59 @@ std::string BuildLevelUpWaitStatusTextFromIds(
            (participant_ids.size() == 1 ? " player" : " players");
 }
 
+LobbySessionState DetectLocalLobbySessionState(
+    const SDModSceneState& scene_state,
+    const SDModPlayerState& player_state,
+    bool player_valid) {
+    if (!player_valid ||
+        player_state.actor_address == 0 ||
+        !scene_state.valid ||
+        scene_state.world_address == 0) {
+        return LobbySessionState::NotInGame;
+    }
+    if (scene_state.kind == "hub" ||
+        scene_state.name == "hub") {
+        return LobbySessionState::InHub;
+    }
+    if (scene_state.kind == "arena" || scene_state.name == "testrun") {
+        return IsRunLifecycleActive() &&
+                g_run_game_over.accepted_epoch == 0
+            ? LobbySessionState::InBoneyard
+            : LobbySessionState::NotInGame;
+    }
+    return LobbySessionState::NotInGame;
+}
+
 void RefreshLocalParticipantFromGameState() {
+    SDModSceneState scene_state;
+    (void)TryGetSceneState(&scene_state);
     SDModPlayerState player_state;
-    if (!TryGetPlayerState(&player_state) || !player_state.valid) {
+    const bool have_player_state =
+        TryGetPlayerState(&player_state) && player_state.valid;
+    const auto lobby_session_state = DetectLocalLobbySessionState(
+        scene_state,
+        player_state,
+        have_player_state);
+    UpdateRuntimeState([&](RuntimeState& state) {
+        state.lobby_session_state = lobby_session_state;
+        if (lobby_session_state ==
+            LobbySessionState::InHub) {
+            state.run_end_pending_lobby_return = false;
+        }
+    });
+    if (!have_player_state) {
         return;
     }
 
     SDModGameplaySelectionDebugState selection_state;
     const bool have_selection_state =
         TryGetGameplaySelectionDebugState(&selection_state) && selection_state.valid;
-    const auto scene_intent = SceneIntentFromLocalScene();
+    auto scene_intent = SceneIntentFromLocalScene();
+    if (scene_intent.kind ==
+            ParticipantSceneIntentKind::Run &&
+        !IsRunLifecycleActive()) {
+        scene_intent = DefaultParticipantSceneIntent();
+    }
     if (scene_intent.kind == ParticipantSceneIntentKind::SharedHub) {
         g_local_run_exit_latched_nonce.store(0, std::memory_order_release);
         g_local_transport.client_host_run_exit_follow = ClientHostRunExitFollow{};
@@ -461,6 +504,7 @@ void PopulateLocalParticipantFrameFields(
         static_cast<std::uint8_t>(ParticipantControllerKind::Native);
     packet->run_nonce = local.runtime.run_nonce;
     PopulateRunGameOverPacketFields(packet);
+    PopulateRunLoadingBarrierPacketFields(packet);
     PopulateSharedGameplayPausePacketFields(runtime_state, packet);
     PopulateLuaTimeControlPacketFields(packet);
     packet->participant_vitals_correction_ack_sequence =

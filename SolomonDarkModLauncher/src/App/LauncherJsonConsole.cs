@@ -176,6 +176,7 @@ internal static class LauncherJsonConsole
                             IsHost = session.IsHost,
                             Phase = session.Phase,
                             GamePhase = session.GamePhase,
+                            SessionState = session.SessionState,
                             AppId = session.AppId,
                             LobbyId = session.LobbyId,
                             HostSteamId = session.HostSteamId,
@@ -426,6 +427,7 @@ internal static class LauncherJsonConsole
         public required bool IsHost { get; init; }
         public required string Phase { get; init; }
         public required string GamePhase { get; init; }
+        public required string SessionState { get; init; }
         public required uint AppId { get; init; }
         public required ulong LobbyId { get; init; }
         public required ulong HostSteamId { get; init; }

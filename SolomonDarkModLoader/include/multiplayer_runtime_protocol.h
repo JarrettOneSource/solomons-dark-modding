@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 84;
+constexpr std::uint16_t kProtocolVersion = 85;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -146,6 +146,12 @@ enum class WorldSceneKind : std::uint8_t {
     SharedHub = 1,
     PrivateRegion = 2,
     Run = 3,
+};
+
+enum class RunLoadingReleaseReason : std::uint8_t {
+    None = 0,
+    AllParticipantsReady = 1,
+    Timeout = 2,
 };
 
 enum class LootDropKind : std::uint8_t {
@@ -480,6 +486,16 @@ struct StatePacket {
     std::uint32_t game_over_command_epoch;
     std::uint32_t game_over_ack_epoch;
     std::uint32_t game_over_run_nonce;
+    std::uint32_t run_loading_ack_nonce;
+    std::uint32_t run_loading_release_nonce;
+    std::uint32_t run_loading_deadline_remaining_ms;
+    std::uint64_t run_loading_visible_participant_set_hash;
+    std::uint64_t run_loading_expected_participant_set_hash;
+    std::uint16_t run_loading_visible_participant_count;
+    std::uint16_t run_loading_expected_participant_count;
+    std::uint16_t run_loading_ready_participant_count;
+    std::uint8_t run_loading_release_reason;
+    std::uint8_t run_loading_reserved = 0;
     std::uint32_t wave_respawn_epoch;
     std::int32_t wave_respawn_wave;
     float wave_respawn_x;
@@ -614,6 +630,16 @@ struct ParticipantFramePacket {
     std::uint32_t game_over_command_epoch;
     std::uint32_t game_over_ack_epoch;
     std::uint32_t game_over_run_nonce;
+    std::uint32_t run_loading_ack_nonce;
+    std::uint32_t run_loading_release_nonce;
+    std::uint32_t run_loading_deadline_remaining_ms;
+    std::uint64_t run_loading_visible_participant_set_hash;
+    std::uint64_t run_loading_expected_participant_set_hash;
+    std::uint16_t run_loading_visible_participant_count;
+    std::uint16_t run_loading_expected_participant_count;
+    std::uint16_t run_loading_ready_participant_count;
+    std::uint8_t run_loading_release_reason;
+    std::uint8_t run_loading_reserved = 0;
     std::uint32_t wave_respawn_epoch;
     std::int32_t wave_respawn_wave;
     float wave_respawn_x;
@@ -1623,12 +1649,12 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 616, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 652, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
 static_assert(sizeof(WaveSummaryPacket) == 296,
               "Unexpected wave summary packet size");
-static_assert(sizeof(ParticipantFramePacket) == 334,
+static_assert(sizeof(ParticipantFramePacket) == 370,
               "Unexpected participant frame packet size");
 static_assert(
     sizeof(ParticipantInventorySnapshotPacket) == 1832,

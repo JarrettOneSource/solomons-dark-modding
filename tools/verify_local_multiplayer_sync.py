@@ -497,6 +497,7 @@ def launch_pair(
     host_preset: str | None = None,
     client_preset: str | None = None,
     temporary_host_profile: bool = True,
+    fresh_install: bool = False,
     god_mode: bool = False,
     tile_windows: bool = True,
     test_survival_boneyard_override: Path | None = None,
@@ -563,7 +564,9 @@ def launch_pair(
             args.extend(["-ClientPreset", client_preset])
     else:
         args.extend(["-Preset", preset])
-    if temporary_host_profile:
+    if fresh_install:
+        args.append("-FreshInstall")
+    elif temporary_host_profile:
         args.append("-TemporaryHostProfile")
     if third_player:
         args.extend(

@@ -1,0 +1,338 @@
+"""Persistent-lobby and run-loading readiness contracts."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from static_re_contract_support import ROOT
+
+
+def _read(relative_path: str) -> str:
+    return (ROOT / Path(relative_path)).read_text(encoding="utf-8")
+
+
+def _require_tokens(source: str, tokens: tuple[str, ...], owner: str) -> None:
+    for token in tokens:
+        assert token in source, f"{owner} lacks: {token}"
+
+
+def _require_in_order(source: str, *tokens: str) -> None:
+    cursor = -1
+    for token in tokens:
+        index = source.find(token, cursor + 1)
+        assert index >= 0, f"ordered lifecycle contract lacks: {token}"
+        cursor = index
+
+
+def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
+    labels = _read(
+        "SolomonDarkModLoader/src/multiplayer_runtime_labels.cpp"
+    )
+    local_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_state_packet_sync.inl"
+    )
+    runtime_state = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_effect_state.inl"
+    )
+    transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
+    join_flow = _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/tick_state_machine.inl"
+    )
+    steam_status = _read(
+        "SolomonDarkModLoader/src/multiplayer_steam_session/"
+        "lobby_and_events.inl"
+    )
+    startup_status = _read("SolomonDarkModLoader/src/startup_status.cpp")
+    launcher_status = _read(
+        "SolomonDarkModLauncher/src/Launch/"
+        "MultiplayerSessionStatusMonitor.cs"
+    )
+    launcher_view = _read(
+        "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
+    )
+    native_note = _read(
+        "docs/reverse-engineering/native-game-over-session-semantics.md"
+    )
+    verifier = _read(
+        "tools/verify_game_over_session_semantics.py"
+    )
+    local_verifier = _read(
+        "tools/verify_local_multiplayer_sync.py"
+    )
+    solo_launcher = _read(
+        "scripts/Launch-LocalSoloSession.ps1"
+    )
+    pair_launcher = _read(
+        "scripts/Launch-LocalMultiplayerPair.ps1"
+    )
+
+    _require_tokens(
+        labels,
+        (
+            'return "not-in-game";',
+            'return "in-hub";',
+            'return "in-boneyard";',
+        ),
+        "lobby activity labels",
+    )
+    _require_tokens(
+        local_state,
+        (
+            "LobbySessionState DetectLocalLobbySessionState(",
+            'scene_state.kind == "hub"',
+            "LobbySessionState::InHub",
+            'scene_state.kind == "arena"',
+            "IsRunLifecycleActive()",
+            "LobbySessionState::InBoneyard",
+            "return LobbySessionState::NotInGame;",
+            "state.run_end_pending_lobby_return = false;",
+        ),
+        "local activity detector",
+    )
+    _require_tokens(
+        runtime_state,
+        (
+            "LobbySessionState lobby_session_state",
+            "bool run_end_pending_lobby_return",
+        ),
+        "runtime activity state",
+    )
+    _require_tokens(
+        transport,
+        (
+            "void NotifyLocalRunStarted()",
+            "state.run_end_pending_lobby_return = false;",
+            "void NotifyLocalRunEnded(std::string_view reason)",
+            "state.run_end_pending_lobby_return = true;",
+        ),
+        "run lifecycle state",
+    )
+    _require_tokens(
+        join_flow,
+        (
+            "case JoinFlowPhase::PostRun:",
+            'snapshot->surface_id != "main_menu"',
+            "SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);",
+        ),
+        "post-run stock reentry",
+    )
+    assert "LeaveSteam" not in join_flow
+    assert "ShutdownLocalTransport" not in join_flow
+
+    _require_tokens(
+        steam_status,
+        (
+            "LobbySessionStateLabel(runtime_state.lobby_session_state)",
+            "case LobbySessionState::NotInGame:",
+            'game_phase = "hub";',
+            "runtime_state.run_loading_barrier.released",
+            "snapshot.session_state = session_state;",
+        ),
+        "Steam lobby status",
+    )
+    assert "sessionState" in startup_status
+    assert "string SessionState" in launcher_status
+    _require_tokens(
+        launcher_view,
+        (
+            '"in-hub" => "In Hub"',
+            '"in-boneyard" => "In Boneyard"',
+            '"not-in-game" => "Not In Game"',
+        ),
+        "launcher lobby card",
+    )
+    _require_tokens(
+        native_note,
+        (
+            "native Game Over completion and multiplayer-session teardown are",
+            "independent state machines",
+            "must likewise not retire authenticated lobby",
+            "without recreating or rejoining the lobby",
+        ),
+        "native Game Over session documentation",
+    )
+    _require_tokens(
+        verifier,
+        (
+            '"-FreshInstall"',
+            "fresh_install=True",
+            "quick_start=True",
+            '"same_lobby_hub_state"',
+            '"same_lobby_hub_relationships"',
+            '"second_run_relationships"',
+            '"second_run_loading_release"',
+            '"same_process_ids": True',
+            '"rejoin_performed": False',
+            '"relaunch_performed": False',
+        ),
+        "same-lobby second-run live gate",
+    )
+    _require_tokens(
+        local_verifier,
+        (
+            "fresh_install: bool = False",
+            'args.append("-FreshInstall")',
+        ),
+        "isolated fresh-install launcher adapter",
+    )
+    _require_tokens(
+        solo_launcher,
+        (
+            "[switch]$FreshInstall",
+            "[switch]$QuickStart",
+            '$arguments += "--fresh-install"',
+            '$arguments += "--temporary-profile"',
+            "SDMOD_MULTIPLAYER_QUICK_START",
+            "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT",
+            "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE",
+        ),
+        "isolated solo fresh-install launcher",
+    )
+    _require_tokens(
+        pair_launcher,
+        (
+            "[switch]$FreshInstall",
+            "-ResponseTimeoutMilliseconds 2500",
+        ),
+        "bounded isolated multiplayer launcher",
+    )
+    return (
+        "native Game Over remains stock-owned while the authenticated lobby "
+        "survives and publishes exact not-in-game, in-hub, and in-boneyard state"
+    )
+
+
+def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    barrier = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "run_loading_barrier_sync.inl"
+    )
+    transport_tick = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    outgoing = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_packet_sync.inl"
+    )
+    join_flow = _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/tick_state_machine.inl"
+    )
+    presentation = _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
+    )
+    lua_runtime = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
+    verifier = _read(
+        "tools/verify_game_over_session_semantics.py"
+    )
+
+    assert "kProtocolVersion = 85" in protocol
+    for field in (
+        "run_loading_ack_nonce",
+        "run_loading_release_nonce",
+        "run_loading_deadline_remaining_ms",
+        "run_loading_visible_participant_set_hash",
+        "run_loading_expected_participant_set_hash",
+        "run_loading_visible_participant_count",
+        "run_loading_expected_participant_count",
+        "run_loading_ready_participant_count",
+        "run_loading_release_reason",
+    ):
+        assert protocol.count(field) == 2, (
+            f"{field} must exist in both reliable state and participant frame"
+        )
+    assert "sizeof(StatePacket) == 652" in protocol
+    assert "sizeof(ParticipantFramePacket) == 370" in protocol
+
+    _require_tokens(
+        barrier,
+        (
+            "kRunLoadingBarrierTimeoutMs = 25000",
+            "BuildHostRunLoadingExpectedParticipantIds(",
+            "g_local_transport.peers",
+            "RunLoadingParticipantSetHash(",
+            "BuildLocallyVisibleRunParticipantIds(",
+            "HostHasLocalMutualRunVisibility(",
+            ".visible_participant_count ==",
+            ".visible_participant_set_hash ==",
+            ".authoritative_expected_participant_set_hash",
+            "packet.run_loading_ack_nonce !=",
+            "packet.run_loading_visible_participant_set_hash !=",
+            "packet.run_loading_expected_participant_set_hash !=",
+            "packet_from_configured_authority",
+            "AllParticipantsReady",
+            '"host_deadline"',
+            '"client_fallback_deadline"',
+            '"authenticated_host_release"',
+        ),
+        "run-loading barrier",
+    )
+    _require_in_order(
+        transport_tick,
+        "ReceivePackets(now_ms);",
+        "ServiceRunLoadingBarrier(now_ms);",
+        "SendLocalState(now_ms);",
+        "SendLocalParticipantFrame(now_ms);",
+    )
+    assert outgoing.count("!HasRunLoadingBarrierPacketWork(packet)") == 2
+    assert "SteamNetworkSendMode::ReliableNoNagle" in outgoing
+
+    _require_tokens(
+        join_flow,
+        (
+            "case JoinFlowPhase::LoadingBoneyard:",
+            "IsRunLoadingBarrierReleased(runtime)",
+            "HasLocalRunTerminated(runtime)",
+        ),
+        "run-entry presentation gate",
+    )
+    _require_tokens(
+        presentation,
+        (
+            "NotifyMultiplayerJoinFlowRunStart()",
+            "JoinFlowPhase::Hub",
+            'return {true, "Loading Boneyard"};',
+        ),
+        "host and client loading presentation",
+    )
+    _require_tokens(
+        lua_runtime,
+        (
+            '"run_loading_barrier"',
+            '"local_mutual_visibility"',
+            '"expected_participant_ids"',
+            '"ready_participant_ids"',
+            '"waiting_participant_ids"',
+            '"release_reason"',
+        ),
+        "barrier observability",
+    )
+    _require_tokens(
+        verifier,
+        (
+            "capture_loading_presentations(",
+            "classify_loading_boneyard_image(",
+            "minimum_unique_colors=20",
+            "maximum_dominant_fraction=0.9999",
+            '"center_light_fraction"',
+            "healthy_loading_barrier_state_matches(",
+            "run_loading_timeout_verification(",
+            "stop_owned_processes(client_owned)",
+            '"host-loading-after-peer-kill.png"',
+            'expected_reason="timeout"',
+            "timeout=35.0",
+            '"host-proceeded-after-timeout.png"',
+            '_path_for_local_python(str(launch["hostLog"]))',
+        ),
+        "bounded loading-barrier live gate",
+    )
+    return (
+        "all participants keep Loading Boneyard until every peer acks the same "
+        "materialized actor set, with authenticated host release and bounded fallbacks"
+    )

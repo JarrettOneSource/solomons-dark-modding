@@ -41,6 +41,7 @@ struct MultiplayerSessionStatusSnapshot {
     bool is_host = false;
     std::string phase;
     std::string game_phase;
+    std::string session_state;
     std::uint32_t app_id = 0;
     std::uint64_t lobby_id = 0;
     std::uint64_t host_steam_id = 0;

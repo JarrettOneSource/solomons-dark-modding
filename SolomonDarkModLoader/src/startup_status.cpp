@@ -157,6 +157,8 @@ void WriteMultiplayerSessionStatus(
            << EscapeJsonString(snapshot.phase) << "\",\n";
     stream << "  \"gamePhase\": \""
            << EscapeJsonString(snapshot.game_phase) << "\",\n";
+    stream << "  \"sessionState\": \""
+           << EscapeJsonString(snapshot.session_state) << "\",\n";
     stream << "  \"appId\": " << snapshot.app_id << ",\n";
     stream << "  \"lobbyId\": " << snapshot.lobby_id << ",\n";
     stream << "  \"hostSteamId\": " << snapshot.host_steam_id << ",\n";

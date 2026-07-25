@@ -12,6 +12,7 @@ import select
 import subprocess
 import time
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +65,7 @@ end
 local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local spectator = assert(multiplayer.death_spectator)
 local terminal = multiplayer.game_over or {}
+local loading = multiplayer.run_loading_barrier or {}
 local player = sd.player.get_state()
 local scene = sd.world.get_scene()
 local ui = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot() or nil
@@ -101,6 +103,9 @@ emit("alive_run_count", alive_run_count)
 emit("remote_peer_count", remote_peer_count)
 emit("run_nonce", run_nonce)
 emit("local_in_run", local_row and local_row.in_run or false)
+emit("session_state", multiplayer.session_state or "")
+emit("run_end_pending_lobby_return",
+  multiplayer.run_end_pending_lobby_return or false)
 emit("local_life_current", player and player.hp or
   (local_row and local_row.life_current or 0))
 emit("local_life_max", player and player.max_hp or
@@ -115,6 +120,27 @@ emit("game_over_authority_participant_id",
   terminal.authority_participant_id or 0)
 emit("game_over_pending_dispatch", terminal.pending_dispatch or false)
 emit("game_over_dispatch_count", terminal.dispatch_count or 0)
+emit("loading_active", loading.active or false)
+emit("loading_local_mutual_visibility",
+  loading.local_mutual_visibility or false)
+emit("loading_released", loading.released or false)
+emit("loading_timed_out", loading.timed_out or false)
+emit("loading_run_nonce", loading.run_nonce or 0)
+emit("loading_local_ack_nonce", loading.local_ack_nonce or 0)
+emit("loading_release_nonce", loading.release_nonce or 0)
+emit("loading_deadline_remaining_ms",
+  loading.deadline_remaining_ms or 0)
+emit("loading_visible_participant_count",
+  loading.visible_participant_count or 0)
+emit("loading_expected_participant_count",
+  loading.expected_participant_count or 0)
+emit("loading_ready_participant_count",
+  loading.ready_participant_count or 0)
+emit("loading_visible_participant_set_hash",
+  loading.visible_participant_set_hash or 0)
+emit("loading_expected_participant_set_hash",
+  loading.expected_participant_set_hash or 0)
+emit("loading_release_reason", loading.release_reason or "")
 """
 
 
@@ -143,13 +169,13 @@ def _default_instance_prefix() -> str:
 
 def _resolve_udp_ports(explicit: list[int | None]) -> list[int]:
     if all(port is None for port in explicit):
-        return select_available_windows_udp_ports(5)
+        return select_available_windows_udp_ports(7)
     if any(port is None for port in explicit):
-        raise ValueError("all five ports must be provided together")
+        raise ValueError("all seven ports must be provided together")
     ports = [int(port) for port in explicit if port is not None]
     if any(port < 1 or port > 0xFFFF for port in ports):
         raise ValueError("explicit UDP ports must be between 1 and 65535")
-    if len(set(ports)) != 5:
+    if len(set(ports)) != 7:
         raise ValueError("explicit UDP ports must be distinct")
     return ports
 
@@ -158,6 +184,27 @@ def _windows_path_equal(left: str, right: str) -> bool:
     return ntpath.normcase(ntpath.normpath(left)) == ntpath.normcase(
         ntpath.normpath(right)
     )
+
+
+def _path_for_local_python(path: str) -> Path:
+    if os.name == "nt":
+        return Path(path)
+    completed = subprocess.run(
+        ["wslpath", "-u", path],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=5.0,
+        check=False,
+    )
+    converted = completed.stdout.strip()
+    if completed.returncode != 0 or not converted:
+        raise VerifyFailure(
+            f"could not convert Windows path for local inspection: "
+            f"{path}: {completed.stdout}"
+        )
+    return Path(converted)
 
 
 def _powershell_literal(value: str) -> str:
@@ -315,6 +362,8 @@ def launch_solo(
         f"0x{SOLO_PARTICIPANT_ID:X}",
         "-PlayerName",
         SOLO_PLAYER_NAME,
+        "-FreshInstall",
+        "-QuickStart",
         "-GameDirectory",
         path_for_powershell(game_directory),
         "-ExactModIds",
@@ -489,6 +538,180 @@ def terminal_game_over_state_matches(
         and values.get("spectator_active") == "false"
         and values.get("spectator_phase") == "Inactive"
     )
+
+
+def loading_barrier_wait_state_matches(
+    values: Mapping[str, str],
+    expected_participants: int,
+) -> bool:
+    expected_hash = values.get(
+        "loading_expected_participant_set_hash",
+        "0",
+    )
+    return (
+        values.get("session_state") == "in-boneyard"
+        and values.get("loading_active") == "true"
+        and values.get("loading_released") == "false"
+        and _integer(
+            values,
+            "loading_expected_participant_count",
+        )
+        == expected_participants
+        and expected_hash not in ("", "0")
+    )
+
+
+def loading_barrier_released_state_matches(
+    values: Mapping[str, str],
+    expected_participants: int,
+    *,
+    expected_reason: str,
+) -> bool:
+    run_nonce = _integer(values, "run_nonce")
+    expected_hash = values.get(
+        "loading_expected_participant_set_hash",
+        "0",
+    )
+    return (
+        values.get("session_state") == "in-boneyard"
+        and values.get("loading_active") == "true"
+        and values.get("loading_released") == "true"
+        and values.get("loading_release_reason") == expected_reason
+        and _integer(values, "loading_run_nonce") == run_nonce
+        and _integer(values, "loading_release_nonce") == run_nonce
+        and _integer(
+            values,
+            "loading_expected_participant_count",
+        )
+        == expected_participants
+        and expected_hash not in ("", "0")
+    )
+
+
+def healthy_loading_barrier_state_matches(
+    values: Mapping[str, str],
+    expected_participants: int,
+) -> bool:
+    run_nonce = _integer(values, "run_nonce")
+    return (
+        loading_barrier_released_state_matches(
+            values,
+            expected_participants,
+            expected_reason="all-participants-ready",
+        )
+        and values.get("loading_local_mutual_visibility") == "true"
+        and values.get("loading_timed_out") == "false"
+        and _integer(values, "loading_local_ack_nonce") == run_nonce
+        and _integer(
+            values,
+            "loading_visible_participant_count",
+        )
+        == expected_participants
+        and _integer(
+            values,
+            "loading_ready_participant_count",
+        )
+        == expected_participants
+        and values.get(
+            "loading_visible_participant_set_hash"
+        )
+        == values.get(
+            "loading_expected_participant_set_hash"
+        )
+    )
+
+
+def classify_loading_boneyard_image(path: Path) -> dict[str, object]:
+    """Recognize the intentional centered text on the black loading frame."""
+
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+    center = _zone_pixels(image, (0.35, 0.42, 0.65, 0.58))
+    all_pixels = _zone_pixels(image, (0.0, 0.0, 1.0, 1.0))
+    center_light_fraction = sum(
+        min(pixel) >= 120 for pixel in center
+    ) / float(len(center))
+    dark_fraction = sum(
+        max(pixel) < 20 for pixel in all_pixels
+    ) / float(len(all_pixels))
+    return {
+        "matched": (
+            center_light_fraction >= 0.003
+            and dark_fraction >= 0.98
+        ),
+        "width": image.width,
+        "height": image.height,
+        "center_light_fraction": center_light_fraction,
+        "dark_fraction": dark_fraction,
+    }
+
+
+def _capture_loading_presentation(
+    pipe_name: str,
+    output_path: Path,
+    expected_participants: int,
+    timeout: float,
+) -> dict[str, object]:
+    state = _wait_for_state(
+        pipe_name,
+        lambda values: loading_barrier_wait_state_matches(
+            values,
+            expected_participants,
+        ),
+        timeout=timeout,
+        description=(
+            "unreleased mutual-visibility run-loading barrier"
+        ),
+    )
+    capture = capture_game_backbuffer(
+        pipe_name,
+        output_path,
+        minimum_unique_colors=20,
+        maximum_dominant_fraction=0.9999,
+    )
+    classification = classify_loading_boneyard_image(output_path)
+    if not classification["matched"]:
+        raise VerifyFailure(
+            "Loading Boneyard presentation was not visible on "
+            f"{pipe_name}: {classification}"
+        )
+    return {
+        "pre_capture_state": state,
+        "capture": capture,
+        "classification": classification,
+        "post_capture_state": query_session_state(pipe_name),
+    }
+
+
+def capture_loading_presentations(
+    pipes_by_label: Mapping[str, str],
+    artifact_directory: Path,
+    *,
+    expected_participants: int,
+    timeout: float = 30.0,
+) -> dict[str, object]:
+    artifact_directory.mkdir(parents=True, exist_ok=True)
+    futures = {}
+    with ThreadPoolExecutor(
+        max_workers=len(pipes_by_label)
+    ) as executor:
+        for label, pipe_name in pipes_by_label.items():
+            future = executor.submit(
+                _capture_loading_presentation,
+                pipe_name,
+                artifact_directory
+                / f"{label}-loading-boneyard.png",
+                expected_participants,
+                timeout,
+            )
+            futures[future] = label
+
+        captures: dict[str, object] = {}
+        for future, label in futures.items():
+            captures[label] = future.result(
+                timeout=timeout + 15.0
+            )
+    return captures
 
 
 def _zone_pixels(
@@ -780,6 +1003,36 @@ def _owned_trio_processes(
     }
 
 
+def _owned_pair_processes(
+    launch: Mapping[str, object],
+) -> dict[int, str]:
+    process_ids = {
+        key: int(value)
+        for key, value in (
+            ("host", launch.get("hostProcessId")),
+            ("client", launch.get("clientProcessId")),
+        )
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0
+    }
+    runtime_root = launch.get("runtimeRoot")
+    instance_prefix = launch.get("instancePrefix")
+    if (
+        len(process_ids) != 2
+        or not isinstance(runtime_root, str)
+        or not isinstance(instance_prefix, str)
+    ):
+        raise VerifyFailure(
+            f"pair launcher did not report exact process ownership: {launch}"
+        )
+    return {
+        process_id: _expected_instance_executable(
+            runtime_root,
+            f"{instance_prefix}-{role}",
+        )
+        for role, process_id in process_ids.items()
+    }
+
+
 def run_solo_verification(
     *,
     instance_prefix: str,
@@ -867,7 +1120,8 @@ def run_trio_verification(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_water_body_hub",
         third_preset="map_create_earth_arcane_hub",
-        temporary_host_profile=True,
+        temporary_host_profile=False,
+        fresh_install=True,
         tile_windows=False,
         third_player=True,
         kill_existing=False,
@@ -877,6 +1131,7 @@ def run_trio_verification(
         third_port=ports[4],
         game_directory=game_directory,
         exact_mod_id=ACCEPTANCE_MOD_ID,
+        quick_start=True,
     )
     owned = _owned_trio_processes(launch)
     result: dict[str, object] = {
@@ -887,10 +1142,22 @@ def run_trio_verification(
     client_pipe = str(launch["clientLuaPipe"])
     third_pipe = str(launch["thirdLuaPipe"])
     pipes = [host_pipe, client_pipe, third_pipe]
+    pipes_by_label = {
+        "host": host_pipe,
+        "client": client_pipe,
+        "third": third_pipe,
+    }
     artifact_directory = ARTIFACT_ROOT / instance_prefix / "trio"
     try:
         result["bots_disabled"] = _disable_bots(pipes)
         _start_testrun_when_ready(host_pipe)
+        result["loading_boneyard"] = (
+            capture_loading_presentations(
+                pipes_by_label,
+                artifact_directory,
+                expected_participants=3,
+            )
+        )
         for pipe_name in pipes:
             wait_for_scene(pipe_name, "testrun", 45.0)
 
@@ -913,6 +1180,40 @@ def run_trio_verification(
                     45.0,
                 )
         result["relationships"] = relationships
+        result["first_run_loading_release"] = {
+            label: _wait_for_state(
+                pipe_name,
+                lambda values: healthy_loading_barrier_state_matches(
+                    values,
+                    3,
+                ),
+                timeout=15.0,
+                description=(
+                    "healthy all-participant run-loading release"
+                ),
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
+        first_run_nonces = {
+            _integer(values, "run_nonce")
+            for values in result[
+                "first_run_loading_release"
+            ].values()
+        }
+        if len(first_run_nonces) != 1 or min(first_run_nonces) <= 0:
+            raise VerifyFailure(
+                "first run did not converge on one nonzero nonce: "
+                f"{result['first_run_loading_release']}"
+            )
+        first_run_nonce = next(iter(first_run_nonces))
+        result["first_run_ready_frames"] = {
+            label: capture_game_backbuffer(
+                pipe_name,
+                artifact_directory
+                / f"{label}-first-run-ready.png",
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
 
         result["first_death"] = _apply_authoritative_remote_lethal_hit(
             host_pipe,
@@ -1020,6 +1321,311 @@ def run_trio_verification(
                 third_pipe: int(launch["thirdProcessId"]),
             }
         )
+        for pipe_name in pipes:
+            wait_for_scene(pipe_name, "hub", 60.0)
+        hub_relationships: dict[str, dict[str, str]] = {}
+        for observer_pipe, observer_id, _ in participants:
+            for _, owner_id, owner_name in participants:
+                if owner_id == observer_id:
+                    continue
+                key = f"{observer_id:x}_observes_{owner_id:x}"
+                hub_relationships[key] = wait_for_remote(
+                    observer_pipe,
+                    owner_id,
+                    owner_name,
+                    "hub",
+                    45.0,
+                )
+        result["same_lobby_hub_relationships"] = (
+            hub_relationships
+        )
+        result["same_lobby_hub_state"] = {
+            label: _wait_for_state(
+                pipe_name,
+                lambda values: (
+                    values.get("session_state") == "in-hub"
+                    and values.get(
+                        "run_end_pending_lobby_return"
+                    )
+                    == "false"
+                    and _integer(
+                        values,
+                        "participant_count",
+                    )
+                    == 3
+                    and _integer(
+                        values,
+                        "remote_peer_count",
+                    )
+                    == 2
+                ),
+                timeout=15.0,
+                description=(
+                    "same-session shared hub after Game Over"
+                ),
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
+        result["same_lobby_hub_frames"] = {
+            label: capture_game_backbuffer(
+                pipe_name,
+                artifact_directory
+                / f"{label}-same-lobby-hub.png",
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
+        result["same_processes_after_game_over"] = (
+            validate_owned_processes(owned)
+        )
+
+        _start_testrun_when_ready(host_pipe)
+        for pipe_name in pipes:
+            wait_for_scene(pipe_name, "testrun", 45.0)
+        second_run_relationships: dict[
+            str,
+            dict[str, str],
+        ] = {}
+        for observer_pipe, observer_id, _ in participants:
+            for _, owner_id, owner_name in participants:
+                if owner_id == observer_id:
+                    continue
+                key = f"{observer_id:x}_observes_{owner_id:x}"
+                second_run_relationships[key] = wait_for_remote(
+                    observer_pipe,
+                    owner_id,
+                    owner_name,
+                    "testrun",
+                    45.0,
+                )
+        result["second_run_relationships"] = (
+            second_run_relationships
+        )
+        result["second_run_loading_release"] = {
+            label: _wait_for_state(
+                pipe_name,
+                lambda values: healthy_loading_barrier_state_matches(
+                    values,
+                    3,
+                ),
+                timeout=15.0,
+                description=(
+                    "second-run all-participant loading release"
+                ),
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
+        second_run_nonces = {
+            _integer(values, "run_nonce")
+            for values in result[
+                "second_run_loading_release"
+            ].values()
+        }
+        if (
+            len(second_run_nonces) != 1
+            or min(second_run_nonces) <= 0
+            or first_run_nonce in second_run_nonces
+        ):
+            raise VerifyFailure(
+                "same-lobby second run did not allocate one fresh nonce: "
+                f"first={first_run_nonce} second={second_run_nonces}"
+            )
+        result["second_run_ready_frames"] = {
+            label: capture_game_backbuffer(
+                pipe_name,
+                artifact_directory
+                / f"{label}-second-run-ready.png",
+            )
+            for label, pipe_name in pipes_by_label.items()
+        }
+        result["same_processes_in_second_run"] = (
+            validate_owned_processes(owned)
+        )
+        result["session_continuity"] = {
+            "same_process_ids": True,
+            "same_instance_group": trio_prefix,
+            "participant_count": 3,
+            "first_run_nonce": first_run_nonce,
+            "second_run_nonce": next(
+                iter(second_run_nonces)
+            ),
+            "rejoin_performed": False,
+            "relaunch_performed": False,
+        }
+        result["ok"] = True
+        return result
+    finally:
+        stop_owned_processes(owned)
+
+
+def run_loading_timeout_verification(
+    *,
+    instance_prefix: str,
+    ports: list[int],
+    game_directory: Path,
+) -> dict[str, object]:
+    pair_prefix = f"{instance_prefix}-timeout"
+    launch = launch_pair(
+        host_preset="map_create_fire_mind_hub",
+        client_preset="map_create_water_body_hub",
+        temporary_host_profile=False,
+        fresh_install=True,
+        tile_windows=False,
+        third_player=False,
+        kill_existing=False,
+        instance_prefix=pair_prefix,
+        host_port=ports[5],
+        client_port=ports[6],
+        game_directory=game_directory,
+        exact_mod_id=ACCEPTANCE_MOD_ID,
+        quick_start=True,
+    )
+    owned = _owned_pair_processes(launch)
+    host_process_id = int(launch["hostProcessId"])
+    client_process_id = int(launch["clientProcessId"])
+    host_owned = {
+        host_process_id: owned[host_process_id],
+    }
+    client_owned = {
+        client_process_id: owned[client_process_id],
+    }
+    host_pipe = str(launch["hostLuaPipe"])
+    client_pipe = str(launch["clientLuaPipe"])
+    artifact_directory = (
+        ARTIFACT_ROOT / instance_prefix / "timeout"
+    )
+    result: dict[str, object] = {
+        "launch": launch,
+        "owned_processes": validate_owned_processes(owned),
+    }
+    try:
+        result["bots_disabled"] = _disable_bots(
+            [host_pipe, client_pipe]
+        )
+        _start_testrun_when_ready(host_pipe)
+        result["kill_delay_seconds"] = 0.15
+        time.sleep(0.15)
+        killed_at = time.monotonic()
+        stop_owned_processes(client_owned)
+        if _query_process_executable(client_process_id) is not None:
+            raise VerifyFailure(
+                "exact client PID remained alive after timeout-drill kill"
+            )
+        result["killed_peer"] = {
+            "process_id": client_process_id,
+            "expected_executable": owned[
+                client_process_id
+            ],
+            "exact_pid_absent_after_kill": True,
+        }
+
+        waiting = _wait_for_state(
+            host_pipe,
+            lambda values: (
+                loading_barrier_wait_state_matches(
+                    values,
+                    2,
+                )
+                and _integer(
+                    values,
+                    "loading_ready_participant_count",
+                )
+                < 2
+            ),
+            timeout=20.0,
+            description=(
+                "host barrier waiting for killed peer"
+            ),
+        )
+        result["host_waiting_state"] = waiting
+        artifact_directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        result["host_loading_frame"] = (
+            capture_game_backbuffer(
+                host_pipe,
+                artifact_directory
+                / "host-loading-after-peer-kill.png",
+            )
+        )
+
+        release_wait_started = time.monotonic()
+        released = _wait_for_state(
+            host_pipe,
+            lambda values: (
+                loading_barrier_released_state_matches(
+                    values,
+                    2,
+                    expected_reason="timeout",
+                )
+                and values.get("loading_timed_out")
+                == "true"
+                and _integer(
+                    values,
+                    "loading_ready_participant_count",
+                )
+                < 2
+                and _integer(
+                    values,
+                    "loading_deadline_remaining_ms",
+                )
+                == 0
+            ),
+            timeout=35.0,
+            description=(
+                "bounded host loading-barrier timeout release"
+            ),
+        )
+        result["host_timeout_state"] = released
+        result["timing"] = {
+            "seconds_from_peer_kill": (
+                time.monotonic() - killed_at
+            ),
+            "seconds_waiting_after_observation": (
+                time.monotonic()
+                - release_wait_started
+            ),
+            "configured_timeout_ms": 25000,
+        }
+        result["host_proceeded_frame"] = (
+            capture_game_backbuffer(
+                host_pipe,
+                artifact_directory
+                / "host-proceeded-after-timeout.png",
+            )
+        )
+        result["surviving_host_process"] = (
+            validate_owned_processes(host_owned)
+        )
+
+        log_path = _path_for_local_python(str(launch["hostLog"]))
+        try:
+            log_lines = log_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ).splitlines()
+        except OSError as exc:
+            raise VerifyFailure(
+                f"timeout-drill loader log unavailable: {log_path}"
+            ) from exc
+        barrier_lines = [
+            line
+            for line in log_lines
+            if "run-loading barrier" in line
+        ]
+        if not any(
+            "reason=timeout" in line
+            and "waiting_participant_ids=" in line
+            for line in barrier_lines
+        ):
+            raise VerifyFailure(
+                "timeout-drill log lacks bounded release evidence: "
+                f"{barrier_lines[-20:]}"
+            )
+        result["barrier_log"] = {
+            "path": str(log_path),
+            "lines": barrier_lines[-20:],
+        }
         result["ok"] = True
         return result
     finally:
@@ -1041,6 +1647,11 @@ def run_live_verification(
             game_directory=game_directory,
         ),
         "trio": run_trio_verification(
+            instance_prefix=instance_prefix,
+            ports=ports,
+            game_directory=game_directory,
+        ),
+        "timeout_drill": run_loading_timeout_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
@@ -1067,6 +1678,8 @@ def main() -> int:
     parser.add_argument("--host-port", type=int, default=None)
     parser.add_argument("--client-port", type=int, default=None)
     parser.add_argument("--third-port", type=int, default=None)
+    parser.add_argument("--timeout-host-port", type=int, default=None)
+    parser.add_argument("--timeout-client-port", type=int, default=None)
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
 
@@ -1085,6 +1698,8 @@ def main() -> int:
                     args.host_port,
                     args.client_port,
                     args.third_port,
+                    args.timeout_host_port,
+                    args.timeout_client_port,
                 ]
             ),
             game_directory=args.game_dir,

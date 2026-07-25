@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -126,8 +127,33 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 84,
+               kProtocolVersion == 85,
                "native and launcher protocol version changed unexpectedly") &&
+        Require(
+            std::string(
+                LobbySessionStateLabel(
+                    LobbySessionState::NotInGame)) ==
+                "not-in-game" &&
+                std::string(
+                    LobbySessionStateLabel(
+                        LobbySessionState::InHub)) ==
+                    "in-hub" &&
+                std::string(
+                    LobbySessionStateLabel(
+                        LobbySessionState::InBoneyard)) ==
+                    "in-boneyard",
+            "lobby session-state JSON labels changed") &&
+        Require(
+            std::string(
+                RunLoadingReleaseReasonLabel(
+                    RunLoadingReleaseReason::
+                        AllParticipantsReady)) ==
+                "all-participants-ready" &&
+                std::string(
+                    RunLoadingReleaseReasonLabel(
+                        RunLoadingReleaseReason::Timeout)) ==
+                    "timeout",
+            "run-loading release labels changed") &&
         Require(
             ResolveParticipantDeathPresentationTick(0) == 0 &&
                 ResolveParticipantDeathPresentationTick(2500) == 150 &&
@@ -149,10 +175,10 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationRenderTick(298) == 159,
             "death presentation render projection does not reach and hold the corpse frame") &&
         Require(
-            sizeof(StatePacket) == 616,
+            sizeof(StatePacket) == 652,
             "StatePacket regained checkpoint-array payload") &&
         Require(
-            sizeof(ParticipantFramePacket) == 334,
+            sizeof(ParticipantFramePacket) == 370,
             "ParticipantFramePacket regained wave-summary payload") &&
         Require(
             ParticipantInventorySnapshotPacketWireSize(0) ==

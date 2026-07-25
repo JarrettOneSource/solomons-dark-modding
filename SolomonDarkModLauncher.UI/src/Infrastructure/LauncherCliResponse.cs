@@ -140,6 +140,7 @@ internal sealed class LauncherCliMultiplayerSession
     public bool IsHost { get; set; }
     public string Phase { get; set; } = string.Empty;
     public string GamePhase { get; set; } = string.Empty;
+    public string SessionState { get; set; } = string.Empty;
     public uint AppId { get; set; }
     public ulong LobbyId { get; set; }
     public ulong HostSteamId { get; set; }

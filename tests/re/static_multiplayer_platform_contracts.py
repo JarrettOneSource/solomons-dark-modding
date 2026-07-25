@@ -928,7 +928,8 @@ def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str
     for token in (
         'std::string game_phase = "loading"',
         'game_phase = "hub"',
-        'game_phase = "session"',
+        'runtime_state.run_loading_barrier.released',
+        "snapshot.session_state = session_state",
         "SteamGetImmediateFriends()",
     ):
         assert token in native_status, f"native lobby status lacks: {token}"

@@ -32,20 +32,55 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
             "select_available_windows_udp_ports",
         ) as reserve:
             ports = verifier._resolve_udp_ports(
-                [23111, 23112, 23113, 23114, 23115]
+                [
+                    23111,
+                    23112,
+                    23113,
+                    23114,
+                    23115,
+                    23116,
+                    23117,
+                ]
             )
 
-        self.assertEqual(ports, [23111, 23112, 23113, 23114, 23115])
+        self.assertEqual(
+            ports,
+            [
+                23111,
+                23112,
+                23113,
+                23114,
+                23115,
+                23116,
+                23117,
+            ],
+        )
         reserve.assert_not_called()
 
     def test_partial_and_duplicate_port_groups_are_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "all five ports"):
+        with self.assertRaisesRegex(ValueError, "all seven ports"):
             verifier._resolve_udp_ports(
-                [23111, None, 23113, 23114, 23115]
+                [
+                    23111,
+                    None,
+                    23113,
+                    23114,
+                    23115,
+                    23116,
+                    23117,
+                ]
             )
         with self.assertRaisesRegex(ValueError, "must be distinct"):
             verifier._resolve_udp_ports(
-                [23111, 23112, 23113, 23113, 23115]
+                [
+                    23111,
+                    23112,
+                    23113,
+                    23113,
+                    23115,
+                    23116,
+                    23117,
+                ]
             )
 
     def test_windows_process_paths_are_case_and_separator_insensitive(self) -> None:
@@ -61,6 +96,38 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
                 r"C:\Runtime\Instances\theirs\stage\SolomonDark.exe",
             )
         )
+
+    def test_windows_log_path_conversion_is_bounded(self) -> None:
+        completed = mock.Mock(
+            returncode=0,
+            stdout="/mnt/c/runtime/instances/ours/loader.log\n",
+        )
+        with mock.patch.object(
+            verifier.os,
+            "name",
+            "posix",
+        ), mock.patch.object(
+            verifier.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            converted = verifier._path_for_local_python(
+                r"C:\runtime\instances\ours\loader.log"
+            )
+
+        self.assertEqual(
+            converted,
+            Path("/mnt/c/runtime/instances/ours/loader.log"),
+        )
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "wslpath",
+                "-u",
+                r"C:\runtime\instances\ours\loader.log",
+            ],
+        )
+        self.assertEqual(run.call_args.kwargs["timeout"], 5.0)
 
     def test_exact_process_ownership_rejects_another_instance(self) -> None:
         expected = {
@@ -104,6 +171,79 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
         self.assertTrue(verifier.terminal_game_over_state_matches(values))
         values["game_over_dispatch_count"] = "2"
         self.assertFalse(verifier.terminal_game_over_state_matches(values))
+
+    def test_healthy_loading_release_requires_exact_mutual_actor_set(self) -> None:
+        values = {
+            "session_state": "in-boneyard",
+            "run_nonce": "91",
+            "loading_active": "true",
+            "loading_released": "true",
+            "loading_timed_out": "false",
+            "loading_local_mutual_visibility": "true",
+            "loading_run_nonce": "91",
+            "loading_local_ack_nonce": "91",
+            "loading_release_nonce": "91",
+            "loading_visible_participant_count": "3",
+            "loading_expected_participant_count": "3",
+            "loading_ready_participant_count": "3",
+            "loading_visible_participant_set_hash": "-411",
+            "loading_expected_participant_set_hash": "-411",
+            "loading_release_reason": "all-participants-ready",
+        }
+        self.assertTrue(
+            verifier.healthy_loading_barrier_state_matches(
+                values,
+                3,
+            )
+        )
+        values["loading_visible_participant_set_hash"] = "-412"
+        self.assertFalse(
+            verifier.healthy_loading_barrier_state_matches(
+                values,
+                3,
+            )
+        )
+
+    def test_timeout_loading_release_proceeds_with_missing_peer(self) -> None:
+        values = {
+            "session_state": "in-boneyard",
+            "run_nonce": "92",
+            "loading_active": "true",
+            "loading_released": "true",
+            "loading_timed_out": "true",
+            "loading_run_nonce": "92",
+            "loading_release_nonce": "92",
+            "loading_visible_participant_count": "1",
+            "loading_expected_participant_count": "2",
+            "loading_ready_participant_count": "0",
+            "loading_expected_participant_set_hash": "481",
+            "loading_release_reason": "timeout",
+        }
+        self.assertTrue(
+            verifier.loading_barrier_released_state_matches(
+                values,
+                2,
+                expected_reason="timeout",
+            )
+        )
+
+    def test_loading_classifier_accepts_centered_text_on_black(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "loading.png"
+            image = Image.new("RGB", (800, 450), (0, 0, 0))
+            for x in range(300, 500):
+                for y in range(215, 235):
+                    if (x + y) % 4 == 0:
+                        image.putpixel((x, y), (220, 220, 220))
+            image.save(path)
+
+            matched = verifier.classify_loading_boneyard_image(path)
+            self.assertTrue(matched["matched"])
+
+            image.paste((0, 0, 0), (280, 180, 520, 270))
+            image.save(path)
+            blank = verifier.classify_loading_boneyard_image(path)
+            self.assertFalse(blank["matched"])
 
     def test_native_game_over_classifier_requires_all_three_gold_lines(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

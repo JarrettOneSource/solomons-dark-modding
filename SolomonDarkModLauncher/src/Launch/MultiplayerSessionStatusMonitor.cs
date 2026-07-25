@@ -9,6 +9,7 @@ internal sealed record MultiplayerSessionStatus(
     bool IsHost,
     string Phase,
     string GamePhase,
+    string SessionState,
     uint AppId,
     ulong LobbyId,
     ulong HostSteamId,
