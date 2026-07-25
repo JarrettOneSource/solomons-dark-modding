@@ -39,6 +39,11 @@ from verify_local_multiplayer_sync import (
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_static_layout_sync_verification.json"
 CAPTURE_FRAMES_PER_PEER = 16
+DECOR_ROI_HALF_EXTENT = 120.0
+MINIMUM_DECOR_ROI_CLEARANCE = 120.0
+ACTOR_LIGHT_PARKING_OFFSET_X = -320.0
+ACTOR_LIGHT_PARKING_OFFSET_Y = 0.0
+MAXIMUM_PLAYER_LIGHT_DISTANCE = 345.0
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -2465,11 +2470,64 @@ def exact_temporal_envelope_decor_pixel_comparison(
     }
 
 
+def actor_light_parking_goal(
+    target_x: float,
+    target_y: float,
+) -> tuple[float, float]:
+    return (
+        target_x + ACTOR_LIGHT_PARKING_OFFSET_X,
+        target_y + ACTOR_LIGHT_PARKING_OFFSET_Y,
+    )
+
+
+def actor_light_parking_geometry(
+    target_x: float,
+    target_y: float,
+    parking_x: float,
+    parking_y: float,
+) -> dict[str, Any]:
+    values = (target_x, target_y, parking_x, parking_y)
+    if not all(math.isfinite(value) for value in values):
+        raise VerifyFailure(f"invalid actor-light parking geometry: {values}")
+    horizontal = abs(parking_x - target_x)
+    vertical = abs(parking_y - target_y)
+    target_distance = math.hypot(horizontal, vertical)
+    decor_roi_clearance = (
+        max(horizontal, vertical) - DECOR_ROI_HALF_EXTENT
+    )
+    if decor_roi_clearance < MINIMUM_DECOR_ROI_CLEARANCE:
+        raise VerifyFailure(
+            "actor-light parking point intersects the decor exclusion zone: "
+            f"target=({target_x},{target_y}) "
+            f"parking=({parking_x},{parking_y}) "
+            f"clearance={decor_roi_clearance}"
+        )
+    if target_distance > MAXIMUM_PLAYER_LIGHT_DISTANCE:
+        raise VerifyFailure(
+            "actor-light parking point is outside player-light range: "
+            f"target=({target_x},{target_y}) "
+            f"parking=({parking_x},{parking_y}) "
+            f"distance={target_distance}"
+        )
+    shared_position = [parking_x, parking_y]
+    return {
+        "host": shared_position,
+        "client": list(shared_position),
+        "target_distances": {
+            "host": target_distance,
+            "client": target_distance,
+        },
+        "decor_roi_clearance": decor_roi_clearance,
+        "actor_separation": 0.0,
+    }
+
+
 def nav_actor_parking_positions(
     pipe_name: str,
     target_x: float,
     target_y: float,
 ) -> dict[str, Any]:
+    goal_x, goal_y = actor_light_parking_goal(target_x, target_y)
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
 local grid = sd.debug.get_nav_grid(1)
@@ -2491,6 +2549,8 @@ end
 emit("grid_available", true)
 local target_x = {target_x!r}
 local target_y = {target_y!r}
+local goal_x = {goal_x!r}
+local goal_y = {goal_y!r}
 local candidates = {{}}
 local traversable_count = 0
 for _, cell in ipairs(grid.cells) do
@@ -2502,36 +2562,39 @@ for _, cell in ipairs(grid.cells) do
       traversable_count = traversable_count + 1
       local dx = math.abs(x - target_x)
       local dy = math.abs(y - target_y)
-      if dx >= 750.0 or dy >= 500.0 then
+      local target_gap = math.sqrt(dx * dx + dy * dy)
+      local decor_roi_clearance =
+        math.max(dx, dy) - {DECOR_ROI_HALF_EXTENT!r}
+      if decor_roi_clearance >= {MINIMUM_DECOR_ROI_CLEARANCE!r} and
+          target_gap <= {MAXIMUM_PLAYER_LIGHT_DISTANCE!r} then
+        local goal_dx = x - goal_x
+        local goal_dy = y - goal_y
         table.insert(candidates, {{
           x = x,
           y = y,
-          gap = math.sqrt(dx * dx + dy * dy),
+          target_gap = target_gap,
+          goal_gap = math.sqrt(goal_dx * goal_dx + goal_dy * goal_dy),
         }})
       end
     end
   end
 end
 table.sort(candidates, function(a, b)
-  if a.gap ~= b.gap then return a.gap > b.gap end
-  if a.x ~= b.x then return a.x > b.x end
-  return a.y > b.y
+  if a.goal_gap ~= b.goal_gap then return a.goal_gap < b.goal_gap end
+  if a.x ~= b.x then return a.x < b.x end
+  return a.y < b.y
 end)
-local host = candidates[1]
-local client = candidates[2] or host
+local shared = candidates[1]
 emit("traversable_count", traversable_count)
 emit("candidate_count", #candidates)
-emit("available", host ~= nil)
-if host ~= nil then
-  emit("host.x", host.x)
-  emit("host.y", host.y)
-  emit("host.gap", host.gap)
-  emit("client.x", client.x)
-  emit("client.y", client.y)
-  emit("client.gap", client.gap)
-  local dx = host.x - client.x
-  local dy = host.y - client.y
-  emit("separation", math.sqrt(dx * dx + dy * dy))
+emit("goal.x", goal_x)
+emit("goal.y", goal_y)
+emit("available", shared ~= nil)
+if shared ~= nil then
+  emit("shared.x", shared.x)
+  emit("shared.y", shared.y)
+  emit("shared.target_gap", shared.target_gap)
+  emit("shared.goal_gap", shared.goal_gap)
 end
 """
     deadline = time.monotonic() + 6.0
@@ -2552,29 +2615,28 @@ end
             "native nav grid lacks an actor-clear parking sample: "
             f"target=({target_x},{target_y}) result={values}"
         )
+    parking = actor_light_parking_geometry(
+        target_x,
+        target_y,
+        float(values["shared.x"]),
+        float(values["shared.y"]),
+    )
     return {
-        "host": [
-            float(values["host.x"]),
-            float(values["host.y"]),
-        ],
-        "client": [
-            float(values["client.x"]),
-            float(values["client.y"]),
-        ],
-        "target_distances": {
-            "host": float(values["host.gap"]),
-            "client": float(values["client.gap"]),
-        },
-        "actor_separation": float(values["separation"]),
+        **parking,
+        "goal": [float(values["goal.x"]), float(values["goal.y"])],
+        "goal_snap_distance": float(values["shared.goal_gap"]),
         "traversable_sample_count": int(
             values["traversable_count"],
             0,
         ),
-        "actor_clear_candidate_count": int(
+        "actor_light_candidate_count": int(
             values["candidate_count"],
             0,
         ),
-        "source": "sd.debug.get_nav_grid(1) traversable samples",
+        "source": (
+            "shared sd.debug.get_nav_grid(1) traversable sample nearest "
+            "the fixed actor-light offset"
+        ),
         "scene_world": int(values["scene_world"], 0),
         "grid_world": int(values["grid_world"], 0),
     }
@@ -2632,6 +2694,18 @@ def capture_matched_camera_areas(
                 stable_seconds=2.0,
             )
         )
+        shared_owner_position_delta = math.hypot(
+            settled_host_actor[0] - settled_client_actor[0],
+            settled_host_actor[1] - settled_client_actor[1],
+        )
+        if shared_owner_position_delta > 3.0:
+            raise VerifyFailure(
+                "owners did not settle at the shared actor-light position: "
+                f"family={target['family']} "
+                f"host={settled_host_actor[:2]} "
+                f"client={settled_client_actor[:2]} "
+                f"delta={shared_owner_position_delta}"
+            )
         host_on_client = local_sync.wait_for_remote_convergence(
             client_pipe,
             HOST_ID,
@@ -2706,9 +2780,36 @@ def capture_matched_camera_areas(
         decor_roi_half_extent = 120.0
         minimum_decor_roi_clearance = 120.0
         actor_decor_roi_clearances: dict[str, dict[str, float]] = {}
+        expected_actor_positions = {
+            "host": {
+                "local_host": settled_host_actor[:2],
+                "remote_client": settled_client_actor[:2],
+            },
+            "client": {
+                "local_client": settled_client_actor[:2],
+                "remote_host": settled_host_actor[:2],
+            },
+        }
+        observed_actor_position_deltas: dict[str, dict[str, float]] = {}
         for observer, positions in observed_actor_positions.items():
             actor_decor_roi_clearances[observer] = {}
+            observed_actor_position_deltas[observer] = {}
             for identity, position in positions.items():
+                expected = expected_actor_positions[observer][identity]
+                position_delta = math.hypot(
+                    position[0] - expected[0],
+                    position[1] - expected[1],
+                )
+                observed_actor_position_deltas[observer][
+                    identity
+                ] = position_delta
+                if position_delta > 3.0:
+                    raise VerifyFailure(
+                        "actor moved away from the shared lighting position: "
+                        f"family={target['family']} observer={observer} "
+                        f"identity={identity} position={position} "
+                        f"expected={expected} delta={position_delta}"
+                    )
                 horizontal = abs(position[0] - target_x)
                 vertical = abs(position[1] - target_y)
                 clearance = max(horizontal, vertical)
@@ -2723,8 +2824,9 @@ def capture_matched_camera_areas(
                     )
         area_result["excluded_actors"] = {
             "method": (
-                "both owners are moved without damage to traversable native-"
-                "nav samples; each owner plus replicated mirror must "
+                "both owners are moved without damage to one shared "
+                "traversable native-nav sample inside player-light range; "
+                "each owner plus replicated mirror must "
                 "settle at least 120 world units beyond the central "
                 "120-world-unit decor ROI"
             ),
@@ -2735,11 +2837,13 @@ def capture_matched_camera_areas(
                 "host": list(settled_host_actor[:2]),
                 "client": list(settled_client_actor[:2]),
             },
+            "shared_owner_position_delta": shared_owner_position_delta,
             "remote_convergence": {
                 "host_on_client": host_on_client,
                 "client_on_host": client_on_host,
             },
             "observed_positions": observed_actor_positions,
+            "observed_position_deltas": observed_actor_position_deltas,
             "decor_roi_clearances": actor_decor_roi_clearances,
             "decor_roi_half_extent": decor_roi_half_extent,
             "minimum_decor_roi_clearance": (

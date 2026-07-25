@@ -281,6 +281,38 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(target["nearby_compact"]["position"], [100.0, 100.0])
         self.assertAlmostEqual(target["nearby_compact_distance"], 2**0.5 * 100)
 
+    def test_actor_light_parking_is_shared_outside_roi_and_within_range(
+        self,
+    ) -> None:
+        target_x = 1000.0
+        target_y = 2000.0
+        goal_x, goal_y = verifier.actor_light_parking_goal(
+            target_x,
+            target_y,
+        )
+        self.assertEqual(
+            [goal_x, goal_y],
+            [680.0, 2000.0],
+        )
+
+        parking = verifier.actor_light_parking_geometry(
+            target_x,
+            target_y,
+            675.0,
+            2000.0,
+        )
+        self.assertEqual(parking["host"], [675.0, 2000.0])
+        self.assertEqual(parking["client"], parking["host"])
+        self.assertEqual(parking["actor_separation"], 0.0)
+        self.assertGreaterEqual(
+            parking["decor_roi_clearance"],
+            verifier.MINIMUM_DECOR_ROI_CLEARANCE,
+        )
+        self.assertLessEqual(
+            parking["target_distances"]["host"],
+            verifier.MAXIMUM_PLAYER_LIGHT_DISTANCE,
+        )
+
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)
