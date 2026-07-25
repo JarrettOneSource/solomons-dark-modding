@@ -1020,7 +1020,16 @@ def capture_native_game_over(
         try:
             if allow_boneyard_mode:
                 last_native_state = query_native_game_over_state(pipe_name)
-            capture = capture_game_backbuffer(pipe_name, output_path)
+            capture = capture_game_backbuffer(
+                pipe_name,
+                output_path,
+                minimum_unique_colors=(
+                    20 if allow_boneyard_mode else 1000
+                ),
+                maximum_dominant_fraction=(
+                    0.9999 if allow_boneyard_mode else 0.85
+                ),
+            )
             classification = classify_native_game_over_image(output_path)
             last_classification = classification
             if classification["matched"]:
@@ -1371,8 +1380,9 @@ def run_solo_verification(
         result["game_over"] = capture_native_game_over(
             pipe_name,
             screenshot,
+            allow_boneyard_mode=True,
         )
-        result["post_game_over"] = advance_stock_post_game_over(
+        result["post_game_over"] = advance_stock_boneyard_game_over(
             {pipe_name: next(iter(owned))}
         )
         result["ok"] = True

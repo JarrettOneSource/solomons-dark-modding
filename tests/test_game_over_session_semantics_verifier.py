@@ -231,6 +231,56 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
             verifier.native_boneyard_game_over_state_matches(values)
         )
 
+    def test_boneyard_game_over_capture_accepts_fade_only_frame_quality(
+        self,
+    ) -> None:
+        native_state = {
+            "game_over_found": "true",
+            "boneyard_mode": "1",
+            "game_over_closed": "0",
+            "game_over_tick_count": "616",
+            "game_over_title_alpha": "1.0",
+            "game_over_click_alpha": "1.0",
+            "game_over_close_alpha": "0.0",
+        }
+        classification = {
+            "matched": False,
+            "dark_fraction": 0.93,
+            "gold_fractions": {
+                "game": 0.0,
+                "over": 0.0,
+                "continue": 0.0,
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            verifier,
+            "query_native_game_over_state",
+            return_value=native_state,
+        ), mock.patch.object(
+            verifier,
+            "capture_game_backbuffer",
+            return_value={"capture_method": "d3d9_backbuffer"},
+        ) as capture, mock.patch.object(
+            verifier,
+            "classify_native_game_over_image",
+            return_value=classification,
+        ):
+            output_path = Path(directory) / "game-over.png"
+            result = verifier.capture_native_game_over(
+                "test-pipe",
+                output_path,
+                allow_boneyard_mode=True,
+            )
+
+        capture.assert_called_once_with(
+            "test-pipe",
+            output_path,
+            minimum_unique_colors=20,
+            maximum_dominant_fraction=0.9999,
+        )
+        self.assertEqual(result["presentation"], "boneyard-fade")
+        self.assertEqual(result["native_state"], native_state)
+
     def test_healthy_loading_release_requires_exact_mutual_actor_set(self) -> None:
         values = {
             "session_state": "in-boneyard",

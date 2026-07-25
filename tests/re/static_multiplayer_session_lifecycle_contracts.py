@@ -294,6 +294,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         ),
         "same-lobby second-run live gate",
     )
+    assert verifier.count("allow_boneyard_mode=True") >= 2
     _require_tokens(
         status_verifier,
         (
