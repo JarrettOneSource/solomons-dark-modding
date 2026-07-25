@@ -732,6 +732,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         ROOT
         / "docs/reverse-engineering/native-game-over-session-semantics.md"
     )
+    binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
 
     assert "kProtocolVersion = 84" in protocol_text
     for field in (
@@ -832,8 +833,23 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         "configured authority",
         "original `Game_OnGameOver` trampoline",
         "host run-exit following must not race",
+        "0x004277B0",
+        "0x005C9670",
+        "native gameplay region, not a",
+        "ends one run nonce, not the lobby",
     ):
         assert token in native_re_text, f"terminal RE note lacks: {token}"
+    for token in (
+        "[game_over.native]",
+        "tick=0x005CF4F0",
+        "close_surface=0x004277B0",
+        "completed_run_cleanup=0x005C9670",
+        "gameplay_scene_factory=0x005B7080",
+        "gameplay_switch_region=0x005CDDD0",
+    ):
+        assert token in binary_layout_text, (
+            f"native Game Over layout contract lacks: {token}"
+        )
 
     return (
         "the host recognizes native terminal death for every connected run "

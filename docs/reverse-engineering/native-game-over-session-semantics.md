@@ -70,11 +70,52 @@ The Game Over atlas becomes resident while the arena presentation remains
 resident underneath it, which is part of the full stock screen rather than a
 replacement scene assembled by the loader.
 
+### Decomposed cleanup boundary
+
+The 2026-07-25 read-only headless pass extended the completion lineage through
+the concrete close and region calls:
+
+```text
+GameOver::Tick                                      0x005CF4F0
+  -> GameOver vtable +0x18
+     -> close/remove surface                        0x004277B0
+        -> application surface manager virtual +0x1C
+        -> surface+0x05 = closed
+  -> archive completed-run state                    0x005C9670
+     -> completed-run/item processing               0x005BE320
+     -> completed-run persistence helper            0x005BE0B0
+  -> gameplay-scene factory(type=0xFA2)             0x005B7080
+  -> Gameplay_SwitchRegion(game, 1)                 0x005CDDD0
+     -> old region virtual +0xD4 / +0xDC
+     -> destroy old region object                    0x00428160
+     -> new region virtual +0xE0
+```
+
+`0x004277B0` unregisters the Game Over surface from the application's surface
+manager and marks that surface closed. `0x005C9670` reads the current gameplay
+object and application-owned completed-run fields, then delegates the
+inventory/result work to `0x005BE320`; it does not close an application,
+socket, or external session. `0x005CDDD0` owns the old-region exit and
+new-region entry virtuals. Its boundary is the native gameplay region, not a
+multiplayer lobby.
+
+There are no Steam, Winsock, process-exit, or loader transport calls in this
+lineage. The retail executable has no knowledge of the loader's lobby.
+Consequently, native Game Over completion and multiplayer-session teardown are
+independent state machines: the stock path must be allowed to retire the run
+scene and completed-run state, while the loader must keep its authenticated
+lobby and transport alive until an explicit leave, disconnect, or process
+shutdown.
+
 Therefore, “proceed normally” has one foundational implementation:
 dispatch the original `Game_OnGameOver` trampoline exactly once on each local
 process and allow the native Game Over object to own every step afterward.
 Loader code must not manually create Mortuary, skip the fade, synthesize Hall
-of Fame, or issue a competing leave-game transition.
+of Fame, or issue a competing leave-game transition. Once stock progression
+has reached a stable non-run surface, a still-connected multiplayer flow may
+re-enter shared hub gameplay through the same stock title/profile transitions
+used at initial join. That re-entry is a loader session-continuity operation;
+it must not replace any of the native cleanup calls above.
 
 ## Session boundary
 
@@ -123,6 +164,11 @@ The terminal command is distinct from wave respawn and ordinary host run-exit:
   it does not construct the participant's Game Over surface;
 - host run-exit following must not race ahead of an accepted all-dead command
   and navigate a client away from its native Game Over flow.
+
+The accepted terminal command must likewise not retire authenticated lobby
+membership. It ends one run nonce, not the lobby. A later host run request in
+the same authenticated lobby must allocate a new run nonce and may start
+without recreating or rejoining the lobby.
 
 ## Regression obligations
 
