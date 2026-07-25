@@ -281,7 +281,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(target["nearby_compact"]["position"], [100.0, 100.0])
         self.assertAlmostEqual(target["nearby_compact_distance"], 2**0.5 * 100)
 
-    def test_actor_light_parking_is_shared_outside_roi_and_within_range(
+    def test_actor_light_parking_is_shared_outside_roi_and_within_radial_band(
         self,
     ) -> None:
         target_x = 1000.0
@@ -298,20 +298,39 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         parking = verifier.actor_light_parking_geometry(
             target_x,
             target_y,
-            675.0,
+            680.0,
             2000.0,
         )
-        self.assertEqual(parking["host"], [675.0, 2000.0])
+        self.assertEqual(parking["host"], [680.0, 2000.0])
         self.assertEqual(parking["client"], parking["host"])
         self.assertEqual(parking["actor_separation"], 0.0)
         self.assertGreaterEqual(
             parking["decor_roi_clearance"],
             verifier.MINIMUM_DECOR_ROI_CLEARANCE,
         )
+        self.assertGreaterEqual(
+            parking["target_distances"]["host"],
+            verifier.MINIMUM_PLAYER_LIGHT_DISTANCE,
+        )
         self.assertLessEqual(
             parking["target_distances"]["host"],
             verifier.MAXIMUM_PLAYER_LIGHT_DISTANCE,
         )
+        self.assertEqual(
+            parking["target_distances"]["host"],
+            verifier.TARGET_PLAYER_LIGHT_DISTANCE,
+        )
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "outside player-light radial band",
+        ):
+            verifier.actor_light_parking_geometry(
+                target_x,
+                target_y,
+                735.0,
+                2000.0,
+            )
 
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:

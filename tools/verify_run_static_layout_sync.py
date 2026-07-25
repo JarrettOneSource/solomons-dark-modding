@@ -43,7 +43,9 @@ DECOR_ROI_HALF_EXTENT = 120.0
 MINIMUM_DECOR_ROI_CLEARANCE = 120.0
 ACTOR_LIGHT_PARKING_OFFSET_X = -320.0
 ACTOR_LIGHT_PARKING_OFFSET_Y = 0.0
-MAXIMUM_PLAYER_LIGHT_DISTANCE = 345.0
+MINIMUM_PLAYER_LIGHT_DISTANCE = 310.0
+TARGET_PLAYER_LIGHT_DISTANCE = 320.0
+MAXIMUM_PLAYER_LIGHT_DISTANCE = 330.0
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -2502,9 +2504,13 @@ def actor_light_parking_geometry(
             f"parking=({parking_x},{parking_y}) "
             f"clearance={decor_roi_clearance}"
         )
-    if target_distance > MAXIMUM_PLAYER_LIGHT_DISTANCE:
+    if not (
+        MINIMUM_PLAYER_LIGHT_DISTANCE
+        <= target_distance
+        <= MAXIMUM_PLAYER_LIGHT_DISTANCE
+    ):
         raise VerifyFailure(
-            "actor-light parking point is outside player-light range: "
+            "actor-light parking point is outside player-light radial band: "
             f"target=({target_x},{target_y}) "
             f"parking=({parking_x},{parking_y}) "
             f"distance={target_distance}"
@@ -2566,6 +2572,7 @@ for _, cell in ipairs(grid.cells) do
       local decor_roi_clearance =
         math.max(dx, dy) - {DECOR_ROI_HALF_EXTENT!r}
       if decor_roi_clearance >= {MINIMUM_DECOR_ROI_CLEARANCE!r} and
+          target_gap >= {MINIMUM_PLAYER_LIGHT_DISTANCE!r} and
           target_gap <= {MAXIMUM_PLAYER_LIGHT_DISTANCE!r} then
         local goal_dx = x - goal_x
         local goal_dy = y - goal_y
@@ -2573,6 +2580,8 @@ for _, cell in ipairs(grid.cells) do
           x = x,
           y = y,
           target_gap = target_gap,
+          radial_error =
+            math.abs(target_gap - {TARGET_PLAYER_LIGHT_DISTANCE!r}),
           goal_gap = math.sqrt(goal_dx * goal_dx + goal_dy * goal_dy),
         }})
       end
@@ -2580,6 +2589,9 @@ for _, cell in ipairs(grid.cells) do
   end
 end
 table.sort(candidates, function(a, b)
+  if a.radial_error ~= b.radial_error then
+    return a.radial_error < b.radial_error
+  end
   if a.goal_gap ~= b.goal_gap then return a.goal_gap < b.goal_gap end
   if a.x ~= b.x then return a.x < b.x end
   return a.y < b.y
@@ -2594,6 +2606,7 @@ if shared ~= nil then
   emit("shared.x", shared.x)
   emit("shared.y", shared.y)
   emit("shared.target_gap", shared.target_gap)
+  emit("shared.radial_error", shared.radial_error)
   emit("shared.goal_gap", shared.goal_gap)
 end
 """
@@ -2635,7 +2648,7 @@ end
         ),
         "source": (
             "shared sd.debug.get_nav_grid(1) traversable sample nearest "
-            "the fixed actor-light offset"
+            "the 320-unit target radius, then the fixed actor-light offset"
         ),
         "scene_world": int(values["scene_world"], 0),
         "grid_world": int(values["grid_world"], 0),
