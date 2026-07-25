@@ -165,7 +165,8 @@ internal static class LobbyDirectoryPublisher
                 var status = MultiplayerSessionStatusMonitor.TryRead(
                     configuration.StageRootPath,
                     configuration.LaunchToken);
-                hubObserved = hubObserved || status?.GamePhase == "hub";
+                hubObserved = hubObserved ||
+                    status?.SessionState == "in-hub";
 
                 if (hubObserved &&
                     DateTime.UtcNow >= nextHeartbeatUtc &&
@@ -230,6 +231,8 @@ internal static class LobbyDirectoryPublisher
                 ProtocolVersion: > 0
             } ||
             status.Phase is not ("LobbyReady" or "Connected") ||
+            status.SessionState is not (
+                "not-in-game" or "in-hub" or "in-boneyard") ||
             status.GamePhase is not ("hub" or "loading" or "session" or "results"))
         {
             return false;

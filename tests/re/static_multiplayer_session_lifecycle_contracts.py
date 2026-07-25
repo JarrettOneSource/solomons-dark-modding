@@ -51,6 +51,10 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     launcher_view = _read(
         "SolomonDarkModLauncher.UI/src/ViewModels/MainWindowViewModel.cs"
     )
+    directory_publisher = _read(
+        "SolomonDarkModLauncher/src/Launch/"
+        "LobbyDirectoryPublisher.cs"
+    )
     native_note = _read(
         "docs/reverse-engineering/native-game-over-session-semantics.md"
     )
@@ -141,6 +145,15 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             '"not-in-game" => "Not In Game"',
         ),
         "launcher lobby card",
+    )
+    _require_tokens(
+        directory_publisher,
+        (
+            'status?.SessionState == "in-hub"',
+            '"not-in-game" or "in-hub" or "in-boneyard"',
+            "status.GamePhase",
+        ),
+        "website lobby-directory publication",
     )
     _require_tokens(
         native_note,

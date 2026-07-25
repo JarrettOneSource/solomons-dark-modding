@@ -920,7 +920,7 @@ def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str
     ], "launcher session monitor still polls the staged runtime-mod directory"
     _require_in_order(
         publisher,
-        'hubObserved = hubObserved || status?.GamePhase == "hub"',
+        'status?.SessionState == "in-hub"',
         "if (hubObserved &&",
         "var result = await AnnounceAsync(",
         "configuration.ActiveMods)",
