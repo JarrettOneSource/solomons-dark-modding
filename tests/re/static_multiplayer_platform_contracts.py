@@ -560,8 +560,11 @@ def test_pair_launcher_drains_redirected_json_output() -> str:
         '"--runtime-root", $testRuntimeRoot)',
         '@("enable-mod", "sample.lua.bots", "--json", '
         '"--runtime-root", $testRuntimeRoot)',
-        '@("launch", "--json", "--runtime-root", $testRuntimeRoot, '
-        '"--temporary-profile")',
+        "$launchArguments = @(",
+        '"--runtime-root", $testRuntimeRoot,',
+        '"--temporary-profile"',
+        '$launchArguments += "--disable-audio"',
+        "-Arguments $launchArguments",
         "SDMOD_LUA_BOTS_ACTIVE = $BotSet",
         "bot.entity_materialized",
         "bot.actor_address",
