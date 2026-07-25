@@ -827,6 +827,9 @@
     <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch_restore.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
