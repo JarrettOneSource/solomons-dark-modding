@@ -546,6 +546,29 @@ reconciliation still rolls local presentation back to authority state, but no
 longer authors a competing damage claim. The authority remains the only process
 that applies and republishes accepted HP.
 
+That exact-callback bridge exposed a narrower serialization race on the
+post-`f12c19a` candidate. The client observed and sent all `170` contacts as
+`44` accumulated claims totaling `4.250265000`, with no rejection or retry, but
+the authority applied only `3.525215000`. Five packets were accepted with
+identical before/after authority HP, and two early packets applied only part of
+their claimed delta. For example, client claim 16 targeted `38.824928` after
+HP while authority HP was already `38.649918`; claim 23 targeted `38.299896`
+while authority HP was `38.124886`. This proves the loss occurred after the
+native damage callback and before the authority write, not in Lightning's
+contact cadence.
+
+The accumulator's `reference_hp` is the serialization cursor for absolute-HP
+claims. It was cleared as soon as one authority snapshot reached that cursor.
+Because identity fragments can assemble for up to `500` ms and world
+presentation intentionally runs `150` ms behind, an older, higher-HP snapshot
+could then become the baseline for the next claim. The host correctly made the
+stale absolute target a no-op, but the client had already removed the whole
+batch from `pending_damage`. The cursor now remains authoritative throughout
+active damage and is released only after `750` ms of quiescence with no claim
+in flight. This preserves idempotent absolute-HP retry semantics, permits later
+host-authored HP increases after the bounded hold, and does not alter stock
+cast start, sustain, or release timing.
+
 The replicated-event acceptance gate pairs its Earth audio-event comparison
 with a fixed-window Lightning damage check. It samples the authority's raw enemy
 HP field on every runtime tick for equal `170`-frame local- and remote-origin
@@ -553,6 +576,19 @@ holds, requires positive damage in both cases, and permits at most two `0.025`
 damage contacts or two percent total-damage divergence. Organic tap and
 sustained acceptance remains a separate no-pin gate so target acquisition
 cannot be hidden by the controlled parity fixture.
+
+On the cursor fix, the controlled authority target fell from
+`40.000000000` to `35.749740601` in both origins. Local-origin Lightning
+produced `170` raw writes totaling `4.250259420`; client-origin Lightning
+produced the same `170` contacts coalesced into `45` authority writes totaling
+`4.250259411`. The damage delta was `0.000000009`, with zero contact-count
+delta. The subsequent organic, unpinned real-wave matrix read positive raw
+authority damage in every cell: solo tap `0.300001140`, solo sustained
+`4.250003293`, host tap `0.300001140`, host sustained `1.749999243` while its
+moving target remained in contact for 70 ticks, client tap `0.300001144`, and
+client sustained `4.200003121` across three naturally acquired enemies. Every
+captured Lightning handle in that matrix resolved to ordinary world group `0`;
+the semantic/raw HP maximum error was `0.0`.
 
 Disintegrate is not a separate projectile or persistent effect actor. On a
 qualifying Lightning contact, `0x0053F9C0` reads the rounded chance at

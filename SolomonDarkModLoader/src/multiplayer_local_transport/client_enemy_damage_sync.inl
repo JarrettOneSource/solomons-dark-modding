@@ -73,13 +73,6 @@ void ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal(
         observed.in_flight_before_hp = 0.0f;
         observed.in_flight_after_hp = 0.0f;
     }
-    if (observed.reference_hp_valid &&
-        authoritative_hp <=
-            observed.reference_hp + kEnemyDamageClaimHpEpsilon) {
-        observed.reference_hp_valid = false;
-        observed.reference_hp = 0.0f;
-    }
-
     const bool was_claimable =
         observed.pending_damage > kEnemyDamageClaimHpEpsilon;
     const float damage_cap =
@@ -89,6 +82,8 @@ void ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal(
     observed.pending_damage =
         (std::min)(damage_cap, observed.pending_damage + damage);
     observed.skill_id = associated_skill_id;
+    observed.last_damage_observed_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
     observed.latest_authoritative_hp = authoritative_hp;
     observed.max_hp = max_hp;
     observed.target_position_x = target_position_x;
@@ -284,6 +279,16 @@ void SendObservedLocalEnemyDamageClaims(
                     " sequence=" + std::to_string(retry_sequence));
             }
             continue;
+        }
+        if (observed.pending_damage <= kEnemyDamageClaimHpEpsilon &&
+            observed.reference_hp_valid &&
+            observed.last_damage_observed_ms != 0 &&
+            now_ms >= observed.last_damage_observed_ms &&
+            now_ms - observed.last_damage_observed_ms >=
+                kEnemyDamageClaimReferenceHoldMs) {
+            observed.reference_hp_valid = false;
+            observed.reference_hp = 0.0f;
+            observed.last_damage_observed_ms = 0;
         }
         if (observed.pending_damage <= kEnemyDamageClaimHpEpsilon ||
             !std::isfinite(observed.latest_authoritative_hp) ||

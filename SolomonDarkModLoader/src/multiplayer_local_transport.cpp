@@ -174,6 +174,11 @@ std::uint64_t BandwidthLimitedSnapshotIntervalMs(
 constexpr float kEnemyDamageClaimHpEpsilon = 0.05f;
 constexpr float kEnemyDamageObservationEpsilon = 0.0001f;
 constexpr std::uint64_t kEnemyDamageClaimResultRetryMs = 3000;
+// Retain the serialized absolute-HP cursor beyond the 500 ms world-snapshot
+// assembly window and 150 ms presentation delay. A pre-claim snapshot can
+// otherwise arrive after the claim result and make the next damage batch
+// target older, higher HP.
+constexpr std::uint64_t kEnemyDamageClaimReferenceHoldMs = 750;
 constexpr float kEnemyDamageClaimMaxDistance = 2200.0f;
 constexpr float kEnemyDamageClaimMaxTargetDrift = 384.0f;
 constexpr float kEnemyDamageClaimMaxHpFactor = 2.5f;
@@ -594,6 +599,7 @@ struct QueuedLocalEnemyDamageClaim {
 struct ObservedLocalEnemyDamage {
     float pending_damage = 0.0f;
     std::int32_t skill_id = 0;
+    std::uint64_t last_damage_observed_ms = 0;
     float latest_authoritative_hp = 0.0f;
     float max_hp = 0.0f;
     float target_position_x = 0.0f;

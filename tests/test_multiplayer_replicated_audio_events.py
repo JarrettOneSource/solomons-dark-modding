@@ -432,12 +432,21 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
             transport_header,
         )
 
-    def test_exact_damage_accumulator_serializes_absolute_hp_claims(self) -> None:
+    def test_exact_damage_accumulator_retains_serialized_hp_cursor_until_quiescent(
+        self,
+    ) -> None:
         damage_sync = (
             ROOT
             / "SolomonDarkModLoader/src/multiplayer_local_transport/"
             "client_enemy_damage_sync.inl"
         ).read_text(encoding="utf-8")
+        observe_section = damage_sync.split(
+            "void ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal(",
+            1,
+        )[1].split(
+            "bool SendLocalEnemyDamageClaim(",
+            1,
+        )[0]
         send_section = damage_sync.split(
             "void SendObservedLocalEnemyDamageClaims(",
             1,
@@ -453,6 +462,22 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
         )
         self.assertIn(
             "observed.in_flight_after_hp = claim_after_hp",
+            send_section,
+        )
+        self.assertNotIn(
+            "observed.reference_hp_valid = false",
+            observe_section,
+        )
+        self.assertIn(
+            "kEnemyDamageClaimReferenceHoldMs",
+            send_section,
+        )
+        self.assertIn(
+            "now_ms - observed.last_damage_observed_ms >=",
+            send_section,
+        )
+        self.assertIn(
+            "observed.reference_hp_valid = false",
             send_section,
         )
 
