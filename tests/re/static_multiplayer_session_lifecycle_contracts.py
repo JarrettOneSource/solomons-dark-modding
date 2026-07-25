@@ -61,6 +61,9 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     verifier = _read(
         "tools/verify_game_over_session_semantics.py"
     )
+    status_verifier = _read(
+        "tools/verify_lobby_session_state_transitions.py"
+    )
     local_verifier = _read(
         "tools/verify_local_multiplayer_sync.py"
     )
@@ -182,6 +185,22 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             '"relaunch_performed": False',
         ),
         "same-lobby second-run live gate",
+    )
+    _require_tokens(
+        status_verifier,
+        (
+            'EXPECTED_STATES = ("not-in-game", "in-hub", "in-boneyard")',
+            '"multiplayer-session-status.json"',
+            '"members"',
+            '"--fresh-install"',
+            '"--multiplayer"',
+            '"host"',
+            "timeout=60.0",
+            "timeout=45.0",
+            "_query_exact_process_ids(",
+            "stop_owned_processes(owned)",
+        ),
+        "real Steam session-state transition gate",
     )
     _require_tokens(
         local_verifier,
