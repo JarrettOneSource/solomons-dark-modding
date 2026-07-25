@@ -148,6 +148,46 @@ void RepairInvalidNativeMeditationTransientState(uintptr_t actor_address) {
         " ok=" + std::to_string(repaired ? 1 : 0));
 }
 
+void ClampLocalMultiplayerDeathPresentationTimerForStockTick(
+    uintptr_t actor_address) {
+    if (actor_address == 0 ||
+        multiplayer::SnapshotRuntimeState()
+                .death_spectator.phase ==
+            multiplayer::DeathSpectatorPhase::Inactive) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t death_drive_state = 0;
+    std::int32_t stored_tick = 0;
+    if (!memory.TryReadField(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            &death_drive_state) ||
+        death_drive_state == 0 ||
+        !memory.TryReadField(
+            actor_address,
+            kActorAnimationMoveDurationTicksOffset,
+            &stored_tick) ||
+        stored_tick <= static_cast<std::int32_t>(
+            multiplayer::kNativeDeathPresentationRedSafeTick)) {
+        return;
+    }
+
+    (void)memory.TryWriteField<std::int32_t>(
+        actor_address,
+        kActorAnimationMoveDurationTicksOffset,
+        multiplayer::
+            ResolveParticipantDeathPresentationStorageTick(
+                static_cast<std::uint16_t>(
+                    (std::clamp)(
+                        stored_tick,
+                        0,
+                        static_cast<std::int32_t>(
+                            multiplayer::
+                                kNativeDeathPresentationMaximumHeldTick)))));
+}
+
 void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<PlayerActorTickFn>(g_gameplay_keyboard_injection.player_actor_tick_hook);
@@ -985,7 +1025,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 }
             }
         }
+        ClampLocalMultiplayerDeathPresentationTimerForStockTick(
+            actor_address);
         original(self);
+        ClampLocalMultiplayerDeathPresentationTimerForStockTick(
+            actor_address);
         if (cast_intent_masked) {
             (void)memory.TryWriteField<std::uint8_t>(
                 gameplay_address_for_pump,

@@ -1074,10 +1074,10 @@ def _native_corpse_state_matches(
         values.get("active") == "true"
         and values.get("phase") == "Spectating"
         and _integer(values, "grid_cell_address") != 0
-        and _integer(values, "grid_member_flag") == 0
-        and abs(_number(values, "render_sort_bias") + 1000.0)
-        <= 0.001
+        and _integer(values, "grid_member_flag") == 1
+        and abs(_number(values, "render_sort_bias")) <= 0.001
         and _integer(values, "death_drive_state") == 1
+        and _integer(values, "death_presentation_ticks") == 150
         and values.get("red_effect_active") == "false"
     )
 
@@ -1089,7 +1089,7 @@ def _wait_for_native_corpse_state(
         client_pipe,
         _native_corpse_state_matches,
         timeout=3.0,
-        description="native tick-159 client corpse state",
+        description="safe multiplayer client corpse state",
     )
 
 
@@ -1318,6 +1318,12 @@ def run_dead_progression_scenario(
             client_pipe,
             screenshot_directory
             / "client-dead-spectator-level-up-picker.png",
+            # The stock picker deliberately dims the entire spectator
+            # backbuffer. Its cards remain readable with fewer colors than a
+            # normal gameplay frame, while the dominant-pixel guard still
+            # rejects an actually blank capture.
+            minimum_unique_colors=500,
+            maximum_dominant_fraction=0.95,
         )
 
         selected_option_id = int(offer["first_option_id"])

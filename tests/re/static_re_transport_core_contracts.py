@@ -231,6 +231,10 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     organic_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_organic_player_death.py"
     )
+    spectator_followup_text = read_text(
+        ROOT
+        / "tools/verify_multiplayer_organic_spectator_followup.py"
+    )
 
     assert "ParticipantPresentationFlagDeathPresentation = 1 << 6" in protocol_text
     for token in (
@@ -259,32 +263,41 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         "kNativeDeathPresentationRedSafeTick = 150",
         "kNativeDeathPresentationTerminalCorpseTick = 159",
         "ResolveParticipantDeathPresentationTick(",
+        "ResolveParticipantDeathPresentationStorageTick(",
+        "ResolveParticipantDeathPresentationRenderTick(",
     ):
         assert token in protocol_text, (
             f"bounded native death clock lacks: {token}"
         )
     assert "presentation_elapsed_ms" in local_presentation_text
     assert "ResolveParticipantDeathPresentationTick(" in local_presentation_text
-    assert "kNativeDeathPresentationRedSafeTick" in local_presentation_text
-    assert "kNativeDeathPresentationRedSafeTick" in remote_vitals_text
+    assert (
+        "ResolveParticipantDeathPresentationStorageTick("
+        in local_presentation_text
+    )
+    assert (
+        "ResolveParticipantDeathPresentationStorageTick("
+        in remote_vitals_text
+    )
     for token in (
-        "ShouldRenderCompletedMultiplayerDeathPresentation",
-        "kNativeDeathPresentationTerminalCorpseTick",
-        "restore_red_safe_tick_after_render",
+        "TryResolveMultiplayerDeathPresentationRenderTick",
+        "ResolveParticipantDeathPresentationRenderTick",
+        "stored_death_tick",
+        "safe_storage_tick",
         "original(self);",
     ):
         assert token in animation_advance_text, (
             f"terminal multiplayer corpse rendering lacks: {token}"
         )
     render_original = animation_advance_text.index("original(self);")
-    red_safe_restore = animation_advance_text.index(
-        "kNativeDeathPresentationRedSafeTick",
+    safe_restore = animation_advance_text.index(
+        "safe_storage_tick",
         render_original,
     )
-    assert render_original < red_safe_restore
-    assert "saved_death_tick);" not in animation_advance_text[
-        render_original:red_safe_restore + 128
-    ]
+    assert render_original < safe_restore
+    assert "ClampLocalMultiplayerDeathPresentationTimerForStockTick" in (
+        tick_text
+    )
     assert "preserve_death_presentation_timer" in dead_motion_text
     assert "if (!preserve_death_presentation_timer)" in dead_motion_text
 
@@ -387,7 +400,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         'choices=("idle", "casting")',
         "observer entered the death animation before the owner",
         "owner and observer death presentation phase diverged",
-        "owner organic staff drop trace was not 1",
+        "owner organic staff drop trace delta was not 1",
         "capture_game_backbuffer",
         "stop_game_processes(process_ids)",
     ):
@@ -395,6 +408,25 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
             f"organic player-death live gate lacks: {token}"
         )
     assert "invoke_native_magic_hit_trial" not in organic_verifier_text
+    for token in (
+        "_materialize_native_wave_schedule",
+        "pre_wave_actor_addresses",
+        "_wait_for_victim_damage",
+        "third_player=True",
+        "map_create_ether_mind_hub",
+        "Call Leviathan",
+        "0x07F2",
+        "_assert_spectated_target_hold",
+        "terminal_frame_callback",
+        "assert_launch_debug_surfaces_empty",
+        'context="spectating_after_ether_minion"',
+        "capture_game_backbuffer",
+        "stop_game_processes(process_ids)",
+    ):
+        assert token in spectator_followup_text, (
+            f"organic spectator follow-up gate lacks: {token}"
+        )
+    assert "invoke_native_magic_hit_trial" not in spectator_followup_text
 
     return (
         "stock enemy damage reaches the owner-authored death epoch, which drives "

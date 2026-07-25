@@ -161,16 +161,17 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
                 [23111, 23112, 23112, 23114]
             )
 
-    def test_native_corpse_gate_waits_for_tick_159_registration_state(
+    def test_native_corpse_gate_requires_safe_multiplayer_registration(
         self,
     ) -> None:
         state = {
             "active": "true",
             "phase": "Spectating",
             "grid_cell_address": "4096",
-            "grid_member_flag": "0",
-            "render_sort_bias": "-1000",
+            "grid_member_flag": "1",
+            "render_sort_bias": "0",
             "death_drive_state": "1",
+            "death_presentation_ticks": "150",
             "red_effect_active": "false",
         }
         self.assertTrue(
@@ -178,8 +179,8 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
         )
 
         first_spectator_frame = dict(state)
-        first_spectator_frame["grid_member_flag"] = "1"
-        first_spectator_frame["render_sort_bias"] = "0"
+        first_spectator_frame["grid_member_flag"] = "0"
+        first_spectator_frame["render_sort_bias"] = "-1000"
         self.assertFalse(
             verifier._native_corpse_state_matches(
                 first_spectator_frame

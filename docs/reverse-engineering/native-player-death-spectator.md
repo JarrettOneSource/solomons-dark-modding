@@ -950,3 +950,45 @@ minion while that owner is the selected target, enforces the normal-session
 zero-diagnostic-surface contract, then organically kills the selected target
 and holds the camera on its position-stable corpse until the five-second
 presentation expires.
+
+## Beta.16 post-fix live evidence
+
+The final x86 Release build was exercised through isolated loopback instance
+groups with the stock 42-record wave graph:
+
+- `orgdf-fix18` killed the host through melee while idle. Owner and observer
+  logical presentation clocks reached 298, stored `+0x1BC` never exceeded
+  150, both corpse-position deltas were zero, and spectator handoff occurred
+  4.985 seconds after presentation began.
+- `orgdf-fix19` killed the client through projectile damage while casting.
+  Handoff occurred after 4.988 seconds; both peers held one corpse coordinate,
+  and post-death primary/secondary input produced no accepted cast, replay,
+  resource spend, summon, projectile, or damage effect.
+- `orgdf-fix20` killed the host through poison while idle. Handoff occurred
+  after 5.035 seconds with synchronized terminal presentation and zero corpse
+  motion.
+- `orgsf-fix5` exercised a previously dead spectator, the Ether owner's real
+  Call Leviathan input, and then an organic death of that selected target.
+  The first and second grace intervals were 5.050 and 5.057 seconds. The
+  selected participant remained attached for 5.004 seconds across 89 samples;
+  both owner and observer reached the terminal corpse frame without executing
+  the native tick-159 CPU transition. All three peers materialized native type
+  `0x07F2`, while every normal-session diagnostic surface count stayed zero.
+- `dsr-fix1` retained host wave authority after host death, completed wave 1
+  on all three peers, and respawned all three owners at the live Arena spawn.
+  Host and client spectator delays were 5.111 and 5.060 seconds.
+- `dpr-fix2` retained a dead-time level-up choice (`option 33`, active
+  `0 -> 1`) through respawn. Skills, items, owned progression, and staff were
+  exact on the same actor. Grace and immediate-round respawns both matched
+  the independently read Arena spawn with zero coordinate delta on owner and
+  observer; the old corpse was absent on both peers, the staff inventory delta
+  was zero, and immediate wave completion canceled the death epoch after
+  0.239 seconds.
+
+The terminal-corpse captures for `orgsf-fix5` are
+`runtime/multiplayer_organic_spectator_followup/orgsf-fix5/`
+`spectated-target-terminal-corpse.png` and
+`spectated-target-owner-terminal-corpse.png`. Dead-picker, spawn, and cleared
+death-location captures for both respawn paths are under
+`runtime/multiplayer_dead_progression_round_respawn/dpr-fix2-p/` and
+`runtime/multiplayer_dead_progression_round_respawn/dpr-fix2-r/`.

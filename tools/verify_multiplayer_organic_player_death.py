@@ -13,7 +13,7 @@ import time
 import traceback
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from multiplayer_frame_capture import capture_game_backbuffer
 from multiplayer_log_probe import log_after, log_position
@@ -62,6 +62,7 @@ VICTIM_MAX_HP = 50.0
 CAST_HOLD_FRAMES = 3600
 PRESENTATION_PHASE_SYNC_TOLERANCE_TICKS = 12.0
 DEATH_PRESENTATION_SECONDS = 5.0
+NATIVE_RED_SAFE_TICK = 150
 NATIVE_TERMINAL_CORPSE_TICK = 159
 CORPSE_POSITION_TOLERANCE = 0.25
 DEAD_INPUT_SETTLE_SECONDS = 1.0
@@ -919,6 +920,9 @@ def _small_state(values: dict[str, str]) -> dict[str, str]:
         "render_sort_bias",
         "x",
         "y",
+        "target_participant_id",
+        "target_name",
+        "display_text",
     )
     return {key: values[key] for key in keys if key in values}
 
@@ -929,11 +933,14 @@ def _sample_lifecycle(
     observer_pipe: str,
     victim_id: int,
     timeout: float,
+    spectator_hold_pipe: str | None = None,
+    terminal_frame_callback: Callable[[], Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     deadline = time.monotonic() + timeout
     started = time.monotonic()
     samples: list[dict[str, Any]] = []
     milestones: dict[str, float] = {}
+    terminal_frame_callback_invoked = False
     while time.monotonic() < deadline:
         elapsed = time.monotonic() - started
         owner = query_spectator_state(victim_pipe)
@@ -943,6 +950,10 @@ def _sample_lifecycle(
             "owner": _small_state(owner),
             "observer": _small_state(observer),
         }
+        if spectator_hold_pipe is not None:
+            sample["spectator_hold"] = _small_state(
+                query_spectator_state(spectator_hold_pipe)
+            )
         samples.append(sample)
         owner_hp = float(owner.get("hp", "0"))
         if owner_hp <= 0.0:
@@ -977,6 +988,29 @@ def _sample_lifecycle(
             milestones.setdefault("red_effect_seconds", elapsed)
         if owner.get("phase") == "Spectating":
             milestones.setdefault("spectator_seconds", elapsed)
+        if (
+            terminal_frame_callback is not None
+            and not terminal_frame_callback_invoked
+            and owner.get("phase") == "DeathPresentation"
+            and observer.get("presentation_active") == "true"
+            and int(
+                owner.get(
+                    "authoritative_death_presentation_ticks",
+                    "0",
+                )
+            )
+                >= NATIVE_TERMINAL_CORPSE_TICK
+            and int(
+                observer.get(
+                    "authoritative_death_presentation_ticks",
+                    "0",
+                )
+            )
+                >= NATIVE_TERMINAL_CORPSE_TICK
+        ):
+            terminal_frame_callback()
+            terminal_frame_callback_invoked = True
+            milestones["terminal_frame_callback_seconds"] = elapsed
         if (
             "spectator_seconds" in milestones
             and owner.get("red_effect_active") == "false"
@@ -1053,55 +1087,132 @@ def _assert_lifecycle(
             f"{presentation_phase_skew:.0f} ticks: {milestones}"
         )
 
-    maximum_owner_tick = max(
+    maximum_owner_storage_tick = max(
         int(sample["owner"].get("death_presentation_ticks", "0"))
         for sample in lifecycle
     )
-    maximum_observer_tick = max(
+    maximum_observer_storage_tick = max(
         int(sample["observer"].get("death_presentation_ticks", "0"))
         for sample in lifecycle
     )
+    maximum_owner_logical_tick = max(
+        int(
+            sample["owner"].get(
+                "authoritative_death_presentation_ticks",
+                "0",
+            )
+        )
+        for sample in lifecycle
+    )
+    maximum_observer_logical_tick = max(
+        int(
+            sample["observer"].get(
+                "authoritative_death_presentation_ticks",
+                "0",
+            )
+        )
+        for sample in lifecycle
+    )
+    milestones["maximum_owner_storage_tick"] = float(
+        maximum_owner_storage_tick
+    )
+    milestones["maximum_observer_storage_tick"] = float(
+        maximum_observer_storage_tick
+    )
     milestones["maximum_owner_presentation_tick"] = float(
-        maximum_owner_tick
+        maximum_owner_logical_tick
     )
     milestones["maximum_observer_presentation_tick"] = float(
-        maximum_observer_tick
+        maximum_observer_logical_tick
     )
     if (
-        maximum_owner_tick < NATIVE_TERMINAL_CORPSE_TICK
-        or maximum_observer_tick < NATIVE_TERMINAL_CORPSE_TICK
+        maximum_owner_storage_tick > NATIVE_RED_SAFE_TICK
+        or maximum_observer_storage_tick > NATIVE_RED_SAFE_TICK
+    ):
+        raise VerifyFailure(
+            "organic death native CPU death timer crossed the tick-159 "
+            "side-effect boundary: "
+            f"owner_storage_tick={maximum_owner_storage_tick} "
+            f"observer_storage_tick={maximum_observer_storage_tick}"
+        )
+    if (
+        maximum_owner_logical_tick < NATIVE_TERMINAL_CORPSE_TICK
+        or maximum_observer_logical_tick <
+            NATIVE_TERMINAL_CORPSE_TICK
     ):
         raise VerifyFailure(
             "organic death presentation did not reach the native terminal "
             "corpse frame on owner and observer: "
-            f"owner_tick={maximum_owner_tick} "
-            f"observer_tick={maximum_observer_tick}"
+            f"owner_tick={maximum_owner_logical_tick} "
+            f"observer_tick={maximum_observer_logical_tick}"
         )
 
-    death_samples = [
+    owner_death_samples = [
         sample
         for sample in lifecycle
         if int(sample["owner"].get("death_drive_state", "0")) != 0
         and float(sample["owner"].get("hp", "0")) <= 0.0
     ]
-    if not death_samples:
+    observer_death_samples = [
+        sample
+        for sample in lifecycle
+        if int(sample["observer"].get("death_drive_state", "0")) != 0
+        and float(sample["observer"].get("hp", "0")) <= 0.0
+    ]
+    if not owner_death_samples or not observer_death_samples:
         raise VerifyFailure(
-            "organic death lifecycle had no corpse-position samples"
+            "organic death lifecycle had no per-peer corpse-position "
+            "samples"
+        )
+    native_cpu_retirement_samples = [
+        sample
+        for sample in owner_death_samples
+        if (
+            int(sample["owner"].get("grid_member_flag", "0")) != 1
+            or abs(
+                float(
+                    sample["owner"].get(
+                        "render_sort_bias",
+                        "0",
+                    )
+                )
+            ) > 0.001
+            or int(
+                sample["observer"].get(
+                    "grid_member_flag",
+                    "0",
+                )
+            ) != 1
+            or abs(
+                float(
+                    sample["observer"].get(
+                        "render_sort_bias",
+                        "0",
+                    )
+                )
+            ) > 0.001
+        )
+    ]
+    if native_cpu_retirement_samples:
+        raise VerifyFailure(
+            "organic death native CPU death timer crossed the tick-159 "
+            "registration/render side-effect boundary: "
+            f"{native_cpu_retirement_samples[0]}"
         )
     owner_reference = (
-        float(death_samples[0]["owner"].get("x", "0")),
-        float(death_samples[0]["owner"].get("y", "0")),
+        float(owner_death_samples[0]["owner"].get("x", "0")),
+        float(owner_death_samples[0]["owner"].get("y", "0")),
     )
     observer_reference = (
-        float(death_samples[0]["observer"].get("x", "0")),
-        float(death_samples[0]["observer"].get("y", "0")),
+        float(observer_death_samples[0]["observer"].get("x", "0")),
+        float(observer_death_samples[0]["observer"].get("y", "0")),
     )
     owner_corpse_max_position_delta = max(
         math.hypot(
             float(sample["owner"].get("x", "0")) - owner_reference[0],
             float(sample["owner"].get("y", "0")) - owner_reference[1],
         )
-        for sample in death_samples
+        for sample in owner_death_samples
     )
     observer_corpse_max_position_delta = max(
         math.hypot(
@@ -1110,7 +1221,7 @@ def _assert_lifecycle(
             float(sample["observer"].get("y", "0")) -
                 observer_reference[1],
         )
-        for sample in death_samples
+        for sample in observer_death_samples
     )
     corpse_position_stability_matches = (
         owner_corpse_max_position_delta <= CORPSE_POSITION_TOLERANCE
@@ -1133,26 +1244,55 @@ def _assert_lifecycle(
             f"observer_delta={observer_corpse_max_position_delta:.3f}"
         )
 
+    initial_owner = lifecycle[0]["owner"]
+    initial_observer = lifecycle[0]["observer"]
     final_owner = lifecycle[-1]["owner"]
     final_observer = lifecycle[-1]["observer"]
-    if int(final_owner.get("death_transition_hits", "0")) != 1:
+    owner_death_transition_delta = (
+        int(final_owner.get("death_transition_hits", "0"))
+        - int(initial_owner.get("death_transition_hits", "0"))
+    )
+    owner_staff_drop_delta = (
+        int(final_owner.get("staff_drop_hits", "0"))
+        - int(initial_owner.get("staff_drop_hits", "0"))
+    )
+    observer_death_transition_delta = (
+        int(final_observer.get("death_transition_hits", "0"))
+        - int(initial_observer.get("death_transition_hits", "0"))
+    )
+    observer_staff_drop_delta = (
+        int(final_observer.get("staff_drop_hits", "0"))
+        - int(initial_observer.get("staff_drop_hits", "0"))
+    )
+    milestones["owner_death_transition_delta"] = float(
+        owner_death_transition_delta
+    )
+    milestones["owner_staff_drop_delta"] = float(owner_staff_drop_delta)
+    milestones["observer_death_transition_delta"] = float(
+        observer_death_transition_delta
+    )
+    milestones["observer_staff_drop_delta"] = float(
+        observer_staff_drop_delta
+    )
+    if owner_death_transition_delta != 1:
         raise VerifyFailure(
-            "owner organic death transition trace was not 1: "
-            f"{final_owner}"
+            "owner organic death transition trace delta was not 1: "
+            f"initial={initial_owner} final={final_owner}"
         )
-    if int(final_owner.get("staff_drop_hits", "0")) != 1:
+    if owner_staff_drop_delta != 1:
         raise VerifyFailure(
-            f"owner organic staff drop trace was not 1: {final_owner}"
+            "owner organic staff drop trace delta was not 1: "
+            f"initial={initial_owner} final={final_owner}"
         )
-    if int(final_observer.get("death_transition_hits", "0")) != 0:
+    if observer_death_transition_delta != 0:
         raise VerifyFailure(
             "observer executed owner-only organic death transition: "
-            f"{final_observer}"
+            f"initial={initial_observer} final={final_observer}"
         )
-    if int(final_observer.get("staff_drop_hits", "0")) != 0:
+    if observer_staff_drop_delta != 0:
         raise VerifyFailure(
             "observer executed owner-only organic staff drop: "
-            f"{final_observer}"
+            f"initial={initial_observer} final={final_observer}"
         )
     return grace_seconds
 

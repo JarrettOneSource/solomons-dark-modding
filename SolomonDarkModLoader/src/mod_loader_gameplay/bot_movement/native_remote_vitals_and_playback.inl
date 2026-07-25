@@ -146,7 +146,9 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         memory.TryWriteField<std::int32_t>(
             actor_address,
             kActorAnimationMoveDurationTicksOffset,
-            presentation_ticks);
+            multiplayer::
+                ResolveParticipantDeathPresentationStorageTick(
+                    presentation_ticks));
 
     if (binding->native_remote_death_attachment_actor_address !=
         actor_address) {

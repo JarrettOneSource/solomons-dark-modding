@@ -323,6 +323,23 @@ constexpr std::uint16_t ResolveParticipantDeathPresentationTick(
             : scaled_tick);
 }
 
+constexpr std::uint16_t
+ResolveParticipantDeathPresentationStorageTick(
+    std::uint16_t logical_tick) {
+    return logical_tick > kNativeDeathPresentationRedSafeTick
+        ? kNativeDeathPresentationRedSafeTick
+        : logical_tick;
+}
+
+constexpr std::uint16_t
+ResolveParticipantDeathPresentationRenderTick(
+    std::uint16_t logical_tick) {
+    return logical_tick >
+            kNativeDeathPresentationTerminalCorpseTick
+        ? kNativeDeathPresentationTerminalCorpseTick
+        : logical_tick;
+}
+
 enum ParticipantPersistentStatusFlags : std::uint8_t {
     ParticipantPersistentStatusFlagFirewalker = 1 << 0,
     ParticipantPersistentStatusFlagMindstar = 1 << 1,

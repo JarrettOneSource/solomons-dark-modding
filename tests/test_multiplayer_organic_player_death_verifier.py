@@ -21,20 +21,26 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
     return [
         {
             "owner": {
-                "death_transition_hits": "1",
-                "staff_drop_hits": "1",
-                "death_presentation_ticks": "159",
-                "death_drive_state": "1",
-                "hp": "0",
+                "death_transition_hits": "0",
+                "staff_drop_hits": "0",
+                "death_presentation_ticks": "0",
+                "authoritative_death_presentation_ticks": "0",
+                "death_drive_state": "0",
+                "grid_member_flag": "1",
+                "hp": "1",
+                "render_sort_bias": "0",
                 "x": "640.0",
                 "y": "384.0",
             },
             "observer": {
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
-                "death_presentation_ticks": "159",
-                "death_drive_state": "1",
-                "hp": "0",
+                "death_presentation_ticks": "0",
+                "authoritative_death_presentation_ticks": "0",
+                "death_drive_state": "0",
+                "grid_member_flag": "1",
+                "hp": "1",
+                "render_sort_bias": "0",
                 "x": "640.0",
                 "y": "384.0",
             },
@@ -44,8 +50,37 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
                 "death_transition_hits": "1",
                 "staff_drop_hits": "1",
                 "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "159",
                 "death_drive_state": "1",
+                "grid_member_flag": "1",
                 "hp": "0",
+                "render_sort_bias": "0",
+                "x": "640.0",
+                "y": "384.0",
+            },
+            "observer": {
+                "death_transition_hits": "0",
+                "staff_drop_hits": "0",
+                "death_presentation_ticks": "0",
+                "authoritative_death_presentation_ticks": "0",
+                "death_drive_state": "0",
+                "grid_member_flag": "1",
+                "hp": "1",
+                "render_sort_bias": "0",
+                "x": "630.0",
+                "y": "384.0",
+            },
+        },
+        {
+            "owner": {
+                "death_transition_hits": "1",
+                "staff_drop_hits": "1",
+                "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "159",
+                "death_drive_state": "1",
+                "grid_member_flag": "1",
+                "hp": "0",
+                "render_sort_bias": "0",
                 "x": "640.0",
                 "y": "384.0",
             },
@@ -53,8 +88,11 @@ def _completed_lifecycle() -> list[dict[str, dict[str, str]]]:
                 "death_transition_hits": "0",
                 "staff_drop_hits": "0",
                 "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "159",
                 "death_drive_state": "1",
+                "grid_member_flag": "1",
                 "hp": "0",
+                "render_sort_bias": "0",
                 "x": "640.0",
                 "y": "384.0",
             },
@@ -141,12 +179,33 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
     def test_incomplete_native_death_animation_is_rejected(self) -> None:
         lifecycle = _completed_lifecycle()
         for sample in lifecycle:
-            sample["owner"]["death_presentation_ticks"] = "158"
-            sample["observer"]["death_presentation_ticks"] = "158"
+            sample["owner"][
+                "authoritative_death_presentation_ticks"
+            ] = "158"
+            sample["observer"][
+                "authoritative_death_presentation_ticks"
+            ] = "158"
 
         with self.assertRaisesRegex(
             verifier.VerifyFailure,
             "terminal corpse frame",
+        ):
+            verifier._assert_lifecycle(
+                lifecycle,
+                _completed_milestones(),
+            )
+
+    def test_native_cpu_death_lifecycle_side_effect_is_rejected(
+        self,
+    ) -> None:
+        lifecycle = _completed_lifecycle()
+        lifecycle[1]["owner"]["death_presentation_ticks"] = "159"
+        lifecycle[1]["owner"]["grid_member_flag"] = "0"
+        lifecycle[1]["owner"]["render_sort_bias"] = "-1000"
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "native CPU death timer crossed",
         ):
             verifier._assert_lifecycle(
                 lifecycle,
@@ -160,6 +219,46 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(
             verifier.VerifyFailure,
             "corpse moved",
+        ):
+            verifier._assert_lifecycle(
+                lifecycle,
+                _completed_milestones(),
+            )
+
+    def test_observer_motion_before_death_delivery_is_not_corpse_motion(
+        self,
+    ) -> None:
+        lifecycle = _completed_lifecycle()
+        lifecycle[1]["observer"]["x"] = "625.0"
+
+        verifier._assert_lifecycle(
+            lifecycle,
+            _completed_milestones(),
+        )
+
+    def test_prior_observer_death_traces_are_used_as_baseline(
+        self,
+    ) -> None:
+        lifecycle = _completed_lifecycle()
+        for sample in lifecycle:
+            sample["observer"]["death_transition_hits"] = "7"
+            sample["observer"]["staff_drop_hits"] = "9"
+
+        verifier._assert_lifecycle(
+            lifecycle,
+            _completed_milestones(),
+        )
+
+    def test_observer_death_trace_increment_is_rejected(self) -> None:
+        lifecycle = _completed_lifecycle()
+        lifecycle[0]["observer"]["death_transition_hits"] = "1"
+        lifecycle[0]["observer"]["staff_drop_hits"] = "1"
+        lifecycle[-1]["observer"]["death_transition_hits"] = "2"
+        lifecycle[-1]["observer"]["staff_drop_hits"] = "2"
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "observer executed owner-only",
         ):
             verifier._assert_lifecycle(
                 lifecycle,

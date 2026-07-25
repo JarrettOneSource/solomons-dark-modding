@@ -136,6 +136,19 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationTick(10000) == 298,
             "death presentation wire clock is not bounded to the native lifecycle") &&
         Require(
+            ResolveParticipantDeathPresentationStorageTick(149) == 149 &&
+                ResolveParticipantDeathPresentationStorageTick(150) == 150 &&
+                ResolveParticipantDeathPresentationStorageTick(151) == 150 &&
+                ResolveParticipantDeathPresentationStorageTick(298) == 150,
+            "death presentation CPU timer can cross the native side-effect boundary") &&
+        Require(
+            ResolveParticipantDeathPresentationRenderTick(149) == 149 &&
+                ResolveParticipantDeathPresentationRenderTick(150) == 150 &&
+                ResolveParticipantDeathPresentationRenderTick(151) == 151 &&
+                ResolveParticipantDeathPresentationRenderTick(159) == 159 &&
+                ResolveParticipantDeathPresentationRenderTick(298) == 159,
+            "death presentation render projection does not reach and hold the corpse frame") &&
+        Require(
             sizeof(StatePacket) == 616,
             "StatePacket regained checkpoint-array payload") &&
         Require(

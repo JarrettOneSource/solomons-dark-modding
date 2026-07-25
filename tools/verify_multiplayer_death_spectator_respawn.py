@@ -66,10 +66,13 @@ if sd.camera ~= nil and sd.camera.get_state ~= nil then
   camera_ok, camera = pcall(sd.camera.get_state)
 end
 local target = nil
+local local_participant = nil
 for _, participant in ipairs(multiplayer.participants or {}) do
   if participant.participant_id == spectator.target_participant_id then
     target = participant
-    break
+  end
+  if participant.kind == "LocalHuman" then
+    local_participant = participant
   end
 end
 local target_gameplay = nil
@@ -94,6 +97,9 @@ local death_transition_hits =
   sd.debug.get_trace_hits("player_death_transition") or {}
 local staff_drop_hits =
   sd.debug.get_trace_hits("player_staff_drop") or {}
+local authoritative_death_presentation_ticks =
+  local_participant and
+    local_participant.death_presentation_tick or 0
 emit("active", spectator.active)
 emit("phase", spectator.phase)
 emit("death_started_ms", spectator.death_started_ms)
@@ -120,11 +126,15 @@ emit("grid_member_flag", player and player.grid_member_flag or 0)
 emit("render_sort_bias", player and player.render_sort_bias or 0)
 emit("death_drive_state", death_drive_state)
 emit("death_presentation_ticks", death_presentation_ticks)
+emit("authoritative_death_presentation_ticks",
+  authoritative_death_presentation_ticks)
 emit("terminal_pending", terminal_pending)
 emit("terminal_countdown", terminal_countdown)
 emit("presentation_active", spectator.phase == "DeathPresentation")
 emit("red_effect_active",
-  death_drive_state ~= 0 and death_presentation_ticks > 150)
+  death_drive_state ~= 0 and
+    spectator.phase == "DeathPresentation" and
+    authoritative_death_presentation_ticks > 150)
 emit("death_transition_hits", #death_transition_hits)
 emit("staff_drop_hits", #staff_drop_hits)
 emit("attachment_type_id",
@@ -182,6 +192,8 @@ local terminal_countdown = actor ~= 0 and
   (sd.debug.read_u32(actor +
     sd.debug.layout_offset("actor_terminal_dispatch_countdown")) or 0) or 0
 local presentation_flags = participant and participant.presentation_flags or 0
+local authoritative_death_presentation_ticks =
+  participant and participant.death_presentation_tick or 0
 local death_transition_hits =
   sd.debug.get_trace_hits("player_death_transition") or {}
 local staff_drop_hits =
@@ -214,11 +226,14 @@ emit("terminal_pending", terminal_pending)
 emit("terminal_countdown", terminal_countdown)
 emit("presentation_flags", presentation_flags)
 emit("authoritative_death_presentation_ticks",
-  participant and participant.death_presentation_tick or 0)
+  authoritative_death_presentation_ticks)
 emit("presentation_active",
   math.floor(presentation_flags / __DEATH_PRESENTATION_FLAG__) % 2 == 1)
 emit("red_effect_active",
-  death_drive_state ~= 0 and death_presentation_ticks > 150)
+  death_drive_state ~= 0 and
+    math.floor(presentation_flags /
+      __DEATH_PRESENTATION_FLAG__) % 2 == 1 and
+    authoritative_death_presentation_ticks > 150)
 emit("death_transition_hits", #death_transition_hits)
 emit("staff_drop_hits", #staff_drop_hits)
 emit("attachment_type_id",
@@ -238,6 +253,13 @@ local function emit(key, value)
 end
 local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local spectator = assert(multiplayer.death_spectator)
+local local_participant = nil
+for _, participant in ipairs(multiplayer.participants or {}) do
+  if participant.kind == "LocalHuman" then
+    local_participant = participant
+    break
+  end
+end
 local player = sd.player.get_state()
 local actor = player and tonumber(player.actor_address) or 0
 local death_drive_state = actor ~= 0 and
@@ -249,14 +271,21 @@ local death_presentation_ticks = actor ~= 0 and
 local terminal_pending = actor ~= 0 and
   (sd.debug.read_u8(actor +
     sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
+local authoritative_death_presentation_ticks =
+  local_participant and
+    local_participant.death_presentation_tick or 0
 emit("materialized", actor ~= 0)
 emit("hp", player and player.hp or 0)
 emit("death_drive_state", death_drive_state)
 emit("death_presentation_ticks", death_presentation_ticks)
+emit("authoritative_death_presentation_ticks",
+  authoritative_death_presentation_ticks)
 emit("terminal_pending", terminal_pending)
 emit("presentation_active", spectator.phase == "DeathPresentation")
 emit("red_effect_active",
-  death_drive_state ~= 0 and death_presentation_ticks > 150)
+  death_drive_state ~= 0 and
+    spectator.phase == "DeathPresentation" and
+    authoritative_death_presentation_ticks > 150)
 """
 
 
@@ -285,6 +314,8 @@ local terminal_pending = actor ~= 0 and
   (sd.debug.read_u8(actor +
     sd.debug.layout_offset("actor_terminal_dispatch_pending")) or 0) or 0
 local presentation_flags = participant and participant.presentation_flags or 0
+local authoritative_death_presentation_ticks =
+  participant and participant.death_presentation_tick or 0
 emit("materialized",
   gameplay ~= nil and gameplay.entity_materialized and actor ~= 0)
 emit("hp",
@@ -292,11 +323,16 @@ emit("hp",
     (participant and participant.life_current or 0))
 emit("death_drive_state", death_drive_state)
 emit("death_presentation_ticks", death_presentation_ticks)
+emit("authoritative_death_presentation_ticks",
+  authoritative_death_presentation_ticks)
 emit("terminal_pending", terminal_pending)
 emit("presentation_active",
   math.floor(presentation_flags / __DEATH_PRESENTATION_FLAG__) % 2 == 1)
 emit("red_effect_active",
-  death_drive_state ~= 0 and death_presentation_ticks > 150)
+  death_drive_state ~= 0 and
+    math.floor(presentation_flags /
+      __DEATH_PRESENTATION_FLAG__) % 2 == 1 and
+    authoritative_death_presentation_ticks > 150)
 """
 
 
@@ -472,6 +508,10 @@ def death_animation_sync_matches(
             values,
             "death_presentation_ticks",
         )
+        logical_ticks = _integer(
+            values,
+            "authoritative_death_presentation_ticks",
+        )
         if (
             values.get("materialized") != "true"
             or not math.isfinite(hp)
@@ -481,11 +521,13 @@ def death_animation_sync_matches(
             or values.get("presentation_active")
             != ("true" if presentation_active else "false")
             or presentation_ticks < 0
-            or presentation_ticks > 298
+            or presentation_ticks > 150
+            or logical_ticks < 0
+            or logical_ticks > 298
         ):
             return False
         if not presentation_active and (
-            presentation_ticks > 150
+            logical_ticks > 150
             or values.get("red_effect_active") != "false"
         ):
             return False
@@ -498,7 +540,10 @@ def death_animation_clock_sync_matches(
     if not states:
         return False
     presentation_ticks = [
-        _integer(values, "death_presentation_ticks")
+        _integer(
+            values,
+            "authoritative_death_presentation_ticks",
+        )
         for values in states
     ]
     return (
@@ -514,7 +559,7 @@ def red_death_effect_matches(
 ) -> bool:
     presentation_ticks = _integer(
         values,
-        "death_presentation_ticks",
+        "authoritative_death_presentation_ticks",
     )
     if active:
         return (

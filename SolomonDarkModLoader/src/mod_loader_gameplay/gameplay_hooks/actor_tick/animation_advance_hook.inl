@@ -1,6 +1,7 @@
-bool ShouldRenderCompletedMultiplayerDeathPresentation(
-    uintptr_t actor_address) {
-    if (actor_address == 0) {
+bool TryResolveMultiplayerDeathPresentationRenderTick(
+    uintptr_t actor_address,
+    std::uint16_t* render_tick) {
+    if (actor_address == 0 || render_tick == nullptr) {
         return false;
     }
 
@@ -9,8 +10,36 @@ bool ShouldRenderCompletedMultiplayerDeathPresentation(
     if (TryGetPlayerState(&local_player) &&
         local_player.valid &&
         local_player.actor_address == actor_address) {
-        return runtime_state.death_spectator.phase ==
-            multiplayer::DeathSpectatorPhase::Spectating;
+        std::uint16_t logical_tick = 0;
+        if (runtime_state.death_spectator.phase ==
+                multiplayer::DeathSpectatorPhase::
+                    DeathPresentation) {
+            const auto now_ms =
+                static_cast<std::uint64_t>(::GetTickCount64());
+            if (now_ms <
+                runtime_state.death_spectator.death_started_ms) {
+                return false;
+            }
+            logical_tick =
+                multiplayer::
+                    ResolveParticipantDeathPresentationTick(
+                        now_ms -
+                        runtime_state.death_spectator
+                            .death_started_ms);
+        } else if (
+            runtime_state.death_spectator.phase ==
+            multiplayer::DeathSpectatorPhase::Spectating) {
+            logical_tick =
+                multiplayer::
+                    kNativeDeathPresentationTerminalCorpseTick;
+        } else {
+            return false;
+        }
+        *render_tick =
+            multiplayer::
+                ResolveParticipantDeathPresentationRenderTick(
+                    logical_tick);
+        return true;
     }
 
     std::lock_guard<std::recursive_mutex> lock(
@@ -22,12 +51,45 @@ bool ShouldRenderCompletedMultiplayerDeathPresentation(
     }
     const auto* participant =
         multiplayer::FindParticipant(runtime_state, binding->bot_id);
-    return participant != nullptr &&
-        participant->runtime.valid &&
-        std::isfinite(participant->runtime.life_current) &&
-        participant->runtime.life_current <= 0.0f &&
-        (participant->runtime.presentation_flags &
-         multiplayer::ParticipantPresentationFlagDeathPresentation) == 0;
+    if (participant == nullptr ||
+        !participant->runtime.valid ||
+        !std::isfinite(participant->runtime.life_current) ||
+        participant->runtime.life_current > 0.0f) {
+        return false;
+    }
+
+    std::uint16_t logical_tick =
+        multiplayer::kNativeDeathPresentationTerminalCorpseTick;
+    if ((participant->runtime.presentation_flags &
+         multiplayer::
+             ParticipantPresentationFlagDeathPresentation) != 0) {
+        const auto now_ms =
+            static_cast<std::uint64_t>(::GetTickCount64());
+        const auto packet_age_ms =
+            participant->last_packet_ms != 0 &&
+                now_ms >= participant->last_packet_ms
+                ? now_ms - participant->last_packet_ms
+                : 0;
+        const auto packet_age_ticks =
+            multiplayer::
+                ResolveParticipantDeathPresentationTick(
+                    packet_age_ms);
+        const auto extrapolated_tick =
+            static_cast<std::uint32_t>(
+                participant->runtime.death_presentation_tick) +
+            packet_age_ticks;
+        logical_tick = static_cast<std::uint16_t>(
+            (std::min)(
+                extrapolated_tick,
+                static_cast<std::uint32_t>(
+                    multiplayer::
+                        kNativeDeathPresentationMaximumHeldTick)));
+    }
+    *render_tick =
+        multiplayer::
+            ResolveParticipantDeathPresentationRenderTick(
+                logical_tick);
+    return true;
 }
 
 void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
@@ -76,25 +138,46 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     {
         auto& memory = ProcessMemory::Instance();
         std::uint8_t death_drive_state = 0;
-        const bool restore_red_safe_tick_after_render =
+        std::int32_t stored_death_tick = 0;
+        std::uint16_t render_death_tick = 0;
+        std::uint16_t safe_storage_tick = 0;
+        const bool can_project_death_tick =
             memory.TryReadField(
                 actor_address,
                 kActorAnimationDriveStateByteOffset,
                 &death_drive_state) &&
             death_drive_state != 0 &&
-            ShouldRenderCompletedMultiplayerDeathPresentation(
-                actor_address) &&
+            memory.TryReadField(
+                actor_address,
+                kActorAnimationMoveDurationTicksOffset,
+                &stored_death_tick) &&
+            TryResolveMultiplayerDeathPresentationRenderTick(
+                actor_address,
+                &render_death_tick);
+        if (can_project_death_tick) {
+            safe_storage_tick =
+                multiplayer::
+                    ResolveParticipantDeathPresentationStorageTick(
+                        static_cast<std::uint16_t>(
+                            (std::clamp)(
+                                stored_death_tick,
+                                0,
+                                static_cast<std::int32_t>(
+                                    multiplayer::
+                                        kNativeDeathPresentationMaximumHeldTick))));
+        }
+        const bool restore_storage_tick_after_render =
+            can_project_death_tick &&
             memory.TryWriteField<std::int32_t>(
                 actor_address,
                 kActorAnimationMoveDurationTicksOffset,
-                multiplayer::
-                    kNativeDeathPresentationTerminalCorpseTick);
+                render_death_tick);
         original(self);
-        if (restore_red_safe_tick_after_render) {
+        if (restore_storage_tick_after_render) {
             (void)memory.TryWriteField<std::int32_t>(
                 actor_address,
                 kActorAnimationMoveDurationTicksOffset,
-                multiplayer::kNativeDeathPresentationRedSafeTick);
+                safe_storage_tick);
         }
     }
     CaptureLuaDrawWorldProjection(GetLastSeenD3d9Device());

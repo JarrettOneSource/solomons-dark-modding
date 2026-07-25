@@ -13,6 +13,11 @@ bool HoldLocalPlayerMultiplayerDeathPresentation(
     }
 
     auto& memory = ProcessMemory::Instance();
+    const auto logical_tick =
+        presentation_active
+            ? multiplayer::ResolveParticipantDeathPresentationTick(
+                  presentation_elapsed_ms)
+            : multiplayer::kNativeDeathPresentationRedSafeTick;
     const bool wrote =
         memory.TryWriteField<std::uint8_t>(
             player.actor_address,
@@ -29,9 +34,8 @@ bool HoldLocalPlayerMultiplayerDeathPresentation(
         memory.TryWriteField<std::int32_t>(
             player.actor_address,
             kActorAnimationMoveDurationTicksOffset,
-            presentation_active
-                ? multiplayer::ResolveParticipantDeathPresentationTick(
-                      presentation_elapsed_ms)
-                : multiplayer::kNativeDeathPresentationRedSafeTick);
+            multiplayer::
+                ResolveParticipantDeathPresentationStorageTick(
+                    logical_tick));
     return wrote;
 }

@@ -68,6 +68,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "hp": "0",
                 "death_drive_state": "1",
                 "death_presentation_ticks": "74",
+                "authoritative_death_presentation_ticks": "74",
                 "terminal_pending": "0",
                 "presentation_active": "true",
             },
@@ -76,6 +77,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "hp": "0",
                 "death_drive_state": "1",
                 "death_presentation_ticks": "71",
+                "authoritative_death_presentation_ticks": "71",
                 "terminal_pending": "0",
                 "presentation_active": "true",
             },
@@ -84,6 +86,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "hp": "0",
                 "death_drive_state": "1",
                 "death_presentation_ticks": "69",
+                "authoritative_death_presentation_ticks": "69",
                 "terminal_pending": "0",
                 "presentation_active": "true",
             },
@@ -102,7 +105,9 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
             )
         )
         states[1]["death_drive_state"] = "1"
-        states[1]["death_presentation_ticks"] = "120"
+        states[1][
+            "authoritative_death_presentation_ticks"
+        ] = "120"
         self.assertFalse(
             verifier.death_animation_clock_sync_matches(states)
         )
@@ -190,6 +195,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "hp": "0",
                 "death_drive_state": "1",
                 "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "150",
                 "terminal_pending": "0",
                 "presentation_active": "false",
                 "red_effect_active": "false",
@@ -199,6 +205,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "hp": "0",
                 "death_drive_state": "1",
                 "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "150",
                 "terminal_pending": "0",
                 "presentation_active": "false",
                 "red_effect_active": "false",
@@ -221,7 +228,8 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
     def test_red_effect_must_appear_during_grace_then_clear(self) -> None:
         values = {
             "death_drive_state": "1",
-            "death_presentation_ticks": "151",
+            "death_presentation_ticks": "150",
+            "authoritative_death_presentation_ticks": "151",
             "presentation_active": "true",
             "red_effect_active": "true",
         }
@@ -231,6 +239,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
         values.update(
             {
                 "death_presentation_ticks": "150",
+                "authoritative_death_presentation_ticks": "150",
                 "presentation_active": "false",
                 "red_effect_active": "false",
             }
