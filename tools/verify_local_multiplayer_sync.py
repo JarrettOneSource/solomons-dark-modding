@@ -262,6 +262,7 @@ def stop_game_processes(process_ids: Iterable[int]) -> None:
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        timeout=15.0,
         check=False,
     )
 

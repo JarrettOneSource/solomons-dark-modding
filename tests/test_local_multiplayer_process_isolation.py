@@ -342,6 +342,7 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         self.assertIn("Get-Process -Id $ids", command)
         self.assertIn("Where-Object", command)
         self.assertNotIn("Get-Process SolomonDark*", command)
+        self.assertEqual(run.call_args.kwargs["timeout"], 15.0)
 
 
 if __name__ == "__main__":

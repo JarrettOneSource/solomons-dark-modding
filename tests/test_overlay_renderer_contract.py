@@ -326,6 +326,19 @@ class OverlayRendererContractTests(unittest.TestCase):
         self.assertIn("state_block->Release()", end_scene)
         self.assertGreaterEqual(hook.count("state_block->Apply()"), 2)
 
+    def test_frame_hook_has_a_bounded_late_device_startup_window(self) -> None:
+        hook = read("SolomonDarkModLoader/src/d3d9_end_scene_hook.cpp")
+
+        self.assertIn(
+            "kDeviceAcquireTimeoutMilliseconds = 10000",
+            hook,
+        )
+        self.assertIn("kDeviceAcquirePollMilliseconds = 50", hook)
+        self.assertIn(
+            "GetTickCount64() + kDeviceAcquireTimeoutMilliseconds",
+            hook,
+        )
+
     def test_lua_draw_batches_runs_and_filters_sprites_linearly(self) -> None:
         renderer = read(
             "SolomonDarkModLoader/src/lua_draw_renderer/"

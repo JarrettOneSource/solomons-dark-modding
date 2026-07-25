@@ -28,7 +28,7 @@ using ResetFn = HRESULT(STDMETHODCALLTYPE*)(
 
 constexpr size_t kResetVtableIndex = 16;
 constexpr size_t kEndSceneVtableIndex = 42;
-constexpr DWORD kDeviceAcquireTimeoutMilliseconds = 5000;
+constexpr DWORD kDeviceAcquireTimeoutMilliseconds = 10000;
 constexpr DWORD kDeviceAcquirePollMilliseconds = 50;
 constexpr std::size_t kMaximumFrameCallbacks = 8;
 
