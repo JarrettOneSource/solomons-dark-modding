@@ -121,11 +121,13 @@ foreach ($projectItem in $projectItems) {
 
 $acceptedLargeFiles = @{
     "include/multiplayer_runtime_protocol.h" = "Fixed local-UDP packet schema; split with the transport protocol redesign."
+    "src/gameplay_seams.h" = "Shared seam surface declarations at the limit; owes a per-subsystem header split when the seam inventory next stabilizes."
     "src/lua_engine_bindings_gameplay.cpp" = "Single Lua gameplay registration unit; split after the multiplayer API stabilizes."
     "src/lua_engine_bindings_runtime.cpp" = "Runtime snapshot table marshalling remains one cohesive Lua binding unit."
     "src/lua_engine_events.cpp" = "The ordered gameplay event variant, queue, and dispatch visitor remain one cohesive unit."
     "src/mod_loader_gameplay/bot_casting/pending_cast_preparation.inl" = "Existing native cast preparation sequence with tightly coupled state guards."
     "src/mod_loader_gameplay/bot_casting/pending_cast_processing.inl" = "Existing native cast lifecycle sequence with tightly coupled cleanup paths."
+    "src/mod_loader_gameplay/core/boneyard_generator_patch.inl" = "Deterministic decor generation and capture seams form one patch transaction; owes a behavior-neutral split to the decor-seam owner."
     "src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl" = "Native actor-tick hook kept contiguous while multiplayer playback is validated."
     "src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl" = "Native input/control detours kept together while multiplayer authority settles."
     "src/mod_loader_gameplay/public_api_keyboard_injection.inl" = "Existing input-injection API and native key routing."
