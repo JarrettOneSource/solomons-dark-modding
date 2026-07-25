@@ -58,7 +58,7 @@ SURVIVOR_HP = 5000.0
 VICTIM_ARMING_HP = 0.1
 VICTIM_MAX_HP = 50.0
 CAST_HOLD_FRAMES = 1200
-PRESENTATION_SYNC_TOLERANCE_SECONDS = 0.25
+PRESENTATION_PHASE_SYNC_TOLERANCE_TICKS = 12.0
 
 WAVE_FIXTURES = {
     "melee": (
@@ -392,8 +392,17 @@ def _sample_lifecycle(
             milestones.setdefault("owner_death_drive_seconds", elapsed)
         if owner.get("phase") == "DeathPresentation":
             milestones.setdefault("presentation_seconds", elapsed)
-        if observer.get("presentation_active") == "true":
-            milestones.setdefault("observer_presentation_seconds", elapsed)
+        if (
+            observer.get("presentation_active") == "true"
+            and "observer_presentation_seconds" not in milestones
+        ):
+            milestones["observer_presentation_seconds"] = elapsed
+            milestones["owner_presentation_tick_at_observer_start"] = float(
+                int(owner.get("death_presentation_ticks", "0"))
+            )
+            milestones["observer_presentation_tick_at_start"] = float(
+                int(observer.get("death_presentation_ticks", "0"))
+            )
         if int(owner.get("death_transition_hits", "0")) > 0:
             milestones.setdefault("death_transition_seconds", elapsed)
         if int(owner.get("staff_drop_hits", "0")) > 0:
@@ -424,6 +433,8 @@ def _assert_lifecycle(
         "hp_zero_seconds",
         "presentation_seconds",
         "observer_presentation_seconds",
+        "owner_presentation_tick_at_observer_start",
+        "observer_presentation_tick_at_start",
         "death_transition_seconds",
         "staff_drop_seconds",
         "red_effect_seconds",
@@ -454,14 +465,26 @@ def _assert_lifecycle(
             "observer entered the death animation before the owner "
             f"started death presentation: {milestones}"
         )
-    presentation_skew = abs(
+    presentation_delivery_skew = abs(
         milestones["observer_presentation_seconds"]
         - milestones["presentation_seconds"]
     )
-    if presentation_skew > PRESENTATION_SYNC_TOLERANCE_SECONDS:
+    presentation_phase_skew = abs(
+        milestones["observer_presentation_tick_at_start"]
+        - milestones["owner_presentation_tick_at_observer_start"]
+    )
+    milestones["presentation_delivery_skew_seconds"] = (
+        presentation_delivery_skew
+    )
+    milestones["presentation_phase_skew_ticks"] = presentation_phase_skew
+    # A stalled peer cannot render while its app thread is stopped. The
+    # replicated bounded clock and packet-age extrapolation are what keep the
+    # first frame it can render aligned with the owner, so assert that native
+    # phase directly instead of packet-observation wall time.
+    if presentation_phase_skew > PRESENTATION_PHASE_SYNC_TOLERANCE_TICKS:
         raise VerifyFailure(
-            "owner and observer death presentation starts diverged by "
-            f"{presentation_skew:.3f}s: {milestones}"
+            "owner and observer death presentation phase diverged by "
+            f"{presentation_phase_skew:.0f} ticks: {milestones}"
         )
 
     final_owner = lifecycle[-1]["owner"]

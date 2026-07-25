@@ -662,6 +662,11 @@ The native findings impose these constraints:
   `+0x160`, the owner-authored bounded `+0x1BC` clock, and whether the grace
   presentation is active. Protocol 84 carries that clock explicitly rather
   than starting a peer-local timer when the death packet arrives.
+- Presentation acceptance compares the native bounded clock on the first
+  observer frame against the owner's clock, not packet-arrival wall time. A
+  stalled peer cannot render during its app-thread gap; when it resumes,
+  packet-age extrapolation must place its first rendered death frame within 12
+  ticks of the owner without running the owner-only terminal/drop virtual.
 - After 3,000 ms, `+0x1BC` is held below the Arena red-effect threshold and can
   never reach the stock tick-300 end-of-life path.
 - Dead remote presentation is reconciled explicitly; it is not obtained by
@@ -675,6 +680,10 @@ The native findings impose these constraints:
   corrections; the same epoch cannot respawn or terminalize an owner twice.
 - The host reads the effective Boneyard slot-0 spawn from the live Arena and
   carries that exact state-derived coordinate in every wave-respawn command.
+- Exact placement is asserted on the applied respawn epoch. After alive
+  registration and collisions resume, stock controls and participant
+  collision resolution may move the actor normally; later stability samples
+  assert that death/grace state stays retired rather than pinning coordinates.
 - Local and remote alive transitions restore the tick-159 grid-member and
   render/sort fields before rebinding the participant actor, removing only
   that participant's death-location corpse registration.

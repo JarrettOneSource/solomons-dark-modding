@@ -354,6 +354,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         'choices=("host", "client")',
         'choices=("idle", "casting")',
         "observer entered the death animation before the owner",
+        "owner and observer death presentation phase diverged",
         "owner organic staff drop trace was not 1",
         "capture_game_backbuffer",
         "stop_game_processes(process_ids)",

@@ -924,8 +924,6 @@ def assert_immediate_respawn_sample(
     *,
     epoch: int,
     wave: int,
-    spawn_x: float,
-    spawn_y: float,
 ) -> None:
     if (
         values.get("active") != "false"
@@ -945,13 +943,6 @@ def assert_immediate_respawn_sample(
         or values.get("red_effect_active") != "false"
         or _integer(values, "death_transition_hits") != 1
         or _integer(values, "staff_drop_hits") != 1
-        or _distance(
-            _number(values, "x"),
-            _number(values, "y"),
-            spawn_x,
-            spawn_y,
-        )
-        > POSITION_TOLERANCE
     ):
         raise VerifyFailure(
             "wave respawn did not atomically retire the death epoch: "
@@ -1640,8 +1631,6 @@ def run_immediate_round_scenario(
                 sample,
                 epoch=epoch,
                 wave=wave,
-                spawn_x=float(spawn["host"]["x"]),
-                spawn_y=float(spawn["host"]["y"]),
             )
             samples.append(sample)
             time.sleep(0.12)

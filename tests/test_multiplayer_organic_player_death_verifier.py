@@ -38,6 +38,8 @@ def _completed_milestones() -> dict[str, float]:
         "observer_death_drive_seconds": 1.42,
         "presentation_seconds": 1.4,
         "observer_presentation_seconds": 1.42,
+        "owner_presentation_tick_at_observer_start": 4.0,
+        "observer_presentation_tick_at_start": 5.0,
         "death_transition_seconds": 1.4,
         "staff_drop_seconds": 1.4,
         "red_effect_seconds": 2.9,
@@ -93,6 +95,40 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(
             verifier.VerifyFailure,
             "before the owner",
+        ):
+            verifier._assert_lifecycle(
+                _completed_lifecycle(),
+                milestones,
+            )
+
+    def test_phase_sync_survives_observer_app_tick_stall(self) -> None:
+        milestones = _completed_milestones()
+        milestones["observer_presentation_seconds"] = 1.8
+        milestones["owner_presentation_tick_at_observer_start"] = 40.0
+        milestones["observer_presentation_tick_at_start"] = 35.0
+
+        verifier._assert_lifecycle(
+            _completed_lifecycle(),
+            milestones,
+        )
+
+        self.assertAlmostEqual(
+            milestones["presentation_delivery_skew_seconds"],
+            0.4,
+        )
+        self.assertEqual(
+            milestones["presentation_phase_skew_ticks"],
+            5.0,
+        )
+
+    def test_native_presentation_phase_desync_is_rejected(self) -> None:
+        milestones = _completed_milestones()
+        milestones["owner_presentation_tick_at_observer_start"] = 40.0
+        milestones["observer_presentation_tick_at_start"] = 20.0
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "presentation phase diverged",
         ):
             verifier._assert_lifecycle(
                 _completed_lifecycle(),

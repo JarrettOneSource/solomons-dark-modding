@@ -318,8 +318,14 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
             sample,
             epoch=4,
             wave=2,
-            spawn_x=128.0,
-            spawn_y=256.0,
+        )
+
+        sample["x"] = "161"
+        sample["y"] = "223"
+        verifier.assert_immediate_respawn_sample(
+            sample,
+            epoch=4,
+            wave=2,
         )
 
         sample["death_started_ms"] = "99"
@@ -331,8 +337,6 @@ class DeadProgressionRoundRespawnVerifierTests(unittest.TestCase):
                 sample,
                 epoch=4,
                 wave=2,
-                spawn_x=128.0,
-                spawn_y=256.0,
             )
 
     def test_respawn_gate_reads_dynamic_spawn_and_retires_only_dead_actor(
