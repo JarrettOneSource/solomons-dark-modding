@@ -1,4 +1,5 @@
 constexpr std::uint64_t kRunLoadingBarrierTimeoutMs = 25000;
+constexpr std::uint64_t kRunLoadingMaterializationStableMs = 250;
 
 struct RunLoadingBarrierState {
     bool active = false;
@@ -9,6 +10,7 @@ struct RunLoadingBarrierState {
     std::uint32_t release_nonce = 0;
     std::uint64_t started_ms = 0;
     std::uint64_t deadline_ms = 0;
+    std::uint64_t local_visibility_stable_since_ms = 0;
     std::uint64_t visible_participant_set_hash = 0;
     std::uint64_t authoritative_expected_participant_set_hash = 0;
     std::uint16_t visible_participant_count = 0;
@@ -384,6 +386,7 @@ void ReleaseRunLoadingBarrier(
 
 bool HostRunLoadingReadyByEveryParticipant() {
     if (!g_local_transport.is_host ||
+        !g_run_loading_barrier.local_mutual_visibility ||
         g_run_loading_barrier
             .expected_participant_ids.empty()) {
         return false;
@@ -438,8 +441,9 @@ void ServiceRunLoadingBarrier(std::uint64_t now_ms) {
     g_run_loading_barrier.visible_participant_set_hash =
         RunLoadingParticipantSetHash(
             visible_participant_ids);
+    bool raw_local_mutual_visibility = false;
     if (g_local_transport.is_host) {
-        g_run_loading_barrier.local_mutual_visibility =
+        raw_local_mutual_visibility =
             HostHasLocalMutualRunVisibility(
                 runtime_state,
                 run_nonce);
@@ -447,7 +451,7 @@ void ServiceRunLoadingBarrier(std::uint64_t now_ms) {
         const auto expected =
             g_run_loading_barrier
                 .authoritative_expected_participant_count;
-        g_run_loading_barrier.local_mutual_visibility =
+        raw_local_mutual_visibility =
             expected != 0 &&
             g_run_loading_barrier
                     .visible_participant_count ==
@@ -456,6 +460,20 @@ void ServiceRunLoadingBarrier(std::uint64_t now_ms) {
                     .visible_participant_set_hash ==
                 g_run_loading_barrier
                     .authoritative_expected_participant_set_hash;
+    }
+    if (!raw_local_mutual_visibility) {
+        g_run_loading_barrier.local_visibility_stable_since_ms = 0;
+        g_run_loading_barrier.local_mutual_visibility = false;
+    } else {
+        if (g_run_loading_barrier.local_visibility_stable_since_ms == 0) {
+            g_run_loading_barrier.local_visibility_stable_since_ms =
+                now_ms;
+        }
+        g_run_loading_barrier.local_mutual_visibility =
+            now_ms -
+                    g_run_loading_barrier
+                        .local_visibility_stable_since_ms >=
+                kRunLoadingMaterializationStableMs;
     }
 
     if (g_run_loading_barrier

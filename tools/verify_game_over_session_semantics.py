@@ -1074,9 +1074,10 @@ def run_solo_verification(
                 _integer(values, "participant_count") == 1
                 and _integer(values, "remote_peer_count") == 0
                 and _integer(values, "connected_run_count") == 1
+                and healthy_loading_barrier_state_matches(values, 1)
             ),
             timeout=10.0,
-            description="one-participant run membership",
+            description="stable one-participant run materialization",
         )
         result["primed_vitals"] = set_local_player_vitals(
             pipe_name,

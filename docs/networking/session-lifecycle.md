@@ -50,6 +50,10 @@ hash. The host applies the same rule to its local view and accepts client acks
 only from expected authenticated participants on the active nonce. This proves
 that every participant actor is materialized on every participant process,
 rather than treating transport readiness or an aggregate count as visibility.
+The exact actor set must remain continuously materialized for 250 milliseconds
+before the process emits its ack. This prevents the first transient actor
+pointer observed during stock respawn from releasing the presentation before
+the scene has settled.
 
 The host publishes one authenticated release after every frozen member has
 acked. Release travels in the low-latency participant frame and the reliable
