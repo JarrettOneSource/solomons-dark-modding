@@ -103,6 +103,14 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
         "Tree/Scrub, Gravestone, Building, Goodie, Road, Fence, terrain, and compact decor",
         "80 4E 18 01",
         "C6 46 18 01",
+        "Tree `+0x148/+0x14C/+0x150` sway state is not serialized",
+        "Scrub `+0x134` animation phase",
+        "Goodie `+0x144` is serialized and conditionally consumed",
+        "0x00471805",
+        "0x004723C2",
+        "0x00649D10",
+        "| 21–24 | Large irregular ground rocks and boulders",
+        "native-order render-input tables plus exact matched-camera decor pixels",
         "protocol version must remain unchanged",
     )
     missing_findings = [token for token in required_findings if token not in findings]
@@ -120,6 +128,35 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
         "boneyard_generator=0x006388B0",
         "boneyard_tree_generator=0x0062CB00",
         "boneyard_materialize=0x006531B0",
+        "region_layout_sync=0x00653660",
+        "arena_compact_decor_update=0x00470A90",
+        "arena_world_render=0x00470EE0",
+        "arena_compact_render_loop=0x004716B1",
+        "arena_compact_ambient_rng_gate=0x00471805",
+        "arena_compact_ambient_rng_x=0x0047182A",
+        "arena_compact_ambient_rng_y=0x0047184A",
+        "arena_compact_ambient_rng_lifetime=0x004718D5",
+        "arena_compact_ambient_spawn=0x0047191C",
+        "arena_secondary_ambient_rng_gate=0x004723C2",
+        "arena_secondary_ambient_rng_x=0x004723F1",
+        "arena_secondary_ambient_rng_y=0x0047240D",
+        "arena_secondary_ambient_rng_lifetime=0x00472479",
+        "arena_secondary_ambient_rng_scale=0x00472493",
+        "arena_secondary_ambient_spawn=0x004724E4",
+        "arena_ambient_effect_spawn=0x00649D10",
+        "scenery_base_tick=0x00624AC0",
+        "tree_tick=0x005F1C50",
+        "tree_render_main=0x00608480",
+        "scrub_ctor_rng_call=0x005E40A4",
+        "scrub_setup_rng_call=0x005E40E2",
+        "scrub_serialize=0x005E40F0",
+        "scrub_render=0x00620120",
+        "goodie_ctor=0x005E3D60",
+        "goodie_serialize=0x005E3DD0",
+        "goodie_render=0x0061F070",
+        "road_serialize=0x0063EAA0",
+        "fence_spec_serialize=0x0063EB70",
+        "terrain_serialize=0x00651720",
         "native_rng_construct=0x00401110",
         "native_rng_initialize=0x00401120",
         "native_rng_integer=0x00401170",
@@ -128,6 +165,10 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
         "native_global_rng_state_object=0x00818B10",
         "actor_world_compact_decoration_list=0x8ADC",
         "boneyard_compact_flags=0x18",
+        "boneyard_compact_bounds_left=0x1C",
+        "boneyard_compact_bounds_top=0x20",
+        "boneyard_compact_bounds_right=0x24",
+        "boneyard_compact_bounds_bottom=0x28",
         "boneyard_compact_runtime_size=0x2C",
         "boneyard_compact_serialized_size=0x19",
     )
@@ -157,7 +198,9 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
 
     return (
         "default Boneyard selection, retail RNG, local materialization, authority "
-        "seed transport, and all seven uninitialized compact-flag sites are mapped"
+        "seed transport, full persistent decor families, peer-local Tree/Scrub/"
+        "Goodie state, render-time ambient RNG, and all seven compact-flag sites "
+        "are mapped"
     )
 
 
@@ -232,10 +275,20 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         'emit("boneyard_scenery_digest"',
         'emit("boneyard_tree_count"',
         'emit("boneyard_tree_digest"',
+        'emit("boneyard_tree_diagnostic_digest"',
+        'off("actor_world_road_list")',
+        'emit("boneyard_road_digest"',
+        'off("actor_world_fence_list")',
+        'emit("boneyard_fence_digest"',
+        'off("actor_world_terrain_list")',
+        'emit("boneyard_terrain_digest"',
         'off("actor_world_compact_decoration_list")',
         'emit("boneyard_compact_count"',
         'emit("boneyard_compact_digest"',
         '"boneyard_compact_type_7_8_noncanonical_flags"',
+        '"boneyard_compact_type_21_24_count"',
+        'off("boneyard_compact_bounds_left")',
+        'off("boneyard_compact_bounds_bottom")',
         "def decor_tables(",
         "def matched_frame_correlation(",
         "def capture_matched_camera_pair(",

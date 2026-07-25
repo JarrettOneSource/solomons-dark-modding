@@ -1,9 +1,9 @@
 # Native default Boneyard load, seed, and decor materialization
 
 This document maps the retail run-start path that selects, procedurally
-generates, saves, reloads, and materializes the default Boneyard. It also
-records the multiplayer seed boundary and the pre-fix root cause of
-process-dependent compact decoration.
+generates, saves, reloads, materializes, updates, and renders the default
+Boneyard. It also records the multiplayer seed boundary and every
+render-relevant decor family found after the beta.16 visual counter-evidence.
 
 The addresses are image-base virtual addresses for the analyzed
 `SolomonDark.exe`:
@@ -17,16 +17,17 @@ The container and RegionLayout grammar remain documented in
 [`boneyard-system.md`](boneyard-system.md). This document is the run-start and
 multiplayer ownership map.
 
-## Result
+## Revised result after beta.16 counter-evidence
 
-The framework already gives every peer the host's 30-bit run-generation seed
-and reapplies it to the retail global RNG immediately before `Arena_Create`.
-For the same run, the host and client therefore generated the same Tree
-objects, Tree variants, positions, roads, fences, compact-decoration geometry,
-and other seeded layout content.
+The framework gives every peer the host's 30-bit run-generation seed and
+reapplies it to the retail global RNG immediately before `Arena_Create`. For
+the same run, the host and client generate the same serialized Boneyard
+layout: Tree positions and variants, roads, Fence specifications, Terrain
+inputs, and all compact-decoration records and bounds match in native order.
 
-The remaining divergence was native uninitialized data. Seven paths in
-`BoneyardGenerator` allocate a `0x2C` compact-decoration record and use:
+That does **not** make the rendered world deterministic. Published
+`v0.1.0-beta.16` fixed one real source of divergence: seven generator paths
+allocated a `0x2C` compact-decoration record and used:
 
 ```text
 OR byte ptr [ESI+0x18], 0x01
@@ -40,9 +41,27 @@ different brightness. Tree-adjacent ground cover and dark patches use this
 same compact table, which makes an otherwise identical tree region look
 different.
 
-The class-level correction is to initialize the complete flags byte to
+The beta.16 class-level correction initializes the complete flags byte to
 `0x01` at all seven sites. It is a local native determinism repair at the
 shared seeded generation boundary; it does not add or change a network field.
+
+Live visual counter-evidence exposed four additional peer-local presentation
+paths outside that old seven-site table:
+
+1. Tree `+0x148/+0x14C/+0x150` sway state is not serialized. The Tree tick
+   uses peer-local actor/spatial lists to change the target and current scale.
+2. Scrub `+0x134` animation phase is seeded from the process-global RNG,
+   incremented by the common scenery tick, omitted from Scrub serialization,
+   and consumed by the renderer.
+3. Goodie `+0x144` is serialized and conditionally consumed by its renderer,
+   but its constructor does not initialize it.
+4. `Arena_Render` draws the serialized compact table and then makes two
+   process-global RNG decisions that can spawn transient ground effects. Those
+   effects do not exist in the compact table or any replicated snapshot.
+
+Thus the beta.16 digest proved seeded layout equality but did not cover every
+input used to produce pixels. The corrected acceptance boundary is the
+native-order render-input tables plus exact matched-camera decor pixels.
 
 ## Run-start selection and load path
 
@@ -164,6 +183,80 @@ Tree serialization at `0x005E0050` writes the geometry/variant fields
 `+0x140`, `+0x142`, and `+0x144`, but not `+0x148`. The latter is local
 presentation/tick state, not a missing serialized Tree position or type.
 
+## Complete decor-family inventory
+
+The inventory below distinguishes persistent seeded layout from derived
+scenery and render-only transient clutter. “Serialized” means the field
+crosses the temporary Boneyard save/reload boundary. It does not mean the
+framework sends the field over multiplayer.
+
+### Scenery objects and derived props
+
+| Family / native type | Creation and materialization | Render-relevant selectors | Ownership finding |
+| --- | --- | --- | --- |
+| Tree `2001` | `0x0062CB00` creates the record; `0x005E46D0` constructs it; `0x006531B0` materializes it. | Position/radius, materialization key `+0x10`, common tint/scale/color, Tree variant `+0x140`, overlay `+0x142/+0x144`, render parameter `+0x13C`, sway target/current `+0x14C/+0x150`. Main/overlay/foreground renderers are `0x00608480`, `0x00608830`, and `0x00608AB0`. | Position, type, variants, overlay, and common draw state match from the seed. Sway does not: `0x005F1C50` decrements local `+0x148`, scans peer-local nearby actors, and changes `+0x14C/+0x150`. |
+| Scrub `2062` | Tree variants 15–18 are replaced by Scrub in `0x006531B0`; constructor/setup are `0x005E4040`/`0x005E40D0`. | Position, variant `+0x140`, phase `+0x134`, orientation/deformation `+0x144/+0x148`, collision flag `+0x14C`; renderer `0x00620120`. | Variant and geometry are deterministic. Constructor RNG calls at `0x005E40A4` and `0x005E40E2` and common tick `0x00624AC0` produce a local phase. `0x005E40F0` omits `+0x134`, while the renderer uses it. |
+| Monument `2009` | Constructor `0x005E0DB0`, setup `0x005E5BB0`. | Serialized simple variant `+0x140` and common scenery draw state; renderers `0x0060E210`/`0x0060E280`. | Deterministically generated and serialized. |
+| Gravestone `2029` | Constructor `0x005E5C30`, setup `0x005F2EB0`. | Variant `+0x140`, overlay `+0x142`, tint `+0x144..+0x150`; renderers `0x0060F0F0`, `0x0060F1F0`, and `0x0060F260`. | Constructor RNG at `0x005E5CCC` is overwritten by serialized values in `0x005E0F60`; render inputs match. |
+| Building `2040` | Constructor/setup `0x005F2C30`/`0x005E5BF0`. | Serialized simple variant and common state; base/upper/bounds renderers `0x0060E940`, `0x0060EC50`, `0x0060EDC0`. | Deterministically generated and serialized. |
+| Goodie `2061` | Constructor `0x005E3D60`, setup `0x005E3E40`. | Subtype `+0x140`, glyph/phase `+0x142`, active flag `+0x143`, indicator timer/value `+0x144`, reward seed `+0x148`; renderer `0x0061F070`. | `0x005E3DD0` serializes every listed field, but the constructor initializes `+0x142/+0x143` and skips `+0x144`. Inactive beta.16 objects showed `0` versus `0x00FFFFFF`; if activated, that residue becomes a render condition. |
+| Fence post `3006` | Fence specs are expanded by `0x0064AC90`; ctor/sync `0x005E1E20`/`0x005E1EA0`. | Variant/bank `+0x140/+0x144`, position and common state; renderer `0x00612CF0`. | Derived synchronously from matching Fence inputs. |
+| Fence grate `3007` | Constructor/builder/setup `0x005E7FB0`, `0x005E8100`, `0x005E8650`. | Geometry `+0x140..+0x1A4`, bounds `+0x1B4..+0x1C0`; renderers `0x00600ED0` and `0x005E1EF0`. | Serialized by `0x005E2080`; inputs match. |
+| Broken grate `3011` | Builder/setup `0x005EC6E0`/`0x005ECD30`. | Grate geometry/bounds plus leaf side `+0x1C4`; renderer `0x005E38C0`. | Builder uses a local RNG initialized from deterministic geometry and side, rather than the process-global stream. |
+| Gate `3012` | Builder `0x005F73C0`, collision/spatial setup `0x005ED4D0`/`0x005ECDF0`. | Grate geometry/bounds, side `+0x1C4`, render state `+0x1CC..+0x1F0`; renderer `0x005ECE40`. | Builder draw at `0x005F75C5` occurs on the matching deterministic Fence path. Later actor-driven gate motion is dynamic gameplay state, not seeded decor. |
+| Wall `3013` | Constructor/setup `0x005F88B0`/`0x005EEAF0`. | Fixed geometry `+0x140..+0x284` excluding self pointers, plus scalar/point/index arrays at `+0x28C/+0x29C/+0x2AC`; renderer `0x0061E780`. | Serialized by `0x00606770`; process-local self pointers are excluded from the render digest. |
+| Rails `3014` | Builder `0x005F0EC0`. | Grate geometry/bounds, side, state `+0x1C8..+0x220`; renderers `0x005E3E70`/`0x00607440`. | Serialized by `0x005E3F60`; inputs match. |
+
+The common scenery tick at `0x00624AC0` increments `+0x134` once per local
+tick. That word is not universally a render field: it is excluded for
+families whose renderers do not read it and included for Scrub, whose renderer
+does. Likewise Tree `+0x148` is a future-update countdown, while the
+instantaneous rendered shape is controlled by `+0x14C/+0x150`.
+
+### Roads, fences, and terrain
+
+| Family | Creation / sync / render | Seed and render inputs |
+| --- | --- | --- |
+| Road | Constructor `0x00645470`, sync `0x0063EAA0`, geometry builder `0x0064C1F0`, render `0x00640750`. | Endpoints, width scales, quad, and style are serialized and match. UID and previous/next UID fields are process-local identifiers and are not renderer inputs; beta.16 differed by a constant UID offset only. |
+| Fence specification | Constructor `0x006407B0`, sync `0x0063EB70`, expansion `0x0064AC90`. | Endpoints, start/end post variants, and segment code match. The process-local UID is not rendered. Expanded posts/grates/gates/walls/rails are covered above. |
+| Terrain | Constructor `0x00646A80`, sync `0x00651720`, rebuild `0x006534B0`, render `0x0064EDA0`. | Control-point/scalar arrays, scale/style/reserved values, and seed `+0xCC` are serialized. Constructor RNG at `0x00646B56` establishes that seed; builders `0x0064F0F0` and `0x0064FA90` initialize private RNGs from it. |
+
+### Compact decoration and ground clutter
+
+RegionLayout section 11 contains native-order `0x2C` records. The renderer
+loop beginning at `0x004716B1` consumes type `+0x00`, position `+0x04/+0x08`,
+rotation `+0x0C`, scale `+0x10`, alpha `+0x14`, flags `+0x18`, and runtime
+bounds `+0x1C..+0x28`. Bounds are rebuilt by `0x00470A90`; they are part of
+the render-input digest even though only the first `0x19` bytes are serialized.
+
+| Type range | Visual family | Creation and selection |
+| ---: | --- | --- |
+| 0–6 | Tree leaves, grass, soil, and tree-adjacent ground cover | Tree helper `0x0062CB00`; the shared generator RNG selects type, offset, rotation, scale, alpha, and flags. |
+| 7–8 | Dark ground patches | `BoneyardGenerator` `0x006388B0`; among the seven corrected flag sites `0x0063BC10..0x0063C45F`. |
+| 9–12 | Paving and flat stones | Same generator and shared RNG path; persistent record contains every draw selector. |
+| 13–18 | Pebbles and small rock scatter | Same generator and shared RNG path. |
+| 19–20 | Twigs and lattice clutter | Same generator and shared RNG path. |
+| 21–24 | Large irregular ground rocks and boulders | Same generator and shared RNG path. The expanded beta.16 baseline contained 50 on both peers with identical full records and bounds. |
+| 25–29 | Shadow/mask sprites and special ground effects | Same persistent generator path; renderer selects art from the table at `0x0081BD20`. The persistent records match, but their render loop also owns a local ambient-effect branch described below. |
+| 30 | Dead roots and stumps | Same generator and shared RNG path. |
+
+No additional persistent compact creator outside the Tree helper and
+`BoneyardGenerator` was found. The missing family was instead transient:
+
+- At `0x00471805`, `Arena_Render` performs a 1-in-2 global-RNG draw while
+  traversing compact types 25–29. It draws X, Y, and lifetime at
+  `0x0047182A`, `0x0047184A`, and `0x004718D5`, then calls effect spawn
+  `0x00649D10` at `0x0047191C`.
+- At `0x004723C2`, a second Arena ambient list performs a 1-in-8 global-RNG
+  draw. It draws position/lifetime/scale at `0x004723F1`, `0x0047240D`,
+  `0x00472479`, and `0x00472493`, then calls the same effect spawn at
+  `0x004724E4`.
+
+These draws happen during rendering, consume whatever process-global RNG state
+each peer has at that frame, and create no serialized or replicated record.
+They can therefore change boulder/rock/clutter pixels while every compact row
+and its digest remains equal.
+
 ### Replication boundary
 
 | State | Owner and transport |
@@ -172,12 +265,16 @@ presentation/tick state, not a missing serialized Tree position or type.
 | Derived six-digit retail seed | Not sent separately; every peer derives it from the synchronized run seed at the same native boundary. |
 | Generated `play.boneyard` bytes | Not transported. Each peer runs the same retail create/save/load path locally. |
 | Tree/Scrub, Gravestone, Building, Goodie, Road, Fence, terrain, and compact decor layout | Locally materialized from the host seed. Equality depends on deterministic native initialization. |
+| Tree sway, Scrub phase, and Arena ambient ground effects | Not replicated by stock or framework packets in beta.16; stock updates/spawns them from peer-local actor, tick, and RNG state. |
 | Participants, enemies, live loot, casts, and transient effects | Replicated by their dedicated framework ownership/snapshot paths. |
 | Run-static Solomon Dig (`0x1391`) and Lantern (`0x1392`) | Host snapshot state; separate from RegionLayout Tree/Scrub/compact decoration. |
 
 No framework packet serializes the RegionLayout scenery list or compact
 section directly. The framework owns authority and seed propagation; the
-retail loader remains the materializer.
+retail loader remains the materializer. A foundational repair therefore has
+to make all presentation derived from that host seed deterministic (or
+disable non-authoritative transients consistently), rather than adding
+per-tree position packets.
 
 ## Pre-fix multiplayer evidence
 
@@ -267,7 +364,27 @@ positions after generation.
 Because the authority seed and packet representation do not change, the
 network protocol version must remain unchanged for this repair.
 
-## Post-fix live acceptance
+## Revised repair boundary
+
+The full class is “locally rendered state reached from seeded Boneyard
+materialization,” not “compact flags” or “Tree positions.” A complete repair
+must satisfy these invariants whenever multiplayer transport is active:
+
+- Tree render target/current cannot depend on which peer-local actors happen
+  to be near the Tree during a local tick.
+- Scrub render phase must be a stable function of the shared run seed and
+  stable object identity, not local global-RNG or tick consumption.
+- Goodie construction must initialize every conditionally rendered and
+  serialized field.
+- Arena render passes cannot spawn non-replicated ground decor from a
+  peer-local RNG stream.
+- Single-player behavior remains stock.
+
+These changes do not alter any framework message or serialized network field.
+The existing host run seed remains the sole authority input, so the protocol
+version remains 84 unless implementation later introduces a wire change.
+
+## Beta.16 acceptance gate and its blind spot
 
 `tools/verify_run_static_layout_sync.py` ran three fresh host/client pairs in
 isolated instance groups over loopback UDP. For each run it compared the full
@@ -275,6 +392,14 @@ decoded Tree table and full compact-decoration table, including exact IEEE-754
 position/rotation/scale/alpha bits, Tree variants, and compact types and flags.
 It also focused both native cameras on the same selected Tree and rejected the
 screenshots unless both grayscale and edge landmarks correlated.
+
+This was an alignment gate, not a visual equality gate. Correlation tolerates
+different Tree silhouettes, shadows, boulders, tint, and clutter as long as
+large landmarks remain in approximately the same place. The published
+beta.16 control images pass that correlation test while visibly differing:
+
+- `/mnt/d/codex-evidence/boneyard-visual-20260724/beta16-render-control-audio/screenshots/run-01-host.png`
+- `/mnt/d/codex-evidence/boneyard-visual-20260724/beta16-render-control-audio/screenshots/run-01-client.png`
 
 | Run | Authority seed | Trees | Tree digest | Compact decor | Compact digest | Gray / edge correlation |
 | ---: | --- | ---: | --- | ---: | --- | --- |
@@ -290,11 +415,36 @@ The other locally materialized lanes from the same generator also matched:
 | 2 | 480 / `0x010EAF17` | 456 / `0x77DBB79A` | 14 / `0x7FD0E4CA` | 2 / `0x902FF326` |
 | 3 | 466 / `0x3419F3B2` | 445 / `0x2BC31C35` | 17 / `0x01A2FBF9` | 2 / `0xA7E5B130` |
 
-Every count, digest, and decoded row matched host versus client. All compact
+Every field included by that old gate matched host versus client. All compact
 records had zero ignored high flag bits, and every type 7/8 record had the
 canonical flags byte `0x01`. The three authority seeds and resulting layouts
 were distinct. Both peer logs in every run recorded the same seed at
 `arena_create_pre_stock` and `compact_flags_sites=7` at patch installation.
+The gate excluded Tree/Scrub presentation inputs, conditional Goodie state,
+compact runtime bounds, roads, fences, Terrain, and render-spawned effects.
+
+The expanded pre-repair baseline at
+`/mnt/d/codex-evidence/boneyard-visual-20260724/render-input-baseline/result.json`
+preserved native order and recorded every recovered persistent renderer input.
+For seed `0x1CC440E4`, both peers had 435 scenery objects, 87 Trees/Scrubs,
+85 roads, 19 Fence specs, 266 compact records, and identical full compact
+digest `0x01C318AB`. The compact family counts also matched exactly: 154
+tree/ground-cover records, 34 dark patches, 50 large rocks, and 28
+shadow/mask records. The mismatches isolated by the expanded dump were:
+
+- all scenery `+0x134` tick counters differed by the peer tick-count delta;
+- Tree render target/current matched at the sample instant, but local
+  countdown `+0x148` differed and controls future peer-local sway updates;
+- six inactive Goodies had uninitialized `+0x144` (`0` versus
+  `0x00FFFFFF`);
+- Road/Fence geometry matched while non-rendered UIDs differed by one.
+
+The corrected digest excludes process-local Road/Fence identifiers and common
+tick words that no renderer consumes, but includes Scrub phase, Tree current
+render shape, conditional Goodie state, all derived geometry arrays, compact
+bounds, and native list order. Final acceptance additionally requires exact
+decor-pixel equality in several matched-camera regions for at least three
+distinct seeds; correlation alone is retained only as an alignment diagnostic.
 
 Evidence is retained locally under:
 
@@ -302,6 +452,5 @@ Evidence is retained locally under:
 - `runtime/evidence/boneyard-seed-sync/acceptance/screenshots/`
 - `runtime/evidence/boneyard-seed-sync/acceptance/logs/`
 
-The verifier stopped only the six game processes it launched after validating
-their exact PIDs and executable paths. The final independent process query
-found no process from the acceptance instance prefix.
+The verifier stops only processes it launched after validating exact PIDs and
+executable paths. It never performs machine-wide Solomon Dark cleanup.

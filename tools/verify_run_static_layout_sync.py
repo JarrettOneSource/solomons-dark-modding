@@ -48,6 +48,21 @@ local function read_u8(address) return tonumber(sd.debug.read_u8(address)) or 0 
 local function read_f(address) return tonumber(sd.debug.read_float(address)) or 0 end
 local function off(name) return tonumber(sd.debug.layout_offset(name)) or 0 end
 local function qf(v) return math.floor((tonumber(v) or 0) * 10.0 + 0.5) end
+local function append(values, value)
+  table.insert(values, tonumber(value) or 0)
+end
+local function append_u32_words(values, address, first_offset, last_offset)
+  for offset = first_offset, last_offset, 4 do
+    append(values, read_u32(address + offset))
+  end
+end
+local function comma_row(values)
+  local rendered = {}
+  for index, value in ipairs(values) do
+    rendered[index] = tostring(value)
+  end
+  return table.concat(rendered, ",")
+end
 
 local hash = 2166136261
 local function mix(v)
@@ -225,16 +240,146 @@ for index, actor in ipairs(static_actors) do
 end
 
 -- Boneyard scenery is owned by RegionLayout's native PointerList rather than
--- the transient actor lane above. First compare the complete materialized
--- scenery graph by type/geometry. Then compare Tree/Scrub art selectors while
--- deliberately excluding their independently ticking sway values.
+-- the transient actor lane above. Preserve native list order and hash common
+-- render state plus every proved family-specific renderer input. The previous
+-- gate sorted rows and excluded Tree/Scrub presentation state.
 local TREE_TYPE_ID = 2001
+local MONUMENT_TYPE_ID = 2009
+local GRAVESTONE_TYPE_ID = 2029
+local BUILDING_TYPE_ID = 2040
+local GOODIE_TYPE_ID = 2061
 local SCRUB_TYPE_ID = 2062
+local FENCEPOST_TYPE_ID = 3006
+local FENCEGRATE_TYPE_ID = 3007
+local BROKEN_GRATE_TYPE_ID = 3011
+local GATE_TYPE_ID = 3012
+local WALL_TYPE_ID = 3013
+local RAILS_TYPE_ID = 3014
+
+local function scenery_family_inputs(scenery, type_id)
+  local values = {}
+  if type_id == TREE_TYPE_ID then
+    append(values, read_i16(scenery + off("boneyard_tree_variant")))
+    append(values, read_i16(scenery + off("boneyard_tree_overlay_variant")))
+    append(values, read_u8(scenery + off("boneyard_tree_overlay_enabled")))
+    append(values, read_u32(scenery + off("boneyard_tree_sway_target")))
+    append(values, read_u32(scenery + off("boneyard_tree_sway_current")))
+  elseif type_id == SCRUB_TYPE_ID then
+    append(values, read_u32(scenery + off("boneyard_scrub_phase")))
+    append(values, read_i32(scenery + off("boneyard_scrub_variant")))
+    append(values, read_u32(scenery + off("boneyard_scrub_orientation_x")))
+    append(values, read_u32(scenery + off("boneyard_scrub_orientation_y")))
+    append(values, read_u8(scenery + off("boneyard_scrub_collision_flag")))
+  elseif type_id == MONUMENT_TYPE_ID or type_id == BUILDING_TYPE_ID then
+    append(values, read_i16(scenery + off("boneyard_simple_scenery_variant")))
+  elseif type_id == GRAVESTONE_TYPE_ID then
+    append(values, read_i16(scenery + off("boneyard_gravestone_variant")))
+    append(values, read_i16(scenery + off("boneyard_gravestone_overlay_variant")))
+    append_u32_words(
+      values,
+      scenery,
+      off("boneyard_gravestone_tint"),
+      off("boneyard_gravestone_tint") + 12)
+  elseif type_id == GOODIE_TYPE_ID then
+    append(values, read_i16(scenery + off("boneyard_goodie_subtype")))
+    append(values, read_u8(scenery + off("boneyard_goodie_phase")))
+    local active = read_u8(scenery + off("boneyard_goodie_active"))
+    append(values, active)
+    -- +0x144 is read by the renderer only while the Goodie indicator is
+    -- active. Canonicalize the inactive value in this render-input digest;
+    -- constructor-state diagnostics are retained separately in live evidence.
+    append(values, active ~= 0
+      and read_u32(scenery + off("boneyard_goodie_timer"))
+      or 0)
+    append(values, read_u32(scenery + off("boneyard_goodie_reward_seed")))
+  elseif type_id == FENCEPOST_TYPE_ID then
+    append(values, read_u32(scenery + off("boneyard_fencepost_variant")))
+    append(values, read_i16(scenery + off("boneyard_fencepost_bank")))
+  elseif type_id == FENCEGRATE_TYPE_ID or
+         type_id == BROKEN_GRATE_TYPE_ID or
+         type_id == GATE_TYPE_ID or
+         type_id == RAILS_TYPE_ID then
+    append_u32_words(
+      values,
+      scenery,
+      off("boneyard_fencegrate_geometry_start"),
+      off("boneyard_fencegrate_geometry_end"))
+    append_u32_words(
+      values,
+      scenery,
+      off("boneyard_fencegrate_bounds"),
+      off("boneyard_fencegrate_bounds") + 12)
+    if type_id ~= FENCEGRATE_TYPE_ID then
+      append(values, read_u8(scenery + off("boneyard_fence_leaf_side")))
+    end
+    if type_id == GATE_TYPE_ID then
+      append_u32_words(
+        values,
+        scenery,
+        off("boneyard_gate_render_state_start"),
+        off("boneyard_gate_render_state_end"))
+    elseif type_id == RAILS_TYPE_ID then
+      append_u32_words(
+        values,
+        scenery,
+        off("boneyard_rails_render_state_start"),
+        off("boneyard_rails_render_state_end"))
+    end
+  elseif type_id == WALL_TYPE_ID then
+    append_u32_words(
+      values,
+      scenery,
+      off("boneyard_wall_fixed_geometry_start"),
+      off("boneyard_wall_self_reference_a") - 4)
+    append_u32_words(
+      values,
+      scenery,
+      off("boneyard_wall_fixed_geometry_after_self_references"),
+      off("boneyard_wall_fixed_geometry_end"))
+    local scalar_count = math.min(
+      math.max(read_i32(scenery + off("boneyard_wall_scalar_count")), 0),
+      4096)
+    local scalar_items = read_ptr(
+      scenery + off("boneyard_wall_scalar_items"))
+    append(values, scalar_count)
+    if scalar_items ~= 0 then
+      for index = 0, scalar_count - 1 do
+        append(values, read_u32(scalar_items + index * 4))
+      end
+    end
+    local point_count = math.min(
+      math.max(read_i32(scenery + off("boneyard_wall_point_count")), 0),
+      4096)
+    local point_items = read_ptr(
+      scenery + off("boneyard_wall_point_items"))
+    append(values, point_count)
+    if point_items ~= 0 then
+      for index = 0, point_count - 1 do
+        append(values, read_u32(point_items + index * 8))
+        append(values, read_u32(point_items + index * 8 + 4))
+      end
+    end
+    local index_count = math.min(
+      math.max(read_i32(scenery + off("boneyard_wall_index_count")), 0),
+      8192)
+    local index_items = read_ptr(
+      scenery + off("boneyard_wall_index_items"))
+    append(values, index_count)
+    if index_items ~= 0 then
+      for index = 0, index_count - 1 do
+        append(values, read_u32(index_items + index * 4))
+      end
+    end
+  end
+  return values
+end
+
 local scenery_list = world_address + off("actor_world_scenery_object_list")
 local scenery_count = read_i32(scenery_list + off("pointer_list_count"))
 local scenery_items = read_ptr(scenery_list + off("pointer_list_items"))
 local scenery_rows = {}
 local boneyard_trees = {}
+local scenery_family_counts = {}
 local max_scenery = scenery_items ~= 0
   and math.min(math.max(scenery_count, 0), 4096)
   or 0
@@ -248,12 +393,36 @@ for index = 0, max_scenery - 1 do
     local x_value = read_f(x_address)
     local y_value = read_f(y_address)
     local radius_value = read_f(radius_address)
-    local x = qf(x_value)
-    local y = qf(y_value)
-    local radius = qf(radius_value)
     local materialization_key =
       read_i32(scenery + off("boneyard_scenery_materialization_key"))
-    table.insert(scenery_rows, {type_id, x, y, radius, materialization_key})
+    local row = {
+      index,
+      type_id,
+      read_u32(x_address),
+      read_u32(y_address),
+      read_u32(radius_address),
+      materialization_key,
+    }
+    append_u32_words(
+      row,
+      scenery,
+      off("boneyard_scenery_common_tint"),
+      off("boneyard_scenery_common_tint") + 12)
+    append(row, read_u32(scenery + off("actor_render_sort_bias")))
+    append(row, read_u32(scenery + off("boneyard_scenery_common_scalar")))
+    append(row, read_u32(scenery + off("boneyard_scenery_common_scale")))
+    append_u32_words(
+      row,
+      scenery,
+      off("boneyard_scenery_common_color"),
+      off("boneyard_scenery_common_color") + 12)
+    append(row, read_u32(scenery + off("boneyard_scenery_render_parameter")))
+    local family_inputs = scenery_family_inputs(scenery, type_id)
+    append(row, #family_inputs)
+    for _, value in ipairs(family_inputs) do append(row, value) end
+    table.insert(scenery_rows, row)
+    scenery_family_counts[type_id] =
+      (scenery_family_counts[type_id] or 0) + 1
 
     if type_id == TREE_TYPE_ID or type_id == SCRUB_TYPE_ID then
       local variant = type_id == TREE_TYPE_ID
@@ -274,20 +443,27 @@ for index = 0, max_scenery - 1 do
         variant,
         overlay_variant,
         overlay_enabled,
+        read_u32(scenery + off("boneyard_scenery_phase")),
+        read_u32(scenery + off("boneyard_scenery_render_parameter")),
+        type_id == TREE_TYPE_ID
+          and read_u32(scenery + off("boneyard_tree_sway_countdown"))
+          or 0,
+        type_id == TREE_TYPE_ID
+          and read_u32(scenery + off("boneyard_tree_sway_target"))
+          or read_u32(scenery + off("boneyard_scrub_orientation_x")),
+        type_id == TREE_TYPE_ID
+          and read_u32(scenery + off("boneyard_tree_sway_current"))
+          or read_u32(scenery + off("boneyard_scrub_orientation_y")),
+        type_id == SCRUB_TYPE_ID
+          and read_u8(scenery + off("boneyard_scrub_collision_flag"))
+          or 0,
+        index,
         x_value,
         y_value,
         radius_value,
       })
     end
   end
-end
-local function sort_rows(rows, field_count)
-  table.sort(rows, function(a, b)
-    for index = 1, field_count do
-      if a[index] ~= b[index] then return a[index] < b[index] end
-    end
-    return false
-  end)
 end
 local function digest_rows(rows, prefix, field_count)
   local values = prefix
@@ -297,14 +473,61 @@ local function digest_rows(rows, prefix, field_count)
   end
   return digest_values(values)
 end
-sort_rows(scenery_rows, 5)
-sort_rows(boneyard_trees, 8)
 emit("boneyard_scenery_count", scenery_count)
+emit("boneyard_scenery_sampled", #scenery_rows)
 emit("boneyard_scenery_digest", hx(
   digest_rows(scenery_rows, {scenery_count, #scenery_rows})))
+for index, scenery in ipairs(scenery_rows) do
+  emit("boneyard_scenery." .. index .. ".row", comma_row(scenery))
+end
+for _, type_id in ipairs({
+    TREE_TYPE_ID,
+    MONUMENT_TYPE_ID,
+    GRAVESTONE_TYPE_ID,
+    BUILDING_TYPE_ID,
+    GOODIE_TYPE_ID,
+    SCRUB_TYPE_ID,
+    FENCEPOST_TYPE_ID,
+    FENCEGRATE_TYPE_ID,
+    BROKEN_GRATE_TYPE_ID,
+    GATE_TYPE_ID,
+    WALL_TYPE_ID,
+    RAILS_TYPE_ID,
+  }) do
+  emit(
+    "boneyard_scenery_type_" .. type_id .. "_count",
+    scenery_family_counts[type_id] or 0)
+end
 emit("boneyard_tree_count", #boneyard_trees)
+local boneyard_tree_render_rows = {}
+for _, tree in ipairs(boneyard_trees) do
+  local render_row = {
+    tree[1],
+    tree[2],
+    tree[3],
+    tree[4],
+    tree[5],
+    tree[6],
+    tree[7],
+    tree[8],
+    tree[10],
+  }
+  if tree[1] == TREE_TYPE_ID then
+    append(render_row, tree[12])
+    append(render_row, tree[13])
+  else
+    append(render_row, tree[9])
+    append(render_row, tree[12])
+    append(render_row, tree[13])
+    append(render_row, tree[14])
+  end
+  append(render_row, tree[15])
+  table.insert(boneyard_tree_render_rows, render_row)
+end
 emit("boneyard_tree_digest", hx(
-  digest_rows(boneyard_trees, {#boneyard_trees}, 8)))
+  digest_rows(boneyard_tree_render_rows, {#boneyard_trees})))
+emit("boneyard_tree_diagnostic_digest", hx(
+  digest_rows(boneyard_trees, {#boneyard_trees}, 15)))
 for index, tree in ipairs(boneyard_trees) do
   emit("boneyard_tree." .. index .. ".type_id", tree[1])
   emit("boneyard_tree." .. index .. ".x_bits", hx(tree[2]))
@@ -314,14 +537,144 @@ for index, tree in ipairs(boneyard_trees) do
   emit("boneyard_tree." .. index .. ".variant", tree[6])
   emit("boneyard_tree." .. index .. ".overlay_variant", tree[7])
   emit("boneyard_tree." .. index .. ".overlay_enabled", tree[8])
-  emit("boneyard_tree." .. index .. ".x", tree[9])
-  emit("boneyard_tree." .. index .. ".y", tree[10])
-  emit("boneyard_tree." .. index .. ".radius", tree[11])
+  emit("boneyard_tree." .. index .. ".phase_bits", hx(tree[9]))
+  emit("boneyard_tree." .. index .. ".render_parameter_bits", hx(tree[10]))
+  emit("boneyard_tree." .. index .. ".sway_countdown", tree[11])
+  emit("boneyard_tree." .. index .. ".sway_target_bits", hx(tree[12]))
+  emit("boneyard_tree." .. index .. ".sway_current_bits", hx(tree[13]))
+  emit("boneyard_tree." .. index .. ".scrub_collision_flag", tree[14])
+  emit("boneyard_tree." .. index .. ".native_index", tree[15])
+  emit("boneyard_tree." .. index .. ".x", tree[16])
+  emit("boneyard_tree." .. index .. ".y", tree[17])
+  emit("boneyard_tree." .. index .. ".radius", tree[18])
+end
+
+-- Roads, abstract Fence specifications, and Terrain live in separate
+-- RegionLayout ObjectManagers. Their ordered serialized inputs feed the
+-- deterministic mesh and derived-scenery builders, so include those inputs in
+-- the same render-materialization gate.
+local road_list = world_address + off("actor_world_road_list")
+local road_count = read_i32(road_list + off("pointer_list_count"))
+local road_items = read_ptr(road_list + off("pointer_list_items"))
+local road_rows = {}
+local max_roads = road_items ~= 0
+  and math.min(math.max(road_count, 0), 2048)
+  or 0
+for index = 0, max_roads - 1 do
+  local road = read_ptr(road_items + index * 4)
+  if road ~= 0 then
+    local row = {index}
+    append_u32_words(
+      row,
+      road,
+      off("boneyard_road_start"),
+      off("boneyard_road_end") + 4)
+    append_u32_words(
+      row,
+      road,
+      off("boneyard_road_width_scales"),
+      off("boneyard_road_width_scales") + 4)
+    append_u32_words(
+      row,
+      road,
+      off("boneyard_road_quad"),
+      off("boneyard_road_quad") + 28)
+    append(row, read_u8(road + off("boneyard_road_style")))
+    table.insert(road_rows, row)
+  end
+end
+emit("boneyard_road_count", road_count)
+emit("boneyard_road_sampled", #road_rows)
+emit("boneyard_road_digest", hx(
+  digest_rows(road_rows, {road_count, #road_rows})))
+for index, road in ipairs(road_rows) do
+  emit("boneyard_road." .. index .. ".row", comma_row(road))
+end
+
+local fence_list = world_address + off("actor_world_fence_list")
+local fence_count = read_i32(fence_list + off("pointer_list_count"))
+local fence_items = read_ptr(fence_list + off("pointer_list_items"))
+local fence_rows = {}
+local max_fences = fence_items ~= 0
+  and math.min(math.max(fence_count, 0), 2048)
+  or 0
+for index = 0, max_fences - 1 do
+  local fence = read_ptr(fence_items + index * 4)
+  if fence ~= 0 then
+    local row = {index}
+    append_u32_words(
+      row,
+      fence,
+      off("boneyard_fence_start"),
+      off("boneyard_fence_end") + 4)
+    append(row, read_u32(fence + off("boneyard_fence_start_post_variant")))
+    append(row, read_u32(fence + off("boneyard_fence_end_post_variant")))
+    append(row, read_u8(fence + off("boneyard_fence_segment_code")))
+    table.insert(fence_rows, row)
+  end
+end
+emit("boneyard_fence_count", fence_count)
+emit("boneyard_fence_sampled", #fence_rows)
+emit("boneyard_fence_digest", hx(
+  digest_rows(fence_rows, {fence_count, #fence_rows})))
+for index, fence in ipairs(fence_rows) do
+  emit("boneyard_fence." .. index .. ".row", comma_row(fence))
+end
+
+local terrain_list = world_address + off("actor_world_terrain_list")
+local terrain_count = read_i32(terrain_list + off("pointer_list_count"))
+local terrain_items = read_ptr(terrain_list + off("pointer_list_items"))
+local terrain_rows = {}
+local max_terrain = terrain_items ~= 0
+  and math.min(math.max(terrain_count, 0), 512)
+  or 0
+for index = 0, max_terrain - 1 do
+  local terrain = read_ptr(terrain_items + index * 4)
+  if terrain ~= 0 then
+    local row = {
+      index,
+      read_u32(terrain + off("boneyard_terrain_style")),
+      read_u32(terrain + off("boneyard_terrain_reserved")),
+      read_u32(terrain + off("boneyard_terrain_scale")),
+      read_u32(terrain + off("boneyard_terrain_seed")),
+    }
+    local point_count = math.min(
+      math.max(read_i32(terrain + off("boneyard_terrain_point_count")), 0),
+      4096)
+    local point_items = read_ptr(
+      terrain + off("boneyard_terrain_point_items"))
+    append(row, point_count)
+    if point_items ~= 0 then
+      for point_index = 0, point_count - 1 do
+        append(row, read_u32(point_items + point_index * 8))
+        append(row, read_u32(point_items + point_index * 8 + 4))
+      end
+    end
+    local scalar_count = math.min(
+      math.max(read_i32(terrain + off("boneyard_terrain_scalar_count")), 0),
+      4096)
+    local scalar_items = read_ptr(
+      terrain + off("boneyard_terrain_scalar_items"))
+    append(row, scalar_count)
+    if scalar_items ~= 0 then
+      for scalar_index = 0, scalar_count - 1 do
+        append(row, read_u32(scalar_items + scalar_index * 4))
+      end
+    end
+    table.insert(terrain_rows, row)
+  end
+end
+emit("boneyard_terrain_count", terrain_count)
+emit("boneyard_terrain_sampled", #terrain_rows)
+emit("boneyard_terrain_digest", hx(
+  digest_rows(terrain_rows, {terrain_count, #terrain_rows})))
+for index, terrain in ipairs(terrain_rows) do
+  emit("boneyard_terrain." .. index .. ".row", comma_row(terrain))
 end
 
 -- RegionLayout section 11 is a separate PointerList of fixed 0x2C-byte
--- compact-decoration records. Hash every serialized semantic field by its
--- exact IEEE-754 bits, including the flags byte that was previously omitted.
+-- compact-decoration records. Preserve native order and include both the
+-- serialized draw controls and the four runtime bounds used by culling.
 local compact_list = world_address + off("actor_world_compact_decoration_list")
 local compact_count = read_i32(compact_list + off("pointer_list_count"))
 local compact_items = read_ptr(compact_list + off("pointer_list_items"))
@@ -329,6 +682,17 @@ local compact_rows = {}
 local compact_ignored_flag_bits_count = 0
 local compact_type_7_8_count = 0
 local compact_type_7_8_noncanonical_flags = 0
+local compact_type_21_24_count = 0
+local compact_family_counts = {
+  tree_ground_cover = 0,
+  ground_patches = 0,
+  paving_stones = 0,
+  pebbles = 0,
+  twig_lattice = 0,
+  large_rocks = 0,
+  shadow_masks = 0,
+  dead_roots = 0,
+}
 local max_compact = compact_items ~= 0
   and math.min(math.max(compact_count, 0), 4096)
   or 0
@@ -342,6 +706,14 @@ for index = 0, max_compact - 1 do
     local scale_bits = read_u32(compact + off("boneyard_compact_scale"))
     local alpha_bits = read_u32(compact + off("boneyard_compact_alpha"))
     local flags = read_u8(compact + off("boneyard_compact_flags"))
+    local bounds_left_bits =
+      read_u32(compact + off("boneyard_compact_bounds_left"))
+    local bounds_top_bits =
+      read_u32(compact + off("boneyard_compact_bounds_top"))
+    local bounds_right_bits =
+      read_u32(compact + off("boneyard_compact_bounds_right"))
+    local bounds_bottom_bits =
+      read_u32(compact + off("boneyard_compact_bounds_bottom"))
     if (flags & 0xFC) ~= 0 then
       compact_ignored_flag_bits_count = compact_ignored_flag_bits_count + 1
     end
@@ -352,7 +724,34 @@ for index = 0, max_compact - 1 do
           compact_type_7_8_noncanonical_flags + 1
       end
     end
+    if type_id >= 0 and type_id <= 6 then
+      compact_family_counts.tree_ground_cover =
+        compact_family_counts.tree_ground_cover + 1
+    elseif type_id <= 8 then
+      compact_family_counts.ground_patches =
+        compact_family_counts.ground_patches + 1
+    elseif type_id <= 12 then
+      compact_family_counts.paving_stones =
+        compact_family_counts.paving_stones + 1
+    elseif type_id <= 18 then
+      compact_family_counts.pebbles =
+        compact_family_counts.pebbles + 1
+    elseif type_id <= 20 then
+      compact_family_counts.twig_lattice =
+        compact_family_counts.twig_lattice + 1
+    elseif type_id <= 24 then
+      compact_type_21_24_count = compact_type_21_24_count + 1
+      compact_family_counts.large_rocks =
+        compact_family_counts.large_rocks + 1
+    elseif type_id <= 29 then
+      compact_family_counts.shadow_masks =
+        compact_family_counts.shadow_masks + 1
+    elseif type_id == 30 then
+      compact_family_counts.dead_roots =
+        compact_family_counts.dead_roots + 1
+    end
     table.insert(compact_rows, {
+      index,
       type_id,
       x_bits,
       y_bits,
@@ -360,31 +759,43 @@ for index = 0, max_compact - 1 do
       scale_bits,
       alpha_bits,
       flags,
+      bounds_left_bits,
+      bounds_top_bits,
+      bounds_right_bits,
+      bounds_bottom_bits,
     })
   end
 end
-sort_rows(compact_rows, 7)
 emit("boneyard_compact_count", compact_count)
 emit("boneyard_compact_sampled", #compact_rows)
 emit("boneyard_compact_digest", hx(
-  digest_rows(compact_rows, {compact_count, #compact_rows}, 7)))
+  digest_rows(compact_rows, {compact_count, #compact_rows}, 12)))
 emit("boneyard_compact_ignored_flag_bits_count",
   compact_ignored_flag_bits_count)
 emit("boneyard_compact_type_7_8_count", compact_type_7_8_count)
 emit("boneyard_compact_type_7_8_noncanonical_flags",
   compact_type_7_8_noncanonical_flags)
+emit("boneyard_compact_type_21_24_count", compact_type_21_24_count)
+for family, count in pairs(compact_family_counts) do
+  emit("boneyard_compact_family_" .. family .. "_count", count)
+end
 for index, compact in ipairs(compact_rows) do
   emit(
     "boneyard_compact." .. index .. ".row",
     string.format(
-      "%d,%s,%s,%s,%s,%s,%d",
+      "%d,%d,%s,%s,%s,%s,%s,%d,%s,%s,%s,%s",
       compact[1],
-      hx(compact[2]),
+      compact[2],
       hx(compact[3]),
       hx(compact[4]),
       hx(compact[5]),
       hx(compact[6]),
-      compact[7]))
+      hx(compact[7]),
+      compact[8],
+      hx(compact[9]),
+      hx(compact[10]),
+      hx(compact[11]),
+      hx(compact[12])))
 end
 
 local replicated = sd.world.get_replicated_actors and sd.world.get_replicated_actors() or nil
@@ -420,6 +831,42 @@ def float_from_u32(text: str) -> float:
 
 
 def decor_tables(row: dict[str, str]) -> dict[str, Any]:
+    scenery: list[dict[str, Any]] = []
+    for index in range(1, integer(row, "boneyard_scenery_sampled") + 1):
+        key = f"boneyard_scenery.{index}.row"
+        fields = row.get(key, "").split(",")
+        if len(fields) < 19:
+            raise VerifyFailure(
+                f"scenery decor dump {index} is malformed: {row.get(key)!r}"
+            )
+        values = [int(field, 0) for field in fields]
+        family_input_count = values[18]
+        if len(values) != 19 + family_input_count:
+            raise VerifyFailure(
+                f"scenery decor dump {index} family payload is malformed: "
+                f"expected {family_input_count}, row={row.get(key)!r}"
+            )
+        scenery.append(
+            {
+                "native_index": values[0],
+                "type_id": values[1],
+                "position": [
+                    float_from_u32(str(values[2])),
+                    float_from_u32(str(values[3])),
+                ],
+                "position_bits": values[2:4],
+                "radius_bits": values[4],
+                "materialization_key": values[5],
+                "common_tint_bits": values[6:10],
+                "render_sort_bias_bits": values[10],
+                "common_scalar_bits": values[11],
+                "common_scale_bits": values[12],
+                "common_color_bits": values[13:17],
+                "render_parameter_bits": values[17],
+                "family_inputs": values[19:],
+            }
+        )
+
     trees: list[dict[str, Any]] = []
     for index in range(1, integer(row, "boneyard_tree_count") + 1):
         prefix = f"boneyard_tree.{index}."
@@ -432,6 +879,13 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
             "variant",
             "overlay_variant",
             "overlay_enabled",
+            "phase_bits",
+            "render_parameter_bits",
+            "sway_countdown",
+            "sway_target_bits",
+            "sway_current_bits",
+            "scrub_collision_flag",
+            "native_index",
         )
         missing = [field for field in required if prefix + field not in row]
         if missing:
@@ -441,34 +895,46 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
         x_bits = row[prefix + "x_bits"]
         y_bits = row[prefix + "y_bits"]
         radius_bits = row[prefix + "radius_bits"]
-        trees.append(
-            {
-                "type_id": integer(row, prefix + "type_id"),
-                "position": [
-                    float_from_u32(x_bits),
-                    float_from_u32(y_bits),
-                ],
-                "position_bits": [x_bits, y_bits],
-                "radius": float_from_u32(radius_bits),
-                "radius_bits": radius_bits,
-                "materialization_key": integer(
-                    row, prefix + "materialization_key"
-                ),
-                "variant": integer(row, prefix + "variant"),
-                "overlay_variant": integer(row, prefix + "overlay_variant"),
-                "overlay_enabled": integer(row, prefix + "overlay_enabled"),
-            }
-        )
+        type_id = integer(row, prefix + "type_id")
+        tree = {
+            "type_id": type_id,
+            "position": [
+                float_from_u32(x_bits),
+                float_from_u32(y_bits),
+            ],
+            "position_bits": [x_bits, y_bits],
+            "radius": float_from_u32(radius_bits),
+            "radius_bits": radius_bits,
+            "materialization_key": integer(
+                row, prefix + "materialization_key"
+            ),
+            "variant": integer(row, prefix + "variant"),
+            "overlay_variant": integer(row, prefix + "overlay_variant"),
+            "overlay_enabled": integer(row, prefix + "overlay_enabled"),
+            "render_parameter_bits": u32(
+                row[prefix + "render_parameter_bits"]
+            ),
+            "sway_target_bits": u32(row[prefix + "sway_target_bits"]),
+            "sway_current_bits": u32(row[prefix + "sway_current_bits"]),
+            "native_index": integer(row, prefix + "native_index"),
+        }
+        if type_id == 2062:
+            tree["phase_bits"] = u32(row[prefix + "phase_bits"])
+            tree["scrub_collision_flag"] = integer(
+                row, prefix + "scrub_collision_flag"
+            )
+        trees.append(tree)
 
     compact: list[dict[str, Any]] = []
     for index in range(1, integer(row, "boneyard_compact_sampled") + 1):
         key = f"boneyard_compact.{index}.row"
         fields = row.get(key, "").split(",")
-        if len(fields) != 7:
+        if len(fields) != 12:
             raise VerifyFailure(
                 f"compact decor dump {index} is malformed: {row.get(key)!r}"
             )
         (
+            native_index_text,
             type_id_text,
             x_bits,
             y_bits,
@@ -476,9 +942,14 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
             scale_bits,
             alpha_bits,
             flags_text,
+            bounds_left_bits,
+            bounds_top_bits,
+            bounds_right_bits,
+            bounds_bottom_bits,
         ) = fields
         compact.append(
             {
+                "native_index": int(native_index_text),
                 "type_id": int(type_id_text),
                 "position": [
                     float_from_u32(x_bits),
@@ -492,13 +963,80 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
                 "alpha": float_from_u32(alpha_bits),
                 "alpha_bits": alpha_bits,
                 "flags": int(flags_text),
+                "bounds_bits": [
+                    u32(bounds_left_bits),
+                    u32(bounds_top_bits),
+                    u32(bounds_right_bits),
+                    u32(bounds_bottom_bits),
+                ],
             }
         )
 
+    ordered_table_names = ("road", "fence", "terrain")
+    ordered_tables: dict[str, list[list[int]]] = {}
+    for table_name in ordered_table_names:
+        table_rows: list[list[int]] = []
+        sampled = integer(row, f"boneyard_{table_name}_sampled")
+        for index in range(1, sampled + 1):
+            key = f"boneyard_{table_name}.{index}.row"
+            fields = row.get(key, "").split(",")
+            if not fields or fields == [""]:
+                raise VerifyFailure(
+                    f"{table_name} dump {index} is malformed: "
+                    f"{row.get(key)!r}"
+                )
+            table_rows.append([int(field, 0) for field in fields])
+        ordered_tables[table_name] = table_rows
+
+    scenery_type_counts = {
+        str(type_id): integer(
+            row, f"boneyard_scenery_type_{type_id}_count"
+        )
+        for type_id in (
+            2001,
+            2009,
+            2029,
+            2040,
+            2061,
+            2062,
+            3006,
+            3007,
+            3011,
+            3012,
+            3013,
+            3014,
+        )
+    }
+    compact_family_counts = {
+        family: integer(row, f"boneyard_compact_family_{family}_count")
+        for family in (
+            "tree_ground_cover",
+            "ground_patches",
+            "paving_stones",
+            "pebbles",
+            "twig_lattice",
+            "large_rocks",
+            "shadow_masks",
+            "dead_roots",
+        )
+    }
     return {
+        "scenery_count": integer(row, "boneyard_scenery_count"),
+        "scenery_digest": row.get("boneyard_scenery_digest", ""),
+        "scenery_type_counts": scenery_type_counts,
+        "scenery": scenery,
         "tree_count": integer(row, "boneyard_tree_count"),
         "tree_digest": row.get("boneyard_tree_digest", ""),
         "trees": trees,
+        "road_count": integer(row, "boneyard_road_count"),
+        "road_digest": row.get("boneyard_road_digest", ""),
+        "roads": ordered_tables["road"],
+        "fence_count": integer(row, "boneyard_fence_count"),
+        "fence_digest": row.get("boneyard_fence_digest", ""),
+        "fences": ordered_tables["fence"],
+        "terrain_count": integer(row, "boneyard_terrain_count"),
+        "terrain_digest": row.get("boneyard_terrain_digest", ""),
+        "terrain": ordered_tables["terrain"],
         "compact_count": integer(row, "boneyard_compact_count"),
         "compact_digest": row.get("boneyard_compact_digest", ""),
         "compact_ignored_flag_bits_count": integer(
@@ -510,6 +1048,10 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
         "compact_type_7_8_noncanonical_flags": integer(
             row, "boneyard_compact_type_7_8_noncanonical_flags"
         ),
+        "compact_type_21_24_count": integer(
+            row, "boneyard_compact_type_21_24_count"
+        ),
+        "compact_family_counts": compact_family_counts,
         "compact": compact,
     }
 
@@ -521,16 +1063,51 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         "circle_mask4_digest",
         "shape_count",
         "shape_digest",
-        "static_actor_count",
-        "static_actor_digest",
         "boneyard_scenery_count",
         "boneyard_scenery_digest",
         "boneyard_tree_count",
         "boneyard_tree_digest",
+        "boneyard_road_count",
+        "boneyard_road_digest",
+        "boneyard_fence_count",
+        "boneyard_fence_digest",
+        "boneyard_terrain_count",
+        "boneyard_terrain_digest",
         "boneyard_compact_count",
         "boneyard_compact_digest",
         "boneyard_compact_type_7_8_count",
+        "boneyard_compact_type_21_24_count",
     ]
+    required_equal.extend(
+        f"boneyard_scenery_type_{type_id}_count"
+        for type_id in (
+            2001,
+            2009,
+            2029,
+            2040,
+            2061,
+            2062,
+            3006,
+            3007,
+            3011,
+            3012,
+            3013,
+            3014,
+        )
+    )
+    required_equal.extend(
+        f"boneyard_compact_family_{family}_count"
+        for family in (
+            "tree_ground_cover",
+            "ground_patches",
+            "paving_stones",
+            "pebbles",
+            "twig_lattice",
+            "large_rocks",
+            "shadow_masks",
+            "dead_roots",
+        )
+    )
     return (
         host.get("scene") == "testrun"
         and client.get("scene") == "testrun"
@@ -542,6 +1119,7 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         and integer(host, "boneyard_tree_count") > 0
         and integer(host, "boneyard_compact_count") > 0
         and integer(host, "boneyard_compact_type_7_8_count") > 0
+        and integer(host, "boneyard_compact_type_21_24_count") > 0
         and integer(host, "boneyard_compact_ignored_flag_bits_count") == 0
         and integer(client, "boneyard_compact_ignored_flag_bits_count") == 0
         and integer(host, "boneyard_compact_type_7_8_noncanonical_flags") == 0
