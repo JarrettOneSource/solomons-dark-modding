@@ -24,11 +24,11 @@ Four native and loader-owned lifecycles currently overlap:
 3. The PlayerWizard tick then advances an unbounded death timer. Arena rendering
    derives the fullscreen red blend from that timer, and the stock
    portrait/save path runs at timer tick 300.
-4. Multiplayer changes its own phase to `Spectating` after 3,000 ms, but it
-   neither retires nor bounds the native timer. Remote participants receive the
-   `+0x160` death drive byte without the owner's advancing `+0x1BC` clock and
-   then stop running presentation reconciliation as soon as replicated HP is
-   zero.
+4. The original multiplayer path changed its own phase to `Spectating` after
+   its grace interval, but it neither retired nor bounded the native timer.
+   Remote participants received the `+0x160` death drive byte without the
+   owner's advancing `+0x1BC` clock and then stopped running presentation
+   reconciliation as soon as replicated HP was zero.
 
 The host failure is therefore an authority-lifecycle problem, not a camera
 problem. The local death virtual naturally hands the Arena to Game Over, which
@@ -262,10 +262,10 @@ normally replaces the Arena with Game Over, so the saturated blend disappears
 with the surface. Multiplayer deliberately preserves the Arena, exposing the
 otherwise hidden unbounded lifecycle.
 
-`TickLocalDeathSpectator` currently changes only its loader phase after 3,000
-ms. A pre-fix live host trace showed `+0x160 = 1` and `+0x1BC` continuing from
-197 through 656 while phase was already `Spectating`. The red blend therefore
-remains saturated indefinitely.
+The original `TickLocalDeathSpectator` changed only its loader phase when its
+grace interval elapsed. A pre-fix live host trace showed `+0x160 = 1` and
+`+0x1BC` continuing from 197 through 656 while phase was already `Spectating`.
+The red blend therefore remained saturated indefinitely.
 
 Clearing `+0x160` at grace expiry would hide the blend but also remove the native
 dead-state guard, allowing later hits to arm another terminal transition and
@@ -613,7 +613,7 @@ from zero to `-10`. The client observer therefore renders a corpse before
 `FUN_00534120` has run on the owner. Presentation must instead begin only from
 the owner-authored death-presentation flag. Once that flag has started the
 death epoch, replicated zero life may keep the bounded corpse state after the
-three-second flag clears; zero life alone must not start it.
+configured grace flag clears; zero life alone must not start it.
 
 ## Beta.15 organic reproduction matrix
 
@@ -634,6 +634,129 @@ Casting was confirmed through the real mouse-input queue and native dispatcher
 log before the poison attack. It did not change the divergence: host paths
 split between network zero and native `-10`, while client paths stopped before
 the zero-life authority signal.
+
+## Beta.16 presentation, input, and spectator follow-up
+
+Published beta.16 fixed the beta.15 organic-damage authority mismatch, but live
+stock-wave testing exposed four additional boundaries that the earlier
+scripted lethal-hit gate did not exercise: the terminal corpse frame, dead
+spell dispatch, spectator-target camera ownership, and the render pass that
+owns the spectator HUD.
+
+### Native death animation frame selection
+
+`FUN_0054BA80`, the PlayerWizard animation/render advance selected by
+`actor_animation_advance`, sends an actor with `+0x160 == 0` through its normal
+animation path. When `+0x160 != 0`, it calls `FUN_00538550`, the dedicated dead
+sprite renderer.
+
+`FUN_00538550` derives its four-frame death image directly from `actor +0x1BC`:
+
+```text
+frame = 0
+if death_ticks > 150:
+    frame = (death_ticks - 150) / 3
+    frame = min(frame, 3)
+```
+
+The terminal corpse image is therefore first selected at tick 159 and remains
+selected for every later tick. It is not a tick-300 animation. Tick 300 belongs
+to the separate stock portrait/save path in `FUN_00533520`.
+
+Beta.16 drives the replicated clock from 0 through 298 during its grace
+interval, then writes zero when `DeathPresentation` becomes `Spectating`.
+Remote reconciliation makes the same active-to-zero transition. Two organic
+traces captured the exact rewind on both peers:
+
+| Victim | Stock damage/activity | Native clock immediately before handoff | First clock after handoff |
+|---|---|---:|---:|
+| host | Skeleton melee, idle | 298 owner / observer | 0 owner / observer |
+| client | fire projectile, held primary | 298 owner / observer | 0 owner / observer |
+
+The death animation reaches frame 3 before handoff, but the zero write sends
+the surviving corpse back to frame 0. That is the visible cut-short
+presentation. Red-effect clearing and corpse rendering cannot share one raw
+timer value after grace: Arena red is active above tick 150, while the terminal
+corpse requires tick 159. The safe split is to keep the stored post-grace timer
+at the red-safe boundary and project tick 159 only while the existing
+PlayerWizard animation hook renders a completed multiplayer corpse. The
+selector `+0x160` remains asserted until respawn.
+
+The product grace contract is now 5,000 ms. The owner-authored 0..298 clock
+therefore reaches the terminal corpse frame during the interval and holds it
+for the remainder. At expiry, red presentation, staff-drop epoch accounting,
+spectator handoff, and respawn eligibility all cross the same duration
+boundary.
+
+### Native spell dispatch is death-blind
+
+The primary dispatcher at `FUN_00548A00` and the secondary dispatcher at
+`FUN_0054CC50` do not read `PlayerWizard +0x160`. Both enter their progression,
+resource, presentation, and behavior paths for a dead actor. The shared primary
+presentation helper `FUN_0052DA80` is death-blind as well.
+
+The default Ether right-click is secondary row `0x0B`, Call Leviathan.
+`FUN_0054CC50` case `0x0B` allocates and registers the native `0x07F2` summon.
+This proves that suppressing only spectator UI input cannot provide the
+required guarantee: the stock authority path itself accepts and materializes a
+world-affecting dead-player command.
+
+The loader exposes the same missing boundary at two levels:
+
+- `HookSpellCastDispatcher`, `HookPurePrimarySpellStart`, and
+  `HookPlayerActorSecondarySpellCast` invoke the stock dispatcher without
+  rejecting the process-local dead participant.
+- `ApplyRemoteCastPacket` relays the packet and applies its position/heading
+  before the later bot queue rejects a dead participant. Special secondary
+  behavior can also run before that late rejection.
+
+Death must therefore be rejected before the local original call, before any
+outgoing queue is sent, and on the authority before relay, transform mutation,
+or secondary behavior. Clearing held mouse input during the terminal
+transition can synthesize a `Released` phase, so the outgoing queue needs the
+same guard even when the native entry hook was not re-entered.
+
+### Spectated death and camera ownership
+
+`CollectAliveSpectatorTargetIds` requires both replicated and materialized HP
+to be positive. `TickLocalSpectatorTarget` rebuilds that list every frame and
+immediately selects another participant when the current target reaches zero.
+It does not preserve a target whose owner-authored death-presentation flag is
+still active.
+
+An organic three-player trace killed an Ether target while a previously dead
+client was spectating it. The target's owner and observer coordinates remained
+exactly `(899.248, 150.000)` throughout the grace window and both native clocks
+reached 298, but the client HUD immediately changed from `Observer Player` to
+`Host Player`. The visible body jump is the camera retarget, not a corpse
+transform mutation in that trace. A current target with an active replicated
+death presentation remains a valid camera subject until that presentation
+expires; manual cycling may still select a living target.
+
+Cast packets nevertheless remain forbidden from mutating a dead participant's
+transform. That authority rule closes the adjacent stale-packet race and makes
+death-location stability independent of input timing.
+
+### Spectator HUD render-pass leak
+
+`DrawGameplayDeathSpectatorStatus` is screen-space and has no actor or summon
+anchor. `RenderOverlayFrame`, however, runs from every observed D3D9
+`EndScene` callback without proving that render target 0 is the swap-chain
+backbuffer. A stock spell can introduce an offscreen world/effect pass that is
+later composited into the final frame.
+
+The three-player organic witness used the Ether preset's real belt slot 1 and
+right-click Call Leviathan dispatcher. Before the summon, the spectator view
+contained one crisp status box at the top of the 1600x900 backbuffer. After the
+`0x07F2` summon materialized on all three peers, a second enlarged copy of the
+status box appeared inside the world above the actors while the original
+screen-space box remained. This is an offscreen render-target leak, not a
+second spectator target or a minion-associated HUD instance.
+
+Overlay drawing must be admitted only when the active render target is the
+device backbuffer. Frame observation bookkeeping may continue on other passes,
+but the spectator HUD must never be drawn into a texture that the game later
+places in world space.
 
 ## Required implementation and acceptance boundaries
 
@@ -667,8 +790,20 @@ The native findings impose these constraints:
   stalled peer cannot render during its app-thread gap; when it resumes,
   packet-age extrapolation must place its first rendered death frame within 12
   ticks of the owner without running the owner-only terminal/drop virtual.
-- After 3,000 ms, `+0x1BC` is held below the Arena red-effect threshold and can
-  never reach the stock tick-300 end-of-life path.
+- The single death-grace contract is 5,000 ms for owner and observers. It owns
+  red-effect expiry, staff-drop epoch accounting, spectator handoff, and
+  respawn eligibility.
+- After 5,000 ms, stored `+0x1BC` is held at the Arena red-safe boundary and
+  can never reach the stock tick-300 end-of-life path. The animation hook
+  projects the tick-159 terminal corpse frame only for rendering.
+- A current spectator target remains camera-valid while its replicated death
+  presentation is active, so its complete death animation stays at the death
+  location before automatic retarget.
+- Local native dispatch, outgoing cast publication, and incoming authority
+  reject dead participants before any spell, minion command, relay, transform
+  mutation, or world effect.
+- Spectator HUD rendering is restricted to the active D3D9 backbuffer; summons
+  and other offscreen passes cannot duplicate or relocate it.
 - Dead remote presentation is reconciled explicitly; it is not obtained by
   invoking the side-effectful complete PlayerWizard death virtual.
 - Respawn clears the death epoch, native death selector/timer, terminal pending
