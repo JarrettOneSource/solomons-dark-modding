@@ -38,8 +38,11 @@ internal sealed class SteamLobbySessionClient : IDisposable
         lock (gate_)
         {
             ObjectDisposedException.ThrowIf(disposed_, this);
-            var startInfo = new ProcessStartInfo(LauncherExecutableResolver.Resolve())
+            var executablePath = LauncherExecutableResolver.Resolve();
+            var startInfo = new ProcessStartInfo(executablePath)
             {
+                WorkingDirectory =
+                    Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory,
                 UseShellExecute = false,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,

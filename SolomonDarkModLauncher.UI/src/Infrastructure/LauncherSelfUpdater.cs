@@ -53,8 +53,7 @@ internal static class LauncherSelfUpdater
         }
 
         var updatesRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SolomonDarkMultiplayerBeta",
+            LauncherUiSettingsStore.ResolveDefaultSettingsRoot(),
             "updates");
         progress?.Report(new UpdateProgress(
             UpdateProgressPhase.Checking,

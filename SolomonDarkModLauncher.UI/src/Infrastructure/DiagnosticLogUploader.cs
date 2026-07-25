@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using SolomonDarkModding.IO;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -111,6 +112,11 @@ internal sealed class DiagnosticLogUploader
         LauncherCliResponse? response)
     {
         var artifacts = new List<CrashReportArtifact>();
+        AddArtifact(
+            artifacts,
+            LauncherLog.GetPath(
+                LauncherUiSettingsStore.ResolveDefaultSettingsRoot()),
+            "launcher/launcher.log");
         var stage = response?.Stage;
         if (stage is null)
         {

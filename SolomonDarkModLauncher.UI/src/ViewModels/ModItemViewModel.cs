@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows.Media;
 using SolomonDarkModLauncher.UI.Infrastructure;
 
@@ -28,9 +27,9 @@ internal sealed class ModItemViewModel : ViewModelBase
         isEnabled_ = mod.Enabled;
 
         OpenFolderCommand = new RelayCommand(_ =>
-            Process.Start(new ProcessStartInfo(RootPath) { UseShellExecute = true }));
+            LauncherShell.TryOpenFolder(RootPath));
         ViewManifestCommand = new RelayCommand(_ =>
-            Process.Start(new ProcessStartInfo("notepad.exe", $"\"{ManifestPath}\"")));
+            LauncherShell.TryOpenTextFile(ManifestPath));
     }
 
     public string Id { get; }

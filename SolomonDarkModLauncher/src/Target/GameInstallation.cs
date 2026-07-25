@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using SolomonDarkModding.IO;
 
 namespace SolomonDarkModLauncher.Target;
 
@@ -16,6 +17,12 @@ internal sealed class GameInstallation
     {
         var installDirectory = NormalizeInstallDirectory(
             installDirectoryOverride ?? ResolveDefaultInstallDirectory(workspaceRootPath));
+
+        if (LauncherPathPolicy.IsDesktopPath(installDirectory))
+        {
+            throw new InvalidOperationException(
+                "The game folder must be outside Desktop.");
+        }
 
         if (!Directory.Exists(installDirectory))
         {
@@ -80,7 +87,7 @@ internal sealed class GameInstallation
         return Path.GetFullPath(installDirectory);
     }
 
-    private static string ResolveDefaultInstallDirectory(string workspaceRootPath)
+    internal static string ResolveDefaultInstallDirectory(string workspaceRootPath)
     {
         var localReplicaPath = NormalizeInstallDirectory(Path.Combine(workspaceRootPath, "..", "SolomonDarkAbandonware"));
         var localExecutablePath = Path.Combine(localReplicaPath, DefaultExecutableName);
@@ -89,9 +96,11 @@ internal sealed class GameInstallation
             return localReplicaPath;
         }
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            LegacyVersionName);
+        var programFiles = LauncherPathPolicy.TryGetKnownFolder(
+            Environment.SpecialFolder.ProgramFilesX86);
+        return programFiles is null
+            ? AppContext.BaseDirectory
+            : Path.Combine(programFiles, LegacyVersionName);
     }
 
     private static string HashFile(string path)

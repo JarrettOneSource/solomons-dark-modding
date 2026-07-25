@@ -2,6 +2,7 @@ using System.Text;
 using System.Reflection.PortableExecutable;
 using Microsoft.Win32;
 using SolomonDarkModLauncher.Target;
+using SolomonDarkModding.IO;
 
 namespace SolomonDarkModLauncher.Steam;
 
@@ -124,15 +125,20 @@ internal static class SteamBootstrapMaterializer
     private static IEnumerable<string> EnumerateSteamInstallRoots()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var candidate in new[]
+        var candidates = new List<string?>
         {
             Environment.GetEnvironmentVariable("STEAM_PATH"),
             ReadRegistryString(RegistryHive.CurrentUser, RegistryView.Default, @"Software\Valve\Steam", "SteamPath"),
-            ReadRegistryString(RegistryHive.LocalMachine, RegistryView.Registry32, @"Software\Valve\Steam", "InstallPath"),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                "Steam")
-        })
+            ReadRegistryString(RegistryHive.LocalMachine, RegistryView.Registry32, @"Software\Valve\Steam", "InstallPath")
+        };
+        var programFiles = LauncherPathPolicy.TryGetKnownFolder(
+            Environment.SpecialFolder.ProgramFilesX86);
+        if (programFiles is not null)
+        {
+            candidates.Add(Path.Combine(programFiles, "Steam"));
+        }
+
+        foreach (var candidate in candidates)
         {
             if (string.IsNullOrWhiteSpace(candidate))
             {

@@ -15,6 +15,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        LauncherShell.UseSafeCurrentDirectory();
 
         if (e.Args.Length > 1)
         {

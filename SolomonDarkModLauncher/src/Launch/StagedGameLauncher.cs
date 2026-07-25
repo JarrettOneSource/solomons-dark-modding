@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SolomonDarkModding.IO;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
 using SolomonDarkModLauncher.Target;
@@ -264,7 +265,8 @@ internal static class StagedGameLauncher
 
     private static string? TryResolveRetailAppDataPath()
     {
-        var appDataRoot = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var appDataRoot = LauncherPathPolicy.TryGetKnownFolder(
+            Environment.SpecialFolder.ApplicationData);
         if (string.IsNullOrWhiteSpace(appDataRoot))
         {
             return null;

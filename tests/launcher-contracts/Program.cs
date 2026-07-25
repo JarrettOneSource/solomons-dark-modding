@@ -16,6 +16,7 @@ using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.ViewModels;
 using SolomonDarkModLauncher.Workspace;
 using SolomonDarkLauncherUpdater;
+using SolomonDarkModding.IO;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
@@ -26,6 +27,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("launcher download progress", TestLauncherDownloadProgressAsync),
     ("update progress JSON protocol", TestUpdateProgressJsonProtocolAsync),
     ("launcher update installation", TestLauncherUpdateInstallationAsync),
+    ("no Desktop shell dependency", TestNoDesktopShellDependencyAsync),
     ("downloaded package traversal rejection", TestDownloadedPackageTraversalAsync),
     ("downloaded package contract", TestDownloadedPackageContractAsync),
     ("website lobby preflight", TestWebsiteLobbyPreflightAsync),
@@ -70,6 +72,245 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestNoDesktopShellDependencyAsync()
+{
+    var workspaceRoot = WorkspaceLocator.FindRootPath(AppContext.BaseDirectory);
+    var uiRoot = Path.Combine(workspaceRoot, "SolomonDarkModLauncher.UI");
+    var updaterRoot = Path.Combine(workspaceRoot, "SolomonDarkLauncherUpdater");
+    var launcherRoot = Path.Combine(workspaceRoot, "SolomonDarkModLauncher");
+    var sharedRoot = Path.Combine(workspaceRoot, "Shared");
+    var launcherShellPath = Path.Combine(
+        uiRoot,
+        "src",
+        "Infrastructure",
+        "LauncherShell.cs");
+    var productSources = new[] { uiRoot, updaterRoot, launcherRoot, sharedRoot }
+        .SelectMany(root => Directory.EnumerateFiles(
+            root,
+            "*.cs",
+            SearchOption.AllDirectories))
+        .Where(path =>
+            !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
+            !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+        .ToArray();
+
+    foreach (var path in productSources)
+    {
+        var source = File.ReadAllText(path);
+        Require(
+            !source.Contains("SpecialFolder.Desktop", StringComparison.Ordinal) &&
+            !source.Contains("SpecialFolder.DesktopDirectory", StringComparison.Ordinal) &&
+            !source.Contains("FOLDERID_Desktop", StringComparison.Ordinal) &&
+            !source.Contains("WScript.Shell", StringComparison.Ordinal) &&
+            !source.Contains(".lnk", StringComparison.OrdinalIgnoreCase),
+            $"launcher source depends on Desktop or shortcut resolution: {Path.GetRelativePath(workspaceRoot, path)}");
+
+        if (!string.Equals(
+                Path.GetFullPath(path),
+                Path.GetFullPath(launcherShellPath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            Require(
+                !source.Contains("OpenFolderDialog", StringComparison.Ordinal) &&
+                !source.Contains("UseShellExecute = true", StringComparison.Ordinal) &&
+                !source.Contains("\"explorer.exe\"", StringComparison.OrdinalIgnoreCase),
+                $"launcher shell access bypasses LauncherShell: {Path.GetRelativePath(workspaceRoot, path)}");
+        }
+
+        var processStartIndex = 0;
+        while ((processStartIndex = source.IndexOf(
+                   "new ProcessStartInfo",
+                   processStartIndex,
+                   StringComparison.Ordinal)) >= 0)
+        {
+            var initializerEnd = source.IndexOf(
+                "};",
+                processStartIndex,
+                StringComparison.Ordinal);
+            Require(
+                initializerEnd >= 0 &&
+                source.AsSpan(
+                    processStartIndex,
+                    initializerEnd - processStartIndex)
+                    .Contains(
+                        "WorkingDirectory",
+                        StringComparison.Ordinal),
+                $"launcher child process inherits its caller working directory: {Path.GetRelativePath(workspaceRoot, path)}");
+            processStartIndex = initializerEnd + 2;
+        }
+    }
+
+    var mainViewModel = File.ReadAllText(Path.Combine(
+        uiRoot,
+        "src",
+        "ViewModels",
+        "MainWindowViewModel.cs"));
+    var saveViewModel = File.ReadAllText(Path.Combine(
+        uiRoot,
+        "src",
+        "ViewModels",
+        "SaveManagerViewModel.cs"));
+    var modViewModel = File.ReadAllText(Path.Combine(
+        uiRoot,
+        "src",
+        "ViewModels",
+        "ModItemViewModel.cs"));
+    var updaterProgram = File.ReadAllText(Path.Combine(
+        updaterRoot,
+        "Program.cs"));
+    var launcherShell = File.ReadAllText(launcherShellPath);
+
+    Require(
+        !mainViewModel.Contains("new OpenFolderDialog", StringComparison.Ordinal),
+        "game-folder selection bypasses the guarded non-Desktop folder policy");
+    Require(
+        !saveViewModel.Contains("new OpenFolderDialog", StringComparison.Ordinal),
+        "save import bypasses the guarded non-Desktop folder policy");
+    Require(
+        !mainViewModel.Contains("UseShellExecute = true", StringComparison.Ordinal) &&
+        !saveViewModel.Contains("UseShellExecute = true", StringComparison.Ordinal) &&
+        !modViewModel.Contains("UseShellExecute = true", StringComparison.Ordinal),
+        "a launcher view model invokes the Windows shell directly");
+    Require(
+        !updaterProgram.Contains("UseShellExecute = true", StringComparison.Ordinal),
+        "the updater restart invokes the Windows shell");
+    Require(
+        launcherShell.Contains(
+            "InitialDirectory = initialDirectory",
+            StringComparison.Ordinal) &&
+        launcherShell.Contains(
+            "DefaultDirectory = initialDirectory",
+            StringComparison.Ordinal),
+        "folder dialogs do not force a resolved non-Desktop initial directory");
+    Require(
+        launcherShell.Contains("DereferenceLinks = false", StringComparison.Ordinal) &&
+        launcherShell.Contains("AddToRecent = false", StringComparison.Ordinal),
+        "folder dialogs can resolve or persist shell locations");
+    Require(
+        launcherShell.Contains("ErrorDialog = false", StringComparison.Ordinal),
+        "URI shell activation can surface a Windows error dialog");
+    Require(
+        !launcherShell.Contains(
+            "WorkingDirectory = AppContext.BaseDirectory",
+            StringComparison.Ordinal),
+        "shell operations can inherit a Desktop-based install directory");
+
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var deniedDesktop = Path.Combine(root, "Desktop");
+        var documents = Path.Combine(root, "Documents");
+        var applicationData = Path.Combine(root, "AppData", "Local");
+        var installDirectory = Path.Combine(root, "Launcher");
+        var log = new List<string>();
+        var desktopWasProbed = false;
+        var resolvedDefault = LauncherPathPolicy.ResolveReadableDirectory(
+            [deniedDesktop, documents, applicationData, installDirectory],
+            log.Add,
+            path =>
+            {
+                if (string.Equals(
+                        path,
+                        deniedDesktop,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    desktopWasProbed = true;
+                    throw new UnauthorizedAccessException(
+                        "The Desktop fixture must be rejected before enumeration.");
+                }
+
+                return string.Equals(
+                    path,
+                    documents,
+                    StringComparison.OrdinalIgnoreCase);
+            });
+        Require(
+            string.Equals(
+                resolvedDefault,
+                documents,
+                StringComparison.OrdinalIgnoreCase),
+            "denied Desktop did not fall back to Documents");
+        Require(
+            log.Any(message =>
+                message.Contains(deniedDesktop, StringComparison.OrdinalIgnoreCase)),
+            "denied Desktop fallback did not emit a log line");
+        Require(
+            !desktopWasProbed,
+            "folder dialog policy enumerated Desktop before falling back");
+
+        log.Clear();
+        var resolvedApplicationData = LauncherPathPolicy.ResolveApplicationDataRoot(
+            log.Add,
+            localApplicationDataPath: deniedDesktop,
+            temporaryPath: applicationData,
+            canWriteDirectory: path => path.StartsWith(
+                applicationData,
+                StringComparison.OrdinalIgnoreCase));
+        Require(
+            resolvedApplicationData.StartsWith(
+                applicationData,
+                StringComparison.OrdinalIgnoreCase) &&
+            !resolvedApplicationData.StartsWith(
+                deniedDesktop,
+                StringComparison.OrdinalIgnoreCase),
+            "launcher application data fell back through Desktop");
+        Require(
+            log.Any(message =>
+                message.Contains(deniedDesktop, StringComparison.OrdinalIgnoreCase)),
+            "denied application-data fallback did not emit a log line");
+        Require(
+            !LauncherLog.GetPath(resolvedApplicationData).StartsWith(
+                deniedDesktop,
+                StringComparison.OrdinalIgnoreCase),
+            "launcher log path depends on Desktop");
+
+        var settingsRoot = Path.Combine(root, "settings");
+        Directory.CreateDirectory(settingsRoot);
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.json"),
+            JsonSerializer.Serialize(new
+            {
+                gameDirectory = deniedDesktop
+            }));
+        var settings = new LauncherUiSettingsStore(settingsRoot);
+        Require(
+            settings.LoadGameDirectory() is null,
+            "saved Desktop game directory remained active");
+        var launcherLogPath = LauncherLog.GetPath(settingsRoot);
+        Require(
+            File.Exists(launcherLogPath) &&
+            File.ReadAllText(launcherLogPath).Contains(
+                deniedDesktop,
+                StringComparison.OrdinalIgnoreCase),
+            "ignored saved Desktop directory did not emit a log line");
+        RequireThrows<InvalidOperationException>(
+            () => settings.SaveGameDirectory(deniedDesktop),
+            "launcher persisted a Desktop game directory");
+        RequireThrows<InvalidOperationException>(
+            () => StageSandboxCompatibilityLinks.Materialize(
+                deniedDesktop,
+                documents),
+            "launcher staging touched a Desktop path");
+        RequireThrows<ArgumentException>(
+            () => LauncherUpdateInstaller.ResolvePackagedPath(
+                deniedDesktop,
+                "launcher.exe"),
+            "updater accepted a Desktop target path");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    RequireThrows<ArgumentException>(
+        () => LauncherUpdateInstaller.ResolvePackagedPath(
+            "relative-launcher-root",
+            "launcher.exe"),
+        "updater accepted a current-directory-relative target path");
+
+    return Task.CompletedTask;
+}
 
 static Task TestNormalRuntimeHidesDiagnosticUiAsync()
 {

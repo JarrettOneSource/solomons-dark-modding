@@ -1,9 +1,12 @@
 using System.Text.Json;
+using SolomonDarkModding.IO;
 
 namespace SolomonDarkModLauncher.UI.Infrastructure;
 
 internal sealed class LauncherUiSettingsStore
 {
+    private const string SettingsDirectoryName = "SolomonDarkMultiplayerBeta";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -15,10 +18,8 @@ internal sealed class LauncherUiSettingsStore
     public LauncherUiSettingsStore(string? settingsRootOverride = null)
     {
         SettingsRoot = string.IsNullOrWhiteSpace(settingsRootOverride)
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SolomonDarkMultiplayerBeta")
-            : Path.GetFullPath(settingsRootOverride);
+            ? ResolveDefaultSettingsRoot()
+            : Path.GetFullPath(settingsRootOverride, AppContext.BaseDirectory);
         settingsPath_ = Path.Combine(SettingsRoot, "settings.json");
         RuntimeRoot = Path.Combine(SettingsRoot, "runtime");
         SavesRoot = Path.Combine(SettingsRoot, "saves");
@@ -28,17 +29,54 @@ internal sealed class LauncherUiSettingsStore
     public string RuntimeRoot { get; }
     public string SavesRoot { get; }
 
+    internal static string ResolveDefaultSettingsRoot()
+    {
+        var rejectedPaths = new List<string>();
+        var root = LauncherPathPolicy.ResolveApplicationDataRoot(
+            rejectedPaths.Add,
+            applicationDirectoryName: SettingsDirectoryName);
+        foreach (var message in rejectedPaths)
+        {
+            LauncherLog.Write("paths", message, root);
+        }
+        return root;
+    }
+
     public string? LoadGameDirectory()
     {
         var gameDirectory = Load().GameDirectory;
-        return string.IsNullOrWhiteSpace(gameDirectory)
-            ? null
-            : Path.GetFullPath(gameDirectory);
+        if (string.IsNullOrWhiteSpace(gameDirectory))
+        {
+            return null;
+        }
+
+        var normalizedPath = Path.GetFullPath(
+            gameDirectory,
+            AppContext.BaseDirectory);
+        if (!LauncherPathPolicy.IsDesktopPath(normalizedPath))
+        {
+            return normalizedPath;
+        }
+
+        LauncherLog.Write(
+            "paths",
+            $"Ignored a saved Desktop game directory: {normalizedPath}",
+            SettingsRoot);
+        return null;
     }
 
     public void SaveGameDirectory(string gameDirectory)
     {
-        Save(Load() with { GameDirectory = Path.GetFullPath(gameDirectory) });
+        var normalizedPath = Path.GetFullPath(
+            gameDirectory,
+            AppContext.BaseDirectory);
+        if (LauncherPathPolicy.IsDesktopPath(normalizedPath))
+        {
+            throw new InvalidOperationException(
+                "Choose a game folder outside Desktop.");
+        }
+
+        Save(Load() with { GameDirectory = normalizedPath });
     }
 
     public string? LoadDirectoryUrl()

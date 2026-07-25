@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
-using Microsoft.Win32;
 using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.Views;
@@ -707,24 +706,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ChooseGameFolder()
     {
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Select the Solomon Dark 0.72.5 folder that contains SolomonDark.exe",
-            Multiselect = false
-        };
-        if (!string.IsNullOrWhiteSpace(GameDirectory) && Directory.Exists(GameDirectory))
-        {
-            dialog.InitialDirectory = GameDirectory;
-        }
-
-        if (dialog.ShowDialog() != true)
+        if (!LauncherShell.TrySelectFolder(
+                "Select the Solomon Dark 0.72.5 folder that contains SolomonDark.exe",
+                GameDirectory,
+                AppContext.BaseDirectory,
+                out var selectedPath))
         {
             return;
         }
 
         try
         {
-            client_.UpdateGameDirectory(dialog.FolderName);
+            client_.UpdateGameDirectory(selectedPath);
         }
         catch (Exception ex)
         {
@@ -761,21 +754,15 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void OpenWebsiteAccount()
     {
-        try
+        if (!LauncherShell.TryOpenUri(
+                $"{DirectoryUrl.TrimEnd('/')}/account"))
         {
-            Process.Start(new ProcessStartInfo($"{DirectoryUrl.TrimEnd('/')}/account")
-            {
-                UseShellExecute = true
-            });
-            CloudAccountStatus =
-                "Link Steam on the website, then return to the launcher.";
+            SetError("Could not open the website account page. See the launcher log.");
+            return;
         }
-        catch (Exception exception) when (
-            exception is InvalidOperationException or
-            System.ComponentModel.Win32Exception)
-        {
-            SetError($"Could not open the website account page: {exception.Message}");
-        }
+
+        CloudAccountStatus =
+            "Link Steam on the website, then return to the launcher.";
     }
 
     private void OpenSettings()
@@ -2134,12 +2121,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private static void OpenFolder(string? path)
     {
-        if (!CanOpenFolder(path))
-        {
-            return;
-        }
-
-        Process.Start(new ProcessStartInfo(path!) { UseShellExecute = true });
+        LauncherShell.TryOpenFolder(path);
     }
 
     private void RaiseCommandStates()

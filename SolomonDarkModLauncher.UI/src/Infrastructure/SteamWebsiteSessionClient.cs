@@ -115,8 +115,11 @@ internal sealed class SteamWebsiteSessionClient
         string directoryUrl,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo(LauncherExecutableResolver.Resolve())
+        var executablePath = LauncherExecutableResolver.Resolve();
+        var startInfo = new ProcessStartInfo(executablePath)
         {
+            WorkingDirectory =
+                Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

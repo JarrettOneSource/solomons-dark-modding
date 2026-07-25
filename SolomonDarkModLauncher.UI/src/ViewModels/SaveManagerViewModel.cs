@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
-using Microsoft.Win32;
 using SolomonDarkModLauncher.UI.Infrastructure;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
@@ -198,12 +196,11 @@ internal sealed class SaveManagerViewModel : ViewModelBase
         {
             return;
         }
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Select a savegames folder containing the solomondark directory",
-            Multiselect = false
-        };
-        if (dialog.ShowDialog() != true)
+        if (!LauncherShell.TrySelectFolder(
+                "Select a savegames folder containing the solomondark directory",
+                preferredPath: null,
+                contextualFallback: catalog_.SavesRoot,
+                selectedPath: out var selectedPath))
         {
             return;
         }
@@ -219,7 +216,7 @@ internal sealed class SaveManagerViewModel : ViewModelBase
 
         try
         {
-            catalog_.Import(selected.Slot, dialog.FolderName);
+            catalog_.Import(selected.Slot, selectedPath);
             ErrorText = string.Empty;
             ReloadSlots(selected.Slot);
             activeSaveChanged_();
@@ -282,40 +279,26 @@ internal sealed class SaveManagerViewModel : ViewModelBase
         {
             return;
         }
-        try
-        {
-            Process.Start(new ProcessStartInfo(selected.Local.SavegamesRootPath)
-            {
-                UseShellExecute = true
-            });
-            ErrorText = string.Empty;
-        }
-        catch (Exception exception) when (
-            exception is InvalidOperationException or
-            System.ComponentModel.Win32Exception)
-        {
-            ErrorText = $"Could not open the save folder: {exception.Message}";
-        }
+
+        LauncherShell.TryOpenFolder(
+            selected.Local.SavegamesRootPath,
+            catalog_.SavesRoot);
+        ErrorText = string.Empty;
     }
 
     private void OpenAccount()
     {
-        try
+        if (!LauncherShell.TryOpenUri(
+                $"{directoryUrl_.TrimEnd('/')}/account"))
         {
-            Process.Start(new ProcessStartInfo($"{directoryUrl_.TrimEnd('/')}/account")
-            {
-                UseShellExecute = true
-            });
-            AccountStatus =
-                "Link Steam on the website, then return here and click Refresh Cloud.";
-            ErrorText = string.Empty;
+            ErrorText =
+                "Could not open the website account page. See the launcher log.";
+            return;
         }
-        catch (Exception exception) when (
-            exception is InvalidOperationException or
-            System.ComponentModel.Win32Exception)
-        {
-            ErrorText = $"Could not open the website account page: {exception.Message}";
-        }
+
+        AccountStatus =
+            "Link Steam on the website, then return here and click Refresh Cloud.";
+        ErrorText = string.Empty;
     }
 
     private void ReloadSlots(int selectedSlot)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SolomonDarkModding.IO;
 
 namespace SolomonDarkModLauncher.Staging;
 
@@ -11,6 +12,13 @@ internal static class StageSandboxCompatibilityLinks
 
     public static bool Materialize(string stageRootPath, string savegamesTargetPath)
     {
+        if (LauncherPathPolicy.IsDesktopPath(stageRootPath) ||
+            LauncherPathPolicy.IsDesktopPath(savegamesTargetPath))
+        {
+            throw new InvalidOperationException(
+                "Staged save paths must be outside Desktop.");
+        }
+
         var sandboxSavegamesPath = Path.Combine(stageRootPath, "sandbox", "savegames");
         if (!Directory.Exists(sandboxSavegamesPath))
         {
@@ -48,6 +56,10 @@ internal static class StageSandboxCompatibilityLinks
         {
             FileName = "cmd.exe",
             Arguments = $"/c mklink /J \"{linkPath}\" \"{targetPath}\"",
+            WorkingDirectory =
+                Path.GetDirectoryName(linkPath) ??
+                throw new InvalidOperationException(
+                    "The staged save path has no parent directory."),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

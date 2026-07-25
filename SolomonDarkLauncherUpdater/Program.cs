@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows.Forms;
+using SolomonDarkModding.IO;
 using SolomonDarkModding.Updates;
 
 namespace SolomonDarkLauncherUpdater;
@@ -91,6 +92,9 @@ internal static class Program
         }
         catch (Exception exception)
         {
+            LauncherLog.Write(
+                "updater",
+                $"Update failed: {exception.GetType().Name}: {exception.Message}");
             form.ShowFailure(
                 $"The launcher update could not be installed.\n{exception.Message}",
                 () => RestartLauncher(arguments));
@@ -140,7 +144,7 @@ internal static class Program
         var startInfo = new ProcessStartInfo(restartPath)
         {
             WorkingDirectory = arguments.TargetPath,
-            UseShellExecute = true
+            UseShellExecute = false
         };
         if (!string.IsNullOrEmpty(arguments.ActivationArgument))
         {
@@ -194,9 +198,22 @@ internal sealed record UpdaterArguments(
 
         return new UpdaterArguments(
             waitProcessId,
-            Path.GetFullPath(archivePath),
-            Path.GetFullPath(targetPath),
+            NormalizeAbsolutePath("--archive", archivePath),
+            NormalizeAbsolutePath("--target", targetPath),
             restartRelativePath,
             values.GetValueOrDefault("--activation") ?? string.Empty);
+    }
+
+    private static string NormalizeAbsolutePath(
+        string argumentName,
+        string value)
+    {
+        if (!Path.IsPathFullyQualified(value))
+        {
+            throw new ArgumentException(
+                $"The launcher updater requires an absolute {argumentName} path.");
+        }
+
+        return Path.GetFullPath(value);
     }
 }

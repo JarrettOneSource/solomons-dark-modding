@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using SolomonDarkModding.Distribution;
+using SolomonDarkModding.IO;
 using SolomonDarkModding.Updates;
 
 namespace SolomonDarkLauncherUpdater;
@@ -15,6 +16,8 @@ internal static class LauncherUpdateInstaller
         string targetPath,
         IProgress<UpdateProgress>? progress = null)
     {
+        RequireAbsolutePath(archivePath, nameof(archivePath));
+        RequireAbsolutePath(targetPath, nameof(targetPath));
         archivePath = Path.GetFullPath(archivePath);
         targetPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetPath));
         if (!File.Exists(archivePath))
@@ -104,6 +107,7 @@ internal static class LauncherUpdateInstaller
 
     public static string ResolvePackagedPath(string rootPath, string relativePath)
     {
+        RequireAbsolutePath(rootPath, nameof(rootPath));
         rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
         var normalized = NormalizeRelativePath(relativePath);
         var fullPath = Path.GetFullPath(
@@ -114,6 +118,23 @@ internal static class LauncherUpdateInstaller
             throw new InvalidDataException($"Package path escapes its root: {relativePath}");
         }
         return fullPath;
+    }
+
+    private static void RequireAbsolutePath(string path, string parameterName)
+    {
+        if (!Path.IsPathFullyQualified(path))
+        {
+            throw new ArgumentException(
+                "Launcher update paths must be absolute.",
+                parameterName);
+        }
+
+        if (LauncherPathPolicy.IsDesktopPath(path))
+        {
+            throw new ArgumentException(
+                "Launcher update paths must be outside Desktop.",
+                parameterName);
+        }
     }
 
     private static string ExtractPackage(
