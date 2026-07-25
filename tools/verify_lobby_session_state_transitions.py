@@ -17,14 +17,13 @@ from typing import Any, Callable
 from verify_game_over_session_semantics import (
     ACCEPTANCE_MOD_ID,
     _query_process_executable,
+    _start_testrun_when_ready,
     _windows_path_equal,
     stop_owned_processes,
 )
 from verify_local_multiplayer_sync import (
     VerifyFailure,
     extract_json,
-    lua,
-    parse_key_values,
     path_for_powershell,
 )
 
@@ -224,25 +223,6 @@ def _query_exact_process_ids(expected_executable: str) -> list[int]:
     )
 
 
-def _start_testrun(pipe_name: str) -> dict[str, str]:
-    values = parse_key_values(
-        lua(
-            pipe_name,
-            """
-local ok, err = sd.hub.start_testrun()
-print("ok=" .. tostring(ok))
-print("error=" .. tostring(err or ""))
-""",
-            timeout=20.0,
-        )
-    )
-    if values.get("ok") != "true":
-        raise VerifyFailure(
-            f"stock hub run entry was rejected: {values}"
-        )
-    return values
-
-
 def _validate_transition_sequence(
     transitions: list[dict[str, Any]],
 ) -> None:
@@ -414,7 +394,11 @@ def run_verification(
             description="Steam host in-hub status",
         )
         result["hub"] = hub
-        result["startTestrun"] = _start_testrun(pipe_name)
+        _start_testrun_when_ready(pipe_name)
+        result["startTestrun"] = {
+            "ok": True,
+            "boundedNativeReadinessRetry": True,
+        }
         boneyard = _wait_for_status(
             status_path,
             transitions,

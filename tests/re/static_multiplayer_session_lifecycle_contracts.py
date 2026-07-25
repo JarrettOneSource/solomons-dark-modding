@@ -197,6 +197,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "_prepare_acceptance_mod_state(",
             '"--multiplayer"',
             '"host"',
+            "_start_testrun_when_ready(pipe_name)",
             "timeout=60.0",
             "timeout=45.0",
             "_query_exact_process_ids(",
