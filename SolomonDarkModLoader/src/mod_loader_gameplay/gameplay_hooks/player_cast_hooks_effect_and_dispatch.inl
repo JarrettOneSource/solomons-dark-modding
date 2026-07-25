@@ -155,6 +155,9 @@ void __fastcall HookPlayerActorPurePrimaryGate(void* self, void* /*unused_edx*/)
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsLocalMultiplayerParticipantGameplayInert(actor_address)) {
+        return;
+    }
     if (IsIdleNativeRemoteParticipantActor(actor_address, nullptr)) {
         ClearIdleNativeRemoteCastReplayState(actor_address);
         return;
@@ -269,6 +272,9 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsLocalMultiplayerParticipantGameplayInert(actor_address)) {
+        return;
+    }
     if (TryDispatchSelectedLuaRegisteredPrimarySpell(actor_address) !=
         LuaRegisteredSpellInputDispatchResult::NotSelected) {
         return;

@@ -300,9 +300,11 @@ enum ParticipantPresentationFlags : std::uint16_t {
     ParticipantPresentationFlagDeathPresentation = 1 << 6,
 };
 
-constexpr std::uint64_t kParticipantDeathPresentationDurationMs = 3000;
+constexpr std::uint64_t kParticipantDeathPresentationDurationMs = 5000;
 constexpr std::uint16_t kNativeDeathPresentationTerminalTick = 300;
 constexpr std::uint16_t kNativeDeathPresentationMaximumHeldTick = 298;
+constexpr std::uint16_t kNativeDeathPresentationRedSafeTick = 150;
+constexpr std::uint16_t kNativeDeathPresentationTerminalCorpseTick = 159;
 
 constexpr std::uint16_t ResolveParticipantDeathPresentationTick(
     std::uint64_t elapsed_ms) {

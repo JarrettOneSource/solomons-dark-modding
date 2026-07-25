@@ -12,6 +12,19 @@ void SendQueuedLuaRegisteredSpellCasts() {
     }
     for (const auto& queued : TakeQueuedLuaRegisteredSpellCasts()) {
         const auto& request = queued.request;
+        const auto runtime_state = SnapshotRuntimeState();
+        const auto* owner =
+            FindParticipant(runtime_state, request.owner_participant_id);
+        if (owner != nullptr &&
+            IsParticipantGameplayInertForDeath(*owner)) {
+            Log(
+                "lua_spells: dropped queued cast for dead owner. "
+                "request_id=" +
+                std::to_string(request.request_id) +
+                " owner_participant_id=" +
+                std::to_string(request.owner_participant_id));
+            continue;
+        }
         LuaRegisteredSpellCastPacket packet{};
         packet.header = MakePacketHeader(
             PacketKind::LuaRegisteredSpellCast,
@@ -111,6 +124,17 @@ bool QueueOwnerRoutedLuaRegisteredSpellCastInternal(
         return fail(
             "Lua registered spell owner is not a connected remote participant.");
     }
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* selected_owner = FindParticipant(
+        runtime_state,
+        selected_owner_participant_id);
+    if ((targets_local_owner &&
+         IsLocalParticipantGameplayInertForDeath()) ||
+        (selected_owner != nullptr &&
+         IsParticipantGameplayInertForDeath(*selected_owner))) {
+        return fail(
+            "Lua registered spell owner is dead and cannot cast.");
+    }
 
     LuaRegisteredSpellCastRequest request;
     request.authority_participant_id = local_wire_participant_id;
@@ -172,6 +196,13 @@ void ApplyLuaRegisteredSpellCastPacket(
             [](std::uint8_t value) { return value != 0; }) ||
         (from.backend == GameplayTransportBackend::Steam &&
          packet.authority_participant_id != from.steam_id)) {
+        return;
+    }
+    if (IsLocalParticipantGameplayInertForDeath()) {
+        Log(
+            "lua_spells: rejected received owner-routed cast for dead owner. "
+            "request_id=" +
+            std::to_string(packet.request_id));
         return;
     }
     if (g_local_transport.received_lua_registered_spell_cast_request_ids.find(

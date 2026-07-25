@@ -357,6 +357,28 @@ bool SendLocalEnemyDamageClaim(
     bool baseline_prevalidated = false,
     bool force_resend = false);
 
+void RetireActiveLocalCastInputWithoutPacket(
+    std::uint64_t now_ms,
+    std::string_view reason) {
+    if (!g_local_transport.active_local_cast_input.active) {
+        return;
+    }
+    const auto retired_cast =
+        g_local_transport.active_local_cast_input;
+    if (retired_cast.skill_id == kAirPrimarySkillId) {
+        QueueAirChainTerminal(
+            retired_cast.cast_sequence,
+            retired_cast.run_nonce,
+            now_ms);
+    }
+    g_local_transport.active_local_cast_input = ActiveLocalCastInput{};
+    Log(
+        "Multiplayer local active cast retired without a packet. "
+        "cast_sequence=" +
+        std::to_string(retired_cast.cast_sequence) +
+        " reason=" + std::string(reason));
+}
+
 void ReleaseActiveLocalCastInputForReplacement(
     const RuntimeState& runtime_state,
     const ParticipantInfo& local,
@@ -412,6 +434,16 @@ void SendQueuedCastEvents(std::uint64_t now_ms) {
         !local->runtime.valid ||
         !local->runtime.in_run ||
         local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
+        return;
+    }
+    if (IsParticipantGameplayInertForDeath(*local)) {
+        RetireActiveLocalCastInputWithoutPacket(
+            now_ms,
+            "participant_dead");
+        Log(
+            "Multiplayer local queued casts dropped for dead participant. "
+            "count=" +
+            std::to_string(events.size()));
         return;
     }
 
@@ -480,29 +512,30 @@ void SendActiveLocalCastInput(std::uint64_t now_ms) {
         return;
     }
 
-    const bool still_held =
-        IsGameplayMouseLeftDown() ||
-        now_ms < g_local_transport.active_local_cast_input.minimum_hold_until_ms;
-    if (still_held &&
-        now_ms - g_local_transport.active_local_cast_input.last_sent_ms <
-            kLocalCastInputUpdateIntervalMs) {
-        return;
-    }
-
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
     if (local == nullptr ||
         !local->runtime.valid ||
         !local->runtime.in_run ||
         local->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
-        const auto abandoned_cast = g_local_transport.active_local_cast_input;
-        if (abandoned_cast.skill_id == kAirPrimarySkillId) {
-            QueueAirChainTerminal(
-                abandoned_cast.cast_sequence,
-                abandoned_cast.run_nonce,
-                now_ms);
-        }
-        g_local_transport.active_local_cast_input = ActiveLocalCastInput{};
+        RetireActiveLocalCastInputWithoutPacket(
+            now_ms,
+            "participant_not_in_run");
+        return;
+    }
+    if (IsParticipantGameplayInertForDeath(*local)) {
+        RetireActiveLocalCastInputWithoutPacket(
+            now_ms,
+            "participant_dead");
+        return;
+    }
+
+    const bool still_held =
+        IsGameplayMouseLeftDown() ||
+        now_ms < g_local_transport.active_local_cast_input.minimum_hold_until_ms;
+    if (still_held &&
+        now_ms - g_local_transport.active_local_cast_input.last_sent_ms <
+            kLocalCastInputUpdateIntervalMs) {
         return;
     }
 

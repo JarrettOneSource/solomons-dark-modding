@@ -130,10 +130,10 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             ResolveParticipantDeathPresentationTick(0) == 0 &&
-                ResolveParticipantDeathPresentationTick(1500) == 150 &&
-                ResolveParticipantDeathPresentationTick(1510) == 151 &&
-                ResolveParticipantDeathPresentationTick(3000) == 298 &&
-                ResolveParticipantDeathPresentationTick(6000) == 298,
+                ResolveParticipantDeathPresentationTick(2500) == 150 &&
+                ResolveParticipantDeathPresentationTick(2517) == 151 &&
+                ResolveParticipantDeathPresentationTick(5000) == 298 &&
+                ResolveParticipantDeathPresentationTick(10000) == 298,
             "death presentation wire clock is not bounded to the native lifecycle") &&
         Require(
             sizeof(StatePacket) == 616,

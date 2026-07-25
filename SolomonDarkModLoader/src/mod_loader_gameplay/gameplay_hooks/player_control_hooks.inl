@@ -1121,6 +1121,9 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsLocalMultiplayerParticipantGameplayInert(actor_address)) {
+        return;
+    }
     if (ShouldSuppressManualSpawnerTestLocalPurePrimary(actor_address)) {
         return;
     }

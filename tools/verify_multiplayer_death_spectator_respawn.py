@@ -586,7 +586,7 @@ def death_presentation_state_matches(
     return (
         values.get("active") == "true"
         and values.get("phase") == "DeathPresentation"
-        and 0 < remaining_ms <= 3000
+        and 0 < remaining_ms <= 5000
         and values.get("scene") == "testrun"
         and values.get("game_over_surface") == "false"
         and math.isfinite(hp)
@@ -992,7 +992,7 @@ def _verify_client_death_regression(
                 "third": third_pipe,
             },
             active=True,
-            timeout=3.2,
+            timeout=4.0,
         )
     )
     result["death_animation_grace"] = red_effect_during_grace
@@ -1011,13 +1011,18 @@ def _verify_client_death_regression(
     spectating = _wait_for_values(
         client_pipe,
         spectator_state_matches,
-        timeout=6.0,
+        timeout=8.0,
         description="client spectator mode with a live target",
     )
     spectator_delay = time.monotonic() - death_written_at
-    if spectator_delay < 2.8:
+    if spectator_delay < 4.75:
         raise VerifyFailure(
-            "client spectator mode started before the three-second native "
+            "client spectator mode started before the five-second native "
+            f"death presentation elapsed: {spectator_delay:.3f}s"
+        )
+    if spectator_delay > 6.25:
+        raise VerifyFailure(
+            "client spectator mode did not start when the five-second native "
             f"death presentation elapsed: {spectator_delay:.3f}s"
         )
     result["spectator_delay_seconds"] = spectator_delay
@@ -1039,7 +1044,7 @@ def _verify_client_death_regression(
         presentation_active=False,
     ):
         raise VerifyFailure(
-            "client death effect remained active after the three-second "
+            "client death effect remained active after the five-second "
             f"grace period: {red_effect_after_grace}"
         )
     result["death_animation_after_grace"] = red_effect_after_grace
@@ -1230,7 +1235,7 @@ def run_live_verification(
                 "third": third_pipe,
             },
             active=True,
-            timeout=3.2,
+            timeout=4.0,
         )
         if not death_animation_sync_matches(
             list(red_effect_during_grace.values()),
@@ -1250,18 +1255,18 @@ def run_live_verification(
         spectating = _wait_for_values(
             host_pipe,
             spectator_state_matches,
-            timeout=6.0,
+            timeout=8.0,
             description="host spectator mode with a live target",
         )
         spectator_delay = time.monotonic() - death_written_at
-        if spectator_delay < 2.8:
+        if spectator_delay < 4.75:
             raise VerifyFailure(
-                "spectator mode started before the three-second native "
+                "spectator mode started before the five-second native "
                 f"death presentation elapsed: {spectator_delay:.3f}s"
             )
-        if spectator_delay > 4.0:
+        if spectator_delay > 6.25:
             raise VerifyFailure(
-                "spectator mode did not start when the three-second native "
+                "spectator mode did not start when the five-second native "
                 f"death presentation elapsed: {spectator_delay:.3f}s"
             )
         result["spectator_delay_seconds"] = spectator_delay
@@ -1292,7 +1297,7 @@ def run_live_verification(
             presentation_active=False,
         ):
             raise VerifyFailure(
-                "death effect remained active after the three-second grace "
+                "death effect remained active after the five-second grace "
                 f"period: {post_grace_states}"
             )
         result["death_animation_after_grace"] = {

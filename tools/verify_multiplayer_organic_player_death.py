@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
+import re
 import time
 import traceback
 import uuid
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from multiplayer_frame_capture import capture_game_backbuffer
-from multiplayer_log_probe import log_position
+from multiplayer_log_probe import log_after, log_position
 from multiplayer_natural_defense_harness import (
     ARM_ENEMY_ARENA_LUA,
     SET_ENEMY_MODE_LUA,
@@ -57,8 +59,13 @@ ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
 SURVIVOR_HP = 5000.0
 VICTIM_ARMING_HP = 0.1
 VICTIM_MAX_HP = 50.0
-CAST_HOLD_FRAMES = 1200
+CAST_HOLD_FRAMES = 3600
 PRESENTATION_PHASE_SYNC_TOLERANCE_TICKS = 12.0
+DEATH_PRESENTATION_SECONDS = 5.0
+NATIVE_TERMINAL_CORPSE_TICK = 159
+CORPSE_POSITION_TOLERANCE = 0.25
+DEAD_INPUT_SETTLE_SECONDS = 1.0
+ATTACKER_STABILIZED_HP = 5000.0
 
 WAVE_FIXTURES = {
     "melee": (
@@ -73,6 +80,12 @@ WAVE_FIXTURES = {
         ROOT / "tests" / "fixtures" / "waves"
         / "organic_death_poison_test.txt"
     ),
+}
+EXPECTED_BASE_ACTOR_OBJECT_TYPE = 1001
+LIFECYCLE_TIMEOUT_SECONDS = {
+    "melee": 18.0,
+    "projectile": 18.0,
+    "poison": 35.0,
 }
 
 
@@ -137,24 +150,60 @@ end
 
 
 LIVE_ENEMY_PROBE = r"""
-local function emit(key, value)
-  print(key .. "=" .. tostring(value == nil and "" or value))
-end
-local selected = nil
-local count = 0
 for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
   if actor.tracked_enemy and not actor.dead and
       (tonumber(actor.hp) or 0) > 0 then
-    count = count + 1
-    if selected == nil then selected = actor end
+    print(table.concat({
+      "A",
+      tostring(tonumber(actor.actor_address) or 0),
+      tostring(tonumber(actor.object_type_id) or 0),
+      string.format("%.6f", tonumber(actor.x) or 0),
+      string.format("%.6f", tonumber(actor.y) or 0),
+      string.format("%.6f", tonumber(actor.hp) or 0),
+    }, "|"))
   end
 end
-emit("count", count)
-emit("actor_address", selected and selected.actor_address or 0)
-emit("object_type_id", selected and selected.object_type_id or 0)
-emit("x", selected and selected.x or 0)
-emit("y", selected and selected.y or 0)
-emit("hp", selected and selected.hp or 0)
+"""
+
+
+STABILIZE_SELECTED_ENEMY_LUA = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local address = __ENEMY_ACTOR_ADDRESS__
+local target_hp = __TARGET_HP__
+local found = false
+for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
+  if tonumber(actor.actor_address) == address and actor.tracked_enemy and
+      not actor.dead then
+    found = true
+    break
+  end
+end
+if not found then
+  emit("ok", false)
+  emit("actor_address", address)
+  return
+end
+local hp_offset = sd.debug.layout_offset("enemy_current_hp")
+local max_hp_offset = sd.debug.layout_offset("enemy_max_hp")
+local progression_offset =
+  sd.debug.layout_offset("actor_progression_runtime_state")
+local progression_hp_offset = sd.debug.layout_offset("progression_hp")
+local progression_max_hp_offset =
+  sd.debug.layout_offset("progression_max_hp")
+sd.debug.write_float(address + max_hp_offset, target_hp)
+sd.debug.write_float(address + hp_offset, target_hp)
+local progression =
+  tonumber(sd.debug.read_ptr(address + progression_offset)) or 0
+if progression ~= 0 then
+  sd.debug.write_float(
+    progression + progression_max_hp_offset, target_hp)
+  sd.debug.write_float(progression + progression_hp_offset, target_hp)
+end
+emit("ok", true)
+emit("actor_address", address)
+emit("hp", target_hp)
 """
 
 
@@ -208,6 +257,261 @@ emit("alive", state and state.alive or 0)
 """
 
 
+POISON_STATE_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local player = sd.player and sd.player.get_state and sd.player.get_state() or nil
+emit("available", player ~= nil)
+emit("hp", player and player.hp or 0)
+emit("poison_remaining_ticks",
+  player and player.poison_remaining_ticks or 0)
+"""
+
+
+ARM_DEAD_INPUT_WORLD_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local probe = {
+  active = false,
+  baseline = {},
+  seen = {},
+}
+for _, actor in ipairs(sd.world.list_actors and sd.world.list_actors() or {}) do
+  local address = tonumber(actor.actor_address) or 0
+  if address ~= 0 then probe.baseline[address] = true end
+end
+_G.__sdmod_dead_input_world_probe = probe
+if not _G.__sdmod_dead_input_world_probe_registered then
+  sd.events.on("runtime.tick", function()
+    local current = _G.__sdmod_dead_input_world_probe
+    if type(current) ~= "table" or not current.active then return end
+    for _, actor in ipairs(
+        sd.world.list_actors and sd.world.list_actors() or {}) do
+      local address = tonumber(actor.actor_address) or 0
+      if address ~= 0 and not current.baseline[address] then
+        current.seen[address] = {
+          object_type_id = tonumber(actor.object_type_id) or 0,
+          owner_address = tonumber(actor.owner_address) or 0,
+          tracked_enemy = actor.tracked_enemy == true,
+        }
+      end
+    end
+  end)
+  _G.__sdmod_dead_input_world_probe_registered = true
+end
+probe.active = true
+emit("armed", true)
+local baseline_count = 0
+for _ in pairs(probe.baseline) do baseline_count = baseline_count + 1 end
+emit("baseline_count", baseline_count)
+"""
+
+
+QUERY_DEAD_INPUT_WORLD_PROBE = r"""
+local probe = _G.__sdmod_dead_input_world_probe
+if type(probe) ~= "table" then error("dead input world probe unavailable") end
+probe.active = false
+local addresses = {}
+for address in pairs(probe.seen or {}) do addresses[#addresses + 1] = address end
+table.sort(addresses)
+print("count=" .. tostring(#addresses))
+for _, address in ipairs(addresses) do
+  local actor = probe.seen[address]
+  print(table.concat({
+    "W",
+    tostring(address),
+    tostring(actor.object_type_id or 0),
+    tostring(actor.owner_address or 0),
+    tostring(actor.tracked_enemy == true),
+  }, "|"))
+end
+"""
+
+
+RESET_DEAD_INPUT_MANA_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+emit("armed", sd.debug.reset_local_cast_observation(1))
+"""
+
+
+QUERY_DEAD_INPUT_MANA_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local observation = assert(sd.debug.get_local_cast_observation(1))
+emit("mana_valid", observation.mana_valid)
+emit("mana_spend_call_count", observation.mana_spend_call_count or 0)
+emit("mana_spent_total", observation.mana_spent_total or 0)
+"""
+
+
+def _read_wave_fixture_enemy_token(fixture_path: Path) -> str:
+    tokens: list[str] = []
+    inside_group = False
+    for line in fixture_path.read_text(encoding="ascii").splitlines():
+        token = line.strip()
+        if token == "GROUP":
+            inside_group = True
+            continue
+        if token == "ENDWAVE":
+            inside_group = False
+            continue
+        if inside_group and token:
+            tokens.append(token)
+    if len(tokens) != 1:
+        raise VerifyFailure(
+            "organic wave fixture must contain exactly one stock enemy token: "
+            f"{fixture_path} contained {tokens}"
+        )
+    return tokens[0]
+
+
+def _materialize_native_wave_schedule(
+    *,
+    retail_wave_path: Path,
+    fixture_path: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    retail_bytes = retail_wave_path.read_bytes()
+    retail_text = retail_bytes.decode("ascii")
+    normalized = retail_text.replace("\r\n", "\n").replace("\r", "\n")
+    record_pattern = re.compile(
+        r"^WAVE[ \t]*\n(?P<body>.*?)^[ \t]*ENDWAVE[ \t]*(?:\n|$)",
+        re.MULTILINE | re.DOTALL,
+    )
+    matches = list(record_pattern.finditer(normalized))
+    if not matches:
+        raise VerifyFailure(
+            f"retail wave schedule has no native WAVE records: "
+            f"{retail_wave_path}"
+        )
+
+    cursor = 0
+    for match in matches:
+        if normalized[cursor:match.start()].strip():
+            raise VerifyFailure(
+                "retail wave schedule contains unsupported content outside "
+                f"WAVE records: {retail_wave_path}"
+            )
+        cursor = match.end()
+    trailing_lines = {
+        line.strip()
+        for line in normalized[cursor:].splitlines()
+        if line.strip()
+    }
+    if trailing_lines - {"ENDWAVE"}:
+        raise VerifyFailure(
+            "retail wave schedule contains trailing content outside WAVE "
+            f"records: {retail_wave_path}"
+        )
+
+    enemy_token = _read_wave_fixture_enemy_token(fixture_path)
+    next_graph: list[str] = []
+    effective_records: list[str] = []
+    for match in matches:
+        next_values = re.findall(
+            r"^[ \t]*NEXT:([^\n]*)$",
+            match.group("body"),
+            re.MULTILINE,
+        )
+        if len(next_values) != 1:
+            raise VerifyFailure(
+                "each native WAVE record must contain exactly one NEXT edge: "
+                f"{retail_wave_path}"
+            )
+        next_value = next_values[0].strip()
+        next_graph.append(next_value)
+        effective_records.append(
+            "\n".join(
+                (
+                    "WAVE",
+                    f"\tNEXT:{next_value}",
+                    "\tSPAWN:1",
+                    "\tSPAWNDELAY:1-1",
+                    "\tWAVEDELAY:100-100",
+                    "\tMAXENEMIES:1",
+                    "\tGROUP",
+                    f"\t\t{enemy_token}",
+                    "\tENDWAVE",
+                    "",
+                )
+            )
+        )
+
+    effective_bytes = "".join(effective_records).replace(
+        "\n",
+        "\r\n",
+    ).encode("ascii")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(effective_bytes)
+    return {
+        "retail_path": str(retail_wave_path.resolve()),
+        "fixture_path": str(fixture_path.resolve()),
+        "effective_path": str(output_path.resolve()),
+        "record_count": len(matches),
+        "next_graph": next_graph,
+        "enemy_token": enemy_token,
+        "retail_sha256": hashlib.sha256(retail_bytes).hexdigest(),
+        "fixture_sha256": hashlib.sha256(
+            fixture_path.read_bytes()
+        ).hexdigest(),
+        "effective_sha256": hashlib.sha256(effective_bytes).hexdigest(),
+    }
+
+
+def _parse_live_enemy_probe(
+    text: str,
+) -> list[dict[str, int | float]]:
+    actors: list[dict[str, int | float]] = []
+    for line in text.splitlines():
+        if not line.startswith("A|"):
+            continue
+        parts = line.split("|")
+        if len(parts) != 6:
+            raise VerifyFailure(f"malformed live enemy record: {line!r}")
+        actors.append(
+            {
+                "actor_address": int(parts[1]),
+                "object_type_id": int(parts[2]),
+                "x": float(parts[3]),
+                "y": float(parts[4]),
+                "hp": float(parts[5]),
+            }
+        )
+    return actors
+
+
+def _query_live_enemies(host_pipe: str) -> list[dict[str, int | float]]:
+    return _parse_live_enemy_probe(lua(host_pipe, LIVE_ENEMY_PROBE))
+
+
+def _select_new_wave_enemy(
+    actors: list[dict[str, int | float]],
+    *,
+    pre_wave_actor_addresses: set[int],
+) -> dict[str, int | float]:
+    for actor in actors:
+        actor_address = int(actor["actor_address"])
+        if (
+            actor_address not in pre_wave_actor_addresses
+            and int(actor["object_type_id"])
+                == EXPECTED_BASE_ACTOR_OBJECT_TYPE
+        ):
+            return {
+                **actor,
+                "expected_base_actor_object_type":
+                    EXPECTED_BASE_ACTOR_OBJECT_TYPE,
+            }
+    raise VerifyFailure(
+        "new native-wave enemy did not appear outside the pre-wave "
+        f"Boneyard actor set: {sorted(pre_wave_actor_addresses)}"
+    )
+
+
 def _default_instance_prefix() -> str:
     return f"orgd-{os.getpid():x}-{uuid.uuid4().hex[:4]}"
 
@@ -251,15 +555,29 @@ def _start_waves(host_pipe: str) -> dict[str, str]:
     return values
 
 
-def _wait_for_enemy(host_pipe: str, timeout: float = 20.0) -> dict[str, str]:
+def _wait_for_new_wave_enemy(
+    host_pipe: str,
+    *,
+    pre_wave_actor_addresses: set[int],
+    timeout: float = 20.0,
+) -> dict[str, int | float]:
     deadline = time.monotonic() + timeout
-    last: dict[str, str] = {}
+    last: list[dict[str, int | float]] = []
     while time.monotonic() < deadline:
-        last = parse_key_values(lua(host_pipe, LIVE_ENEMY_PROBE))
-        if int(float(last.get("count", "0"))) >= 1:
-            return last
+        last = _query_live_enemies(host_pipe)
+        try:
+            return _select_new_wave_enemy(
+                last,
+                pre_wave_actor_addresses=pre_wave_actor_addresses,
+            )
+        except VerifyFailure:
+            pass
         time.sleep(0.1)
-    raise VerifyFailure(f"stock wave did not produce a live enemy: {last}")
+    raise VerifyFailure(
+        "stock schedule did not produce a new native-wave enemy after "
+        f"excluding pre-wave addresses "
+        f"{sorted(pre_wave_actor_addresses)}: {last}"
+    )
 
 
 def _arm_enemy_arena(
@@ -275,6 +593,27 @@ def _arm_enemy_arena(
     values = parse_key_values(lua(host_pipe, code, timeout=10.0))
     if values.get("ok") != "true":
         raise VerifyFailure(f"failed to arm organic enemy arena: {values}")
+    return values
+
+
+def _stabilize_enemy(
+    host_pipe: str,
+    *,
+    enemy_actor_address: int,
+) -> dict[str, str]:
+    code = (
+        STABILIZE_SELECTED_ENEMY_LUA
+        .replace("__ENEMY_ACTOR_ADDRESS__", str(enemy_actor_address))
+        .replace("__TARGET_HP__", f"{ATTACKER_STABILIZED_HP:.6f}")
+    )
+    values = parse_key_values(lua(host_pipe, code, timeout=10.0))
+    if (
+        values.get("ok") != "true"
+        or int(values.get("actor_address", "0")) != enemy_actor_address
+    ):
+        raise VerifyFailure(
+            f"failed to stabilize selected organic attacker: {values}"
+        )
     return values
 
 
@@ -311,6 +650,49 @@ def _set_enemy_attack(
     raise VerifyFailure(f"organic enemy could not target victim: {last}")
 
 
+def _set_enemy_idle(host_pipe: str) -> dict[str, str]:
+    code = (
+        SET_ENEMY_MODE_LUA
+        .replace("__MODE__", "idle")
+        .replace("__TARGET_X__", "0.0")
+        .replace("__TARGET_Y__", "0.0")
+        .replace("__ATTACK_DISTANCE__", "0.0")
+        .replace("__ENEMY_ACTOR_ADDRESS__", "0")
+        .replace("__TARGET_PARTICIPANT_ID__", "0")
+    )
+    values = parse_key_values(lua(host_pipe, code, timeout=10.0))
+    if values.get("ok") != "true":
+        raise VerifyFailure(
+            f"organic enemy arena could not become idle: {values}"
+        )
+    return values
+
+
+def _wait_for_victim_damage(
+    victim_pipe: str,
+    *,
+    baseline_hp: float,
+    timeout: float,
+) -> dict[str, float]:
+    deadline = time.monotonic() + timeout
+    minimum_hp = baseline_hp
+    while time.monotonic() < deadline:
+        current = query_spectator_state(victim_pipe)
+        current_hp = float(current.get("hp", "0"))
+        minimum_hp = min(minimum_hp, current_hp)
+        if current_hp < baseline_hp - 0.01:
+            return {
+                "baseline_hp": baseline_hp,
+                "observed_hp": current_hp,
+                "damage": baseline_hp - current_hp,
+            }
+        time.sleep(0.05)
+    raise VerifyFailure(
+        "selected new native-wave enemy did not produce a real victim HP "
+        f"decrement: baseline={baseline_hp} minimum={minimum_hp}"
+    )
+
+
 def _parse_damage_probe(text: str) -> list[dict[str, int | float]]:
     events: list[dict[str, int | float]] = []
     for line in text.splitlines():
@@ -335,12 +717,193 @@ def _parse_damage_probe(text: str) -> list[dict[str, int | float]]:
     return events
 
 
+def _parse_dead_input_world_probe(
+    text: str,
+) -> list[dict[str, int | bool]]:
+    actors: list[dict[str, int | bool]] = []
+    for line in text.splitlines():
+        if not line.startswith("W|"):
+            continue
+        parts = line.split("|")
+        if len(parts) != 5:
+            raise VerifyFailure(
+                f"malformed dead-input world record: {line!r}"
+            )
+        actors.append(
+            {
+                "actor_address": int(parts[1]),
+                "object_type_id": int(parts[2]),
+                "owner_address": int(parts[3]),
+                "tracked_enemy": parts[4] == "true",
+            }
+        )
+    return actors
+
+
+def _count_log_markers(text: str, markers: tuple[str, ...]) -> int:
+    return sum(text.count(marker) for marker in markers)
+
+
+def _attempt_dead_gameplay_inputs(
+    *,
+    direction: Direction,
+    victim_pipe: str,
+    observer_pipe: str,
+) -> dict[str, Any]:
+    before = query_spectator_state(victim_pipe)
+    if (
+        before.get("active") != "true"
+        or before.get("phase") != "Spectating"
+        or int(before.get("death_drive_state", "0")) == 0
+        or before.get("red_effect_active") != "false"
+    ):
+        raise VerifyFailure(
+            "dead-input lockout requires an active dead spectator: "
+            f"{_small_state(before)}"
+        )
+
+    victim_world_probe = parse_key_values(
+        lua(victim_pipe, ARM_DEAD_INPUT_WORLD_PROBE)
+    )
+    observer_world_probe = parse_key_values(
+        lua(observer_pipe, ARM_DEAD_INPUT_WORLD_PROBE)
+    )
+    mana_probe = parse_key_values(
+        lua(victim_pipe, RESET_DEAD_INPUT_MANA_PROBE)
+    )
+    if (
+        victim_world_probe.get("armed") != "true"
+        or observer_world_probe.get("armed") != "true"
+        or mana_probe.get("armed") != "true"
+    ):
+        raise VerifyFailure(
+            "dead-input observation probes failed to arm: "
+            f"victim={victim_world_probe} "
+            f"observer={observer_world_probe} mana={mana_probe}"
+        )
+
+    victim_log_offset = log_position(direction.source_log)
+    observer_log_offset = log_position(direction.receiver_log)
+    mana_before = float(before.get("mp", "0"))
+    primary_input = queue_gameplay_mouse_left(direction, 12)
+    secondary_input = parse_key_values(
+        lua(
+            victim_pipe,
+            """
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local ok, result = pcall(sd.input.press_binding, "belt_slot_1")
+emit("pcall_ok", ok)
+emit("result", result)
+""",
+        )
+    )
+    if (
+        secondary_input.get("pcall_ok") != "true"
+        or secondary_input.get("result") != "true"
+    ):
+        raise VerifyFailure(
+            f"dead secondary input could not be attempted: {secondary_input}"
+        )
+    time.sleep(DEAD_INPUT_SETTLE_SECONDS)
+    clear_result = clear_gameplay_mouse_left(direction)
+
+    after = query_spectator_state(victim_pipe)
+    mana_after = float(after.get("mp", "0"))
+    mana_observation = parse_key_values(
+        lua(victim_pipe, QUERY_DEAD_INPUT_MANA_PROBE)
+    )
+    victim_new_actors = _parse_dead_input_world_probe(
+        lua(victim_pipe, QUERY_DEAD_INPUT_WORLD_PROBE)
+    )
+    observer_new_actors = _parse_dead_input_world_probe(
+        lua(observer_pipe, QUERY_DEAD_INPUT_WORLD_PROBE)
+    )
+    victim_log_text = log_after(direction.source_log, victim_log_offset)
+    observer_log_text = log_after(
+        direction.receiver_log,
+        observer_log_offset,
+    )
+    dead_input_local_cast_log_count = _count_log_markers(
+        victim_log_text,
+        (
+            "Multiplayer local primary cast queued from native",
+            "Multiplayer local secondary cast queued from native dispatcher",
+            "Multiplayer local cast sent.",
+            "lua_spells: queued selected input cast.",
+        ),
+    )
+    dead_input_remote_cast_log_count = _count_log_markers(
+        observer_log_text,
+        (
+            "Multiplayer remote cast queued.",
+            "Multiplayer remote secondary cast queued.",
+            "lua_spells: accepted owner-routed cast.",
+        ),
+    )
+    dead_input_new_world_effect_actor_count = (
+        len(victim_new_actors) + len(observer_new_actors)
+    )
+    dead_input_mana_delta = mana_after - mana_before
+    mana_spend_call_count = int(
+        mana_observation.get("mana_spend_call_count", "0")
+    )
+    mana_spent_total = float(
+        mana_observation.get("mana_spent_total", "0")
+    )
+    dead_input_authority_rejection_matches = (
+        dead_input_local_cast_log_count == 0
+        and dead_input_remote_cast_log_count == 0
+    )
+    dead_input_lockout_matches = (
+        dead_input_authority_rejection_matches
+        and dead_input_new_world_effect_actor_count == 0
+        and mana_spend_call_count == 0
+        and abs(mana_spent_total) <= 0.001
+        and after.get("active") == "true"
+        and after.get("phase") == "Spectating"
+        and int(after.get("death_drive_state", "0")) != 0
+        and after.get("red_effect_active") == "false"
+        and int(after.get("death_presentation_ticks", "0")) <= 150
+    )
+    evidence = {
+        "dead_input_lockout_matches": dead_input_lockout_matches,
+        "dead_input_authority_rejection_matches":
+            dead_input_authority_rejection_matches,
+        "dead_input_new_world_effect_actor_count":
+            dead_input_new_world_effect_actor_count,
+        "dead_input_local_cast_log_count":
+            dead_input_local_cast_log_count,
+        "dead_input_remote_cast_log_count":
+            dead_input_remote_cast_log_count,
+        "dead_input_mana_delta": dead_input_mana_delta,
+        "mana_spend_call_count": mana_spend_call_count,
+        "mana_spent_total": mana_spent_total,
+        "victim_new_world_actors": victim_new_actors,
+        "observer_new_world_actors": observer_new_actors,
+        "primary_input": primary_input,
+        "secondary_input": secondary_input,
+        "clear_result": clear_result,
+        "before": _small_state(before),
+        "after": _small_state(after),
+    }
+    if not dead_input_lockout_matches:
+        raise VerifyFailure(
+            "dead participant input produced gameplay authority or world "
+            f"effects: {evidence}"
+        )
+    return evidence
+
+
 def _small_state(values: dict[str, str]) -> dict[str, str]:
     keys = (
         "active",
         "phase",
         "hp",
         "max_hp",
+        "mp",
+        "max_mp",
         "death_drive_state",
         "death_presentation_ticks",
         "terminal_pending",
@@ -451,9 +1014,12 @@ def _assert_lifecycle(
         milestones["spectator_seconds"]
         - milestones["presentation_seconds"]
     )
-    if grace_seconds < 2.75 or grace_seconds > 4.25:
+    if (
+        grace_seconds < DEATH_PRESENTATION_SECONDS - 0.25
+        or grace_seconds > DEATH_PRESENTATION_SECONDS + 1.25
+    ):
         raise VerifyFailure(
-            "organic death presentation did not hold for three seconds: "
+            "organic death presentation did not hold for five seconds: "
             f"{grace_seconds:.3f}s milestones={milestones}"
         )
     if (
@@ -485,6 +1051,86 @@ def _assert_lifecycle(
         raise VerifyFailure(
             "owner and observer death presentation phase diverged by "
             f"{presentation_phase_skew:.0f} ticks: {milestones}"
+        )
+
+    maximum_owner_tick = max(
+        int(sample["owner"].get("death_presentation_ticks", "0"))
+        for sample in lifecycle
+    )
+    maximum_observer_tick = max(
+        int(sample["observer"].get("death_presentation_ticks", "0"))
+        for sample in lifecycle
+    )
+    milestones["maximum_owner_presentation_tick"] = float(
+        maximum_owner_tick
+    )
+    milestones["maximum_observer_presentation_tick"] = float(
+        maximum_observer_tick
+    )
+    if (
+        maximum_owner_tick < NATIVE_TERMINAL_CORPSE_TICK
+        or maximum_observer_tick < NATIVE_TERMINAL_CORPSE_TICK
+    ):
+        raise VerifyFailure(
+            "organic death presentation did not reach the native terminal "
+            "corpse frame on owner and observer: "
+            f"owner_tick={maximum_owner_tick} "
+            f"observer_tick={maximum_observer_tick}"
+        )
+
+    death_samples = [
+        sample
+        for sample in lifecycle
+        if int(sample["owner"].get("death_drive_state", "0")) != 0
+        and float(sample["owner"].get("hp", "0")) <= 0.0
+    ]
+    if not death_samples:
+        raise VerifyFailure(
+            "organic death lifecycle had no corpse-position samples"
+        )
+    owner_reference = (
+        float(death_samples[0]["owner"].get("x", "0")),
+        float(death_samples[0]["owner"].get("y", "0")),
+    )
+    observer_reference = (
+        float(death_samples[0]["observer"].get("x", "0")),
+        float(death_samples[0]["observer"].get("y", "0")),
+    )
+    owner_corpse_max_position_delta = max(
+        math.hypot(
+            float(sample["owner"].get("x", "0")) - owner_reference[0],
+            float(sample["owner"].get("y", "0")) - owner_reference[1],
+        )
+        for sample in death_samples
+    )
+    observer_corpse_max_position_delta = max(
+        math.hypot(
+            float(sample["observer"].get("x", "0")) -
+                observer_reference[0],
+            float(sample["observer"].get("y", "0")) -
+                observer_reference[1],
+        )
+        for sample in death_samples
+    )
+    corpse_position_stability_matches = (
+        owner_corpse_max_position_delta <= CORPSE_POSITION_TOLERANCE
+        and observer_corpse_max_position_delta <=
+            CORPSE_POSITION_TOLERANCE
+    )
+    milestones["owner_corpse_max_position_delta"] = (
+        owner_corpse_max_position_delta
+    )
+    milestones["observer_corpse_max_position_delta"] = (
+        observer_corpse_max_position_delta
+    )
+    milestones["corpse_position_stability_matches"] = (
+        1.0 if corpse_position_stability_matches else 0.0
+    )
+    if not corpse_position_stability_matches:
+        raise VerifyFailure(
+            "organic death corpse moved during the grace window: "
+            f"owner_delta={owner_corpse_max_position_delta:.3f} "
+            f"observer_delta={observer_corpse_max_position_delta:.3f}"
         )
 
     final_owner = lifecycle[-1]["owner"]
@@ -553,15 +1199,38 @@ def run_live_verification(
     kill_type: str,
     victim_role: str,
     activity: str,
+    enable_audio: bool = False,
 ) -> dict[str, Any]:
     fixture = WAVE_FIXTURES[kill_type]
+    if game_directory is None:
+        raise VerifyFailure(
+            "organic player-death verification requires an explicit retail "
+            "game directory so the complete native wave schedule can be "
+            "materialized without touching the source"
+        )
+    retail_wave_path = game_directory.resolve() / "data" / "wave.txt"
+    effective_wave_path = (
+        SCREENSHOT_ROOT
+        / instance_prefix
+        / f"effective-{kill_type}-wave.txt"
+    )
+    wave_schedule = _materialize_native_wave_schedule(
+        retail_wave_path=retail_wave_path,
+        fixture_path=fixture,
+        output_path=effective_wave_path,
+    )
+    if wave_schedule["record_count"] != 42:
+        raise VerifyFailure(
+            "organic acceptance expected the retail 42-record native wave "
+            f"graph, got {wave_schedule['record_count']}: {retail_wave_path}"
+        )
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_air_mind_hub",
         temporary_host_profile=True,
         tile_windows=False,
         test_blank_boneyard=True,
-        test_wave_override=fixture,
+        test_wave_override=effective_wave_path,
         kill_existing=False,
         instance_prefix=instance_prefix,
         host_port=ports[0],
@@ -569,6 +1238,8 @@ def run_live_verification(
         game_directory=game_directory,
         launcher_path=launcher_path,
         exact_mod_id=ACCEPTANCE_MOD_ID,
+        use_sandbox_preset_flow=True,
+        enable_audio=enable_audio,
     )
     process_ids = game_process_ids(launch)
     if len(process_ids) != 2:
@@ -587,6 +1258,37 @@ def run_live_verification(
         victim_pipe = client_pipe
         observer_pipe = host_pipe
         victim_id = CLIENT_ID
+    observer_role = "client" if victim_role == "host" else "host"
+    victim_log = (
+        ROOT
+        / "runtime"
+        / "instances"
+        / f"{instance_prefix}-{victim_role}"
+        / "stage"
+        / ".sdmod"
+        / "logs"
+        / "solomondarkmodloader.log"
+    )
+    observer_log = (
+        ROOT
+        / "runtime"
+        / "instances"
+        / f"{instance_prefix}-{observer_role}"
+        / "stage"
+        / ".sdmod"
+        / "logs"
+        / "solomondarkmodloader.log"
+    )
+    direction = Direction(
+        name=f"{victim_role}_organic_death_cast",
+        source_id=victim_id,
+        source_name=HOST_NAME if victim_role == "host" else CLIENT_NAME,
+        source_pipe=victim_pipe,
+        source_log=victim_log,
+        source_pid=int(launch[f"{victim_role}ProcessId"]),
+        receiver_pipe=observer_pipe,
+        receiver_log=observer_log,
+    )
 
     result: dict[str, Any] = {
         "launch": launch,
@@ -596,7 +1298,9 @@ def run_live_verification(
         "kill_type": kill_type,
         "victim_role": victim_role,
         "activity": activity,
+        "audio_enabled": enable_audio,
         "wave_fixture": str(fixture),
+        "wave_schedule": wave_schedule,
     }
     try:
         _disable_companion_bots(pipes)
@@ -656,8 +1360,20 @@ def run_live_verification(
                 )
             result["damage_probes_armed"][role] = armed
 
+        pre_wave_enemies = _query_live_enemies(host_pipe)
+        pre_wave_actor_addresses = {
+            int(actor["actor_address"])
+            for actor in pre_wave_enemies
+        }
+        result["pre_wave_enemies"] = pre_wave_enemies
+        result["pre_wave_actor_addresses"] = sorted(
+            pre_wave_actor_addresses
+        )
         result["wave_start"] = _start_waves(host_pipe)
-        enemy = _wait_for_enemy(host_pipe)
+        enemy = _wait_for_new_wave_enemy(
+            host_pipe,
+            pre_wave_actor_addresses=pre_wave_actor_addresses,
+        )
         result["enemy"] = enemy
         victim_before = query_spectator_state(victim_pipe)
         victim_x = float(victim_before["x"])
@@ -668,37 +1384,36 @@ def run_live_verification(
             victim_x,
             victim_y,
         )
+        result["enemy_stabilized"] = _stabilize_enemy(
+            host_pipe,
+            enemy_actor_address=int(enemy["actor_address"]),
+        )
+
+        enemy_attack_kwargs = {
+            "target_x": victim_x,
+            "target_y": victim_y,
+            "target_participant_id":
+                0 if victim_role == "host" else victim_id,
+            "enemy_actor_address":
+                int(enemy["actor_address"]),
+            "attack_distance":
+                64.0 if kill_type == "melee" else 240.0,
+        }
+        damage_baseline = query_spectator_state(victim_pipe)
+        result["enemy_attack"] = _set_enemy_attack(
+            host_pipe,
+            **enemy_attack_kwargs,
+        )
+        result["enemy_damage_observed"] = _wait_for_victim_damage(
+            victim_pipe,
+            baseline_hp=float(damage_baseline["hp"]),
+            timeout=30.0 if kill_type == "poison" else 18.0,
+        )
+        if kill_type == "poison":
+            result["poison_state_after_damage"] = parse_key_values(
+                lua(victim_pipe, POISON_STATE_PROBE)
+            )
         if activity == "casting":
-            victim_log = (
-                ROOT
-                / "runtime"
-                / "instances"
-                / f"{instance_prefix}-{victim_role}"
-                / "stage"
-                / ".sdmod"
-                / "logs"
-                / "solomondarkmodloader.log"
-            )
-            direction = Direction(
-                name=f"{victim_role}_organic_death_cast",
-                source_id=victim_id,
-                source_name=HOST_NAME if victim_role == "host" else CLIENT_NAME,
-                source_pipe=victim_pipe,
-                source_log=victim_log,
-                source_pid=int(launch[f"{victim_role}ProcessId"]),
-                receiver_pipe=observer_pipe,
-                receiver_log=(
-                    ROOT
-                    / "runtime"
-                    / "instances"
-                    / f"{instance_prefix}-"
-                    f"{'client' if victim_role == 'host' else 'host'}"
-                    / "stage"
-                    / ".sdmod"
-                    / "logs"
-                    / "solomondarkmodloader.log"
-                ),
-            )
             source_log_offset = log_position(victim_log)
             result["cast_input"] = queue_gameplay_mouse_left(
                 direction,
@@ -715,7 +1430,6 @@ def run_live_verification(
                 "native_hook_count": native_hook_count,
             }
         else:
-            direction = None
             result["idle_input"] = parse_key_values(
                 lua(
                     victim_pipe,
@@ -723,33 +1437,16 @@ def run_live_verification(
                     "tostring(sd.input.clear_mouse_left()))",
                 )
             )
-
         result["victim_armed"] = set_local_player_vitals(
             victim_pipe,
             VICTIM_ARMING_HP,
             VICTIM_MAX_HP,
         )
-        result["enemy_attack"] = _set_enemy_attack(
-            host_pipe,
-            target_x=victim_x,
-            target_y=victim_y,
-            target_participant_id=(
-                0 if victim_role == "host" else victim_id
-            ),
-            enemy_actor_address=(
-                int(enemy["actor_address"])
-                if victim_role == "host"
-                else 0
-            ),
-            attack_distance=(
-                64.0 if kill_type == "melee" else 240.0
-            ),
-        )
         lifecycle, milestones = _sample_lifecycle(
             victim_pipe=victim_pipe,
             observer_pipe=observer_pipe,
             victim_id=victim_id,
-            timeout=18.0,
+            timeout=LIFECYCLE_TIMEOUT_SECONDS[kill_type],
         )
         result["lifecycle_samples"] = lifecycle
         result["milestones"] = milestones
@@ -757,15 +1454,21 @@ def run_live_verification(
             "host": _parse_damage_probe(lua(host_pipe, QUERY_DAMAGE_PROBE)),
             "client": _parse_damage_probe(lua(client_pipe, QUERY_DAMAGE_PROBE)),
         }
-        if direction is not None:
-            try:
-                result["cast_clear"] = clear_gameplay_mouse_left(direction)
-            except VerifyFailure as exc:
-                result["cast_clear_error"] = str(exc)
+        try:
+            result["cast_clear"] = clear_gameplay_mouse_left(direction)
+        except VerifyFailure as exc:
+            result["cast_clear_error"] = str(exc)
 
         result["grace_seconds"] = _assert_lifecycle(
             lifecycle,
             milestones,
+        )
+        result["enemy_idle_for_dead_input"] = _set_enemy_idle(host_pipe)
+        time.sleep(0.25)
+        result["dead_input"] = _attempt_dead_gameplay_inputs(
+            direction=direction,
+            victim_pipe=victim_pipe,
+            observer_pipe=observer_pipe,
         )
 
         screenshot_directory = SCREENSHOT_ROOT / instance_prefix
@@ -781,6 +1484,21 @@ def run_live_verification(
         }
         result["wave_finish"] = _finish_wave(host_pipe)
         result["respawned"] = _wait_for_respawn(victim_pipe)
+        retail_sha256_after = hashlib.sha256(
+            retail_wave_path.read_bytes()
+        ).hexdigest()
+        result["wave_schedule"]["retail_sha256_after"] = (
+            retail_sha256_after
+        )
+        result["wave_schedule"]["retail_unchanged"] = (
+            retail_sha256_after
+            == result["wave_schedule"]["retail_sha256"]
+        )
+        if not result["wave_schedule"]["retail_unchanged"]:
+            raise VerifyFailure(
+                f"retail wave source changed during isolated verification: "
+                f"{retail_wave_path}"
+            )
         result["ok"] = True
         return result
     except Exception as exc:
@@ -827,6 +1545,11 @@ def main() -> int:
         choices=("idle", "casting"),
         default="idle",
     )
+    parser.add_argument(
+        "--enable-audio",
+        action="store_true",
+        help="Keep stock audio enabled for systems where silent D3D startup stalls.",
+    )
     parser.add_argument("--host-port", type=int, default=None)
     parser.add_argument("--client-port", type=int, default=None)
     args = parser.parse_args()
@@ -850,6 +1573,7 @@ def main() -> int:
             kill_type=args.kill_type,
             victim_role=args.victim,
             activity=args.activity,
+            enable_audio=args.enable_audio,
         )
         exit_code = 0
     except Exception as exc:  # noqa: BLE001 - persist exact live evidence.

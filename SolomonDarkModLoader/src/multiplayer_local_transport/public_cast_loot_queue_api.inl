@@ -35,6 +35,9 @@ std::uint64_t QueueLocalCastEventInternal(
           !std::isfinite(cursor_world_y)))) {
         return 0;
     }
+    if (IsLocalParticipantGameplayInertForDeath()) {
+        return 0;
+    }
     if (has_aim_target &&
         !IsUsableLocalCastAimTarget(position_x, position_y, aim_target_x, aim_target_y)) {
         has_aim_target = false;

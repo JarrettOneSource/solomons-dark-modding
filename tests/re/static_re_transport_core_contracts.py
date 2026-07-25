@@ -56,7 +56,7 @@ from static_re_contract_support import (
 
 
 def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() -> str:
-    """A connected death stays in the run and becomes spectatable after 3 seconds."""
+    """A connected death stays in-run and becomes spectatable after 5 seconds."""
 
     transport_header = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
     transport_text = "\n".join(
@@ -151,7 +151,7 @@ def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() ->
 
     return (
         "connected deaths preserve stock pre-hook audio, suppress only Game Over, "
-        "and enter spectator mode after a three-second presentation"
+        "and enter spectator mode after a five-second presentation"
     )
 
 
@@ -188,6 +188,10 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     local_presentation_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_death_presentation.inl"
+    )
+    animation_advance_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/animation_advance_hook.inl"
     )
     binding_text = read_text(
         ROOT
@@ -249,9 +253,11 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         assert token in transport_text, f"local death presentation lacks: {token}"
 
     for token in (
-        "kParticipantDeathPresentationDurationMs = 3000",
+        "kParticipantDeathPresentationDurationMs = 5000",
         "kNativeDeathPresentationTerminalTick = 300",
         "kNativeDeathPresentationMaximumHeldTick = 298",
+        "kNativeDeathPresentationRedSafeTick = 150",
+        "kNativeDeathPresentationTerminalCorpseTick = 159",
         "ResolveParticipantDeathPresentationTick(",
     ):
         assert token in protocol_text, (
@@ -259,6 +265,26 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         )
     assert "presentation_elapsed_ms" in local_presentation_text
     assert "ResolveParticipantDeathPresentationTick(" in local_presentation_text
+    assert "kNativeDeathPresentationRedSafeTick" in local_presentation_text
+    assert "kNativeDeathPresentationRedSafeTick" in remote_vitals_text
+    for token in (
+        "ShouldRenderCompletedMultiplayerDeathPresentation",
+        "kNativeDeathPresentationTerminalCorpseTick",
+        "restore_red_safe_tick_after_render",
+        "original(self);",
+    ):
+        assert token in animation_advance_text, (
+            f"terminal multiplayer corpse rendering lacks: {token}"
+        )
+    render_original = animation_advance_text.index("original(self);")
+    red_safe_restore = animation_advance_text.index(
+        "kNativeDeathPresentationRedSafeTick",
+        render_original,
+    )
+    assert render_original < red_safe_restore
+    assert "saved_death_tick);" not in animation_advance_text[
+        render_original:red_safe_restore + 128
+    ]
     assert "preserve_death_presentation_timer" in dead_motion_text
     assert "if (!preserve_death_presentation_timer)" in dead_motion_text
 
@@ -351,6 +377,12 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         "organic_death_projectile_test.txt",
         "organic_death_poison_test.txt",
         "SET_ENEMY_MODE_LUA",
+        "_materialize_native_wave_schedule",
+        "pre_wave_actor_addresses",
+        "EXPECTED_BASE_ACTOR_OBJECT_TYPE",
+        "expected_base_actor_object_type",
+        'int(enemy["actor_address"])',
+        "enemy_damage_observed",
         'choices=("host", "client")',
         'choices=("idle", "casting")',
         "observer entered the death animation before the owner",
@@ -367,6 +399,190 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     return (
         "stock enemy damage reaches the owner-authored death epoch, which drives "
         "synchronized presentation and permits exactly one owner staff drop"
+    )
+
+
+def test_dead_multiplayer_participants_are_authority_inert() -> str:
+    """Dead owners cannot execute, queue, transmit, relay, or receive casts."""
+
+    transport_header = read_text(MULTIPLAYER_LOCAL_TRANSPORT_HEADER)
+    death_sync_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_sync.inl"
+    )
+    death_public_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/death_spectator_public.inl"
+    )
+    queue_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/public_cast_loot_queue_api.inl"
+    )
+    outgoing_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_cast_packet_sync.inl"
+    )
+    incoming_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_cast_packet_sync.inl"
+    )
+    lua_spell_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/lua_registered_spell_cast_sync.inl"
+    )
+    player_cast_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks.inl"
+    )
+    player_control_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+    player_dispatch_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_cast_hooks_effect_and_dispatch.inl"
+    )
+    secondary_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_secondary_spell_cast_hook.inl"
+    )
+    organic_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_organic_player_death.py"
+    )
+
+    assert "bool IsLocalParticipantGameplayInertForDeath();" in transport_header
+    for token in (
+        "bool IsParticipantGameplayInertForDeath(",
+        "ParticipantPresentationFlagDeathPresentation",
+        "participant.runtime.life_current <= 0.0f",
+    ):
+        assert token in death_sync_text, (
+            f"participant death authority predicate lacks: {token}"
+        )
+    assert "bool IsLocalParticipantGameplayInertForDeath()" in death_public_text
+    assert "g_local_death_spectator.phase != DeathSpectatorPhase::Inactive" in (
+        death_public_text
+    )
+
+    for source_text, function_name, first_effect in (
+        (
+            player_control_text,
+            "HookPurePrimarySpellStart",
+            "TryDispatchSelectedLuaRegisteredPrimarySpell(",
+        ),
+        (
+            player_dispatch_text,
+            "HookPlayerActorPurePrimaryGate",
+            "IsIdleNativeRemoteParticipantActor(",
+        ),
+        (
+            player_dispatch_text,
+            "HookSpellCastDispatcher",
+            "TryDispatchSelectedLuaRegisteredPrimarySpell(",
+        ),
+        (
+            secondary_text,
+            "HookPlayerActorSecondarySpellCast",
+            "TryCaptureLocalSecondaryCast(",
+        ),
+    ):
+        function_start = source_text.index(function_name)
+        actor_start = source_text.index(
+            "const auto actor_address = reinterpret_cast<uintptr_t>(self);",
+            function_start,
+        )
+        inert_gate = source_text.index(
+            "IsLocalMultiplayerParticipantGameplayInert(actor_address)",
+            actor_start,
+        )
+        effect_start = source_text.index(first_effect, actor_start)
+        assert actor_start < inert_gate < effect_start, (
+            f"{function_name} must reject a dead local owner before native, Lua, "
+            "or replicated cast work begins"
+        )
+
+    assert "bool IsLocalMultiplayerParticipantGameplayInert(" in player_cast_text
+    for token in (
+        "IsLocalParticipantGameplayInertForDeath()",
+        "kActorAnimationDriveStateByteOffset",
+    ):
+        assert token in player_cast_text, (
+            f"local native death cast predicate lacks: {token}"
+        )
+
+    queue_start = queue_text.index("std::uint64_t QueueLocalCastEventInternal(")
+    queue_gate = queue_text.index(
+        "IsLocalParticipantGameplayInertForDeath()",
+        queue_start,
+    )
+    queue_mutation = queue_text.index(
+        "g_queued_local_cast_events.push_back(event);",
+        queue_start,
+    )
+    assert queue_gate < queue_mutation
+
+    for function_name in ("SendQueuedCastEvents", "SendActiveLocalCastInput"):
+        function_start = outgoing_text.index(f"void {function_name}(")
+        function_end = outgoing_text.find("\nvoid ", function_start + 1)
+        if function_end < 0:
+            function_end = len(outgoing_text)
+        function_body = outgoing_text[function_start:function_end]
+        inert_gate = function_body.index("IsParticipantGameplayInertForDeath(")
+        first_send = function_body.find("SendCastPacketToEndpoints(")
+        if first_send >= 0:
+            assert inert_gate < first_send
+    assert "RetireActiveLocalCastInputWithoutPacket(" in outgoing_text
+
+    incoming_start = incoming_text.index("void ApplyRemoteCastPacket(")
+    death_rejection = incoming_text.index(
+        'log_cast_drop("participant_dead");',
+        incoming_start,
+    )
+    for forbidden_before_authority in (
+        "input_tracker.last_packet_sequence =",
+        "RelayCastPacketToPeers(",
+        "UpdateRuntimeState(",
+        "QueueMultiplayerDampenEffect(",
+        "QueueBotCast(",
+    ):
+        assert death_rejection < incoming_text.index(
+            forbidden_before_authority,
+            incoming_start,
+        ), (
+            "remote dead-owner rejection must precede cast replay mutation: "
+            f"{forbidden_before_authority}"
+        )
+
+    lua_queue_start = lua_spell_text.index(
+        "bool QueueOwnerRoutedLuaRegisteredSpellCastInternal("
+    )
+    lua_apply_start = lua_spell_text.index(
+        "void ApplyLuaRegisteredSpellCastPacket("
+    )
+    assert lua_queue_start < lua_spell_text.index(
+        "IsParticipantGameplayInertForDeath(",
+        lua_queue_start,
+        lua_apply_start,
+    )
+    assert lua_apply_start < lua_spell_text.index(
+        "IsLocalParticipantGameplayInertForDeath()",
+        lua_apply_start,
+    )
+
+    for token in (
+        "dead_input_lockout_matches",
+        "dead_input_new_world_effect_actor_count",
+        "dead_input_local_cast_log_count",
+        "dead_input_remote_cast_log_count",
+        "dead_input_mana_delta",
+    ):
+        assert token in organic_verifier_text, (
+            f"organic dead-input live gate lacks: {token}"
+        )
+
+    return (
+        "dead participants are inert at local native/Lua dispatch, transport "
+        "queue/send, and host-authority receive boundaries"
     )
 
 
@@ -639,6 +855,8 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
 
     for token in (
         "SelectNextAliveSpectatorTarget",
+        "ShouldHoldCurrentSpectatorDeathPresentation",
+        "target_death_presentation_seen",
         "TryGetParticipantGameplayState(",
         "participant.runtime.life_current > 0.0f",
         "IsGameplayMouseLeftDown()",
@@ -657,6 +875,14 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
         r"SetLocalCameraFocus\s*\(\s*kDeathSpectatorCameraOwner",
         transport_text,
     )
+    hold_current = transport_text.index(
+        "ShouldHoldCurrentSpectatorDeathPresentation("
+    )
+    select_next = transport_text.index(
+        "SelectNextAliveSpectatorTarget(",
+        hold_current,
+    )
+    assert hold_current < select_next
 
     for token in (
         "TryBuildDeathSpectatorStatusText",

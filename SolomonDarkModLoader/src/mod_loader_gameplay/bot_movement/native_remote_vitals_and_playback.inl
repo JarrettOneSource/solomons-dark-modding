@@ -107,7 +107,8 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
     }
 
     binding->death_transition_stock_tick_seen = true;
-    std::uint16_t presentation_ticks = 0;
+    std::uint16_t presentation_ticks =
+        multiplayer::kNativeDeathPresentationRedSafeTick;
     if (presentation_active) {
         const auto packet_age_ms =
             participant.last_packet_ms != 0 &&

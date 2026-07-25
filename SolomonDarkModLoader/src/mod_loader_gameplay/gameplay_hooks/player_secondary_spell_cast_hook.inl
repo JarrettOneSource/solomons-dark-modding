@@ -10,6 +10,9 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    if (IsLocalMultiplayerParticipantGameplayInert(actor_address)) {
+        return 0;
+    }
     const bool local_input_dispatch =
         g_remote_secondary_spell_dispatch_depth == 0 &&
         IsActorCurrentLocalPlayerSlotZero(actor_address);

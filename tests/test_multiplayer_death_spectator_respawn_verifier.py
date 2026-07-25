@@ -50,7 +50,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
         values = {
             "active": "true",
             "phase": "DeathPresentation",
-            "presentation_remaining_ms": "2875",
+            "presentation_remaining_ms": "4875",
             "scene": "testrun",
             "game_over_surface": "false",
             "hp": "0.001",
@@ -189,7 +189,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "materialized": "true",
                 "hp": "0",
                 "death_drive_state": "1",
-                "death_presentation_ticks": "0",
+                "death_presentation_ticks": "150",
                 "terminal_pending": "0",
                 "presentation_active": "false",
                 "red_effect_active": "false",
@@ -198,7 +198,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
                 "materialized": "true",
                 "hp": "0",
                 "death_drive_state": "1",
-                "death_presentation_ticks": "0",
+                "death_presentation_ticks": "150",
                 "terminal_pending": "0",
                 "presentation_active": "false",
                 "red_effect_active": "false",
@@ -230,7 +230,7 @@ class DeathSpectatorRespawnVerifierTests(unittest.TestCase):
         )
         values.update(
             {
-                "death_presentation_ticks": "0",
+                "death_presentation_ticks": "150",
                 "presentation_active": "false",
                 "red_effect_active": "false",
             }

@@ -343,6 +343,7 @@ def launch_pair(
     test_wave_override: Path | None = None,
     third_player: bool = False,
     third_preset: str | None = None,
+    use_sandbox_preset_flow: bool = False,
     allow_focus_steal: bool = False,
     kill_existing: bool = False,
     instance_prefix: str = "local-mp",
@@ -415,6 +416,8 @@ def launch_pair(
         )
         if third_preset is not None:
             args.extend(["-ThirdPreset", third_preset])
+    if use_sandbox_preset_flow:
+        args.append("-UseSandboxPresetFlow")
     if god_mode:
         args.append("-GodMode")
     if test_survival_boneyard_override is not None:

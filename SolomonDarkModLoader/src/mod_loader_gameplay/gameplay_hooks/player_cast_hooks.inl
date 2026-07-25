@@ -47,6 +47,26 @@ struct LocalPrimarySpellFilterState {
 
 LocalPrimarySpellFilterState g_local_primary_spell_filter_state;
 
+bool IsLocalMultiplayerParticipantGameplayInert(
+    uintptr_t actor_address) {
+    if (!multiplayer::IsLocalTransportEnabled() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
+        return false;
+    }
+    if (multiplayer::IsLocalParticipantGameplayInertForDeath()) {
+        return true;
+    }
+    if (kActorAnimationDriveStateByteOffset == 0) {
+        return false;
+    }
+    std::uint8_t native_death_state = 0;
+    return ProcessMemory::Instance().TryReadField(
+               actor_address,
+               kActorAnimationDriveStateByteOffset,
+               &native_death_state) &&
+        native_death_state != 0;
+}
+
 bool TryResolveLocalPlayerPrimarySpellFilterSkillId(
     uintptr_t actor_address,
     std::int32_t* skill_id) {

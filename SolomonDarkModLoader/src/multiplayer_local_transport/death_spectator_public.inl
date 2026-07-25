@@ -65,6 +65,19 @@ bool BeginLocalDeathSpectatorPresentation() {
     return true;
 }
 
+bool IsLocalParticipantGameplayInertForDeath() {
+    if (!g_local_transport.initialized) {
+        return false;
+    }
+    if (g_local_death_spectator.phase != DeathSpectatorPhase::Inactive) {
+        return true;
+    }
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    return local != nullptr &&
+        IsParticipantGameplayInertForDeath(*local);
+}
+
 bool TryBuildDeathSpectatorStatusText(std::string* status_text) {
     if (status_text == nullptr) {
         return false;

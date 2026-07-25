@@ -48,35 +48,6 @@ void ApplyRemoteCastPacket(
 
     UpsertPeerEndpoint(from, packet.participant_id, now_ms);
 
-    const auto last_sequence_it =
-        g_local_transport.last_cast_sequence_by_participant.find(packet.participant_id);
-    if (last_sequence_it != g_local_transport.last_cast_sequence_by_participant.end() &&
-        packet.cast_sequence != last_sequence_it->second &&
-        !IsPacketSequenceNewer(packet.cast_sequence, last_sequence_it->second)) {
-        log_cast_drop(
-            "stale_cast_sequence last_cast_sequence=" +
-            std::to_string(last_sequence_it->second));
-        return;
-    }
-    auto& input_tracker = g_local_transport.remote_cast_inputs_by_participant[packet.participant_id];
-    if (input_tracker.cast_sequence != packet.cast_sequence) {
-        input_tracker = RemoteCastInputTracker{};
-        input_tracker.cast_sequence = packet.cast_sequence;
-        g_local_transport.last_cast_sequence_by_participant[packet.participant_id] =
-            packet.cast_sequence;
-    } else if (input_tracker.last_packet_sequence != 0 &&
-               !IsPacketSequenceNewer(
-                   packet.header.sequence,
-                   input_tracker.last_packet_sequence)) {
-        log_cast_drop(
-            "stale_packet_sequence last_packet_sequence=" +
-            std::to_string(input_tracker.last_packet_sequence));
-        return;
-    }
-    input_tracker.last_packet_sequence = packet.header.sequence;
-    input_tracker.last_packet_ms = now_ms;
-    RelayCastPacketToPeers(packet, from);
-
     const auto runtime_state = SnapshotRuntimeState();
     const auto* participant = FindParticipant(runtime_state, packet.participant_id);
     if (participant == nullptr) {
@@ -117,6 +88,10 @@ void ApplyRemoteCastPacket(
             std::to_string(participant->runtime.run_nonce));
         return;
     }
+    if (IsParticipantGameplayInertForDeath(*participant)) {
+        log_cast_drop("participant_dead");
+        return;
+    }
     if (cast_kind == CastKind::Secondary) {
         const auto secondary_slot = static_cast<std::size_t>(packet.secondary_slot);
         const auto* owned_entry =
@@ -142,6 +117,41 @@ void ApplyRemoteCastPacket(
             std::to_string(gameplay_state.entity_materialized ? 1 : 0));
         return;
     }
+
+    const auto last_sequence_it =
+        g_local_transport.last_cast_sequence_by_participant.find(
+            packet.participant_id);
+    if (last_sequence_it !=
+            g_local_transport.last_cast_sequence_by_participant.end() &&
+        packet.cast_sequence != last_sequence_it->second &&
+        !IsPacketSequenceNewer(
+            packet.cast_sequence,
+            last_sequence_it->second)) {
+        log_cast_drop(
+            "stale_cast_sequence last_cast_sequence=" +
+            std::to_string(last_sequence_it->second));
+        return;
+    }
+    auto& input_tracker =
+        g_local_transport.remote_cast_inputs_by_participant[
+            packet.participant_id];
+    if (input_tracker.cast_sequence != packet.cast_sequence) {
+        input_tracker = RemoteCastInputTracker{};
+        input_tracker.cast_sequence = packet.cast_sequence;
+        g_local_transport.last_cast_sequence_by_participant[
+            packet.participant_id] = packet.cast_sequence;
+    } else if (input_tracker.last_packet_sequence != 0 &&
+               !IsPacketSequenceNewer(
+                   packet.header.sequence,
+                   input_tracker.last_packet_sequence)) {
+        log_cast_drop(
+            "stale_packet_sequence last_packet_sequence=" +
+            std::to_string(input_tracker.last_packet_sequence));
+        return;
+    }
+    input_tracker.last_packet_sequence = packet.header.sequence;
+    input_tracker.last_packet_ms = now_ms;
+    RelayCastPacketToPeers(packet, from);
 
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* live_participant = FindParticipant(state, packet.participant_id);

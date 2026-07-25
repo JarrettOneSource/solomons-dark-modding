@@ -1,3 +1,35 @@
+bool ShouldRenderCompletedMultiplayerDeathPresentation(
+    uintptr_t actor_address) {
+    if (actor_address == 0) {
+        return false;
+    }
+
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    SDModPlayerState local_player;
+    if (TryGetPlayerState(&local_player) &&
+        local_player.valid &&
+        local_player.actor_address == actor_address) {
+        return runtime_state.death_spectator.phase ==
+            multiplayer::DeathSpectatorPhase::Spectating;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(
+        g_participant_entities_mutex);
+    const auto* binding = FindParticipantEntityForActor(actor_address);
+    if (binding == nullptr ||
+        !binding->native_remote_death_epoch_active) {
+        return false;
+    }
+    const auto* participant =
+        multiplayer::FindParticipant(runtime_state, binding->bot_id);
+    return participant != nullptr &&
+        participant->runtime.valid &&
+        std::isfinite(participant->runtime.life_current) &&
+        participant->runtime.life_current <= 0.0f &&
+        (participant->runtime.presentation_flags &
+         multiplayer::ParticipantPresentationFlagDeathPresentation) == 0;
+}
+
 void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
     const auto original =
         GetX86HookTrampoline<ActorAnimationAdvanceFn>(g_gameplay_keyboard_injection.actor_animation_advance_hook);
@@ -41,7 +73,30 @@ void __fastcall HookActorAnimationAdvance(void* self, void* /*unused_edx*/) {
         }
     } context_scope(actor_address, reinterpret_cast<uintptr_t>(_ReturnAddress()));
 
-    original(self);
+    {
+        auto& memory = ProcessMemory::Instance();
+        std::uint8_t death_drive_state = 0;
+        const bool restore_red_safe_tick_after_render =
+            memory.TryReadField(
+                actor_address,
+                kActorAnimationDriveStateByteOffset,
+                &death_drive_state) &&
+            death_drive_state != 0 &&
+            ShouldRenderCompletedMultiplayerDeathPresentation(
+                actor_address) &&
+            memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorAnimationMoveDurationTicksOffset,
+                multiplayer::
+                    kNativeDeathPresentationTerminalCorpseTick);
+        original(self);
+        if (restore_red_safe_tick_after_render) {
+            (void)memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorAnimationMoveDurationTicksOffset,
+                multiplayer::kNativeDeathPresentationRedSafeTick);
+        }
+    }
     CaptureLuaDrawWorldProjection(GetLastSeenD3d9Device());
     if (IsTrackedWizardParticipantActorForHud(actor_address)) {
         std::string display_name;

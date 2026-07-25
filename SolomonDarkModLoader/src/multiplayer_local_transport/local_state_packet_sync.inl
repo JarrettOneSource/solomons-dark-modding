@@ -353,12 +353,13 @@ void RefreshLocalParticipantFromGameState() {
             DeathSpectatorPhase::DeathPresentation) {
             local->runtime.presentation_flags |=
                 ParticipantPresentationFlagDeathPresentation;
-            local->runtime.death_presentation_tick =
-                CurrentLocalDeathPresentationTick(
-                    static_cast<std::uint64_t>(::GetTickCount64()));
         } else {
-            local->runtime.death_presentation_tick = 0;
+            local->runtime.presentation_flags &=
+                ~ParticipantPresentationFlagDeathPresentation;
         }
+        local->runtime.death_presentation_tick =
+            CurrentLocalDeathPresentationTick(
+                static_cast<std::uint64_t>(::GetTickCount64()));
         // The staff attachment tail field at +0x84 is native-owned and can hold
         // process-local/pointer-like data in run scenes. Do not mirror it across
         // clients; remote cast playback and local materialization own staff glow.

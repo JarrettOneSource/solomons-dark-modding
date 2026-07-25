@@ -32,6 +32,6 @@ bool HoldLocalPlayerMultiplayerDeathPresentation(
             presentation_active
                 ? multiplayer::ResolveParticipantDeathPresentationTick(
                       presentation_elapsed_ms)
-                : 0);
+                : multiplayer::kNativeDeathPresentationRedSafeTick);
     return wrote;
 }

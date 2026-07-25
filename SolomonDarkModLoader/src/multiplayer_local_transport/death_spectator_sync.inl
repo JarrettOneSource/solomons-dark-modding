@@ -8,6 +8,8 @@ struct LocalDeathSpectatorState {
     DeathSpectatorPhase phase = DeathSpectatorPhase::Inactive;
     std::uint64_t death_started_ms = 0;
     std::uint64_t target_participant_id = 0;
+    std::uint64_t target_death_presentation_participant_id = 0;
+    bool target_death_presentation_seen = false;
     bool click_armed = true;
     std::uint64_t click_consumed_ms = 0;
     std::uint64_t observed_mouse_left_edge_serial = 0;
@@ -16,8 +18,29 @@ struct LocalDeathSpectatorState {
 
 LocalDeathSpectatorState g_local_death_spectator;
 
+bool IsParticipantGameplayInertForDeath(
+    const ParticipantInfo& participant) {
+    if (!participant.runtime.valid ||
+        !participant.runtime.in_run) {
+        return false;
+    }
+    const bool terminal_vitals =
+        std::isfinite(participant.runtime.life_current) &&
+        std::isfinite(participant.runtime.life_max) &&
+        participant.runtime.life_max > 0.0f &&
+        participant.runtime.life_current <= 0.0f;
+    const bool death_presentation_active =
+        (participant.runtime.presentation_flags &
+         ParticipantPresentationFlagDeathPresentation) != 0;
+    return terminal_vitals || death_presentation_active;
+}
+
 std::uint16_t CurrentLocalDeathPresentationTick(
     std::uint64_t now_ms) {
+    if (g_local_death_spectator.phase ==
+        DeathSpectatorPhase::Spectating) {
+        return kNativeDeathPresentationRedSafeTick;
+    }
     if (g_local_death_spectator.phase !=
             DeathSpectatorPhase::DeathPresentation ||
         now_ms < g_local_death_spectator.death_started_ms) {
@@ -457,6 +480,67 @@ std::uint64_t SelectNextAliveSpectatorTarget(
         : participant_ids.front();
 }
 
+bool ShouldHoldCurrentSpectatorDeathPresentation(
+    const RuntimeState& runtime_state,
+    std::uint32_t run_nonce,
+    std::uint64_t participant_id) {
+    if (participant_id == 0) {
+        return false;
+    }
+    const auto* participant =
+        FindParticipant(runtime_state, participant_id);
+    if (participant == nullptr ||
+        !participant->ready ||
+        !participant->transport_connected ||
+        !participant->runtime.valid ||
+        !participant->runtime.in_run ||
+        !participant->runtime.transform_valid ||
+        participant->runtime.run_nonce != run_nonce ||
+        !std::isfinite(participant->runtime.life_current) ||
+        !std::isfinite(participant->runtime.life_max) ||
+        participant->runtime.life_max <= 0.0f) {
+        return false;
+    }
+
+    SDModParticipantGameplayState gameplay_state;
+    if (!TryGetParticipantGameplayState(
+            participant_id,
+            &gameplay_state) ||
+        !gameplay_state.available ||
+        !gameplay_state.entity_materialized ||
+        gameplay_state.actor_address == 0 ||
+        !std::isfinite(gameplay_state.x) ||
+        !std::isfinite(gameplay_state.y) ||
+        !std::isfinite(gameplay_state.hp)) {
+        return false;
+    }
+
+    const bool target_dead =
+        participant->runtime.life_current <= 0.0f ||
+        gameplay_state.hp <= 0.0f;
+    auto& spectator = g_local_death_spectator;
+    if (!target_dead) {
+        spectator.target_death_presentation_participant_id = 0;
+        spectator.target_death_presentation_seen = false;
+        return false;
+    }
+
+    if (spectator.target_death_presentation_participant_id !=
+        participant_id) {
+        spectator.target_death_presentation_participant_id =
+            participant_id;
+        spectator.target_death_presentation_seen = false;
+    }
+    const bool presentation_active =
+        (participant->runtime.presentation_flags &
+         ParticipantPresentationFlagDeathPresentation) != 0;
+    if (presentation_active) {
+        spectator.target_death_presentation_seen = true;
+    }
+    return presentation_active ||
+        !spectator.target_death_presentation_seen;
+}
+
 void PublishSpectatorTarget(
     const RuntimeState& runtime_state,
     std::uint64_t target_participant_id,
@@ -543,10 +627,23 @@ void TickLocalSpectatorTarget(std::uint64_t now_ms) {
     const auto alive_target_ids = CollectAliveSpectatorTargetIds(
         runtime_state,
         local->runtime.run_nonce);
-    const auto target_participant_id = SelectNextAliveSpectatorTarget(
-        alive_target_ids,
-        g_local_death_spectator.target_participant_id,
-        advance);
+    std::uint64_t target_participant_id = 0;
+    if (!advance &&
+        ShouldHoldCurrentSpectatorDeathPresentation(
+            runtime_state,
+            local->runtime.run_nonce,
+            g_local_death_spectator.target_participant_id)) {
+        target_participant_id =
+            g_local_death_spectator.target_participant_id;
+    } else {
+        g_local_death_spectator
+            .target_death_presentation_participant_id = 0;
+        g_local_death_spectator.target_death_presentation_seen = false;
+        target_participant_id = SelectNextAliveSpectatorTarget(
+            alive_target_ids,
+            g_local_death_spectator.target_participant_id,
+            advance);
+    }
     g_local_death_spectator.target_participant_id =
         target_participant_id;
     if (target_participant_id == 0) {

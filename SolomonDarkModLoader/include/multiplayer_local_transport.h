@@ -27,6 +27,7 @@ bool IsLuaModSimulationAuthority();
 void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool BeginLocalDeathSpectatorPresentation();
+bool IsLocalParticipantGameplayInertForDeath();
 bool TryBuildDeathSpectatorStatusText(std::string* status_text);
 bool ConsumePendingNativeGameOverDispatch();
 void NotifyNativeGameOverDispatched();
