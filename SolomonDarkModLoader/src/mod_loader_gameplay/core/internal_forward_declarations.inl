@@ -14,6 +14,7 @@ bool ReacquireHostileTargetAfterInvalidation(
     std::string_view reason);
 void RefreshHostileTargetParticipantDeathLatches(
     const multiplayer::RuntimeState& runtime_state);
+void MaintainNearestValidHostileTargets(std::uint64_t now_ms);
 bool IsArenaCombatActorTypeInternal(std::uint32_t object_type_id);
 void ApplyObservedBotAnimationState(ParticipantEntityBinding* binding, uintptr_t actor_address, bool moving);
 void PublishParticipantGameplaySnapshot(const ParticipantEntityBinding& binding);

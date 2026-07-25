@@ -3,7 +3,9 @@ constexpr std::uint32_t kLeviathanHostileTargetTypeId = 0x07F2;
 constexpr std::uint32_t kGolemHostileTargetTypeId = 0x07F4;
 constexpr std::int32_t kMaximumNativeHostileTargetCandidates = 512;
 constexpr std::uint64_t kHostileTargetSidecarRefreshIntervalMs = 100;
+constexpr std::uint64_t kHostileTargetNearestMaintenanceIntervalMs = 100;
 constexpr std::uint64_t kHostileTargetDeathMaintenanceMaxMs = 30000;
+constexpr std::uint64_t kHostileTargetLocalDeathFallbackMs = 1500;
 
 struct HostileTargetSelection {
     bool valid = false;
@@ -22,13 +24,18 @@ struct HostileTargetSidecarCache {
 
 struct HostileTargetDeathMaintenance {
     std::uint64_t expires_at_ms = 0;
+    std::uint64_t local_death_fallback_at_ms = 0;
+    bool awaiting_local_native_death_transition = false;
     std::unordered_set<uintptr_t> hostile_actor_addresses;
 };
 
 HostileTargetSidecarCache g_hostile_target_sidecar_cache;
+std::uint64_t g_hostile_target_nearest_maintenance_not_before_ms = 0;
 std::unordered_set<uintptr_t> g_hostile_target_dead_participant_actors;
 std::unordered_map<uintptr_t, HostileTargetDeathMaintenance>
     g_hostile_target_death_maintenance;
+std::unordered_map<uintptr_t, uintptr_t>
+    g_last_logged_hostile_target_by_actor;
 
 std::uint64_t ResolveHostileTargetParticipantId(uintptr_t actor_address);
 
@@ -104,6 +111,15 @@ void AppendWizardParticipantTargetCandidates(
         return;
     }
 
+    uintptr_t local_actor_address = 0;
+    if (TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &local_actor_address) &&
+        local_actor_address != 0) {
+        actor_addresses->push_back(local_actor_address);
+    }
+
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     for (const auto& binding : g_participant_entities) {
         if (!IsWizardParticipantKind(binding.kind) ||
@@ -115,6 +131,25 @@ void AppendWizardParticipantTargetCandidates(
         }
         actor_addresses->push_back(binding.actor_address);
     }
+}
+
+void ReplacePlayerOwnedHostileTargetSidecars(
+    uintptr_t world_address,
+    std::uint64_t now_ms,
+    const std::vector<SDModSceneActorState>& actors) {
+    HostileTargetSidecarCache next;
+    next.world_address = world_address;
+    next.refresh_not_before_ms =
+        now_ms + kHostileTargetSidecarRefreshIntervalMs;
+    for (const auto& actor : actors) {
+        if (actor.valid &&
+            actor.actor_address != 0 &&
+            actor.owner_address == world_address &&
+            IsExplicitPlayerOwnedHostileTargetType(actor.object_type_id)) {
+            next.actor_addresses.push_back(actor.actor_address);
+        }
+    }
+    g_hostile_target_sidecar_cache = std::move(next);
 }
 
 void RefreshPlayerOwnedHostileTargetSidecars(
@@ -136,20 +171,10 @@ void RefreshPlayerOwnedHostileTargetSidecars(
         }
         return;
     }
-
-    HostileTargetSidecarCache next;
-    next.world_address = world_address;
-    next.refresh_not_before_ms =
-        now_ms + kHostileTargetSidecarRefreshIntervalMs;
-    for (const auto& actor : actors) {
-        if (actor.valid &&
-            actor.actor_address != 0 &&
-            actor.owner_address == world_address &&
-            IsExplicitPlayerOwnedHostileTargetType(actor.object_type_id)) {
-            next.actor_addresses.push_back(actor.actor_address);
-        }
-    }
-    g_hostile_target_sidecar_cache = std::move(next);
+    ReplacePlayerOwnedHostileTargetSidecars(
+        world_address,
+        now_ms,
+        actors);
 }
 
 bool TryValidateHostileTargetCandidate(
@@ -494,11 +519,32 @@ bool TrySelectNearestValidHostileTarget(
 }
 
 std::uint64_t ResolveHostileTargetParticipantId(uintptr_t actor_address) {
-    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-    const auto* binding = FindParticipantEntityForActor(actor_address);
-    return binding != nullptr && IsWizardParticipantKind(binding->kind)
-        ? binding->bot_id
-        : 0;
+    {
+        std::lock_guard<std::recursive_mutex> lock(
+            g_participant_entities_mutex);
+        const auto* binding = FindParticipantEntityForActor(actor_address);
+        if (binding != nullptr && IsWizardParticipantKind(binding->kind)) {
+            return binding->bot_id;
+        }
+    }
+
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) ||
+        !TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &local_actor_address) ||
+        local_actor_address == 0 ||
+        local_actor_address != actor_address) {
+        return 0;
+    }
+
+    const auto transport_participant_id =
+        multiplayer::GetLocalTransportParticipantId();
+    return transport_participant_id != 0
+        ? transport_participant_id
+        : multiplayer::kLocalParticipantId;
 }
 
 bool ApplyNearestValidHostileTarget(
@@ -578,19 +624,17 @@ bool ApplyNearestValidHostileTarget(
         return false;
     }
 
-    bool log_target_change = true;
-    if (reason == "participant_death_maintenance" ||
-        reason == "participant_death_post_player_tick") {
-        static std::uint64_t s_last_death_maintenance_log_ms = 0;
-        const auto now_ms =
-            static_cast<std::uint64_t>(GetTickCount64());
-        log_target_change =
-            now_ms - s_last_death_maintenance_log_ms >= 250;
-        if (log_target_change) {
-            s_last_death_maintenance_log_ms = now_ms;
-        }
+    const auto [logged_target_iterator, inserted_logged_target] =
+        g_last_logged_hostile_target_by_actor.try_emplace(
+            hostile_actor_address,
+            desired_target_actor_address);
+    const bool semantic_target_change =
+        inserted_logged_target ||
+        logged_target_iterator->second != desired_target_actor_address;
+    if (semantic_target_change && !inserted_logged_target) {
+        logged_target_iterator->second = desired_target_actor_address;
     }
-    if (log_target_change &&
+    if (semantic_target_change &&
         (previous_target_actor_address != desired_target_actor_address ||
          previous_bucket_delta != desired_bucket_delta)) {
         Log(

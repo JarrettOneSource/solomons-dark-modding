@@ -203,6 +203,9 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
             "authority_target_native_type_id",
             "analyze_retarget_samples(",
             "_wait_for_logical_death(",
+            "_wait_for_stable_host_target(",
+            "_wait_for_host_target_layout(",
+            "TARGET_LAYOUT_STABLE_SAMPLES = 3",
             "focus.cast_secondary_belt_slot(",
             "ETHER_MINION_NATIVE_TYPE_ID",
             "capture_game_backbuffer",
@@ -293,6 +296,11 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "actor_tick/player_actor_tick_hook.inl"
     )
+    participant_scene_tick = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_movement_tick/participant_scene_binding_ticks.inl"
+    )
     resource_state = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/"
@@ -315,6 +323,9 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
         (
             "TryReadNativeHostileTargetCandidateList(",
             "AppendWizardParticipantTargetCandidates(",
+            "TryResolvePlayerActorForSlot(",
+            "multiplayer::GetLocalTransportParticipantId()",
+            "multiplayer::kLocalParticipantId",
             "kGoodImpHostileTargetTypeId = 0x03ED",
             "kLeviathanHostileTargetTypeId = 0x07F2",
             "kGolemHostileTargetTypeId = 0x07F4",
@@ -330,14 +341,28 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
             "ApplyNearestValidHostileTarget(",
             "IsParticipantRuntimeDeadForHostileTargeting(",
             "RefreshHostileTargetParticipantDeathLatches(",
-            '"participant_life_zero"',
+            "kHostileTargetLocalDeathFallbackMs = 1500",
+            "awaiting_local_native_death_transition",
+            "HasLocalPlayerNativeDeathTransitionStarted(",
+            "kActorHostileTargetIneligibleStateOffset",
+            "ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(",
+            "DeferHostileTargetReacquisitionForLocalNativeDeath(",
+            "IsHostileTargetReacquisitionDeferred(",
+            "participant life-zero captured for native-transition-safe reacquisition",
             "MaintainInvalidatedHostileTargetAfterNativeTick(",
             "MaintainMissingOrInvalidHostileTargetAfterNativeTick(",
             '"participant_death_maintenance"',
             "MaintainInvalidatedHostileTargetsAfterLocalPlayerTick(",
             '"participant_death_post_player_tick"',
+            "kHostileTargetNearestMaintenanceIntervalMs = 100",
+            "MaintainNearestValidHostileTargets(",
+            "ReplacePlayerOwnedHostileTargetSidecars(",
+            "!actor.tracked_enemy",
+            '"nearest_valid_maintenance"',
             "target_participant_id=",
             "target_native_type_id=",
+            "g_last_logged_hostile_target_by_actor.try_emplace(",
+            "semantic_target_change",
         ),
     )
     _require_tokens(
@@ -355,7 +380,9 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
             "MaintainInvalidatedHostileTargetAfterNativeTick(",
             "MaintainMissingOrInvalidHostileTargetAfterNativeTick(",
             "ClearHostileTargetsForDeadWizardActor(",
-            '"target_death"',
+            "ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(",
+            "DeferHostileTargetReacquisitionForLocalNativeDeath(",
+            "IsHostileTargetReacquisitionDeferred(",
             "ReacquireHostileTargetAfterInvalidation(",
             "ApplyLatestReplicatedRunEnemyTargetForLocalActor(",
         ),
@@ -379,6 +406,7 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
             "hostiles_targeting_removed_actor",
             '"target_removal"',
             "ReacquireHostileTargetAfterInvalidation(",
+            "g_last_logged_hostile_target_by_actor.erase(actor_address);",
         ),
     )
     capture = lifecycle_hook.index("CaptureLiveHostilesTargetingActor(")
@@ -393,10 +421,28 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
     assert capture < unregister < reacquire
 
     _require_tokens(
+        "participant target maintenance cadence",
+        participant_scene_tick,
+        ("MaintainNearestValidHostileTargets(now_ms);",),
+    )
+    _require_tokens(
         "local-player death-transition maintenance",
         player_tick,
         ("MaintainInvalidatedHostileTargetsAfterLocalPlayerTick();",),
     )
+    chase_tick = monster_hook[
+        monster_hook.index("std::uint32_t __fastcall HookBadguyCommonChaseTick(") :
+    ]
+    original_chase = chase_tick.index("const auto result = original(self, nullptr);")
+    defer_local_death = chase_tick.index(
+        "DeferHostileTargetReacquisitionForLocalNativeDeath(",
+        original_chase,
+    )
+    restore_target = chase_tick.index(
+        "kActorCurrentTargetActorOffset,",
+        defer_local_death,
+    )
+    assert original_chase < defer_local_death < restore_target
     _require_tokens(
         "actor runtime-death type ownership",
         resource_state,
@@ -451,6 +497,49 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
     assert "X86Hook badguy_common_chase_tick_hook;" in runtime_state
 
     behavior = acquisition + monster_hook
+    native_death_transition_predicate = acquisition[
+        acquisition.index("bool HasLocalPlayerNativeDeathTransitionStarted("):
+        acquisition.index(
+            "bool IsHostileTargetReacquisitionDeferred(",
+            acquisition.index(
+                "bool HasLocalPlayerNativeDeathTransitionStarted("
+            ),
+        )
+    ]
+    assert (
+        "kActorAnimationDriveStateByteOffset"
+        not in native_death_transition_predicate
+    ), (
+        "ordinary animation-drive state must not release the local native "
+        "death-transition grace period"
+    )
+    reacquisition_deferred_predicate = acquisition[
+        acquisition.index("bool IsHostileTargetReacquisitionDeferred("):
+        acquisition.index(
+            "void ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(",
+            acquisition.index(
+                "bool IsHostileTargetReacquisitionDeferred("
+            ),
+        )
+    ]
+    _require_tokens(
+        "hostile death-transition maintenance membership",
+        reacquisition_deferred_predicate,
+        (
+            "maintenance.hostile_actor_addresses.find(",
+            "maintenance.hostile_actor_addresses.end()) {",
+            "return true;",
+        ),
+    )
+    assert (
+        "maintenance.hostile_actor_addresses.find(\n"
+        "                hostile_actor_address) ==\n"
+        "            maintenance.hostile_actor_addresses.end()) {"
+        in reacquisition_deferred_predicate
+    ), (
+        "the death-transition grace must be evaluated for affected hostiles, "
+        "not skipped for them"
+    )
     for forbidden in (
         "ActorWorld_RelocateHostileToGroupZero",
         "HookMonsterPathfindingRefreshTarget promotion",

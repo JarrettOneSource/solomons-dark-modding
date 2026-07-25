@@ -172,6 +172,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
     }
 
     RefreshHostileTargetParticipantDeathLatches(runtime_state);
+    MaintainNearestValidHostileTargets(now_ms);
 }
 
 void TickParticipantSceneBindingsIfActive() {

@@ -356,15 +356,24 @@ the recomputed envelope.
 
 ### 8. Runtime Cutover
 
-- the loader now hooks `MonsterPathfinding_RefreshTarget (0x00483480)`
-  through the gameplay hook set
+- the loader now hooks both
+  `MonsterPathfinding_SelectNearestTarget (0x00481A60)` and
+  `MonsterPathfinding_RefreshTarget (0x00483480)` through the gameplay hook set
 - implementation strategy:
   - let stock refresh run first
-  - keep the stock slot-0 result as the baseline
-  - scan live gameplay-slot participants in slots `1..3`
-  - if a valid slot `1..3` participant is closer than the stock slot-0 target,
-    overwrite hostile target state with that actor and a cross-group bucket
-    delta that survives later stock refreshes
+  - scan the native candidate list, every live materialized participant, and
+    the explicit GoodImp/Leviathan/Golem ally sidecars
+  - explicitly append gameplay slot 0 and map it to the local transport
+    participant; the local player has no `ParticipantEntityBinding`, and
+    treating it as an ordinary native actor made eligibility asymmetric
+  - choose the nearest candidate after exact same-world and ActorWorld-bucket
+    validation
+  - on local slot-0 life zero, preserve the hostile target until native
+    `+0x160` becomes ineligible (with a bounded 1,500 ms fallback); changing
+    the attacker target earlier prevented
+    `Player_DeathTransition` in live organic-death evidence
+  - repeat host selection for live run enemies on a bounded 100 ms service
+    cadence because stock class-specific refresh lanes are not guaranteed
 - the runtime patch intentionally uses the stock gameplay-slot path rather than
   spoofing bot identity
   - bots still materialize through `Gameplay_CreatePlayerSlot`

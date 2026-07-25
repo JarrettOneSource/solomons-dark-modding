@@ -41,6 +41,110 @@ bool IsParticipantRuntimeDeadForHostileTargeting(
            participant.runtime.life_current <= 0.0f;
 }
 
+bool IsCurrentGameplayLocalPlayerActor(uintptr_t actor_address) {
+    uintptr_t gameplay_address = 0;
+    uintptr_t local_actor_address = 0;
+    return actor_address != 0 &&
+           TryResolveCurrentGameplayScene(&gameplay_address) &&
+           TryResolvePlayerActorForSlot(
+               gameplay_address,
+               0,
+               &local_actor_address) &&
+           local_actor_address == actor_address;
+}
+
+bool HasLocalPlayerNativeDeathTransitionStarted(
+    uintptr_t actor_address) {
+    if (!IsCurrentGameplayLocalPlayerActor(actor_address)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::uint8_t ineligible_state = 0;
+    return memory.TryReadField(
+               actor_address,
+               kActorHostileTargetIneligibleStateOffset,
+               &ineligible_state) &&
+           ineligible_state != 0;
+}
+
+bool IsHostileTargetReacquisitionDeferred(
+    uintptr_t hostile_actor_address) {
+    if (hostile_actor_address == 0) {
+        return false;
+    }
+    const auto now_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
+    for (auto& [dead_actor_address, maintenance] :
+         g_hostile_target_death_maintenance) {
+        if (maintenance.hostile_actor_addresses.find(
+                hostile_actor_address) ==
+            maintenance.hostile_actor_addresses.end()) {
+            continue;
+        }
+        if (maintenance.awaiting_local_native_death_transition &&
+            (HasLocalPlayerNativeDeathTransitionStarted(
+                 dead_actor_address) ||
+             now_ms >= maintenance.local_death_fallback_at_ms)) {
+            maintenance.awaiting_local_native_death_transition = false;
+        }
+        if (maintenance.awaiting_local_native_death_transition) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(
+    uintptr_t dead_actor_address,
+    const std::vector<uintptr_t>& hostile_actor_addresses) {
+    if (dead_actor_address == 0 ||
+        hostile_actor_addresses.empty() ||
+        multiplayer::IsLocalTransportClient()) {
+        return;
+    }
+
+    const auto [iterator, inserted] =
+        g_hostile_target_death_maintenance.try_emplace(
+            dead_actor_address);
+    auto& maintenance = iterator->second;
+    if (inserted) {
+        const auto now_ms =
+            static_cast<std::uint64_t>(GetTickCount64());
+        maintenance.expires_at_ms =
+            now_ms +
+            kHostileTargetDeathMaintenanceMaxMs;
+        maintenance.awaiting_local_native_death_transition =
+            IsCurrentGameplayLocalPlayerActor(dead_actor_address) &&
+            !HasLocalPlayerNativeDeathTransitionStarted(
+                dead_actor_address);
+        maintenance.local_death_fallback_at_ms =
+            now_ms + kHostileTargetLocalDeathFallbackMs;
+    }
+    maintenance.hostile_actor_addresses.insert(
+        hostile_actor_addresses.begin(),
+        hostile_actor_addresses.end());
+}
+
+bool DeferHostileTargetReacquisitionForLocalNativeDeath(
+    uintptr_t hostile_actor_address,
+    uintptr_t target_actor_address) {
+    if (hostile_actor_address == 0 ||
+        target_actor_address == 0 ||
+        !IsCurrentGameplayLocalPlayerActor(target_actor_address) ||
+        !IsActorRuntimeDead(target_actor_address) ||
+        HasLocalPlayerNativeDeathTransitionStarted(
+            target_actor_address)) {
+        return false;
+    }
+
+    ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(
+        target_actor_address,
+        std::vector<uintptr_t>{hostile_actor_address});
+    return IsHostileTargetReacquisitionDeferred(
+        hostile_actor_address);
+}
+
 void RefreshHostileTargetParticipantDeathLatches(
     const multiplayer::RuntimeState& runtime_state) {
     struct ParticipantActorDeathState {
@@ -136,34 +240,67 @@ void RefreshHostileTargetParticipantDeathLatches(
                 &hostile_actor_addresses)) {
             continue;
         }
-        auto& maintenance =
-            g_hostile_target_death_maintenance[dead_actor_address];
-        maintenance.expires_at_ms =
-            static_cast<std::uint64_t>(GetTickCount64()) +
-            kHostileTargetDeathMaintenanceMaxMs;
-        maintenance.hostile_actor_addresses.insert(
-            hostile_actor_addresses.begin(),
-            hostile_actor_addresses.end());
-        int reacquired_hostiles = 0;
-        for (const auto hostile_actor_address : hostile_actor_addresses) {
-            if (ReacquireHostileTargetAfterInvalidation(
-                    hostile_actor_address,
-                    dead_actor_address,
-                    "participant_life_zero")) {
-                reacquired_hostiles += 1;
-            }
-        }
-        if (reacquired_hostiles > 0) {
+        ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(
+            dead_actor_address,
+            hostile_actor_addresses);
+        if (!hostile_actor_addresses.empty()) {
             Log(
                 std::string(
-                    "[hostile_ai] participant life-zero forced "
-                    "reacquisition") +
+                    "[hostile_ai] participant life-zero captured for "
+                    "native-transition-safe reacquisition") +
                 ". dead_target=" + HexString(dead_actor_address) +
-                " reacquired=" +
-                    std::to_string(reacquired_hostiles) +
                 " affected=" +
                     std::to_string(hostile_actor_addresses.size()));
         }
+    }
+}
+
+void MaintainNearestValidHostileTargets(std::uint64_t now_ms) {
+    if (multiplayer::IsLocalTransportClient() ||
+        now_ms <
+            g_hostile_target_nearest_maintenance_not_before_ms) {
+        return;
+    }
+    g_hostile_target_nearest_maintenance_not_before_ms =
+        now_ms + kHostileTargetNearestMaintenanceIntervalMs;
+
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return;
+    }
+
+    uintptr_t world_address = 0;
+    std::vector<uintptr_t> hostile_actor_addresses;
+    hostile_actor_addresses.reserve(actors.size());
+    for (const auto& actor : actors) {
+        if (!actor.valid ||
+            !actor.tracked_enemy ||
+            actor.actor_address == 0 ||
+            actor.dead ||
+            IsActorRuntimeDead(actor.actor_address)) {
+            continue;
+        }
+        if (world_address == 0) {
+            world_address = actor.owner_address;
+        }
+        hostile_actor_addresses.push_back(actor.actor_address);
+    }
+    if (world_address != 0) {
+        ReplacePlayerOwnedHostileTargetSidecars(
+            world_address,
+            now_ms,
+            actors);
+    }
+
+    for (const auto hostile_actor_address : hostile_actor_addresses) {
+        if (IsHostileTargetReacquisitionDeferred(
+                hostile_actor_address)) {
+            continue;
+        }
+        (void)ReacquireHostileTargetAfterInvalidation(
+            hostile_actor_address,
+            0,
+            "nearest_valid_maintenance");
     }
 }
 

@@ -188,7 +188,21 @@ bool ApplyHigherPriorityHostileTargetPolicy(
             true);
         return true;
     }
-    return ApplyLuaEnemyAiTargetOverride(hostile_actor_address);
+    if (ApplyLuaEnemyAiTargetOverride(hostile_actor_address)) {
+        return true;
+    }
+    uintptr_t current_target_actor_address = 0;
+    if (ProcessMemory::Instance().TryReadField(
+            hostile_actor_address,
+            kActorCurrentTargetActorOffset,
+            &current_target_actor_address) &&
+        DeferHostileTargetReacquisitionForLocalNativeDeath(
+            hostile_actor_address,
+            current_target_actor_address)) {
+        return true;
+    }
+    return IsHostileTargetReacquisitionDeferred(
+        hostile_actor_address);
 }
 
 bool ReacquireHostileTargetAfterInvalidation(
@@ -222,25 +236,19 @@ bool ClearHostileTargetsForDeadWizardActor(uintptr_t dead_actor_address) {
         return false;
     }
 
-    int reacquired_hostiles = 0;
-    for (const auto hostile_actor_address : hostile_actor_addresses) {
-        if (ReacquireHostileTargetAfterInvalidation(
-                hostile_actor_address,
-                dead_actor_address,
-                "target_death")) {
-            reacquired_hostiles += 1;
-        }
-    }
-
-    if (reacquired_hostiles > 0) {
+    ScheduleHostileTargetReacquisitionAfterNativeDeathTransition(
+        dead_actor_address,
+        hostile_actor_addresses);
+    if (!hostile_actor_addresses.empty()) {
         Log(
-            std::string("[hostile_ai] target death forced reacquisition") +
+            std::string(
+                "[hostile_ai] target death captured for transition-safe "
+                "reacquisition") +
             ". dead_target=" + HexString(dead_actor_address) +
-            " reacquired=" + std::to_string(reacquired_hostiles) +
             " affected=" +
                 std::to_string(hostile_actor_addresses.size()));
     }
-    return reacquired_hostiles > 0;
+    return !hostile_actor_addresses.empty();
 }
 
 void __fastcall HookMonsterPathfindingSelectNearestTarget(
@@ -301,9 +309,37 @@ std::uint32_t __fastcall HookBadguyCommonChaseTick(
         return 0;
     }
 
-    const auto result = original(self, nullptr);
     const auto hostile_actor_address =
         reinterpret_cast<uintptr_t>(self);
+    uintptr_t target_before_tick = 0;
+    std::int32_t bucket_delta_before_tick = 0;
+    auto& memory = ProcessMemory::Instance();
+    const bool have_target_before_tick =
+        memory.TryReadField(
+            hostile_actor_address,
+            kActorCurrentTargetActorOffset,
+            &target_before_tick) &&
+        target_before_tick != 0 &&
+        memory.TryReadField(
+            hostile_actor_address,
+            kHostileTargetBucketDeltaOffset,
+            &bucket_delta_before_tick);
+
+    const auto result = original(self, nullptr);
+    if (have_target_before_tick &&
+        DeferHostileTargetReacquisitionForLocalNativeDeath(
+            hostile_actor_address,
+            target_before_tick)) {
+        (void)memory.TryWriteField(
+            hostile_actor_address,
+            kActorCurrentTargetActorOffset,
+            target_before_tick);
+        (void)memory.TryWriteField(
+            hostile_actor_address,
+            kHostileTargetBucketDeltaOffset,
+            bucket_delta_before_tick);
+        return result;
+    }
     MaintainInvalidatedHostileTargetAfterNativeTick(hostile_actor_address);
     MaintainMissingOrInvalidHostileTargetAfterNativeTick(
         hostile_actor_address);

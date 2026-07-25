@@ -151,10 +151,13 @@ The runtime behavior change must therefore:
    the native candidate list plus the explicit player-owned ally types;
 3. exclude dead/spectating players through the native `+0x160` state and
    multiplayer participant-death state;
-4. reacquire immediately after the current target dies or is removed;
-5. write only the hostile target pointer and bucket delta—never relocate or
+4. reacquire after removal, or on the first safe native-player-tick boundary
+   after death;
+5. re-evaluate live run enemies on a bounded host cadence so a newly spawned or
+   newly nearer valid target does not wait on a class-specific stock lane;
+6. write only the hostile target pointer and bucket delta—never relocate or
    promote the target actor; and
-6. leave Lua target overrides, Turn Undead locks, manual freeze behavior, and
+7. leave Lua target overrides, Turn Undead locks, manual freeze behavior, and
    client-applied authoritative targets as higher-priority policies.
 
 ## Loader correction
@@ -180,32 +183,65 @@ slots and the three explicit player-owned ally types may therefore cross an
 unset region-table entry after the stricter same-world/exact-bucket checks.
 Arbitrary actors never receive that exception.
 
-Player death ticks call the same selector immediately for every hostile that
-still points at the dead actor. `HookActorWorldUnregister` captures those
-references before stock clears the target's owner/bucket and runs the same
-re-acquisition after unregister returns. The refresh detour also reapplies the
-host selection after retail refresh logic, because the native death transition
-can clear a hostile's target before the loader observes the wizard's dead
-state. Multiplayer participant `life_current <= 0` is therefore latched on the
-50 ms materialized-participant service edge as well: that edge excludes the
-dead actor and immediately reacquires hostiles while their old target pointer
-is still available. The affected hostile addresses remain latched for the
-logical death epoch (with a 30-second stale-state safety bound); native
-`+0x160` alone does not retire the latch because the actor can remain in the
-host slot. Both the local-player tick return edge and the Badguy common-chase
-return edge apply the bounded maintenance, covering either native tick order.
-This prevents the still-eligible retail slot from restoring the dying owner
-between the life-zero edge and `Player_DeathTransition`. This covers both owners
-before the asymmetric retail death transition mutates the slot list. Clients
-never run nearest selection; they continue resolving the host-authored
-participant, owner-plus-native-type, or exact native target identity from world
-snapshots.
+Slot 0 is not represented by a `ParticipantEntityBinding`; it is the stock
+local player actor. The loader must append that actor explicitly and map it to
+`GetLocalTransportParticipantId()` (or the offline local participant ID).
+Without that mapping, the extended-candidate exception applied only to remote
+players: a living host could be rejected by the retail region-table comparison
+while the client remained eligible, making nearest selection asymmetric.
+
+`HookActorWorldUnregister` captures hostile references before stock clears the
+target's owner/bucket and runs re-acquisition after unregister returns. The
+refresh detour also reapplies host selection after retail refresh logic,
+because the native death transition can clear a hostile's target before the
+loader observes the wizard's dead state.
+
+Multiplayer participant `life_current <= 0` is latched on the 50 ms
+materialized-participant service edge. A live organic-death trace established
+an ordering constraint that the synthetic death gate did not expose: changing
+the attacker's target on that life-zero edge happened before
+`Player_DeathTransition`, the transition never ran, and the player remained at
+negative health while regeneration continued. The corrected edge captures the
+affected hostiles and excludes the dead participant immediately, but defers
+loader target mutation for a dead slot-0 actor until stock sets the native
+`+0x160` ineligible byte. The animation-drive byte cannot be used as a second
+signal: ordinary cast, movement, and damage reactions also set it, and a live
+hit trace proved that doing so released the grace period before
+`Player_DeathTransition`. A 1,500 ms fallback bounds re-acquisition if the
+native transition signal never arrives. Remote-player death does not need this
+grace on host authority because its native death stack runs on the other peer.
+
+The common-chase hook snapshots the current target pointer and bucket delta
+before retail code runs. If life crosses zero during that tick, the hook
+captures the affected hostile and restores those two fields until the native
+death-transition signal. This closes the earlier race where the 100 ms
+maintenance could observe progression HP at zero before the multiplayer
+participant snapshot had published the death latch.
+
+The affected hostile addresses remain latched for the logical death epoch
+(with a 30-second stale-state safety bound); native `+0x160` alone does not
+retire the latch because the actor can remain in the host slot. The local-player
+tick return edge and Badguy common-chase return edge then apply bounded
+maintenance. This covers host and remote-client deaths without relying on the
+asymmetric retail slot removal. Clients never run nearest selection; they
+continue resolving the host-authored participant, owner-plus-native-type, or
+exact native target identity from world snapshots.
 
 The common-chase return edge also repairs a missing, dead, or natively
 ineligible current target outside a participant-death epoch. This is required
 for the native `0x00483895` post-selector clear and for summon/allied-NPC
-death. It does not rescan while the current target remains valid; ordinary
-nearest changes still enter through the stock selector cadence.
+death. That repair alone is insufficient for the nearest-target contract:
+live evidence showed a hostile retain a valid player target for the entire
+2.5-second observation after a nearer Leviathan appeared because none of its
+class-specific native selector lanes fired. The host therefore re-evaluates
+every live scene-combat enemy at most once per 100 ms on the existing
+materialized-participant service edge. This enumeration comes from validated
+ActorWorld scene actors, not only the run-lifecycle spawn-hook map: a stock
+wave actor can already be scene-visible and replicated without appearing in
+that map's current snapshot. The same scene scan refreshes the ally sidecar, so
+maintenance does not perform a second 8,192-bucket pass. Higher-priority manual
+freeze, Turn Undead, and Lua policies still short-circuit the selection, and
+clients still apply only host-authored target identity.
 
 Loader death validation applies progression health only to native type `1`,
 the player family. Native summons do not own those progression fields; treating

@@ -521,6 +521,7 @@ void __fastcall HookActorWorldUnregister(
             actor_address,
             &hostiles_targeting_removed_actor);
     }
+    g_last_logged_hostile_target_by_actor.erase(actor_address);
 
     ForgetAuthoritativeTurnUndeadTargetLocksForActor(actor_address);
     if (actor_address != 0 && remove_from_container == 1) {
