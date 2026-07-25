@@ -674,13 +674,50 @@ traces captured the exact rewind on both peers:
 | client | fire projectile, held primary | 298 owner / observer | 0 owner / observer |
 
 The death animation reaches frame 3 before handoff, but the zero write sends
-the surviving corpse back to frame 0. That is the visible cut-short
-presentation. Red-effect clearing and corpse rendering cannot share one raw
-timer value after grace: Arena red is active above tick 150, while the terminal
-corpse requires tick 159. The safe split is to keep the stored post-grace timer
-at the red-safe boundary and project tick 159 only while the existing
-PlayerWizard animation hook renders a completed multiplayer corpse. The
-selector `+0x160` remains asserted until respawn.
+the surviving corpse back to frame 0. That is one visible cut-short path.
+Red-effect clearing and corpse rendering cannot share one raw timer value
+after grace: Arena red is active above tick 150, while the terminal corpse
+requires tick 159. The selector `+0x160` remains asserted until respawn.
+
+The first three-owner organic follow-up exposed a second, earlier cut. The
+logical five-second clock was being written directly into `actor +0x1BC`.
+Headless re-decompilation of `FUN_00533520` confirms that this field is both a
+sprite-frame input and the CPU lifecycle counter. The PlayerWizard tick
+increments it before exact equality checks. At `0x9F` (159) it performs all of
+these owner-side mutations in one block:
+
+```text
+Arena +0x8E04 = 0.25f
+actor +0x36 = 0
+actor +0xA0 = -1000.0f
+emit the finite additive corpse bursts
+```
+
+`FUN_00538550`, by contrast, only reads `+0x1BC` to choose death sprite
+`min((ticks - 150) / 3, 3)`. A render call may therefore project tick 159
+without executing the tick-159 CPU transition.
+
+The distinction appeared exactly in the isolated `orgsf-fix1` and
+`orgsf-fix2` traces. The target owner advanced from tick 157 to 162, changed
+its render/sort field from `0.0` to `-1000.0`, and returned an all-black
+1600x900 D3D9 backbuffer five consecutive times while its runtime phase was
+still `DeathPresentation`. The dead client observing that same target kept
+`+0xA0 = 0.0`, reached the replicated terminal frame, and produced a valid
+corpse image at the unchanged death coordinate. Remote dead actors bypass the
+owner-only `FUN_00533520` transition, explaining the peer split.
+
+The foundational timer ownership is consequently:
+
+1. the runtime/wire death epoch owns the full logical `0..298` clock;
+2. the CPU-visible native timer is clamped at the red-safe tick 150 before
+   every connected multiplayer death tick, so neither tick 159 nor tick 300
+   can execute;
+3. the PlayerWizard animation hook temporarily projects
+   `min(logical_tick, 159)` for both active owner and replicated presentations,
+   calls the stock dead-sprite renderer, and restores a value no greater than
+   150;
+4. after grace, rendering continues to project tick 159 while the stored timer
+   stays at 150 until participant-scoped respawn clears the death selector.
 
 The product grace contract is now 5,000 ms. The owner-authored 0..298 clock
 therefore reaches the terminal corpse frame during the interval and holds it
@@ -753,10 +790,19 @@ status box appeared inside the world above the actors while the original
 screen-space box remained. This is an offscreen render-target leak, not a
 second spectator target or a minion-associated HUD instance.
 
-Overlay drawing must be admitted only when the active render target is the
-device backbuffer. Frame observation bookkeeping may continue on other passes,
-but the spectator HUD must never be drawn into a texture that the game later
-places in world space.
+The controls box is loader diagnostic status text, not stock spectator UI and
+not an actor-owned surface. Normal player sessions run with
+`loader.debug_ui=false`; `RegisterDiagnosticSurfaceFrame` returns before it
+constructs the spectator text, and the normal-session log guard rejects any
+successful spectator-status draw. The semantic spectator target and click
+controls remain available through runtime state.
+
+This is a stronger product boundary than trying to associate the diagnostic
+quad with a wizard: normal gameplay registers and draws no such surface on the
+backbuffer or on offscreen passes. Summons therefore cannot duplicate, migrate,
+or appear to inherit it. Diagnostic launches may still opt into the screen-
+space status surface explicitly, but that path is not part of the published
+player presentation.
 
 ### Native wave loading and organic-damage provenance
 
@@ -848,17 +894,20 @@ The native findings impose these constraints:
 - The single death-grace contract is 5,000 ms for owner and observers. It owns
   red-effect expiry, staff-drop epoch accounting, spectator handoff, and
   respawn eligibility.
-- After 5,000 ms, stored `+0x1BC` is held at the Arena red-safe boundary and
-  can never reach the stock tick-300 end-of-life path. The animation hook
-  projects the tick-159 terminal corpse frame only for rendering.
+- Throughout a connected multiplayer death, stored `+0x1BC` never exceeds the
+  Arena red-safe boundary, so the owner-only tick-159 retirement block and
+  tick-300 end-of-life path cannot execute. The runtime/wire clock still
+  advances through 298, and the animation hook projects its clamped `0..159`
+  value only for rendering on owners and observers.
 - A current spectator target remains camera-valid while its replicated death
   presentation is active, so its complete death animation stays at the death
   location before automatic retarget.
 - Local native dispatch, outgoing cast publication, and incoming authority
   reject dead participants before any spell, minion command, relay, transform
   mutation, or world effect.
-- Spectator HUD rendering is restricted to the active D3D9 backbuffer; summons
-  and other offscreen passes cannot duplicate or relocate it.
+- Normal player sessions do not register or draw loader spectator-status
+  surfaces. Spectator targeting remains semantic, and summons cannot inherit
+  or duplicate a diagnostic quad.
 - Organic acceptance rewrites all 42 staged wave records while preserving the
   native `NEXT:` graph, excludes every pre-wave Boneyard actor by address, and
   observes a real HP decrement from the selected post-start actor before
@@ -895,3 +944,9 @@ three-owner loopback acceptance entry point.
 variant. It covers melee, projectile, and poison wave fixtures, host/client
 victims, idle/casting input, synchronized presentation, owner-only one-shot
 death/drop traces, grace expiry, spectator handoff, and respawn.
+`tools/verify_multiplayer_organic_spectator_followup.py` is the three-owner
+continuation. It organically creates a spectator, summons the default Ether
+minion while that owner is the selected target, enforces the normal-session
+zero-diagnostic-surface contract, then organically kills the selected target
+and holds the camera on its position-stable corpse until the five-second
+presentation expires.
