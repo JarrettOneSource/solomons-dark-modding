@@ -133,6 +133,7 @@ $acceptedLargeFiles = @{
     "src/mod_loader_gameplay/replicated_loot_reconciliation.inl" = "Host-owned loot materialization lifecycle kept together through live verification."
     "src/mod_loader_gameplay/world_snapshot_reconciliation.inl" = "Host-authoritative world reconciliation pipeline pending a behavior-neutral module split."
     "src/multiplayer_local_transport.cpp" = "Local-UDP protocol prototype pending extraction behind the final transport interface."
+    "src/multiplayer_local_transport/death_spectator_sync.inl" = "Death/spectator sync transaction kept contiguous while the spectator HUD rework is in flight; owes a behavior-neutral split to the death-seam owner."
     "src/multiplayer_local_transport/loot_pickup_authority.inl" = "Host loot-pickup validation, ownership, and completion form one authority transaction."
     "src/run_lifecycle/run_and_enemy_hooks.inl" = "Run lifecycle and enemy authority hooks kept contiguous through multiplayer stress validation."
     "src/wave_intelligence.cpp" = "Effective schedule parsing and authority/replication accounting form one semantic wave service."
