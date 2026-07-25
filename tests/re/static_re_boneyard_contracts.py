@@ -237,6 +237,9 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
     run_hooks = _read(
         "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/run_transition_hooks.inl"
     )
+    presentation_patch = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/boneyard_generator_patch.inl"
+    )
     verifier = _read("tools/verify_run_static_layout_sync.py")
     layout = _read("config/binary-layout.ini")
     networking = _read("docs/networking/README.md")
@@ -273,7 +276,14 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "boneyard_tree_variant=0x140",
         "boneyard_tree_overlay_variant=0x142",
         "boneyard_tree_overlay_enabled=0x144",
+        "boneyard_scenery_common_scalar=0xCC",
+        "boneyard_tree_sway_countdown=0x148",
+        "boneyard_tree_sway_target=0x14C",
+        "boneyard_tree_sway_current=0x150",
         "boneyard_scrub_variant=0x140",
+        "boneyard_scrub_phase=0x134",
+        "boneyard_goodie_active=0x143",
+        "boneyard_goodie_timer=0x144",
         "actor_world_compact_decoration_list=0x8ADC",
         "boneyard_compact_type=0x00",
         "boneyard_compact_position_x=0x04",
@@ -297,9 +307,11 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "SCRUB_TYPE_ID = 2062",
         'emit("boneyard_scenery_count"',
         'emit("boneyard_scenery_digest"',
+        'emit("boneyard_scenery_diagnostic_digest"',
         'emit("boneyard_tree_count"',
         'emit("boneyard_tree_digest"',
         'emit("boneyard_tree_diagnostic_digest"',
+        '"common_scalar_bits"',
         'off("actor_world_road_list")',
         'emit("boneyard_road_digest"',
         'off("actor_world_fence_list")',
@@ -309,16 +321,64 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         'off("actor_world_compact_decoration_list")',
         'emit("boneyard_compact_count"',
         'emit("boneyard_compact_digest"',
+        'emit("boneyard_presentation_digest"',
+        '"boneyard_presentation_arena_ambient_kind"',
+        '"boneyard_presentation_marker_scale_bits"',
         '"boneyard_compact_type_7_8_noncanonical_flags"',
         '"boneyard_compact_type_21_24_count"',
         'off("boneyard_compact_bounds_left")',
         'off("boneyard_compact_bounds_bottom")',
         "def decor_tables(",
-        "def matched_frame_correlation(",
-        "def capture_matched_camera_pair(",
-        '"frame_correlation": correlation',
-        'correlation["grayscale_correlation"] >= 0.75',
-        'correlation["edge_correlation"] >= 0.65',
+        "def render_decor_tables(",
+        '"presentation_inputs": presentation_inputs',
+        "def full_render_input_digest(",
+        '"verified_render_profile"',
+        'if row["type_id"] != 2001:',
+        '"render_decor_tables_exact": True',
+        '"diagnostic_decor_tables_exact"',
+        "def matched_camera_targets(",
+        "def exact_decor_pixel_comparison(",
+        "def exact_stable_decor_pixel_comparison(",
+        "def exact_temporal_envelope_decor_pixel_comparison(",
+        "def nav_actor_parking_positions(",
+        "sd.debug.get_nav_grid(1)",
+        "grid_world ~= scene_world",
+        "sample.traversable",
+        "def capture_matched_camera_areas(",
+        "clearance(row)[0] >= 1000.0",
+        "camera_safe_margin = 650.0",
+        "local_sync.wait_for_local_transform_settled(",
+        "local_sync.wait_for_remote_convergence(",
+        "minimum_decor_roi_clearance = 120.0",
+        "No damage or spell probe",
+        '"differing_pixel_count": differing_pixel_count',
+        '"pixel_hashes_match": host_hash == client_hash',
+        "differing_pixel_count == 0",
+        '"differing_stable_pixel_count": differing_stable_pixel_count',
+        '"stable_pixel_hashes_match": stable_hashes_match',
+        "stable_pixel_count >= minimum_stable_pixel_count",
+        "stable_visible_pixel_count >= minimum_stable_visible_pixel_count",
+        'if not stable_pixels["exact_match"]',
+        '"frames_per_peer": len(host_paths)',
+        '"differing_envelope_pixel_count"',
+        '"maximum_envelope_channel_gap"',
+        '"allowed_unexplained_channel_gap": 0',
+        '"excluded_pixel_count": sum(excluded_mask)',
+        "minimum_visible_pixel_count = 512",
+        '"world_roi_excluded": True',
+        "range(1, CAPTURE_FRAMES_PER_PEER + 1)",
+        '"family": family',
+        '"trees"',
+        '"large-rocks"',
+        '"ground-clutter"',
+        '"scenery-props"',
+        "def configure_visual_gate_render_profile(",
+        "complex_lighting = { address = 0x00B3BCA8, value = 1 }",
+        "complex_shadows = { address = 0x00B3BCA9, value = 1 }",
+        "multiple_shadows = { address = 0x00B3BCAA, value = 1 }",
+        "zoom_effects = { address = 0x00B3BCAC, value = 1 }",
+        "enhanced_effects = { address = 0x00B3BCAD, value = 0 }",
+        "sd.debug.resolve_game_address(slot.address)",
         "def capture_owned_process_identities(",
         "def stop_owned_processes(",
         '"boneyard_scenery_count"',
@@ -338,6 +398,44 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
     if "stop_games()" in verifier:
         raise StaticReTestFailure(
             "Boneyard live verifier still performs machine-wide game cleanup"
+        )
+    if "queue_native_magic_hit_behavior_probe" in verifier:
+        raise StaticReTestFailure(
+            "Boneyard visual gate still injects actor damage presentation"
+        )
+    required_presentation_repair = (
+        "HookBoneyardTreeCtor",
+        "kBoneyardSceneryCommonScalarOffset",
+        "HookBoneyardTreeTick",
+        "kBoneyardCanonicalTreeSwayCountdown",
+        "HookBoneyardTreeRenderOverlay",
+        "HookBoneyardSceneryRenderLighting",
+        "CanonicalizeBoneyardTreeLightingScalar",
+        "StableBoneyardTreeLightingScalar",
+        "StableBoneyardTreeSwayScale",
+        "StableBoneyardSceneryHash",
+        "kBoneyardTreeTypeId",
+        "StableBoneyardScrubPhase",
+        "HookBoneyardScrubCtor",
+        "HookBoneyardScrubTick",
+        "HookBoneyardGoodieCtor",
+        "kBoneyardGoodieTimerOffset",
+        "BoneyardAmbientRngGate",
+        "BoneyardMarkerPrimaryTintRng",
+        "BoneyardMarkerSecondaryTintRng",
+        "StableBoneyardMarkerTint",
+        "ambient_rng_suppression=2",
+        "marker_tint_rng_stabilization=2",
+    )
+    missing_repair = [
+        token
+        for token in required_presentation_repair
+        if token not in presentation_patch
+    ]
+    if missing_repair:
+        raise StaticReTestFailure(
+            "Boneyard presentation repair is incomplete: "
+            + ", ".join(missing_repair)
         )
 
     for token in ("Solomon_Dig", "Lantern", "Tree 2001", "Scrub 2062"):

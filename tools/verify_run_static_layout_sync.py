@@ -4,17 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import struct
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
 import multiplayer_frame_capture
 import verify_local_multiplayer_sync as local_sync
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -28,6 +30,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_key_values,
     path_for_powershell,
+    place_player,
     select_available_windows_udp_ports,
     start_host_testrun_and_wait_for_clients,
     wait_for_remote,
@@ -35,6 +38,7 @@ from verify_local_multiplayer_sync import (
 
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_static_layout_sync_verification.json"
+CAPTURE_FRAMES_PER_PEER = 16
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -100,6 +104,43 @@ if mp and mp.participants then
 end
 emit("local_run_nonce", hx(local_run_nonce))
 emit("remote_run_nonce", hx(remote_run_nonce))
+
+local marker_tint_scale_address =
+  tonumber(sd.debug.resolve_game_address(0x00785D34)) or 0
+local marker_tint_bias_address =
+  tonumber(sd.debug.resolve_game_address(0x00784E20)) or 0
+local marker_tint_scale_bits = read_u32(marker_tint_scale_address)
+local marker_tint_bias_low_bits = read_u32(marker_tint_bias_address)
+local marker_tint_bias_high_bits = read_u32(marker_tint_bias_address + 4)
+local arena_ambient_kind =
+  read_u8(world_address + off("boneyard_arena_ambient_kind"))
+local presentation_values = {
+  local_run_nonce,
+  arena_ambient_kind,
+  0x00471805,
+  0,
+  0x004723C2,
+  0,
+  0x004712BB,
+  marker_tint_scale_bits,
+  0,
+  marker_tint_bias_low_bits,
+  marker_tint_bias_high_bits,
+  0x004726E3,
+  marker_tint_scale_bits,
+  0,
+  marker_tint_bias_low_bits,
+  marker_tint_bias_high_bits,
+}
+emit("boneyard_presentation_run_seed", hx(local_run_nonce))
+emit("boneyard_presentation_arena_ambient_kind", arena_ambient_kind)
+emit("boneyard_presentation_compact_ambient_result", 0)
+emit("boneyard_presentation_secondary_ambient_result", 0)
+emit("boneyard_presentation_marker_scale_bits", hx(marker_tint_scale_bits))
+emit("boneyard_presentation_marker_sign_mode", 0)
+emit("boneyard_presentation_marker_bias_low_bits", hx(marker_tint_bias_low_bits))
+emit("boneyard_presentation_marker_bias_high_bits", hx(marker_tint_bias_high_bits))
+emit("boneyard_presentation_digest", hx(digest_values(presentation_values)))
 
 local controller = world_address + off("actor_owner_movement_controller")
 local circle_count = read_i32(controller + off("movement_controller_circle_count"))
@@ -461,6 +502,7 @@ for index = 0, max_scenery - 1 do
         x_value,
         y_value,
         radius_value,
+        read_u32(scenery + off("boneyard_scenery_common_scalar")),
       })
     end
   end
@@ -475,7 +517,22 @@ local function digest_rows(rows, prefix, field_count)
 end
 emit("boneyard_scenery_count", scenery_count)
 emit("boneyard_scenery_sampled", #scenery_rows)
+local scenery_render_rows = {}
+for _, scenery in ipairs(scenery_rows) do
+  local render_row = {}
+  for field_index, value in ipairs(scenery) do
+    -- Common scenery +0xCC is read only by Tree's complex-lighting overlay.
+    -- Include it for Tree while retaining it only diagnostically for families
+    -- whose complete renderer set does not consume the word.
+    if field_index ~= 12 or scenery[2] == TREE_TYPE_ID then
+      append(render_row, value)
+    end
+  end
+  table.insert(scenery_render_rows, render_row)
+end
 emit("boneyard_scenery_digest", hx(
+  digest_rows(scenery_render_rows, {scenery_count, #scenery_rows})))
+emit("boneyard_scenery_diagnostic_digest", hx(
   digest_rows(scenery_rows, {scenery_count, #scenery_rows})))
 for index, scenery in ipairs(scenery_rows) do
   emit("boneyard_scenery." .. index .. ".row", comma_row(scenery))
@@ -515,6 +572,7 @@ for _, tree in ipairs(boneyard_trees) do
   if tree[1] == TREE_TYPE_ID then
     append(render_row, tree[12])
     append(render_row, tree[13])
+    append(render_row, tree[19])
   else
     append(render_row, tree[9])
     append(render_row, tree[12])
@@ -527,7 +585,7 @@ end
 emit("boneyard_tree_digest", hx(
   digest_rows(boneyard_tree_render_rows, {#boneyard_trees})))
 emit("boneyard_tree_diagnostic_digest", hx(
-  digest_rows(boneyard_trees, {#boneyard_trees}, 15)))
+  digest_rows(boneyard_trees, {#boneyard_trees}, 19)))
 for index, tree in ipairs(boneyard_trees) do
   emit("boneyard_tree." .. index .. ".type_id", tree[1])
   emit("boneyard_tree." .. index .. ".x_bits", hx(tree[2]))
@@ -547,6 +605,7 @@ for index, tree in ipairs(boneyard_trees) do
   emit("boneyard_tree." .. index .. ".x", tree[16])
   emit("boneyard_tree." .. index .. ".y", tree[17])
   emit("boneyard_tree." .. index .. ".radius", tree[18])
+  emit("boneyard_tree." .. index .. ".common_scalar_bits", hx(tree[19]))
 end
 
 -- Roads, abstract Fence specifications, and Terrain live in separate
@@ -881,6 +940,7 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
             "overlay_enabled",
             "phase_bits",
             "render_parameter_bits",
+            "common_scalar_bits",
             "sway_countdown",
             "sway_target_bits",
             "sway_current_bits",
@@ -913,6 +973,9 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
             "overlay_enabled": integer(row, prefix + "overlay_enabled"),
             "render_parameter_bits": u32(
                 row[prefix + "render_parameter_bits"]
+            ),
+            "common_scalar_bits": u32(
+                row[prefix + "common_scalar_bits"]
             ),
             "sway_target_bits": u32(row[prefix + "sway_target_bits"]),
             "sway_current_bits": u32(row[prefix + "sway_current_bits"]),
@@ -1020,6 +1083,35 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
             "dead_roots",
         )
     }
+    presentation_inputs = {
+        "run_seed": u32(row["boneyard_presentation_run_seed"]),
+        "arena_ambient_kind": integer(
+            row, "boneyard_presentation_arena_ambient_kind"
+        ),
+        "ambient_spawn_results": {
+            "compact": integer(
+                row, "boneyard_presentation_compact_ambient_result"
+            ),
+            "secondary": integer(
+                row, "boneyard_presentation_secondary_ambient_result"
+            ),
+        },
+        "marker_tint": {
+            "primary_salt": 0x004712BB,
+            "secondary_salt": 0x004726E3,
+            "scale_bits": u32(
+                row["boneyard_presentation_marker_scale_bits"]
+            ),
+            "sign_mode": integer(
+                row, "boneyard_presentation_marker_sign_mode"
+            ),
+            "bias_bits": [
+                u32(row["boneyard_presentation_marker_bias_low_bits"]),
+                u32(row["boneyard_presentation_marker_bias_high_bits"]),
+            ],
+        },
+        "digest": row["boneyard_presentation_digest"],
+    }
     return {
         "scenery_count": integer(row, "boneyard_scenery_count"),
         "scenery_digest": row.get("boneyard_scenery_digest", ""),
@@ -1053,7 +1145,60 @@ def decor_tables(row: dict[str, str]) -> dict[str, Any]:
         ),
         "compact_family_counts": compact_family_counts,
         "compact": compact,
+        "presentation_inputs": presentation_inputs,
     }
+
+
+def render_decor_tables(decor: dict[str, Any]) -> dict[str, Any]:
+    scenery: list[dict[str, Any]] = []
+    for row in decor["scenery"]:
+        render_row = dict(row)
+        if row["type_id"] != 2001:
+            render_row.pop("common_scalar_bits", None)
+        scenery.append(render_row)
+    return {
+        "scenery": scenery,
+        "trees": decor["trees"],
+        "roads": decor["roads"],
+        "fences": decor["fences"],
+        "terrain": decor["terrain"],
+        "compact": decor["compact"],
+        "presentation_inputs": decor["presentation_inputs"],
+    }
+
+
+def verified_render_profile_inputs(
+    profile: dict[str, str],
+) -> dict[str, int]:
+    names = (
+        "complex_lighting",
+        "complex_shadows",
+        "multiple_shadows",
+        "zoom_effects",
+        "enhanced_effects",
+    )
+    return {
+        name: int(profile[f"after.{name}"])
+        for name in names
+    }
+
+
+def full_render_input_digest(
+    render_decor: dict[str, Any],
+    render_profile: dict[str, str],
+) -> str:
+    payload = {
+        "native_order_render_decor": render_decor,
+        "verified_render_profile": verified_render_profile_inputs(
+            render_profile
+        ),
+    }
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
@@ -1077,6 +1222,7 @@ def layouts_match(host: dict[str, str], client: dict[str, str]) -> bool:
         "boneyard_compact_digest",
         "boneyard_compact_type_7_8_count",
         "boneyard_compact_type_21_24_count",
+        "boneyard_presentation_digest",
     ]
     required_equal.extend(
         f"boneyard_scenery_type_{type_id}_count"
@@ -1144,9 +1290,20 @@ def wait_for_layout_sync(
         if layouts_match(last_host, last_client):
             host_decor = decor_tables(last_host)
             client_decor = decor_tables(last_client)
-            if host_decor != client_decor:
+            host_render_decor = render_decor_tables(host_decor)
+            client_render_decor = render_decor_tables(client_decor)
+            mismatched_render_tables = [
+                table_name
+                for table_name in host_render_decor
+                if (
+                    host_render_decor[table_name]
+                    != client_render_decor[table_name]
+                )
+            ]
+            if mismatched_render_tables:
                 raise VerifyFailure(
-                    "decor digests matched but the exact Tree/compact tables did not"
+                    "decor digests matched but exact render-input tables "
+                    "differed: " + ", ".join(mismatched_render_tables)
                 )
             return {
                 "host": last_host,
@@ -1155,6 +1312,14 @@ def wait_for_layout_sync(
                     "host": host_decor,
                     "client": client_decor,
                 },
+                "render_decor_tables": {
+                    "host": host_render_decor,
+                    "client": client_render_decor,
+                },
+                "render_decor_tables_exact": True,
+                "diagnostic_decor_tables_exact": (
+                    host_decor == client_decor
+                ),
             }
         time.sleep(0.25)
     raise VerifyFailure(f"run static layout did not converge: host={last_host} client={last_client}")
@@ -1167,6 +1332,7 @@ def _normalize_windows_path(path: str) -> str:
 def expected_owned_process_identities(
     launch: dict[str, object],
     instance_prefix: str,
+    runtime_root: Path = ROOT / "runtime",
 ) -> list[dict[str, Any]]:
     roles = (
         ("host", "hostProcessId"),
@@ -1178,8 +1344,7 @@ def expected_owned_process_identities(
         if process_id <= 0:
             raise VerifyFailure(f"launcher did not report the {role} process ID")
         expected_path = path_for_powershell(
-            ROOT
-            / "runtime"
+            runtime_root
             / "instances"
             / f"{instance_prefix}-{role}"
             / "stage"
@@ -1392,6 +1557,274 @@ def matched_camera_target(
     }
 
 
+def matched_camera_targets(
+    decor: dict[str, Any],
+    actor_positions: list[list[float]],
+) -> list[dict[str, Any]]:
+    categories = (
+        (
+            "trees",
+            "scenery",
+            [
+                row
+                for row in decor["trees"]
+                if row["type_id"] == 2001
+            ],
+        ),
+        (
+            "large-rocks",
+            "compact",
+            [
+                row
+                for row in decor["compact"]
+                if 21 <= row["type_id"] <= 24
+            ],
+        ),
+        (
+            "ground-clutter",
+            "compact",
+            [
+                row
+                for row in decor["compact"]
+                if 0 <= row["type_id"] <= 20 or row["type_id"] == 30
+            ],
+        ),
+        (
+            "scenery-props",
+            "scenery",
+            [
+                row
+                for row in decor["scenery"]
+                if row["type_id"]
+                in {
+                    2009,
+                    2029,
+                    2040,
+                    2061,
+                    2062,
+                }
+            ],
+        ),
+    )
+    normalized_actors = [
+        [float(position[0]), float(position[1])]
+        for position in actor_positions
+        if (
+            len(position) == 2
+            and math.isfinite(float(position[0]))
+            and math.isfinite(float(position[1]))
+        )
+    ]
+    all_decor_positions = [
+        [
+            float(row["position"][0]),
+            float(row["position"][1]),
+        ]
+        for table_name in ("scenery", "compact")
+        for row in decor[table_name]
+        if (
+            len(row.get("position", ())) == 2
+            and math.isfinite(float(row["position"][0]))
+            and math.isfinite(float(row["position"][1]))
+        )
+    ]
+    if not all_decor_positions:
+        raise VerifyFailure("matched-camera capture lacks decor positions")
+    min_world_x = min(position[0] for position in all_decor_positions)
+    max_world_x = max(position[0] for position in all_decor_positions)
+    min_world_y = min(position[1] for position in all_decor_positions)
+    max_world_y = max(position[1] for position in all_decor_positions)
+    camera_safe_margin = 650.0
+    world_center = [
+        sum(position[axis] for position in all_decor_positions)
+        / len(all_decor_positions)
+        for axis in (0, 1)
+    ]
+    selected: list[dict[str, Any]] = []
+    for family, source, candidates in categories:
+        def clearance(row: dict[str, Any]) -> tuple[float, float]:
+            position = row["position"]
+            actor_clearance = (
+                min(math.dist(position, actor) for actor in normalized_actors)
+                if normalized_actors
+                else math.inf
+            )
+            area_separation = (
+                min(
+                    math.dist(position, target["position"])
+                    for target in selected
+                )
+                if selected
+                else math.inf
+            )
+            return actor_clearance, area_separation
+
+        valid = [
+            row
+            for row in candidates
+            if (
+                len(row.get("position", ())) == 2
+                and math.isfinite(float(row["position"][0]))
+                and math.isfinite(float(row["position"][1]))
+                and clearance(row)[0] >= 1000.0
+                and min_world_x + camera_safe_margin
+                <= float(row["position"][0])
+                <= max_world_x - camera_safe_margin
+                and min_world_y + camera_safe_margin
+                <= float(row["position"][1])
+                <= max_world_y - camera_safe_margin
+            )
+        ]
+        if not valid:
+            raise VerifyFailure(
+                f"matched-camera capture lacks actor-clear {family} "
+                f"candidates"
+            )
+
+        separated = [
+            row
+            for row in valid
+            if not selected or clearance(row)[1] >= 250.0
+        ]
+        if not separated:
+            raise VerifyFailure(
+                f"matched-camera capture lacks a distinct {family} area"
+            )
+
+        def density_key(row: dict[str, Any]) -> tuple[int, int, float, int]:
+            position = row["position"]
+            near = sum(
+                math.dist(position, other) <= 160.0
+                for other in all_decor_positions
+            )
+            neighborhood = sum(
+                math.dist(position, other) <= 300.0
+                for other in all_decor_positions
+            )
+            return (
+                near,
+                neighborhood,
+                -math.dist(position, world_center),
+                int(row.get("native_index", -1)),
+            )
+
+        entity = max(
+            separated,
+            key=density_key,
+        )
+        actor_clearance, area_separation = clearance(entity)
+        target_position = [
+            float(entity["position"][0]),
+            float(entity["position"][1]),
+        ]
+        selected.append(
+            {
+                "family": family,
+                "source": source,
+                "position": target_position,
+                "entity": entity,
+                "actor_clearance": actor_clearance,
+                "decor_density_160": density_key(entity)[0],
+                "decor_density_300": density_key(entity)[1],
+                "camera_safe_margin": camera_safe_margin,
+                "nearest_selected_area_distance": (
+                    area_separation if selected else None
+                ),
+            }
+        )
+    return selected
+
+
+def first_launch_control_picker_worker(
+    pipe_names: list[str],
+    stop_event: threading.Event,
+    records: dict[str, dict[str, Any]],
+) -> None:
+    if stop_event.wait(20.0):
+        return
+    code = """
+local snap = sd.ui.get_snapshot()
+local surface = type(snap) == "table" and tostring(snap.surface_id or "") or ""
+print("surface=" .. surface)
+if surface == "control_scheme_picker" then
+  local ok, request = sd.ui.activate_action(
+    "control_scheme_picker.select_wasd",
+    "control_scheme_picker")
+  print("accepted=" .. tostring(ok))
+  print("request=" .. tostring(request))
+end
+"""
+    pending = set(pipe_names)
+    while pending and not stop_event.is_set():
+        for pipe_name in list(pending):
+            if stop_event.is_set():
+                break
+            try:
+                row = parse_key_values(lua(pipe_name, code, timeout=2.0))
+                records[pipe_name] = row
+                if (
+                    row.get("surface") == "control_scheme_picker"
+                    and row.get("accepted") == "true"
+                ):
+                    records[pipe_name]["dispatched"] = True
+                    pending.remove(pipe_name)
+            except Exception as exc:
+                records[pipe_name] = {"last_error": str(exc)}
+        stop_event.wait(0.2)
+
+
+def configure_visual_gate_render_profile(
+    pipe_name: str,
+) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            """
+local slots = {
+  complex_lighting = { address = 0x00B3BCA8, value = 1 },
+  complex_shadows = { address = 0x00B3BCA9, value = 1 },
+  multiple_shadows = { address = 0x00B3BCAA, value = 1 },
+  zoom_effects = { address = 0x00B3BCAC, value = 1 },
+  enhanced_effects = { address = 0x00B3BCAD, value = 0 },
+}
+for name, slot in pairs(slots) do
+  slot.live = assert(sd.debug.resolve_game_address(slot.address))
+  print("address." .. name .. "=" .. tostring(slot.live))
+  print("before." .. name .. "=" .. tostring(sd.debug.read_u8(slot.live)))
+end
+for _, slot in pairs(slots) do
+  assert(sd.debug.write_u8(slot.live, slot.value))
+end
+for name, slot in pairs(slots) do
+  print("expected." .. name .. "=" .. tostring(slot.value))
+  print("after." .. name .. "=" .. tostring(sd.debug.read_u8(slot.live)))
+end
+""",
+            timeout=10.0,
+        )
+    )
+    after = {
+        key: value
+        for key, value in values.items()
+        if key.startswith("after.")
+    }
+    expected = {
+        key.removeprefix("expected."): value
+        for key, value in values.items()
+        if key.startswith("expected.")
+    }
+    actual = {
+        key.removeprefix("after."): value
+        for key, value in after.items()
+    }
+    if not expected or actual != expected:
+        raise VerifyFailure(
+            f"visual-gate render profile did not converge on {pipe_name}: "
+            f"{values}"
+        )
+    return values
+
+
 def focus_camera(
     pipe_name: str,
     target_x: float,
@@ -1508,77 +1941,953 @@ def matched_frame_correlation(
     }
 
 
-def capture_matched_camera_pair(
+def roi_excluded_pixel_mask(
+    image_size: tuple[int, int],
+    roi_bounds: tuple[int, int, int, int],
+    excluded_rectangles: list[list[int]] | None,
+) -> list[bool]:
+    roi_left, roi_top, roi_right, roi_bottom = roi_bounds
+    roi_width = roi_right - roi_left
+    roi_height = roi_bottom - roi_top
+    mask = [False] * (roi_width * roi_height)
+    if not excluded_rectangles:
+        return mask
+    image_width, image_height = image_size
+    for rectangle in excluded_rectangles:
+        if len(rectangle) != 4:
+            raise VerifyFailure(
+                f"invalid pixel exclusion rectangle: {rectangle}"
+            )
+        left, top, right, bottom = (int(value) for value in rectangle)
+        left = max(0, min(image_width, left))
+        top = max(0, min(image_height, top))
+        right = max(0, min(image_width, right))
+        bottom = max(0, min(image_height, bottom))
+        if right <= left or bottom <= top:
+            continue
+        for y in range(max(top, roi_top), min(bottom, roi_bottom)):
+            row_offset = (y - roi_top) * roi_width
+            for x in range(max(left, roi_left), min(right, roi_right)):
+                mask[row_offset + x - roi_left] = True
+    return mask
+
+
+def exact_decor_pixel_comparison(
+    host_path: Path,
+    client_path: Path,
+    camera: dict[str, Any],
+    evidence_prefix: Path,
+    world_half_extent: float = 120.0,
+    excluded_rectangles: list[list[int]] | None = None,
+) -> dict[str, Any]:
+    with Image.open(host_path) as host_source:
+        host = host_source.convert("RGB")
+    with Image.open(client_path) as client_source:
+        client = client_source.convert("RGB")
+    if host.size != client.size:
+        raise VerifyFailure(
+            f"matched captures have different dimensions: "
+            f"host={host.size} client={client.size}"
+        )
+
+    camera_width = float(camera["width"])
+    camera_height = float(camera["height"])
+    if camera_width <= 0.0 or camera_height <= 0.0:
+        raise VerifyFailure(f"invalid camera dimensions: {camera}")
+    half_width_pixels = max(
+        1,
+        round(world_half_extent * host.width / camera_width),
+    )
+    half_height_pixels = max(
+        1,
+        round(world_half_extent * host.height / camera_height),
+    )
+    center_x = host.width // 2
+    center_y = host.height // 2
+    bounds = (
+        max(0, center_x - half_width_pixels),
+        max(0, center_y - half_height_pixels),
+        min(host.width, center_x + half_width_pixels),
+        min(host.height, center_y + half_height_pixels),
+    )
+    excluded_mask = roi_excluded_pixel_mask(
+        host.size,
+        bounds,
+        excluded_rectangles,
+    )
+    host_roi = host.crop(bounds)
+    client_roi = client.crop(bounds)
+    host_pixels = list(host_roi.get_flattened_data())
+    client_pixels = list(client_roi.get_flattened_data())
+    for index, excluded in enumerate(excluded_mask):
+        if excluded:
+            host_pixels[index] = (0, 0, 0)
+            client_pixels[index] = (0, 0, 0)
+    host_roi.putdata(host_pixels)
+    client_roi.putdata(client_pixels)
+    difference = ImageChops.difference(host_roi, client_roi)
+    difference_pixels = list(difference.get_flattened_data())
+    differing_pixel_count = sum(
+        pixel != (0, 0, 0) for pixel in difference_pixels
+    )
+    maximum_channel_delta = max(
+        (max(pixel) for pixel in difference_pixels),
+        default=0,
+    )
+    host_visible_pixels = sum(max(pixel) > 8 for pixel in host_pixels)
+    client_visible_pixels = sum(max(pixel) > 8 for pixel in client_pixels)
+    host_unique_colors = len(set(host_pixels))
+    client_unique_colors = len(set(client_pixels))
+
+    host_roi_path = Path(f"{evidence_prefix}-host-decor-roi.png")
+    client_roi_path = Path(f"{evidence_prefix}-client-decor-roi.png")
+    difference_path = Path(f"{evidence_prefix}-decor-diff.png")
+    host_roi.save(host_roi_path)
+    client_roi.save(client_roi_path)
+    difference.save(difference_path)
+    host_hash = hashlib.sha256(host_roi.tobytes()).hexdigest()
+    client_hash = hashlib.sha256(client_roi.tobytes()).hexdigest()
+    sufficient_visual_content = (
+        host_visible_pixels >= 512
+        and client_visible_pixels >= 512
+        and host_unique_colors >= 32
+        and client_unique_colors >= 32
+    )
+    return {
+        "roi_bounds": list(bounds),
+        "roi_world_half_extent": world_half_extent,
+        "pixel_count": host_roi.width * host_roi.height,
+        "excluded_pixel_count": sum(excluded_mask),
+        "excluded_rectangles": excluded_rectangles or [],
+        "differing_pixel_count": differing_pixel_count,
+        "maximum_channel_delta": maximum_channel_delta,
+        "host_pixel_sha256": host_hash,
+        "client_pixel_sha256": client_hash,
+        "pixel_hashes_match": host_hash == client_hash,
+        "host_visible_pixels": host_visible_pixels,
+        "client_visible_pixels": client_visible_pixels,
+        "host_unique_colors": host_unique_colors,
+        "client_unique_colors": client_unique_colors,
+        "sufficient_visual_content": sufficient_visual_content,
+        "exact_match": (
+            differing_pixel_count == 0
+            and host_hash == client_hash
+            and sufficient_visual_content
+        ),
+        "host_roi_path": str(host_roi_path),
+        "client_roi_path": str(client_roi_path),
+        "difference_path": str(difference_path),
+    }
+
+
+def exact_stable_decor_pixel_comparison(
+    host_paths: list[Path],
+    client_paths: list[Path],
+    camera: dict[str, Any],
+    evidence_prefix: Path,
+    world_half_extent: float = 120.0,
+    excluded_rectangles: list[list[int]] | None = None,
+) -> dict[str, Any]:
+    if len(host_paths) != len(client_paths) or len(host_paths) < 3:
+        raise VerifyFailure(
+            "stable decor comparison requires at least three paired frames"
+        )
+
+    frames: dict[str, list[Image.Image]] = {"host": [], "client": []}
+    for peer, paths in (("host", host_paths), ("client", client_paths)):
+        for path in paths:
+            with Image.open(path) as source:
+                frames[peer].append(source.convert("RGB"))
+    sizes = {
+        image.size
+        for peer_frames in frames.values()
+        for image in peer_frames
+    }
+    if len(sizes) != 1:
+        raise VerifyFailure(
+            f"stable decor captures have different dimensions: {sizes}"
+        )
+    width, height = next(iter(sizes))
+
+    camera_width = float(camera["width"])
+    camera_height = float(camera["height"])
+    if camera_width <= 0.0 or camera_height <= 0.0:
+        raise VerifyFailure(f"invalid camera dimensions: {camera}")
+    half_width_pixels = max(
+        1,
+        round(world_half_extent * width / camera_width),
+    )
+    half_height_pixels = max(
+        1,
+        round(world_half_extent * height / camera_height),
+    )
+    center_x = width // 2
+    center_y = height // 2
+    bounds = (
+        max(0, center_x - half_width_pixels),
+        max(0, center_y - half_height_pixels),
+        min(width, center_x + half_width_pixels),
+        min(height, center_y + half_height_pixels),
+    )
+    pixels = {
+        peer: [
+            list(image.crop(bounds).get_flattened_data())
+            for image in peer_frames
+        ]
+        for peer, peer_frames in frames.items()
+    }
+    pixel_count = len(pixels["host"][0])
+    excluded_mask = roi_excluded_pixel_mask(
+        (width, height),
+        bounds,
+        excluded_rectangles,
+    )
+    stable_mask_pixels: list[int] = []
+    stable_host_pixels: list[tuple[int, int, int]] = []
+    stable_client_pixels: list[tuple[int, int, int]] = []
+    stable_difference_pixels: list[tuple[int, int, int]] = []
+    host_hash = hashlib.sha256()
+    client_hash = hashlib.sha256()
+    stable_pixel_count = 0
+    stable_visible_pixel_count = 0
+    differing_stable_pixel_count = 0
+    maximum_stable_channel_delta = 0
+    stable_host_colors: set[tuple[int, int, int]] = set()
+    stable_client_colors: set[tuple[int, int, int]] = set()
+
+    for index in range(pixel_count):
+        if excluded_mask[index]:
+            stable_mask_pixels.append(0)
+            stable_host_pixels.append((0, 0, 0))
+            stable_client_pixels.append((0, 0, 0))
+            stable_difference_pixels.append((0, 0, 0))
+            continue
+        host_samples = [row[index] for row in pixels["host"]]
+        client_samples = [row[index] for row in pixels["client"]]
+        stable = (
+            all(sample == host_samples[0] for sample in host_samples[1:])
+            and all(
+                sample == client_samples[0]
+                for sample in client_samples[1:]
+            )
+        )
+        if not stable:
+            stable_mask_pixels.append(0)
+            stable_host_pixels.append((0, 0, 0))
+            stable_client_pixels.append((0, 0, 0))
+            stable_difference_pixels.append((0, 0, 0))
+            continue
+
+        host_pixel = host_samples[0]
+        client_pixel = client_samples[0]
+        delta = tuple(
+            abs(host_value - client_value)
+            for host_value, client_value in zip(
+                host_pixel,
+                client_pixel,
+                strict=True,
+            )
+        )
+        stable_mask_pixels.append(255)
+        stable_host_pixels.append(host_pixel)
+        stable_client_pixels.append(client_pixel)
+        stable_difference_pixels.append(delta)
+        stable_pixel_count += 1
+        stable_host_colors.add(host_pixel)
+        stable_client_colors.add(client_pixel)
+        if max(host_pixel) > 8 or max(client_pixel) > 8:
+            stable_visible_pixel_count += 1
+        if host_pixel != client_pixel:
+            differing_stable_pixel_count += 1
+        maximum_stable_channel_delta = max(
+            maximum_stable_channel_delta,
+            max(delta),
+        )
+        coordinate = index.to_bytes(4, "little", signed=False)
+        host_hash.update(coordinate)
+        host_hash.update(bytes(host_pixel))
+        client_hash.update(coordinate)
+        client_hash.update(bytes(client_pixel))
+
+    roi_width = bounds[2] - bounds[0]
+    roi_height = bounds[3] - bounds[1]
+    stable_mask = Image.new("L", (roi_width, roi_height))
+    stable_host = Image.new("RGB", (roi_width, roi_height))
+    stable_client = Image.new("RGB", (roi_width, roi_height))
+    stable_difference = Image.new("RGB", (roi_width, roi_height))
+    stable_mask.putdata(stable_mask_pixels)
+    stable_host.putdata(stable_host_pixels)
+    stable_client.putdata(stable_client_pixels)
+    stable_difference.putdata(stable_difference_pixels)
+    stable_mask_path = Path(f"{evidence_prefix}-stable-mask.png")
+    stable_host_path = Path(f"{evidence_prefix}-host-stable-decor.png")
+    stable_client_path = Path(f"{evidence_prefix}-client-stable-decor.png")
+    stable_difference_path = Path(
+        f"{evidence_prefix}-stable-decor-diff.png"
+    )
+    stable_mask.save(stable_mask_path)
+    stable_host.save(stable_host_path)
+    stable_client.save(stable_client_path)
+    stable_difference.save(stable_difference_path)
+
+    minimum_stable_pixel_count = math.ceil(pixel_count * 0.5)
+    minimum_stable_visible_pixel_count = 1024
+    minimum_stable_unique_colors = 32
+    stable_hashes_match = host_hash.digest() == client_hash.digest()
+    sufficient_stable_content = (
+        stable_pixel_count >= minimum_stable_pixel_count
+        and stable_visible_pixel_count >= minimum_stable_visible_pixel_count
+        and len(stable_host_colors) >= minimum_stable_unique_colors
+        and len(stable_client_colors) >= minimum_stable_unique_colors
+    )
+    return {
+        "roi_bounds": list(bounds),
+        "roi_world_half_extent": world_half_extent,
+        "pixel_count": pixel_count,
+        "excluded_pixel_count": sum(excluded_mask),
+        "excluded_rectangles": excluded_rectangles or [],
+        "stable_pixel_count": stable_pixel_count,
+        "stable_pixel_fraction": stable_pixel_count / pixel_count,
+        "minimum_stable_pixel_count": minimum_stable_pixel_count,
+        "stable_visible_pixel_count": stable_visible_pixel_count,
+        "minimum_stable_visible_pixel_count": (
+            minimum_stable_visible_pixel_count
+        ),
+        "stable_host_unique_colors": len(stable_host_colors),
+        "stable_client_unique_colors": len(stable_client_colors),
+        "minimum_stable_unique_colors": minimum_stable_unique_colors,
+        "differing_stable_pixel_count": differing_stable_pixel_count,
+        "maximum_stable_channel_delta": maximum_stable_channel_delta,
+        "host_stable_pixel_sha256": host_hash.hexdigest(),
+        "client_stable_pixel_sha256": client_hash.hexdigest(),
+        "stable_pixel_hashes_match": stable_hashes_match,
+        "sufficient_stable_content": sufficient_stable_content,
+        "actors_and_ui_excluded": {
+            "method": (
+                "intersection of pixels unchanged across three native "
+                "backbuffers on each peer"
+            ),
+            "frames_per_peer": len(host_paths),
+        },
+        "exact_match": (
+            differing_stable_pixel_count == 0
+            and stable_hashes_match
+            and sufficient_stable_content
+        ),
+        "stable_mask_path": str(stable_mask_path),
+        "host_stable_decor_path": str(stable_host_path),
+        "client_stable_decor_path": str(stable_client_path),
+        "stable_difference_path": str(stable_difference_path),
+    }
+
+
+def exact_temporal_envelope_decor_pixel_comparison(
+    host_paths: list[Path],
+    client_paths: list[Path],
+    camera: dict[str, Any],
+    evidence_prefix: Path,
+    world_half_extent: float = 120.0,
+    excluded_rectangles: list[list[int]] | None = None,
+) -> dict[str, Any]:
+    if len(host_paths) != len(client_paths) or len(host_paths) < 3:
+        raise VerifyFailure(
+            "temporal decor comparison requires at least three paired frames"
+        )
+    frames: dict[str, list[Image.Image]] = {"host": [], "client": []}
+    for peer, paths in (("host", host_paths), ("client", client_paths)):
+        for path in paths:
+            with Image.open(path) as source:
+                frames[peer].append(source.convert("RGB"))
+    sizes = {
+        image.size
+        for peer_frames in frames.values()
+        for image in peer_frames
+    }
+    if len(sizes) != 1:
+        raise VerifyFailure(
+            f"temporal decor captures have different dimensions: {sizes}"
+        )
+    width, height = next(iter(sizes))
+    camera_width = float(camera["width"])
+    camera_height = float(camera["height"])
+    if camera_width <= 0.0 or camera_height <= 0.0:
+        raise VerifyFailure(f"invalid camera dimensions: {camera}")
+    half_width_pixels = max(
+        1,
+        round(world_half_extent * width / camera_width),
+    )
+    half_height_pixels = max(
+        1,
+        round(world_half_extent * height / camera_height),
+    )
+    center_x = width // 2
+    center_y = height // 2
+    bounds = (
+        max(0, center_x - half_width_pixels),
+        max(0, center_y - half_height_pixels),
+        min(width, center_x + half_width_pixels),
+        min(height, center_y + half_height_pixels),
+    )
+    pixels = {
+        peer: [
+            list(image.crop(bounds).get_flattened_data())
+            for image in peer_frames
+        ]
+        for peer, peer_frames in frames.items()
+    }
+    pixel_count = len(pixels["host"][0])
+    excluded_mask = roi_excluded_pixel_mask(
+        (width, height),
+        bounds,
+        excluded_rectangles,
+    )
+    minima: dict[str, list[tuple[int, int, int]]] = {
+        "host": [],
+        "client": [],
+    }
+    maxima: dict[str, list[tuple[int, int, int]]] = {
+        "host": [],
+        "client": [],
+    }
+    gap_pixels: list[tuple[int, int, int]] = []
+    differing_envelope_pixel_count = 0
+    maximum_envelope_channel_gap = 0
+    for index in range(pixel_count):
+        if excluded_mask[index]:
+            for peer in ("host", "client"):
+                minima[peer].append((0, 0, 0))
+                maxima[peer].append((0, 0, 0))
+            gap_pixels.append((0, 0, 0))
+            continue
+        for peer in ("host", "client"):
+            samples = [frame[index] for frame in pixels[peer]]
+            minima[peer].append(
+                tuple(min(sample[channel] for sample in samples) for channel in range(3))
+            )
+            maxima[peer].append(
+                tuple(max(sample[channel] for sample in samples) for channel in range(3))
+            )
+        gap = tuple(
+            max(
+                0,
+                max(minima["host"][index][channel], minima["client"][index][channel])
+                - min(maxima["host"][index][channel], maxima["client"][index][channel]),
+            )
+            for channel in range(3)
+        )
+        gap_pixels.append(gap)
+        if gap != (0, 0, 0):
+            differing_envelope_pixel_count += 1
+        maximum_envelope_channel_gap = max(
+            maximum_envelope_channel_gap,
+            max(gap),
+        )
+
+    visible_counts = {
+        peer: sum(max(pixel) > 8 for pixel in maxima[peer])
+        for peer in ("host", "client")
+    }
+    unique_colors = {
+        peer: len(set(maxima[peer]))
+        for peer in ("host", "client")
+    }
+    # Complex lighting intentionally makes some Boneyard regions nearly
+    # black.  Requiring 512 lit pixels plus 32 distinct colors rejects an
+    # empty capture while retaining those stock dark Tree silhouettes.
+    minimum_visible_pixel_count = 512
+    minimum_unique_colors = 32
+    sufficient_visual_content = (
+        all(
+            count >= minimum_visible_pixel_count
+            for count in visible_counts.values()
+        )
+        and all(
+            count >= minimum_unique_colors
+            for count in unique_colors.values()
+        )
+    )
+
+    roi_size = (bounds[2] - bounds[0], bounds[3] - bounds[1])
+    artifact_paths: dict[str, str] = {}
+    for peer in ("host", "client"):
+        for bound_name, values in (
+            ("minimum", minima[peer]),
+            ("maximum", maxima[peer]),
+        ):
+            image = Image.new("RGB", roi_size)
+            image.putdata(values)
+            path = Path(
+                f"{evidence_prefix}-{peer}-temporal-{bound_name}.png"
+            )
+            image.save(path)
+            artifact_paths[f"{peer}_{bound_name}_path"] = str(path)
+    gap_image = Image.new("RGB", roi_size)
+    gap_image.putdata(gap_pixels)
+    gap_path = Path(f"{evidence_prefix}-temporal-envelope-gap.png")
+    gap_image.save(gap_path)
+    artifact_paths["gap_path"] = str(gap_path)
+
+    return {
+        "roi_bounds": list(bounds),
+        "roi_world_half_extent": world_half_extent,
+        "frames_per_peer": len(host_paths),
+        "pixel_count": pixel_count,
+        "excluded_pixel_count": sum(excluded_mask),
+        "excluded_rectangles": excluded_rectangles or [],
+        "differing_envelope_pixel_count": (
+            differing_envelope_pixel_count
+        ),
+        "maximum_envelope_channel_gap": maximum_envelope_channel_gap,
+        "host_visible_pixel_count": visible_counts["host"],
+        "client_visible_pixel_count": visible_counts["client"],
+        "minimum_visible_pixel_count": minimum_visible_pixel_count,
+        "host_unique_colors": unique_colors["host"],
+        "client_unique_colors": unique_colors["client"],
+        "minimum_unique_colors": minimum_unique_colors,
+        "sufficient_visual_content": sufficient_visual_content,
+        "actors_and_ui_excluded": {
+            "method": (
+                "the live gate proves every local and replicated actor is "
+                "outside the central decor ROI; optional explicit rectangles "
+                "remain supported by the pixel comparator"
+            ),
+            "frames_per_peer": len(host_paths),
+            "renderer_nameplate_rectangles": (
+                excluded_rectangles or []
+            ),
+            "allowed_unexplained_channel_gap": 0,
+        },
+        "exact_match": (
+            differing_envelope_pixel_count == 0
+            and sufficient_visual_content
+        ),
+        **artifact_paths,
+    }
+
+
+def nav_actor_parking_positions(
+    pipe_name: str,
+    target_x: float,
+    target_y: float,
+) -> dict[str, Any]:
+    code = f"""
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local grid = sd.debug.get_nav_grid(1)
+local scene = sd.world.get_scene()
+local player = sd.player.get_state()
+local scene_world =
+  tonumber(scene and scene.world_address) or
+  tonumber(player and player.world_address) or 0
+local grid_world = tonumber(grid and grid.world_address) or 0
+emit("scene_world", scene_world)
+emit("grid_world", grid_world)
+if type(grid) ~= "table" or grid.valid == false or
+    type(grid.cells) ~= "table" or scene_world == 0 or
+    grid_world ~= scene_world then
+  emit("grid_available", false)
+  emit("available", false)
+  return
+end
+emit("grid_available", true)
+local target_x = {target_x!r}
+local target_y = {target_y!r}
+local candidates = {{}}
+local traversable_count = 0
+for _, cell in ipairs(grid.cells) do
+  for _, sample in ipairs(
+      type(cell) == "table" and cell.samples or {{}}) do
+    local x = tonumber(sample and sample.world_x)
+    local y = tonumber(sample and sample.world_y)
+    if sample and sample.traversable and x ~= nil and y ~= nil then
+      traversable_count = traversable_count + 1
+      local dx = math.abs(x - target_x)
+      local dy = math.abs(y - target_y)
+      if dx >= 750.0 or dy >= 500.0 then
+        table.insert(candidates, {{
+          x = x,
+          y = y,
+          gap = math.sqrt(dx * dx + dy * dy),
+        }})
+      end
+    end
+  end
+end
+table.sort(candidates, function(a, b)
+  if a.gap ~= b.gap then return a.gap > b.gap end
+  if a.x ~= b.x then return a.x > b.x end
+  return a.y > b.y
+end)
+local host = candidates[1]
+local client = candidates[2] or host
+emit("traversable_count", traversable_count)
+emit("candidate_count", #candidates)
+emit("available", host ~= nil)
+if host ~= nil then
+  emit("host.x", host.x)
+  emit("host.y", host.y)
+  emit("host.gap", host.gap)
+  emit("client.x", client.x)
+  emit("client.y", client.y)
+  emit("client.gap", client.gap)
+  local dx = host.x - client.x
+  local dy = host.y - client.y
+  emit("separation", math.sqrt(dx * dx + dy * dy))
+end
+"""
+    deadline = time.monotonic() + 6.0
+    values: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        values = parse_key_values(
+            lua(
+                pipe_name,
+                code,
+                timeout=10.0,
+            )
+        )
+        if values.get("available") == "true":
+            break
+        time.sleep(0.25)
+    if values.get("available") != "true":
+        raise VerifyFailure(
+            "native nav grid lacks an actor-clear parking sample: "
+            f"target=({target_x},{target_y}) result={values}"
+        )
+    return {
+        "host": [
+            float(values["host.x"]),
+            float(values["host.y"]),
+        ],
+        "client": [
+            float(values["client.x"]),
+            float(values["client.y"]),
+        ],
+        "target_distances": {
+            "host": float(values["host.gap"]),
+            "client": float(values["client.gap"]),
+        },
+        "actor_separation": float(values["separation"]),
+        "traversable_sample_count": int(
+            values["traversable_count"],
+            0,
+        ),
+        "actor_clear_candidate_count": int(
+            values["candidate_count"],
+            0,
+        ),
+        "source": "sd.debug.get_nav_grid(1) traversable samples",
+        "scene_world": int(values["scene_world"], 0),
+        "grid_world": int(values["grid_world"], 0),
+    }
+
+
+def capture_matched_camera_areas(
     host_pipe: str,
     client_pipe: str,
-    decor: dict[str, Any],
-    anchor_position: list[float],
+    targets: list[dict[str, Any]],
     evidence_dir: Path,
     run_index: int,
-) -> dict[str, Any]:
-    target = matched_camera_target(decor, anchor_position)
-    target_x, target_y = target["position"]
-    host_camera = focus_camera(host_pipe, target_x, target_y)
-    client_camera = focus_camera(client_pipe, target_x, target_y)
-    if (
-        abs(host_camera["center_x"] - client_camera["center_x"]) > 0.05
-        or abs(host_camera["center_y"] - client_camera["center_y"]) > 0.05
-    ):
-        raise VerifyFailure(
-            "matched camera centers differ: "
-            f"host={host_camera} client={client_camera}"
-        )
+    areas: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    host_path = evidence_dir / f"run-{run_index:02d}-host.png"
-    client_path = evidence_dir / f"run-{run_index:02d}-client.png"
-    last: dict[str, Any] = {}
-    for attempt in range(1, 4):
-        host_camera = focus_camera(host_pipe, target_x, target_y)
-        client_camera = focus_camera(client_pipe, target_x, target_y)
-        time.sleep(1.0)
-        screenshots = {
-            "host": multiplayer_frame_capture.capture_game_backbuffer(
+    if areas is None:
+        areas = []
+    for area_index, target in enumerate(targets, start=1):
+        target_x, target_y = target["position"]
+        area_attempts: list[dict[str, Any]] = []
+        area_result: dict[str, Any] = {
+            "area_index": area_index,
+            "target": target,
+            "attempts": area_attempts,
+        }
+        areas.append(area_result)
+        family_slug = str(target["family"]).replace("_", "-")
+        parking = nav_actor_parking_positions(
+            host_pipe,
+            target_x,
+            target_y,
+        )
+        owner_placements = {
+            "host": place_player(
                 host_pipe,
-                host_path,
-                maximum_dominant_fraction=0.97,
+                *parking["host"],
+                0.0,
             ),
-            "client": multiplayer_frame_capture.capture_game_backbuffer(
+            "client": place_player(
                 client_pipe,
-                client_path,
-                maximum_dominant_fraction=0.97,
+                *parking["client"],
+                0.0,
             ),
         }
-        host_quality = screenshots["host"]["quality"]
-        client_quality = screenshots["client"]["quality"]
+        settled_host_actor = (
+            local_sync.wait_for_local_transform_settled(
+                host_pipe,
+                timeout=12.0,
+                stable_seconds=2.0,
+            )
+        )
+        settled_client_actor = (
+            local_sync.wait_for_local_transform_settled(
+                client_pipe,
+                timeout=12.0,
+                stable_seconds=2.0,
+            )
+        )
+        host_on_client = local_sync.wait_for_remote_convergence(
+            client_pipe,
+            HOST_ID,
+            *settled_host_actor,
+        )
+        client_on_host = local_sync.wait_for_remote_convergence(
+            host_pipe,
+            CLIENT_ID,
+            *settled_client_actor,
+        )
+        settled_host_camera = focus_camera(
+            host_pipe,
+            target_x,
+            target_y,
+        )
+        settled_client_camera = focus_camera(
+            client_pipe,
+            target_x,
+            target_y,
+        )
         if (
-            host_quality["width"] != client_quality["width"]
-            or host_quality["height"] != client_quality["height"]
+            abs(
+                settled_host_camera["center_x"]
+                - settled_client_camera["center_x"]
+            )
+            > 0.05
+            or abs(
+                settled_host_camera["center_y"]
+                - settled_client_camera["center_y"]
+            )
+            > 0.05
+            or abs(
+                settled_host_camera["width"]
+                - settled_client_camera["width"]
+            )
+            > 0.05
+            or abs(
+                settled_host_camera["height"]
+                - settled_client_camera["height"]
+            )
+            > 0.05
         ):
             raise VerifyFailure(
-                f"matched captures have different dimensions: {screenshots}"
+                "matched camera geometry differs: "
+                f"host={settled_host_camera} "
+                f"client={settled_client_camera}"
             )
-        correlation = matched_frame_correlation(host_path, client_path)
-        last = {
-            "attempt": attempt,
-            "correlation": correlation,
-            "screenshots": screenshots,
+        host_actor_view = local_sync.query(host_pipe)
+        client_actor_view = local_sync.query(client_pipe)
+        observed_actor_positions = {
+            "host": {
+                "local_host": [
+                    float(host_actor_view["player.x"]),
+                    float(host_actor_view["player.y"]),
+                ],
+                "remote_client": [
+                    float(host_actor_view[f"peer.{CLIENT_ID}.x"]),
+                    float(host_actor_view[f"peer.{CLIENT_ID}.y"]),
+                ],
+            },
+            "client": {
+                "local_client": [
+                    float(client_actor_view["player.x"]),
+                    float(client_actor_view["player.y"]),
+                ],
+                "remote_host": [
+                    float(client_actor_view[f"peer.{HOST_ID}.x"]),
+                    float(client_actor_view[f"peer.{HOST_ID}.y"]),
+                ],
+            },
         }
-        if (
-            correlation["grayscale_correlation"] >= 0.75
-            and correlation["edge_correlation"] >= 0.65
-        ):
-            return {
-                "target": target,
+        decor_roi_half_extent = 120.0
+        minimum_decor_roi_clearance = 120.0
+        actor_decor_roi_clearances: dict[str, dict[str, float]] = {}
+        for observer, positions in observed_actor_positions.items():
+            actor_decor_roi_clearances[observer] = {}
+            for identity, position in positions.items():
+                horizontal = abs(position[0] - target_x)
+                vertical = abs(position[1] - target_y)
+                clearance = max(horizontal, vertical)
+                clearance -= decor_roi_half_extent
+                actor_decor_roi_clearances[observer][identity] = clearance
+                if clearance < minimum_decor_roi_clearance:
+                    raise VerifyFailure(
+                        "actor remained too close to the matched decor ROI: "
+                        f"family={target['family']} observer={observer} "
+                        f"identity={identity} position={position} "
+                        f"clearance={clearance}"
+                    )
+        area_result["excluded_actors"] = {
+            "method": (
+                "both owners are moved without damage to traversable native-"
+                "nav samples; each owner plus replicated mirror must "
+                "settle at least 120 world units beyond the central "
+                "120-world-unit decor ROI"
+            ),
+            "parking": parking,
+            "world_roi_excluded": True,
+            "owner_placements": owner_placements,
+            "settled_owner_positions": {
+                "host": list(settled_host_actor[:2]),
+                "client": list(settled_client_actor[:2]),
+            },
+            "remote_convergence": {
+                "host_on_client": host_on_client,
+                "client_on_host": client_on_host,
+            },
+            "observed_positions": observed_actor_positions,
+            "decor_roi_clearances": actor_decor_roi_clearances,
+            "decor_roi_half_extent": decor_roi_half_extent,
+            "minimum_decor_roi_clearance": (
+                minimum_decor_roi_clearance
+            ),
+        }
+        area_result["settled_camera"] = {
+            "host": settled_host_camera,
+            "client": settled_client_camera,
+        }
+        # Nav parking is the only actor mutation.  No damage or spell probe is
+        # allowed in the decor capture phase.
+        time.sleep(2.0)
+        excluded_rectangles: list[list[int]] = []
+
+        host_paths: list[Path] = []
+        client_paths: list[Path] = []
+        for attempt in range(1, CAPTURE_FRAMES_PER_PEER + 1):
+            host_camera = focus_camera(host_pipe, target_x, target_y)
+            client_camera = focus_camera(client_pipe, target_x, target_y)
+            if (
+                abs(host_camera["center_x"] - client_camera["center_x"])
+                > 0.05
+                or abs(host_camera["center_y"] - client_camera["center_y"])
+                > 0.05
+                or abs(host_camera["width"] - client_camera["width"])
+                > 0.05
+                or abs(host_camera["height"] - client_camera["height"])
+                > 0.05
+            ):
+                raise VerifyFailure(
+                    "matched camera geometry differs during capture: "
+                    f"host={host_camera} client={client_camera}"
+                )
+            time.sleep(0.5)
+            evidence_prefix = (
+                evidence_dir
+                / (
+                    f"run-{run_index:02d}-area-{area_index:02d}-"
+                    f"{family_slug}-attempt-{attempt:02d}"
+                )
+            )
+            host_path = Path(f"{evidence_prefix}-host.png")
+            client_path = Path(f"{evidence_prefix}-client.png")
+            host_paths.append(host_path)
+            client_paths.append(client_path)
+            screenshots = {
+                "host": multiplayer_frame_capture.capture_game_backbuffer(
+                    host_pipe,
+                    host_path,
+                    maximum_dominant_fraction=0.99,
+                ),
+                "client": (
+                    multiplayer_frame_capture.capture_game_backbuffer(
+                        client_pipe,
+                        client_path,
+                        maximum_dominant_fraction=0.99,
+                    )
+                ),
+            }
+            host_quality = screenshots["host"]["quality"]
+            client_quality = screenshots["client"]["quality"]
+            if (
+                host_quality["width"] != client_quality["width"]
+                or host_quality["height"] != client_quality["height"]
+            ):
+                raise VerifyFailure(
+                    f"matched captures have different dimensions: "
+                    f"{screenshots}"
+                )
+            exact_pixels = exact_decor_pixel_comparison(
+                host_path,
+                client_path,
+                host_camera,
+                evidence_prefix,
+                excluded_rectangles=excluded_rectangles,
+            )
+            attempt_result = {
+                "attempt": attempt,
                 "host_camera": host_camera,
                 "client_camera": client_camera,
-                "capture_attempts": attempt,
-                "frame_correlation": correlation,
+                "frame_correlation": matched_frame_correlation(
+                    host_path, client_path
+                ),
+                "exact_decor_pixels": exact_pixels,
                 "screenshots": screenshots,
             }
-    raise VerifyFailure(
-        "matched camera screenshots did not align their world landmarks "
-        f"after three captures: {last}"
-    )
+            area_attempts.append(attempt_result)
+
+        stable_prefix = (
+            evidence_dir
+            / (
+                f"run-{run_index:02d}-area-{area_index:02d}-"
+                f"{family_slug}"
+            )
+        )
+        stable_pixels = exact_stable_decor_pixel_comparison(
+            host_paths,
+            client_paths,
+            settled_host_camera,
+            stable_prefix,
+            excluded_rectangles=excluded_rectangles,
+        )
+        temporal_envelope = (
+            exact_temporal_envelope_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                settled_host_camera,
+                stable_prefix,
+                excluded_rectangles=excluded_rectangles,
+            )
+        )
+        area_result.update(
+            {
+                "ok": (
+                    stable_pixels["exact_match"]
+                    and temporal_envelope["exact_match"]
+                ),
+                "host_camera": settled_host_camera,
+                "client_camera": settled_client_camera,
+                "stable_decor_pixels": stable_pixels,
+                "temporal_decor_envelope": temporal_envelope,
+                "screenshots": area_attempts[0]["screenshots"],
+                "screenshot_pairs": [
+                    attempt["screenshots"]
+                    for attempt in area_attempts
+                ],
+                "actors_and_ui_excluded": {
+                    "actor_placement": area_result["excluded_actors"],
+                    "pixel_comparison": temporal_envelope[
+                        "actors_and_ui_excluded"
+                    ],
+                },
+            }
+        )
+        if not stable_pixels["exact_match"]:
+            raise VerifyFailure(
+                "matched-camera stable decor pixels differed: "
+                f"family={target['family']} "
+                f"stable={stable_pixels}"
+            )
+        if not temporal_envelope["exact_match"]:
+            raise VerifyFailure(
+                "matched-camera temporal decor pixels differed: "
+                f"family={target['family']} "
+                f"envelope={temporal_envelope}"
+            )
+    return areas
 
 
 def parse_args() -> argparse.Namespace:
@@ -1591,6 +2900,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--instance-prefix", default="run-static-layout")
     parser.add_argument("--game-directory", type=Path)
+    parser.add_argument(
+        "--runtime-root",
+        type=Path,
+        default=ROOT / "runtime",
+        help="isolated launcher runtime root (including per-peer stages)",
+    )
     parser.add_argument("--exact-mod-id", default="sample.lua.camera_lab")
     parser.add_argument("--output", type=Path, default=RUNTIME_OUTPUT)
     parser.add_argument(
@@ -1611,11 +2926,13 @@ def main() -> int:
     args = parse_args()
     output_path = args.output.resolve()
     evidence_dir = args.evidence_dir.resolve()
+    runtime_root = args.runtime_root.resolve()
     result: dict[str, Any] = {
         "ok": False,
         "runs_requested": args.runs,
         "instance_prefix": args.instance_prefix,
         "transport": "loopback_udp",
+        "runtime_root": str(runtime_root),
         "runs": [],
     }
 
@@ -1634,14 +2951,40 @@ def main() -> int:
             host_port, client_port = select_available_windows_udp_ports(2)
             launch: dict[str, object] = {}
             identities: list[dict[str, Any]] = []
-            try:
-                launch = launch_pair(
-                    instance_prefix=instance_prefix,
-                    host_port=host_port,
-                    client_port=client_port,
-                    game_directory=args.game_directory,
-                    exact_mod_id=args.exact_mod_id,
+            host_pipe = ""
+            picker_stop = threading.Event()
+            picker_records: dict[str, dict[str, Any]] = {}
+            picker_pipe_names = [
+                (
+                    "SolomonDarkModLoader_LuaExec_"
+                    f"{instance_prefix}-{role}"
                 )
+                for role in ("host", "client")
+            ]
+            picker_thread = threading.Thread(
+                target=first_launch_control_picker_worker,
+                args=(picker_pipe_names, picker_stop, picker_records),
+                name=f"{instance_prefix}-control-picker",
+                daemon=True,
+            )
+            try:
+                picker_thread.start()
+                try:
+                    launch = launch_pair(
+                        instance_prefix=instance_prefix,
+                        host_port=host_port,
+                        client_port=client_port,
+                        game_directory=args.game_directory,
+                        runtime_root=runtime_root,
+                        exact_mod_id=args.exact_mod_id,
+                    )
+                finally:
+                    picker_stop.set()
+                    picker_thread.join(timeout=5.0)
+                    run_result["first_launch_control_picker"] = {
+                        "records": picker_records,
+                        "worker_stopped": not picker_thread.is_alive(),
+                    }
                 run_result["launch"] = launch
                 reported_ids = game_process_ids(launch)
                 if len(reported_ids) != 2:
@@ -1649,7 +2992,7 @@ def main() -> int:
                         f"pair launch did not report exactly two PIDs: {reported_ids}"
                     )
                 identities = expected_owned_process_identities(
-                    launch, instance_prefix
+                    launch, instance_prefix, runtime_root
                 )
                 identities = capture_owned_process_identities(identities)
                 run_result["owned_processes"] = identities
@@ -1682,24 +3025,103 @@ def main() -> int:
                     timeout=args.layout_timeout,
                 )
                 run_result["layout_sync"] = layout_sync
-                run_result["matched_camera"] = capture_matched_camera_pair(
+                visual_gate_render_profile = {
+                    "host": configure_visual_gate_render_profile(host_pipe),
+                    "client": configure_visual_gate_render_profile(
+                        client_pipe
+                    ),
+                }
+                run_result["visual_gate_render_profile"] = (
+                    visual_gate_render_profile
+                )
+                host_full_render_input_digest = full_render_input_digest(
+                    layout_sync["render_decor_tables"]["host"],
+                    visual_gate_render_profile["host"],
+                )
+                client_full_render_input_digest = full_render_input_digest(
+                    layout_sync["render_decor_tables"]["client"],
+                    visual_gate_render_profile["client"],
+                )
+                run_result["full_render_input_gate"] = {
+                    "host_sha256": host_full_render_input_digest,
+                    "client_sha256": client_full_render_input_digest,
+                    "exact": (
+                        host_full_render_input_digest
+                        == client_full_render_input_digest
+                    ),
+                    "covers": [
+                        "native-order decor entity tables",
+                        "Tree/Scrub/Goodie presentation fields",
+                        "Arena ambient suppression inputs",
+                        "Arena marker tint inputs",
+                        "verified render profile",
+                    ],
+                }
+                if (
+                    host_full_render_input_digest
+                    != client_full_render_input_digest
+                ):
+                    raise VerifyFailure(
+                        "full render-input digest differed after render "
+                        "profile configuration"
+                    )
+                settled_host_actor = (
+                    local_sync.wait_for_local_transform_settled(
+                        host_pipe,
+                        timeout=12.0,
+                        stable_seconds=2.0,
+                    )
+                )
+                settled_client_actor = (
+                    local_sync.wait_for_local_transform_settled(
+                        client_pipe,
+                        timeout=12.0,
+                        stable_seconds=2.0,
+                    )
+                )
+                host_on_client = (
+                    local_sync.wait_for_remote_convergence(
+                        client_pipe,
+                        HOST_ID,
+                        *settled_host_actor,
+                    )
+                )
+                client_on_host = (
+                    local_sync.wait_for_remote_convergence(
+                        host_pipe,
+                        CLIENT_ID,
+                        *settled_client_actor,
+                    )
+                )
+                actor_positions = [
+                    list(settled_host_actor[:2]),
+                    list(settled_client_actor[:2]),
+                ]
+                run_result["visual_gate_actor_settle"] = {
+                    "owner_positions": {
+                        "host": actor_positions[0],
+                        "client": actor_positions[1],
+                    },
+                    "remote_convergence": {
+                        "host_on_client": host_on_client,
+                        "client_on_host": client_on_host,
+                    },
+                    "preselection_movement_or_damage_injected": False,
+                }
+                targets = matched_camera_targets(
+                    layout_sync["decor_tables"]["host"],
+                    actor_positions,
+                )
+                run_result["matched_camera_targets"] = targets
+                matched_areas: list[dict[str, Any]] = []
+                run_result["matched_camera_areas"] = matched_areas
+                capture_matched_camera_areas(
                     host_pipe,
                     client_pipe,
-                    layout_sync["decor_tables"]["host"],
-                    [
-                        (
-                            float(layout_sync["host"]["player_x"])
-                            + float(layout_sync["client"]["player_x"])
-                        )
-                        / 2.0,
-                        (
-                            float(layout_sync["host"]["player_y"])
-                            + float(layout_sync["client"]["player_y"])
-                        )
-                        / 2.0,
-                    ],
+                    targets,
                     evidence_dir,
                     run_index,
+                    matched_areas,
                 )
                 run_result["ok"] = True
             finally:
@@ -1712,9 +3134,16 @@ def main() -> int:
             for run in result["runs"]
         ]
         decor_digests = [
-            (
-                run["layout_sync"]["host"]["boneyard_tree_digest"],
-                run["layout_sync"]["host"]["boneyard_compact_digest"],
+            tuple(
+                run["layout_sync"]["host"][key]
+                for key in (
+                    "boneyard_scenery_digest",
+                    "boneyard_tree_digest",
+                    "boneyard_road_digest",
+                    "boneyard_fence_digest",
+                    "boneyard_terrain_digest",
+                    "boneyard_compact_digest",
+                )
             )
             for run in result["runs"]
         ]
@@ -1739,8 +3168,9 @@ def main() -> int:
                     "output": str(output_path),
                     "runs": args.runs,
                     "screenshots": [
-                        run["matched_camera"]["screenshots"]
+                        area["screenshots"]
                         for run in result["runs"]
+                        for area in run["matched_camera_areas"]
                     ],
                 },
                 indent=2,

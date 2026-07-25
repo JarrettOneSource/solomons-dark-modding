@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import struct
 import sys
 import tempfile
@@ -55,6 +56,15 @@ def matching_layout() -> dict[str, str]:
         "boneyard_compact_type_7_8_count": "1",
         "boneyard_compact_type_7_8_noncanonical_flags": "0",
         "boneyard_compact_type_21_24_count": "1",
+        "boneyard_presentation_run_seed": "0x12345678",
+        "boneyard_presentation_arena_ambient_kind": "1",
+        "boneyard_presentation_compact_ambient_result": "0",
+        "boneyard_presentation_secondary_ambient_result": "0",
+        "boneyard_presentation_marker_scale_bits": float_bits(0.05),
+        "boneyard_presentation_marker_sign_mode": "0",
+        "boneyard_presentation_marker_bias_low_bits": "0x60000000",
+        "boneyard_presentation_marker_bias_high_bits": "0x3FEE6666",
+        "boneyard_presentation_digest": "0x0000000A",
         "replicated_run_static_count": "0",
         "replicated_matched_actor_count": "0",
     }
@@ -92,6 +102,68 @@ def matching_layout() -> dict[str, str]:
 
 
 class RunStaticLayoutSyncTest(unittest.TestCase):
+    def test_full_render_digest_covers_presentation_and_profile(self) -> None:
+        render_decor = {
+            "scenery": [],
+            "trees": [],
+            "roads": [],
+            "fences": [],
+            "terrain": [],
+            "compact": [],
+            "presentation_inputs": {
+                "run_seed": 0x12345678,
+                "ambient_spawn_results": {
+                    "compact": 0,
+                    "secondary": 0,
+                },
+                "marker_tint": {
+                    "scale_bits": int(float_bits(0.05), 0),
+                    "sign_mode": 0,
+                    "bias_bits": [0x60000000, 0x3FEE6666],
+                },
+            },
+        }
+        profile = {
+            "after.complex_lighting": "1",
+            "after.complex_shadows": "1",
+            "after.multiple_shadows": "1",
+            "after.zoom_effects": "1",
+            "after.enhanced_effects": "0",
+        }
+        baseline = verifier.full_render_input_digest(
+            render_decor,
+            profile,
+        )
+        self.assertEqual(
+            baseline,
+            verifier.full_render_input_digest(
+                copy.deepcopy(render_decor),
+                dict(profile),
+            ),
+        )
+
+        changed_presentation = copy.deepcopy(render_decor)
+        changed_presentation["presentation_inputs"]["marker_tint"][
+            "scale_bits"
+        ] += 1
+        self.assertNotEqual(
+            baseline,
+            verifier.full_render_input_digest(
+                changed_presentation,
+                profile,
+            ),
+        )
+
+        changed_profile = dict(profile)
+        changed_profile["after.complex_lighting"] = "0"
+        self.assertNotEqual(
+            baseline,
+            verifier.full_render_input_digest(
+                render_decor,
+                changed_profile,
+            ),
+        )
+
     def test_exact_tree_and_compact_tables_decode_float_bits(self) -> None:
         row = matching_layout()
         row.update(
@@ -106,6 +178,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 "boneyard_tree.1.overlay_enabled": "1",
                 "boneyard_tree.1.phase_bits": float_bits(0.25),
                 "boneyard_tree.1.render_parameter_bits": float_bits(1.0),
+                "boneyard_tree.1.common_scalar_bits": float_bits(0.0),
                 "boneyard_tree.1.sway_countdown": "25",
                 "boneyard_tree.1.sway_target_bits": float_bits(1.0),
                 "boneyard_tree.1.sway_current_bits": float_bits(1.0),
@@ -162,6 +235,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(tables["trees"][0]["type_id"], 2001)
         self.assertEqual(tables["trees"][0]["position"], [125.5, -32.25])
         self.assertEqual(tables["trees"][0]["variant"], 6)
+        self.assertEqual(tables["trees"][0]["common_scalar_bits"], 0)
         self.assertNotIn("sway_countdown", tables["trees"][0])
         self.assertEqual(tables["trees"][0]["native_index"], 4)
         self.assertEqual(tables["compact"][0]["type_id"], 7)
@@ -170,6 +244,14 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(tables["compact"][0]["rotation"], -3.5)
         self.assertEqual(tables["compact"][0]["scale"], 0.875)
         self.assertEqual(tables["compact"][0]["flags"], 1)
+        self.assertEqual(
+            tables["presentation_inputs"]["run_seed"],
+            0x12345678,
+        )
+        self.assertEqual(
+            tables["presentation_inputs"]["ambient_spawn_results"],
+            {"compact": 0, "secondary": 0},
+        )
         self.assertEqual(
             tables["compact"][0]["bounds_bits"][0],
             int(float_bits(112.0), 0),
@@ -199,35 +281,155 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(target["nearby_compact"]["position"], [100.0, 100.0])
         self.assertAlmostEqual(target["nearby_compact_distance"], 2**0.5 * 100)
 
-    def test_frame_correlation_rejects_a_displaced_world_region(self) -> None:
+    def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)
             host_path = root / "host.png"
             client_path = root / "client.png"
             displaced_path = root / "displaced.png"
+            matched_prefix = root / "matched"
+            displaced_prefix = root / "displaced"
             image = Image.new("RGB", (400, 240), "black")
             for x in range(80, 160):
                 for y in range(60, 180):
-                    image.putpixel((x, y), (220, 180, 120))
+                    image.putpixel(
+                        (x, y),
+                        (
+                            100 + x % 120,
+                            80 + y % 100,
+                            50 + (x + y) % 100,
+                        ),
+                    )
             image.save(host_path)
             image.save(client_path)
 
             displaced = Image.new("RGB", image.size, "black")
             for x in range(240, 320):
                 for y in range(60, 180):
-                    displaced.putpixel((x, y), (220, 180, 120))
+                    displaced.putpixel(
+                        (x, y),
+                        (
+                            100 + (x - 160) % 120,
+                            80 + y % 100,
+                            50 + (x + y - 160) % 100,
+                        ),
+                    )
             displaced.save(displaced_path)
+            nameplate_only = image.copy()
+            for x in range(190, 230):
+                for y in range(90, 120):
+                    nameplate_only.putpixel((x, y), (255, 0, 0))
+            nameplate_path = root / "nameplate.png"
+            nameplate_only.save(nameplate_path)
 
-            matched = verifier.matched_frame_correlation(
-                host_path, client_path
+            camera = {"width": 400.0, "height": 240.0}
+            matched = verifier.exact_decor_pixel_comparison(
+                host_path,
+                client_path,
+                camera,
+                matched_prefix,
             )
-            mismatched = verifier.matched_frame_correlation(
-                host_path, displaced_path
+            mismatched = verifier.exact_decor_pixel_comparison(
+                host_path,
+                displaced_path,
+                camera,
+                displaced_prefix,
             )
-            self.assertAlmostEqual(matched["grayscale_correlation"], 1.0)
-            self.assertAlmostEqual(matched["edge_correlation"], 1.0)
-            self.assertLess(mismatched["grayscale_correlation"], 0.75)
-            self.assertLess(mismatched["edge_correlation"], 0.65)
+            self.assertTrue(matched["exact_match"])
+            self.assertEqual(matched["differing_pixel_count"], 0)
+            self.assertTrue(matched["pixel_hashes_match"])
+            self.assertFalse(mismatched["exact_match"])
+            self.assertGreater(mismatched["differing_pixel_count"], 0)
+            self.assertFalse(mismatched["pixel_hashes_match"])
+            masked_nameplate = verifier.exact_decor_pixel_comparison(
+                host_path,
+                nameplate_path,
+                camera,
+                root / "masked-nameplate",
+                excluded_rectangles=[[190, 90, 230, 120]],
+            )
+            self.assertTrue(masked_nameplate["exact_match"])
+            self.assertEqual(
+                masked_nameplate["excluded_pixel_count"],
+                1200,
+            )
+            envelope_mismatch = (
+                verifier.exact_temporal_envelope_decor_pixel_comparison(
+                    [host_path] * 3,
+                    [displaced_path] * 3,
+                    camera,
+                    root / "envelope-displaced",
+                )
+            )
+            self.assertFalse(envelope_mismatch["exact_match"])
+            self.assertGreater(
+                envelope_mismatch["differing_envelope_pixel_count"],
+                0,
+            )
+
+    def test_stable_pixel_gate_excludes_dynamic_actor_pixels(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            host_paths: list[Path] = []
+            client_paths: list[Path] = []
+            for frame in range(3):
+                for peer, paths in (
+                    ("host", host_paths),
+                    ("client", client_paths),
+                ):
+                    image = Image.new("RGB", (400, 240), "black")
+                    for x in range(80, 180):
+                        for y in range(60, 180):
+                            image.putpixel(
+                                (x, y),
+                                (
+                                    80 + x % 150,
+                                    60 + y % 140,
+                                    40 + (x + y) % 180,
+                                ),
+                            )
+                    dynamic_left = (
+                        240
+                        + frame * 20
+                        + (5 if peer == "client" else 0)
+                    )
+                    for x in range(dynamic_left, dynamic_left + 30):
+                        for y in range(90, 140):
+                            image.putpixel((x, y), (255, 180, 80))
+                    path = root / f"{peer}-{frame}.png"
+                    image.save(path)
+                    paths.append(path)
+
+            result = verifier.exact_stable_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "stable",
+            )
+            self.assertTrue(result["exact_match"])
+            self.assertEqual(result["differing_stable_pixel_count"], 0)
+            self.assertTrue(result["stable_pixel_hashes_match"])
+            self.assertGreaterEqual(
+                result["stable_visible_pixel_count"],
+                result["minimum_stable_visible_pixel_count"],
+            )
+            envelope = (
+                verifier.exact_temporal_envelope_decor_pixel_comparison(
+                    host_paths,
+                    client_paths,
+                    {"width": 400.0, "height": 240.0},
+                    root / "envelope",
+                )
+            )
+            self.assertTrue(envelope["exact_match"])
+            self.assertEqual(
+                envelope["differing_envelope_pixel_count"],
+                0,
+            )
+            self.assertEqual(
+                envelope["maximum_envelope_channel_gap"],
+                0,
+            )
 
 
 if __name__ == "__main__":
