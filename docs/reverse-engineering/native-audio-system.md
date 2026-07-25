@@ -45,6 +45,51 @@ destruction removes it after releasing active channels and the BASS sample.
 `SoundLoop` performs the parallel manager registration for its ticking loop
 state and tears down the channel before its embedded `Sound`.
 
+## Startup, settings, and the complete silence boundary
+
+The application-level audio coordinator at `0x00407080` has one native startup
+path:
+
+1. call the BASS initializer at `0x004450D0`;
+2. load `Audio.SoundVolume` and `Audio.MusicVolume` through `0x00407190`; and
+3. apply the effective sound and music gains through BASS configuration
+   attributes when `DAT_00B40239` is set.
+
+The initializer requires BASS version `0x0204`, first calls
+`BASS_Init(-1, 44100, 0, window, 0)` for the default output device, and falls
+back to BASS device `0` (the no-sound device) if that fails. A successful
+initialization calls `BASS_Start` and writes `1` to `DAT_00B40239`. The only
+stock shutdown path clears that byte and then calls the imported `BASS_Free`
+thunk at `0x006B0186`.
+
+The `Audio` manager's user and effective volume fields are separate:
+
+| State | Address / field | Writer | Native effect |
+| --- | ---: | ---: | --- |
+| Audio manager singleton | `DAT_00B401A0` | `0x00406DE0` | Publishes the manager used by every native sound class. |
+| Music user volume | `Audio +0x78` | `0x00407340` | Multiplies `Audio +0x80`, then writes BASS config `6`. |
+| Sound user volume | `Audio +0x7C` | `0x004073A0` | Multiplies `Audio +0x84`, then writes BASS configs `4` and `5`. |
+| BASS enabled gate | `DAT_00B40239` | `0x004450D0` / stock shutdown | Gates sample, stream, module, loop, pause, attribute, and free calls. |
+
+Settings apply at `0x005D8FC0` sends the `SOUND VOL:` slider to
+`0x004073A0` and the `MUSIC VOL:` slider to `0x00407340`. Those values
+originate in the user's persisted `Audio.SoundVolume` and
+`Audio.MusicVolume` settings. A launch-only silence feature must therefore not
+drive the sliders, overwrite the two fields as preference state, or save the
+settings screen.
+
+The complete per-process boundary is the engine gate, not the individual
+sample registry. Intercepting `0x004450D0` prevents device creation before any
+one-shot, stream, module, menu song, voice, dynamic loop, or ambience path can
+acquire a BASS handle. If injection occurs after stock initialization, the
+equivalent stock shutdown sequence is to clear `DAT_00B40239` and call
+`BASS_Free`; keeping the initializer intercepted prevents later reopening.
+This leaves both persisted volume values untouched and makes process exit the
+only lifetime boundary. Per-source muting is neither necessary nor complete.
+
+The corresponding versioned entries live in `[audio.hooks]` and
+`[audio.globals]` in `config/binary-layout.ini`.
+
 ### One-shot sample path
 
 `Sound_Load (0x004076D0)` accepts an extensionless base path. Its confirmed

@@ -323,6 +323,9 @@ from static_re_runtime_cast_contracts import (
     test_write_watch_rearm_is_owned_by_faulting_thread,
     test_write_watches_are_transparent_to_loader_memory_access,
 )
+from static_re_audio_disable_contracts import (
+    test_stock_audio_bootstrap_and_settings_are_layout_backed,
+)
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
     test_launcher_tutorial_bypass_is_standalone_and_default_on,
@@ -1210,6 +1213,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
+    (
+        "stock audio bootstrap and settings are layout-backed",
+        test_stock_audio_bootstrap_and_settings_are_layout_backed,
+    ),
     ("binary layout identity is staged", test_binary_layout_matches_staged_layout_identity),
     ("residual probe and skill-choice offsets are layout-backed", test_residual_probe_and_skill_choice_offsets_are_layout_backed),
     ("second residual runtime offsets and trace addresses are layout-backed", test_second_residual_runtime_and_trace_addresses_are_layout_backed),
