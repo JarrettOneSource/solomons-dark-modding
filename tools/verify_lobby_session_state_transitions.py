@@ -302,12 +302,14 @@ def run_verification(
             timeout=60.0,
         )
         launch = launch_response.get("launch")
-        if not isinstance(launch, dict):
+        stage = launch_response.get("stage")
+        if not isinstance(launch, dict) or not isinstance(stage, dict):
             raise VerifyFailure(
-                f"launcher response omitted launch ownership: {launch_response}"
+                "launcher response omitted stage or launch ownership: "
+                f"{launch_response}"
             )
         process_id = int(launch.get("processId", 0))
-        executable = str(launch.get("executablePath", ""))
+        executable = str(stage.get("stageExecutablePath", ""))
         if (
             process_id <= 0
             or not executable
@@ -332,6 +334,7 @@ def run_verification(
                 f"actual={actual!r}"
             )
         owned[process_id] = expected_executable
+        result["stage"] = stage
         result["launch"] = launch
 
         hub = _wait_for_status(
