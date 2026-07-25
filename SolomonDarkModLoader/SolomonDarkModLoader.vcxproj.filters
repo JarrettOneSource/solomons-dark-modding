@@ -563,9 +563,6 @@
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\gameplay_death_spectator_rendering.inl">
-      <Filter>Header Files\Debug UI Overlay</Filter>
-    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>

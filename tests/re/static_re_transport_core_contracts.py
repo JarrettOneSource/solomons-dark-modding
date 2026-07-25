@@ -869,9 +869,11 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_mouse_refresh_hook.inl"
     )
-    overlay_renderer = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/gameplay_death_spectator_rendering.inl"
+    product_ui_renderer = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_ui_renderer.cpp"
+    )
+    organic_verifier = read_text(
+        ROOT / "tools/verify_multiplayer_organic_player_death.py"
     )
     frame_renderer = read_text(
         ROOT
@@ -919,14 +921,25 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
 
     for token in (
         "TryBuildDeathSpectatorStatusText",
-        "DrawGameplayDeathSpectatorStatus",
+        "DrawSpectatorProductHud",
         "Left / Right click: next player",
     ):
-        combined = transport_text + overlay_renderer + frame_renderer
+        combined = transport_text + product_ui_renderer
         assert token in combined, f"spectator HUD lacks: {token}"
 
-    assert "gameplay_death_spectator_text.empty()" in frame_renderer
-    assert "DrawGameplayDeathSpectatorStatus(" in frame_renderer
+    for token in (
+        "SnapshotRuntimeState().death_spectator",
+        "DrawNativePanel(",
+        "DrawNativeText(",
+        "IsSwapChainBackBufferActive(",
+        "Product spectator HUD surface. active=",
+    ):
+        assert token in product_ui_renderer, (
+            f"product spectator HUD renderer lacks: {token}"
+        )
+    assert "TryBuildDeathSpectatorStatusText" not in frame_renderer
+    assert "death_spectator_text" not in frame_renderer
+    assert "inspect_spectator_product_hud_pixels(" in organic_verifier
 
     return (
         "dead clients follow only live participant actors through a local camera, "

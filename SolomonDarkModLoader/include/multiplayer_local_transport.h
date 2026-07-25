@@ -17,6 +17,8 @@ struct SDModSceneActorState;
 
 namespace sdmod::multiplayer {
 
+struct DeathSpectatorRuntimeInfo;
+
 bool InitializeLocalTransport();
 void ShutdownLocalTransport();
 void TickLocalTransport(std::uint64_t now_ms);
@@ -28,6 +30,9 @@ void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool BeginLocalDeathSpectatorPresentation();
 bool IsLocalParticipantGameplayInertForDeath();
+bool TryBuildDeathSpectatorStatusText(
+    const DeathSpectatorRuntimeInfo& runtime,
+    std::string* status_text);
 bool TryBuildDeathSpectatorStatusText(std::string* status_text);
 bool ConsumePendingNativeGameOverDispatch();
 void NotifyNativeGameOverDispatched();

@@ -797,12 +797,94 @@ constructs the spectator text, and the normal-session log guard rejects any
 successful spectator-status draw. The semantic spectator target and click
 controls remain available through runtime state.
 
-This is a stronger product boundary than trying to associate the diagnostic
-quad with a wizard: normal gameplay registers and draws no such surface on the
+This is a stronger boundary than trying to associate the diagnostic quad with
+a wizard: normal gameplay registers and draws no such diagnostic surface on the
 backbuffer or on offscreen passes. Summons therefore cannot duplicate, migrate,
-or appear to inherit it. Diagnostic launches may still opt into the screen-
-space status surface explicitly, but that path is not part of the published
-player presentation.
+or appear to inherit it. The diagnostic implementation was subsequently
+removed when the player-facing replacement moved to the native product-UI
+path described below.
+
+### Beta.17 missing spectator affordance and product UI boundary
+
+Commit `a201d28` correctly placed every loader diagnostic status surface behind
+`RegisterDiagnosticSurfaceFrame` and made the published `full` profile keep
+`loader.debug_ui=false`. The death-spectator target/click bar was still the only
+player-facing spectator affordance, however, so that change also removed the
+bar from normal play. The beta.17 live log expressed the intended diagnostic
+result—`enabled=0 registered=0 rendered=0`—while no independent product
+spectator surface existed.
+
+The two-owner host-death topology does not have a separate authority or camera
+fault. A clean beta.17 organic melee trace held the host's death presentation
+for 5.011 seconds, entered `Spectating`, selected the sole live client
+participant, and set local camera focus to that participant's exact gameplay
+coordinates. `SelectNextAliveSpectatorTarget` finds the current ID in the
+alive-only sorted vector; with one entry, either click advances past the end and
+wraps to `front()`, which is the same ID. The missing information was
+presentation-only.
+
+The player-facing replacement reuses the retail native UI seams already mapped
+under `[lua_ui_authoring]`:
+
+- `UiPanel_Render` at `0x005C3F40` draws the stock-style panel;
+- `ExactText_Render` at `0x0043BCD0`, the native string assigner at
+  `0x00402AE0`, and `UiRenderContext_SetColor` at `0x0041FE50` draw the target
+  name and `Left / Right click: next player` instruction;
+- the existing font bundle and render-context globals supply the same native
+  objects used by authored UI.
+
+This renderer owns an independent product-surface lifecycle. It registers and
+draws only when the local runtime is active in `Spectating` and
+`TryBuildDeathSpectatorStatusText` returns nonempty text. `Inactive` (menu,
+lobby, alive, or respawned) and the five-second `DeathPresentation` phase both
+emit a hidden state. A living peer never registers the surface. The old
+`DrawGameplayDeathSpectatorStatus` filled-quad implementation is removed from
+the diagnostic renderer rather than re-enabled. Phase, target ID, target name,
+and display text are derived from one `DeathSpectatorRuntimeInfo` snapshot so a
+render frame cannot straddle handoff and report a visible surface with the
+preceding phase.
+
+The render callback additionally compares D3D9 render target 0 with swap-chain
+backbuffer 0 before it snapshots or registers the product surface. Offscreen
+spell/minion `EndScene` passes return without drawing or changing the reported
+surface state. This closes the original black-texture/migrating-overlay class
+while restoring a legitimate screen-space player affordance on the real
+backbuffer.
+
+The acceptance boundary now requires both the state marker and pixels. A
+normalized top-of-backbuffer region must contain the native gold exact-text
+output for the dead owner and must not contain it for a living peer or a target
+owner still in `DeathPresentation`. Gold output located only over a world actor
+does not satisfy the region check. This closes the beta.17 gate hole where
+semantic target/camera reads could pass despite the complete absence of visible
+controls.
+
+Post-fix isolated evidence:
+
+- `shudh2a-0725` organically killed the host through melee. The product marker
+  stayed hidden during `DeathPresentation` from `09:24:25.290` until
+  `09:24:30.284`, then registered/rendered for sole target
+  `2305843009213698050`. Left and right trials held that ID and exact camera
+  position across 29 and 26 samples. The measured grace was 5.003 seconds;
+  respawn retired the surface and red effect.
+- `shudc2a-0725` killed the client through a stock projectile while it was
+  casting. Its product transition was 4.991 seconds, both single-target click
+  trials remained stable, the host never registered the surface, and respawn
+  retired it.
+- `shud3b-0725` retained one client product HUD before and after the Ether
+  minion materialized on all three peers. The living Ether owner had no product
+  pixels. The client held the dying target through the terminal corpse frame,
+  both dead owners later rendered one HUD toward the surviving host, and all
+  three peers returned to hidden state on wave respawn. Every diagnostic
+  surface counter remained zero.
+
+The corresponding backbuffer captures are
+`runtime/multiplayer_organic_player_death/shudh2a-0725/`
+`victim-spectator.png`,
+`runtime/multiplayer_organic_player_death/shudc2a-0725/`
+`victim-spectator.png`, and
+`runtime/multiplayer_organic_spectator_followup/shud3b-0725/`
+`after-ether-minion.png` plus `ether-minion-owner.png`.
 
 ### Native wave loading and organic-damage provenance
 
@@ -905,9 +987,10 @@ The native findings impose these constraints:
 - Local native dispatch, outgoing cast publication, and incoming authority
   reject dead participants before any spell, minion command, relay, transform
   mutation, or world effect.
-- Normal player sessions do not register or draw loader spectator-status
-  surfaces. Spectator targeting remains semantic, and summons cannot inherit
-  or duplicate a diagnostic quad.
+- Normal player sessions do not register or draw diagnostic spectator-status
+  surfaces. A separate product HUD registers only for the local owner in
+  `Spectating`, uses native panel/text rendering on the swap-chain backbuffer,
+  and cannot appear on a summon or other offscreen pass.
 - Organic acceptance rewrites all 42 staged wave records while preserving the
   native `NEXT:` graph, excludes every pre-wave Boneyard actor by address, and
   observes a real HP decrement from the selected post-start actor before

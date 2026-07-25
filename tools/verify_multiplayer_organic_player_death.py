@@ -21,6 +21,19 @@ from multiplayer_natural_defense_harness import (
     ARM_ENEMY_ARENA_LUA,
     SET_ENEMY_MODE_LUA,
 )
+from normal_gameplay_debug_surface_guard import (
+    assert_launch_debug_surfaces_empty,
+)
+from spectator_product_hud_guard import (
+    assert_latest_spectator_product_hud_state,
+    assert_spectator_product_hud_lifecycle,
+    assert_spectator_product_hud_never_visible,
+    parse_spectator_product_hud_states,
+    wait_for_spectator_product_hud_state,
+)
+from spectator_product_hud_visual import (
+    inspect_spectator_product_hud_pixels,
+)
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -66,6 +79,8 @@ DEATH_PRESENTATION_SECONDS = 5.0
 NATIVE_RED_SAFE_TICK = 150
 NATIVE_TERMINAL_CORPSE_TICK = 159
 CORPSE_POSITION_TOLERANCE = 0.25
+SPECTATOR_CAMERA_TOLERANCE = 0.25
+SINGLE_TARGET_SAMPLE_SECONDS = 0.8
 DEAD_INPUT_SETTLE_SECONDS = 1.0
 ATTACKER_STABILIZED_HP = 5000.0
 
@@ -931,6 +946,130 @@ def _small_state(values: dict[str, str]) -> dict[str, str]:
     return {key: values[key] for key in keys if key in values}
 
 
+def _assert_single_target_spectator_samples(
+    samples: list[dict[str, str]],
+    *,
+    expected_target_participant_id: int,
+) -> dict[str, Any]:
+    if not samples:
+        raise VerifyFailure(
+            "single-target spectator control trial captured no state"
+        )
+    invalid: list[dict[str, str]] = []
+    maximum_camera_error = 0.0
+    target_names: set[str] = set()
+    for sample in samples:
+        camera_error = math.hypot(
+            float(sample.get("camera_center_x", "0"))
+                - float(sample.get("target_x", "0")),
+            float(sample.get("camera_center_y", "0"))
+                - float(sample.get("target_y", "0")),
+        )
+        maximum_camera_error = max(
+            maximum_camera_error,
+            camera_error,
+        )
+        target_name = sample.get("target_name", "")
+        if target_name:
+            target_names.add(target_name)
+        if (
+            sample.get("active") != "true"
+            or sample.get("phase") != "Spectating"
+            or int(sample.get("target_participant_id", "0"))
+                != expected_target_participant_id
+            or sample.get("target_alive") != "true"
+            or sample.get("camera_focus_active") != "true"
+            or camera_error > SPECTATOR_CAMERA_TOLERANCE
+            or "Left / Right click: next player"
+                not in sample.get("display_text", "")
+        ):
+            invalid.append(sample)
+    if invalid:
+        raise VerifyFailure(
+            "single-target spectator cycling blanked or migrated the "
+            f"target: expected={expected_target_participant_id} "
+            f"invalid={invalid[0]}"
+        )
+    return {
+        "stable": True,
+        "expected_target_participant_id":
+            expected_target_participant_id,
+        "sample_count": len(samples),
+        "maximum_camera_error": maximum_camera_error,
+        "target_names": sorted(target_names),
+    }
+
+
+def _exercise_single_target_spectator_controls(
+    pipe_name: str,
+    *,
+    expected_target_participant_id: int,
+) -> dict[str, Any]:
+    clear_result = parse_key_values(
+        lua(
+            pipe_name,
+            "print('left=' .. "
+            "tostring(sd.input.clear_mouse_left())); "
+            "print('right=' .. "
+            "tostring(sd.input.clear_mouse_right()))",
+        )
+    )
+    time.sleep(0.25)
+    initial = query_spectator_state(pipe_name)
+    initial_assertion = _assert_single_target_spectator_samples(
+        [initial],
+        expected_target_participant_id=
+            expected_target_participant_id,
+    )
+    trials: dict[str, Any] = {}
+    inputs = (
+        (
+            "left",
+            "return tostring("
+            "sd.input.click_normalized(0.5, 0.5))",
+        ),
+        (
+            "right",
+            "return tostring("
+            "sd.input.hold_mouse_right_frames(1))",
+        ),
+    )
+    for label, code in inputs:
+        injected = lua(pipe_name, code)
+        deadline = time.monotonic() + SINGLE_TARGET_SAMPLE_SECONDS
+        samples: list[dict[str, str]] = []
+        while time.monotonic() < deadline:
+            samples.append(query_spectator_state(pipe_name))
+            time.sleep(0.02)
+        trials[label] = {
+            "input_result": injected.strip(),
+            "assertion": _assert_single_target_spectator_samples(
+                samples,
+                expected_target_participant_id=
+                    expected_target_participant_id,
+            ),
+            "first": _small_state(samples[0]),
+            "last": _small_state(samples[-1]),
+        }
+        parse_key_values(
+            lua(
+                pipe_name,
+                "print('left=' .. "
+                "tostring(sd.input.clear_mouse_left())); "
+                "print('right=' .. "
+                "tostring(sd.input.clear_mouse_right()))",
+            )
+        )
+        time.sleep(0.25)
+    return {
+        "clear_result": clear_result,
+        "initial": _small_state(initial),
+        "initial_assertion": initial_assertion,
+        "trials": trials,
+        "stable": True,
+    }
+
+
 def _sample_lifecycle(
     *,
     victim_pipe: str,
@@ -946,21 +1085,22 @@ def _sample_lifecycle(
     milestones: dict[str, float] = {}
     terminal_frame_callback_invoked = False
     while time.monotonic() < deadline:
-        elapsed = time.monotonic() - started
         owner = query_spectator_state(victim_pipe)
         observer = query_remote_death_state(observer_pipe, victim_id)
+        spectator_hold: dict[str, str] | None = None
+        if spectator_hold_pipe is not None:
+            spectator_hold = query_spectator_target_death_state(
+                spectator_hold_pipe,
+                victim_id,
+            )
+        elapsed = time.monotonic() - started
         sample = {
             "elapsed_seconds": round(elapsed, 6),
             "owner": _small_state(owner),
             "observer": _small_state(observer),
         }
-        if spectator_hold_pipe is not None:
-            sample["spectator_hold"] = _small_state(
-                query_spectator_target_death_state(
-                    spectator_hold_pipe,
-                    victim_id,
-                )
-            )
+        if spectator_hold is not None:
+            sample["spectator_hold"] = _small_state(spectator_hold)
         samples.append(sample)
         owner_hp = float(owner.get("hp", "0"))
         if owner_hp <= 0.0:
@@ -1497,6 +1637,24 @@ def run_live_verification(
                 raise VerifyFailure(
                     f"{role} was already dead before organic trial: {state}"
                 )
+        result["product_hud_alive"] = (
+            assert_latest_spectator_product_hud_state(
+                [victim_log, observer_log],
+                context="alive",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+            )
+        )
+        result["diagnostic_surface_guard_alive"] = (
+            assert_launch_debug_surfaces_empty(
+                launch,
+                roles=("host", "client"),
+                context="alive",
+            )
+        )
         result["death_traces_armed"] = _arm_death_traces(pipes)
         result["damage_probes_armed"] = {}
         for role, pipe_name in (("host", host_pipe), ("client", client_pipe)):
@@ -1610,6 +1768,48 @@ def run_live_verification(
             lifecycle,
             milestones,
         )
+        expected_spectator_target_id = (
+            CLIENT_ID if victim_role == "host" else HOST_ID
+        )
+        result["product_hud_spectating"] = (
+            wait_for_spectator_product_hud_state(
+                [victim_log],
+                context="spectating",
+                expected_active=True,
+                expected_phase="Spectating",
+                expected_registered=True,
+                expected_rendered=True,
+                expected_target_participant_id=
+                    expected_spectator_target_id,
+                timeout=5.0,
+            )
+        )
+        result["product_hud_alive_observer"] = (
+            assert_latest_spectator_product_hud_state(
+                [observer_log],
+                context="alive",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+            )
+        )
+        result["product_hud_lifecycle_before_respawn"] = (
+            assert_spectator_product_hud_lifecycle(
+                victim_log,
+                expected_target_participant_id=
+                    expected_spectator_target_id,
+                require_retired=False,
+            )
+        )
+        result["diagnostic_surface_guard_spectating"] = (
+            assert_launch_debug_surfaces_empty(
+                launch,
+                roles=("host", "client"),
+                context="spectating",
+            )
+        )
         result["enemy_idle_for_dead_input"] = _set_enemy_idle(host_pipe)
         time.sleep(0.25)
         result["dead_input"] = _attempt_dead_gameplay_inputs(
@@ -1617,20 +1817,89 @@ def run_live_verification(
             victim_pipe=victim_pipe,
             observer_pipe=observer_pipe,
         )
+        result["single_target_controls"] = (
+            _exercise_single_target_spectator_controls(
+                victim_pipe,
+                expected_target_participant_id=
+                    expected_spectator_target_id,
+            )
+        )
 
         screenshot_directory = SCREENSHOT_ROOT / instance_prefix
+        victim_screenshot_path = (
+            screenshot_directory / "victim-spectator.png"
+        )
+        observer_screenshot_path = (
+            screenshot_directory / "observer-death-location.png"
+        )
         result["screenshots"] = {
             "victim_spectator": capture_game_backbuffer(
                 victim_pipe,
-                screenshot_directory / "victim-spectator.png",
+                victim_screenshot_path,
             ),
             "observer_death_location": capture_game_backbuffer(
                 observer_pipe,
-                screenshot_directory / "observer-death-location.png",
+                observer_screenshot_path,
             ),
+        }
+        result["product_hud_pixels"] = {
+            "victim_visible":
+                inspect_spectator_product_hud_pixels(
+                    victim_screenshot_path,
+                    expected_visible=True,
+                ),
+            "observer_hidden":
+                inspect_spectator_product_hud_pixels(
+                    observer_screenshot_path,
+                    expected_visible=False,
+                ),
         }
         result["wave_finish"] = _finish_wave(host_pipe)
         result["respawned"] = _wait_for_respawn(victim_pipe)
+        result["product_hud_respawned"] = (
+            wait_for_spectator_product_hud_state(
+                [victim_log],
+                context="respawned",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+                timeout=5.0,
+            )
+        )
+        result["product_hud_lifecycle"] = (
+            assert_spectator_product_hud_lifecycle(
+                victim_log,
+                expected_target_participant_id=
+                    expected_spectator_target_id,
+                require_retired=True,
+            )
+        )
+        result["product_hud_observer_never_visible"] = (
+            assert_spectator_product_hud_never_visible(observer_log)
+        )
+        result["diagnostic_surface_guard_respawned"] = (
+            assert_launch_debug_surfaces_empty(
+                launch,
+                roles=("host", "client"),
+                context="respawned",
+            )
+        )
+        result["product_hud_surface_states"] = {
+            victim_role: parse_spectator_product_hud_states(
+                victim_log.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            ),
+            observer_role: parse_spectator_product_hud_states(
+                observer_log.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            ),
+        }
         retail_sha256_after = hashlib.sha256(
             retail_wave_path.read_bytes()
         ).hexdigest()

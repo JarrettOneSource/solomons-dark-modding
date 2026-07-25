@@ -202,7 +202,7 @@ class OverlayRendererContractTests(unittest.TestCase):
             "definition and single registered-surface loop",
         )
 
-    def test_loader_status_surfaces_share_the_diagnostic_registration_gate(
+    def test_diagnostic_registry_keeps_product_spectator_hud_out(
         self,
     ) -> None:
         frame_renderer = read(
@@ -217,9 +217,7 @@ class OverlayRendererContractTests(unittest.TestCase):
 
         for token in (
             "multiplayer::TryBuildLevelUpWaitStatusText(",
-            "multiplayer::TryBuildDeathSpectatorStatusText(",
             "frame.level_up_wait_text",
-            "frame.death_spectator_text",
         ):
             self.assertIn(token, gate)
         self.assertLess(
@@ -228,21 +226,15 @@ class OverlayRendererContractTests(unittest.TestCase):
                 "multiplayer::TryBuildLevelUpWaitStatusText("
             ),
         )
-        self.assertLess(
-            gate.index("if (!diagnostic_visuals_enabled)"),
-            gate.index(
-                "multiplayer::TryBuildDeathSpectatorStatusText("
-            ),
+        self.assertNotIn(
+            "multiplayer::TryBuildDeathSpectatorStatusText(",
+            gate,
         )
+        self.assertNotIn("death_spectator_text", frame_renderer)
 
         self.assertIn(
             "gameplay_level_up_wait_text =\n"
             "        diagnostic_surface_frame.level_up_wait_text",
-            frame_renderer,
-        )
-        self.assertIn(
-            "gameplay_death_spectator_text =\n"
-            "        diagnostic_surface_frame.death_spectator_text",
             frame_renderer,
         )
         self.assertEqual(
@@ -252,11 +244,72 @@ class OverlayRendererContractTests(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            1,
+            0,
             frame_renderer.count(
                 "multiplayer::TryBuildDeathSpectatorStatusText("
             ),
         )
+
+    def test_spectator_product_hud_uses_stock_native_ui_and_state_gate(
+        self,
+    ) -> None:
+        renderer = read(
+            "SolomonDarkModLoader/src/lua_ui_renderer.cpp"
+        )
+        two_peer_verifier = read(
+            "tools/verify_multiplayer_organic_player_death.py"
+        )
+        three_peer_verifier = read(
+            "tools/verify_multiplayer_organic_spectator_followup.py"
+        )
+        obsolete_quad_path = (
+            ROOT
+            / "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "gameplay_death_spectator_rendering.inl"
+        )
+
+        for token in (
+            '#include "multiplayer_local_transport.h"',
+            "multiplayer::TryBuildDeathSpectatorStatusText(",
+            "SnapshotRuntimeState().death_spectator",
+            "DrawNativePanel(",
+            "DrawNativeText(",
+            "IsSwapChainBackBufferActive(",
+            "device->GetRenderTarget(0, &render_target)",
+            "device->GetBackBuffer(",
+            "Product spectator HUD surface. active=",
+            "DeathSpectatorPhaseLabel(",
+            "registered=",
+            "rendered=",
+            "target_participant_id=",
+        ):
+            self.assertIn(token, renderer)
+        self.assertNotIn("DrawFilledRect(", renderer)
+        self.assertNotIn("DrawRectOutline(", renderer)
+        self.assertNotIn("DrawLabelText(", renderer)
+        render_frame = renderer[
+            renderer.index(
+                "void RenderLuaUiFrame(IDirect3DDevice9* device)"
+            ) :
+        ]
+        self.assertLess(
+            render_frame.index(
+                "if (!IsSwapChainBackBufferActive(device))"
+            ),
+            render_frame.index(
+                "const auto spectator_hud = "
+                "BuildSpectatorProductHudFrame();"
+            ),
+        )
+        self.assertFalse(
+            obsolete_quad_path.exists(),
+            "the diagnostic filled-quad spectator renderer still exists",
+        )
+        for verifier in (two_peer_verifier, three_peer_verifier):
+            self.assertIn(
+                "inspect_spectator_product_hud_pixels(",
+                verifier,
+            )
 
     def test_native_picker_owner_never_gets_a_loader_choice_surface(self) -> None:
         transport = read(

@@ -60,11 +60,12 @@ The overlay is intentionally structured to keep the hot path light when enabled:
 
 This separation is structural: normal gameplay can observe a stock surface for
 automation without turning that surface into a loader-owned quad. In
-particular, level-up barrier text and death-spectator hints are constructed
-inside the same diagnostic registration function as observed stock-surface
-overlays. When `loader.debug_ui=false`, that function returns before any of
-those surfaces are constructed. Their semantic state remains available through
-`sd.runtime`; it is not drawn over a real player session.
+particular, level-up barrier text is constructed inside the same diagnostic
+registration function as observed stock-surface overlays. When
+`loader.debug_ui=false`, that function returns before either surface is
+constructed. Death-spectator status is deliberately not part of this registry:
+it is player-facing product UI rendered through the retail panel and exact-text
+functions only while the local owner is in the `Spectating` phase.
 
 The complete native D3D9 surface audit is:
 
@@ -72,12 +73,16 @@ The complete native D3D9 surface audit is:
 | --- | --- | --- |
 | Observed stock UI labels and panels | Diagnostic gate | Automation and acceptance observability |
 | Level-up barrier wait text | Diagnostic gate | Loader status text; stock picker remains authoritative |
-| Death-spectator target/click hint | Diagnostic gate | Loader status text; spectator state remains semantic |
+| Death-spectator target/click hint | Product, spectator-only | Required target and input affordance; uses retail panel/text rendering |
 | Participant health bars | Functional | Multiplayer combat information |
 | Dampen rings | Functional | Replicated gameplay effect |
 | Join consent and loading covers | Functional | Required launcher join-flow interaction |
 
-This keeps resource setup and draw submission out of the text helper path and leaves the loader with one render pass per frame instead of many immediate draws.
+The product spectator renderer first proves render target 0 is the swap-chain
+backbuffer. It skips offscreen `EndScene` passes, so a summon or spell render
+target cannot inherit or duplicate the HUD. Resource setup and draw submission
+stay out of the text helper path, and the loader retains one shared callback
+pass rather than many immediate draws.
 
 ## Diagnostic logging policy
 
@@ -106,10 +111,26 @@ Debug UI diagnostic surface set. enabled=0 registered=0 rendered=0
 
 The gate fails if the marker is missing or if any diagnostic surface is enabled,
 registered, or rendered. It also rejects any successful level-up-wait or
-death-spectator status draw even if the diagnostic-set counters claim zero.
+legacy diagnostic death-spectator draw even if the diagnostic-set counters
+claim zero.
 The guard exposes the complete normal-session context matrix—menu, join/lobby,
 alive, dead, and spectating—so live gates can record the same invariant for
 every peer.
+
+The separate product-surface marker is:
+
+```text
+Product spectator HUD surface. active=1 phase=Spectating registered=1 rendered=1 target_participant_id=2305843009213698050
+```
+
+`tools/spectator_product_hud_guard.py` requires
+`registered=rendered=1` only for the local dead owner's `Spectating` phase.
+Menu, join/lobby, alive, five-second `DeathPresentation`, and respawned states
+must remain `registered=rendered=0`; living observer peers must never report a
+visible product spectator surface. Live gates also inspect the normalized
+backbuffer HUD region for the native gold text pixels. This makes a successful
+state marker insufficient by itself: clipped, invisible, or actor-migrated
+output fails the acceptance run.
 
 When `config/debug-ui.ini` is enabled and the staged runtime explicitly sets
 `loader.debug_ui=true`, a live launch should produce loader log markers showing:

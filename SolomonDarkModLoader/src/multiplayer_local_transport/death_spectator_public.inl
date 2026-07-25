@@ -78,12 +78,13 @@ bool IsLocalParticipantGameplayInertForDeath() {
         IsParticipantGameplayInertForDeath(*local);
 }
 
-bool TryBuildDeathSpectatorStatusText(std::string* status_text) {
+bool TryBuildDeathSpectatorStatusText(
+    const DeathSpectatorRuntimeInfo& runtime,
+    std::string* status_text) {
     if (status_text == nullptr) {
         return false;
     }
     status_text->clear();
-    const auto runtime = SnapshotRuntimeState().death_spectator;
     if (!runtime.active ||
         runtime.phase != DeathSpectatorPhase::Spectating) {
         return false;
@@ -97,4 +98,10 @@ bool TryBuildDeathSpectatorStatusText(std::string* status_text) {
             "  |  Left / Right click: next player";
     }
     return true;
+}
+
+bool TryBuildDeathSpectatorStatusText(std::string* status_text) {
+    return TryBuildDeathSpectatorStatusText(
+        SnapshotRuntimeState().death_spectator,
+        status_text);
 }

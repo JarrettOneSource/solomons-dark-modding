@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -165,6 +166,125 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_single_target_spectator_samples_remain_camera_stable(
+        self,
+    ) -> None:
+        target_id = 2305843009213698050
+        samples = [
+            {
+                "active": "true",
+                "phase": "Spectating",
+                "target_participant_id": str(target_id),
+                "target_name": "Client Player",
+                "target_alive": "true",
+                "target_x": "812.25",
+                "target_y": "150.0",
+                "camera_focus_active": "true",
+                "camera_center_x": "812.25",
+                "camera_center_y": "150.0",
+                "display_text":
+                    "Spectating Client Player  |  "
+                    "Left / Right click: next player",
+            },
+            {
+                "active": "true",
+                "phase": "Spectating",
+                "target_participant_id": str(target_id),
+                "target_name": "Client Player",
+                "target_alive": "true",
+                "target_x": "813.0",
+                "target_y": "150.0",
+                "camera_focus_active": "true",
+                "camera_center_x": "813.1",
+                "camera_center_y": "150.0",
+                "display_text":
+                    "Spectating Client Player  |  "
+                    "Left / Right click: next player",
+            },
+        ]
+
+        result = verifier._assert_single_target_spectator_samples(
+            samples,
+            expected_target_participant_id=target_id,
+        )
+
+        self.assertTrue(result["stable"])
+        self.assertEqual(2, result["sample_count"])
+        self.assertEqual(["Client Player"], result["target_names"])
+
+    def test_single_target_spectator_sample_rejects_blank_target(
+        self,
+    ) -> None:
+        target_id = 2305843009213698050
+        sample = {
+            "active": "true",
+            "phase": "Spectating",
+            "target_participant_id": "0",
+            "target_name": "",
+            "target_alive": "false",
+            "target_x": "0",
+            "target_y": "0",
+            "camera_focus_active": "false",
+            "camera_center_x": "0",
+            "camera_center_y": "0",
+            "display_text": "Spectating - waiting for an alive player",
+        }
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "blanked or migrated",
+        ):
+            verifier._assert_single_target_spectator_samples(
+                [sample],
+                expected_target_participant_id=target_id,
+            )
+
+    def test_lifecycle_samples_are_timestamped_after_blocking_queries(
+        self,
+    ) -> None:
+        owner = {
+            "active": "true",
+            "phase": "Spectating",
+            "hp": "0",
+            "death_drive_state": "1",
+            "red_effect_active": "false",
+            "death_transition_hits": "1",
+            "staff_drop_hits": "1",
+        }
+        observer = {
+            "hp": "0",
+            "death_drive_state": "1",
+            "presentation_active": "false",
+            "red_effect_active": "false",
+        }
+        with (
+            patch.object(
+                verifier.time,
+                "monotonic",
+                side_effect=(100.0, 100.0, 100.0, 102.0),
+            ),
+            patch.object(
+                verifier,
+                "query_spectator_state",
+                return_value=owner,
+            ),
+            patch.object(
+                verifier,
+                "query_remote_death_state",
+                return_value=observer,
+            ),
+        ):
+            samples, milestones = verifier._sample_lifecycle(
+                victim_pipe="victim",
+                observer_pipe="observer",
+                victim_id=23,
+                timeout=10.0,
+            )
+
+        self.assertEqual(2.0, samples[0]["elapsed_seconds"])
+        self.assertEqual(2.0, milestones["spectator_seconds"])
+        self.assertEqual(2.0, milestones["red_cleared_seconds"])
 
     def test_completed_organic_lifecycle_requires_owner_only_drop(
         self,

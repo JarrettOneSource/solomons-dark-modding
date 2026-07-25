@@ -20,6 +20,15 @@ from multiplayer_progression_probe import query_progression_snapshot
 from normal_gameplay_debug_surface_guard import (
     assert_launch_debug_surfaces_empty,
 )
+from spectator_product_hud_guard import (
+    assert_spectator_product_hud_lifecycle,
+    assert_spectator_product_hud_never_visible,
+    parse_spectator_product_hud_states,
+    wait_for_spectator_product_hud_state,
+)
+from spectator_product_hud_visual import (
+    inspect_spectator_product_hud_pixels,
+)
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -442,6 +451,18 @@ def run_live_verification(
                     45.0,
                 )
         result["relationships"] = relationships
+        result["product_hud_alive"] = (
+            wait_for_spectator_product_hud_state(
+                [host_log, client_log, third_log],
+                context="alive",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+                timeout=5.0,
+            )
+        )
         result["death_traces_armed"] = _arm_death_traces(
             list(pipes.values())
         )
@@ -499,10 +520,40 @@ def run_live_verification(
             timeout=8.0,
             allow_cycle=True,
         )
+        result["product_hud_spectating_ether_target"] = (
+            wait_for_spectator_product_hud_state(
+                [client_log],
+                context="spectating",
+                expected_active=True,
+                expected_phase="Spectating",
+                expected_registered=True,
+                expected_rendered=True,
+                expected_target_participant_id=THIRD_ID,
+                timeout=5.0,
+            )
+        )
+        result["product_hud_alive_target_peers"] = (
+            wait_for_spectator_product_hud_state(
+                [host_log, third_log],
+                context="alive",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+                timeout=5.0,
+            )
+        )
         result["screenshots"]["before_ether_minion"] = (
             capture_game_backbuffer(
                 client_pipe,
                 artifact_directory / "before-ether-minion.png",
+            )
+        )
+        result["product_hud_pixels_before_minion"] = (
+            inspect_spectator_product_hud_pixels(
+                artifact_directory / "before-ether-minion.png",
+                expected_visible=True,
             )
         )
 
@@ -560,6 +611,18 @@ def run_live_verification(
                 allow_cycle=False,
             )
         )
+        result["product_hud_after_ether_minion"] = (
+            wait_for_spectator_product_hud_state(
+                [client_log],
+                context="spectating",
+                expected_active=True,
+                expected_phase="Spectating",
+                expected_registered=True,
+                expected_rendered=True,
+                expected_target_participant_id=THIRD_ID,
+                timeout=5.0,
+            )
+        )
         result["screenshots"]["after_ether_minion"] = (
             capture_game_backbuffer(
                 client_pipe,
@@ -572,6 +635,18 @@ def run_live_verification(
                 artifact_directory / "ether-minion-owner.png",
             )
         )
+        result["product_hud_pixels_after_minion"] = {
+            "spectator_visible":
+                inspect_spectator_product_hud_pixels(
+                    artifact_directory / "after-ether-minion.png",
+                    expected_visible=True,
+                ),
+            "alive_owner_hidden":
+                inspect_spectator_product_hud_pixels(
+                    artifact_directory / "ether-minion-owner.png",
+                    expected_visible=False,
+                ),
+        }
         result["normal_surface_guard_after_minion"] = (
             assert_launch_debug_surfaces_empty(
                 launch,
@@ -648,6 +723,20 @@ def run_live_verification(
                     terminal_screenshots["owner"],
             }
         )
+        result["product_hud_pixels_terminal_corpse"] = {
+            "spectator_visible":
+                inspect_spectator_product_hud_pixels(
+                    artifact_directory
+                    / "spectated-target-terminal-corpse.png",
+                    expected_visible=True,
+                ),
+            "death_presentation_owner_hidden":
+                inspect_spectator_product_hud_pixels(
+                    artifact_directory
+                    / "spectated-target-owner-terminal-corpse.png",
+                    expected_visible=False,
+                ),
+        }
         result["automatic_retarget_after_grace"] = (
             _wait_for_spectator_target(
                 client_pipe,
@@ -656,10 +745,48 @@ def run_live_verification(
                 allow_cycle=False,
             )
         )
+        result["product_hud_after_target_grace"] = {
+            "client": wait_for_spectator_product_hud_state(
+                [client_log],
+                context="spectating",
+                expected_active=True,
+                expected_phase="Spectating",
+                expected_registered=True,
+                expected_rendered=True,
+                expected_target_participant_id=HOST_ID,
+                timeout=5.0,
+            ),
+            "third": wait_for_spectator_product_hud_state(
+                [third_log],
+                context="spectating",
+                expected_active=True,
+                expected_phase="Spectating",
+                expected_registered=True,
+                expected_rendered=True,
+                expected_target_participant_id=HOST_ID,
+                timeout=5.0,
+            ),
+            "host": wait_for_spectator_product_hud_state(
+                [host_log],
+                context="alive",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+                timeout=5.0,
+            ),
+        }
         result["screenshots"]["after_target_grace"] = (
             capture_game_backbuffer(
                 client_pipe,
                 artifact_directory / "after-target-grace.png",
+            )
+        )
+        result["product_hud_pixels_after_target_grace"] = (
+            inspect_spectator_product_hud_pixels(
+                artifact_directory / "after-target-grace.png",
+                expected_visible=True,
             )
         )
         result["normal_surface_guard_after_target_death"] = (
@@ -677,6 +804,45 @@ def run_live_verification(
         result["respawned"] = {
             "client": _wait_for_respawn(client_pipe),
             "third": _wait_for_respawn(third_pipe),
+        }
+        result["product_hud_respawned"] = (
+            wait_for_spectator_product_hud_state(
+                [host_log, client_log, third_log],
+                context="respawned",
+                expected_active=False,
+                expected_phase="Inactive",
+                expected_registered=False,
+                expected_rendered=False,
+                expected_target_participant_id=0,
+                timeout=5.0,
+            )
+        )
+        result["product_hud_lifecycles"] = {
+            "client": assert_spectator_product_hud_lifecycle(
+                client_log,
+                expected_target_participant_id=THIRD_ID,
+                require_retired=True,
+            ),
+            "third": assert_spectator_product_hud_lifecycle(
+                third_log,
+                expected_target_participant_id=HOST_ID,
+                require_retired=True,
+            ),
+            "host_never_visible":
+                assert_spectator_product_hud_never_visible(host_log),
+        }
+        result["product_hud_surface_states"] = {
+            role: parse_spectator_product_hud_states(
+                log_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            )
+            for role, log_path in (
+                ("host", host_log),
+                ("client", client_log),
+                ("third", third_log),
+            )
         }
         retail_sha256_after = hashlib.sha256(
             retail_wave_path.read_bytes()

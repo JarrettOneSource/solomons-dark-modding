@@ -4,6 +4,8 @@
 #include "d3d9_end_scene_hook.h"
 #include "logger.h"
 #include "memory_access.h"
+#include "multiplayer_local_transport.h"
+#include "multiplayer_runtime_state.h"
 
 #include <Windows.h>
 #include <d3d9.h>
@@ -36,10 +38,17 @@ using ExactTextRenderFn = void(__thiscall*)(void* self, NativeUiString text, flo
 using UiRenderContextColorFn =
     void(__thiscall*)(void* self, float red, float green, float blue, float alpha);
 
-struct LuaUiRendererState {
+struct NativeUiRendererState {
     bool started = false;
     bool first_frame_logged = false;
     bool fault_logged = false;
+    bool spectator_hud_state_logged = false;
+    bool spectator_hud_active = false;
+    multiplayer::DeathSpectatorPhase spectator_hud_phase =
+        multiplayer::DeathSpectatorPhase::Inactive;
+    bool spectator_hud_registered = false;
+    bool spectator_hud_rendered = false;
+    std::uint64_t spectator_hud_target_participant_id = 0;
     uintptr_t device_pointer_global = 0;
     uintptr_t font_bundle_global = 0;
     uintptr_t font_object_offset = 0;
@@ -52,7 +61,72 @@ struct LuaUiRendererState {
     std::mutex mutex;
 };
 
-LuaUiRendererState g_lua_ui_renderer;
+NativeUiRendererState g_native_ui_renderer;
+
+struct SpectatorProductHudFrame {
+    bool active = false;
+    multiplayer::DeathSpectatorPhase phase =
+        multiplayer::DeathSpectatorPhase::Inactive;
+    std::uint64_t target_participant_id = 0;
+    std::string text;
+    bool registered = false;
+};
+
+SpectatorProductHudFrame BuildSpectatorProductHudFrame() {
+    SpectatorProductHudFrame frame;
+    const auto runtime =
+        multiplayer::SnapshotRuntimeState().death_spectator;
+    frame.active = runtime.active;
+    frame.phase = runtime.phase;
+    frame.target_participant_id = runtime.target_participant_id;
+    frame.registered =
+        multiplayer::TryBuildDeathSpectatorStatusText(
+            runtime,
+            &frame.text) &&
+        !frame.text.empty();
+    return frame;
+}
+
+void LogSpectatorProductHudFrame(
+    const SpectatorProductHudFrame& frame,
+    bool rendered) {
+    bool changed = false;
+    {
+        std::scoped_lock lock(g_native_ui_renderer.mutex);
+        changed =
+            !g_native_ui_renderer.spectator_hud_state_logged ||
+            g_native_ui_renderer.spectator_hud_active != frame.active ||
+            g_native_ui_renderer.spectator_hud_phase != frame.phase ||
+            g_native_ui_renderer.spectator_hud_registered !=
+                frame.registered ||
+            g_native_ui_renderer.spectator_hud_rendered != rendered ||
+            g_native_ui_renderer.spectator_hud_target_participant_id !=
+                frame.target_participant_id;
+        if (changed) {
+            g_native_ui_renderer.spectator_hud_state_logged = true;
+            g_native_ui_renderer.spectator_hud_active = frame.active;
+            g_native_ui_renderer.spectator_hud_phase = frame.phase;
+            g_native_ui_renderer.spectator_hud_registered =
+                frame.registered;
+            g_native_ui_renderer.spectator_hud_rendered = rendered;
+            g_native_ui_renderer.spectator_hud_target_participant_id =
+                frame.target_participant_id;
+        }
+    }
+    if (!changed) {
+        return;
+    }
+    Log(
+        "Product spectator HUD surface. active=" +
+        std::to_string(frame.active ? 1 : 0) +
+        " phase=" +
+        multiplayer::DeathSpectatorPhaseLabel(frame.phase) +
+        " registered=" +
+        std::to_string(frame.registered ? 1 : 0) +
+        " rendered=" + std::to_string(rendered ? 1 : 0) +
+        " target_participant_id=" +
+        std::to_string(frame.target_participant_id));
+}
 
 bool ReadRequiredLayoutValue(
     const char* key,
@@ -197,6 +271,88 @@ bool DrawNativePanel(
     }
 }
 
+bool DrawSpectatorProductHud(
+    UiPanelRenderFn panel_render,
+    NativeStringAssignFn string_assign,
+    ExactTextRenderFn text_render,
+    UiRenderContextColorFn render_context_color,
+    void* render_context,
+    void* font,
+    const D3DVIEWPORT9& viewport,
+    const SpectatorProductHudFrame& frame,
+    DWORD* exception_code) {
+    if (!frame.registered || frame.text.empty()) {
+        return false;
+    }
+
+    constexpr LuaUiRect kSurfaceRect{
+        0.20f,
+        0.055f,
+        0.60f,
+        0.075f,
+    };
+    const float left =
+        kSurfaceRect.x * static_cast<float>(viewport.Width);
+    const float top =
+        kSurfaceRect.y * static_cast<float>(viewport.Height);
+
+    const bool panel_drawn = DrawNativePanel(
+        panel_render,
+        kSurfaceRect,
+        viewport,
+        exception_code);
+    const bool color_set = SetNativeTextColor(
+        render_context_color,
+        render_context,
+        1.0f,
+        0.9f,
+        0.55f,
+        exception_code);
+    const bool text_drawn = DrawNativeText(
+        string_assign,
+        text_render,
+        font,
+        frame.text,
+        left + 18.0f,
+        top + 20.0f,
+        exception_code);
+    const bool color_restored = SetNativeTextColor(
+        render_context_color,
+        render_context,
+        1.0f,
+        1.0f,
+        1.0f,
+        exception_code);
+    return panel_drawn && color_set && text_drawn && color_restored;
+}
+
+bool IsSwapChainBackBufferActive(IDirect3DDevice9* device) {
+    if (device == nullptr) {
+        return false;
+    }
+    IDirect3DSurface9* render_target = nullptr;
+    IDirect3DSurface9* back_buffer = nullptr;
+    const auto render_target_result =
+        device->GetRenderTarget(0, &render_target);
+    const auto back_buffer_result = device->GetBackBuffer(
+        0,
+        0,
+        D3DBACKBUFFER_TYPE_MONO,
+        &back_buffer);
+    const bool active =
+        SUCCEEDED(render_target_result) &&
+        SUCCEEDED(back_buffer_result) &&
+        render_target != nullptr &&
+        render_target == back_buffer;
+    if (back_buffer != nullptr) {
+        back_buffer->Release();
+    }
+    if (render_target != nullptr) {
+        render_target->Release();
+    }
+    return active;
+}
+
 bool ResolveFontObject(uintptr_t global_address, uintptr_t offset, void** font) {
     if (font != nullptr) {
         *font = nullptr;
@@ -228,8 +384,8 @@ bool StartLuaUiRenderer(std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
-    std::scoped_lock lock(g_lua_ui_renderer.mutex);
-    if (g_lua_ui_renderer.started) {
+    std::scoped_lock lock(g_native_ui_renderer.mutex);
+    if (g_native_ui_renderer.started) {
         return true;
     }
 
@@ -280,55 +436,59 @@ bool StartLuaUiRenderer(std::string* error_message) {
             device_global, &RenderLuaUiFrame, error_message)) {
         return false;
     }
-    g_lua_ui_renderer.device_pointer_global = resolved_device_global;
-    g_lua_ui_renderer.font_bundle_global = resolved_font_global;
-    g_lua_ui_renderer.font_object_offset = font_object_offset;
-    g_lua_ui_renderer.render_context_global = resolved_context_global;
-    g_lua_ui_renderer.render_context_draw_state_offset =
+    g_native_ui_renderer.device_pointer_global = resolved_device_global;
+    g_native_ui_renderer.font_bundle_global = resolved_font_global;
+    g_native_ui_renderer.font_object_offset = font_object_offset;
+    g_native_ui_renderer.render_context_global = resolved_context_global;
+    g_native_ui_renderer.render_context_draw_state_offset =
         render_context_draw_state_offset;
-    g_lua_ui_renderer.panel_render =
+    g_native_ui_renderer.panel_render =
         reinterpret_cast<UiPanelRenderFn>(resolved_panel);
-    g_lua_ui_renderer.exact_text_render =
+    g_native_ui_renderer.exact_text_render =
         reinterpret_cast<ExactTextRenderFn>(resolved_text);
-    g_lua_ui_renderer.string_assign =
+    g_native_ui_renderer.string_assign =
         reinterpret_cast<NativeStringAssignFn>(resolved_assign);
-    g_lua_ui_renderer.render_context_color =
+    g_native_ui_renderer.render_context_color =
         reinterpret_cast<UiRenderContextColorFn>(resolved_context_color);
-    g_lua_ui_renderer.first_frame_logged = false;
-    g_lua_ui_renderer.fault_logged = false;
-    g_lua_ui_renderer.started = true;
-    Log("Lua UI renderer registered game-native panel and exact-text callbacks.");
+    g_native_ui_renderer.first_frame_logged = false;
+    g_native_ui_renderer.fault_logged = false;
+    g_native_ui_renderer.spectator_hud_state_logged = false;
+    g_native_ui_renderer.started = true;
+    Log(
+        "Native UI renderer registered game-native panel and exact-text "
+        "callbacks.");
     return true;
 }
 
 bool IsLuaUiRendererStarted() {
-    std::scoped_lock lock(g_lua_ui_renderer.mutex);
-    return g_lua_ui_renderer.started;
+    std::scoped_lock lock(g_native_ui_renderer.mutex);
+    return g_native_ui_renderer.started;
 }
 
 void ShutdownLuaUiRuntime() {
     RemoveD3d9FrameCallback(&RenderLuaUiFrame);
     {
-        std::scoped_lock lock(g_lua_ui_renderer.mutex);
-        g_lua_ui_renderer.started = false;
-        g_lua_ui_renderer.first_frame_logged = false;
-        g_lua_ui_renderer.fault_logged = false;
-        g_lua_ui_renderer.device_pointer_global = 0;
-        g_lua_ui_renderer.font_bundle_global = 0;
-        g_lua_ui_renderer.font_object_offset = 0;
-        g_lua_ui_renderer.render_context_global = 0;
-        g_lua_ui_renderer.render_context_draw_state_offset = 0;
-        g_lua_ui_renderer.panel_render = nullptr;
-        g_lua_ui_renderer.string_assign = nullptr;
-        g_lua_ui_renderer.exact_text_render = nullptr;
-        g_lua_ui_renderer.render_context_color = nullptr;
+        std::scoped_lock lock(g_native_ui_renderer.mutex);
+        g_native_ui_renderer.started = false;
+        g_native_ui_renderer.first_frame_logged = false;
+        g_native_ui_renderer.fault_logged = false;
+        g_native_ui_renderer.spectator_hud_state_logged = false;
+        g_native_ui_renderer.device_pointer_global = 0;
+        g_native_ui_renderer.font_bundle_global = 0;
+        g_native_ui_renderer.font_object_offset = 0;
+        g_native_ui_renderer.render_context_global = 0;
+        g_native_ui_renderer.render_context_draw_state_offset = 0;
+        g_native_ui_renderer.panel_render = nullptr;
+        g_native_ui_renderer.string_assign = nullptr;
+        g_native_ui_renderer.exact_text_render = nullptr;
+        g_native_ui_renderer.render_context_color = nullptr;
     }
     std::string ignored;
     InitializeLuaUiRuntime(&ignored);
 }
 
 void RenderLuaUiFrame(IDirect3DDevice9* device) {
-    if (device == nullptr) {
+    if (!IsSwapChainBackBufferActive(device)) {
         return;
     }
     D3DVIEWPORT9 viewport{};
@@ -338,7 +498,9 @@ void RenderLuaUiFrame(IDirect3DDevice9* device) {
     }
     UpdateLuaUiViewport(viewport.Width, viewport.Height);
     const auto surfaces = SnapshotLuaUiSurfaces();
-    if (surfaces.empty()) {
+    const auto spectator_hud = BuildSpectatorProductHudFrame();
+    if (surfaces.empty() && !spectator_hud.registered) {
+        LogSpectatorProductHudFrame(spectator_hud, false);
         return;
     }
 
@@ -351,28 +513,30 @@ void RenderLuaUiFrame(IDirect3DDevice9* device) {
     uintptr_t render_context_draw_state_offset = 0;
     UiRenderContextColorFn render_context_color = nullptr;
     {
-        std::scoped_lock lock(g_lua_ui_renderer.mutex);
-        if (!g_lua_ui_renderer.started) {
+        std::scoped_lock lock(g_native_ui_renderer.mutex);
+        if (!g_native_ui_renderer.started) {
             return;
         }
-        panel_render = g_lua_ui_renderer.panel_render;
-        string_assign = g_lua_ui_renderer.string_assign;
-        exact_text_render = g_lua_ui_renderer.exact_text_render;
-        font_bundle_global = g_lua_ui_renderer.font_bundle_global;
-        font_object_offset = g_lua_ui_renderer.font_object_offset;
-        render_context_global = g_lua_ui_renderer.render_context_global;
+        panel_render = g_native_ui_renderer.panel_render;
+        string_assign = g_native_ui_renderer.string_assign;
+        exact_text_render = g_native_ui_renderer.exact_text_render;
+        font_bundle_global = g_native_ui_renderer.font_bundle_global;
+        font_object_offset = g_native_ui_renderer.font_object_offset;
+        render_context_global = g_native_ui_renderer.render_context_global;
         render_context_draw_state_offset =
-            g_lua_ui_renderer.render_context_draw_state_offset;
-        render_context_color = g_lua_ui_renderer.render_context_color;
+            g_native_ui_renderer.render_context_draw_state_offset;
+        render_context_color = g_native_ui_renderer.render_context_color;
     }
 
     void* font = nullptr;
     if (!ResolveFontObject(font_bundle_global, font_object_offset, &font)) {
+        LogSpectatorProductHudFrame(spectator_hud, false);
         return;
     }
     uintptr_t context_base = 0;
     if (!ProcessMemory::Instance().TryReadValue(
             render_context_global, &context_base) || context_base == 0) {
+        LogSpectatorProductHudFrame(spectator_hud, false);
         return;
     }
     auto* render_context = reinterpret_cast<void*>(
@@ -438,17 +602,34 @@ void RenderLuaUiFrame(IDirect3DDevice9* device) {
             }
         }
     }
+    bool spectator_hud_rendered = false;
+    if (spectator_hud.registered) {
+        spectator_hud_rendered = DrawSpectatorProductHud(
+            panel_render,
+            string_assign,
+            exact_text_render,
+            render_context_color,
+            render_context,
+            font,
+            viewport,
+            spectator_hud,
+            &exception_code);
+        succeeded = spectator_hud_rendered && succeeded;
+    }
+    LogSpectatorProductHudFrame(
+        spectator_hud,
+        spectator_hud_rendered);
 
-    std::scoped_lock lock(g_lua_ui_renderer.mutex);
-    if (!succeeded && !g_lua_ui_renderer.fault_logged) {
-        g_lua_ui_renderer.fault_logged = true;
-        g_lua_ui_renderer.started = false;
+    std::scoped_lock lock(g_native_ui_renderer.mutex);
+    if (!succeeded && !g_native_ui_renderer.fault_logged) {
+        g_native_ui_renderer.fault_logged = true;
+        g_native_ui_renderer.started = false;
         Log(
-            "Lua UI disabled authored rendering after a native draw failure. code=" +
+            "Native UI renderer disabled after a native draw failure. code=" +
             std::to_string(exception_code) + ".");
-    } else if (!g_lua_ui_renderer.first_frame_logged) {
-        g_lua_ui_renderer.first_frame_logged = true;
-        Log("Lua UI renderer completed its first authored native UI frame.");
+    } else if (!g_native_ui_renderer.first_frame_logged) {
+        g_native_ui_renderer.first_frame_logged = true;
+        Log("Native UI renderer completed its first product/authored UI frame.");
     }
 }
 

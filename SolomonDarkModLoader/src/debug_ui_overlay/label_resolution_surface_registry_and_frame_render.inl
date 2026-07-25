@@ -50,7 +50,6 @@ static SurfaceRegistryInitializer s_surface_registry_initializer;
 struct DiagnosticSurfaceFrame {
     std::vector<OverlayRenderElement> render_elements;
     std::string level_up_wait_text;
-    std::string death_spectator_text;
     std::size_t registered_surface_count = 0;
 };
 
@@ -69,11 +68,6 @@ DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(
     if (multiplayer::TryBuildLevelUpWaitStatusText(
             &frame.level_up_wait_text) &&
         !frame.level_up_wait_text.empty()) {
-        ++frame.registered_surface_count;
-    }
-    if (multiplayer::TryBuildDeathSpectatorStatusText(
-            &frame.death_spectator_text) &&
-        !frame.death_spectator_text.empty()) {
         ++frame.registered_surface_count;
     }
     return frame;
@@ -298,8 +292,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             semantic_surface_elements);
     const auto& gameplay_level_up_wait_text =
         diagnostic_surface_frame.level_up_wait_text;
-    const auto& gameplay_death_spectator_text =
-        diagnostic_surface_frame.death_spectator_text;
 
     const auto join_flow_presentation =
         GetMultiplayerJoinFlowPresentation();
@@ -324,16 +316,10 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             {},
             GameplayLevelUpWaitDrawResult::Hidden);
     }
-    if (gameplay_death_spectator_text.empty()) {
-        LogGameplayDeathSpectatorStatusDraw(
-            {},
-            GameplayDeathSpectatorDrawResult::Hidden);
-    }
     if (diagnostic_surface_frame.render_elements.empty() &&
         gameplay_health_bars.empty() &&
         gameplay_dampen_presentations.empty() &&
-        gameplay_level_up_wait_text.empty() &&
-        gameplay_death_spectator_text.empty()) {
+        gameplay_level_up_wait_text.empty()) {
         return;
     }
 
@@ -362,16 +348,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             gameplay_level_up_wait_text,
             draw_result);
     }
-    if (!gameplay_death_spectator_text.empty()) {
-        const auto draw_result = DrawGameplayDeathSpectatorStatus(
-            device,
-            g_debug_ui_overlay_state.font_atlas,
-            gameplay_death_spectator_text);
-        LogGameplayDeathSpectatorStatusDraw(
-            gameplay_death_spectator_text,
-            draw_result);
-    }
-
     if (!g_debug_ui_overlay_state.first_frame_logged) {
         g_debug_ui_overlay_state.first_frame_logged = true;
         Log(

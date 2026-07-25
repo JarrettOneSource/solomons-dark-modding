@@ -184,7 +184,6 @@
     <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl" />
-    <ClInclude Include="src\debug_ui_overlay\gameplay_death_spectator_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_helpers.inl" />
