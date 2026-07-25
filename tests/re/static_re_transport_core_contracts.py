@@ -1387,6 +1387,11 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     native_enemy_lifecycle_header_text = read_text(NATIVE_ENEMY_LIFECYCLE_HEADER)
     native_enemy_lifecycle_text = read_text(NATIVE_ENEMY_LIFECYCLE)
     world_snapshot_reconciliation_text = read_source_unit(WORLD_SNAPSHOT_RECONCILIATION)
+    badguy_damage_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "badguy_damage_hook.inl"
+    )
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)
     lua_exec_pipe_text = read_text(LUA_EXEC_PIPE)
     staged_game_launcher_text = read_text(STAGED_GAME_LAUNCHER)
@@ -1743,7 +1748,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_header_text, "IsLocalTransportClient"),
         (transport_header_text, "GetLocalTransportParticipantId"),
         (transport_header_text, "QueueLocalLootPickupRequest"),
-        (transport_header_text, "ObserveReplicatedRunEnemyDamage"),
+        (
+            transport_header_text,
+            "ObserveLocalPlayerReplicatedRunEnemyDamageEvent",
+        ),
         (transport_header_text, "PublishHostLevelUpOffers"),
         (transport_header_text, "QueueLocalLevelUpChoice"),
         (transport_header_text, "ShouldPauseMultiplayerGameplay"),
@@ -1911,23 +1919,27 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "observed_enemy_damage_by_network_id"),
         (transport_text, "recent_local_cast_skill_id"),
         (transport_text, "recent_local_air_chain_target_until_ms"),
-        (transport_text, "active.target_network_actor_id == network_actor_id"),
+        (transport_text, "g_local_native_spell_damage_dispatch_skill_id"),
         (transport_text, "kEnemyDamageObservationEpsilon"),
         (transport_text, "kEnemyDamageClaimResultRetryMs"),
-        (transport_text, "Multiplayer observed enemy damage reached claim threshold"),
+        (transport_text, "Multiplayer exact native enemy damage reached claim threshold"),
         (transport_text, "Multiplayer observed enemy damage claim sent"),
         (transport_text, "Multiplayer observed enemy damage claim retried"),
         (transport_text, "Multiplayer enemy damage claim suppressed until first authoritative HP baseline"),
+        (transport_header_text, "ScopedLocalNativeSpellDamageDispatch"),
+        (transport_header_text, "ObserveLocalPlayerReplicatedRunEnemyDamageEvent"),
+        (badguy_damage_hook_text, "CaptureLocalReplicatedEnemyDamageBeforeNativeCall"),
+        (badguy_damage_hook_text, "ResolveDamageSourceParticipantId(context_source)"),
+        (badguy_damage_hook_text, "ObserveLocalPlayerReplicatedRunEnemyDamageEvent"),
         (world_snapshot_reconciliation_text, "const bool has_damage_baseline"),
         (world_snapshot_reconciliation_text, "const bool observed_local_damage"),
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemyDamageObservationEpsilon"),
-        (world_snapshot_reconciliation_text, "multiplayer::ObserveReplicatedRunEnemyDamage("),
         (transport_text, "unknown_claim_flags"),
         (transport_text, "const bool target_position_optional"),
         (transport_text, "!target_position_optional &&"),
         (transport_text, "kEnemyDamageClaimFlagTargetPositionOptional"),
-        (world_snapshot_reconciliation_text, "float claimed_target_x = authoritative_actor.position_x;"),
-        (world_snapshot_reconciliation_text, "TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &local_target_x)"),
+        (badguy_damage_hook_text, "float target_x = capture.target_x;"),
+        (badguy_damage_hook_text, "kActorPositionXOffset,\n        &target_x"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor, now_ms)"),
         (transport_text, "TryApplyAcceptedEnemyDamageTargetPosition"),
         (transport_text, "accepted_new_damage"),
@@ -2528,15 +2540,22 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (player_health_death_verifier_text, '"observer_relationship_count": 6'),
         (run_enemy_presentation_probe_text, "start_host_testrun_and_wait_for_clients"),
         (run_reward_sync_probe_text, "start_host_testrun_and_wait_for_clients"),
-        (transport_text, "std::fabs(local_actor.max_hp - authoritative_max_hp)"),
+        (
+            transport_text,
+            "baseline == g_local_transport.last_synced_enemy_hp_by_network_id.end()",
+        ),
         (world_snapshot_reconciliation_text, "max_hp_synced"),
     )
     missing = [token for text, token in required_pairs if token not in text]
-    if re.search(
-        r"claimed_target_y,\s*true\)",
-        world_snapshot_reconciliation_text,
-    ) is None:
-        missing.append("enemy damage claims preserve a validated target position")
+    for token in (
+        "multiplayer::QueueLocalEnemyDamageClaim(",
+        "multiplayer::ObserveReplicatedRunEnemyDamage(",
+    ):
+        if token in world_snapshot_reconciliation_text:
+            missing.append(
+                "snapshot HP sampling still competes with exact native damage: "
+                + token
+            )
     native_remote_vital_guard = participant_snapshot_text.find(
         "if (multiplayer::IsNativeControlledParticipant(*participant))"
     )

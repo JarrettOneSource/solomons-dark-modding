@@ -262,6 +262,10 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("run_lifecycle.hooks", "enemy_death", kEnemyDeath),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_3eb", kSpellCast3EB),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_018", kSpellCast018),
+        SDMOD_ADDR(
+            "run_lifecycle.hooks",
+            "air_lightning_primary_target_refresh",
+            kAirLightningPrimaryTargetRefresh),
         SDMOD_ADDR("run_lifecycle.hooks", "air_lightning_chain_target", kAirLightningChainTarget),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_020", kSpellCast020),
         SDMOD_ADDR("run_lifecycle.hooks", "spell_cast_028", kSpellCast028),

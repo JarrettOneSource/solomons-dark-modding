@@ -1346,6 +1346,9 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\public_cast_damage_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

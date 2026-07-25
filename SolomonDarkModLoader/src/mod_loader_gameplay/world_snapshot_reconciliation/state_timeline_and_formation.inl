@@ -12,7 +12,6 @@ constexpr float kReplicatedRunEnemyDamageObservationEpsilon = 0.0001f;
 // Keep client-authored native hit reactions when they remain close to the
 // host snapshot.  Larger presentation drift must not invalidate otherwise
 // legitimate damage; fall back to the authoritative position instead.
-constexpr float kLocalEnemyDamageClaimPositionPreserveDistance = 96.0f;
 constexpr float kRunEntryFormationSpacing = 64.0f;
 constexpr float kRunEntryFormationNavSnapMaxDistance = 48.0f;
 constexpr float kRunEntryFormationNavSnapMaxAuthorityDistance = 96.0f;

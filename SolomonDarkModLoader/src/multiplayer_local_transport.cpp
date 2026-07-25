@@ -593,6 +593,7 @@ struct QueuedLocalEnemyDamageClaim {
 
 struct ObservedLocalEnemyDamage {
     float pending_damage = 0.0f;
+    std::int32_t skill_id = 0;
     float latest_authoritative_hp = 0.0f;
     float max_hp = 0.0f;
     float target_position_x = 0.0f;
@@ -1111,6 +1112,8 @@ bool g_have_queued_local_air_chain_frame = false;
 std::uint32_t g_next_local_loot_pickup_request_sequence = 1;
 FireballExplodeEffectConfig g_fireball_explode_effect_config;
 bool g_fireball_explode_effect_config_attempted = false;
+thread_local std::int32_t
+    g_local_native_spell_damage_dispatch_skill_id = -1;
 
 void ClearLocalLootPickupRequestStateLocked() {
     g_queued_local_loot_pickup_requests.clear();
@@ -1666,6 +1669,7 @@ void ProcessPendingHostLevelUpOffers(std::uint64_t now_ms);
 void ProcessHostLevelUpBarrier(std::uint64_t now_ms);
 int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
 
+#include "multiplayer_local_transport/public_cast_damage_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_queue_api.inl"
 #include "multiplayer_local_transport/lua_mod_stream_public.inl"

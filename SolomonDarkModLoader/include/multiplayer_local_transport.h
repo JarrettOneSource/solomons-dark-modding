@@ -39,6 +39,23 @@ void NotifyNativeGameOverDispatched();
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
 std::uint64_t GetLocalTransportAuthorityParticipantId();
+
+class ScopedLocalNativeSpellDamageDispatch final {
+public:
+    explicit ScopedLocalNativeSpellDamageDispatch(
+        std::int32_t skill_id);
+    ~ScopedLocalNativeSpellDamageDispatch();
+
+    ScopedLocalNativeSpellDamageDispatch(
+        const ScopedLocalNativeSpellDamageDispatch&) = delete;
+    ScopedLocalNativeSpellDamageDispatch& operator=(
+        const ScopedLocalNativeSpellDamageDispatch&) = delete;
+
+private:
+    bool active_ = false;
+    std::int32_t previous_skill_id_ = -1;
+};
+
 bool QueueAuthoritativeLuaItemGrant(
     std::uint64_t content_id,
     std::uint64_t requested_target_participant_id,
@@ -157,10 +174,9 @@ void QueueLocalEnemyDamageClaim(
     float target_position_x,
     float target_position_y,
     bool target_position_optional = false);
-void ObserveReplicatedRunEnemyDamage(
+void ObserveLocalPlayerReplicatedRunEnemyDamageEvent(
     std::uint64_t network_actor_id,
-    float authoritative_hp,
-    float local_hp,
+    float damage,
     float max_hp,
     float target_position_x,
     float target_position_y,
@@ -210,6 +226,10 @@ bool HasLocalPendingLethalEnemyDamageClaim(
 bool TryFindLocalRunEnemyByNetworkId(
     std::uint64_t network_actor_id,
     SDModSceneActorState* actor_out);
+bool TryResolveLocalMultiplayerAirPrimaryNativeTarget(
+    uintptr_t caster_actor_address,
+    std::uint64_t* network_actor_id_out,
+    uintptr_t* target_actor_address_out);
 std::uint64_t GetLocalRunEnemyNetworkActorId(uintptr_t actor_address);
 
 struct AirChainTargetCapture {

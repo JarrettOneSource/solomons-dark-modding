@@ -496,6 +496,7 @@
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_correction.inl" />
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\public_cast_damage_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl" />

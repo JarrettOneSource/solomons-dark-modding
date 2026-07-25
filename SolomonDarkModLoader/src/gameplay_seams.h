@@ -236,6 +236,7 @@ extern uintptr_t kWaveSpawnerTick;
 extern uintptr_t kEnemyDeath;
 extern uintptr_t kSpellCast3EB;
 extern uintptr_t kSpellCast018;
+extern uintptr_t kAirLightningPrimaryTargetRefresh;
 extern uintptr_t kAirLightningChainTarget;
 extern uintptr_t kAirLightningChainTargetReturn;
 extern uintptr_t kSpellCast020;

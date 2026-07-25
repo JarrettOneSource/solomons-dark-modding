@@ -1,36 +1,19 @@
-std::unordered_map<uintptr_t, SDModSceneActorState> BuildSceneActorMapByAddress() {
-    std::vector<SDModSceneActorState> actors;
-    std::unordered_map<uintptr_t, SDModSceneActorState> by_address;
-    if (!TryListSceneActors(&actors)) {
-        return by_address;
+bool TryResolveAssociatedLocalEnemyDamageSkill(
+    std::uint64_t network_actor_id,
+    std::int32_t* skill_id_out) {
+    if (skill_id_out != nullptr) {
+        *skill_id_out = 0;
+    }
+    if (!IsLocalTransportClient() || network_actor_id == 0) {
+        return false;
     }
 
-    by_address.reserve(actors.size());
-    for (const auto& actor : actors) {
-        if (actor.actor_address != 0) {
-            by_address[actor.actor_address] = actor;
+    if (g_local_native_spell_damage_dispatch_skill_id >= 0) {
+        if (skill_id_out != nullptr) {
+            *skill_id_out =
+                g_local_native_spell_damage_dispatch_skill_id;
         }
-    }
-    return by_address;
-}
-void ObserveReplicatedRunEnemyDamageInternal(
-    std::uint64_t network_actor_id,
-    float authoritative_hp,
-    float local_hp,
-    float max_hp,
-    float target_position_x,
-    float target_position_y,
-    bool target_position_optional) {
-    if (!IsLocalTransportClient() ||
-        network_actor_id == 0 ||
-        !HasReplicatedRunEnemyDamageBaseline(network_actor_id) ||
-        !std::isfinite(authoritative_hp) ||
-        !std::isfinite(local_hp) ||
-        !std::isfinite(max_hp) ||
-        max_hp <= 0.0f ||
-        !std::isfinite(target_position_x) ||
-        !std::isfinite(target_position_y)) {
-        return;
+        return true;
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
@@ -45,80 +28,67 @@ void ObserveReplicatedRunEnemyDamageInternal(
     const auto associated_skill_id =
         active_cast
             ? active.skill_id
-            : (recent_cast ? g_local_transport.recent_local_cast_skill_id : -1);
-    bool local_cast_associated = associated_skill_id >= 0;
-    if (associated_skill_id == kAirPrimarySkillId) {
-        local_cast_associated =
-            (active_cast && active.target_network_actor_id == network_actor_id) ||
-            (recent_cast &&
-             g_local_transport.recent_local_cast_target_network_actor_id ==
-                 network_actor_id);
-        const auto chain_target =
-            g_local_transport.recent_local_air_chain_target_until_ms.find(
-                network_actor_id);
-        if (chain_target !=
-                g_local_transport.recent_local_air_chain_target_until_ms.end() &&
-            chain_target->second >= now_ms) {
-            local_cast_associated = true;
-        }
+            : (recent_cast ? g_local_transport.recent_local_cast_skill_id : 0);
+    if (skill_id_out != nullptr) {
+        *skill_id_out = associated_skill_id;
     }
-    if (!local_cast_associated) {
+    return true;
+}
+
+void ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal(
+    std::uint64_t network_actor_id,
+    float damage,
+    float max_hp,
+    float target_position_x,
+    float target_position_y,
+    bool target_position_optional) {
+    const auto baseline =
+        g_local_transport.last_synced_enemy_hp_by_network_id.find(
+            network_actor_id);
+    std::int32_t associated_skill_id = 0;
+    if (network_actor_id == 0 ||
+        baseline == g_local_transport.last_synced_enemy_hp_by_network_id.end() ||
+        !std::isfinite(baseline->second) ||
+        !std::isfinite(damage) ||
+        damage <= kEnemyDamageObservationEpsilon ||
+        !std::isfinite(max_hp) ||
+        max_hp <= 0.0f ||
+        !std::isfinite(target_position_x) ||
+        !std::isfinite(target_position_y) ||
+        !TryResolveAssociatedLocalEnemyDamageSkill(
+            network_actor_id,
+            &associated_skill_id)) {
         return;
     }
 
-    authoritative_hp = ClampEnemyHp(authoritative_hp, max_hp);
-    local_hp = ClampEnemyHp(local_hp, max_hp);
-    auto existing =
-        g_local_transport.observed_enemy_damage_by_network_id.find(network_actor_id);
-    if (existing != g_local_transport.observed_enemy_damage_by_network_id.end()) {
-        auto& observed = existing->second;
-        if (observed.in_flight_claim_sequence != 0 &&
-            authoritative_hp <=
-                observed.in_flight_after_hp + kEnemyDamageClaimHpEpsilon) {
-            observed.in_flight_claim_sequence = 0;
-            observed.in_flight_sent_ms = 0;
-            observed.in_flight_before_hp = 0.0f;
-            observed.in_flight_after_hp = 0.0f;
-        }
-        if (observed.reference_hp_valid &&
-            authoritative_hp <= observed.reference_hp + kEnemyDamageClaimHpEpsilon) {
-            observed.reference_hp_valid = false;
-            observed.reference_hp = 0.0f;
-        }
-    }
-
-    float observation_baseline_hp = authoritative_hp;
-    if (existing != g_local_transport.observed_enemy_damage_by_network_id.end() &&
-        existing->second.reference_hp_valid &&
-        existing->second.reference_hp + kEnemyDamageClaimHpEpsilon < authoritative_hp &&
-        local_hp <= existing->second.reference_hp + kEnemyDamageObservationEpsilon) {
-        // An accepted claim correction can arrive before the corresponding
-        // world snapshot.  Treat only damage below that correction as new;
-        // otherwise the stale snapshot would count the accepted claim twice.
-        observation_baseline_hp = existing->second.reference_hp;
-    }
-
-    const float observed_damage = observation_baseline_hp - local_hp;
-    if (!std::isfinite(observed_damage) ||
-        observed_damage <= kEnemyDamageObservationEpsilon) {
-        if (existing != g_local_transport.observed_enemy_damage_by_network_id.end()) {
-            existing->second.latest_authoritative_hp = authoritative_hp;
-            existing->second.max_hp = max_hp;
-            existing->second.target_position_x = target_position_x;
-            existing->second.target_position_y = target_position_y;
-            existing->second.target_position_optional = target_position_optional;
-        }
-        return;
-    }
-
+    const auto authoritative_hp =
+        ClampEnemyHp(baseline->second, max_hp);
     auto& observed =
         g_local_transport.observed_enemy_damage_by_network_id[network_actor_id];
+    if (observed.in_flight_claim_sequence != 0 &&
+        authoritative_hp <=
+            observed.in_flight_after_hp + kEnemyDamageClaimHpEpsilon) {
+        observed.in_flight_claim_sequence = 0;
+        observed.in_flight_sent_ms = 0;
+        observed.in_flight_before_hp = 0.0f;
+        observed.in_flight_after_hp = 0.0f;
+    }
+    if (observed.reference_hp_valid &&
+        authoritative_hp <=
+            observed.reference_hp + kEnemyDamageClaimHpEpsilon) {
+        observed.reference_hp_valid = false;
+        observed.reference_hp = 0.0f;
+    }
+
     const bool was_claimable =
         observed.pending_damage > kEnemyDamageClaimHpEpsilon;
     const float damage_cap =
-        (std::min)(kEnemyDamageClaimAbsoluteCap, max_hp * kEnemyDamageClaimMaxHpFactor);
+        (std::min)(
+            kEnemyDamageClaimAbsoluteCap,
+            max_hp * kEnemyDamageClaimMaxHpFactor);
     observed.pending_damage =
-        (std::min)(damage_cap, observed.pending_damage + observed_damage);
+        (std::min)(damage_cap, observed.pending_damage + damage);
+    observed.skill_id = associated_skill_id;
     observed.latest_authoritative_hp = authoritative_hp;
     observed.max_hp = max_hp;
     observed.target_position_x = target_position_x;
@@ -127,8 +97,9 @@ void ObserveReplicatedRunEnemyDamageInternal(
     if (!was_claimable &&
         observed.pending_damage > kEnemyDamageClaimHpEpsilon) {
         Log(
-            "Multiplayer observed enemy damage reached claim threshold. "
+            "Multiplayer exact native enemy damage reached claim threshold. "
             "target_network_actor_id=" + std::to_string(network_actor_id) +
+            " skill_id=" + std::to_string(associated_skill_id) +
             " accumulated_damage=" + std::to_string(observed.pending_damage));
     }
 }
@@ -296,7 +267,7 @@ void SendObservedLocalEnemyDamageClaims(
                     runtime_state,
                     local,
                     network_actor_id,
-                    0,
+                    observed.skill_id,
                     observed.in_flight_before_hp,
                     observed.in_flight_after_hp,
                     observed.max_hp,
@@ -344,7 +315,7 @@ void SendObservedLocalEnemyDamageClaims(
                 runtime_state,
                 local,
                 network_actor_id,
-                0,
+                observed.skill_id,
                 claim_before_hp,
                 claim_after_hp,
                 observed.max_hp,
@@ -440,89 +411,4 @@ void SendLocalEnemyDamageClaims() {
         runtime_state,
         *local,
         static_cast<std::uint64_t>(GetTickCount64()));
-
-    const auto local_scene_actors = BuildSceneActorMapByAddress();
-    if (local_scene_actors.empty()) {
-        return;
-    }
-
-    for (const auto& binding : runtime_state.world_snapshot_apply.actor_bindings) {
-        if (binding.network_actor_id == 0 ||
-            binding.local_actor_address == 0 ||
-            !binding.matched ||
-            binding.parked ||
-            binding.removed) {
-            if (binding.network_actor_id != 0 && (binding.parked || binding.removed)) {
-                ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
-            }
-            continue;
-        }
-
-        const auto* authoritative_actor = FindSnapshotActorByNetworkId(
-            runtime_state.world_snapshot,
-            binding.network_actor_id);
-        if (authoritative_actor == nullptr ||
-            !authoritative_actor->tracked_enemy ||
-            authoritative_actor->run_static ||
-            !std::isfinite(authoritative_actor->hp) ||
-            !std::isfinite(authoritative_actor->max_hp) ||
-            authoritative_actor->max_hp <= 0.0f ||
-            authoritative_actor->hp <= kEnemyDamageClaimHpEpsilon) {
-            ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
-            continue;
-        }
-
-        const auto local_it = local_scene_actors.find(binding.local_actor_address);
-        if (local_it == local_scene_actors.end()) {
-            continue;
-        }
-        const auto& local_actor = local_it->second;
-        if (!local_actor.tracked_enemy ||
-            !std::isfinite(local_actor.hp) ||
-            !std::isfinite(local_actor.max_hp) ||
-            local_actor.max_hp <= 0.0f) {
-            continue;
-        }
-
-        const float local_hp = ClampEnemyHp(local_actor.hp, local_actor.max_hp);
-        const float authoritative_max_hp = authoritative_actor->max_hp;
-        if (std::fabs(local_actor.max_hp - authoritative_max_hp) > kEnemyDamageClaimHpEpsilon) {
-            ClearReplicatedRunEnemyDamageBaseline(binding.network_actor_id);
-            continue;
-        }
-        const float authoritative_hp =
-            ClampEnemyHp(authoritative_actor->hp, authoritative_max_hp);
-        if (!HasReplicatedRunEnemyDamageBaseline(binding.network_actor_id)) {
-            if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
-                MarkReplicatedRunEnemyDamageBaseline(binding.network_actor_id, authoritative_hp);
-            }
-            continue;
-        }
-        if (local_hp + kEnemyDamageObservationEpsilon >= authoritative_hp) {
-            g_local_transport.last_enemy_claimed_hp_by_network_id.erase(binding.network_actor_id);
-            continue;
-        }
-        if (local_hp + kEnemyDamageClaimHpEpsilon < authoritative_hp) {
-            (void)SendLocalEnemyDamageClaim(
-                runtime_state,
-                *local,
-                binding.network_actor_id,
-                0,
-                authoritative_hp,
-                local_hp,
-                authoritative_actor->max_hp,
-                local_actor.x,
-                local_actor.y,
-                true);
-        } else {
-            ObserveReplicatedRunEnemyDamageInternal(
-                binding.network_actor_id,
-                authoritative_hp,
-                local_hp,
-                authoritative_actor->max_hp,
-                local_actor.x,
-                local_actor.y,
-                true);
-        }
-    }
 }

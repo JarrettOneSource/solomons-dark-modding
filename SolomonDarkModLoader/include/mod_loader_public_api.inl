@@ -26,6 +26,9 @@ bool SetGameplayNativeControlAllowanceFrames(
     std::string* error_message);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
+bool ApplyNativePrimaryTargetHandle(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address);
 bool QueueLocalPlayerNativeDispatcherPrimaryCast(
     uintptr_t actor_address,
     std::int32_t dispatched_skill_id);

@@ -581,6 +581,7 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
 
     required_layout_tokens = (
         "actor_air_lightning_chain_count=0x284",
+        "air_lightning_primary_target_refresh=0x0052BA80",
         "air_lightning_chain_target=0x00641340",
         "air_lightning_chain_target_return=0x005403AF",
         "air_lightning_chain_source_from_return_slot=0xB0",

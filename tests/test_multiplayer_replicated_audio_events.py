@@ -98,6 +98,51 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
                 local_counts=counts,
             )
 
+    def test_lightning_damage_event_contract_accepts_two_tick_jitter(self) -> None:
+        parity = MODULE.assert_lightning_damage_event_parity(
+            label="client_to_host",
+            local_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 170,
+            remote_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 168,
+        )
+
+        self.assertEqual(parity["local_damage_tick_count"], 170)
+        self.assertEqual(parity["remote_damage_tick_count"], 168)
+        self.assertAlmostEqual(parity["damage_delta"], 0.05)
+
+    def test_lightning_damage_event_contract_accepts_coalesced_hp_writes(self) -> None:
+        parity = MODULE.assert_lightning_damage_event_parity(
+            label="client_to_host",
+            local_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 170,
+            remote_events=[MODULE.LIGHTNING_DAMAGE_TICK * 10] * 17,
+        )
+
+        self.assertEqual(parity["local_raw_transition_count"], 170)
+        self.assertEqual(parity["remote_raw_transition_count"], 17)
+        self.assertEqual(parity["local_damage_tick_count"], 170)
+        self.assertEqual(parity["remote_damage_tick_count"], 170)
+
+    def test_lightning_damage_event_contract_rejects_zero_remote_damage(self) -> None:
+        with self.assertRaisesRegex(
+            MODULE.VerifyFailure,
+            "did not damage the authority in both origins",
+        ):
+            MODULE.assert_lightning_damage_event_parity(
+                label="client_to_host",
+                local_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 170,
+                remote_events=[],
+            )
+
+    def test_lightning_damage_event_contract_rejects_remote_tick_loss(self) -> None:
+        with self.assertRaisesRegex(
+            MODULE.VerifyFailure,
+            "damage events diverged",
+        ):
+            MODULE.assert_lightning_damage_event_parity(
+                label="client_to_host",
+                local_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 170,
+                remote_events=[MODULE.LIGHTNING_DAMAGE_TICK] * 130,
+            )
+
     def test_solo_control_compares_deterministic_cast_lifecycle_only(self) -> None:
         self.assertIn(
             "gather_bass_channel_play",
@@ -114,6 +159,8 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
         self.assertIn("host_to_client", source)
         self.assertIn("client_to_host", source)
         self.assertIn("run_solo_case", source)
+        self.assertIn("run_lightning_damage_parity", source)
+        self.assertIn("COLLECT_LIGHTNING_DAMAGE_MONITOR_LUA", source)
         self.assertNotIn("stop_games(", source)
 
     def test_owned_cleanup_revalidates_path_before_exact_pid_stop(self) -> None:
@@ -172,6 +219,58 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
 
         stop.assert_not_called()
 
+    def test_window_activation_is_exact_pid_and_path_scoped(self) -> None:
+        expected = {
+            3210: Path(
+                "/mnt/c/audio/instances/audio-host/stage/SolomonDark.exe"
+            )
+        }
+        windows_path = (
+            r"C:\audio\instances\audio-host\stage\SolomonDark.exe"
+        )
+        completed = mock.Mock(
+            returncode=0,
+            stdout="activated SolomonDark pid=3210 hwnd=42\n",
+            stderr="",
+        )
+        with (
+            mock.patch.object(
+                MODULE,
+                "validate_owned_processes",
+                return_value={"3210": windows_path},
+            ) as validate,
+            mock.patch.object(
+                MODULE,
+                "path_for_powershell",
+                return_value=r"C:\repo\scripts\activate_window.py",
+            ),
+            mock.patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
+        ):
+            activated = MODULE.activate_owned_game_window(3210, expected)
+
+        self.assertEqual(validate.call_count, 2)
+        self.assertIn(r"C:\repo\scripts\activate_window.py", run.call_args.args[0])
+        self.assertEqual(activated["process_id"], 3210)
+        self.assertEqual(activated["after"], windows_path)
+
+    def test_window_activation_refuses_unowned_pid(self) -> None:
+        with self.assertRaisesRegex(
+            MODULE.VerifyFailure,
+            "refusing to activate unowned PID",
+        ):
+            MODULE.activate_owned_game_window(
+                9876,
+                {
+                    3210: Path(
+                        "/mnt/c/audio/instances/audio-host/stage/SolomonDark.exe"
+                    )
+                },
+            )
+
     def test_post_stock_cast_state_is_not_replayed_after_native_activity(self) -> None:
         source = (
             ROOT
@@ -191,6 +290,171 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
         self.assertIn("!ongoing.post_stock_dispatch_attempted", section)
         self.assertIn("!native_activity_after_stock", section)
         self.assertNotIn("kActorPreviousSkillIdOffset", section)
+
+    def test_multiplayer_lightning_normalizes_the_organic_wave_target(self) -> None:
+        spell_source = (
+            ROOT
+            / "SolomonDarkModLoader/src/run_lifecycle/spell_cast_hooks.inl"
+        ).read_text(encoding="utf-8")
+        air_hook = spell_source.split(
+            "void __fastcall HookSpellCast_018",
+            1,
+        )[1].split("void __fastcall HookSpellCast_020", 1)[0]
+        self.assertIn(
+            "TryResolveLocalMultiplayerAirPrimaryNativeTarget",
+            air_hook,
+        )
+        self.assertIn(
+            "context.primary_target_actor_address = target_actor_address",
+            air_hook,
+        )
+        self.assertNotIn("ApplyNativePrimaryTargetHandle(", air_hook)
+
+        target_refresh_hook = spell_source.split(
+            "void __fastcall HookAirLightningPrimaryTargetRefresh",
+            1,
+        )[1].split("void* __fastcall HookAirLightningChainTarget", 1)[0]
+        self.assertIn("original(self, unused_edx)", target_refresh_hook)
+        self.assertIn(
+            "kActorSpellTargetGroupByteOffset",
+            target_refresh_hook,
+        )
+        self.assertIn(
+            "stock_target_group < kAirLightningSpecialTargetGroup",
+            target_refresh_hook,
+        )
+        self.assertIn("ApplyNativePrimaryTargetHandle(", target_refresh_hook)
+        self.assertLess(
+            target_refresh_hook.index("original(self, unused_edx)"),
+            target_refresh_hook.index("ApplyNativePrimaryTargetHandle("),
+        )
+
+        input_source = (
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+            "public_api_input_queueing.inl"
+        ).read_text(encoding="utf-8")
+        handle_writer = input_source.split(
+            "bool ApplyNativePrimaryTargetHandle(",
+            1,
+        )[1].split(
+            "bool QueueLocalPlayerNativeDispatcherPrimaryCast(",
+            1,
+        )[0]
+        self.assertIn("kActorSpellTargetGroupByteOffset", handle_writer)
+        self.assertIn("kActorSpellTargetSlotShortOffset", handle_writer)
+        self.assertNotIn("kActorAimTargetXOffset", handle_writer)
+        self.assertNotIn("ApplyWizardActorFacingState", handle_writer)
+
+        target_source = (
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "cast_target_resolution.inl"
+        ).read_text(encoding="utf-8")
+        resolver = target_source.split(
+            "bool TryResolveLocalMultiplayerAirPrimaryNativeTargetInternal(",
+            1,
+        )[1].split("bool IsRunEnemyAlignedWithPlayerCastAim(", 1)[0]
+        self.assertIn("IsLocalTransportEnabled()", resolver)
+        self.assertNotIn("IsLocalTransportClient()", resolver)
+        self.assertIn("TryFindLocalRunEnemyForCastAim(", resolver)
+        self.assertIn("ResolveLocalRunEnemyNetworkActorId(target_actor)", resolver)
+        self.assertIn("target_actor.dead", resolver)
+
+    def test_client_damage_claims_use_exact_native_damage_events_only(self) -> None:
+        damage_hook = (
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+            "badguy_damage_hook.inl"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "CaptureLocalReplicatedEnemyDamageBeforeNativeCall",
+            damage_hook,
+        )
+        self.assertIn(
+            "ResolveDamageSourceParticipantId(context_source)",
+            damage_hook,
+        )
+        self.assertIn(
+            "ObserveLocalPlayerReplicatedRunEnemyDamageEvent",
+            damage_hook,
+        )
+        self.assertLess(
+            damage_hook.index("capture.hp_before - hp_after"),
+            damage_hook.index(
+                "ObserveLocalPlayerReplicatedRunEnemyDamageEvent"
+            ),
+        )
+
+        reconciliation = (
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+            "world_snapshot_reconciliation/run_enemy_health_and_status.inl"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "multiplayer::QueueLocalEnemyDamageClaim(",
+            reconciliation,
+        )
+        self.assertNotIn(
+            "multiplayer::ObserveReplicatedRunEnemyDamage(",
+            reconciliation,
+        )
+
+        damage_sync = (
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "client_enemy_damage_sync.inl"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal",
+            damage_sync,
+        )
+        self.assertIn(
+            "g_local_native_spell_damage_dispatch_skill_id",
+            damage_sync,
+        )
+        self.assertIn(
+            "recent_cast ? g_local_transport.recent_local_cast_skill_id : 0",
+            damage_sync,
+        )
+        self.assertNotIn("BuildSceneActorMapByAddress", damage_sync)
+        self.assertNotIn(
+            "ObserveReplicatedRunEnemyDamageInternal",
+            damage_sync,
+        )
+
+        transport_header = (
+            ROOT
+            / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "void ObserveReplicatedRunEnemyDamage(",
+            transport_header,
+        )
+
+    def test_exact_damage_accumulator_serializes_absolute_hp_claims(self) -> None:
+        damage_sync = (
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "client_enemy_damage_sync.inl"
+        ).read_text(encoding="utf-8")
+        send_section = damage_sync.split(
+            "void SendObservedLocalEnemyDamageClaims(",
+            1,
+        )[1].split(
+            "bool HasLocalPendingLethalEnemyDamageClaimInternal(",
+            1,
+        )[0]
+        self.assertIn("observed.in_flight_claim_sequence != 0", send_section)
+        self.assertIn("observed.skill_id", send_section)
+        self.assertIn(
+            "observed.pending_damage - claim_damage",
+            send_section,
+        )
+        self.assertIn(
+            "observed.in_flight_after_hp = claim_after_hp",
+            send_section,
+        )
 
     def test_bounded_release_edge_is_presented_once_immediately_before_stock(self) -> None:
         tick_source = (

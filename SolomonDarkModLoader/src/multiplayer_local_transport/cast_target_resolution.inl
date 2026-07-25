@@ -20,7 +20,8 @@ bool TryFindHostRunEnemyByNetworkId(
 
     for (const auto& actor : actors) {
         if (!ShouldReplicateWorldActor(actor, scene_intent.kind) ||
-            !actor.tracked_enemy) {
+            !actor.tracked_enemy ||
+            actor.dead) {
             continue;
         }
 
@@ -45,17 +46,6 @@ bool TryFindHostRunEnemyByNetworkId(
     }
     return false;
 }
-const WorldActorSnapshot* FindSnapshotActorByNetworkId(
-    const WorldSnapshotRuntimeInfo& snapshot,
-    std::uint64_t network_actor_id) {
-    for (const auto& actor : snapshot.actors) {
-        if (actor.network_actor_id == network_actor_id) {
-            return &actor;
-        }
-    }
-    return nullptr;
-}
-
 uintptr_t FindReplicatedLocalActorAddress(std::uint64_t network_actor_id) {
     const auto runtime_state = SnapshotRuntimeState();
     for (const auto& binding : runtime_state.world_snapshot_apply.actor_bindings) {
@@ -185,6 +175,14 @@ std::uint64_t ResolveLocalRunEnemyNetworkActorId(const SDModSceneActorState& act
 }
 
 std::uint64_t ResolveLocalRunEnemyNetworkActorId(uintptr_t actor_address) {
+    if (!IsLuaModSimulationAuthority()) {
+        const auto network_actor_id =
+            FindReplicatedLocalNetworkActorId(actor_address);
+        if (network_actor_id != 0) {
+            return network_actor_id;
+        }
+    }
+
     SDModSceneActorState actor;
     if (!TryGetLiveRunEnemyActorByAddress(actor_address, &actor)) {
         return 0;
@@ -331,7 +329,8 @@ bool TryFindLocalRunEnemyForCastAim(
     bool have_best = false;
     for (const auto& actor : actors) {
         if (!ShouldReplicateWorldActor(actor, scene_intent.kind) ||
-            !actor.tracked_enemy) {
+            !actor.tracked_enemy ||
+            actor.dead) {
             continue;
         }
 
@@ -368,6 +367,86 @@ bool TryFindLocalRunEnemyForCastAim(
     }
     if (actor_out != nullptr) {
         *actor_out = best_actor;
+    }
+    return true;
+}
+
+bool TryResolveLocalMultiplayerAirPrimaryNativeTargetInternal(
+    uintptr_t caster_actor_address,
+    std::uint64_t* network_actor_id_out,
+    uintptr_t* target_actor_address_out) {
+    if (network_actor_id_out != nullptr) {
+        *network_actor_id_out = 0;
+    }
+    if (target_actor_address_out != nullptr) {
+        *target_actor_address_out = 0;
+    }
+    if (!IsLocalTransportEnabled() || caster_actor_address == 0) {
+        return false;
+    }
+
+    SDModPlayerState player_state;
+    if (!TryGetPlayerState(&player_state) ||
+        !player_state.valid ||
+        player_state.actor_address != caster_actor_address ||
+        !std::isfinite(player_state.x) ||
+        !std::isfinite(player_state.y)) {
+        return false;
+    }
+
+    SDModSceneActorState target_actor;
+    bool have_target = false;
+    float aim_target_x = 0.0f;
+    float aim_target_y = 0.0f;
+    if (ProcessMemory::Instance().TryReadField(
+            caster_actor_address,
+            kActorAimTargetXOffset,
+            &aim_target_x) &&
+        ProcessMemory::Instance().TryReadField(
+            caster_actor_address,
+            kActorAimTargetYOffset,
+            &aim_target_y) &&
+        IsUsableLocalCastAimTarget(
+            player_state.x,
+            player_state.y,
+            aim_target_x,
+            aim_target_y)) {
+        have_target = TryFindLocalRunEnemyForCastAim(
+            player_state.x,
+            player_state.y,
+            aim_target_x - player_state.x,
+            aim_target_y - player_state.y,
+            aim_target_x,
+            aim_target_y,
+            &target_actor);
+    }
+
+    const auto& active = g_local_transport.active_local_cast_input;
+    if (!have_target &&
+        active.active &&
+        active.skill_id == kAirPrimarySkillId &&
+        active.target_network_actor_id != 0) {
+        have_target = TryFindLocalRunEnemyByNetworkIdInternal(
+            active.target_network_actor_id,
+            &target_actor);
+    }
+    if (!have_target ||
+        !target_actor.tracked_enemy ||
+        target_actor.dead ||
+        target_actor.actor_address == 0) {
+        return false;
+    }
+
+    const auto network_actor_id =
+        ResolveLocalRunEnemyNetworkActorId(target_actor);
+    if (network_actor_id == 0) {
+        return false;
+    }
+    if (network_actor_id_out != nullptr) {
+        *network_actor_id_out = network_actor_id;
+    }
+    if (target_actor_address_out != nullptr) {
+        *target_actor_address_out = target_actor.actor_address;
     }
     return true;
 }

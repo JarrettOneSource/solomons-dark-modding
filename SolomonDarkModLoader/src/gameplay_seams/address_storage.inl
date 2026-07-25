@@ -221,6 +221,7 @@ uintptr_t kWaveSpawnerTick = 0;
 uintptr_t kEnemyDeath = 0;
 uintptr_t kSpellCast3EB = 0;
 uintptr_t kSpellCast018 = 0;
+uintptr_t kAirLightningPrimaryTargetRefresh = 0;
 uintptr_t kAirLightningChainTarget = 0;
 uintptr_t kAirLightningChainTargetReturn = 0;
 uintptr_t kSpellCast020 = 0;

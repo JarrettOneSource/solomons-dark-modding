@@ -87,6 +87,35 @@ bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
                target_actor_address);
 }
 
+bool ApplyNativePrimaryTargetHandle(
+    uintptr_t actor_address,
+    uintptr_t target_actor_address) {
+    if (actor_address == 0 ||
+        !IsManualSpawnerPrimaryTargetActor(target_actor_address)) {
+        return false;
+    }
+
+    std::uint8_t target_group = kTargetHandleGroupSentinel;
+    std::uint16_t target_slot = kTargetHandleSlotSentinel;
+    if (!TryResolveSameWorldTargetHandle(
+            actor_address,
+            target_actor_address,
+            &target_group,
+            &target_slot)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    return memory.TryWriteField<std::uint8_t>(
+               actor_address,
+               kActorSpellTargetGroupByteOffset,
+               target_group) &&
+           memory.TryWriteField<std::uint16_t>(
+               actor_address,
+               kActorSpellTargetSlotShortOffset,
+               target_slot);
+}
+
 bool QueueLocalPlayerNativeDispatcherPrimaryCast(
     uintptr_t actor_address,
     std::int32_t dispatched_skill_id) {

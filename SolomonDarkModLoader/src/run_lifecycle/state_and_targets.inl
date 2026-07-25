@@ -19,6 +19,8 @@ using EnemySpawnedFn =
 using EnemyDeathFn = int(__fastcall*)(void* self, void* unused_edx);
 using DropSelectorFn = void(__fastcall*)(void* self, void* unused_edx);
 using SpellCastFn = void(__fastcall*)(void* self, void* unused_edx);
+using AirLightningPrimaryTargetRefreshFn =
+    void(__fastcall*)(void* self, void* unused_edx);
 using AirLightningChainTargetFn =
     void* (__thiscall*)(
         void* self,
@@ -55,6 +57,7 @@ enum HookIndex : size_t {
     kHookDropSelector,
     kHookSpellCast3EB,
     kHookSpellCast018,
+    kHookAirLightningPrimaryTargetRefresh,
     kHookAirLightningChainTarget,
     kHookSpellCast020,
     kHookSpellCast028,
@@ -191,6 +194,11 @@ void BuildHookTargets(HookTarget* targets) {
     targets[kHookDropSelector] = {kEnemyDropSelector, 7};
     targets[kHookSpellCast3EB] = {kSpellCast3EB, 8};
     targets[kHookSpellCast018] = {kSpellCast018, 8};
+    // Whole instructions: SUB ESP,10h; PUSH EBX; PUSH ESI; PUSH EDI;
+    // MOV EDI,ECX.
+    targets[kHookAirLightningPrimaryTargetRefresh] = {
+        kAirLightningPrimaryTargetRefresh,
+        8};
     // Whole instructions: sub esp,18h (3) + fld [esp+24h] (4).
     targets[kHookAirLightningChainTarget] = {kAirLightningChainTarget, 7};
     targets[kHookSpellCast020] = {kSpellCast020, 8};

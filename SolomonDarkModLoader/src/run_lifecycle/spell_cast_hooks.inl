@@ -94,6 +94,7 @@ struct AirLightningDispatchContext {
     bool local_owner = false;
     bool truncated = false;
     uintptr_t caster_actor_address = 0;
+    uintptr_t primary_target_actor_address = 0;
     std::uint64_t owner_participant_id = 0;
     std::uint16_t next_target_ordinal = 0;
     std::size_t target_count = 0;
@@ -110,6 +111,7 @@ struct AirLightningDispatchContext {
 };
 
 thread_local AirLightningDispatchContext g_air_lightning_dispatch_context;
+constexpr std::uint8_t kAirLightningSpecialTargetGroup = 100;
 
 bool TryGetReplicatedParticipantForAirChain(
     uintptr_t actor_address,
@@ -261,6 +263,41 @@ bool ApplyAuthoritativeAirChainSourceEndpointToNativeCaller(
                authoritative_source.y);
 }
 
+void __fastcall HookAirLightningPrimaryTargetRefresh(
+    void* self,
+    void* unused_edx) {
+    const auto original =
+        GetX86HookTrampoline<AirLightningPrimaryTargetRefreshFn>(
+            g_state.hooks[kHookAirLightningPrimaryTargetRefresh]);
+    if (original == nullptr) {
+        return;
+    }
+
+    original(self, unused_edx);
+
+    auto& context = g_air_lightning_dispatch_context;
+    const auto self_address = reinterpret_cast<uintptr_t>(self);
+    if (!context.active ||
+        !context.local_owner ||
+        context.caster_actor_address != self_address ||
+        context.primary_target_actor_address == 0) {
+        return;
+    }
+
+    std::uint8_t stock_target_group = 0;
+    if (!ProcessMemory::Instance().TryReadField(
+            self_address,
+            kActorSpellTargetGroupByteOffset,
+            &stock_target_group) ||
+        stock_target_group < kAirLightningSpecialTargetGroup) {
+        return;
+    }
+
+    (void)ApplyNativePrimaryTargetHandle(
+        self_address,
+        context.primary_target_actor_address);
+}
+
 void* __fastcall HookAirLightningChainTarget(
     void* self,
     void* unused_edx,
@@ -371,6 +408,10 @@ void* __fastcall HookAirLightningChainTarget(
         const auto self_address = reinterpret_cast<uintptr_t>(self);                 \
         int spell_id = 0;                                                           \
         const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id); \
+        multiplayer::ScopedLocalNativeSpellDamageDispatch damage_dispatch_scope(    \
+            have_spell_id && IsLocalPlayerActorForRunLifecycle(self_address)         \
+                ? spell_id                                                          \
+                : -1);                                                              \
         original(self, unused_edx);                                                  \
         if (have_spell_id) {                                                         \
             DispatchSpellCastForSelf(self_address, spell_id);                        \
@@ -395,14 +436,10 @@ void __fastcall HookSpellCast_018(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     int spell_id = 0;
     const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
-
-    // Scripted flat-boneyard casts have no real cursor hover to refresh the
-    // actor's native target handle. Lightning consumes that handle at this
-    // dispatcher entry, unlike projectile primaries which consume aim
-    // coordinates later. This helper is inert during ordinary player input.
-    if (IsLocalPlayerActorForRunLifecycle(self_address)) {
-        (void)ApplyPinnedManualSpawnerPrimaryTarget(self_address);
-    }
+    multiplayer::ScopedLocalNativeSpellDamageDispatch damage_dispatch_scope(
+        have_spell_id && IsLocalPlayerActorForRunLifecycle(self_address)
+            ? spell_id
+            : -1);
 
     const auto previous_context = g_air_lightning_dispatch_context;
     g_air_lightning_dispatch_context = AirLightningDispatchContext{};
@@ -413,6 +450,24 @@ void __fastcall HookSpellCast_018(void* self, void* unused_edx) {
                      TryGetReplicatedParticipantForAirChain(
                          self_address,
                          &context.owner_participant_id);
+
+    // Lightning's 0x0052BA80 target refresh always reacquires through
+    // 0x00529AD0 before it considers the prior handle. In multiplayer, that
+    // query can select a group-100 presentation/scenery actor instead of the
+    // real wave enemy. Resolve the organic aim here, then let the nested
+    // target-refresh hook replace only a special/sentinel result after stock
+    // acquisition and before SpellCast_018 consumes it. A valid ordinary-world
+    // stock result remains untouched.
+    if (context.local_owner &&
+        !ApplyPinnedManualSpawnerPrimaryTarget(self_address)) {
+        uintptr_t target_actor_address = 0;
+        if (multiplayer::TryResolveLocalMultiplayerAirPrimaryNativeTarget(
+                self_address,
+                nullptr,
+                &target_actor_address)) {
+            context.primary_target_actor_address = target_actor_address;
+        }
+    }
 
     original(self, unused_edx);
     if (have_spell_id) {
@@ -449,6 +504,10 @@ void __fastcall HookSpellCast_020(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     int spell_id = 0;
     const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
+    multiplayer::ScopedLocalNativeSpellDamageDispatch damage_dispatch_scope(
+        have_spell_id && IsLocalPlayerActorForRunLifecycle(self_address)
+            ? spell_id
+            : -1);
 
     original(self, unused_edx);
     if (have_spell_id) {
@@ -469,6 +528,10 @@ void __fastcall HookSpellCast_028(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     int spell_id = 0;
     const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
+    multiplayer::ScopedLocalNativeSpellDamageDispatch damage_dispatch_scope(
+        have_spell_id && IsLocalPlayerActorForRunLifecycle(self_address)
+            ? spell_id
+            : -1);
 
     original(self, unused_edx);
     if (have_spell_id) {
@@ -488,6 +551,10 @@ void __fastcall HookSpellCast_3EF(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
     int spell_id = 0;
     const bool have_spell_id = TryReadSpellCastHookSkillId(self_address, &spell_id);
+    multiplayer::ScopedLocalNativeSpellDamageDispatch damage_dispatch_scope(
+        have_spell_id && IsLocalPlayerActorForRunLifecycle(self_address)
+            ? spell_id
+            : -1);
     Log("[bots] spell_3ef hook enter. " + DescribeSpellCastHookActorState(self_address));
     original(self, unused_edx);
     Log("[bots] spell_3ef hook exit. " + DescribeSpellCastHookActorState(self_address));

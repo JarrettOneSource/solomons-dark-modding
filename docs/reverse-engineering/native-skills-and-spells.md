@@ -476,6 +476,84 @@ than a raw actor pointer.
 | `1007` Fire + Earth | `0x0052BB60` | Emits `Anim_Iceblast` presentation at the aimed point and periodically creates randomized `Meteor (0x7E2)` actors. Each meteor receives normalized damage/fire payload fields at `+0x160..+0x17C`; impact behavior belongs to the Meteor lifecycle. |
 | `1008` Water + Earth | `0x00545C20` | Creates a persistent `Hailstones (0x7E4)`, copies normalized damage, duration, size and impact fields through `+0x220`, retains its group/slot identity, and continuously follows the cast origin/heading. |
 
+### Organic remote Lightning target and damage invariants
+
+Organic raw-HP validation on 2026-07-25 separated two problems that the earlier
+pinned-target harness could not expose. On the beta.17 release `bd9c47f`, a host
+tap dealt `0.300001140` damage in twelve approximately `0.025` contacts and a
+host sustained cast dealt `2.500000451` across moving real-wave enemies. The
+equivalent client-origin tap and sustained casts dealt exactly `0.0` authority
+HP damage. A post-beta.17 repeat at `5d3582a` reproduced the zero client cells
+while the host sustained total varied organically to `3.225002016`. The client
+sent the intended enemy network ID and the authority resolved it, but one
+captured client Lightning actor still held group `100`, slot `452` in
+`actor+0x164/+0x166`; the actual replicated run enemy was a normal world actor
+in group `0`, slot `10`.
+
+The requested `4b316be..bd9c47f` history contains no first-bad commit. Both
+client-origin cells were already zero at `4b316be`, remained zero at
+`28ed954`, and remained zero at `bd9c47f`. In particular, `28ed954`'s
+stock-owned primary transitions and single pre-stock release edge did not cause
+the organic failure. A temporary theory that its pure-primary primer latches
+suppressed the dispatcher was also disproved and was not retained. The earlier
+positive client result had explicitly pinned `+0x164/+0x166`, bypassing the
+broken acquisition path.
+
+`0x0053F9C0` refreshes or retains the Lightning target through `0x0052BA80`.
+That refresh unconditionally saves the prior `+0x164/+0x166` handle and calls
+`0x00529AD0`; it restores and validates the prior handle only when the new query
+returns the sentinel. A correction at `SpellCast_018` entry is therefore too
+early: a successful bad client query necessarily overwrites it. The
+`0x0052BA80` prologue is eight whole bytes
+(`SUB ESP,10h; PUSH EBX; PUSH ESI; PUSH EDI; MOV EDI,ECX`) and is the exact
+post-query, pre-consumption hook seam.
+
+`0x00529AD0` clears `+0x164/+0x166`, builds the angle/range query, and asks
+`0x00641500`/`0x00522F50` for a native spatial-cell candidate. A handle below
+group `100` indexes the ordinary world actor buckets. Group `100` instead
+selects a special scenery list, so a replica-only group `100` handle cannot
+reach the real run enemy's `0x0063E7D0` contact/damage callback.
+
+For either local multiplayer origin, the loader resolves the naturally aimed,
+alive wave enemy when `SpellCast_018` begins. The nested `0x0052BA80` hook runs
+stock acquisition first, then normalizes only the returned native handle to
+that real actor's group and slot before `0x0053F9C0` tests and resolves it.
+Covering both origins is required: a post-tap host sustained cast was observed
+to select group `100`, slot `42`, which resolved to a Gravestone (`2029`) at
+`895.8655,514.5286` while the organic aim target was the live wave enemy at
+`1020.5078,121.4300`; authority HP remained unchanged for the entire hold.
+This does not pin a test target: the resolver uses the same player position,
+heading, range, and alignment query as organic cast packet targeting. Stock
+still owns the acquisition call, cast duration, primary transitions, and the
+release edge. Solo retains the unmodified stock path.
+
+A second defect was visible after acquisition was controlled. Over equal
+170-frame holds, the host produced `170` damage contacts (`4.250259420`), while
+the client-origin path produced only `119` contacts (`2.975181589`) on the
+authority. The client damage bridge had two asynchronous snapshot samplers
+constructing overlapping absolute-HP claims. Later no-op or stale claims could
+overtake real contacts, so event count depended on packet/snapshot timing.
+
+The damage bridge now observes the exact bound enemy HP immediately before and
+after each native badguy-damage callback. It accepts only callbacks whose
+resolved source participant is the local client, associates the enclosing
+native spell dispatcher skill (including the first immediate contact), and
+serializes one absolute authority claim at a time while accumulating subsequent
+native contacts. A delayed stock effect outside the cast-association window
+retains the pre-existing wire-skill `0` fallback because the exact native
+callback still proves its damage source is the local participant. Snapshot
+reconciliation still rolls local presentation back to authority state, but no
+longer authors a competing damage claim. The authority remains the only process
+that applies and republishes accepted HP.
+
+The replicated-event acceptance gate pairs its Earth audio-event comparison
+with a fixed-window Lightning damage check. It samples the authority's raw enemy
+HP field on every runtime tick for equal `170`-frame local- and remote-origin
+holds, requires positive damage in both cases, and permits at most two `0.025`
+damage contacts or two percent total-damage divergence. Organic tap and
+sustained acceptance remains a separate no-pin gate so target acquisition
+cannot be hidden by the controlled parity fixture.
+
 Disintegrate is not a separate projectile or persistent effect actor. On a
 qualifying Lightning contact, `0x0053F9C0` reads the rounded chance at
 progression `+0x8D2`; a successful percentile roll ORs `0x4` into the

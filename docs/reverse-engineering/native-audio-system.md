@@ -239,7 +239,10 @@ multi-enemy behavior, remote cast start/stop latency, or native audio event
 counts. Those green gates could not detect this native-frame replay. The live
 network gates now cover organic multi-enemy convergence and Air/lightning
 press/release timing, while the audio gate compares native Earth trigger
-counts in both multiplayer directions and against solo.
+counts in both multiplayer directions and against solo. The same
+replicated-event gate also compares authority-side raw Lightning HP contacts
+over equal 170-frame local- and remote-origin windows; audio parity alone is
+not sufficient evidence that a remote sustained dispatcher actually ran.
 
 ### Global ambient loop mix
 
