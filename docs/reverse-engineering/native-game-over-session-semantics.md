@@ -51,6 +51,115 @@ virtual at `+0xA8`. The constructed object uses vtable `0x0079B0CC` and builds
 the stock `GameOver` presentation. Its renderer at `0x005C9030` draws the two
 active Game Over atlas records, text, and the fullscreen fade layers.
 
+### Boneyard/survival presentation branch
+
+The renderer has one stock mode split which is material to multiplayer
+acceptance. When `DAT_0081A434` (`0x0081A434`) is zero, `GameOver::Render`
+draws the normal `GAME`, `OVER`, and click-prompt glyphs as their object-local
+alphas become positive. When it is nonzero, the renderer intentionally skips
+those glyphs and draws only the fullscreen fade layers. The Boneyard
+`testrun` path used by launcher multiplayer starts with this flag nonzero.
+Consequently, a black terminal frame in that mode is the retail Game Over
+presentation, not evidence that the object failed to install.
+
+The completion path is also mode-specific:
+
+- the normal story branch archives the completed run, creates scene type
+  `0xFA2` (`Mortuary`), and switches gameplay regions;
+- the Boneyard branch reaches its stock input-acceptance threshold at GameOver
+  tick 1000. It does not close merely because the counter reaches that value.
+  Once stock input is accepted, completion clears `DAT_0081A434`, runs the
+  stock completed-run cleanup, and calls `FUN_005A7F60` (`0x005A7F60`) to
+  select and install the stock front-end surface.
+
+Read-only live evidence on 2026-07-25 found the Boneyard GameOver object in
+the application's `+0x44` CPU manager with vtable `0x0079B0CC`. Across a
+ten-second sample its tick counter advanced from 6 to 972, title alpha from
+`-1.47` to `1.0`, and click alpha from `-1.97` to `1.0`, while the renderer
+correctly remained fade-only because the mode flag was set. This distinguishes
+the stock mode branch from both a stalled GameOver tick and an arbitrary dark
+death frame without writing native state.
+
+The same three-peer trace then observed the stock
+`Gameplay_SwitchRegion(game, 1)` hook on all processes and a stable
+`memorator` scene after the GameOver object closed. The front-end surface
+dispatch does not itself move a connected multiplayer party into the shared
+Courtyard. That is why waiting only for a main-menu surface leaves a post-run
+party parked in the private Memoratorium even though native Game Over cleanup
+has completed normally.
+
+### Stock post-Boneyard front-end lineage
+
+The follow-up headless pass recovered the exact native objects behind the
+post-Boneyard front end:
+
+```text
+GameOver Boneyard completion
+  -> FUN_005A7F60                              0x005A7F60
+     -> MainMenu installer                     0x005A7D90
+        -> MainMenu constructor                0x0058D940
+        -> application +0xDAC = MainMenu*
+        -> register surface                    0x004277E0
+        -> application surface virtual +0xA8
+
+stock post-run Menu input
+  -> HallOfFame factory                        0x005A7E30
+     -> HallOfFame constructor                 0x00598120
+     -> application +0xDB0 = HallOfFame*
+     -> register surface                       0x004277E0
+     -> application surface virtual +0xA8
+
+HallOfFame input virtual +0x10                 0x00589DB0
+  -> if controller+0x7C == 0.0, set it to 1.0
+  -> RET 4: consumes one ignored 32-bit stack argument
+HallOfFame::Tick virtual +0x08                 0x00589CD0
+  -> controller+0x78 += controller+0x7C * dt
+  -> when controller+0x78 > 1.0:
+       MainMenu installer                      0x005A7D90
+```
+
+The outer Hall of Fame controller has vtable `0x00799334`. It is distinct
+from the render-helper object with vtable `0x00799264` that the observability
+layer tracks while drawing the screen. This distinction matters for safe
+automation: invoking the input virtual is valid only after reading
+`application+0xDB0` and validating the outer controller's exact vtable and
+slot-`0x10` target.
+Its machine-code ABI is not a no-argument C++ member function: the handler
+returns with `ret 4`. Typed dispatch must therefore supply one ignored 32-bit
+stack argument in addition to `ECX=this`. Calling it as `void
+(__thiscall*)(void*)` leaves the caller and callee with different stack
+expectations and corrupts the process on return. The binary layout records the
+four-byte contract beside the handler address.
+
+Read-only three-peer control runs confirmed the live sequence. After native
+Game Over completion all processes were stable in private `memorator`; the
+stock Menu binding exposed `hall_of_fame` on every process. The gameplay mouse
+queue then rejected a click because gameplay is no longer active, correctly
+showing that Hall of Fame belongs to the application front end. The safe
+continuation seam is therefore its native controller virtual on the
+application thread. The handler only changes state once `controller+0x7C`
+has reached zero, so a call made during the initial fade is a safe no-op.
+Automation must retry the validated handler until the surface advances; call
+return alone is not proof that Hall of Fame accepted the input.
+After the main menu reopens Create, the controller can expose either retained
+values or `0xFFFFFFFF` sentinels. Stock button activation remains valid in
+both states and is what advances the controller. The multiplayer onboarding
+flow therefore observes the player's actual first Create choices at
+`Create+0x1A4` (element) and `Create+0x22C` (discipline), retains their
+semantic action IDs in process memory, and replays those same stock buttons on
+a later post-run Create surface. An explicitly configured native fresh-start
+loadout uses those configured IDs instead. It does not hard-code a fallback
+character, use either sentinel as an action-eligibility gate, or rewrite a
+native selection field.
+
+Two attempted direct `Gameplay_SwitchRegion(game, 0)` probes are negative
+evidence, not an implementation option. One ran immediately after the
+stock region-1 transition and one waited for the same private scene, world,
+and local actor to remain unchanged for two seconds. Both access-violated all
+three isolated processes. Post-run continuity must follow the native
+front-end objects above and must never issue a raw region switch from
+Memoratorium.
+
 ## The Game Over object owns the post-death flow
 
 The Game Over tick at `0x005CF4F0` owns input arming, timeout behavior, fade
@@ -113,9 +222,14 @@ process and allow the native Game Over object to own every step afterward.
 Loader code must not manually create Mortuary, skip the fade, synthesize Hall
 of Fame, or issue a competing leave-game transition. Once stock progression
 has reached a stable non-run surface, a still-connected multiplayer flow may
-re-enter shared hub gameplay through the same stock title/profile transitions
-used at initial join. That re-entry is a loader session-continuity operation;
-it must not replace any of the native cleanup calls above.
+re-enter shared hub gameplay through a stock transition appropriate to that
+surface. Story/main-menu completion reuses the initial title/profile flow.
+Boneyard completion uses the stock Menu binding, validates and invokes the
+native Hall of Fame continue virtual, and lets `HallOfFame::Tick` reinstall
+the stock main menu. The existing onboarding state machine owns the later hub
+entry. Both routes are loader session-continuity operations; neither replaces
+any native cleanup call above, writes a native field, or calls
+`Gameplay_SwitchRegion` from the private post-run scene.
 
 ## Session boundary
 
@@ -147,9 +261,11 @@ run.
 
 Every participant then consumes that command once on its game/application
 thread and invokes the same original `Game_OnGameOver` trampoline. This gives
-the host and every client an independently owned full native Game Over object
-while keeping the decision host-authoritative. Dispatch also retires local
-spectator camera/HUD state before the native surface is installed.
+the host and every client an independently owned native Game Over object while
+keeping the decision host-authoritative. The object renders the full title in
+story mode and the stock fade-only presentation in Boneyard mode. Dispatch
+also retires local spectator camera/HUD state before the native surface is
+installed.
 
 Installing the Game Over surface retires the ordinary local run state before
 the transport stops pumping. Terminal command and acknowledgment envelopes
@@ -179,14 +295,22 @@ Static and live gates must prove both sides of the boundary:
   Hall of Fame/main-menu progression;
 - multiplayer trio: the first two native deaths remain in the spectator
   system with a living target and no Game Over surface; the last death produces
-  one authority terminal command and a full native Game Over surface on all
-  three processes, followed by native post-game progression;
+  one authority terminal command and a native Boneyard GameOver object on all
+  three processes, a fade-only frame with the object tick/input alphas fully
+  advanced, the stock private Memoratorium transition, the native Hall of Fame
+  controller transition, and then normal main-menu onboarding back to the
+  shared hub;
 - protocol: terminal commands are authority-validated, run-nonce scoped,
   replay-safe, and present in the reliable state path;
 - lifecycle: native Game Over dispatch occurs exactly once per participant and
   suppresses competing host-run-exit follow for that terminalized run.
 
-The live post-flow gate sends stock mouse input only to each
-executable-path-validated process ID and verifies the resulting Mortuary, Hall
-of Fame, and main-menu states. Lua gameplay-click injection is not evidence for
-this surface because the native Game Over object owns its own input tick.
+The live story post-flow gate sends stock mouse input only to each
+executable-path-validated process ID and verifies Mortuary, Hall of Fame, and
+main-menu states. Boneyard coverage waits for the native tick-1000 input
+threshold, sends mouse messages only to the exact owned process window, and
+then verifies the `FUN_005A7F60` front-end branch before the launcher flow
+follows the validated `HallOfFame` controller and returns the same processes
+to the intact lobby hub. It neither activates a foreground window nor mutates
+global mouse state. Lua gameplay-click injection is not evidence for the Game
+Over surface because the native Game Over object owns its own input tick.

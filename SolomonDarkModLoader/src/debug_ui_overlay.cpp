@@ -80,6 +80,7 @@ using TextQuadDrawHelperFn = void(__thiscall*)(void* self, const float* arg2, co
 using SurfaceRenderHelperFn = void(__thiscall*)(void* self);
 using UiOwnerControlActionFn = void(__thiscall*)(void* self, void* control);
 using UiOwnerNoArgActionFn = void(__thiscall*)(void* self);
+using UiOwnerIgnoredStackArgActionFn = void(__thiscall*)(void* self, std::uint32_t ignored);
 using UiOwnerPointClickActionFn = void(__thiscall*)(void* self, std::int32_t x, std::int32_t y);
 using MyQuickPanelModalLoopFn = int(__thiscall*)(void* self, void* arg2);
 // Ghidra shows the helper at 0x005ABF10 returns with `ret 1Ch`, so it consumes

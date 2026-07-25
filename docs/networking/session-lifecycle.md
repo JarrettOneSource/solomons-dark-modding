@@ -4,14 +4,31 @@ The authenticated Steam lobby and gameplay runs have different lifetimes. A
 native Solomon's Dark Game Over ends one run nonce; it does not leave or
 destroy the loader lobby. The host remains host, authenticated members remain
 members, and the existing transport keeps pumping while each process follows
-the stock Game Over, Mortuary, Hall of Fame, and main-menu transitions.
+the stock Game Over and mode-specific post-run transition.
 
-Once a process reaches a fresh stock main-menu surface, the existing
-multiplayer onboarding flow uses the same Play/Create/private-gameplay/hub
-transitions as initial launch. It does not construct a Mortuary, skip native
-cleanup, write a region pointer, relaunch the process, or rejoin the lobby.
-When all peers are back in the shared hub, the host can start another run. The
-new run receives a fresh nonce inside the same lobby and process group.
+Story mode continues through Mortuary, Hall of Fame, and the main menu. The
+Boneyard branch installs its stock front-end surface while the completed run
+lands in the private Memoratorium region. Once that native cleanup is complete,
+the multiplayer post-run flow sends the stock Menu binding to expose the
+native Hall of Fame controller. It validates that controller against its exact
+vtable, invokes its stock continue virtual on the application thread with the
+native handler's required ignored four-byte stack argument, and lets
+`HallOfFame::Tick` reinstall the native main menu. The input handler is a
+fade-state gate, so the join flow retries it at a bounded cadence until the
+surface advances instead of treating an early no-op call as completion. The
+existing main-menu/profile onboarding flow then returns that same process to
+the shared hub. During initial Create onboarding the flow remembers the
+player's actual element and discipline choices. If stock completed-run
+cleanup presents Create again, it replays those same semantic stock actions
+on the new controller; a native no-Lua fresh-start configuration supplies the
+equivalent choices explicitly. This works whether the new controller starts
+with retained values or `unset` sentinels, because the button handlers own
+progression. It does not hard-code a fallback loadout, call
+`Gameplay_SwitchRegion` from the post-run scene,
+construct a region or UI object, write a native field, relaunch the process, or
+rejoin the lobby. When all peers are back in the shared hub, the host can start
+another run. The new run receives a fresh nonce inside the same lobby and
+process group.
 
 The native teardown call graph and its separation from loader session state are
 recorded in
@@ -82,8 +99,9 @@ deadlines.
 
 `tools/verify_game_over_session_semantics.py` is the live contract. Its isolated
 three-peer run captures `Loading Boneyard` on all participants, verifies exact
-mutual visibility, terminalizes the run through native Game Over, returns all
-three processes to the hub, and starts a second fresh nonce without relaunch or
-rejoin. A separate isolated pair kills only its recorded client PID after the
-run-start request and proves the surviving host releases at the deadline
-instead of hanging.
+mutual visibility, terminalizes the run through each peer's native
+Boneyard-mode GameOver object and stock fade-only front-end branch, returns all
+three processes through the stock Hall-of-Fame/main-menu onboarding path, and
+starts a second fresh nonce without relaunch or rejoin. A separate isolated
+pair kills only its recorded client PID after the run-start request and proves
+the surviving host releases at the deadline instead of hanging.

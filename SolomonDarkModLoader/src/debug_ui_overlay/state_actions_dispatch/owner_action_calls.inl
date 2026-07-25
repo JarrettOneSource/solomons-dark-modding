@@ -66,6 +66,27 @@ bool TryCallUiOwnerNoArgAction(
     }
 }
 
+bool TryCallUiOwnerIgnoredStackArgAction(
+    UiOwnerIgnoredStackArgActionFn action_method,
+    uintptr_t owner_address,
+    std::uint32_t ignored,
+    UiOwnerControlActionException* exception) {
+    if (action_method == nullptr || owner_address == 0) {
+        return false;
+    }
+
+    if (exception != nullptr) {
+        *exception = UiOwnerControlActionException{};
+    }
+
+    __try {
+        action_method(reinterpret_cast<void*>(owner_address), ignored);
+        return true;
+    } __except (CaptureUiOwnerControlActionException(GetExceptionInformation(), exception)) {
+        return false;
+    }
+}
+
 bool TryCallUiOwnerPointClickAction(
     UiOwnerPointClickActionFn action_method,
     uintptr_t owner_address,

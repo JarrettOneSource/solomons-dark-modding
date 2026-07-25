@@ -48,6 +48,7 @@ def click_screen_point(
     screen_y: int,
     hold_ms: int,
     global_only: bool,
+    window_only: bool,
     button: str,
     drag_client_point: tuple[int, int] | None = None,
     drag_screen_point: tuple[int, int] | None = None,
@@ -75,14 +76,15 @@ def click_screen_point(
     client_lparam = ((client_y & 0xFFFF) << 16) | (client_x & 0xFFFF)
     release_client_lparam = client_lparam
 
-    if not user32.SetCursorPos(screen_x, screen_y):
+    if not window_only and not user32.SetCursorPos(screen_x, screen_y):
         raise OSError(ctypes.get_last_error(), "SetCursorPos failed")
 
     window_button_down = False
     global_button_down = False
     try:
-        user32.mouse_event(mouseeventf_down, 0, 0, 0, 0)
-        global_button_down = True
+        if not window_only:
+            user32.mouse_event(mouseeventf_down, 0, 0, 0, 0)
+            global_button_down = True
         if not global_only:
             user32.SendMessageW(hwnd, wm_mousemove, 0, client_lparam)
             user32.SendMessageW(hwnd, wm_buttondown, mk_button, client_lparam)
@@ -99,7 +101,10 @@ def click_screen_point(
                 fraction = step / step_count
                 step_screen_x = round(screen_x + (drag_screen_x - screen_x) * fraction)
                 step_screen_y = round(screen_y + (drag_screen_y - screen_y) * fraction)
-                if not user32.SetCursorPos(step_screen_x, step_screen_y):
+                if (
+                    not window_only and
+                    not user32.SetCursorPos(step_screen_x, step_screen_y)
+                ):
                     raise OSError(ctypes.get_last_error(), "SetCursorPos failed while dragging")
                 if not global_only:
                     step_client_x = round(client_x + (drag_x - client_x) * fraction)
@@ -175,6 +180,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use only foreground OS mouse state events after positioning the cursor.",
     )
     parser.add_argument(
+        "--window-only",
+        action="store_true",
+        help="Send mouse messages only to the matched window without changing global mouse state.",
+    )
+    parser.add_argument(
         "--release-only",
         action="store_true",
         help="Release the selected global mouse button without finding or clicking a window.",
@@ -215,6 +225,8 @@ def main() -> int:
         parser.error("--center-x does not support dragging.")
     if (args.drag_x is None) != (args.drag_y is None):
         parser.error("--drag-x and --drag-y must be provided together.")
+    if args.global_only and args.window_only:
+        parser.error("--global-only and --window-only cannot be combined.")
 
     window = find_window(args.title, args.exact_title, args.pid)
     if args.activate:
@@ -287,6 +299,7 @@ def main() -> int:
         absolute_y,
         max(0, args.hold_ms),
         args.global_only,
+        args.window_only,
         args.button,
         drag_client_point,
         drag_screen_point,

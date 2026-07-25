@@ -39,6 +39,16 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     join_flow = _read(
         "SolomonDarkModLoader/src/multiplayer_join_flow/tick_state_machine.inl"
     )
+    join_flow_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
+    )
+    debug_ui_header = _read(
+        "SolomonDarkModLoader/include/debug_ui_overlay.h"
+    )
+    debug_ui_actions = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "public_api_actions.inl"
+    )
     steam_status = _read(
         "SolomonDarkModLoader/src/multiplayer_steam_session/"
         "lobby_and_events.inl"
@@ -58,6 +68,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     native_note = _read(
         "docs/reverse-engineering/native-game-over-session-semantics.md"
     )
+    binary_layout = _read("config/binary-layout.ini")
     verifier = _read(
         "tools/verify_game_over_session_semantics.py"
     )
@@ -119,10 +130,69 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         join_flow,
         (
             "case JoinFlowPhase::PostRun:",
-            'snapshot->surface_id != "main_menu"',
+            'snapshot->surface_id == "main_menu"',
             "SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);",
+            'snapshot->surface_id == "hall_of_fame"',
+            "TryContinuePostRunHallOfFame(&error_message)",
+            'QueueGameplayKeyPress("menu", &error_message)',
         ),
         "post-run stock reentry",
+    )
+    assert "QueueGameplaySwitchRegion(" not in join_flow
+    _require_tokens(
+        join_flow_state,
+        (
+            "kPostRunInputRetryDelayMs = 1000;",
+            "post_run_menu_retry_not_before_ms",
+            "post_run_hall_of_fame_continue_logged",
+            "phase == JoinFlowPhase::PostRun",
+            "post_run_hall_of_fame_continue_logged = false;",
+            "now_ms + kActionRetryDelayMs;",
+            "quick_start_loadout_state_logged",
+            "quick_start_loadout_replay_enabled",
+            "kCreateDisciplineSelectedOffset = 0x22C;",
+            "Multiplayer join flow could not queue semantic UI ",
+        ),
+        "post-run stock front-end state",
+    )
+    _require_tokens(
+        join_flow,
+        (
+            "ElementActionIdForSelection(element_selected)",
+            "DisciplineActionIdForSelection(",
+            "retained the player's ",
+            "Multiplayer join flow observed stock Create ",
+            "if ((element_enabled & 0xFFu) != 0 &&",
+            "element_selected == g_join_flow.quick_start_element_id &&",
+        ),
+        "post-run stock Create replay",
+    )
+    assert "discipline_selected == kCreateSelectionUnset" not in join_flow
+    assert (
+        "element_selected == kCreateSelectionUnset &&\n"
+        "                    HasAction(" not in join_flow
+    )
+    _require_tokens(
+        debug_ui_header,
+        ("bool TryContinuePostRunHallOfFame(std::string* error_message);",),
+        "typed Hall of Fame public seam",
+    )
+    _require_tokens(
+        debug_ui_actions,
+        (
+            "bool TryContinuePostRunHallOfFame(",
+            '"game_over.native"',
+            '"application_global"',
+            '"application_hall_of_fame_offset"',
+            '"hall_of_fame_vftable"',
+            '"hall_of_fame_continue"',
+            '"hall_of_fame_continue_stack_bytes"',
+            "TryReadResolvedGamePointer(",
+            "TryResolveOwnerControlActionMethod(",
+            "TryCallUiOwnerIgnoredStackArgAction(",
+            "UiOwnerIgnoredStackArgActionFn",
+        ),
+        "validated Hall of Fame native dispatch",
     )
     assert "LeaveSteam" not in join_flow
     assert "ShutdownLocalTransport" not in join_flow
@@ -163,10 +233,37 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         (
             "native Game Over completion and multiplayer-session teardown are",
             "independent state machines",
+            "Boneyard/survival presentation branch",
+            "`DAT_0081A434`",
+            "`FUN_005A7F60`",
+            "Stock post-Boneyard front-end lineage",
+            "`0x00799334`",
+            "must never issue a raw region switch",
             "must likewise not retire authenticated lobby",
             "without recreating or rejoining the lobby",
         ),
         "native Game Over session documentation",
+    )
+    _require_tokens(
+        binary_layout,
+        (
+            "vtable=0x0079B0CC",
+            "boneyard_mode=0x0081A434",
+            "render=0x005C9030",
+            "boneyard_front_end_dispatch=0x005A7F60",
+            "application_global=0x00B401A8",
+            "application_main_menu_offset=0x0DAC",
+            "application_hall_of_fame_offset=0x0DB0",
+            "post_run_main_menu=0x005A7D90",
+            "hall_of_fame_factory=0x005A7E30",
+            "hall_of_fame_vftable=0x00799334",
+            "hall_of_fame_tick=0x00589CD0",
+            "hall_of_fame_continue=0x00589DB0",
+            "hall_of_fame_continue_stack_bytes=0x04",
+            "application_cpu_manager=0x44",
+            "tick_count=0xAC",
+        ),
+        "native Game Over layout",
     )
     _require_tokens(
         verifier,
@@ -180,6 +277,17 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             '"same_lobby_hub_relationships"',
             '"second_run_relationships"',
             '"second_run_loading_release"',
+            "NATIVE_GAME_OVER_PROBE",
+            "native_boneyard_game_over_state_matches",
+            "allow_boneyard_mode=True",
+            "advance_stock_boneyard_game_over(",
+            '"progression": "exact-pid-window-input"',
+            '"--window-only"',
+            "hub_stable_since",
+            "now - hub_stable_since >= 3.0",
+            'emit("create_action_ids"',
+            'emit("create_element_selected"',
+            'emit("create_discipline_selected"',
             '"same_process_ids": True',
             '"rejoin_performed": False',
             '"relaunch_performed": False',

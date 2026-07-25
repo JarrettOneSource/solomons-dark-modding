@@ -822,12 +822,14 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         '("client", client_pipe)',
         '("third", third_pipe)',
         "advance_stock_post_game_over(",
+        "advance_stock_boneyard_game_over(",
         "CLICK_WINDOW",
         '"--pid"',
-        '"--activate"',
-        '"--global-only"',
+        '"--window-only"',
     ):
         assert token in verifier_text, f"trio live gate lacks: {token}"
+    assert '"--activate"' not in verifier_text
+    assert '"--global-only"' not in verifier_text
     assert "sd.input.click_normalized" not in verifier_text
     for token in (
         "configured authority",

@@ -2,6 +2,95 @@ void DispatchPendingDebugUiActionOnAppTick() {
     DispatchPendingSemanticUiActionRequest();
 }
 
+bool TryContinuePostRunHallOfFame(std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    uintptr_t application_global = 0;
+    uintptr_t hall_of_fame_offset = 0;
+    uintptr_t hall_of_fame_vftable = 0;
+    uintptr_t hall_of_fame_continue = 0;
+    uintptr_t hall_of_fame_continue_stack_bytes = 0;
+    if (!TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "application_global",
+            &application_global) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "application_hall_of_fame_offset",
+            &hall_of_fame_offset) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "hall_of_fame_vftable",
+            &hall_of_fame_vftable) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "hall_of_fame_continue",
+            &hall_of_fame_continue) ||
+        !TryGetBinaryLayoutNumericValue(
+            "game_over.native",
+            "hall_of_fame_continue_stack_bytes",
+            &hall_of_fame_continue_stack_bytes) ||
+        application_global == 0 ||
+        hall_of_fame_offset == 0 ||
+        hall_of_fame_vftable == 0 ||
+        hall_of_fame_continue == 0 ||
+        hall_of_fame_continue_stack_bytes != sizeof(std::uint32_t)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Post-run Hall of Fame layout is incomplete.";
+        }
+        return false;
+    }
+
+    uintptr_t application = 0;
+    uintptr_t hall_of_fame = 0;
+    if (!TryReadResolvedGamePointer(
+            application_global,
+            &application) ||
+        application == 0 ||
+        !TryReadPointerValueDirect(
+            application + hall_of_fame_offset,
+            &hall_of_fame) ||
+        hall_of_fame == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The stock Hall of Fame controller is not active.";
+        }
+        return false;
+    }
+
+    UiOwnerControlActionFn raw_action_method = nullptr;
+    if (!TryResolveOwnerControlActionMethod(
+            reinterpret_cast<const void*>(hall_of_fame),
+            hall_of_fame_vftable,
+            hall_of_fame_continue,
+            &raw_action_method,
+            error_message)) {
+        return false;
+    }
+
+    UiOwnerControlActionException exception;
+    const auto dispatched = TryCallUiOwnerIgnoredStackArgAction(
+        reinterpret_cast<UiOwnerIgnoredStackArgActionFn>(raw_action_method),
+        hall_of_fame,
+        0,
+        &exception);
+    if (!dispatched && error_message != nullptr) {
+        *error_message =
+            "Hall of Fame continue raised an exception during dispatch: code=" +
+            HexString(static_cast<uintptr_t>(exception.code)) +
+            " fault=" + HexString(exception.address) +
+            " owner=" + HexString(hall_of_fame) +
+            " handler=" + HexString(reinterpret_cast<uintptr_t>(raw_action_method)) +
+            " access_type=" + HexString(exception.access_type) +
+            " access_address=" + HexString(exception.access_address);
+    }
+
+    return dispatched;
+}
+
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot) {
     if (snapshot == nullptr) {
         return false;

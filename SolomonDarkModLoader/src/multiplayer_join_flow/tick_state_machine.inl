@@ -140,9 +140,7 @@ void TickMultiplayerJoinFlow() {
                 return;
             }
             if (snapshot == nullptr ||
-                snapshot->surface_id != "create" ||
-                g_join_flow.quick_start_element_action_id.empty() ||
-                g_join_flow.quick_start_discipline_action_id.empty()) {
+                snapshot->surface_id != "create") {
                 return;
             }
             std::uint32_t element_enabled = 0;
@@ -157,12 +155,70 @@ void TickMultiplayerJoinFlow() {
                     &discipline_selected)) {
                 return;
             }
+            if (!g_join_flow.quick_start_loadout_replay_enabled) {
+                if (g_join_flow.quick_start_element_action_id.empty()) {
+                    g_join_flow.quick_start_element_action_id =
+                        ElementActionIdForSelection(element_selected);
+                    if (!g_join_flow.quick_start_element_action_id.empty()) {
+                        g_join_flow.quick_start_element_id =
+                            element_selected;
+                    }
+                }
+                if (g_join_flow.quick_start_discipline_action_id.empty()) {
+                    g_join_flow.quick_start_discipline_action_id =
+                        DisciplineActionIdForSelection(
+                            discipline_selected);
+                }
+                if (!g_join_flow.quick_start_loadout_state_logged &&
+                    !g_join_flow.quick_start_element_action_id.empty() &&
+                    !g_join_flow.quick_start_discipline_action_id.empty()) {
+                    g_join_flow.quick_start_loadout_state_logged = true;
+                    Log(
+                        "Multiplayer join flow retained the player's "
+                        "stock Create choices for post-run lobby "
+                        "reentry. element_action=" +
+                        g_join_flow.quick_start_element_action_id +
+                        " discipline_action=" +
+                        g_join_flow.quick_start_discipline_action_id);
+                }
+                return;
+            }
+            if (g_join_flow.quick_start_element_action_id.empty() ||
+                g_join_flow.quick_start_discipline_action_id.empty()) {
+                return;
+            }
+            const bool element_action_available =
+                HasAction(
+                    *snapshot,
+                    g_join_flow.quick_start_element_action_id);
+            const bool discipline_action_available =
+                HasAction(
+                    *snapshot,
+                    g_join_flow.quick_start_discipline_action_id);
+            if (!g_join_flow.quick_start_loadout_state_logged) {
+                g_join_flow.quick_start_loadout_state_logged = true;
+                Log(
+                    "Multiplayer join flow observed stock Create "
+                    "readiness. element_enabled=" +
+                    std::to_string(element_enabled & 0xFFu) +
+                    " element_selected=" +
+                    std::to_string(element_selected) +
+                    " element_dispatched=" +
+                    std::to_string(
+                        g_join_flow.quick_start_element_dispatched) +
+                    " element_action_available=" +
+                    std::to_string(element_action_available) +
+                    " discipline_enabled=" +
+                    std::to_string(discipline_enabled & 0xFFu) +
+                    " discipline_dispatched=" +
+                    std::to_string(
+                        g_join_flow.quick_start_discipline_dispatched) +
+                    " discipline_action_available=" +
+                    std::to_string(discipline_action_available));
+            }
             if (!g_join_flow.quick_start_element_dispatched) {
                 if ((element_enabled & 0xFFu) != 0 &&
-                    element_selected == kCreateSelectionUnset &&
-                    HasAction(
-                        *snapshot,
-                        g_join_flow.quick_start_element_action_id)) {
+                    element_action_available) {
                     (void)QueueActionUnlocked(
                         *snapshot,
                         g_join_flow.quick_start_element_action_id,
@@ -173,10 +229,7 @@ void TickMultiplayerJoinFlow() {
             if (!g_join_flow.quick_start_discipline_dispatched &&
                 (discipline_enabled & 0xFFu) != 0 &&
                 element_selected == g_join_flow.quick_start_element_id &&
-                discipline_selected == kCreateSelectionUnset &&
-                HasAction(
-                    *snapshot,
-                    g_join_flow.quick_start_discipline_action_id)) {
+                discipline_action_available) {
                 (void)QueueActionUnlocked(
                     *snapshot,
                     g_join_flow.quick_start_discipline_action_id,
@@ -295,23 +348,89 @@ void TickMultiplayerJoinFlow() {
         }
         return;
 
-    case JoinFlowPhase::PostRun:
+    case JoinFlowPhase::PostRun: {
         if (hub_ready) {
             ClearPendingActionUnlocked();
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
             return;
         }
-        if (snapshot == nullptr ||
-            snapshot->captured_at_milliseconds <=
-                g_join_flow.phase_entered_ms ||
-            snapshot->surface_id != "main_menu") {
+        if (snapshot != nullptr &&
+            snapshot->captured_at_milliseconds >
+                g_join_flow.phase_entered_ms) {
+            if (snapshot->surface_id == "main_menu") {
+                ClearPendingActionUnlocked();
+                g_join_flow.main_menu_first_seen_ms = 0;
+                g_join_flow.action_retry_not_before_ms = 0;
+                SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
+                return;
+            }
+            if (snapshot->surface_id == "hall_of_fame") {
+                if (now_ms <
+                        g_join_flow
+                            .post_run_hall_of_fame_retry_not_before_ms) {
+                    return;
+                }
+                g_join_flow
+                    .post_run_hall_of_fame_retry_not_before_ms =
+                    now_ms + kActionRetryDelayMs;
+                std::string error_message;
+                if (TryContinuePostRunHallOfFame(&error_message)) {
+                    g_join_flow
+                        .post_run_hall_of_fame_continue_last_error.clear();
+                    if (!g_join_flow
+                             .post_run_hall_of_fame_continue_logged) {
+                        g_join_flow
+                            .post_run_hall_of_fame_continue_logged = true;
+                        Log(
+                            "Multiplayer post-run flow is dispatching "
+                            "the stock Hall of Fame continue handler "
+                            "until the surface advances.");
+                    }
+                } else if (
+                    error_message !=
+                    g_join_flow
+                        .post_run_hall_of_fame_continue_last_error) {
+                    g_join_flow
+                        .post_run_hall_of_fame_continue_last_error =
+                        error_message;
+                    Log(
+                        "Multiplayer post-run flow is waiting for the "
+                        "stock Hall of Fame controller. error=" +
+                        error_message);
+                }
+                return;
+            }
+        }
+        if (!private_gameplay_ready ||
+            now_ms <
+                g_join_flow.post_run_menu_retry_not_before_ms) {
             return;
         }
-        ClearPendingActionUnlocked();
-        g_join_flow.main_menu_first_seen_ms = 0;
-        g_join_flow.action_retry_not_before_ms = 0;
-        SetPhaseUnlocked(JoinFlowPhase::AdvancingMenus);
+
+        std::string error_message;
+        g_join_flow.post_run_menu_retry_not_before_ms =
+            now_ms + kPostRunInputRetryDelayMs;
+        if (QueueGameplayKeyPress("menu", &error_message)) {
+            if (!g_join_flow.post_run_menu_last_error.empty()) {
+                g_join_flow.post_run_menu_last_error.clear();
+            }
+            if (!g_join_flow.post_run_menu_request_logged) {
+                g_join_flow.post_run_menu_request_logged = true;
+                Log(
+                    "Multiplayer post-run flow requested the stock "
+                    "post-Boneyard front end.");
+            }
+        } else if (
+            error_message !=
+            g_join_flow.post_run_menu_last_error) {
+            g_join_flow.post_run_menu_last_error = error_message;
+            Log(
+                "Multiplayer post-run flow is waiting to request the "
+                "stock post-Boneyard front end. error=" +
+                error_message);
+        }
         return;
+    }
 
     case JoinFlowPhase::Failed:
     case JoinFlowPhase::Disabled:

@@ -26,6 +26,40 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
         self.assertLessEqual(len(prefix), 18)
         self.assertRegex(prefix, r"^go-[0-9a-f]+-[0-9a-f]{4}$")
 
+    def test_launcher_instance_groups_are_short_stable_and_distinct(self) -> None:
+        evidence_prefix = "descriptive-evidence-name-that-can-be-long"
+        groups = {
+            role: verifier._launcher_instance_prefix(
+                evidence_prefix,
+                role,
+            )
+            for role in ("s", "m", "t")
+        }
+
+        self.assertEqual(len(set(groups.values())), 3)
+        for role, value in groups.items():
+            self.assertEqual(len(value), 10)
+            self.assertRegex(value, rf"^g[0-9a-f]{{8}}{role}$")
+            self.assertEqual(
+                value,
+                verifier._launcher_instance_prefix(
+                    evidence_prefix,
+                    role,
+                ),
+            )
+        self.assertNotEqual(
+            groups["m"],
+            verifier._launcher_instance_prefix(
+                evidence_prefix + "-other",
+                "m",
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            verifier._launcher_instance_prefix(
+                evidence_prefix,
+                "x",
+            )
+
     def test_explicit_ports_keep_both_instance_groups_isolated(self) -> None:
         with mock.patch.object(
             verifier,
@@ -172,6 +206,31 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
         values["game_over_dispatch_count"] = "2"
         self.assertFalse(verifier.terminal_game_over_state_matches(values))
 
+    def test_boneyard_game_over_requires_stock_object_at_full_input_alpha(
+        self,
+    ) -> None:
+        values = {
+            "game_over_found": "true",
+            "boneyard_mode": "1",
+            "game_over_closed": "0",
+            "game_over_tick_count": "616",
+            "game_over_title_alpha": "1.0",
+            "game_over_click_alpha": "1.0",
+            "game_over_close_alpha": "0.0",
+        }
+        self.assertTrue(
+            verifier.native_boneyard_game_over_state_matches(values)
+        )
+        values["game_over_tick_count"] = "599"
+        self.assertFalse(
+            verifier.native_boneyard_game_over_state_matches(values)
+        )
+        values["game_over_tick_count"] = "616"
+        values["boneyard_mode"] = "0"
+        self.assertFalse(
+            verifier.native_boneyard_game_over_state_matches(values)
+        )
+
     def test_healthy_loading_release_requires_exact_mutual_actor_set(self) -> None:
         values = {
             "session_state": "in-boneyard",
@@ -300,8 +359,9 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
             ["powershell.exe", "-NoProfile", "-Command"],
         )
         self.assertIn("--pid 4321", command[3])
-        self.assertIn("--activate", command[3])
-        self.assertIn("--global-only", command[3])
+        self.assertNotIn("--activate", command[3])
+        self.assertIn("--window-only", command[3])
+        self.assertNotIn("--global-only", command[3])
 
 
 if __name__ == "__main__":

@@ -770,6 +770,7 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
         "dispatched_quick_start_loadout_action",
         "kCreateElementSelectedOffset = 0x1A4",
         "kCreateDisciplineEnabledOffset = 0x228",
+        "kCreateDisciplineSelectedOffset = 0x22C",
         "TryReadCreateSelectionState(",
         "HasMaterializedRemoteCharacter(runtime)",
         "kQuickStartRunMaterializedDelayMs",

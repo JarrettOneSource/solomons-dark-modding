@@ -31,6 +31,7 @@ constexpr std::uint64_t kActionRetryDelayMs = 100;
 constexpr std::uint64_t kCreateSurfaceExitStabilityMs = 100;
 constexpr std::uint64_t kTransitionPresentationMinimumMs = 750;
 constexpr std::uint64_t kQuickStartRunMaterializedDelayMs = 12000;
+constexpr std::uint64_t kPostRunInputRetryDelayMs = 1000;
 constexpr std::size_t kCreateElementEnabledOffset = 0x18C;
 constexpr std::size_t kCreateElementSelectedOffset = 0x1A4;
 constexpr std::size_t kCreateDisciplineEnabledOffset = 0x228;
@@ -65,10 +66,19 @@ struct JoinFlowState {
     std::uint32_t quick_start_element_id = kCreateSelectionUnset;
     bool quick_start_element_dispatched = false;
     bool quick_start_discipline_dispatched = false;
+    bool quick_start_loadout_replay_enabled = false;
+    bool quick_start_loadout_state_logged = false;
+    std::string action_queue_last_error;
     bool quick_start_run = false;
     bool quick_start_run_requested = false;
     std::uint64_t quick_start_run_ready_since_ms = 0;
     std::string quick_start_run_last_error;
+    std::uint64_t post_run_menu_retry_not_before_ms = 0;
+    bool post_run_menu_request_logged = false;
+    std::string post_run_menu_last_error;
+    std::uint64_t post_run_hall_of_fame_retry_not_before_ms = 0;
+    bool post_run_hall_of_fame_continue_logged = false;
+    std::string post_run_hall_of_fame_continue_last_error;
     bool create_scene_valid = false;
     std::uintptr_t create_gameplay_scene_address = 0;
     std::uintptr_t create_world_address = 0;
@@ -157,6 +167,36 @@ std::uint32_t QuickStartElementId(std::string_view value) {
     return kCreateSelectionUnset;
 }
 
+std::string ElementActionIdForSelection(std::uint32_t selection) {
+    switch (selection) {
+    case 0:
+        return "create.select_element_ether";
+    case 1:
+        return "create.select_element_fire";
+    case 2:
+        return "create.select_element_air";
+    case 3:
+        return "create.select_element_water";
+    case 4:
+        return "create.select_element_earth";
+    default:
+        return {};
+    }
+}
+
+std::string DisciplineActionIdForSelection(std::uint32_t selection) {
+    switch (selection) {
+    case 0:
+        return "create.select_discipline_mind";
+    case 1:
+        return "create.select_discipline_body";
+    case 2:
+        return "create.select_discipline_arcane";
+    default:
+        return {};
+    }
+}
+
 bool IsSupportedQuickStartDiscipline(std::string_view value) {
     return value == "mind" ||
            value == "body" ||
@@ -177,10 +217,19 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->quick_start_element_id = kCreateSelectionUnset;
     state->quick_start_element_dispatched = false;
     state->quick_start_discipline_dispatched = false;
+    state->quick_start_loadout_replay_enabled = false;
+    state->quick_start_loadout_state_logged = false;
+    state->action_queue_last_error.clear();
     state->quick_start_run = false;
     state->quick_start_run_requested = false;
     state->quick_start_run_ready_since_ms = 0;
     state->quick_start_run_last_error.clear();
+    state->post_run_menu_retry_not_before_ms = 0;
+    state->post_run_menu_request_logged = false;
+    state->post_run_menu_last_error.clear();
+    state->post_run_hall_of_fame_retry_not_before_ms = 0;
+    state->post_run_hall_of_fame_continue_logged = false;
+    state->post_run_hall_of_fame_continue_last_error.clear();
     state->create_scene_valid = false;
     state->create_gameplay_scene_address = 0;
     state->create_world_address = 0;
@@ -198,6 +247,14 @@ void SetPhaseUnlocked(JoinFlowPhase phase) {
     g_join_flow.phase = phase;
     g_join_flow.phase_entered_ms =
         static_cast<std::uint64_t>(GetTickCount64());
+    if (phase == JoinFlowPhase::PostRun) {
+        g_join_flow.post_run_menu_retry_not_before_ms = 0;
+        g_join_flow.post_run_menu_request_logged = false;
+        g_join_flow.post_run_menu_last_error.clear();
+        g_join_flow.post_run_hall_of_fame_retry_not_before_ms = 0;
+        g_join_flow.post_run_hall_of_fame_continue_logged = false;
+        g_join_flow.post_run_hall_of_fame_continue_last_error.clear();
+    }
 }
 
 bool IsHubScene(const SDModSceneState& scene) {
@@ -356,9 +413,20 @@ bool QueueActionUnlocked(
             &error_message)) {
         g_join_flow.action_retry_not_before_ms =
             now_ms + kActionRetryDelayMs;
+        if (error_message !=
+            g_join_flow.action_queue_last_error) {
+            g_join_flow.action_queue_last_error =
+                error_message;
+            Log(
+                "Multiplayer join flow could not queue semantic UI "
+                "action '" +
+                std::string(action_id) + "'. error=" +
+                error_message);
+        }
         return false;
     }
 
+    g_join_flow.action_queue_last_error.clear();
     g_join_flow.pending_action_request_id = request_id;
     g_join_flow.pending_action_generation = snapshot.generation;
     g_join_flow.pending_action_id = action_id;
@@ -434,6 +502,11 @@ void EnterLoadoutSelectionUnlocked(const SDModSceneState& scene) {
     g_join_flow.create_surface_absent_since_ms = 0;
     g_join_flow.quick_start_element_dispatched = false;
     g_join_flow.quick_start_discipline_dispatched = false;
+    g_join_flow.quick_start_loadout_replay_enabled =
+        !g_join_flow.quick_start_element_action_id.empty() &&
+        !g_join_flow.quick_start_discipline_action_id.empty();
+    g_join_flow.quick_start_loadout_state_logged = false;
+    g_join_flow.action_queue_last_error.clear();
     SetPhaseUnlocked(JoinFlowPhase::SelectingLoadout);
 }
 

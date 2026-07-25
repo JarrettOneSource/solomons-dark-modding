@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import configparser
+import hashlib
 import json
 import math
 import ntpath
@@ -56,6 +58,71 @@ ARTIFACT_ROOT = ROOT / "runtime" / "game-over-acceptance"
 SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
 CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 VITAL_TOLERANCE = 0.05
+GAME_OVER_LAYOUT = ROOT / "config" / "binary-layout.ini"
+
+
+def _read_layout_address(section: str, key: str) -> int:
+    parser = configparser.ConfigParser(strict=False)
+    if not parser.read(GAME_OVER_LAYOUT, encoding="utf-8"):
+        raise RuntimeError(
+            f"Unable to read binary layout: {GAME_OVER_LAYOUT}"
+        )
+    try:
+        return int(parser[section][key], 0)
+    except (KeyError, ValueError) as exc:
+        raise RuntimeError(
+            f"Invalid binary layout entry: [{section}] {key}"
+        ) from exc
+
+
+GAME_OVER_APPLICATION_GLOBAL = _read_layout_address(
+    "game_over.native",
+    "application_global",
+)
+GAME_OVER_VTABLE = _read_layout_address(
+    "game_over.native",
+    "vtable",
+)
+GAME_OVER_BONEYARD_MODE = _read_layout_address(
+    "game_over.native",
+    "boneyard_mode",
+)
+GAME_OVER_APPLICATION_CPU_MANAGER = _read_layout_address(
+    "game_over.native",
+    "application_cpu_manager",
+)
+GAME_OVER_CPU_MANAGER_COUNT = _read_layout_address(
+    "game_over.native",
+    "cpu_manager_count",
+)
+GAME_OVER_CPU_MANAGER_ITEMS = _read_layout_address(
+    "game_over.native",
+    "cpu_manager_items",
+)
+GAME_OVER_SURFACE_CLOSED = _read_layout_address(
+    "game_over.native",
+    "surface_closed",
+)
+GAME_OVER_BACKGROUND_ALPHA = _read_layout_address(
+    "game_over.native",
+    "background_alpha",
+)
+GAME_OVER_TITLE_ALPHA = _read_layout_address(
+    "game_over.native",
+    "title_alpha",
+)
+GAME_OVER_CLICK_ALPHA = _read_layout_address(
+    "game_over.native",
+    "click_alpha",
+)
+GAME_OVER_CLOSE_ALPHA = _read_layout_address(
+    "game_over.native",
+    "close_alpha",
+)
+GAME_OVER_TICK_COUNT = _read_layout_address(
+    "game_over.native",
+    "tick_count",
+)
 
 
 SESSION_STATE_PROBE = r"""
@@ -70,6 +137,8 @@ local player = sd.player.get_state()
 local scene = sd.world.get_scene()
 local ui = sd.ui and sd.ui.get_snapshot and sd.ui.get_snapshot() or nil
 local local_row = nil
+local create_owner = 0
+local create_action_ids = {}
 local connected_run_count = 0
 local alive_run_count = 0
 local remote_peer_count = 0
@@ -95,8 +164,36 @@ for _, participant in ipairs(multiplayer.participants or {}) do
     end
   end
 end
+if ui ~= nil and ui.surface_id == "create" then
+  for _, element in ipairs(ui.elements or {}) do
+    local surface_id = tostring(
+      element.surface_root_id or element.surface_id or "")
+    if surface_id == "create" then
+      if create_owner == 0 then
+        create_owner = tonumber(element.surface_object_ptr) or 0
+      end
+      local action_id = tostring(element.action_id or "")
+      if action_id ~= "" then
+        table.insert(create_action_ids, action_id)
+      end
+    end
+  end
+end
+table.sort(create_action_ids)
 emit("scene", scene and (scene.name or scene.kind) or "")
 emit("surface", ui and ui.surface_id or "")
+emit("create_owner", create_owner)
+emit("create_action_ids", table.concat(create_action_ids, ","))
+if create_owner ~= 0 then
+  emit("create_element_enabled",
+    sd.debug.read_u8(create_owner + 0x18C))
+  emit("create_element_selected",
+    sd.debug.read_u32(create_owner + 0x1A4))
+  emit("create_discipline_enabled",
+    sd.debug.read_u8(create_owner + 0x228))
+  emit("create_discipline_selected",
+    sd.debug.read_u32(create_owner + 0x22C))
+end
 emit("participant_count", multiplayer.participant_count or 0)
 emit("connected_run_count", connected_run_count)
 emit("alive_run_count", alive_run_count)
@@ -144,6 +241,66 @@ emit("loading_release_reason", loading.release_reason or "")
 """
 
 
+NATIVE_GAME_OVER_PROBE = f"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local app_slot =
+  tonumber(sd.debug.resolve_game_address(
+    {GAME_OVER_APPLICATION_GLOBAL})) or 0
+local game_over_vtable =
+  tonumber(sd.debug.resolve_game_address({GAME_OVER_VTABLE})) or 0
+local boneyard_mode_address =
+  tonumber(sd.debug.resolve_game_address({GAME_OVER_BONEYARD_MODE})) or 0
+local app =
+  app_slot ~= 0 and (tonumber(sd.debug.read_ptr(app_slot)) or 0) or 0
+local found = false
+emit("boneyard_mode",
+  boneyard_mode_address ~= 0 and
+    (tonumber(sd.debug.read_u8(boneyard_mode_address)) or 0) or -1)
+if app ~= 0 then
+  local manager = tonumber(sd.debug.read_ptr(
+    app + {GAME_OVER_APPLICATION_CPU_MANAGER:#x})) or 0
+  if manager ~= 0 then
+    local count = tonumber(sd.debug.read_i32(
+      manager + {GAME_OVER_CPU_MANAGER_COUNT:#x})) or 0
+    local items = tonumber(sd.debug.read_ptr(
+      manager + {GAME_OVER_CPU_MANAGER_ITEMS:#x})) or 0
+    if items ~= 0 and count > 0 then
+      for index = 0, math.min(count - 1, 31) do
+        local object = tonumber(sd.debug.read_ptr(items + index * 4)) or 0
+        local vtable =
+          object ~= 0 and (tonumber(sd.debug.read_ptr(object)) or 0) or 0
+        if vtable == game_over_vtable then
+          found = true
+          emit("game_over_closed",
+            tonumber(sd.debug.read_u8(
+              object + {GAME_OVER_SURFACE_CLOSED:#x})) or -1)
+          emit("game_over_background_alpha",
+            tonumber(sd.debug.read_float(
+              object + {GAME_OVER_BACKGROUND_ALPHA:#x})) or -1)
+          emit("game_over_title_alpha",
+            tonumber(sd.debug.read_float(
+              object + {GAME_OVER_TITLE_ALPHA:#x})) or -1)
+          emit("game_over_click_alpha",
+            tonumber(sd.debug.read_float(
+              object + {GAME_OVER_CLICK_ALPHA:#x})) or -1)
+          emit("game_over_close_alpha",
+            tonumber(sd.debug.read_float(
+              object + {GAME_OVER_CLOSE_ALPHA:#x})) or -1)
+          emit("game_over_tick_count",
+            tonumber(sd.debug.read_i32(
+              object + {GAME_OVER_TICK_COUNT:#x})) or -1)
+          break
+        end
+      end
+    end
+  end
+end
+emit("game_over_found", found)
+"""
+
+
 def _number(values: Mapping[str, str], key: str) -> float:
     try:
         value = float(values.get(key, "nan"))
@@ -165,6 +322,18 @@ def _integer(values: Mapping[str, str], key: str) -> int:
 
 def _default_instance_prefix() -> str:
     return f"go-{os.getpid():x}-{time.time_ns() & 0xFFFF:04x}"
+
+
+def _launcher_instance_prefix(
+    evidence_prefix: str,
+    role_group: str,
+) -> str:
+    if role_group not in {"s", "m", "t"}:
+        raise ValueError(f"unsupported launcher role group: {role_group}")
+    digest = hashlib.sha256(
+        evidence_prefix.encode("utf-8")
+    ).hexdigest()[:8]
+    return f"g{digest}{role_group}"
 
 
 def _resolve_udp_ports(explicit: list[int | None]) -> list[int]:
@@ -432,6 +601,12 @@ def query_session_state(pipe_name: str) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, SESSION_STATE_PROBE, timeout=8.0))
 
 
+def query_native_game_over_state(pipe_name: str) -> dict[str, str]:
+    return parse_key_values(
+        lua(pipe_name, NATIVE_GAME_OVER_PROBE, timeout=8.0)
+    )
+
+
 def _wait_for_state(
     pipe_name: str,
     predicate,
@@ -484,6 +659,32 @@ def _start_testrun_when_ready(
 ) -> None:
     deadline = time.monotonic() + timeout
     last_error = ""
+    hub_stable_since: float | None = None
+    while time.monotonic() < deadline:
+        try:
+            state = query_session_state(host_pipe)
+            last_error = ""
+            if (
+                state.get("scene") == "hub"
+                and state.get("session_state") == "in-hub"
+            ):
+                now = time.monotonic()
+                if hub_stable_since is None:
+                    hub_stable_since = now
+                elif now - hub_stable_since >= 3.0:
+                    break
+            else:
+                hub_stable_since = None
+        except Exception as exc:  # noqa: BLE001 - retain last live error.
+            last_error = str(exc)
+            hub_stable_since = None
+        time.sleep(0.1)
+    else:
+        raise VerifyFailure(
+            "host never remained in the shared hub for 3 seconds before "
+            f"run entry: {last_error}"
+        )
+
     while time.monotonic() < deadline:
         try:
             start_testrun(host_pipe)
@@ -545,6 +746,20 @@ def terminal_game_over_state_matches(
         and _integer(values, "game_over_dispatch_count") == 1
         and values.get("spectator_active") == "false"
         and values.get("spectator_phase") == "Inactive"
+    )
+
+
+def native_boneyard_game_over_state_matches(
+    values: Mapping[str, str],
+) -> bool:
+    return (
+        values.get("game_over_found") == "true"
+        and _integer(values, "boneyard_mode") == 1
+        and _integer(values, "game_over_closed") == 0
+        and _integer(values, "game_over_tick_count") >= 600
+        and _number(values, "game_over_title_alpha") >= 0.99
+        and _number(values, "game_over_click_alpha") >= 0.99
+        and _number(values, "game_over_close_alpha") <= 0.01
     )
 
 
@@ -795,12 +1010,16 @@ def capture_native_game_over(
     output_path: Path,
     *,
     timeout: float = 10.0,
+    allow_boneyard_mode: bool = False,
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout
     last_error = ""
     last_classification: dict[str, object] = {}
+    last_native_state: dict[str, str] = {}
     while time.monotonic() < deadline:
         try:
+            if allow_boneyard_mode:
+                last_native_state = query_native_game_over_state(pipe_name)
             capture = capture_game_backbuffer(pipe_name, output_path)
             classification = classify_native_game_over_image(output_path)
             last_classification = classification
@@ -808,13 +1027,33 @@ def capture_native_game_over(
                 return {
                     "capture": capture,
                     "classification": classification,
+                    "presentation": "story-title",
+                }
+            if (
+                allow_boneyard_mode
+                and native_boneyard_game_over_state_matches(
+                    last_native_state
+                )
+                and classification["dark_fraction"] >= 0.70
+                and max(
+                    classification["gold_fractions"].values(),
+                    default=0.0,
+                )
+                < 0.005
+            ):
+                return {
+                    "capture": capture,
+                    "classification": classification,
+                    "native_state": last_native_state,
+                    "presentation": "boneyard-fade",
                 }
         except Exception as exc:  # noqa: BLE001 - retry through native fade.
             last_error = str(exc)
         time.sleep(0.2)
     raise VerifyFailure(
-        "full native Game Over frame did not become visible on "
+        "native Game Over presentation did not become visible on "
         f"{pipe_name}; classification={last_classification} "
+        f"native_state={last_native_state} "
         f"last_error={last_error}"
     )
 
@@ -836,16 +1075,13 @@ def _click_owned_window(
             str(x),
             "--y",
             str(y),
-            "--activate",
-            "--activation-delay-ms",
-            "250",
             "--post-delay-ms",
             "150",
             "--hold-ms",
             "90",
             "--button",
             "left",
-            "--global-only",
+            "--window-only",
         ]
     )
     completed = subprocess.run(
@@ -943,6 +1179,31 @@ def advance_stock_post_game_over(
         "mortuary": mortuary,
         "hall_of_fame": hall_of_fame,
         "main_menu": main_menu,
+    }
+
+
+def advance_stock_boneyard_game_over(
+    process_ids_by_pipe: Mapping[str, int],
+) -> dict[str, object]:
+    hub = {
+        pipe_name: _drive_stock_click_until(
+            pipe_name,
+            process_id,
+            0.5,
+            0.5,
+            lambda values: (
+                values.get("scene") == "hub"
+                and values.get("session_state") == "in-hub"
+            ),
+            timeout=60.0,
+            description="same-lobby hub after stock Boneyard Game Over",
+        )
+        for pipe_name, process_id in process_ids_by_pipe.items()
+    }
+    return {
+        "progression": "exact-pid-window-input",
+        "owned_process_ids": dict(process_ids_by_pipe),
+        "hub": hub,
     }
 
 
@@ -1048,7 +1309,7 @@ def run_solo_verification(
     game_directory: Path,
     launcher_path: Path | None = None,
 ) -> dict[str, object]:
-    instance = f"{instance_prefix}-solo"
+    instance = _launcher_instance_prefix(instance_prefix, "s")
     launch = launch_solo(
         instance=instance,
         local_port=ports[0],
@@ -1127,7 +1388,7 @@ def run_trio_verification(
     game_directory: Path,
     launcher_path: Path | None = None,
 ) -> dict[str, object]:
-    trio_prefix = f"{instance_prefix}-mp"
+    trio_prefix = _launcher_instance_prefix(instance_prefix, "m")
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_water_body_hub",
@@ -1242,7 +1503,7 @@ def run_trio_verification(
         result["first_spectating"] = _wait_for_spectator_state(
             client_pipe,
             spectator_state_matches,
-            timeout=6.0,
+            timeout=12.0,
             description="first dead participant spectating",
         )
         result["first_spectator_frame"] = capture_game_backbuffer(
@@ -1264,7 +1525,7 @@ def run_trio_verification(
         result["second_spectating"] = _wait_for_spectator_state(
             third_pipe,
             spectator_state_matches,
-            timeout=6.0,
+            timeout=12.0,
             description="second dead participant spectating",
         )
         result["first_still_spectating"] = _wait_for_spectator_state(
@@ -1320,6 +1581,7 @@ def run_trio_verification(
             label: capture_native_game_over(
                 pipe_name,
                 artifact_directory / f"{label}-game-over.png",
+                allow_boneyard_mode=True,
             )
             for label, pipe_name in (
                 ("host", host_pipe),
@@ -1327,7 +1589,7 @@ def run_trio_verification(
                 ("third", third_pipe),
             )
         }
-        result["post_game_over"] = advance_stock_post_game_over(
+        result["post_game_over"] = advance_stock_boneyard_game_over(
             {
                 host_pipe: int(launch["hostProcessId"]),
                 client_pipe: int(launch["clientProcessId"]),
@@ -1477,7 +1739,7 @@ def run_loading_timeout_verification(
     game_directory: Path,
     launcher_path: Path | None = None,
 ) -> dict[str, object]:
-    pair_prefix = f"{instance_prefix}-timeout"
+    pair_prefix = _launcher_instance_prefix(instance_prefix, "t")
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_water_body_hub",
@@ -1574,13 +1836,29 @@ def run_loading_timeout_verification(
             parents=True,
             exist_ok=True,
         )
-        result["host_loading_frame"] = (
-            capture_game_backbuffer(
-                host_pipe,
-                artifact_directory
-                / "host-loading-after-peer-kill.png",
-            )
+        loading_path = (
+            artifact_directory
+            / "host-loading-after-peer-kill.png"
         )
+        loading_capture = capture_game_backbuffer(
+            host_pipe,
+            loading_path,
+            minimum_unique_colors=20,
+            maximum_dominant_fraction=0.9999,
+        )
+        loading_classification = (
+            classify_loading_boneyard_image(loading_path)
+        )
+        if not loading_classification["matched"]:
+            raise VerifyFailure(
+                "surviving host did not retain Loading Boneyard "
+                "while waiting for the killed peer: "
+                f"{loading_classification}"
+            )
+        result["host_loading_frame"] = {
+            "capture": loading_capture,
+            "classification": loading_classification,
+        }
 
         release_wait_started = time.monotonic()
         released = _wait_for_state(
@@ -1620,13 +1898,26 @@ def run_loading_timeout_verification(
             ),
             "configured_timeout_ms": 25000,
         }
-        result["host_proceeded_frame"] = (
-            capture_game_backbuffer(
-                host_pipe,
-                artifact_directory
-                / "host-proceeded-after-timeout.png",
-            )
+        proceeded_path = (
+            artifact_directory
+            / "host-proceeded-after-timeout.png"
         )
+        proceeded_capture = capture_game_backbuffer(
+            host_pipe,
+            proceeded_path,
+        )
+        proceeded_classification = (
+            classify_loading_boneyard_image(proceeded_path)
+        )
+        if proceeded_classification["matched"]:
+            raise VerifyFailure(
+                "surviving host still rendered Loading Boneyard "
+                "after the timeout release"
+            )
+        result["host_proceeded_frame"] = {
+            "capture": proceeded_capture,
+            "loading_classification": proceeded_classification,
+        }
         result["surviving_host_process"] = (
             validate_owned_processes(host_owned)
         )

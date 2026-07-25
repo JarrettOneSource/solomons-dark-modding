@@ -62,6 +62,7 @@ void DispatchPendingDebugUiActionOnAppTick();
 bool TryPrepareMainMenuNewGameSaveReset(
     std::uintptr_t main_menu_address,
     std::string* error_message);
+bool TryContinuePostRunHallOfFame(std::string* error_message);
 bool TryGetLatestDebugUiSurfaceSnapshot(DebugUiSurfaceSnapshot* snapshot);
 bool TryFindDebugUiActionElement(std::string_view action_id, std::string_view surface_id, DebugUiSnapshotElement* element);
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot);
