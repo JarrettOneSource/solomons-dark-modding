@@ -320,6 +320,13 @@ outside the compact loop:
 - after restoring the render transform, the second marker pass repeats the
   tint draw at `0x004726E3` before drawing the same marker family.
 
+Both callsites pass sign mode 0 and the float scale stored at `0x00785D34`
+(`0.0500000119`). The caller then adds the double bias stored at `0x00784E20`
+(`0.9499999881`) before converting the tint to a float. Thus the complete
+stock tint input is the peer-local RNG state, callsite, fixed scale, fixed
+sign mode, and fixed bias; the visible range is approximately 0.95 through
+1.0.
+
 Both paths iterate the four marker slots rooted at
 `DAT_0081C264 + 0x1358`. The marker objects and glyph selection can be
 identical while their brightness differs because the calls consume the
@@ -465,6 +472,74 @@ must satisfy these invariants whenever multiplayer transport is active:
 These changes do not alter any framework message or serialized network field.
 The existing host run seed remains the sole authority input, so the protocol
 version remains 84 unless implementation later introduces a wire change.
+
+## Implemented multiplayer presentation boundary
+
+The framework now enforces those invariants only while local multiplayer
+transport is active. The stock single-player paths remain untouched.
+
+| Family or pass | Multiplayer behavior |
+| --- | --- |
+| Persistent compact types 0–30 | The seven incomplete flag writes remain full-byte `MOV 0x01` initializations, eliminating allocator-derived tint and ignored bits for ground cover, patches, paving, pebbles, twigs, boulders, shadow/mask sprites, and roots. |
+| Tree `2001` | The constructor initializes common scalar `+0xCC` before the temporary save/reload can preserve heap residue. After materialization, a stable per-Tree hash of the host run seed, exact X/Y bits, type, and packed variant/overlay word selects sway scale and complex-lighting scalar. The Tree tick reasserts `+0x148/+0x14C/+0x150`; the overlay hook writes `+0xCC` immediately before `0x00608912`; and the common lighting-dispatch hook restores the same scalar after `0x00624B40` returns so both pixels and live table dumps observe the deterministic value. |
+| Scrub `2062` | The setup hook replaces the constructor/setup RNG result immediately after stock setup. The common scenery tick hook reasserts the same seed/position/type/variant-derived phase after every stock increment, preventing both a first-frame mismatch and later tick-count drift. |
+| Goodie `2061` | The constructor initializes `+0x144` to zero before procedural serialization. A later load may overwrite it only with the now-canonical serialized value. This fixes the object class at construction rather than hiding residue in the digest. |
+| Arena ambient ground effects | The integer RNG calls at `0x00471805` and `0x004723C2` are redirected to return the native non-spawn result in multiplayer. No peer creates these non-authoritative, non-replicated transient ground effects. |
+| Arena marker glyphs | The floating RNG calls at `0x004712BB` and `0x004726E3` are redirected to values derived from the host run seed and a callsite salt. Each pass therefore selects the same tint on every peer without consuming peer-local presentation RNG. |
+
+The deterministic scenery hash never uses an address, allocator state,
+container index, local tick count, actor list, or render-iteration order.
+Position and variant inputs already come from the shared seeded
+materialization path. The Arena-only redirects use the synchronized run seed
+and fixed callsite salts. No RegionLayout field or framework packet changes,
+so the network protocol remains version 84.
+
+The patch installer validates the supported stock bytes at all seven compact
+sites and all four Arena render-RNG callsites before writing anything. Failure
+rolls back every byte patch and installed presentation hook. Shutdown restores
+the stock callsites and hooks.
+
+## Corrected digest and pixel acceptance
+
+The live verifier preserves native order and compares exact renderer inputs,
+not a sorted or position-only projection:
+
+- common scenery position, materialization key, scale, color, render
+  parameter, and the proved family-specific arrays and fields;
+- Tree variants, overlay state, deterministic sway target/current, and the
+  final complex-lighting scalar;
+- Scrub phase, variant, orientation/deformation, and collision selector;
+- Monument, Gravestone, Building, Goodie, Fence-post, grate, broken-grate,
+  Gate, Wall, and Rails render fields;
+- Road geometry/style, Fence specifications, complete Terrain inputs and
+  private-RNG seed, and every compact type 0–30 record including rebuilt
+  bounds; and
+- the host run seed plus the fixed Arena ambient-suppression policy and the
+  two seed-derived marker tint inputs.
+
+Process-local Road/Fence UIDs, Wall self-pointers, and common `+0x134` words
+whose family renderer never reads them remain diagnostic-only. An inactive
+Goodie timer is canonicalized to zero in both construction and the semantic
+digest; an active timer remains included.
+
+For visual acceptance, each fresh seed selects four distinct, dense,
+camera-safe areas: Trees, large rocks/boulders, ground clutter, and scenery
+props. Both owners and their replicated mirrors are parked on traversable
+native-nav samples outside the central 120-world-unit decor region. The
+verifier applies identical render options to both peers with complex lighting,
+complex shadows, multiple shadows, and zoom effects enabled. Enhanced effects
+are disabled only to remove unrelated peer-local weather; the two Boneyard
+ambient branches are independently suppressed by the repair above.
+
+Each peer contributes 16 native-backbuffer captures per area. Pixels that are
+unchanged throughout both sequences must match exactly, including their hash,
+with no unexplained channel delta. The temporal RGB envelopes of the remaining
+animated pixels must overlap with zero channel gap. The gate also requires
+non-empty, color-rich regions and stores the host image, client image, stable
+mask, exact difference image, temporal minima/maxima, and envelope-gap image.
+Actors are excluded spatially, not painted out, and the verifier injects no
+damage or spell presentation. A correlation score is retained only as an
+alignment diagnostic and cannot pass the gate.
 
 ## Beta.16 acceptance gate and its blind spot
 
