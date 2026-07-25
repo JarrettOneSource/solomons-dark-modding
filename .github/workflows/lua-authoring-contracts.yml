@@ -51,6 +51,17 @@ jobs:
           tests/native/world_motion_fragment_merge_tests.cpp
           -o /tmp/world-motion-fragment-merge-tests
           && /tmp/world-motion-fragment-merge-tests
+      - name: Test x86 hook instruction relocation
+        run: >-
+          g++ -std=c++17 -Wall -Wextra -pedantic
+          -ISolomonDarkModLoader/include
+          tests/native/x86_hook_decoder_tests.cpp
+          -o /tmp/x86-hook-decoder-tests
+          && /tmp/x86-hook-decoder-tests
+      - name: Test multiplayer run-entry stability verifier
+        run: >-
+          python -m unittest
+          tests.test_multiplayer_run_entry_stability_verifier
       - name: Test organic enemy and Air timing verifier
         run: >-
           python -m unittest

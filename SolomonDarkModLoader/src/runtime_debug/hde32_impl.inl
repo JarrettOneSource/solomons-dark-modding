@@ -270,18 +270,8 @@ pref_done:
     } else if (pref & PRE_LOCK)
         hs->flags |= F_ERROR | F_ERROR_LOCK;
 
-    if (cflags & C_IMM_P66) {
-        if (cflags & C_REL32) {
-            if (pref & PRE_66) {
-                hs->flags |= F_IMM16 | F_RELATIVE;
-                hs->imm.imm16 = *(uint16_t*)p;
-                p += 2;
-            } else {
-                hs->flags |= F_IMM32 | F_RELATIVE;
-                hs->imm.imm32 = *(uint32_t*)p;
-                p += 4;
-            }
-        } else if (opcode == 0x9a || opcode == 0xea) {
+    if ((cflags & C_IMM_P66) && !(cflags & C_REL32)) {
+        if (opcode == 0x9a || opcode == 0xea) {
             if (pref & PRE_66) {
                 hs->flags |= F_IMM16;
                 hs->imm.imm16 = *(uint16_t*)p;
@@ -315,9 +305,15 @@ pref_done:
         p++;
     }
     if (cflags & C_REL32) {
-        hs->flags |= F_IMM32 | F_RELATIVE;
-        hs->imm.imm32 = *(uint32_t*)p;
-        p += 4;
+        if ((cflags & C_IMM_P66) && (pref & PRE_66)) {
+            hs->flags |= F_IMM16 | F_RELATIVE;
+            hs->imm.imm16 = *(uint16_t*)p;
+            p += 2;
+        } else {
+            hs->flags |= F_IMM32 | F_RELATIVE;
+            hs->imm.imm32 = *(uint32_t*)p;
+            p += 4;
+        }
     } else if (cflags & C_REL8) {
         hs->flags |= F_IMM8 | F_RELATIVE;
         hs->imm.imm8 = *p;
