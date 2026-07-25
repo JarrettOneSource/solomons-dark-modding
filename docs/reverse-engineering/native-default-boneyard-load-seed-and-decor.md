@@ -644,8 +644,58 @@ units and nearest 320, with camera, digests, and comparators unchanged —
 was approved but not executed because the fleet account reached its usage
 window before the renewed passes could run.
 
-Debts owed by the decor-seam owner at next resume: execute the radial
-parking correction and complete one three-seed lit gate, and split
-`boneyard_generator_patch.inl` behind the accepted source-organization
-exception. Live play on the next published beta remains the final arbiter
-for residual visual divergence.
+### Renewed radial-gate result
+
+The approved parking correction was exercised once on 2026-07-25 with
+instance prefix `bny-radial-final73`. Candidate selection now filters the
+native traversable samples by their actual distance from the comparison
+target (310-330 units) and ranks them nearest 320 before using the original
+westward goal as a deterministic tie-breaker. Camera selection, render-input
+digests, and both pixel comparators were unchanged. Run 1 selected one shared
+host/client point at `[950, 1550]`, 318.699 units from the Tree target, from
+four eligible samples.
+
+The command requested three seeds but stopped during the first seed's Tree
+window because the stable-content fraction remained below quorum. This was
+environmental exhaustion, not a decor mismatch:
+
+- The complete render-input SHA-256 was
+  `b08160c78529b1bc469133ae98414cf4768edbe0c772202bb01c6a47cfada721`
+  on both peers. It covers the native-order decor tables, Tree/Scrub/Goodie
+  presentation fields, Arena ambient suppression and marker tint, and the
+  verified render profile.
+- All 40,028 stable Tree pixels matched exactly. The two stable-pixel hashes
+  were
+  `e48e4478cd6ec9522dee45aba9306d17e34796068ec5aca5c2ec7076668fc4da`;
+  2,190 pixels were visible, 419 stable colors were present on each peer,
+  `differing_stable_pixel_count=0`, and
+  `maximum_stable_channel_delta=0`.
+- The failure was only `stable_pixel_fraction=0.381306`, below the 0.50
+  quorum. The temporal envelope had 34,213 host-visible and 34,766
+  client-visible pixels with `differing_envelope_pixel_count=0` and
+  `maximum_envelope_channel_gap=0`.
+- Exact-PID/path cleanup succeeded for both owned instances. Both crash logs
+  remained empty.
+
+The result and all 16 matched Tree screenshot pairs are under
+`/mnt/d/codex-evidence/boneyard-radial-20260725/radial-lit-final73/`.
+The stable difference image is
+`run-01-area-01-trees-stable-decor-diff.png`; the temporal-envelope gap image
+is `run-01-area-01-trees-temporal-envelope-gap.png`.
+
+Family verdict at this landing:
+
+| Family | Render-input verdict | Pixel verdict |
+| --- | --- | --- |
+| Trees | Exact in the renewed run and the earlier three-seed run | Renewed stable and temporal comparisons had zero differing pixels; stable-content quorum alone failed |
+| Large rocks | Exact in the earlier three-seed run and included in the renewed full-input hash | ATC's landing run had identical stable-pixel SHA-256 (`65eb0cca...`), zero differing pixels, and zero maximum channel delta; its stable fraction was 0.404 versus the 0.50 quorum |
+| Boulders | Exact in the earlier three-seed run and included in the renewed full-input hash | Not reached after the renewed Tree quorum stop; no completed comparison has shown a divergence |
+| Ground clutter | Exact in the earlier three-seed run and included in the renewed full-input hash | Not reached after the renewed Tree quorum stop; no completed comparison has shown a divergence |
+
+The terminal acceptance rule for a second environment-only exhaustion with
+zero observed divergence was to land the harness correction rather than
+iterate again. The source-organization debt was also paid by moving the
+unchanged restore transaction to
+`boneyard_generator_patch_restore.inl`; the main generator patch is now below
+700 lines and no longer has a large-file exception. Live play remains the
+final arbiter for residual visual divergence.
