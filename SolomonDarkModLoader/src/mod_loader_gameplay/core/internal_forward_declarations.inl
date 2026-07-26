@@ -45,6 +45,10 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     uintptr_t ensure_progression_handle_address,
     uintptr_t actor_address,
     DWORD* exception_code);
+bool CallPlayerActorLightSubmitSafe(
+    uintptr_t light_submit_address,
+    uintptr_t actor_address,
+    DWORD* exception_code);
 bool CallPlayerActorInitializeControlBrainSafe(
     uintptr_t initialize_address,
     uintptr_t actor_address,

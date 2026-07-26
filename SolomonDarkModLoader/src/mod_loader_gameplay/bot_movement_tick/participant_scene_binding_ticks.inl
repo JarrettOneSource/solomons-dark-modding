@@ -132,6 +132,11 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                         binding.actor_address,
                         *participant,
                         now_ms);
+                    if (binding.native_remote_death_epoch_active) {
+                        (void)SubmitNativeRemoteParticipantCorpseLight(
+                            &binding,
+                            binding.actor_address);
+                    }
                 }
                 if (!binding.native_remote_death_epoch_active) {
                     (void)ApplyNativeRemoteParticipantPlayback(

@@ -19,6 +19,27 @@ bool CallPlayerActorEnsureProgressionHandleSafe(
     }
 }
 
+bool CallPlayerActorLightSubmitSafe(
+    uintptr_t light_submit_address,
+    uintptr_t actor_address,
+    DWORD* exception_code) {
+    auto* light_submit =
+        reinterpret_cast<PlayerActorNoArgMethodFn>(light_submit_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (light_submit == nullptr || actor_address == 0) {
+        return false;
+    }
+
+    __try {
+        light_submit(reinterpret_cast<void*>(actor_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallPlayerActorInitializeControlBrainSafe(
     uintptr_t initialize_address,
     uintptr_t actor_address,

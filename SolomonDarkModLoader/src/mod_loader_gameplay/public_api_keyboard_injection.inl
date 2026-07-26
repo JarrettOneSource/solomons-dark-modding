@@ -990,21 +990,6 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
-    if (!InstallSafeX86Hook(
-            reinterpret_cast<void*>(player_actor_light_submit),
-            reinterpret_cast<void*>(&HookPlayerActorLightSubmit),
-            kPlayerActorLightSubmitHookMinimumPatchSize,
-            &g_gameplay_keyboard_injection.player_actor_light_submit_hook,
-            &hook_error)) {
-        ShutdownGameplayKeyboardInjection();
-        if (error_message != nullptr) {
-            *error_message =
-                "Failed to install PlayerActor light-submit hook: " +
-                hook_error;
-        }
-        return false;
-    }
-
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -1143,7 +1128,6 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
-    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_light_submit_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);

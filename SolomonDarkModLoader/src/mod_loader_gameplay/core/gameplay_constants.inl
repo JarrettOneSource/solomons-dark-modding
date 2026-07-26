@@ -2,9 +2,6 @@ constexpr std::size_t kGameplayMouseRefreshHookPatchSize = 8;
 constexpr std::size_t kGameplayKeyboardEdgeHookPatchSize = 9;
 constexpr std::size_t kPlayerActorTickHookPatchSize = 6;
 constexpr std::size_t kPlayerActorEnsureProgressionHandleHookPatchSize = 7;
-// PlayerActor's light-submit vfunc starts with `sub esp,0x10; push esi;
-// mov esi,ecx` (six bytes). The safe hook preserves whole instructions.
-constexpr std::size_t kPlayerActorLightSubmitHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerActorApplyManaDeltaHookPatchSize = 5;
 constexpr std::size_t kPlayerActorDtorHookPatchSize = 12;
 constexpr bool kEnablePlayerActorDtorHook = false;

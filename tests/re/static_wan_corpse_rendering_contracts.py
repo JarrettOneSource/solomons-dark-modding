@@ -122,46 +122,41 @@ def test_dead_owner_vitals_are_reasserted_after_the_progression_tick() -> str:
 
 def test_committed_remote_corpses_use_the_stock_local_corpse_light_branch() -> str:
     config = _read("config/binary-layout.ini")
-    hooks = _read(
-        "SolomonDarkModLoader/src/mod_loader_gameplay/"
-        "dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    remote_vitals = read_source_unit(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
+        "native_remote_vitals_and_playback.inl"
     )
-    initialization = _read(
+    scene_tick = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
-        "public_api_keyboard_injection.inl"
+        "bot_movement_tick/participant_scene_binding_ticks.inl"
     )
 
     assert "player_actor_light_submit=0x005299A0" in config
-    hook_start = hooks.index(
-        "void __fastcall HookPlayerActorLightSubmit("
+    submit_start = remote_vitals.index(
+        "bool SubmitNativeRemoteParticipantCorpseLight("
     )
-    hook_end = hooks.index(
-        "bool IsLocalPlayerActorDestructorTarget(",
-        hook_start,
+    submit_end = remote_vitals.index(
+        "bool ApplyNativeRemoteParticipantDeathPresentationState(",
+        submit_start,
     )
-    hook = hooks[hook_start:hook_end]
+    submit = remote_vitals[submit_start:submit_end]
     _require_in_order(
-        hook,
-        "FindParticipantEntityForActor(actor_address)",
+        submit,
         "IsNativeRemoteParticipantBinding(binding)",
         "binding->native_remote_death_epoch_active",
         "ScopedActorSlotZeroContext slot_context(",
-        "original(self);",
+        "CallPlayerActorLightSubmitSafe(",
+        "slot_context.Restore();",
     )
-    assert "kActorLighting" not in hook
-    assert "TryWriteField<float>" not in hook
-    assert "InstallSafeX86Hook(" in initialization
-    assert "&HookPlayerActorLightSubmit" in initialization
-    assert (
-        "RemoveX86Hook("
-        "&g_gameplay_keyboard_injection.player_actor_light_submit_hook)"
-        in initialization.replace("\n", "")
-    )
+    assert "kActorLighting" not in submit
+    assert "TryWriteField<float>" not in submit
+    assert "SubmitNativeRemoteParticipantCorpseLight(" in scene_tick
+    assert "HookPlayerActorLightSubmit" not in remote_vitals
 
     return (
-        "only a committed native remote corpse temporarily takes the stock "
-        "slot-zero PlayerActor light path, with its gameplay slot restored "
-        "by the scoped context"
+        "the local scene-binding tick explicitly submits each committed "
+        "native remote corpse through the stock slot-zero PlayerActor light "
+        "path, with its gameplay slot restored by the scoped context"
     )
 
 

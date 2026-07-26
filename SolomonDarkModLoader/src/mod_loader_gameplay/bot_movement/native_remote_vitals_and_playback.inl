@@ -25,6 +25,37 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
 
 #include "native_remote_death_drop.inl"
 
+bool SubmitNativeRemoteParticipantCorpseLight(
+    const ParticipantEntityBinding* binding,
+    uintptr_t actor_address) {
+    if (!IsNativeRemoteParticipantBinding(binding) ||
+        !binding->native_remote_death_epoch_active ||
+        actor_address == 0) {
+        return false;
+    }
+
+    const auto light_submit_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kPlayerActorLightSubmit);
+    if (light_submit_address == 0) {
+        return false;
+    }
+
+    ScopedActorSlotZeroContext slot_context(actor_address, true);
+    if (!slot_context.ready) {
+        return false;
+    }
+
+    DWORD exception_code = 0;
+    const bool submitted =
+        CallPlayerActorLightSubmitSafe(
+            light_submit_address,
+            actor_address,
+            &exception_code);
+    slot_context.Restore();
+    return submitted && exception_code == 0 && slot_context.restored;
+}
+
 bool ApplyNativeRemoteParticipantDeathPresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address,
