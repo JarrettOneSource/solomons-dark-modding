@@ -56,6 +56,17 @@ bool SubmitNativeRemoteParticipantCorpseLight(
     return submitted && exception_code == 0 && slot_context.restored;
 }
 
+void SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame() {
+    std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+    for (const auto& binding : g_participant_entities) {
+        if (binding.native_remote_death_epoch_active) {
+            (void)SubmitNativeRemoteParticipantCorpseLight(
+                &binding,
+                binding.actor_address);
+        }
+    }
+}
+
 bool ApplyNativeRemoteParticipantDeathPresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address,

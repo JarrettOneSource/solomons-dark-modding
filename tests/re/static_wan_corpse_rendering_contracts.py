@@ -126,12 +126,21 @@ def test_committed_remote_corpses_use_the_stock_local_corpse_light_branch() -> s
         "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
         "native_remote_vitals_and_playback.inl"
     )
+    hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    initialization = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_keyboard_injection.inl"
+    )
     scene_tick = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "bot_movement_tick/participant_scene_binding_ticks.inl"
     )
 
     assert "player_actor_light_submit=0x005299A0" in config
+    assert "arena_light_collection_finalize=0x0057D5E0" in config
     submit_start = remote_vitals.index(
         "bool SubmitNativeRemoteParticipantCorpseLight("
     )
@@ -150,13 +159,37 @@ def test_committed_remote_corpses_use_the_stock_local_corpse_light_branch() -> s
     )
     assert "kActorLighting" not in submit
     assert "TryWriteField<float>" not in submit
-    assert "SubmitNativeRemoteParticipantCorpseLight(" in scene_tick
-    assert "HookPlayerActorLightSubmit" not in remote_vitals
+    assert (
+        "void SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame()"
+        in remote_vitals
+    )
+    assert "SubmitNativeRemoteParticipantCorpseLight(" not in scene_tick
+
+    hook_start = hooks.index(
+        "void __cdecl HookArenaLightCollectionFinalize()"
+    )
+    hook_end = hooks.index(
+        "bool IsLocalPlayerActorDestructorTarget(",
+        hook_start,
+    )
+    hook = hooks[hook_start:hook_end]
+    _require_in_order(
+        hook,
+        "SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame();",
+        "original();",
+    )
+    assert "&HookArenaLightCollectionFinalize" in initialization
+    assert (
+        "RemoveX86Hook("
+        "&g_gameplay_keyboard_injection"
+        ".arena_light_collection_finalize_hook)"
+        in initialization.replace("\n", "").replace(" ", "")
+    )
 
     return (
-        "the local scene-binding tick explicitly submits each committed "
-        "native remote corpse through the stock slot-zero PlayerActor light "
-        "path, with its gameplay slot restored by the scoped context"
+        "the arena pre-finalize seam submits each committed native remote "
+        "corpse after the per-frame light reset through the stock slot-zero "
+        "PlayerActor path, with its gameplay slot restored"
     )
 
 

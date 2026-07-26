@@ -8,6 +8,19 @@ void __fastcall HookPlayerActorEnsureProgressionHandle(void* self, void* /*unuse
     original(self);
 }
 
+void __cdecl HookArenaLightCollectionFinalize() {
+    const auto original =
+        GetX86HookTrampoline<ArenaLightCollectionFinalizeFn>(
+            g_gameplay_keyboard_injection
+                .arena_light_collection_finalize_hook);
+    if (original == nullptr) {
+        return;
+    }
+
+    SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame();
+    original();
+}
+
 bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
     if (actor_address == 0) {
         return false;

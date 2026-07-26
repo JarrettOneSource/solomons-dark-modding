@@ -180,6 +180,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook edge_hook;
     X86Hook player_actor_tick_hook;
     X86Hook player_actor_progression_handle_hook;
+    X86Hook arena_light_collection_finalize_hook;
     X86Hook player_actor_apply_mana_delta_hook;
     X86Hook player_actor_dtor_hook;
     X86Hook player_actor_vtable28_hook;

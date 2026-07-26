@@ -3,6 +3,7 @@ using GameplayMouseRefreshFn = void(__fastcall*)(void* self, void* unused_edx);
 using PlayerActorTickFn = void(__thiscall*)(void* self);
 using PlayerActorActionManagerTickFn = void(__thiscall*)(void* self);
 using PlayerActorNoArgMethodFn = void(__thiscall*)(void* self);
+using ArenaLightCollectionFinalizeFn = void(__cdecl*)();
 using PlayerActorSecondarySpellCastFn = std::uint8_t(__thiscall*)(void* self, int skill_entry_index);
 using SecondaryCursorWorldProjectionFn = void*(__thiscall*)(
     void* self,

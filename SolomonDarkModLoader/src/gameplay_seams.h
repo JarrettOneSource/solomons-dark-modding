@@ -27,6 +27,7 @@ extern uintptr_t kGameplayKeyboardEdgeHelper;
 extern uintptr_t kPlayerActorTick;
 extern uintptr_t kPlayerProgressionTick;
 extern uintptr_t kPlayerActorLightSubmit;
+extern uintptr_t kArenaLightCollectionFinalize;
 extern uintptr_t kActorWorldTick;
 extern uintptr_t kPlayerActorActionManagerTick;
 extern uintptr_t kPlayerActorEnsureProgressionHandle;
