@@ -743,20 +743,62 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             self.assertFalse(tolerated["exact_match"])
             self.assertTrue(tolerated["bounded_match"])
             self.assertEqual(tolerated["maximum_stable_channel_delta"], 2)
+            self.assertEqual(tolerated["maximum_stable_envelope_gap"], 2)
 
-            for path in client_paths:
+            phase_offsets = ((0, 3), (1, 2), (2, 4))
+            for frame, (host_offset, client_offset) in enumerate(
+                phase_offsets
+            ):
+                phased_host = Image.new("RGB", (400, 240))
+                phased_client = Image.new("RGB", (400, 240))
+                for x in range(400):
+                    for y in range(240):
+                        pixel = (
+                            80 + x % 100,
+                            60 + y % 100,
+                            40 + (x + y) % 100,
+                        )
+                        phased_host.putpixel(
+                            (x, y),
+                            tuple(value + host_offset for value in pixel),
+                        )
+                        phased_client.putpixel(
+                            (x, y),
+                            tuple(value + client_offset for value in pixel),
+                        )
+                phased_host.save(host_paths[frame])
+                phased_client.save(client_paths[frame])
+            phased = verifier.exact_stable_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "phased",
+            )
+            self.assertTrue(phased["bounded_match"])
+            self.assertEqual(phased["maximum_stable_channel_delta"], 3)
+            self.assertEqual(phased["maximum_stable_envelope_gap"], 0)
+
+            for host_path, client_path in zip(
+                host_paths,
+                client_paths,
+                strict=True,
+            ):
+                host = Image.new("RGB", (400, 240))
                 shifted = Image.new("RGB", (400, 240))
                 for x in range(400):
                     for y in range(240):
+                        pixel = (
+                            80 + x % 100,
+                            60 + y % 100,
+                            40 + (x + y) % 100,
+                        )
+                        host.putpixel((x, y), pixel)
                         shifted.putpixel(
                             (x, y),
-                            (
-                                83 + x % 100,
-                                63 + y % 100,
-                                43 + (x + y) % 100,
-                            ),
+                            tuple(value + 3 for value in pixel),
                         )
-                shifted.save(path)
+                host.save(host_path)
+                shifted.save(client_path)
             rejected = verifier.exact_stable_decor_pixel_comparison(
                 host_paths,
                 client_paths,
@@ -765,6 +807,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             )
             self.assertFalse(rejected["bounded_match"])
             self.assertEqual(rejected["maximum_stable_channel_delta"], 3)
+            self.assertEqual(rejected["maximum_stable_envelope_gap"], 3)
 
     def test_stable_pixel_gate_uses_visible_content_not_dark_fraction(
         self,

@@ -2251,6 +2251,7 @@ def exact_stable_decor_pixel_comparison(
     stable_visible_pixel_count = 0
     differing_stable_pixel_count = 0
     maximum_stable_channel_delta = 0
+    maximum_stable_envelope_gap = 0
     stable_host_colors: set[tuple[int, int, int]] = set()
     stable_client_colors: set[tuple[int, int, int]] = set()
 
@@ -2263,16 +2264,30 @@ def exact_stable_decor_pixel_comparison(
             continue
         host_samples = [row[index] for row in pixels["host"]]
         client_samples = [row[index] for row in pixels["client"]]
+        host_minimum = tuple(
+            min(sample[channel] for sample in host_samples)
+            for channel in range(3)
+        )
+        host_maximum = tuple(
+            max(sample[channel] for sample in host_samples)
+            for channel in range(3)
+        )
+        client_minimum = tuple(
+            min(sample[channel] for sample in client_samples)
+            for channel in range(3)
+        )
+        client_maximum = tuple(
+            max(sample[channel] for sample in client_samples)
+            for channel in range(3)
+        )
         stable = (
             max(
-                max(sample[channel] for sample in host_samples)
-                - min(sample[channel] for sample in host_samples)
+                host_maximum[channel] - host_minimum[channel]
                 for channel in range(3)
             )
             <= STABLE_TEMPORAL_CHANNEL_RANGE
             and max(
-                max(sample[channel] for sample in client_samples)
-                - min(sample[channel] for sample in client_samples)
+                client_maximum[channel] - client_minimum[channel]
                 for channel in range(3)
             )
             <= STABLE_TEMPORAL_CHANNEL_RANGE
@@ -2308,6 +2323,18 @@ def exact_stable_decor_pixel_comparison(
         maximum_stable_channel_delta = max(
             maximum_stable_channel_delta,
             max(delta),
+        )
+        envelope_gap = max(
+            max(
+                host_minimum[channel] - client_maximum[channel],
+                client_minimum[channel] - host_maximum[channel],
+                0,
+            )
+            for channel in range(3)
+        )
+        maximum_stable_envelope_gap = max(
+            maximum_stable_envelope_gap,
+            envelope_gap,
         )
         coordinate = index.to_bytes(4, "little", signed=False)
         host_hash.update(coordinate)
@@ -2350,7 +2377,7 @@ def exact_stable_decor_pixel_comparison(
         and sufficient_stable_content
     )
     bounded_match = (
-        maximum_stable_channel_delta
+        maximum_stable_envelope_gap
         <= STABLE_CROSS_PEER_CHANNEL_DELTA
         and sufficient_stable_content
     )
@@ -2373,11 +2400,12 @@ def exact_stable_decor_pixel_comparison(
         "maximum_stable_temporal_channel_range": (
             STABLE_TEMPORAL_CHANNEL_RANGE
         ),
-        "maximum_allowed_stable_cross_peer_channel_delta": (
+        "maximum_allowed_stable_cross_peer_envelope_gap": (
             STABLE_CROSS_PEER_CHANNEL_DELTA
         ),
         "differing_stable_pixel_count": differing_stable_pixel_count,
         "maximum_stable_channel_delta": maximum_stable_channel_delta,
+        "maximum_stable_envelope_gap": maximum_stable_envelope_gap,
         "host_stable_pixel_sha256": host_hash.hexdigest(),
         "client_stable_pixel_sha256": client_hash.hexdigest(),
         "stable_pixel_hashes_match": stable_hashes_match,
@@ -2386,7 +2414,8 @@ def exact_stable_decor_pixel_comparison(
             "method": (
                 "intersection of pixels staying within a two-value "
                 "per-channel temporal band across native backbuffers on "
-                "each peer"
+                "each peer, compared by their cross-peer temporal-envelope "
+                "gap rather than capture order"
             ),
             "frames_per_peer": len(host_paths),
         },
