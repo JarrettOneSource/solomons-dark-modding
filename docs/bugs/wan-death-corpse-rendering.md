@@ -193,19 +193,31 @@ by more than ten percent. Life authority and local maximum ownership were
 incorrectly coupled. The host correction should own current life; the
 recipient's current native maximum remains the write maximum and clamp.
 
-### Loading Boneyard's floor starts before a frame can be rendered
+### Loading Boneyard was disabled by the WAN audit launch contract
 
-The barrier itself did not complete too quickly. The audit barrier lasted
-about 4.7 seconds, while `kTransitionPresentationMinimumMs` is 750 ms and
-materialization stability is 250 ms.
+The barrier did not complete too quickly. The audit's archived client barrier
+ran for about 4.75 seconds. A fresh same-process WAN cycle in this
+investigation ran for 5.15 seconds on Home and 5.18 seconds on NFO. Both are
+far longer than the existing 750 ms `kTransitionPresentationMinimumMs` floor
+and the 250 ms materialization-stability interval.
 
-The 750 ms clock starts before the blocking native scene load. No EndScene
-frame can display the loading overlay during that call. By the first
-presentable Boneyard frame, the clock has expired and barrier acknowledgements
-are ready, so the state can advance to Run before the text renders once.
+The missing title is instead deterministic from the launch configuration. Both
+WAN wrappers explicitly set `SDMOD_MULTIPLAYER_QUICK_START` and its three
+companion variables to the empty string. `InitializeMultiplayerJoinFlow`
+returns `false` when that variable is disabled.
+`GetMultiplayerJoinFlowPresentation` therefore always returns an invisible
+presentation, including while the independent transport run-loading barrier
+is active. Neither archived audit log contains
+`Multiplayer join flow enabled`, a phase transition, or a first-render marker.
+The repeated Home and NFO frame bursts contain the native fade-to-black
+interval but no loader title, exactly as that disabled state requires.
 
-The spec-consistent fix is to start the minimum-display interval on the first
-actual rendered Loading Boneyard overlay frame, not on transition entry.
+The repository's focused lifecycle verifier launches with `quick_start=True`;
+that is the supported contract which enables the join-flow cover and its
+minimum-display floor. The WAN suite's manually driven wrapper deliberately
+disabled the same facility while retaining the verifier's visual assertion.
+This is an acceptance-harness mode mismatch, not a latency regression in the
+barrier. Production code is left unchanged for this secondary finding.
 
 ## Planned foundational change
 
@@ -222,7 +234,6 @@ Treat remote death as a durable replicated presentation epoch:
 5. reassert local dead-owner life after the native progression tick;
 6. apply authenticated host life corrections against the recipient's current
    native maximum; and
-7. anchor the Loading Boneyard display floor to its first rendered frame; and
-8. submit committed remote corpse lights at the arena's native pre-finalize
+7. submit committed remote corpse lights at the arena's native pre-finalize
    frame seam through the stock slot-zero PlayerActor method while restoring
    their real slot before returning.
