@@ -221,6 +221,9 @@
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_join_flow\presentation.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_local_transport.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -780,6 +783,9 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_death_drop.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl">

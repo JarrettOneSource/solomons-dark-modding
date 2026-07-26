@@ -117,9 +117,7 @@ void ApplyParticipantVitalsCorrectionPacket(
         !player_state.valid ||
         !std::isfinite(player_state.hp) ||
         !std::isfinite(player_state.max_hp) ||
-        player_state.max_hp <= 0.0f ||
-        std::fabs(player_state.max_hp - packet.life_max) >
-            (std::max)(1.0f, player_state.max_hp * 0.1f)) {
+        player_state.max_hp <= 0.0f) {
         return;
     }
 
@@ -138,10 +136,16 @@ void ApplyParticipantVitalsCorrectionPacket(
         local->owned_progression.hagatha_perks.valid &&
         packet.hagatha_cheat_death_charges <
             local->owned_progression.hagatha_perks.cheat_death_charges;
+    // The authenticated host owns current life. Maximum life remains an
+    // owner-native field because progression/perk changes can reach the owner
+    // before the host's mirror. A stale mirrored maximum must not reject a
+    // lethal correction or write the stale value back into native state.
+    const float authoritative_life =
+        (std::min)(packet.life_current, player_state.max_hp);
     const float corrected_life =
         cheat_death_consumed
-            ? packet.life_current
-            : (std::min)(player_state.hp, packet.life_current);
+            ? authoritative_life
+            : (std::min)(player_state.hp, authoritative_life);
     if (correction_hagatha_runtime &&
         !ApplyAuthoritativeHagathaRuntimeCorrection(
             player_state.progression_address,

@@ -88,6 +88,24 @@ bool CallNativeRngInitializeSafe(
     uintptr_t rng_state_address,
     std::uint32_t seed,
     DWORD* exception_code);
+bool CallNativeRngFloatSafe(
+    uintptr_t random_address,
+    uintptr_t rng_state_address,
+    float maximum,
+    float* value,
+    DWORD* exception_code);
+bool CallAnimationBouncerVisualResolverSafe(
+    uintptr_t resolver_address,
+    uintptr_t bouncer_address,
+    uintptr_t item_address,
+    DWORD* exception_code);
+bool CallWorldAnimationLaneInsertSafe(
+    uintptr_t world_address,
+    uintptr_t bouncer_address,
+    DWORD* exception_code);
+bool CallAnimationBouncerPostInsertSafe(
+    uintptr_t bouncer_address,
+    DWORD* exception_code);
 bool CallWizardCloneFromSourceActorSafe(
     uintptr_t clone_address,
     uintptr_t source_actor_address,

@@ -30,6 +30,7 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "participant_equipment_state.inl",
         "transient_status_participant_reconciliation.inl",
         "native_remote_vitals_and_playback.inl",
+        "native_remote_death_drop.inl",
         "incoming_participant_state_sync.inl",
         "level_up_native_picker_presentation.inl",
         "level_up_packet_handlers.inl",
@@ -65,6 +66,7 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "registered_spell_input.inl",
         "player_secondary_spell_cast_hook.inl",
         "tick_state_machine.inl",
+        "presentation.inl",
     }
 )
 

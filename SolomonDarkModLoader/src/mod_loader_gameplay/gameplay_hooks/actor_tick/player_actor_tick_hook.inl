@@ -1029,6 +1029,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         ClampLocalMultiplayerDeathPresentationTimerForStockTick(
             actor_address);
         original(self);
+        (void)multiplayer::
+            ReassertLocalDeathSpectatorVitalsAfterStockTick();
         ClampLocalMultiplayerDeathPresentationTimerForStockTick(
             actor_address);
         if (cast_intent_masked) {

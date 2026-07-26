@@ -326,8 +326,9 @@ void TickMultiplayerJoinFlow() {
             SetPhaseUnlocked(JoinFlowPhase::PostRun);
             return;
         }
-        if (now_ms <
-            g_join_flow.phase_entered_ms +
+        if (g_join_flow.loading_presentation_first_rendered_ms == 0 ||
+            now_ms <
+            g_join_flow.loading_presentation_first_rendered_ms +
                 kTransitionPresentationMinimumMs) {
             return;
         }

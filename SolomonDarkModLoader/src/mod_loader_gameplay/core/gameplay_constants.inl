@@ -117,6 +117,21 @@ constexpr std::uint32_t kStandaloneWizardStaffItemTypeId = 0x1B5C;
 constexpr std::uint32_t kStandaloneWizardWandItemTypeId = 0x1B63;
 constexpr std::uint32_t kStandaloneWizardRingItemTypeId = 0x1B5A;
 constexpr std::uint32_t kStandaloneWizardAmuletItemTypeId = 0x1B5B;
+constexpr std::size_t kAnimationBouncerSize = 0x50;
+constexpr std::size_t kAnimationBouncerPositionXOffset = 0x14;
+constexpr std::size_t kAnimationBouncerPositionYOffset = 0x18;
+constexpr std::size_t kAnimationBouncerVelocityXOffset = 0x1C;
+constexpr std::size_t kAnimationBouncerVelocityYOffset = 0x20;
+constexpr std::size_t kAnimationBouncerLifetimeOffset = 0x30;
+constexpr std::size_t kAnimationBouncerActiveOffset = 0x44;
+constexpr std::size_t kWorldAnimationLaneOffset = 0x2C4;
+constexpr std::size_t kWorldAnimationLaneInsertVfuncOffset = 0x10;
+constexpr std::size_t kAnimationBouncerPostInsertVfuncOffset = 0x1C;
+constexpr float kAnimationBouncerHorizontalVelocityScale = 1.5f;
+constexpr float kAnimationBouncerLaunchOffsetMinimum = 15.0f;
+constexpr float kAnimationBouncerLaunchOffsetRange = 10.0f;
+constexpr float kAnimationBouncerForwardOffset = 2.0f;
+constexpr float kAnimationBouncerLifetime = 99999.0f;
 // Object_Ctor treats +0x04..+0x07 as object-header state, not an actor-owned
 // render-context pointer. Keep the raw word available for dumps and probes, but
 // do not treat it as a transferable render node.

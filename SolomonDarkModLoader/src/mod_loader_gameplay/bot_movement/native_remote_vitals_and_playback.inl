@@ -23,6 +23,8 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
     return dx * dx + dy * dy > 2.25f || std::fabs(heading_delta) > 2.0f;
 }
 
+#include "native_remote_death_drop.inl"
+
 bool ApplyNativeRemoteParticipantDeathPresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address,
@@ -80,26 +82,15 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         }
         binding->native_remote_death_epoch_active = false;
         binding->native_remote_death_attachment_actor_address = 0;
+        binding->native_remote_death_drop_spawned = false;
         binding->death_transition_stock_tick_seen = false;
         return true;
-    }
-
-    if (!binding->native_remote_death_epoch_active &&
-        !presentation_active) {
-        return
-            memory.TryWriteField<std::uint8_t>(
-                actor_address,
-                kActorTerminalDispatchPendingOffset,
-                0) &&
-            memory.TryWriteField<std::int32_t>(
-                actor_address,
-                kActorTerminalDispatchCountdownOffset,
-                0);
     }
 
     if (!binding->native_remote_death_epoch_active) {
         binding->native_remote_death_epoch_active = true;
         binding->native_remote_death_attachment_actor_address = 0;
+        binding->native_remote_death_drop_spawned = false;
         Log(
             "[bots] native remote death epoch started. participant_id=" +
             std::to_string(binding->bot_id) +
@@ -108,7 +99,7 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
 
     binding->death_transition_stock_tick_seen = true;
     std::uint16_t presentation_ticks =
-        multiplayer::kNativeDeathPresentationRedSafeTick;
+        multiplayer::kNativeDeathPresentationTerminalCorpseTick;
     if (presentation_active) {
         const auto packet_age_ms =
             participant.last_packet_ms != 0 &&
@@ -129,6 +120,14 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
                     multiplayer::
                         kNativeDeathPresentationMaximumHeldTick)));
     }
+
+    (void)ApplyNativeRemoteParticipantCorpsePresentationState(
+        binding,
+        actor_address);
+    const bool drop_ready =
+        TrySpawnNativeRemoteParticipantDeathDrop(
+            binding,
+            actor_address);
 
     bool wrote =
         memory.TryWriteField<std::uint8_t>(
@@ -168,7 +167,7 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         }
         wrote = detached && wrote;
     }
-    return wrote;
+    return drop_ready && wrote;
 }
 
 NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(

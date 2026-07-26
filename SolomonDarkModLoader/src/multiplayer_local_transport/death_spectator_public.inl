@@ -65,6 +65,15 @@ bool BeginLocalDeathSpectatorPresentation() {
     return true;
 }
 
+bool ReassertLocalDeathSpectatorVitalsAfterStockTick() {
+    if (!g_local_transport.initialized ||
+        g_local_death_spectator.phase ==
+            DeathSpectatorPhase::Inactive) {
+        return false;
+    }
+    return HoldLocalSpectatorDeathVitals();
+}
+
 bool IsLocalParticipantGameplayInertForDeath() {
     if (!g_local_transport.initialized) {
         return false;

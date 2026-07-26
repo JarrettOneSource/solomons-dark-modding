@@ -153,6 +153,8 @@ void DrawMultiplayerJoinFlowPresentation(
         text_top,
         presentation.message,
         kLabelTextColor);
+    NotifyMultiplayerJoinFlowPresentationRendered(
+        presentation.message);
 }
 
 void RenderOverlayFrame(IDirect3DDevice9* device) {

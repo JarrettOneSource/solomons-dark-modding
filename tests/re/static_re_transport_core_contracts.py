@@ -201,7 +201,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_participant_lifecycle.inl"
     )
-    remote_vitals_text = read_text(
+    remote_vitals_text = read_source_unit(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_vitals_and_playback.inl"
     )
@@ -304,6 +304,7 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     for token in (
         "native_remote_death_epoch_active",
         "native_remote_death_attachment_actor_address",
+        "native_remote_death_drop_spawned",
     ):
         assert token in binding_text, f"participant death epoch lacks: {token}"
         reset_start = lifecycle_text.index(
@@ -342,7 +343,10 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     assert (
         "!binding->native_remote_death_epoch_active &&\n"
         "        !presentation_active"
-    ) in remote_vitals_text
+    ) not in remote_vitals_text
+    assert "kNativeDeathPresentationTerminalCorpseTick" in remote_vitals_text
+    assert "ApplyNativeRemoteParticipantCorpsePresentationState(" in remote_vitals_text
+    assert "TrySpawnNativeRemoteParticipantDeathDrop(" in remote_vitals_text
     assert "replicated_life_increased_since_last_write" not in remote_vitals_text
     native_damage_start = remote_vitals_text.index(
         "const bool native_damage_observed ="

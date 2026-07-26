@@ -120,6 +120,7 @@
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
+    <ClInclude Include="src\multiplayer_join_flow\presentation.inl" />
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_ui_action_sync.inl" />
@@ -306,6 +307,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_death_drop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />

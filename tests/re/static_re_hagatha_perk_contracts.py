@@ -598,7 +598,7 @@ def test_cheat_death_health_increase_is_captured_as_authoritative_damage() -> st
             "previous_consumed_cheat_death",
             "pending_cheat_death_consumed",
             "const bool cheat_death_consumed",
-            "cheat_death_consumed\n            ? packet.life_current",
+            "cheat_death_consumed\n            ? authoritative_life",
             "pending_cheat_death_consumed\n"
             "                    ? pending.packet.life_current",
             "hagatha_perk_revision += 1",

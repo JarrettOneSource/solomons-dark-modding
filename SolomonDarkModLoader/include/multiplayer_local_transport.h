@@ -29,6 +29,7 @@ bool IsLuaModSimulationAuthority();
 void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);
 bool BeginLocalDeathSpectatorPresentation();
+bool ReassertLocalDeathSpectatorVitalsAfterStockTick();
 bool IsLocalParticipantGameplayInertForDeath();
 bool TryBuildDeathSpectatorStatusText(
     const DeathSpectatorRuntimeInfo& runtime,

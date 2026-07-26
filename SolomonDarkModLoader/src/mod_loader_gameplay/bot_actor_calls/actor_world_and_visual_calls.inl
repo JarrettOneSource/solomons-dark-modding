@@ -82,6 +82,149 @@ bool CallActorBuildRenderDescriptorFromSourceSafe(
     }
 }
 
+bool CallNativeRngFloatSafe(
+    uintptr_t random_address,
+    uintptr_t rng_state_address,
+    float maximum,
+    float* value,
+    DWORD* exception_code) {
+    if (value != nullptr) {
+        *value = 0.0f;
+    }
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    auto* random_float =
+        reinterpret_cast<NativeRngFloatFn>(random_address);
+    if (random_float == nullptr ||
+        rng_state_address == 0 ||
+        value == nullptr ||
+        !std::isfinite(maximum) ||
+        maximum <= 0.0f) {
+        return false;
+    }
+
+    __try {
+        const auto sampled = random_float(
+            reinterpret_cast<void*>(rng_state_address),
+            maximum,
+            0);
+        if (!std::isfinite(sampled) ||
+            sampled < 0.0f ||
+            sampled > maximum) {
+            return false;
+        }
+        *value = sampled;
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallAnimationBouncerVisualResolverSafe(
+    uintptr_t resolver_address,
+    uintptr_t bouncer_address,
+    uintptr_t item_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    auto* resolver =
+        reinterpret_cast<AnimationBouncerVisualResolverFn>(
+            resolver_address);
+    if (resolver == nullptr ||
+        bouncer_address == 0 ||
+        item_address == 0) {
+        return false;
+    }
+
+    __try {
+        resolver(
+            reinterpret_cast<void*>(bouncer_address),
+            reinterpret_cast<void*>(item_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallWorldAnimationLaneInsertSafe(
+    uintptr_t world_address,
+    uintptr_t bouncer_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (world_address == 0 || bouncer_address == 0) {
+        return false;
+    }
+
+    __try {
+        const auto lane_address =
+            world_address + kWorldAnimationLaneOffset;
+        const auto vtable =
+            *reinterpret_cast<uintptr_t*>(lane_address);
+        if (vtable == 0) {
+            return false;
+        }
+        const auto insert_address =
+            *reinterpret_cast<uintptr_t*>(
+                vtable +
+                kWorldAnimationLaneInsertVfuncOffset);
+        if (insert_address == 0 ||
+            !ProcessMemory::Instance().IsExecutableRange(
+                insert_address,
+                1)) {
+            return false;
+        }
+        auto* insert =
+            reinterpret_cast<WorldAnimationLaneInsertFn>(
+                insert_address);
+        insert(
+            reinterpret_cast<void*>(lane_address),
+            reinterpret_cast<void*>(bouncer_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
+bool CallAnimationBouncerPostInsertSafe(
+    uintptr_t bouncer_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (bouncer_address == 0) {
+        return false;
+    }
+
+    __try {
+        const auto vtable =
+            *reinterpret_cast<uintptr_t*>(bouncer_address);
+        if (vtable == 0) {
+            return false;
+        }
+        const auto post_insert_address =
+            *reinterpret_cast<uintptr_t*>(
+                vtable +
+                kAnimationBouncerPostInsertVfuncOffset);
+        if (post_insert_address == 0 ||
+            !ProcessMemory::Instance().IsExecutableRange(
+                post_insert_address,
+                1)) {
+            return false;
+        }
+        auto* post_insert =
+            reinterpret_cast<AnimationBouncerPostInsertFn>(
+                post_insert_address);
+        post_insert(reinterpret_cast<void*>(bouncer_address));
+        return true;
+    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
+        return false;
+    }
+}
+
 bool CallWizardCloneFromSourceActorSafe(
     uintptr_t clone_address,
     uintptr_t source_actor_address,

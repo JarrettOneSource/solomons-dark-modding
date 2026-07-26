@@ -15,6 +15,8 @@ void ShutdownMultiplayerJoinFlow();
 void TickMultiplayerJoinFlow();
 void ObserveMultiplayerJoinFlowSurface(std::string_view surface_id);
 void NotifyMultiplayerJoinFlowRunStart();
+void NotifyMultiplayerJoinFlowPresentationRendered(
+    std::string_view message);
 MultiplayerJoinFlowPresentation GetMultiplayerJoinFlowPresentation();
 
 }  // namespace sdmod

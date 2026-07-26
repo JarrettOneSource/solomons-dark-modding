@@ -410,7 +410,8 @@ bool ReconcileNativeRemoteParticipantEquipmentLane(
 
 bool ApplyNativeRemoteParticipantEquipmentState(
     ParticipantEntityBinding* binding,
-    uintptr_t actor_address) {
+    uintptr_t actor_address,
+    bool reconcile_attachment) {
     if (!IsNativeRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         (binding->replicated_presentation_flags &
@@ -497,20 +498,23 @@ bool ApplyNativeRemoteParticipantEquipmentState(
         &robe,
         "robe");
 
-    const auto attachment_type = binding->replicated_attachment_visual_link_type_id;
-    const bool attachment_type_valid =
-        attachment_type == 0 ||
-        attachment_type == kStandaloneWizardStaffItemTypeId ||
-        attachment_type == kStandaloneWizardWandItemTypeId;
-    if (!attachment_type_valid) {
-        complete = false;
-    } else {
-        reconcile(
-            kActorEquipRuntimeVisualLinkAttachmentOffset,
-            attachment_type,
-            binding->replicated_attachment_visual_link_recipe_uid,
-            nullptr,
-            "attachment");
+    if (reconcile_attachment) {
+        const auto attachment_type =
+            binding->replicated_attachment_visual_link_type_id;
+        const bool attachment_type_valid =
+            attachment_type == 0 ||
+            attachment_type == kStandaloneWizardStaffItemTypeId ||
+            attachment_type == kStandaloneWizardWandItemTypeId;
+        if (!attachment_type_valid) {
+            complete = false;
+        } else {
+            reconcile(
+                kActorEquipRuntimeVisualLinkAttachmentOffset,
+                attachment_type,
+                binding->replicated_attachment_visual_link_recipe_uid,
+                nullptr,
+                "attachment");
+        }
     }
 
     if (changed) {
@@ -561,6 +565,27 @@ bool ApplyNativeRemoteParticipantProfileRenderSelectors(
         nullptr);
 }
 
+bool ApplyNativeRemoteParticipantCorpsePresentationState(
+    ParticipantEntityBinding* binding,
+    uintptr_t actor_address) {
+    if (!IsNativeRemoteParticipantBinding(binding) ||
+        actor_address == 0) {
+        return false;
+    }
+
+    bool wrote =
+        ApplyNativeRemoteParticipantProfileRenderSelectors(
+            binding,
+            actor_address);
+    wrote =
+        ApplyNativeRemoteParticipantEquipmentState(
+            binding,
+            actor_address,
+            false) ||
+        wrote;
+    return wrote;
+}
+
 bool ApplyNativeRemoteParticipantPresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
@@ -595,7 +620,12 @@ bool ApplyNativeRemoteParticipantPresentationState(
     wrote = ApplyNativeRemoteParticipantProfileRenderSelectors(
         binding,
         actor_address) || wrote;
-    wrote = ApplyNativeRemoteParticipantEquipmentState(binding, actor_address) || wrote;
+    wrote =
+        ApplyNativeRemoteParticipantEquipmentState(
+            binding,
+            actor_address,
+            true) ||
+        wrote;
 
     if ((binding->replicated_presentation_flags &
          multiplayer::ParticipantPresentationFlagRenderDriveFloats) == 0) {

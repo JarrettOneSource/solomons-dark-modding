@@ -101,6 +101,15 @@ using SpawnRewardGoldFn = void(__thiscall*)(void* self, std::uint32_t x_bits, st
 using SpawnPotionDropFn = void(__thiscall*)(void* self, std::uint32_t x_bits, std::uint32_t y_bits, int potion_slot);
 using GameFreeFn = void(__cdecl*)(void* memory);
 using NativeRngInitializeFn = void(__thiscall*)(void* self, std::uint32_t seed);
+using NativeRngFloatFn = float(__thiscall*)(
+    void* self,
+    float maximum,
+    std::uint8_t refresh_state);
+using AnimationBouncerVisualResolverFn =
+    void(__thiscall*)(void* self, void* item);
+using WorldAnimationLaneInsertFn =
+    void(__thiscall*)(void* self, void* animation);
+using AnimationBouncerPostInsertFn = void(__thiscall*)(void* self);
 using OrbRewardInitializeFn = void(__thiscall*)(void* self, void* rng_state);
 using GoldPickupTickFn = void(__thiscall*)(void* self);
 using OrbPickupTickFn = void(__thiscall*)(void* self);
