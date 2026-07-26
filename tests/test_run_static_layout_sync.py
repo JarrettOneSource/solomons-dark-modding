@@ -551,6 +551,192 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertIn("unsafe native wall", attempts[0]["error"])
         self.assertTrue(attempts[1]["ok"])
 
+        visual_target_plan = {
+            "family": "large-rocks",
+            "candidates": [
+                {
+                    "family": "large-rocks",
+                    "position": [1000.0, 2400.0],
+                },
+                {
+                    "family": "large-rocks",
+                    "position": [1800.0, 1600.0],
+                },
+            ],
+        }
+        current_parking = [0.0, 0.0, 0.0]
+
+        def settle_parking(
+            _host_pipe: str,
+            _client_pipe: str,
+            target_x: float,
+            target_y: float,
+            parking_attempts: list[dict[str, object]],
+        ) -> dict[str, object]:
+            current_parking[:] = [target_x - 320.0, target_y, 0.0]
+            parking_attempts.append({"candidate_index": 1, "ok": True})
+            return {
+                "parking": {
+                    "host": current_parking[:2],
+                    "client": current_parking[:2],
+                },
+                "owner_placements": {},
+                "settled_host_actor": list(current_parking),
+                "settled_client_actor": list(current_parking),
+                "settled_actor_geometry": {"ok": True},
+                "attempts": parking_attempts,
+            }
+
+        def camera(
+            _pipe_name: str,
+            target_x: float,
+            target_y: float,
+        ) -> dict[str, float]:
+            return {
+                "center_x": target_x,
+                "center_y": target_y,
+                "width": 400.0,
+                "height": 240.0,
+            }
+
+        def actor_view(_pipe_name: str) -> dict[str, str]:
+            return {
+                "player.x": str(current_parking[0]),
+                "player.y": str(current_parking[1]),
+                f"peer.{verifier.HOST_ID}.x": str(current_parking[0]),
+                f"peer.{verifier.HOST_ID}.y": str(current_parking[1]),
+                f"peer.{verifier.CLIENT_ID}.x": str(
+                    current_parking[0]
+                ),
+                f"peer.{verifier.CLIENT_ID}.y": str(
+                    current_parking[1]
+                ),
+            }
+
+        def capture_frame(
+            _pipe_name: str,
+            output_path: Path,
+        ) -> tuple[Path, dict[str, object]]:
+            return (
+                output_path,
+                {
+                    "path": str(output_path),
+                    "quality": {"width": 400, "height": 240},
+                },
+            )
+
+        def stable_pixels(
+            _host_paths: list[Path],
+            _client_paths: list[Path],
+            _camera: dict[str, float],
+            evidence_prefix: Path,
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            sufficient = "target-retry-02" in str(evidence_prefix)
+            return {
+                "sufficient_stable_content": sufficient,
+                "bounded_match": sufficient,
+            }
+
+        visual_areas: list[dict[str, object]] = []
+        with (
+            tempfile.TemporaryDirectory() as temp_directory,
+            mock.patch.object(
+                verifier,
+                "settle_shared_actor_parking",
+                side_effect=settle_parking,
+            ),
+            mock.patch.object(
+                verifier.local_sync,
+                "wait_for_remote_convergence",
+                return_value={"ok": True},
+            ),
+            mock.patch.object(
+                verifier,
+                "focus_camera",
+                side_effect=camera,
+            ),
+            mock.patch.object(
+                verifier.local_sync,
+                "query",
+                side_effect=actor_view,
+            ),
+            mock.patch.object(
+                verifier,
+                "configure_visual_gate_render_profile",
+                return_value={"ok": True},
+            ),
+            mock.patch.object(
+                verifier,
+                "capture_information_frame",
+                side_effect=capture_frame,
+            ),
+            mock.patch.object(
+                verifier,
+                "exact_decor_pixel_comparison",
+                return_value={"exact_match": True},
+            ),
+            mock.patch.object(
+                verifier,
+                "matched_frame_correlation",
+                return_value={"ok": True},
+            ),
+            mock.patch.object(
+                verifier,
+                "exact_temporal_envelope_decor_pixel_comparison",
+                return_value={
+                    "exact_match": True,
+                    "actors_and_ui_excluded": {},
+                },
+            ),
+            mock.patch.object(
+                verifier,
+                "exact_stable_decor_pixel_comparison",
+                side_effect=stable_pixels,
+            ),
+            mock.patch.object(
+                verifier,
+                "temporal_minimum_edge_comparison",
+                return_value={"ok": True},
+            ),
+            mock.patch.object(verifier.time, "sleep"),
+            mock.patch.object(verifier, "CAPTURE_FRAMES_PER_PEER", 1),
+        ):
+            verifier.capture_matched_camera_areas(
+                "host-pipe",
+                "client-pipe",
+                [visual_target_plan],
+                Path(temp_directory),
+                1,
+                visual_areas,
+            )
+
+        self.assertEqual(len(visual_areas), 1)
+        visual_area = visual_areas[0]
+        self.assertEqual(
+            visual_area["target"]["position"],
+            [1800.0, 1600.0],
+        )
+        self.assertEqual(visual_area["target_capture_attempt"], 2)
+        self.assertEqual(len(visual_area["target_attempts"]), 2)
+        rejected_visual = visual_area["target_attempts"][0]
+        self.assertFalse(rejected_visual["ok"])
+        self.assertFalse(rejected_visual["accepted"])
+        self.assertIn("stable-content quorum", rejected_visual["error"])
+        self.assertEqual(
+            len(
+                rejected_visual["visual_capture"][
+                    "simple_lighting_capture_batches"
+                ]
+            ),
+            3,
+        )
+        self.assertTrue(visual_area["target_attempts"][1]["accepted"])
+        self.assertIn(
+            "target-retry-02",
+            visual_area["screenshots"]["host"]["path"],
+        )
+
     def test_layout_capture_retries_only_low_information_frames(self) -> None:
         calls: list[Path] = []
 

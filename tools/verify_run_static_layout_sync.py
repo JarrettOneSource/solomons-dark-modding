@@ -3429,18 +3429,25 @@ def capture_matched_camera_areas(
     evidence_dir: Path,
     run_index: int,
     areas: list[dict[str, Any]] | None = None,
+    *,
+    selected_target_positions: list[list[float]] | None = None,
+    area_index_offset: int = 0,
+    target_capture_attempt: int = 1,
 ) -> list[dict[str, Any]]:
     evidence_dir.mkdir(parents=True, exist_ok=True)
     if areas is None:
         areas = []
-    selected_target_positions: list[list[float]] = []
-    for area_index, target_plan in enumerate(targets, start=1):
+    if selected_target_positions is None:
+        selected_target_positions = []
+    for relative_area_index, target_plan in enumerate(targets, start=1):
+        area_index = area_index_offset + relative_area_index
         area_attempts: list[dict[str, Any]] = []
         area_result: dict[str, Any] = {
             "area_index": area_index,
             "family": target_plan["family"],
             "attempts": area_attempts,
             "target_attempts": [],
+            "target_capture_attempt": target_capture_attempt,
         }
         areas.append(area_result)
         settled_target = settle_matched_camera_target(
@@ -3455,6 +3462,14 @@ def capture_matched_camera_areas(
         target_x, target_y = target["position"]
         selected_target_positions.append([target_x, target_y])
         family_slug = str(target["family"]).replace("_", "-")
+        evidence_slug = (
+            family_slug
+            if target_capture_attempt == 1
+            else (
+                f"{family_slug}-target-retry-"
+                f"{target_capture_attempt:02d}"
+            )
+        )
         settled_parking = settled_target["settled_parking"]
         area_result["parking_attempts"] = settled_parking["attempts"]
         parking = settled_parking["parking"]
@@ -3662,7 +3677,7 @@ def capture_matched_camera_areas(
                     evidence_dir
                     / (
                         f"run-{run_index:02d}-area-{area_index:02d}-"
-                        f"{family_slug}-{profile_slug}-"
+                        f"{evidence_slug}-{profile_slug}-"
                         f"attempt-{attempt:02d}"
                     )
                 )
@@ -3723,7 +3738,7 @@ def capture_matched_camera_areas(
             evidence_dir
             / (
                 f"run-{run_index:02d}-area-{area_index:02d}-"
-                f"{family_slug}"
+                f"{evidence_slug}"
             )
         )
         temporal_envelope = (
@@ -3803,6 +3818,66 @@ def capture_matched_camera_areas(
             }
         )
         if not stable_pixels["bounded_match"]:
+            if not stable_pixels["sufficient_stable_content"]:
+                candidates = target_plan["candidates"]
+                accepted_candidate_index = next(
+                    (
+                        index
+                        for index, candidate in enumerate(candidates)
+                        if candidate["position"] == target["position"]
+                    ),
+                    None,
+                )
+                remaining_candidates = (
+                    candidates[accepted_candidate_index + 1 :]
+                    if accepted_candidate_index is not None
+                    else []
+                )
+                if remaining_candidates:
+                    accepted_attempt = next(
+                        attempt
+                        for attempt in area_result["target_attempts"]
+                        if attempt.get("accepted") is True
+                    )
+                    accepted_attempt["accepted"] = False
+                    accepted_attempt["ok"] = False
+                    accepted_attempt["error"] = (
+                        "matched-camera target remained below the "
+                        "stable-content quorum through bounded aggregate "
+                        "capture retries"
+                    )
+                    accepted_attempt["visual_capture"] = {
+                        key: value
+                        for key, value in area_result.items()
+                        if key != "target_attempts"
+                    }
+                    previous_attempts = area_result["target_attempts"]
+                    selected_target_positions.pop()
+                    areas.pop()
+                    retry_plan = {
+                        **target_plan,
+                        "candidates": remaining_candidates,
+                    }
+                    capture_matched_camera_areas(
+                        host_pipe,
+                        client_pipe,
+                        [retry_plan],
+                        evidence_dir,
+                        run_index,
+                        areas,
+                        selected_target_positions=(
+                            selected_target_positions
+                        ),
+                        area_index_offset=area_index - 1,
+                        target_capture_attempt=(
+                            target_capture_attempt + 1
+                        ),
+                    )
+                    areas[-1]["target_attempts"] = (
+                        previous_attempts
+                        + areas[-1]["target_attempts"]
+                    )
+                    continue
             raise VerifyFailure(
                 "matched-camera stable decor pixels differed: "
                 f"family={target['family']} "
