@@ -246,7 +246,7 @@ void RefreshLocalParticipantFromGameState() {
         !IsRunLifecycleActive()) {
         scene_intent = DefaultParticipantSceneIntent();
     }
-    if (scene_intent.kind == ParticipantSceneIntentKind::SharedHub) {
+    if (lobby_session_state == LobbySessionState::InHub) {
         g_local_run_exit_latched_nonce.store(0, std::memory_order_release);
         g_local_transport.client_host_run_exit_follow = ClientHostRunExitFollow{};
     }

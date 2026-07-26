@@ -321,41 +321,23 @@ std::optional<DialogOverlaySnapshot> TryBuildTrackedDialogOverlaySnapshot(
         tracked_dialog = g_debug_ui_overlay_state.tracked_dialog;
     }
 
-    const auto object_ptr = reinterpret_cast<const void*>(tracked_dialog.object_ptr);
-    const auto now = GetTickCount64();
-    DialogGeometry geometry;
-    if (!TryReadMsgBoxGeometry(object_ptr, g_debug_ui_overlay_state.config, &geometry)) {
-        if (now - tracked_dialog.captured_at > 1000) {
-            std::scoped_lock clear_lock(g_debug_ui_overlay_state.mutex);
-            if (g_debug_ui_overlay_state.tracked_dialog.object_ptr == tracked_dialog.object_ptr) {
-                g_debug_ui_overlay_state.tracked_dialog = TrackedDialogState{};
-            }
-        }
+    if (!tracked_dialog.has_geometry) {
         return std::nullopt;
-    }
-
-    if (!tracked_dialog.has_geometry || tracked_dialog.left != geometry.left || tracked_dialog.top != geometry.top ||
-        tracked_dialog.right != geometry.right || tracked_dialog.bottom != geometry.bottom) {
-        std::scoped_lock refresh_lock(g_debug_ui_overlay_state.mutex);
-        auto& live_dialog = g_debug_ui_overlay_state.tracked_dialog;
-        if (live_dialog.object_ptr == tracked_dialog.object_ptr) {
-            MergeTrackedDialogGeometryLocked(&live_dialog, geometry);
-        }
     }
 
     DialogOverlaySnapshot snapshot;
     snapshot.object_ptr = tracked_dialog.object_ptr;
     snapshot.captured_at = tracked_dialog.captured_at;
-    snapshot.uses_cached_geometry = false;
-    snapshot.left = geometry.left;
-    snapshot.top = geometry.top;
-    snapshot.right = geometry.right;
-    snapshot.bottom = geometry.bottom;
-    if (geometry.primary_button.has_bounds) {
-        snapshot.buttons.push_back(geometry.primary_button);
+    snapshot.uses_cached_geometry = true;
+    snapshot.left = tracked_dialog.left;
+    snapshot.top = tracked_dialog.top;
+    snapshot.right = tracked_dialog.right;
+    snapshot.bottom = tracked_dialog.bottom;
+    if (tracked_dialog.primary_button.has_bounds) {
+        snapshot.buttons.push_back(tracked_dialog.primary_button);
     }
-    if (geometry.secondary_button.has_bounds) {
-        snapshot.buttons.push_back(geometry.secondary_button);
+    if (tracked_dialog.secondary_button.has_bounds) {
+        snapshot.buttons.push_back(tracked_dialog.secondary_button);
     }
 
     for (const auto& element : exact_text_elements) {
@@ -371,7 +353,13 @@ std::optional<DialogOverlaySnapshot> TryBuildTrackedDialogOverlaySnapshot(
 
         const auto center_x = (element.min_x + element.max_x) * 0.5f;
         const auto center_y = (element.min_y + element.max_y) * 0.5f;
-        if (!PointInsideRect(center_x, center_y, geometry.left, geometry.top, geometry.right, geometry.bottom)) {
+        if (!PointInsideRect(
+                center_x,
+                center_y,
+                tracked_dialog.left,
+                tracked_dialog.top,
+                tracked_dialog.right,
+                tracked_dialog.bottom)) {
             continue;
         }
 

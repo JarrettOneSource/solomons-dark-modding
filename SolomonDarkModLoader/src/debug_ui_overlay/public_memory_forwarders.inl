@@ -11,6 +11,7 @@ bool TryReadActiveTitleMainMenu(
     const DebugUiOverlayConfig& config,
     uintptr_t* bundle_address,
     uintptr_t* main_menu_address);
+bool TryGetActiveTitleMainMenuRender(uintptr_t* main_menu_address);
 void RememberDarkCloudBrowserPanelRect(
     uintptr_t browser_address,
     float left,
@@ -38,6 +39,7 @@ bool TryReadTrackedDarkCloudBrowserModalRootRect(
 bool TryGetLiveSettingsRender(uintptr_t* settings_address);
 bool TryGetActiveSettingsRender(uintptr_t* settings_address);
 bool TryGetActiveMyQuickPanelRender(uintptr_t* quick_panel_address);
+bool TryGetActiveMyQuickPanel(uintptr_t* quick_panel_address);
 bool TryReadTrackedMyQuickPanel(uintptr_t* quick_panel_address);
 bool TryGetActiveSimpleMenu(uintptr_t* simple_menu_address);
 bool TryGetActiveHallOfFameRender(uintptr_t* hof_address);

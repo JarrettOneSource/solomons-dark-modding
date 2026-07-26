@@ -491,6 +491,21 @@ def test_host_run_exit_is_authoritative_and_self_correcting() -> str:
         "packet->transform_valid = 0;",
         "packet->run_nonce = run_exit_nonce;",
     )
+    if (
+        "if (scene_intent.kind == ParticipantSceneIntentKind::SharedHub) {\n"
+        "        g_local_run_exit_latched_nonce.store(0, std::memory_order_release);"
+        in local_state
+    ):
+        raise AssertionError(
+            "transient or invalid scenes still clear the reliable host run-exit "
+            "latch by collapsing to the default SharedHub intent"
+        )
+    _require_in_order(
+        local_state,
+        "const auto lobby_session_state = DetectLocalLobbySessionState(",
+        "if (lobby_session_state == LobbySessionState::InHub) {",
+        "g_local_run_exit_latched_nonce.store(0, std::memory_order_release);",
+    )
     for token in (
         "packet.transform_valid == 0",
         "g_local_transport.is_host",

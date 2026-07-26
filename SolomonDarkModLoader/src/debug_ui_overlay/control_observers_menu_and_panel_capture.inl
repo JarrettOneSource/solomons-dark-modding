@@ -160,7 +160,7 @@ void ObserveQuickPanelControlRender(void* control_object, uintptr_t caller_addre
     }
 
     uintptr_t quick_panel_address = 0;
-    if (!TryReadTrackedMyQuickPanel(&quick_panel_address) || quick_panel_address == 0) {
+    if (!TryGetActiveMyQuickPanel(&quick_panel_address) || quick_panel_address == 0) {
         return;
     }
 
@@ -241,7 +241,7 @@ void ObserveQuickPanelRectDispatch(
     }
 
     uintptr_t quick_panel_address = 0;
-    if (!TryReadTrackedMyQuickPanel(&quick_panel_address) || quick_panel_address == 0) {
+    if (!TryGetActiveMyQuickPanel(&quick_panel_address) || quick_panel_address == 0) {
         return;
     }
 

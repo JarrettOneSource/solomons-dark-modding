@@ -5,7 +5,7 @@ void ObserveMainMenuControlRender(void* control_object, uintptr_t caller_address
     }
 
     uintptr_t settings_address = 0;
-    if (TryGetActiveSettingsRender(&settings_address) && settings_address != 0) {
+    if (TryGetLiveSettingsRender(&settings_address) && settings_address != 0) {
         return;
     }
 
@@ -20,12 +20,12 @@ void ObserveMainMenuControlRender(void* control_object, uintptr_t caller_address
     }
 
     uintptr_t quick_panel_address = 0;
-    if (TryReadTrackedMyQuickPanel(&quick_panel_address) && quick_panel_address != 0) {
+    if (TryGetActiveMyQuickPanel(&quick_panel_address) && quick_panel_address != 0) {
         return;
     }
 
     uintptr_t main_menu_address = 0;
-    if (!TryReadActiveTitleMainMenu(*config, nullptr, &main_menu_address) || main_menu_address == 0) {
+    if (!TryGetActiveTitleMainMenuRender(&main_menu_address) || main_menu_address == 0) {
         return;
     }
 
@@ -295,7 +295,7 @@ void ObserveSettingsControlRender(void* control_object, uintptr_t caller_address
     }
 
     uintptr_t settings_address = 0;
-    if (!TryGetActiveSettingsRender(&settings_address) || settings_address == 0) {
+    if (!TryGetLiveSettingsRender(&settings_address) || settings_address == 0) {
         return;
     }
 
@@ -357,7 +357,7 @@ void ObserveSettingsPanelRender(
     float right,
     float bottom) {
     uintptr_t settings_address = 0;
-    if (!TryGetActiveSettingsRender(&settings_address) || settings_address == 0) {
+    if (!TryGetLiveSettingsRender(&settings_address) || settings_address == 0) {
         return;
     }
 
@@ -390,7 +390,7 @@ void ObserveSettingsRectDispatch(
     }
 
     uintptr_t settings_address = 0;
-    if (!TryGetActiveSettingsRender(&settings_address) || settings_address == 0) {
+    if (!TryGetLiveSettingsRender(&settings_address) || settings_address == 0) {
         return;
     }
 

@@ -89,7 +89,7 @@ void BeginExactTextRenderCapture(
         surface_match.has_value() && surface_match->range != nullptr && surface_match->range->surface_id != "main_menu";
     if (!capture.capture_enabled &&
         !stack_explicitly_rejected && recognized_title_line &&
-        TryReadActiveTitleMainMenu(g_debug_ui_overlay_state.config, nullptr, &main_menu_address)) {
+        TryGetActiveTitleMainMenuRender(&main_menu_address)) {
         capture.capture_enabled = true;
         capture.surface_id = "main_menu";
         capture.surface_title = "Main Menu";
@@ -106,7 +106,7 @@ void BeginExactTextRenderCapture(
         const auto normalized_caller_address = NormalizeObservedCodeAddress(caller_address);
         const auto* config = TryGetDebugUiOverlayConfig();
         if (config != nullptr &&
-            TryGetActiveSettingsRender(&settings_address) &&
+            TryGetLiveSettingsRender(&settings_address) &&
             settings_address != 0 &&
             !capture.label.empty() &&
             IsTrustedSettingsTextCaller(g_debug_ui_overlay_state.config, normalized_caller_address)) {
@@ -162,7 +162,7 @@ void BeginExactTextRenderCapture(
         uintptr_t quick_panel_address = 0;
         const auto* config = TryGetDebugUiOverlayConfig();
         uintptr_t owned_object_address = 0;
-        if (config != nullptr && TryReadTrackedMyQuickPanel(&quick_panel_address) && quick_panel_address != 0 &&
+        if (config != nullptr && TryGetActiveMyQuickPanel(&quick_panel_address) && quick_panel_address != 0 &&
             !capture.label.empty() &&
             TryResolveQuickPanelOwnedObject(
                 *config,
@@ -281,41 +281,6 @@ void BeginExactTextRenderCapture(
             capture.surface_id = surface.surface_id;
             capture.surface_title = surface.surface_title;
             capture.source_object_ptr = source_object;
-            if (surface_match.has_value() && surface_match->range != nullptr) {
-                capture.surface_return_address = surface_match->return_address;
-                capture.stack_slot = surface_match->stack_slot;
-            }
-        }
-    }
-
-    if (!capture.capture_enabled) {
-        const auto tracked_dialog_object = GetTrackedDialogObject();
-        uintptr_t dialog_owned_object = 0;
-        const auto* config = TryGetDebugUiOverlayConfig();
-        if (config != nullptr && tracked_dialog_object != 0 && !capture.label.empty()) {
-            const uintptr_t candidate_objects[] = {
-                widget_object,
-                reinterpret_cast<uintptr_t>(self),
-                reinterpret_cast<uintptr_t>(string_object),
-            };
-            for (const auto candidate_object : candidate_objects) {
-                if (candidate_object == 0) {
-                    continue;
-                }
-
-                if (candidate_object == tracked_dialog_object ||
-                    IsWidgetOwnedByRoot(*config, tracked_dialog_object, candidate_object)) {
-                    dialog_owned_object = candidate_object;
-                    break;
-                }
-            }
-        }
-
-        if (dialog_owned_object != 0) {
-            capture.capture_enabled = true;
-            capture.surface_id = "dialog";
-            capture.surface_title = "Dialog";
-            capture.source_object_ptr = dialog_owned_object;
             if (surface_match.has_value() && surface_match->range != nullptr) {
                 capture.surface_return_address = surface_match->return_address;
                 capture.stack_slot = surface_match->stack_slot;

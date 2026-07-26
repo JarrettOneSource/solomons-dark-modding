@@ -485,6 +485,279 @@ def test_debug_ui_frame_render_does_not_log_each_snapshot_generation() -> str:
     return "debug UI frame rendering keeps bounded startup diagnostics without generation log flooding"
 
 
+def test_exact_text_capture_does_not_read_retired_ui_trees() -> str:
+    capture_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/capture_session.inl"
+    )
+    owned_rect_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_widget_resolution/owned_text_rects.inl"
+    )
+    tracked_surfaces_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/tracked_surfaces_and_main_menu.inl"
+    )
+    surface_hooks_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/surface_render_hooks.inl"
+    )
+    install_hooks_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/install_hooks.inl"
+    )
+    initialization_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/public_api_initialization.inl"
+    )
+    shutdown_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/public_api_surface_dispatch.inl"
+    )
+    reset_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/state_and_actions_requests_and_reset.inl"
+    )
+    action_activation_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/state_actions_activation/resolved_action_activation.inl"
+    )
+    config_text = read_text(ROOT / "config/debug-ui.ini")
+    dialog_builder_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/overlay_surface_builders_misc_surfaces.inl"
+    )
+    dialog_tracking_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/dialog_tracking_and_snapshots_tracking.inl"
+    )
+    observation_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/debug_ui_overlay/dialog_tracking_and_snapshots_observation.inl"
+    )
+
+    capture_required = (
+        "TryGetActiveTitleMainMenuRender(",
+        "TryGetLiveSettingsRender(",
+        "TryGetActiveMyQuickPanel(",
+        "TryGetActiveSimpleMenu(",
+        "TryGetActiveDarkCloudBrowserRender",
+        "TryGetActiveHallOfFameRender",
+        "TryGetActiveSpellPickerRender",
+    )
+    missing = [token for token in capture_required if token not in capture_text]
+    if missing:
+        raise StaticReTestFailure(
+            "exact-text capture is missing active native-lifetime owner seam(s): "
+            + ", ".join(missing)
+        )
+
+    retired_capture_paths = (
+        "TryReadActiveTitleMainMenu(",
+        "TryGetActiveSettingsRender(",
+        "TryReadTrackedMyQuickPanel(",
+        "GetTrackedDialogObject(",
+        "tracked_dialog_object",
+        "dialog_owned_object",
+    )
+    present = [token for token in retired_capture_paths if token in capture_text]
+    if present:
+        raise StaticReTestFailure(
+            "exact-text capture still walks a durable UI observation after its "
+            "native owner scope can end: "
+            + ", ".join(present)
+        )
+
+    rect_required = (
+        "TryGetLiveSettingsRender(",
+        "TryGetActiveMyQuickPanel(",
+        "TryGetActiveDarkCloudBrowserRender(",
+    )
+    missing = [token for token in rect_required if token not in owned_rect_text]
+    if missing:
+        raise StaticReTestFailure(
+            "exact-text geometry resolution is missing active owner seam(s): "
+            + ", ".join(missing)
+        )
+
+    retired_rect_paths = (
+        "TryGetActiveSettingsRender(",
+        "TryReadTrackedMyQuickPanel(",
+        "TryGetCurrentDarkCloudBrowser(",
+    )
+    present = [token for token in retired_rect_paths if token in owned_rect_text]
+    if present:
+        raise StaticReTestFailure(
+            "exact-text geometry resolution still dereferences a retired surface "
+            "root: "
+            + ", ".join(present)
+        )
+
+    helper_required = (
+        "bool TryGetActiveTitleMainMenuRender(",
+        "tracked_main_menu.render_depth",
+        "bool TryGetActiveMyQuickPanel(",
+        "myquick_panel_modal.modal_depth",
+        "myquick_panel_render.render_depth",
+    )
+    helper_text = tracked_surfaces_text + surface_hooks_text
+    missing = [token for token in helper_required if token not in helper_text]
+    if missing:
+        raise StaticReTestFailure(
+            "native UI owner scopes are not fully represented in lifecycle "
+            "tracking: "
+            + ", ".join(missing)
+        )
+
+    dialog_start = dialog_builder_text.find(
+        "std::optional<DialogOverlaySnapshot> TryBuildTrackedDialogOverlaySnapshot("
+    )
+    dialog_end = dialog_builder_text.find(
+        "\nvoid ClearTrackedDialogBecauseHigherPrioritySurfaceBecameDominant(",
+        dialog_start,
+    )
+    if dialog_start == -1 or dialog_end == -1:
+        raise StaticReTestFailure(
+            "tracked dialog snapshot builder body is unavailable"
+        )
+    dialog_body = dialog_builder_text[dialog_start:dialog_end]
+    dialog_required = (
+        "tracked_dialog.has_geometry",
+        "snapshot.uses_cached_geometry = true;",
+        "snapshot.left = tracked_dialog.left;",
+        "tracked_dialog.primary_button",
+    )
+    missing = [token for token in dialog_required if token not in dialog_body]
+    if missing:
+        raise StaticReTestFailure(
+            "tracked dialog snapshot does not consume hook-captured value data: "
+            + ", ".join(missing)
+        )
+    if "TryReadMsgBoxGeometry(" in dialog_body:
+        raise StaticReTestFailure(
+            "tracked dialog snapshot still dereferences the historical native "
+            "dialog object after its builder/finalize hook returned"
+        )
+
+    live_dialog_layout_required = (
+        "void __fastcall HookDialogPrimaryRenderHelper(",
+        "g_debug_ui_overlay_state.dialog_primary_render_hook",
+        "original(dialog_object, arg2, arg3, arg4, arg5);",
+        "ObserveDialogPrimaryRender(dialog_object, caller_address);",
+    )
+    missing = [
+        token
+        for token in live_dialog_layout_required
+        if token not in surface_hooks_text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "dialog geometry is not captured from the live primary layout/render "
+            "callback: "
+            + ", ".join(missing)
+        )
+
+    observer_start = dialog_tracking_text.find(
+        "void ObserveDialogPrimaryRender("
+    )
+    observer_end = dialog_tracking_text.find(
+        "\nvoid ObserveDialogFinalize(",
+        observer_start,
+    )
+    if observer_start == -1 or observer_end == -1:
+        raise StaticReTestFailure(
+            "the live primary dialog render observer is unavailable"
+        )
+    observer_body = dialog_tracking_text[observer_start:observer_end]
+    observer_required = (
+        "TryReadMsgBoxGeometry(",
+        "tracked_dialog.object_ptr != dialog_address",
+        "MergeTrackedDialogGeometryLocked(&tracked_dialog, geometry);",
+    )
+    missing = [token for token in observer_required if token not in observer_body]
+    if missing:
+        raise StaticReTestFailure(
+            "the live primary dialog render observer does not cache geometry "
+            "for the matching constructed dialog: "
+            + ", ".join(missing)
+        )
+    if "tracked_dialog.captured_at =" in observer_body:
+        raise StaticReTestFailure(
+            "primary dialog rendering refreshes the durable observation "
+            "lifetime and can resurrect a dismissed dialog"
+        )
+
+    observation_start = observation_text.find(
+        "std::optional<ObservedUiElement> ObserveUiDrawCall("
+    )
+    observation_end = observation_text.find(
+        "\n}",
+        observation_start,
+    )
+    if observation_start == -1 or observation_end == -1:
+        raise StaticReTestFailure("the generic UI draw observer body is unavailable")
+    observation_body = observation_text[observation_start:observation_end]
+    if "TryResolveObjectLabel(" in observation_body:
+        raise StaticReTestFailure(
+            "generic draw capture still dereferences the heuristic caller widget "
+            "pointer instead of consuming labels captured by live control hooks"
+        )
+    if "object_label_cache.find(label_source_address)" not in observation_body:
+        raise StaticReTestFailure(
+            "generic draw capture no longer consumes the live control-label cache"
+        )
+
+    action_retirement_required = (
+        "void RetireUiCaptureBeforeActionDispatch()",
+        "g_debug_ui_overlay_state.active_exact_text_renders.clear();",
+        "g_debug_ui_overlay_state.frame_elements.clear();",
+        "g_debug_ui_overlay_state.frame_exact_text_elements.clear();",
+        "g_debug_ui_overlay_state.frame_exact_control_elements.clear();",
+        "g_debug_ui_overlay_state.simple_menu = TrackedSimpleMenuState{};",
+        "g_debug_ui_overlay_state.tracked_dialog = TrackedDialogState{};",
+        "g_debug_ui_overlay_state.object_label_cache.clear();",
+        "g_debug_ui_overlay_state.latest_surface_snapshot = DebugUiSurfaceSnapshot{};",
+        "RetireUiCaptureBeforeActionDispatch();",
+    )
+    missing = [
+        token
+        for token in action_retirement_required
+        if token not in action_activation_text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "successful semantic dispatch does not retire all native-backed "
+            "capture state before native teardown: "
+            + ", ".join(missing)
+        )
+
+    if "dialog_primary_render_helper=0x005AB2C0" not in config_text:
+        raise StaticReTestFailure(
+            "the primary dialog layout/render helper address is not pinned"
+        )
+    if "InstallDialogPrimaryRenderHook(" not in install_hooks_text:
+        raise StaticReTestFailure(
+            "the primary dialog layout/render hook is not installed"
+        )
+
+    cleanup_text = initialization_text + shutdown_text + reset_text
+    cleanup_required = (
+        "RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);",
+        "state->dialog_primary_render_hook = X86Hook{};",
+    )
+    missing = [token for token in cleanup_required if token not in cleanup_text]
+    if missing:
+        raise StaticReTestFailure(
+            "the primary dialog layout/render hook lifecycle is incomplete: "
+            + ", ".join(missing)
+        )
+
+    return (
+        "UI capture and dialog geometry snapshots only read native UI trees "
+        "while their owning native hook scope is active"
+    )
+
+
 def test_main_thread_work_pump_is_not_render_owned() -> str:
     background_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"

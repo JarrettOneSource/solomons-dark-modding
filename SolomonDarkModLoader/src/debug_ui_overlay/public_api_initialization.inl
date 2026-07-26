@@ -87,9 +87,28 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     }
     Log("Debug UI overlay: dialog finalize hook installed.");
 
+    Log("Debug UI overlay: installing dialog primary render hook.");
+    if (!InstallDialogPrimaryRenderHook(
+            g_debug_ui_overlay_state.config,
+            &hook_error)) {
+        Log(
+            "Debug UI overlay dialog primary render hook failed. " +
+            hook_error);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_add_line_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.string_assign_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.text_draw_hook);
+        ResetDebugUiOverlayStateUnlocked(&g_debug_ui_overlay_state);
+        return false;
+    }
+    Log("Debug UI overlay: dialog primary render hook installed.");
+
     Log("Debug UI overlay: installing exact text render hook.");
     if (!InstallExactTextRenderHook(g_debug_ui_overlay_state.config, &hook_error)) {
         Log("Debug UI overlay exact text render hook failed. " + hook_error);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -105,6 +124,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     if (!InstallDarkCloudBrowserExactTextRenderHook(g_debug_ui_overlay_state.config, &hook_error)) {
         Log("Debug UI overlay Dark Cloud browser exact text render hook failed. " + hook_error);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -124,6 +144,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
             Log("Debug UI overlay glyph draw hook failed. " + hook_error);
             RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
             RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+            RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
             RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
             RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
             RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -142,6 +163,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -160,6 +182,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -209,6 +232,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -232,6 +256,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -256,6 +281,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -281,6 +307,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -307,6 +334,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -334,6 +362,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -362,6 +391,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -391,6 +421,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -421,6 +452,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -452,6 +484,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
         RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
         RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);
@@ -483,6 +516,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled) {
     Log("Debug UI dialog primary-button helper: " + HexString(config->dialog_primary_button_helper));
     Log("Debug UI dialog secondary-button helper: " + HexString(config->dialog_secondary_button_helper));
     Log("Debug UI dialog finalize helper: " + HexString(config->dialog_finalize_helper));
+    Log("Debug UI dialog primary render helper: " + HexString(config->dialog_primary_render_helper));
     Log("Debug UI exact text render helper: " + HexString(config->exact_text_render_helper));
     Log(
         "Debug UI Dark Cloud browser exact text render helper: " +

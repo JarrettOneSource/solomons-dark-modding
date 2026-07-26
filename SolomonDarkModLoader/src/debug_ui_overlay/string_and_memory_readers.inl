@@ -65,34 +65,6 @@ bool TryReadStringObject(uintptr_t object_address, std::string* value) {
     return true;
 }
 
-bool TryResolveObjectLabel(uintptr_t object_address, std::string* value) {
-    if (object_address == 0 || value == nullptr) {
-        return false;
-    }
-
-    if (TryReadStringObject(object_address, value)) {
-        return true;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    for (std::size_t offset = 0; offset < 0x100; offset += sizeof(std::uint32_t)) {
-        std::uint32_t candidate_pointer = 0;
-        if (!memory.TryReadValue(object_address + offset, &candidate_pointer) || candidate_pointer == 0) {
-            continue;
-        }
-
-        if (TryReadStringObject(candidate_pointer, value)) {
-            return true;
-        }
-
-        if (TryReadPrintableCString(candidate_pointer, value, 2, 96)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 template <typename T>
 bool TryReadPlainField(const void* object, std::size_t byte_offset, T* value) {
     if (object == nullptr || value == nullptr) {

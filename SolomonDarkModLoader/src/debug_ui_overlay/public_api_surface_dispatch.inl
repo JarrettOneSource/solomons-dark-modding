@@ -19,6 +19,7 @@ void ShutdownDebugUiOverlay() {
     RemoveX86Hook(&g_debug_ui_overlay_state.glyph_draw_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.dark_cloud_browser_exact_text_render_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.exact_text_render_hook);
+    RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_render_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.dialog_finalize_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.dialog_secondary_button_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.dialog_primary_button_hook);

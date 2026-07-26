@@ -131,6 +131,23 @@ bool TryReadActiveTitleMainMenu(
     return true;
 }
 
+bool TryGetActiveTitleMainMenuRender(uintptr_t* main_menu_address) {
+    if (main_menu_address == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    const auto& active_main_menu =
+        g_debug_ui_overlay_state.main_menu_render;
+    if (active_main_menu.render_depth == 0 ||
+        active_main_menu.active_object_ptr == 0) {
+        return false;
+    }
+
+    *main_menu_address = active_main_menu.active_object_ptr;
+    return true;
+}
+
 bool TryReadTrackedDarkCloudBrowser(uintptr_t* browser_address) {
     if (browser_address == nullptr) {
         return false;
@@ -452,6 +469,29 @@ bool TryGetActiveMyQuickPanelRender(uintptr_t* quick_panel_address) {
     return true;
 }
 
+bool TryGetActiveMyQuickPanel(uintptr_t* quick_panel_address) {
+    if (quick_panel_address == nullptr) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (g_debug_ui_overlay_state.myquick_panel_modal.modal_depth != 0 &&
+        g_debug_ui_overlay_state.myquick_panel_modal.active_object_ptr != 0) {
+        *quick_panel_address =
+            g_debug_ui_overlay_state.myquick_panel_modal.active_object_ptr;
+        return true;
+    }
+
+    if (g_debug_ui_overlay_state.myquick_panel_render.render_depth == 0 ||
+        g_debug_ui_overlay_state.myquick_panel_render.active_object_ptr == 0) {
+        return false;
+    }
+
+    *quick_panel_address =
+        g_debug_ui_overlay_state.myquick_panel_render.active_object_ptr;
+    return true;
+}
+
 bool TryReadTrackedMyQuickPanel(uintptr_t* quick_panel_address) {
     if (quick_panel_address == nullptr) {
         return false;
@@ -487,11 +527,6 @@ bool TryGetActiveSimpleMenu(uintptr_t* simple_menu_address) {
 
     *simple_menu_address = g_debug_ui_overlay_state.simple_menu.active_object_ptr;
     return true;
-}
-
-uintptr_t GetTrackedDialogObject() {
-    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
-    return g_debug_ui_overlay_state.tracked_dialog.object_ptr;
 }
 
 bool TryReadUiRenderContext(const DebugUiOverlayConfig& config, uintptr_t* render_context_address) {

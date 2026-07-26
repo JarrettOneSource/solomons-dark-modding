@@ -358,6 +358,7 @@ from static_re_runtime_platform_contracts import (
 )
 from static_re_runtime_behavior_contracts import (
     test_debug_ui_frame_render_does_not_log_each_snapshot_generation,
+    test_exact_text_capture_does_not_read_retired_ui_trees,
     test_main_thread_work_pump_is_not_render_owned,
     test_mindstar_semantic_spell_projection_ignores_raw_storage_tail,
     test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread_owned,
@@ -1034,6 +1035,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Debug UI frame rendering does not log each snapshot generation",
         test_debug_ui_frame_render_does_not_log_each_snapshot_generation,
+    ),
+    (
+        "Exact-text capture does not read retired UI trees",
+        test_exact_text_capture_does_not_read_retired_ui_trees,
     ),
     (
         "Main-thread work pump is not render-owned",

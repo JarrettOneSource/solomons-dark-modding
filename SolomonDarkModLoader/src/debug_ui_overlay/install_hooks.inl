@@ -124,6 +124,33 @@ bool InstallDialogFinalizeHook(const DebugUiOverlayConfig& config, std::string* 
     return GetX86HookTrampoline<DialogFinalizeHelperFn>(g_debug_ui_overlay_state.dialog_finalize_hook) != nullptr;
 }
 
+bool InstallDialogPrimaryRenderHook(
+    const DebugUiOverlayConfig& config,
+    std::string* error_message) {
+    const auto helper_address =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            config.dialog_primary_render_helper);
+    if (helper_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the configured dialog primary render helper address.";
+        }
+        return false;
+    }
+
+    if (!InstallX86Hook(
+            reinterpret_cast<void*>(helper_address),
+            reinterpret_cast<void*>(&HookDialogPrimaryRenderHelper),
+            kDialogPrimaryRenderHookPatchSize,
+            &g_debug_ui_overlay_state.dialog_primary_render_hook,
+            error_message)) {
+        return false;
+    }
+
+    return GetX86HookTrampoline<DialogPrimaryRenderHelperFn>(
+               g_debug_ui_overlay_state.dialog_primary_render_hook) != nullptr;
+}
+
 bool InstallExactTextRenderHook(const DebugUiOverlayConfig& config, std::string* error_message) {
     const auto helper_address = ProcessMemory::Instance().ResolveGameAddressOrZero(config.exact_text_render_helper);
     if (helper_address == 0) {

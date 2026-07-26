@@ -2,8 +2,8 @@
 
 ## Status
 
-Diagnosed on the unpublished `v0.1.0-beta.18` release candidate. Product fix
-pending.
+Fixed on the unpublished `v0.1.0-beta.18` release candidate. The release gate
+continues to use the stock pause-menu `LEAVE GAME` path.
 
 ## Reproduction
 
@@ -95,3 +95,47 @@ The fix must enforce the lifetime rule at the capture/geometry seam:
 The regression contract should reject historical-root parent walks in exact
 text capture. The original two-peer Leave Game path remains the live acceptance
 test because it exercises the stock teardown ordering that exposed the defect.
+
+## Follow-up evidence
+
+The first lifecycle correction removed the historical-dialog fallback, but a
+focused Leave Game reproduction exposed the same ownership error in the generic
+text-draw observer. Release-PDB symbolication resolved the later first-chance
+access violation as:
+
+1. `TryResolveObjectLabel`
+2. `ObserveUiDrawCall`
+3. `HookTextDrawHelper`
+
+That observer treated the caller's `ESI` value as a possible widget and scanned
+the pointed-to object for strings. `ESI` was only a heuristic identity source,
+not a lifetime-checked widget lease. During teardown it referenced retired
+storage, so the generic label probe raised another `0xC0000005`.
+
+The same focused run also showed why the client initially stayed in `testrun`
+after the host left. The host's reliable run-exit nonce was correctly latched,
+then `RefreshLocalParticipantFromGameState` immediately cleared it because an
+invalid transition scene collapses to the default `SharedHub` intent. No
+authenticated non-run packet with the old run nonce reached the client.
+
+## Resolution
+
+The fix closes the native-lifetime class at the capture seam:
+
+- exact-text ownership and geometry readers use only native render or modal
+  scopes whose depth is currently nonzero;
+- durable dialog snapshots contain copied values only;
+- dialog geometry is copied at the live primary layout/render routine
+  `0x005AB2C0`;
+- every semantic action retires native-backed capture state before invoking the
+  stock handler that may begin teardown;
+- the generic text observer uses labels already captured by live control hooks
+  and no longer scans a heuristic caller pointer;
+- the host run-exit latch is cleared only after a confirmed native hub scene,
+  not during an invalid or transitional scene.
+
+Static regression contracts pin both the capture-lifetime boundary and the
+confirmed-hub run-exit rule. The focused two-peer reproduction at
+`runtime-fix-repro-primary-render-v8` completed the real pause-menu Leave Game
+path for both peers with zero access violations, zero crash artifacts, and two
+clean process exits.

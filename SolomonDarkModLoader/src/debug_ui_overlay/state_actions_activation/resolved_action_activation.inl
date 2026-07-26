@@ -1,3 +1,29 @@
+void RetireUiCaptureBeforeActionDispatch() {
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    g_debug_ui_overlay_state.frame_elements.clear();
+    g_debug_ui_overlay_state.frame_exact_text_elements.clear();
+    g_debug_ui_overlay_state.frame_exact_control_elements.clear();
+    g_debug_ui_overlay_state.active_exact_text_renders.clear();
+    g_debug_ui_overlay_state.recent_assigned_strings.clear();
+    g_debug_ui_overlay_state.recent_assigned_strings_updated_at = 0;
+    g_debug_ui_overlay_state.tracked_title_main_menu_object = 0;
+    g_debug_ui_overlay_state.last_create_owner_object = 0;
+    g_debug_ui_overlay_state.main_menu_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.dark_cloud_browser_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.settings_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.myquick_panel_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.hall_of_fame_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.spell_picker_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.control_scheme_picker_render = TrackedSurfaceRenderState{};
+    g_debug_ui_overlay_state.myquick_panel_modal = TrackedSimpleMenuState{};
+    g_debug_ui_overlay_state.simple_menu = TrackedSimpleMenuState{};
+    g_debug_ui_overlay_state.dark_cloud_browser_panel = TrackedWidgetRectState{};
+    g_debug_ui_overlay_state.dark_cloud_browser_modal_root = TrackedWidgetRectState{};
+    g_debug_ui_overlay_state.tracked_dialog = TrackedDialogState{};
+    g_debug_ui_overlay_state.object_label_cache.clear();
+    g_debug_ui_overlay_state.latest_surface_snapshot = DebugUiSurfaceSnapshot{};
+}
+
 bool TryActivateResolvedUiAction(
     std::string_view surface_root_id,
     uintptr_t owner_address,
@@ -74,6 +100,7 @@ bool TryActivateResolvedUiAction(
             " dispatch_kind=owner_noarg owner=" + HexString(resolved_owner_address) +
             " handler=" + HexString(expectation.expected_handler_address));
         StoreActiveSemanticUiActionDispatchResolution(resolved_owner_address, 0, "owner_noarg");
+        RetireUiCaptureBeforeActionDispatch();
         return complete_successful_dispatch(TryInvokeOwnerNoArgAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
@@ -159,6 +186,7 @@ bool TryActivateResolvedUiAction(
             " x=" + std::to_string(point_x) + " (" + std::to_string(point_x_float) + "f)" +
             " y=" + std::to_string(point_y) + " (" + std::to_string(point_y_float) + "f)");
         StoreActiveSemanticUiActionDispatchResolution(resolved_owner_address, point_address, "owner_point_click");
+        RetireUiCaptureBeforeActionDispatch();
         return complete_successful_dispatch(TryInvokeOwnerPointClickAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
@@ -248,6 +276,7 @@ bool TryActivateResolvedUiAction(
                 0.0f,
                 0.0f);
         }
+        RetireUiCaptureBeforeActionDispatch();
         return complete_successful_dispatch(TryInvokeOwnerControlActionByControlAddress(
             dispatch_owner_address,
             expectation.expected_vftable_address,
@@ -267,6 +296,7 @@ bool TryActivateResolvedUiAction(
             " dispatch_kind=control_noarg control=" + HexString(resolved_owner_address) +
             " handler=" + HexString(expectation.expected_handler_address));
         StoreActiveSemanticUiActionDispatchResolution(0, resolved_owner_address, "control_noarg");
+        RetireUiCaptureBeforeActionDispatch();
         return complete_successful_dispatch(TryInvokeControlNoArgAction(
             resolved_owner_address,
             expectation.expected_vftable_address,
@@ -297,6 +327,7 @@ bool TryActivateResolvedUiAction(
             return false;
         }
 
+        RetireUiCaptureBeforeActionDispatch();
         if (write_global != 0) {
             if (!ProcessMemory::Instance().TryWriteValue(write_global, static_cast<std::uint32_t>(write_value))) {
                 if (error_message != nullptr) {
@@ -375,6 +406,7 @@ bool TryActivateResolvedUiAction(
             error_message)) {
         return false;
     }
+    RetireUiCaptureBeforeActionDispatch();
     return complete_successful_dispatch(TryInvokeOwnerControlActionByControlAddress(
         resolved_owner_address,
         expectation.expected_vftable_address,

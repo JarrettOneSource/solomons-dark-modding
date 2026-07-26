@@ -50,7 +50,7 @@ The overlay is intentionally structured to keep the hot path light when enabled:
 
 1. The x86 text helper hook resolves the active UI surface from the live call stack and records per-element observations.
 2. Element observations are aggregated by stable widget identity when available, then filtered to the dominant active surface before a frame is rendered.
-3. The dialog hooks track `MsgBox` line and button construction into a durable modal snapshot, while the tracked dialog renderer rereads the live root `MsgBox` object for exact panel and primary-button rectangles.
+3. The dialog hooks track `MsgBox` line and button construction into a durable modal snapshot. Final panel and primary-button rectangles are copied by the live primary dialog layout/render hook; later snapshot rendering consumes only those cached values and never rereads the retained native object.
 4. The D3D9 `EndScene` hook prewarms the font atlas once and renders overlay primitives once per frame.
 5. The native UI bridge may stay active for semantic `sd.ui` snapshots and
    functional multiplayer HUDs, but diagnostic surface registration is a

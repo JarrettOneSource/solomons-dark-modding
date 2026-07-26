@@ -188,12 +188,33 @@ void __fastcall HookMainMenuRenderHelper(void* self, void* /*unused_edx*/) {
                 HexString(reinterpret_cast<uintptr_t>(self)));
         }
 
-        g_debug_ui_overlay_state.tracked_title_main_menu_object = reinterpret_cast<uintptr_t>(self);
+        const auto main_menu_address = reinterpret_cast<uintptr_t>(self);
+        auto& tracked_main_menu =
+            g_debug_ui_overlay_state.main_menu_render;
+        ++tracked_main_menu.render_depth;
+        tracked_main_menu.active_object_ptr = main_menu_address;
+        tracked_main_menu.tracked_object_ptr = main_menu_address;
+        tracked_main_menu.captured_at = GetTickCount64();
+        g_debug_ui_overlay_state.tracked_title_main_menu_object =
+            main_menu_address;
     }
 
     const auto original = GetX86HookTrampoline<SurfaceRenderHelperFn>(g_debug_ui_overlay_state.main_menu_render_hook);
     if (original != nullptr) {
         original(self);
+    }
+
+    if (!is_main_menu) {
+        return;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    auto& tracked_main_menu = g_debug_ui_overlay_state.main_menu_render;
+    if (tracked_main_menu.render_depth > 0) {
+        --tracked_main_menu.render_depth;
+    }
+    if (tracked_main_menu.render_depth == 0) {
+        tracked_main_menu.active_object_ptr = 0;
     }
 }
 
@@ -603,4 +624,23 @@ void __fastcall HookDialogFinalizeHelper(
 
     const auto caller_address = reinterpret_cast<uintptr_t>(_ReturnAddress());
     ObserveDialogFinalize(dialog_object, caller_address);
+}
+
+void __fastcall HookDialogPrimaryRenderHelper(
+    void* dialog_object,
+    void* /*unused_edx*/,
+    std::uint32_t arg2,
+    std::uint32_t arg3,
+    std::uint32_t arg4,
+    float arg5) {
+    const auto original =
+        GetX86HookTrampoline<DialogPrimaryRenderHelperFn>(
+            g_debug_ui_overlay_state.dialog_primary_render_hook);
+    if (original != nullptr) {
+        original(dialog_object, arg2, arg3, arg4, arg5);
+    }
+
+    const auto caller_address =
+        reinterpret_cast<uintptr_t>(_ReturnAddress());
+    ObserveDialogPrimaryRender(dialog_object, caller_address);
 }

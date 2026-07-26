@@ -476,6 +476,56 @@ void TrackDialogButton(void* dialog_object, bool primary_button, uintptr_t calle
     }
 }
 
+void ObserveDialogPrimaryRender(
+    void* object_ptr,
+    uintptr_t caller_address) {
+    if (object_ptr == nullptr) {
+        return;
+    }
+
+    DialogGeometry geometry;
+    if (!TryReadMsgBoxGeometry(
+            object_ptr,
+            g_debug_ui_overlay_state.config,
+            &geometry)) {
+        return;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    auto& tracked_dialog = g_debug_ui_overlay_state.tracked_dialog;
+    const auto dialog_address =
+        reinterpret_cast<uintptr_t>(object_ptr);
+    if (tracked_dialog.object_ptr != dialog_address) {
+        return;
+    }
+
+    MergeTrackedDialogGeometryLocked(&tracked_dialog, geometry);
+    if (tracked_dialog.title.empty()) {
+        if (!tracked_dialog.lines.empty()) {
+            tracked_dialog.title = tracked_dialog.lines.front();
+        } else {
+            tracked_dialog.title = "Dialog";
+        }
+    }
+    if (tracked_dialog.primary_button.label.empty()) {
+        tracked_dialog.primary_button.label =
+            geometry.primary_button.label.empty()
+                ? std::string("OK")
+                : geometry.primary_button.label;
+    }
+
+    if (!g_debug_ui_overlay_state.first_dialog_finalize_logged) {
+        g_debug_ui_overlay_state.first_dialog_finalize_logged = true;
+        Log(
+            "Debug UI overlay captured its first live dialog object. left=" +
+            std::to_string(geometry.left) + " top=" +
+            std::to_string(geometry.top) + " width=" +
+            std::to_string(geometry.right - geometry.left) + " height=" +
+            std::to_string(geometry.bottom - geometry.top) + " caller=" +
+            HexString(caller_address));
+    }
+}
+
 void ObserveDialogFinalize(void* object_ptr, uintptr_t caller_address) {
     if (object_ptr == nullptr) {
         return;

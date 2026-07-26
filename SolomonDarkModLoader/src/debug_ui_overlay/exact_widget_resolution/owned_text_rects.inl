@@ -32,7 +32,9 @@ bool TryResolveDarkCloudBrowserModalLocalTextRect(
     }
 
     uintptr_t browser_address = 0;
-    const auto has_browser = TryGetCurrentDarkCloudBrowser(&browser_address) && browser_address != 0;
+    const auto has_browser =
+        TryGetActiveDarkCloudBrowserRender(&browser_address) &&
+        browser_address != 0;
 
     uintptr_t rollout_address = 0;
     if (TryReadPointerField(
@@ -125,7 +127,7 @@ bool TryResolveOwnedExactTextRect(
     const auto normalized_caller_address = NormalizeObservedCodeAddress(caller_address);
     if (surface_id == "settings") {
         uintptr_t settings_address = 0;
-        if (!TryGetActiveSettingsRender(&settings_address) || settings_address == 0) {
+        if (!TryGetLiveSettingsRender(&settings_address) || settings_address == 0) {
             return false;
         }
 
@@ -156,7 +158,7 @@ bool TryResolveOwnedExactTextRect(
         }
 
         uintptr_t quick_panel_address = 0;
-        if (!TryReadTrackedMyQuickPanel(&quick_panel_address) || quick_panel_address == 0 ||
+        if (!TryGetActiveMyQuickPanel(&quick_panel_address) || quick_panel_address == 0 ||
             !IsQuickPanelOwnedObject(*config, quick_panel_address, source_object_ptr)) {
             return false;
         }
@@ -182,7 +184,7 @@ bool TryResolveOwnedExactTextRect(
         }
 
         uintptr_t browser_address = 0;
-        if (TryGetCurrentDarkCloudBrowser(&browser_address) && browser_address != 0 &&
+        if (TryGetActiveDarkCloudBrowserRender(&browser_address) && browser_address != 0 &&
             TryReadTranslatedWidgetRectToRoot(
                 *config,
                 browser_address,

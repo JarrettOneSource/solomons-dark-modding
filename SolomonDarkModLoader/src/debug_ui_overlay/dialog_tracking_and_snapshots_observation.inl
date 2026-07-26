@@ -186,10 +186,6 @@ std::optional<ObservedUiElement> ObserveUiDrawCall(
     const auto cache_it = g_debug_ui_overlay_state.object_label_cache.find(label_source_address);
     if (cache_it != g_debug_ui_overlay_state.object_label_cache.end()) {
         label = cache_it->second;
-    } else {
-        if (label_source_address != 0 && TryResolveObjectLabel(label_source_address, &label)) {
-            g_debug_ui_overlay_state.object_label_cache.emplace(label_source_address, label);
-        }
     }
 
     const auto object_address =

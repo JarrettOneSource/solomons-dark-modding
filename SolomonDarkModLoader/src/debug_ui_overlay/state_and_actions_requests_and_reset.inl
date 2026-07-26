@@ -534,6 +534,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->dialog_primary_button_hook = X86Hook{};
     state->dialog_secondary_button_hook = X86Hook{};
     state->dialog_finalize_hook = X86Hook{};
+    state->dialog_primary_render_hook = X86Hook{};
     state->exact_text_render_hook = X86Hook{};
     state->glyph_draw_hook = X86Hook{};
     state->text_quad_draw_hook = X86Hook{};
@@ -562,6 +563,7 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->recent_assigned_strings_updated_at = 0;
     state->tracked_title_main_menu_object = 0;
     state->last_create_owner_object = 0;
+    state->main_menu_render = TrackedSurfaceRenderState{};
     state->dark_cloud_browser_render = TrackedSurfaceRenderState{};
     state->settings_render = TrackedSurfaceRenderState{};
     state->myquick_panel_render = TrackedSurfaceRenderState{};

@@ -64,6 +64,8 @@ using DialogButtonHelperFn = void(__thiscall*)(
     uintptr_t arg8);
 using DialogFinalizeHelperFn =
     void(__thiscall*)(void* self, std::uint32_t arg2, std::uint32_t arg3, std::uint32_t arg4, float arg5);
+using DialogPrimaryRenderHelperFn =
+    void(__thiscall*)(void* self, std::uint32_t arg2, std::uint32_t arg3, std::uint32_t arg4, float arg5);
 using ExactTextRenderFn = void(__thiscall*)(
     void* self,
     void* arg2,
@@ -148,6 +150,7 @@ constexpr std::size_t kStringAssignHookPatchSize = 5;
 constexpr std::size_t kDialogAddLineHookPatchSize = 7;
 constexpr std::size_t kDialogButtonHookPatchSize = 7;
 constexpr std::size_t kDialogFinalizeHookPatchSize = 7;
+constexpr std::size_t kDialogPrimaryRenderHookPatchSize = 7;
 constexpr std::size_t kExactTextRenderHookPatchSize = 5;
 constexpr std::size_t kGlyphDrawHookPatchSize = 6;
 constexpr std::size_t kSurfaceRenderHookPatchSize = 7;
@@ -473,6 +476,7 @@ struct DebugUiOverlayState {
     X86Hook dialog_primary_button_hook;
     X86Hook dialog_secondary_button_hook;
     X86Hook dialog_finalize_hook;
+    X86Hook dialog_primary_render_hook;
     X86Hook exact_text_render_hook;
     X86Hook dark_cloud_browser_exact_text_render_hook;
     X86Hook glyph_draw_hook;
@@ -510,6 +514,7 @@ struct DebugUiOverlayState {
     ULONGLONG recent_assigned_strings_updated_at = 0;
     uintptr_t tracked_title_main_menu_object = 0;
     uintptr_t last_create_owner_object = 0;
+    TrackedSurfaceRenderState main_menu_render;
     TrackedSurfaceRenderState dark_cloud_browser_render;
     TrackedSurfaceRenderState settings_render;
     TrackedSurfaceRenderState myquick_panel_render;

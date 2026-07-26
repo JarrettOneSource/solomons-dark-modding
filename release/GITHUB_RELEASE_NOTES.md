@@ -5,6 +5,7 @@
 - WAN deaths are now reliable: remote corpses always appear with normal lighting instead of a black silhouette, the dropped staff is replicated, and dead-owner HP stays at exactly zero.
 - Enemies now re-acquire the nearest surviving player after their current target dies.
 - Multiplayer lobbies now survive Game Over. Every peer waits behind the Loading Boneyard barrier and can start another run without rejoining.
+- Leaving a multiplayer run through the pause menu now takes every peer out of the run cleanly instead of risking a UI-teardown crash.
 - Host spectator controls and the spectator HUD now display correctly. The launcher no longer triggers a Windows Desktop access-denied dialog.
 - Release coverage was audited and hardened across 859 automated checks.
 - **Known issues:** A Fireball cast by the client occasionally deals no damage; this is under investigation. Earth damage varies strongly with charge hold time, so a tap and a held cast can deal very different damage.

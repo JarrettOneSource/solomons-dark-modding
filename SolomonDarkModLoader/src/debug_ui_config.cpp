@@ -67,6 +67,7 @@ bool ParseDebugUiOverlayConfig(
         {"dialog_primary_button_helper", &DebugUiOverlayConfig::dialog_primary_button_helper},
         {"dialog_secondary_button_helper", &DebugUiOverlayConfig::dialog_secondary_button_helper},
         {"dialog_finalize_helper", &DebugUiOverlayConfig::dialog_finalize_helper},
+        {"dialog_primary_render_helper", &DebugUiOverlayConfig::dialog_primary_render_helper},
         {"exact_text_render_helper", &DebugUiOverlayConfig::exact_text_render_helper},
         {"dark_cloud_browser_exact_text_render_helper", &DebugUiOverlayConfig::dark_cloud_browser_exact_text_render_helper},
         {"ui_labeled_control_render_helper", &DebugUiOverlayConfig::ui_labeled_control_render_helper},

@@ -16,6 +16,7 @@ struct DebugUiOverlayConfig {
     uintptr_t dialog_primary_button_helper = 0;
     uintptr_t dialog_secondary_button_helper = 0;
     uintptr_t dialog_finalize_helper = 0;
+    uintptr_t dialog_primary_render_helper = 0;
     uintptr_t exact_text_render_helper = 0;
     uintptr_t dark_cloud_browser_exact_text_render_helper = 0;
     uintptr_t ui_labeled_control_render_helper = 0;
