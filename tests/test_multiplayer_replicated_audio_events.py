@@ -432,7 +432,7 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
             transport_header,
         )
 
-    def test_exact_damage_accumulator_retains_serialized_hp_cursor_until_quiescent(
+    def test_exact_damage_accumulator_releases_paired_hp_cursors_after_quiescence(
         self,
     ) -> None:
         damage_sync = (
@@ -479,6 +479,11 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
         self.assertIn(
             "observed.reference_hp_valid = false",
             send_section,
+        )
+        self.assertIn(
+            "g_local_transport.last_enemy_claimed_hp_by_network_id.erase("
+            "network_actor_id);",
+            "".join(send_section.split()),
         )
 
     def test_bounded_release_edge_is_presented_once_immediately_before_stock(self) -> None:

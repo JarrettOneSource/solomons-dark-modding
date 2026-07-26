@@ -39,18 +39,24 @@ the native path:
 The traced first client cast ran 128 Fireball ticks and 128 candidate queries
 but never called `0x005E5160` or `0x0063E7D0`. Its trajectory started at
 `(1684.5, 1799.5)`, passed the enemy's `x=1800` at `x=1801.5`, and continued
-to `x=2710.5`. The enemy stayed at `(1800, 1800)`. Successful casts stayed on
-`y=1800`, called impact and the damage-context dispatcher once, and stopped at
-`x=1802`.
+to `x=2710.5`. The enemy stayed at `(1800, 1800)`. Successful casts started at
+`(1694, 1800)`, called impact and the damage-context dispatcher once, and
+stopped at `x=1802`.
 
-This half-unit lane is a controlled-fixture overlap, not an aim, damage, or
-replication defect. The matrix refreshed both the source peer's local player
-and the observer peer's local player to `(1624, 1800)`. Their replicated
-counterparts therefore occupied the same origin on both machines. Participant
-collision intermittently displaced the client-origin local caster before
-Fireball birth. The small target angle quantized back to horizontal flight, so
-the projectile stayed in spatial row `1799` while the target occupied row
-`1800`. The stock current-cell-only candidate query could not see it.
+The half-unit lane is a controlled-fixture boundary, not an aim, damage, or
+replication defect. A follow-up ten-cast trace continuously pinned the source
+caster to `(1624, 1800)` and parked the non-casting participant 320 units off
+the projectile lane. It still correlated every miss with native emitter output
+`(1684.5, 1799.5)` and every contact with `(1694, 1800)`. Thus participant
+overlap is excluded: stock Fireball birth can use either of two native emitter
+positions at this animation boundary. Both have the pinned eastward velocity.
+
+The fixture put the enemy exactly on spatial row boundary `y=1800`. The lower
+emitter path stayed on row `1799`, while the target remained in row `1800`.
+Because the stock candidate query visits only the projectile's current cell,
+the circle test never saw the target. Moving the controlled target into the
+cell interior at `y=1824`, while preserving the same 176-unit eastward lane,
+produced ten consecutive client native impacts and exact `4.0` contacts.
 
 ## Claim cursor root cause
 
@@ -91,8 +97,8 @@ for the existing bounded hold, while a later genuine contact starts from the
 current authority baseline. Pending exact native damage, retry behavior, host
 validation, and every damage scalar remain unchanged.
 
-The harness fix is separate and fixture-only: position only the casting local
-player at the controlled origin and leave the non-casting local player in its
-run formation, preventing replicated participant overlap. Independent matrix
-cells must also honor the serializer's bounded quiescence before casting
-against a deliberately restored HP baseline.
+The harness fix is separate and fixture-only: place the target in a spatial
+cell interior (`y=1824`), continuously park the non-casting participant off
+the projectile lane, and pin only the casting player to the controlled origin.
+Independent matrix cells must also honor the serializer's bounded quiescence
+before casting against a deliberately restored HP baseline.

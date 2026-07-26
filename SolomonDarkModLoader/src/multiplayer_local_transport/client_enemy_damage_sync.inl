@@ -289,6 +289,8 @@ void SendObservedLocalEnemyDamageClaims(
             observed.reference_hp_valid = false;
             observed.reference_hp = 0.0f;
             observed.last_damage_observed_ms = 0;
+            g_local_transport.last_enemy_claimed_hp_by_network_id.erase(
+                network_actor_id);
         }
         if (observed.pending_damage <= kEnemyDamageClaimHpEpsilon ||
             !std::isfinite(observed.latest_authoritative_hp) ||
