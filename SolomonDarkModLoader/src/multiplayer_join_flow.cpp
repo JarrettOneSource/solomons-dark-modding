@@ -72,7 +72,6 @@ struct JoinFlowState {
     bool quick_start_run = false;
     bool quick_start_run_requested = false;
     std::uint64_t quick_start_run_ready_since_ms = 0;
-    std::uint64_t loading_presentation_first_rendered_ms = 0;
     std::string quick_start_run_last_error;
     std::uint64_t post_run_menu_retry_not_before_ms = 0;
     bool post_run_menu_request_logged = false;
@@ -224,7 +223,6 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->quick_start_run = false;
     state->quick_start_run_requested = false;
     state->quick_start_run_ready_since_ms = 0;
-    state->loading_presentation_first_rendered_ms = 0;
     state->quick_start_run_last_error.clear();
     state->post_run_menu_retry_not_before_ms = 0;
     state->post_run_menu_request_logged = false;
@@ -249,7 +247,6 @@ void SetPhaseUnlocked(JoinFlowPhase phase) {
     g_join_flow.phase = phase;
     g_join_flow.phase_entered_ms =
         static_cast<std::uint64_t>(GetTickCount64());
-    g_join_flow.loading_presentation_first_rendered_ms = 0;
     if (phase == JoinFlowPhase::PostRun) {
         g_join_flow.post_run_menu_retry_not_before_ms = 0;
         g_join_flow.post_run_menu_request_logged = false;
@@ -666,6 +663,26 @@ void NotifyMultiplayerJoinFlowRunStart() {
     }
 }
 
-#include "multiplayer_join_flow/presentation.inl"
+MultiplayerJoinFlowPresentation
+GetMultiplayerJoinFlowPresentation() {
+    std::scoped_lock lock(g_join_flow.mutex);
+    switch (g_join_flow.phase) {
+    case JoinFlowPhase::AdvancingMenus:
+        return {
+            g_join_flow.main_menu_first_seen_ms != 0,
+            {},
+        };
+    case JoinFlowPhase::PrivateGameplay:
+        return {};
+    case JoinFlowPhase::AwaitingLoadout:
+        return {true, {}};
+    case JoinFlowPhase::Connecting:
+        return {true, "Connecting to match"};
+    case JoinFlowPhase::LoadingBoneyard:
+        return {true, "Loading Boneyard"};
+    default:
+        return {};
+    }
+}
 
 }  // namespace sdmod

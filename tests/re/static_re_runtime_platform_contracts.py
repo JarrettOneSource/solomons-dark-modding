@@ -238,11 +238,7 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
             "g_join_flow.phase_entered_ms +\n"
             "                kTransitionPresentationMinimumMs"
         )
-        != 1
-        or
-        "g_join_flow.loading_presentation_first_rendered_ms +\n"
-        "                kTransitionPresentationMinimumMs"
-        not in flow_text
+        != 2
     ):
         raise StaticReTestFailure(
             "Connecting and Loading Boneyard must remain visible long enough to read"

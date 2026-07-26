@@ -372,8 +372,6 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
     )
     presentation = _read(
         "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
-    ) + _read(
-        "SolomonDarkModLoader/src/multiplayer_join_flow/presentation.inl"
     )
     lua_runtime = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
