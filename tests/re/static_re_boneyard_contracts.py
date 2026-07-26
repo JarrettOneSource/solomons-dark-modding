@@ -371,6 +371,9 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "except ParkingSelectionFailure as error:",
         '"target_attempts": []',
         "def capture_matched_camera_areas(",
+        "complex_visual_content_insufficient = (",
+        "def temporal_envelope_has_only_insufficient_content(",
+        'not envelope["sufficient_visual_content"]',
         "CAPTURE_ATTEMPTS_PER_FRAME = 8",
         "def capture_information_frame(",
         "def enable_quiet_layout_test_mode(",
@@ -435,6 +438,16 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
     if missing_verifier:
         raise StaticReTestFailure(
             "Live Boneyard scenery equality gate is incomplete: " + ", ".join(missing_verifier)
+        )
+    if (
+        verifier.count(
+            "temporal_envelope_has_only_insufficient_content("
+        )
+        < 2
+    ):
+        raise StaticReTestFailure(
+            "complex-lighting content classification is not wired into "
+            "matched-target retry"
         )
     hub_ready_index = verifier.find(
         'run_result["hub_remote_materialized"]'

@@ -563,6 +563,10 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                     "family": "large-rocks",
                     "position": [1800.0, 1600.0],
                 },
+                {
+                    "family": "large-rocks",
+                    "position": [2600.0, 800.0],
+                },
             ],
         }
         current_parking = [0.0, 0.0, 0.0]
@@ -633,10 +637,26 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             evidence_prefix: Path,
             **_kwargs: object,
         ) -> dict[str, object]:
-            sufficient = "target-retry-02" in str(evidence_prefix)
+            sufficient = "target-retry-02" not in str(evidence_prefix)
             return {
                 "sufficient_stable_content": sufficient,
                 "bounded_match": sufficient,
+            }
+
+        def temporal_pixels(
+            _host_paths: list[Path],
+            _client_paths: list[Path],
+            _camera: dict[str, float],
+            evidence_prefix: Path,
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            sufficient = "target-retry" in str(evidence_prefix)
+            return {
+                "exact_match": sufficient,
+                "sufficient_visual_content": sufficient,
+                "differing_envelope_pixel_count": 0,
+                "maximum_envelope_channel_gap": 0,
+                "actors_and_ui_excluded": {},
             }
 
         visual_areas: list[dict[str, object]] = []
@@ -685,10 +705,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             mock.patch.object(
                 verifier,
                 "exact_temporal_envelope_decor_pixel_comparison",
-                return_value={
-                    "exact_match": True,
-                    "actors_and_ui_excluded": {},
-                },
+                side_effect=temporal_pixels,
             ),
             mock.patch.object(
                 verifier,
@@ -719,26 +736,57 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         visual_area = visual_areas[0]
         self.assertEqual(
             visual_area["target"]["position"],
-            [1800.0, 1600.0],
+            [2600.0, 800.0],
         )
-        self.assertEqual(visual_area["target_capture_attempt"], 2)
-        self.assertEqual(len(visual_area["target_attempts"]), 2)
-        rejected_visual = visual_area["target_attempts"][0]
-        self.assertFalse(rejected_visual["ok"])
-        self.assertFalse(rejected_visual["accepted"])
-        self.assertIn("visual-content quorum", rejected_visual["error"])
+        self.assertEqual(visual_area["target_capture_attempt"], 3)
+        self.assertEqual(len(visual_area["target_attempts"]), 3)
+        rejected_complex = visual_area["target_attempts"][0]
+        self.assertFalse(rejected_complex["ok"])
+        self.assertFalse(rejected_complex["accepted"])
+        self.assertIn("visual-content quorum", rejected_complex["error"])
+        self.assertFalse(
+            rejected_complex["visual_capture"][
+                "temporal_decor_envelope"
+            ]["sufficient_visual_content"]
+        )
         self.assertEqual(
             len(
-                rejected_visual["visual_capture"][
+                rejected_complex["visual_capture"][
+                    "simple_lighting_capture_batches"
+                ]
+            ),
+            1,
+        )
+        rejected_stable = visual_area["target_attempts"][1]
+        self.assertFalse(rejected_stable["ok"])
+        self.assertFalse(rejected_stable["accepted"])
+        self.assertIn("visual-content quorum", rejected_stable["error"])
+        self.assertTrue(
+            rejected_stable["visual_capture"][
+                "temporal_decor_envelope"
+            ]["sufficient_visual_content"]
+        )
+        self.assertEqual(
+            len(
+                rejected_stable["visual_capture"][
                     "simple_lighting_capture_batches"
                 ]
             ),
             3,
         )
-        self.assertTrue(visual_area["target_attempts"][1]["accepted"])
+        self.assertTrue(visual_area["target_attempts"][2]["accepted"])
         self.assertIn(
-            "target-retry-02",
+            "target-retry-03",
             visual_area["screenshots"]["host"]["path"],
+        )
+        self.assertFalse(
+            verifier.temporal_envelope_has_only_insufficient_content(
+                {
+                    "sufficient_visual_content": False,
+                    "differing_envelope_pixel_count": 1,
+                    "maximum_envelope_channel_gap": 1,
+                }
+            )
         )
 
     def test_layout_capture_retries_only_low_information_frames(self) -> None:

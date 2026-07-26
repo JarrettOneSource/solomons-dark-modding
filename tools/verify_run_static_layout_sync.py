@@ -3484,6 +3484,18 @@ def capture_stable_render_profile(
     }
 
 
+def temporal_envelope_has_only_insufficient_content(
+    envelope: dict[str, Any],
+) -> bool:
+    """Distinguish a dark exact envelope from a real peer mismatch."""
+
+    return (
+        not envelope["sufficient_visual_content"]
+        and envelope["differing_envelope_pixel_count"] == 0
+        and envelope["maximum_envelope_channel_gap"] == 0
+    )
+
+
 def capture_matched_camera_areas(
     host_pipe: str,
     client_pipe: str,
@@ -3879,9 +3891,15 @@ def capture_matched_camera_areas(
                 },
             }
         )
+        complex_visual_content_insufficient = (
+            temporal_envelope_has_only_insufficient_content(
+                temporal_envelope
+            )
+        )
         insufficient_visual_content = (
             not stable_pixels["sufficient_stable_content"]
             or not edge_geometry["sufficient_content"]
+            or complex_visual_content_insufficient
         )
         if insufficient_visual_content:
             candidates = target_plan["candidates"]
@@ -3908,7 +3926,7 @@ def capture_matched_camera_areas(
                 accepted_attempt["ok"] = False
                 accepted_attempt["error"] = (
                     "matched-camera target remained below a visual-content "
-                    "quorum through bounded aggregate capture retries"
+                    "quorum under the required render profiles"
                 )
                 accepted_attempt["visual_capture"] = {
                     key: value
