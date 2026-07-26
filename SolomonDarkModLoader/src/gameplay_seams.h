@@ -25,6 +25,7 @@ extern uintptr_t kCpuTickEpilogue;
 extern uintptr_t kGameplayMouseRefreshHelper;
 extern uintptr_t kGameplayKeyboardEdgeHelper;
 extern uintptr_t kPlayerActorTick;
+extern uintptr_t kPlayerProgressionTick;
 extern uintptr_t kActorWorldTick;
 extern uintptr_t kPlayerActorActionManagerTick;
 extern uintptr_t kPlayerActorEnsureProgressionHandle;

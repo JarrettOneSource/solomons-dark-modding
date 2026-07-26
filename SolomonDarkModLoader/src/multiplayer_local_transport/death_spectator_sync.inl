@@ -17,6 +17,8 @@ struct LocalDeathSpectatorState {
 };
 
 LocalDeathSpectatorState g_local_death_spectator;
+using LocalPlayerProgressionTickFn = void(__thiscall*)(void* self);
+X86Hook g_local_death_progression_tick_hook;
 
 bool IsParticipantGameplayInertForDeath(
     const ParticipantInfo& participant) {
@@ -417,6 +419,86 @@ bool HoldLocalSpectatorDeathVitals() {
         local->runtime.life_max = player.max_hp;
     });
     return true;
+}
+
+void __fastcall HookLocalDeathProgressionTick(
+    void* self,
+    void* /*unused_edx*/) {
+    const auto original =
+        GetX86HookTrampoline<LocalPlayerProgressionTickFn>(
+            g_local_death_progression_tick_hook);
+    if (original == nullptr) {
+        return;
+    }
+
+    original(self);
+    if (!g_local_transport.initialized ||
+        g_local_death_spectator.phase ==
+            DeathSpectatorPhase::Inactive) {
+        return;
+    }
+
+    SDModPlayerState player;
+    if (TryGetPlayerState(&player) &&
+        player.valid &&
+        player.progression_address ==
+            reinterpret_cast<uintptr_t>(self)) {
+        (void)HoldLocalSpectatorDeathVitals();
+    }
+}
+
+bool InitializeLocalDeathProgressionTickHook(
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    const auto progression_tick =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kPlayerProgressionTick);
+    if (progression_tick == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "local player progression tick is unavailable";
+        }
+        return false;
+    }
+    if (g_local_death_progression_tick_hook.installed) {
+        if (reinterpret_cast<uintptr_t>(
+                g_local_death_progression_tick_hook.target) ==
+            progression_tick) {
+            return true;
+        }
+        if (error_message != nullptr) {
+            *error_message =
+                "local player progression tick changed while hooked";
+        }
+        return false;
+    }
+
+    std::string hook_error;
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(progression_tick),
+            reinterpret_cast<void*>(
+                &HookLocalDeathProgressionTick),
+            5,
+            &g_local_death_progression_tick_hook,
+            &hook_error)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "local player progression tick hook install failed: " +
+                hook_error;
+        }
+        return false;
+    }
+    Log(
+        "Multiplayer dead-owner progression tick hook installed. target=" +
+        HexString(progression_tick));
+    return true;
+}
+
+void ShutdownLocalDeathProgressionTickHook() {
+    RemoveX86Hook(&g_local_death_progression_tick_hook);
 }
 
 std::vector<std::uint64_t> CollectAliveSpectatorTargetIds(

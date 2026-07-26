@@ -36,6 +36,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "mouse_refresh_helper", kGameplayMouseRefreshHelper),
         SDMOD_ADDR("gameplay.hooks", "keyboard_edge_helper", kGameplayKeyboardEdgeHelper),
         SDMOD_ADDR("gameplay.hooks", "player_actor_tick", kPlayerActorTick),
+        SDMOD_ADDR("gameplay.hooks", "player_progression_tick", kPlayerProgressionTick),
         SDMOD_ADDR("gameplay.hooks", "actor_world_tick", kActorWorldTick),
         SDMOD_ADDR("gameplay.hooks", "player_actor_action_manager_tick", kPlayerActorActionManagerTick),
         SDMOD_ADDR("gameplay.hooks", "player_actor_ensure_progression_handle", kPlayerActorEnsureProgressionHandle),

@@ -43,6 +43,16 @@ bool InitializeLocalTransport() {
             g_local_transport = LocalTransportState{};
             return false;
         }
+        std::string death_hook_error;
+        if (!InitializeLocalDeathProgressionTickHook(
+                &death_hook_error)) {
+            Log(
+                "Multiplayer Steam transport could not install the "
+                "dead-owner progression boundary: " +
+                death_hook_error);
+            g_local_transport = LocalTransportState{};
+            return false;
+        }
         g_local_transport.initialized = true;
         if (g_local_transport.is_host) {
             g_local_transport_authority_participant_id.store(
@@ -98,6 +108,16 @@ bool InitializeLocalTransport() {
         return false;
     }
 
+    std::string death_hook_error;
+    if (!InitializeLocalDeathProgressionTickHook(
+            &death_hook_error)) {
+        Log(
+            "Multiplayer local UDP could not install the dead-owner "
+            "progression boundary: " +
+            death_hook_error);
+        ShutdownLocalTransport();
+        return false;
+    }
     g_local_transport.initialized = true;
     if (g_local_transport.is_host) {
         g_local_transport_authority_participant_id.store(
@@ -117,6 +137,7 @@ bool InitializeLocalTransport() {
 }
 
 void ShutdownLocalTransport() {
+    ShutdownLocalDeathProgressionTickHook();
     ShutdownLocalLevelUpOptionRollHook();
     ShutdownDeadLevelUpScreenTickHook();
     ResetRunGameOverState("transport_shutdown");

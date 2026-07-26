@@ -78,30 +78,40 @@ def test_wan_death_presentation_is_a_convergent_transaction() -> str:
     )
 
 
-def test_dead_owner_vitals_are_reasserted_after_the_stock_tick() -> str:
-    transport_header = _read(
-        "SolomonDarkModLoader/include/multiplayer_local_transport.h"
-    )
-    spectator_public = _read(
+def test_dead_owner_vitals_are_reasserted_after_the_progression_tick() -> str:
+    spectator = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
-        "death_spectator_public.inl"
+        "death_spectator_sync.inl"
     )
-    player_tick = _read(
-        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
-        "actor_tick/player_actor_tick_hook.inl"
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
     )
+    config = _read("config/binary-layout.ini")
 
-    token = "ReassertLocalDeathSpectatorVitalsAfterStockTick"
-    assert token in transport_header
-    assert token in spectator_public
-    local_start = player_tick.index("if (local_player_actor) {")
-    local_tick = player_tick.index("original(self);", local_start)
-    reassert = player_tick.index(token, local_tick)
-    assert local_tick < reassert
+    assert "player_progression_tick=0x006614D0" in config
+    hook_start = spectator.index(
+        "void __fastcall HookLocalDeathProgressionTick("
+    )
+    hook_end = spectator.index(
+        "bool InitializeLocalDeathProgressionTickHook(",
+        hook_start,
+    )
+    hook = spectator[hook_start:hook_end]
+    _require_in_order(
+        hook,
+        "original(self);",
+        "player.progression_address ==",
+        "HoldLocalSpectatorDeathVitals();",
+    )
+    assert transport.count(
+        "InitializeLocalDeathProgressionTickHook("
+    ) == 2
+    assert "ShutdownLocalDeathProgressionTickHook();" in transport
 
     return (
         "the multiplayer zero-life invariant is restored after native passive "
-        "regeneration on every dead-owner player tick"
+        "regeneration on every dead-owner progression tick"
     )
 
 
