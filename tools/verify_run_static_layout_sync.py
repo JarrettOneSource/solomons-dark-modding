@@ -3386,7 +3386,7 @@ def capture_stable_render_profile(
     attempts: int = STABLE_PROFILE_CAPTURE_ATTEMPTS,
     retry_delay: float = STABLE_PROFILE_CAPTURE_RETRY_DELAY_SECONDS,
 ) -> dict[str, Any]:
-    """Retry a whole simple-lighting batch when it contains too little decor."""
+    """Retry a simple-lighting batch when either decor quorum is too low."""
 
     if attempts <= 0:
         raise ValueError("stable profile capture attempts must be positive")
@@ -3430,7 +3430,10 @@ def capture_stable_render_profile(
             "temporal_minimum_edge_geometry": edge_geometry,
         }
         capture_batches.append(batch)
-        if stable_pixels["sufficient_stable_content"]:
+        if (
+            stable_pixels["sufficient_stable_content"]
+            and edge_geometry["sufficient_content"]
+        ):
             return {
                 "accepted_capture_attempt": capture_attempt,
                 "capture_batches": capture_batches,
@@ -3849,67 +3852,68 @@ def capture_matched_camera_areas(
                 },
             }
         )
-        if not stable_pixels["bounded_match"]:
-            if not stable_pixels["sufficient_stable_content"]:
-                candidates = target_plan["candidates"]
-                accepted_candidate_index = next(
-                    (
-                        index
-                        for index, candidate in enumerate(candidates)
-                        if candidate["position"] == target["position"]
+        insufficient_visual_content = (
+            not stable_pixels["sufficient_stable_content"]
+            or not edge_geometry["sufficient_content"]
+        )
+        if insufficient_visual_content:
+            candidates = target_plan["candidates"]
+            accepted_candidate_index = next(
+                (
+                    index
+                    for index, candidate in enumerate(candidates)
+                    if candidate["position"] == target["position"]
+                ),
+                None,
+            )
+            remaining_candidates = (
+                candidates[accepted_candidate_index + 1 :]
+                if accepted_candidate_index is not None
+                else []
+            )
+            if remaining_candidates:
+                accepted_attempt = next(
+                    attempt
+                    for attempt in area_result["target_attempts"]
+                    if attempt.get("accepted") is True
+                )
+                accepted_attempt["accepted"] = False
+                accepted_attempt["ok"] = False
+                accepted_attempt["error"] = (
+                    "matched-camera target remained below a visual-content "
+                    "quorum through bounded aggregate capture retries"
+                )
+                accepted_attempt["visual_capture"] = {
+                    key: value
+                    for key, value in area_result.items()
+                    if key != "target_attempts"
+                }
+                previous_attempts = area_result["target_attempts"]
+                selected_target_positions.pop()
+                areas.pop()
+                retry_plan = {
+                    **target_plan,
+                    "candidates": remaining_candidates,
+                }
+                capture_matched_camera_areas(
+                    host_pipe,
+                    client_pipe,
+                    [retry_plan],
+                    evidence_dir,
+                    run_index,
+                    areas,
+                    selected_target_positions=selected_target_positions,
+                    area_index_offset=area_index - 1,
+                    target_capture_attempt=(
+                        target_capture_attempt + 1
                     ),
-                    None,
                 )
-                remaining_candidates = (
-                    candidates[accepted_candidate_index + 1 :]
-                    if accepted_candidate_index is not None
-                    else []
+                areas[-1]["target_attempts"] = (
+                    previous_attempts
+                    + areas[-1]["target_attempts"]
                 )
-                if remaining_candidates:
-                    accepted_attempt = next(
-                        attempt
-                        for attempt in area_result["target_attempts"]
-                        if attempt.get("accepted") is True
-                    )
-                    accepted_attempt["accepted"] = False
-                    accepted_attempt["ok"] = False
-                    accepted_attempt["error"] = (
-                        "matched-camera target remained below the "
-                        "stable-content quorum through bounded aggregate "
-                        "capture retries"
-                    )
-                    accepted_attempt["visual_capture"] = {
-                        key: value
-                        for key, value in area_result.items()
-                        if key != "target_attempts"
-                    }
-                    previous_attempts = area_result["target_attempts"]
-                    selected_target_positions.pop()
-                    areas.pop()
-                    retry_plan = {
-                        **target_plan,
-                        "candidates": remaining_candidates,
-                    }
-                    capture_matched_camera_areas(
-                        host_pipe,
-                        client_pipe,
-                        [retry_plan],
-                        evidence_dir,
-                        run_index,
-                        areas,
-                        selected_target_positions=(
-                            selected_target_positions
-                        ),
-                        area_index_offset=area_index - 1,
-                        target_capture_attempt=(
-                            target_capture_attempt + 1
-                        ),
-                    )
-                    areas[-1]["target_attempts"] = (
-                        previous_attempts
-                        + areas[-1]["target_attempts"]
-                    )
-                    continue
+                continue
+        if not stable_pixels["bounded_match"]:
             raise VerifyFailure(
                 "matched-camera stable decor pixels differed: "
                 f"family={target['family']} "

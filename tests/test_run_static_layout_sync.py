@@ -698,7 +698,10 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             mock.patch.object(
                 verifier,
                 "temporal_minimum_edge_comparison",
-                return_value={"ok": True},
+                return_value={
+                    "sufficient_content": True,
+                    "ok": True,
+                },
             ),
             mock.patch.object(verifier.time, "sleep"),
             mock.patch.object(verifier, "CAPTURE_FRAMES_PER_PEER", 1),
@@ -723,7 +726,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         rejected_visual = visual_area["target_attempts"][0]
         self.assertFalse(rejected_visual["ok"])
         self.assertFalse(rejected_visual["accepted"])
-        self.assertIn("stable-content quorum", rejected_visual["error"])
+        self.assertIn("visual-content quorum", rejected_visual["error"])
         self.assertEqual(
             len(
                 rejected_visual["visual_capture"][
@@ -848,7 +851,10 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             mock.patch.object(
                 verifier,
                 "temporal_minimum_edge_comparison",
-                side_effect=[{"ok": True}, {"ok": True}],
+                side_effect=[
+                    {"sufficient_content": True, "ok": True},
+                    {"sufficient_content": True, "ok": True},
+                ],
             ),
             mock.patch.object(verifier.time, "sleep") as sleep,
         ):
@@ -877,6 +883,48 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             ]
         )
         sleep.assert_called_once_with(0.25)
+
+        profile_slugs.clear()
+        with (
+            mock.patch.object(
+                verifier,
+                "exact_stable_decor_pixel_comparison",
+                side_effect=[sufficient, sufficient],
+            ),
+            mock.patch.object(
+                verifier,
+                "temporal_minimum_edge_comparison",
+                side_effect=[
+                    {"sufficient_content": False, "ok": False},
+                    {"sufficient_content": True, "ok": True},
+                ],
+            ),
+            mock.patch.object(verifier.time, "sleep") as edge_sleep,
+        ):
+            edge_profile = verifier.capture_stable_render_profile(
+                capture_profile,
+                {"width": 400.0, "height": 240.0},
+                Path("/evidence/trees"),
+                attempts=3,
+                retry_delay=0.25,
+            )
+
+        self.assertEqual(
+            profile_slugs,
+            ["simple-lighting", "simple-lighting-retry-02"],
+        )
+        self.assertEqual(edge_profile["accepted_capture_attempt"], 2)
+        self.assertFalse(
+            edge_profile["capture_batches"][0][
+                "temporal_minimum_edge_geometry"
+            ]["sufficient_content"]
+        )
+        self.assertTrue(
+            edge_profile["temporal_minimum_edge_geometry"][
+                "sufficient_content"
+            ]
+        )
+        edge_sleep.assert_called_once_with(0.25)
 
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
