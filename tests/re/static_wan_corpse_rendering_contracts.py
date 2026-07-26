@@ -36,8 +36,12 @@ def test_wan_death_presentation_is_a_convergent_transaction() -> str:
     assert "native_remote_death_drop_spawned = true" in remote_vitals
     assert (
         "!binding->native_remote_death_epoch_active &&\n"
-        "        !presentation_active"
-    ) not in remote_vitals
+        "        !presentation_committed"
+    ) in remote_vitals
+    assert (
+        "presentation_active ||\n"
+        "        participant.runtime.death_presentation_tick != 0"
+    ) in remote_vitals
     assert "kNativeDeathPresentationTerminalCorpseTick" in remote_vitals
 
     _require_in_order(
@@ -73,8 +77,9 @@ def test_wan_death_presentation_is_a_convergent_transaction() -> str:
     ]
 
     return (
-        "authoritative death converges after late materialization, reapplies "
-        "corpse-safe visuals, and creates one stock dropped-equipment bouncer"
+        "a committed authoritative death converges after late "
+        "materialization, reapplies corpse-safe visuals, and creates one "
+        "stock dropped-equipment bouncer"
     )
 
 

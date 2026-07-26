@@ -52,6 +52,9 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
     const bool presentation_active =
         (participant.runtime.presentation_flags &
          multiplayer::ParticipantPresentationFlagDeathPresentation) != 0;
+    const bool presentation_committed =
+        presentation_active ||
+        participant.runtime.death_presentation_tick != 0;
     auto& memory = ProcessMemory::Instance();
     if (!authoritative_dead) {
         if (!binding->native_remote_death_epoch_active) {
@@ -85,6 +88,19 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
         binding->native_remote_death_drop_spawned = false;
         binding->death_transition_stock_tick_seen = false;
         return true;
+    }
+
+    if (!binding->native_remote_death_epoch_active &&
+        !presentation_committed) {
+        return
+            memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorTerminalDispatchPendingOffset,
+                0) &&
+            memory.TryWriteField<std::int32_t>(
+                actor_address,
+                kActorTerminalDispatchCountdownOffset,
+                0);
     }
 
     if (!binding->native_remote_death_epoch_active) {
