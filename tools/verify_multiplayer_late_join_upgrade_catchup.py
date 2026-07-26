@@ -23,7 +23,7 @@ from verify_local_multiplayer_sync import (
     VerifyFailure,
     complete_native_create,
     launch_additional_client,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_scene,
 )
 from verify_multiplayer_all_upgrade_sync import (
@@ -247,7 +247,7 @@ def main() -> int:
         return_code = 1
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(output, indent=2, sort_keys=True) + "\n",

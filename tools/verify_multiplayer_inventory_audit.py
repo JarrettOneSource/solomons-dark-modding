@@ -20,7 +20,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_int_text,
     parse_key_values,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_both_hub_settled,
 )
 
@@ -546,7 +546,7 @@ def wait_for_pair_inventory(timeout: float) -> dict[str, Any]:
 def run(args: argparse.Namespace) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
     if not args.no_launch:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         wait_for_both_hub_settled()
@@ -582,7 +582,7 @@ def main() -> int:
         return 1
     finally:
         if not args.no_launch:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

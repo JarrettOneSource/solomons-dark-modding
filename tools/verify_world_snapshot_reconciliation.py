@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from multiplayer_lua_probe import DEFAULT_CLIENTS, parse_client, run_all  # noqa: E402
-from verify_local_multiplayer_sync import disable_bots, launch_pair, stop_games  # noqa: E402
+from verify_local_multiplayer_sync import disable_bots, launch_pair, stop_owned_game_processes  # noqa: E402
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "world_snapshot_reconciliation.json"
 
@@ -190,7 +190,7 @@ def main() -> int:
     launch_info: dict[str, object] | None = None
     try:
         if args.launch_pair:
-            stop_games()
+            stop_owned_game_processes()
             launch_info = launch_pair()
             disable_bots()
             time.sleep(0.75)
@@ -218,7 +218,7 @@ def main() -> int:
                 time.sleep(max(args.interval, 0.0))
     finally:
         if args.launch_pair:
-            stop_games()
+            stop_owned_game_processes()
 
     if args.json:
         print(json.dumps(last_output, indent=2, sort_keys=True))

@@ -22,7 +22,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     parse_int_text,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from multiplayer_progression_probe import query_progression_snapshot
@@ -900,7 +900,7 @@ def launch_pair_ready(
 ) -> dict[str, Any]:
     last_error: Exception | None = None
     for attempt in range(1, 4):
-        stop_games()
+        stop_owned_game_processes()
         try:
             launch = launch_pair(
                 preset=preset,
@@ -951,7 +951,7 @@ def launch_pair_ready(
             }
         except Exception as exc:
             last_error = exc
-            stop_games()
+            stop_owned_game_processes()
             time.sleep(1.0)
     if last_error is not None:
         raise last_error
@@ -1052,13 +1052,13 @@ def main() -> int:
         except Exception:
             pass
         print(json.dumps(result, indent=2, sort_keys=True))
-        stop_games()
+        stop_owned_game_processes()
         return 1
 
     result["output"] = str(args.output)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    stop_games()
+    stop_owned_game_processes()
     return 0
 
 

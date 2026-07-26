@@ -31,7 +31,7 @@ from verify_local_multiplayer_sync import (
     parse_int_text,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_multiplayer_all_upgrade_sync import (
@@ -1516,7 +1516,7 @@ def main() -> int:
     output: dict[str, Any] = {"ok": False}
     return_code = 1
     try:
-        stop_games()
+        stop_owned_game_processes()
         output["launch"] = launch_pair(
             preset="map_create_fire_mind_hub",
             god_mode=False,
@@ -1643,7 +1643,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     matrix = output.get("matrix", {})
     print(

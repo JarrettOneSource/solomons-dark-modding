@@ -25,7 +25,7 @@ from verify_enemy_damage_claim_sync import (
     set_local_player_vitals,
     start_host_testrun_and_wait_for_clients,
     start_host_waves,
-    stop_games,
+    stop_owned_game_processes,
     values,
     wait_for_client_enemy_death_handled,
     wait_for_host_enemy_hp,
@@ -131,7 +131,7 @@ def capture_pair(label: str, x: float, y: float, radius: float) -> dict[str, Any
 def run_probe(radius: float, keep_open: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         result["run_entry"] = start_host_testrun_and_wait_for_clients()
@@ -171,7 +171,7 @@ def run_probe(radius: float, keep_open: bool) -> dict[str, Any]:
         return result
     finally:
         if not keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
 
 def main() -> int:
@@ -186,7 +186,7 @@ def main() -> int:
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from multiplayer_log_probe import log_after, log_position, read_log
+from owned_process_ledger import owned_process_ids_by_role
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -26,7 +27,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -179,30 +180,12 @@ def enable_progression_neutral_combat() -> dict[str, object]:
 
 
 def detect_instance_pids() -> dict[str, int]:
-    output = run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            "Get-CimInstance Win32_Process -Filter \"Name='SolomonDark.exe'\" | "
-            "Select-Object ProcessId,CommandLine | ConvertTo-Json -Depth 3",
-        ],
-        timeout=10.0,
-    )
-    parsed = json.loads(output)
-    rows = parsed if isinstance(parsed, list) else [parsed]
-    result: dict[str, int] = {}
-    for row in rows:
-        command_line = str(row.get("CommandLine", "")).lower()
-        process_id = int(row.get("ProcessId", 0))
-        if "local-mp-host" in command_line:
-            result["host"] = process_id
-        elif "local-mp-client" in command_line:
-            result["client"] = process_id
-        elif "local-mp-third" in command_line:
-            result["third"] = process_id
+    result = owned_process_ids_by_role()
     if "host" not in result or "client" not in result:
-        raise VerifyFailure(f"could not resolve host/client SolomonDark PIDs from {rows}")
+        raise VerifyFailure(
+            "the owned-process ledger does not contain both host and client "
+            f"processes: {result}"
+        )
     return result
 
 
@@ -883,7 +866,7 @@ def main() -> int:
         return 1
     finally:
         release_global_mouse_button()
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

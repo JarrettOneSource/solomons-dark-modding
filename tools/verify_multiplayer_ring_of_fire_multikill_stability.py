@@ -18,7 +18,7 @@ from verify_local_multiplayer_sync import (
     VerifyFailure,
     parse_key_values,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_all_upgrade_sync import (
     new_crash_artifacts,
@@ -369,7 +369,7 @@ def main() -> int:
     result: dict[str, Any] = {"ok": False}
     return_code = 1
     try:
-        stop_games()
+        stop_owned_game_processes()
         result = run_verifier(args.timeout, result)
         return_code = 0
     except Exception as exc:
@@ -383,7 +383,7 @@ def main() -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

@@ -176,6 +176,9 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
         ROOT / "tools/verify_multiplayer_enemy_retarget.py"
     )
     process_cleanup = read_text(
+        ROOT / "tools/owned_process_ledger.py"
+    )
+    process_bridge = read_text(
         ROOT / "tools/verify_local_multiplayer_sync.py"
     )
     unit_tests = read_text(
@@ -218,9 +221,21 @@ def test_enemy_retarget_acceptance_gate_is_wired() -> str:
         "exact pair-process cleanup",
         process_cleanup,
         (
+            "class OwnedProcessLedger:",
+            "Get-CimInstance -ClassName Win32_Process",
+            '-Filter "ProcessId = $processId"',
+            "$process.ExecutablePath",
+            "if (-not $refused)",
+            "refused to stop launcher PIDs with different executables",
+        ),
+    )
+    _require_tokens(
+        "exact pair-process cleanup bridge",
+        process_bridge,
+        (
             "def stop_exact_game_processes(",
-            "pathMatched = $matches",
-            "refused to stop launcher PID with a different executable",
+            "register_owned_launch(launch)",
+            "return stop_owned_process_ids(",
         ),
     )
     _require_tokens(

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import time
 
@@ -17,7 +18,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
     HOST_ID,
     HOST_NAME,
@@ -559,9 +560,10 @@ def move_client_near(target: dict[str, str]) -> dict[str, str]:
 
 
 def main() -> int:
+    argparse.ArgumentParser(description=__doc__).parse_args()
     result: dict[str, object] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         result["run_entry"] = start_host_testrun_and_wait_for_clients()
@@ -643,7 +645,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

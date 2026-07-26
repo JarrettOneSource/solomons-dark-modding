@@ -29,7 +29,7 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     ROOT,
     VerifyFailure,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_all_stat_sync import (
     compact_snapshot,
@@ -250,7 +250,7 @@ def run_natural_stat_matrix(**kwargs: Any) -> dict[str, Any]:
             direction=direction,
             **kwargs,
         )
-        stop_games()
+        stop_owned_game_processes()
     return {
         "directions": directions,
         "contracts": {
@@ -524,7 +524,7 @@ def run_deflect_stat_session(timeout: float) -> dict[str, Any]:
             direction,
             timeout,
         )
-        stop_games()
+        stop_owned_game_processes()
     return {
         "directions": directions,
         "contracts": {
@@ -803,9 +803,9 @@ def main() -> int:
     return_code = 1
     try:
         output["resist_magic"] = run_magic_stat_session(args.timeout)
-        stop_games()
+        stop_owned_game_processes()
         output["deflect"] = run_deflect_stat_session(args.timeout)
-        stop_games()
+        stop_owned_game_processes()
         output["resist_poison"] = run_poison_stat_session(args.timeout)
         crashes = new_crash_artifacts(started_at)
         output["new_crash_artifacts"] = crashes
@@ -823,7 +823,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

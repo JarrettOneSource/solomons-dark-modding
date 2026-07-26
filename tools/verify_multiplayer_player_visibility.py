@@ -27,7 +27,7 @@ from verify_local_multiplayer_sync import (
     place_player,
     query,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
     wait_for_remote_convergence,
 )
@@ -280,14 +280,14 @@ def main() -> int:
 
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         run(result)
         return_code = 0
     except Exception as exc:
         result["error"] = str(exc)
         return_code = 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -20,7 +20,7 @@ from verify_hub_student_seed_viability import (  # noqa: E402
     VerifyFailure,
     disable_bots,
     launch_isolated_pair,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_local_multiplayer_sync import lua, parse_key_values, wait_for_scene  # noqa: E402
 
@@ -339,7 +339,7 @@ def main() -> int:
         return 1
     finally:
         if not args.keep_running:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

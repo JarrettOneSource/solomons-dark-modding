@@ -24,7 +24,7 @@ from verify_local_multiplayer_sync import (
     parse_int_text,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_multiplayer_level_up_offer_sync import (
@@ -512,7 +512,7 @@ def main() -> int:
 
     output: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         output["launch"] = launch_pair()
         disable_bots()
         output["hub_ready"] = {
@@ -528,7 +528,7 @@ def main() -> int:
         return_code = 1
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")

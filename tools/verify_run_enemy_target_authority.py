@@ -21,7 +21,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
 
@@ -412,7 +412,7 @@ def arrange_close_range() -> dict[str, Any]:
 
 def run_verifier(sample_seconds: float, interval: float) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
-    stop_games()
+    stop_owned_game_processes()
     try:
         result["launch"] = launch_pair(god_mode=True)
         disable_bots()
@@ -501,7 +501,7 @@ def run_verifier(sample_seconds: float, interval: float) -> dict[str, Any]:
         result["ok"] = True
         return result
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 def main() -> int:
@@ -524,7 +524,7 @@ def main() -> int:
             result = runtime_partial if isinstance(runtime_partial, dict) else {}
         result["ok"] = False
         result["error"] = str(exc)
-        stop_games()
+        stop_owned_game_processes()
 
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

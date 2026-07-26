@@ -20,7 +20,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
 )
 
 
@@ -880,7 +880,7 @@ def setup_pair(max_attempts: int) -> dict[str, Any]:
     last_error = ""
     for attempt in range(1, max_attempts + 1):
         try:
-            stop_games()
+            stop_owned_game_processes()
             launch = launch_pair()
             disable_bots()
             run_entry = start_host_testrun_and_wait_for_clients()
@@ -891,7 +891,7 @@ def setup_pair(max_attempts: int) -> dict[str, Any]:
             }
         except Exception as exc:
             last_error = str(exc)
-            stop_games()
+            stop_owned_game_processes()
             time.sleep(1.0)
     raise VerifyFailure(f"failed to prepare multiplayer run pair: {last_error}")
 
@@ -1028,7 +1028,7 @@ def main() -> int:
         return 1
     finally:
         if not args.no_launch:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

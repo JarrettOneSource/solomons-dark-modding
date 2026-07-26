@@ -24,7 +24,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -1049,7 +1049,7 @@ def main() -> int:
                     time.sleep(1.0)
                 finally:
                     record_telemetry("targeted.element.cleanup", element=spec.element)
-                    stop_games()
+                    stop_owned_game_processes()
                     time.sleep(0.75)
         result["ok"] = True
         record_telemetry("targeted.harness.success")
@@ -1059,7 +1059,7 @@ def main() -> int:
         record_telemetry("targeted.harness.failure", error=str(exc))
         return_code = 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

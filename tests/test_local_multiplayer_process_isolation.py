@@ -295,14 +295,14 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         targets = verifier._exact_game_process_targets(
             {
                 "hostProcessId": 4311,
-                "hostLog": (
-                    r"C:\acceptance\instances\pair-host\stage"
-                    r"\.sdmod\logs\solomondarkmodloader.log"
+                "hostExecutablePath": (
+                    r"C:\acceptance\instances\pair-host"
+                    r"\stage\SolomonDark.exe"
                 ),
                 "clientProcessId": 4312,
-                "clientLog": (
-                    r"C:\acceptance\instances\pair-client\stage"
-                    r"\.sdmod\logs\solomondarkmodloader.log"
+                "clientExecutablePath": (
+                    r"C:\acceptance\instances\pair-client"
+                    r"\stage\SolomonDark.exe"
                 ),
             }
         )
@@ -328,12 +328,12 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
             ],
         )
 
-    def test_exact_pair_cleanup_rejects_pid_without_log_identity(
+    def test_exact_pair_cleanup_rejects_pid_without_staged_path_identity(
         self,
     ) -> None:
         with self.assertRaisesRegex(
-            verifier.VerifyFailure,
-            "hostProcessId without hostLog",
+            RuntimeError,
+            "hostExecutablePath",
         ):
             verifier._exact_game_process_targets(
                 {"hostProcessId": 4311}
@@ -394,16 +394,18 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
             verifier.select_available_windows_udp_ports(2)
 
     def test_exact_cleanup_never_uses_a_machine_wide_process_query(self) -> None:
-        with mock.patch.object(verifier.subprocess, "run") as run:
-            verifier.stop_game_processes([4312, 4311, 4312, -1, True])
+        with (
+            mock.patch.object(verifier.subprocess, "run") as run,
+            self.assertRaisesRegex(
+                RuntimeError,
+                "absent from the owned process ledger",
+            ),
+        ):
+            verifier.stop_game_processes(
+                [4312, 4311, 4312, -1, True]
+            )
 
-        run.assert_called_once()
-        command = run.call_args.args[0][-1]
-        self.assertIn("$ids = @(4311,4312);", command)
-        self.assertIn("Get-Process -Id $ids", command)
-        self.assertIn("Where-Object", command)
-        self.assertNotIn("Get-Process SolomonDark*", command)
-        self.assertEqual(run.call_args.kwargs["timeout"], 15.0)
+        run.assert_not_called()
 
 
 if __name__ == "__main__":

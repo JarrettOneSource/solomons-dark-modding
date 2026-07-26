@@ -23,7 +23,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -337,7 +337,7 @@ def run_sustained_combat_window(
 def main() -> int:
     result: dict[str, object] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair(
             host_preset=AIR_HOST_PRESET,
             client_preset=ETHER_CLIENT_PRESET,
@@ -421,7 +421,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

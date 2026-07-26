@@ -114,11 +114,19 @@ $result = Invoke-LauncherWithEnvironment `
     -Environment $environment `
     -Arguments $arguments
 
+$instanceRoot = Join-Path $effectiveRuntimeRoot (
+    Join-Path "instances" $Instance.ToLowerInvariant())
+$executablePath = [System.IO.Path]::GetFullPath(
+    (Join-Path $instanceRoot "stage\SolomonDark.exe"))
+
 if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     [System.IO.File]::WriteAllText(
         $ProcessIdOutputPath,
         ([pscustomobject]@{
             processId = [int]$result.launch.processId
+            executablePath = $executablePath
+            instance = $Instance
+            processRole = "third"
         } | ConvertTo-Json -Compress)
     )
 }
@@ -134,6 +142,8 @@ if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     hostPort = $HostPort
     luaPipe = $pipeName
     startupLogPath = $result.launch.startupLogPath
+    executablePath = $executablePath
+    processRole = "third"
     testSurvivalBoneyardOverride = $resolvedOverride
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedWaveOverride

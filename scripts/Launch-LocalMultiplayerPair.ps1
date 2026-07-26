@@ -230,6 +230,18 @@ $effectiveRuntimeRoot = if ([string]::IsNullOrWhiteSpace($runtimeRootOverride)) 
     $runtimeRootOverride
 }
 
+function Get-InstanceExecutablePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Instance
+    )
+
+    $instanceRoot = Join-Path $effectiveRuntimeRoot (
+        Join-Path "instances" $Instance.ToLowerInvariant())
+    return [System.IO.Path]::GetFullPath(
+        (Join-Path $instanceRoot "stage\SolomonDark.exe"))
+}
+
 function Write-LaunchedProcessIds {
     param(
         [object]$HostResult = $null,
@@ -247,8 +259,18 @@ function Write-LaunchedProcessIds {
         } else {
             $null
         }
+        hostExecutablePath = if ($null -ne $HostResult) {
+            Get-InstanceExecutablePath -Instance $hostInstance
+        } else {
+            $null
+        }
         clientProcessId = if ($null -ne $ClientResult) {
             [int]$ClientResult.launch.processId
+        } else {
+            $null
+        }
+        clientExecutablePath = if ($null -ne $ClientResult) {
+            Get-InstanceExecutablePath -Instance $clientInstance
         } else {
             $null
         }
@@ -257,6 +279,12 @@ function Write-LaunchedProcessIds {
         } else {
             $null
         }
+        thirdExecutablePath = if ($null -ne $ThirdResult) {
+            Get-InstanceExecutablePath -Instance $thirdInstance
+        } else {
+            $null
+        }
+        instancePrefix = $InstancePrefix
     }
     [System.IO.File]::WriteAllText(
         $ProcessIdOutputPath,
@@ -1417,6 +1445,13 @@ if (-not $NoTileWindows) {
     hostProcessId = $hostResult.launch.processId
     clientProcessId = $clientResult.launch.processId
     thirdProcessId = if ($null -ne $thirdResult) { $thirdResult.launch.processId } else { $null }
+    hostExecutablePath = Get-InstanceExecutablePath -Instance $hostInstance
+    clientExecutablePath = Get-InstanceExecutablePath -Instance $clientInstance
+    thirdExecutablePath = if ($null -ne $thirdResult) {
+        Get-InstanceExecutablePath -Instance $thirdInstance
+    } else {
+        $null
+    }
     hostPort = $HostPort
     clientPort = $ClientPort
     thirdPort = if ($EnableThird) { $ThirdPort } else { $null }

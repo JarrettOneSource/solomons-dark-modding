@@ -24,7 +24,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     snap_to_nav,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -989,7 +989,7 @@ def launch_run_pair() -> tuple[dict[str, object], dict[str, int], list[dict[str,
 
 def run_verifier(*, keep_open: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
-    stop_games()
+    stop_owned_game_processes()
     try:
         setup, pids, targets = launch_run_pair()
         result["setup"] = setup
@@ -1037,7 +1037,7 @@ def run_verifier(*, keep_open: bool) -> dict[str, Any]:
         return result
     finally:
         if not keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
 
 def main() -> int:
@@ -1051,7 +1051,7 @@ def main() -> int:
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

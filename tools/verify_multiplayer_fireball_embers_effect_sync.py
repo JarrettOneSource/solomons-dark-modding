@@ -19,7 +19,7 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     VerifyFailure,
     parse_int_text,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_fireball_explode_effect_sync import (
     build_manual_pair,
@@ -785,13 +785,13 @@ def main() -> int:
         result = {"ok": False, "owner": args.owner, "error": str(exc)}
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
-        stop_games()
+        stop_owned_game_processes()
         return 1
 
     result["output"] = str(args.output)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    stop_games()
+    stop_owned_game_processes()
     return 0
 
 

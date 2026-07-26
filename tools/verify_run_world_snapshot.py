@@ -17,7 +17,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
 )
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_world_snapshot_verification.json"
@@ -316,7 +316,7 @@ def main() -> int:
 
     result: dict[str, object] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         result["host_run_entry"] = start_host_testrun_and_wait_for_clients()
@@ -336,7 +336,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     parse_key_values,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_real_input_spell_cast_sync import (
@@ -203,7 +203,7 @@ def cast_and_sample(direction: Direction) -> dict[str, object]:
 def main() -> int:
     result: dict[str, object] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair(preset="map_create_fire_mind_hub")
         wait_for_remote(HOST_PIPE, CLIENT_ID, CLIENT_NAME, "hub")
         wait_for_remote(CLIENT_PIPE, HOST_ID, HOST_NAME, "hub")
@@ -239,7 +239,7 @@ def main() -> int:
         OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT_PATH.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
         print(json.dumps(result, indent=2, sort_keys=True))
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

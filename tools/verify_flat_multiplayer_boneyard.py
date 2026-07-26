@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
@@ -26,7 +27,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     query,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_multiplayer_primary_kill_stress import (
@@ -406,16 +407,17 @@ def run() -> dict[str, Any]:
 
 
 def main() -> int:
+    argparse.ArgumentParser(description=__doc__).parse_args()
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result = run()
         return_code = 0
     except Exception as exc:
         result["error"] = str(exc)
         return_code = 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

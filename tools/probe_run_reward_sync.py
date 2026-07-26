@@ -21,7 +21,7 @@ from verify_local_multiplayer_sync import (
     place_player,
     snap_to_nav,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_local_transform_settled,
 )
 from verify_run_world_snapshot import start_host_waves, wait_for_run_snapshot
@@ -507,7 +507,7 @@ def setup_live_run_pair(max_attempts: int = 3) -> dict[str, Any]:
     last_error = ""
     for attempt in range(1, max_attempts + 1):
         try:
-            stop_games()
+            stop_owned_game_processes()
             launch = launch_pair()
             disable_bots()
             host_run_entry = start_host_testrun_and_wait_for_clients()
@@ -522,7 +522,7 @@ def setup_live_run_pair(max_attempts: int = 3) -> dict[str, Any]:
             }
         except Exception as exc:
             last_error = str(exc)
-            stop_games()
+            stop_owned_game_processes()
             time.sleep(1.0)
     raise VerifyFailure(f"failed to prepare live run pair after {max_attempts} attempts: {last_error}")
 
@@ -650,7 +650,7 @@ def main() -> int:
         return 1
     finally:
         if not args.no_launch:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

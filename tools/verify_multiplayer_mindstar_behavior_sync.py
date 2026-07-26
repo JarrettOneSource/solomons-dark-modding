@@ -27,7 +27,7 @@ from verify_local_multiplayer_sync import (
     HOST_ID,
     HOST_PIPE,
     VerifyFailure,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_battle_siege_behavior_sync import (
     AIR_PRIMARY_ENTRY,
@@ -692,7 +692,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

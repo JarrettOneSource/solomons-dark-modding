@@ -22,7 +22,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     parse_int_text,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_multiplayer_level_up_offer_sync import (
@@ -2097,7 +2097,7 @@ def wait_for_host_target_upgrade(timeout: float) -> dict[str, Any]:
 def launch_pair_ready(timeout: float) -> dict[str, Any]:
     last_error: Exception | None = None
     for attempt in range(1, 4):
-        stop_games()
+        stop_owned_game_processes()
         try:
             launch = launch_pair(
                 preset=AIR_PRESET,
@@ -2124,7 +2124,7 @@ def launch_pair_ready(timeout: float) -> dict[str, Any]:
             }
         except Exception as exc:
             last_error = exc
-            stop_games()
+            stop_owned_game_processes()
             time.sleep(1.0)
     if last_error is not None:
         raise last_error
@@ -2445,13 +2445,13 @@ def main() -> int:
         except Exception:
             pass
         print(json.dumps(result, indent=2, sort_keys=True))
-        stop_games()
+        stop_owned_game_processes()
         return 1
 
     result["output"] = str(args.output)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
-    stop_games()
+    stop_owned_game_processes()
     return 0 if result.get("ok") is True else 1
 
 

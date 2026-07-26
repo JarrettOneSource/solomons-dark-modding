@@ -34,7 +34,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_testrun,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
     wait_for_scene,
 )
@@ -905,7 +905,7 @@ def main() -> int:
     started_at = time.time()
     output: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         output["launch"] = launch_trio(
             preset=AIR_PRESET,
             god_mode=True,
@@ -974,7 +974,7 @@ def main() -> int:
         return_code = 1
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(output, indent=2, sort_keys=True) + "\n",

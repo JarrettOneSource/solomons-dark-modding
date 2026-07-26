@@ -20,7 +20,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_key_values,
     start_testrun,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_both_hub_settled,
     wait_for_remote,
     wait_for_scene,
@@ -99,7 +99,7 @@ def run() -> dict[str, Any]:
         "watch_name": WATCH_NAME,
         "started_at": time.time(),
     }
-    stop_games()
+    stop_owned_game_processes()
     result["launch"] = launch_pair(god_mode=True)
     result["disable_bots"] = disable_bots()
     wait_for_both_hub_settled(settle_seconds=2.0, timeout=20.0)

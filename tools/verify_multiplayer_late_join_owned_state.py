@@ -13,6 +13,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from multiplayer_progression_probe import query_progression_snapshot
+from owned_process_ledger import (
+    OwnedProcessError,
+    stop_owned_process_ids,
+)
 from multiplayer_transient_status_harness import (
     TRANSIENT_POISONED,
     TRANSIENT_SNAPSHOT_VALID,
@@ -32,7 +36,7 @@ from verify_local_multiplayer_sync import (
     launch_additional_client,
     parse_int_text,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_scene,
 )
 from verify_multiplayer_inventory_audit import (
@@ -245,28 +249,23 @@ def verify_bootstrap(
 
 
 def stop_third_process(pid: int, timeout: float) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            f"Stop-Process -Id {pid} -Force -ErrorAction Stop",
-        ],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=10.0,
-        check=False,
-    )
+    try:
+        cleanup = stop_owned_process_ids([pid])
+    except OwnedProcessError as exc:
+        raise VerifyFailure(
+            f"refused to stop unowned third process {pid}: {exc}"
+        ) from exc
     _kill_lua_daemon(THIRD_PIPE)
-    if completed.returncode != 0:
-        raise VerifyFailure(f"failed to stop third process {pid}: {completed.stdout}")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         pids = detect_instance_pids()
         if pids.get("third") != pid:
-            return {"pid": pid, "stopped": True, "remaining": pids}
+            return {
+                "pid": pid,
+                "stopped": True,
+                "remaining": pids,
+                "owned_cleanup": cleanup,
+            }
         time.sleep(0.1)
     raise VerifyFailure(f"third process {pid} did not exit")
 
@@ -437,7 +436,7 @@ def main() -> int:
         return_code = 1
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(output, indent=2, sort_keys=True) + "\n",

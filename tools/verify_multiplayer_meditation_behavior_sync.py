@@ -25,7 +25,7 @@ from verify_local_multiplayer_sync import (
     parse_int_text,
     parse_key_values,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_local_transform_settled,
     wait_for_remote_convergence,
 )
@@ -909,7 +909,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

@@ -24,7 +24,7 @@ from verify_enemy_damage_claim_sync import (
     set_local_player_vitals,
     start_host_testrun_and_wait_for_clients,
     start_host_waves,
-    stop_games,
+    stop_owned_game_processes,
     values,
     wait_for_client_enemy_death_handled,
     wait_for_host_enemy_killed,
@@ -180,7 +180,7 @@ def summarize_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def run_probe_once(radius: float, keep_open: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         result["run_entry"] = start_host_testrun_and_wait_for_clients(timeout=45.0)
@@ -227,7 +227,7 @@ def run_probe_once(radius: float, keep_open: bool) -> dict[str, Any]:
         return result
     finally:
         if not keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
 
 def run_probe(radius: float, keep_open: bool, attempts: int) -> dict[str, Any]:
@@ -244,7 +244,7 @@ def run_probe(radius: float, keep_open: bool, attempts: int) -> dict[str, Any]:
             attempt_results.append({"attempt": attempt, "error": last_error})
             if keep_open:
                 raise
-            stop_games()
+            stop_owned_game_processes()
             time.sleep(1.0)
     return {
         "ok": False,
@@ -265,7 +265,7 @@ def main() -> int:
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

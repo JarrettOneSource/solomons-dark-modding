@@ -29,7 +29,7 @@ from verify_local_multiplayer_sync import (
     resolve_level_ups_from_snapshots,
     snap_to_nav,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import set_local_player_vitals
@@ -4646,7 +4646,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
     try:
         if not args.attach:
             stage("stopping any running games")
-            stop_games()
+            stop_owned_game_processes()
             stage("launching host+client pair (god mode)")
             result["launch"] = launch_pair(god_mode=True, tile_windows=False)
         stage("disabling bots on both instances")
@@ -4782,7 +4782,7 @@ def run_verifier(args: argparse.Namespace) -> dict[str, Any]:
         result["client_crash_delta"] = crash_log_tail(CLIENT_CRASH_LOG, client_crash_start)
         args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
         if not args.attach:
-            stop_games()
+            stop_owned_game_processes()
     return result
 
 

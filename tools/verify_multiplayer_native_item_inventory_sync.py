@@ -16,7 +16,7 @@ from verify_local_multiplayer_sync import (
     ROOT,
     VerifyFailure,
     parse_int_text,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_gold_pickup_authority import (
     move_client_into_pickup_range,
@@ -856,7 +856,7 @@ def main() -> int:
         return 1
     finally:
         if not args.no_launch:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

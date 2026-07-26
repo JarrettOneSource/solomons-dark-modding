@@ -20,7 +20,7 @@ from verify_local_multiplayer_sync import (
     disable_bots,
     launch_pair,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_both_hub_settled,
 )
 from verify_multiplayer_inventory_audit import (
@@ -341,7 +341,7 @@ def open_luthacus_inventory(host_pid: int) -> dict[str, Any]:
 
 
 def run(args: argparse.Namespace, result: dict[str, Any]) -> dict[str, Any]:
-    stop_games()
+    stop_owned_game_processes()
     launch = launch_pair(allow_focus_steal=True)
     result["launch"] = launch
     host_pid = int(launch["hostProcessId"])
@@ -449,7 +449,7 @@ def main() -> int:
             "output": str(OUTPUT),
         }, indent=2, sort_keys=True))
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
     return return_code
 
 

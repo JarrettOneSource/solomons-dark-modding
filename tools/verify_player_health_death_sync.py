@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import time
@@ -26,7 +27,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_testrun,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
     wait_for_scene,
 )
@@ -355,9 +356,10 @@ def verify_one_direction(
 
 
 def main() -> int:
+    argparse.ArgumentParser(description=__doc__).parse_args()
     result: dict[str, object] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_trio(tile_windows=False)
         disable_bots()
         third_bot_count = lua(
@@ -459,7 +461,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

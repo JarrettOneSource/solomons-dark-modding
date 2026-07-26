@@ -16,7 +16,7 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     VerifyFailure,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_fireball_explode_effect_sync import launch_pair_ready
 from verify_multiplayer_primary_kill_stress import (
@@ -243,7 +243,7 @@ def main() -> int:
     result: dict[str, Any] = {"ok": False}
     return_code = 1
     try:
-        stop_games()
+        stop_owned_game_processes()
         result = run_verifier(args.timeout)
         return_code = 0
     except Exception as exc:
@@ -255,7 +255,7 @@ def main() -> int:
         args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result, indent=2))
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
     return return_code
 
 

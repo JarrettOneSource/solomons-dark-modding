@@ -24,7 +24,7 @@ from verify_local_multiplayer_sync import (
     launch_pair,
     lua,
     parse_key_values,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_player_health_death_sync import query_remote_participant
@@ -1356,7 +1356,7 @@ def main() -> int:
                 result["elements"].append(verify_element(spec))
             finally:
                 record_telemetry("element.cleanup", element=spec.element)
-                stop_games()
+                stop_owned_game_processes()
         result["ok"] = True
         result["telemetry_path"] = str(TELEMETRY_PATH)
         record_telemetry("harness.success")

@@ -18,7 +18,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     lua,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_run_world_snapshot import (
     CLIENT_SNAPSHOT_LUA,
@@ -76,7 +76,7 @@ def run_verifier(
     require_growth: bool,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {"ok": False}
-    stop_games()
+    stop_owned_game_processes()
     try:
         result["launch"] = launch_pair()
         disable_bots()
@@ -136,7 +136,7 @@ def run_verifier(
         result["ok"] = True
         return result
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 def main() -> int:
@@ -157,7 +157,7 @@ def main() -> int:
         )
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
-        stop_games()
+        stop_owned_game_processes()
 
     RUNTIME_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RUNTIME_OUTPUT.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

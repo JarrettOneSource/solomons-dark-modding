@@ -22,7 +22,7 @@ from verify_local_multiplayer_sync import (
     VerifyFailure,
     disable_bots,
     launch_pair,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 
@@ -325,7 +325,7 @@ def main() -> int:
     output: dict[str, Any] = {"ok": False}
     try:
         configs = load_skill_configs()
-        stop_games()
+        stop_owned_game_processes()
         output["launch"] = launch_pair()
         disable_bots()
         output["hub_ready"] = {
@@ -343,7 +343,7 @@ def main() -> int:
         output["error"] = str(exc)
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")

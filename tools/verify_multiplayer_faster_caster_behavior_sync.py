@@ -24,7 +24,7 @@ from verify_local_multiplayer_sync import (
     VerifyFailure,
     lua,
     parse_key_values,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_all_stat_sync import apply_stat_batch, load_stat_contract_values
 from verify_multiplayer_all_upgrade_sync import (
@@ -615,7 +615,7 @@ def run_cadence_phase(
         return phase
     finally:
         if retire_pair:
-            stop_games()
+            stop_owned_game_processes()
 
 
 def verify_cadence_contracts(
@@ -747,7 +747,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

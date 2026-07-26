@@ -27,7 +27,7 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     ROOT,
     VerifyFailure,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_all_upgrade_sync import new_crash_artifacts
 from verify_multiplayer_fireball_explode_effect_sync import launch_pair_ready
@@ -468,7 +468,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(json.dumps({
         "ok": output.get("ok", False),

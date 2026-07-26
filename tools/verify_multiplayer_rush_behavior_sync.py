@@ -34,7 +34,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_local_transform_settled,
     wait_for_remote,
     wait_for_remote_convergence,
@@ -1156,7 +1156,7 @@ def main() -> int:
         output["native_rush_evidence"] = load_native_rush_evidence(
             args.native_rush_evidence
         )
-        stop_games()
+        stop_owned_game_processes()
         output["launch"] = launch_pair(
             preset="map_create_fire_mind_hub",
             god_mode=True,
@@ -1215,7 +1215,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(

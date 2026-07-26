@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import atexit
 import base64
 import importlib.util
@@ -15,10 +16,18 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 from collections.abc import Iterable
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any
+
+from owned_process_ledger import (
+    identities_from_launch,
+    new_launcher_ledger_path,
+    read_launcher_ledger,
+    register_owned_launch,
+    stop_owned_game_processes,
+    stop_owned_process_ids,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -194,21 +203,6 @@ try {{
     return selected
 
 
-def stop_games() -> None:
-    subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            "Get-Process SolomonDark* -ErrorAction SilentlyContinue | Stop-Process -Force",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-
-
 def game_process_ids(result: dict[str, object]) -> list[int]:
     """Return the exact game process IDs reported by a launcher result."""
     process_ids: set[int] = set()
@@ -232,215 +226,46 @@ def game_process_ids(result: dict[str, object]) -> list[int]:
     return sorted(process_ids)
 
 
-def stop_game_processes(process_ids: Iterable[int]) -> None:
-    """Stop only the reported Solomon Dark processes, never every game process."""
-    exact_process_ids = sorted(
-        {
-            process_id
-            for process_id in process_ids
-            if isinstance(process_id, int)
-            and not isinstance(process_id, bool)
-            and process_id > 0
-        }
-    )
-    if not exact_process_ids:
-        return
+def stop_game_processes(
+    process_ids: Iterable[int],
+) -> list[dict[str, Any]]:
+    """Stop only exact PIDs already acquired by the shared path ledger."""
 
-    joined_process_ids = ",".join(str(process_id) for process_id in exact_process_ids)
-    subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            (
-                f"$ids = @({joined_process_ids}); "
-                "Get-Process -Id $ids -ErrorAction SilentlyContinue | "
-                "Where-Object { $_.ProcessName -like 'SolomonDark*' } | "
-                "Stop-Process -Force"
-            ),
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        timeout=15.0,
-        check=False,
-    )
+    return stop_owned_process_ids(process_ids)
 
 
 def _exact_game_process_targets(
     launch: dict[str, object],
 ) -> list[dict[str, object]]:
-    targets: list[dict[str, object]] = []
-    for role, process_key, log_key in (
-        ("host", "hostProcessId", "hostLog"),
-        ("client", "clientProcessId", "clientLog"),
-        ("third", "thirdProcessId", "thirdLog"),
-    ):
-        process_id = launch.get(process_key)
-        if (
-            isinstance(process_id, bool)
-            or not isinstance(process_id, int)
-            or process_id <= 0
-        ):
-            continue
-        raw_log_path = launch.get(log_key)
-        if not isinstance(raw_log_path, str) or not raw_log_path:
-            raise VerifyFailure(
-                f"pair launch reported {process_key} without {log_key}"
-            )
-
-        if re.match(r"^[A-Za-z]:[\\/]", raw_log_path) or raw_log_path.startswith(
-            "\\\\"
-        ):
-            log_path = PureWindowsPath(raw_log_path)
-            if (
-                len(log_path.parents) < 3
-                or log_path.parent.name.casefold() != "logs"
-                or log_path.parent.parent.name.casefold() != ".sdmod"
-            ):
-                raise VerifyFailure(
-                    f"pair launch reported an unexpected {log_key}: "
-                    f"{raw_log_path}"
-                )
-            expected_path = str(
-                log_path.parents[2] / "SolomonDark.exe"
-            )
-        else:
-            log_path = Path(raw_log_path)
-            if (
-                len(log_path.parents) < 3
-                or log_path.parent.name.casefold() != "logs"
-                or log_path.parent.parent.name.casefold() != ".sdmod"
-            ):
-                raise VerifyFailure(
-                    f"pair launch reported an unexpected {log_key}: "
-                    f"{raw_log_path}"
-                )
-            expected_path = path_for_powershell(
-                log_path.parents[2] / "SolomonDark.exe"
-            )
-        targets.append(
-            {
-                "role": role,
-                "pid": process_id,
-                "expected_path": expected_path,
-            }
-        )
-    return targets
+    return [
+        {
+            "role": identity.role,
+            "pid": identity.process_id,
+            "expected_path": identity.executable_path,
+        }
+        for identity in identities_from_launch(launch)
+    ]
 
 
 def stop_exact_game_processes(
     launch: dict[str, object],
 ) -> list[dict[str, object]]:
     """Stop only launcher-owned PIDs whose executable path also matches."""
-    targets = _exact_game_process_targets(launch)
-    if not targets:
-        return []
-
-    payload = base64.b64encode(
-        json.dumps(targets).encode("utf-8")
-    ).decode("ascii")
-    script = r"""
-$ErrorActionPreference = "Stop"
-$payload = [System.Text.Encoding]::UTF8.GetString(
-    [System.Convert]::FromBase64String("__PAYLOAD__"))
-$targets = ConvertFrom-Json -InputObject $payload
-$results = @()
-foreach ($target in @($targets)) {
-    $process = Get-Process -Id ([int]$target.pid) `
-        -ErrorAction SilentlyContinue
-    if ($null -eq $process) {
-        $results += [pscustomobject]@{
-            role = [string]$target.role
-            pid = [int]$target.pid
-            expectedPath = [string]$target.expected_path
-            actualPath = $null
-            stopped = $false
-            alreadyExited = $true
-            pathMatched = $false
-        }
-        continue
-    }
-    $actual = [System.IO.Path]::GetFullPath([string]$process.Path)
-    $expected = [System.IO.Path]::GetFullPath(
-        [string]$target.expected_path)
-    $matches = [string]::Equals(
-        $actual,
-        $expected,
-        [System.StringComparison]::OrdinalIgnoreCase)
-    if ($matches) {
-        Stop-Process -Id ([int]$target.pid) -Force
-    }
-    $results += [pscustomobject]@{
-        role = [string]$target.role
-        pid = [int]$target.pid
-        expectedPath = $expected
-        actualPath = $actual
-        stopped = $matches
-        alreadyExited = $false
-        pathMatched = $matches
-    }
-}
-[Console]::Write((ConvertTo-Json -InputObject @($results) -Compress))
-""".replace("__PAYLOAD__", payload)
-    completed = subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            script,
-        ],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=15.0,
-        check=False,
+    identities = register_owned_launch(launch)
+    return stop_owned_process_ids(
+        identity.process_id for identity in identities
     )
-    if completed.returncode != 0:
-        raise VerifyFailure(
-            "exact owned-process cleanup failed: "
-            f"{completed.stderr or completed.stdout}"
-        )
-    parsed = json.loads(completed.stdout or "[]")
-    if isinstance(parsed, dict):
-        results = [parsed]
-    elif isinstance(parsed, list):
-        results = parsed
-    else:
-        raise VerifyFailure(
-            f"exact owned-process cleanup returned {parsed!r}"
-        )
-    mismatches = [
-        result
-        for result in results
-        if isinstance(result, dict)
-        and not result.get("alreadyExited")
-        and not result.get("pathMatched")
-    ]
-    if mismatches:
-        raise VerifyFailure(
-            "refused to stop launcher PID with a different executable: "
-            f"{mismatches}"
-        )
-    return results
 
 
 def _read_process_id_ledger(path: Path | None) -> dict[str, object]:
-    if path is None or not path.is_file():
-        return {}
-    try:
-        value = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return value if isinstance(value, dict) else {}
+    return read_launcher_ledger(path)
 
 
 def _new_process_id_ledger() -> Path:
-    runtime_root = ROOT / "runtime"
-    runtime_root.mkdir(parents=True, exist_ok=True)
-    return runtime_root / f".local-mp-processes-{uuid.uuid4().hex}.json"
+    return new_launcher_ledger_path(
+        root=ROOT,
+        label="local-mp-processes",
+    )
 
 
 def extract_json(buffer: str) -> dict[str, object] | None:
@@ -697,6 +522,7 @@ def launch_pair(
                     buffer += line
                     parsed = extract_json(buffer)
                     if parsed is not None:
+                        register_owned_launch(parsed)
                         launch_completed = True
                         return parsed
                 elif process.poll() is not None:
@@ -708,6 +534,7 @@ def launch_pair(
                     buffer += remainder
                     parsed = extract_json(buffer)
                     if parsed is not None:
+                        register_owned_launch(parsed)
                         launch_completed = True
                         return parsed
                 if process.returncode != 0:
@@ -742,6 +569,7 @@ def launch_pair(
                         fallback_result.update(
                             _read_process_id_ledger(process_id_ledger)
                         )
+                        register_owned_launch(fallback_result)
                         launch_completed = True
                         return fallback_result
                 else:
@@ -750,11 +578,19 @@ def launch_pair(
         raise VerifyFailure(f"timed out waiting for pair launcher JSON:\n{buffer}")
     finally:
         terminate_launcher()
-        if not launch_completed:
-            stop_game_processes(
-                game_process_ids(_read_process_id_ledger(process_id_ledger))
-            )
-        if process_id_ledger is not None:
+        try:
+            if not launch_completed:
+                partial_launch = _read_process_id_ledger(
+                    process_id_ledger
+                )
+                identities = register_owned_launch(
+                    partial_launch,
+                    require_processes=False,
+                )
+                stop_owned_process_ids(
+                    identity.process_id for identity in identities
+                )
+        finally:
             process_id_ledger.unlink(missing_ok=True)
 
 
@@ -878,6 +714,7 @@ def launch_additional_client(
                             raise VerifyFailure(
                                 f"additional-client launcher reported failure: {parsed}"
                             )
+                        register_owned_launch(parsed)
                         launch_completed = True
                         return parsed
                 elif process.poll() is not None:
@@ -888,6 +725,7 @@ def launch_additional_client(
                     buffer += remainder
                 parsed = extract_json(buffer)
                 if parsed is not None and parsed.get("success"):
+                    register_owned_launch(parsed)
                     launch_completed = True
                     return parsed
                 break
@@ -901,11 +739,20 @@ def launch_additional_client(
                 process.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
                 process.kill()
-        if not launch_completed:
-            stop_game_processes(
-                game_process_ids(_read_process_id_ledger(process_id_ledger))
-            )
-        process_id_ledger.unlink(missing_ok=True)
+        try:
+            if not launch_completed:
+                partial_launch = _read_process_id_ledger(
+                    process_id_ledger
+                )
+                identities = register_owned_launch(
+                    partial_launch,
+                    require_processes=False,
+                )
+                stop_owned_process_ids(
+                    identity.process_id for identity in identities
+                )
+        finally:
+            process_id_ledger.unlink(missing_ok=True)
 
 
 CREATE_ELEMENT_IDS = {
@@ -2568,9 +2415,10 @@ def verify_scene(scene_name: str) -> dict[str, object]:
 
 
 def main() -> int:
+    argparse.ArgumentParser(description=__doc__).parse_args()
     result: dict[str, object] = {"ok": False, "checks": []}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result["launch"] = launch_pair()
         disable_bots()
         result["checks"].append(verify_scene("hub"))
@@ -2588,7 +2436,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 1
     finally:
-        stop_games()
+        stop_owned_game_processes()
 
 
 if __name__ == "__main__":

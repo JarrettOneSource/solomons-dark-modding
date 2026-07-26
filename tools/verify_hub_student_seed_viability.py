@@ -12,6 +12,15 @@ import sys
 import time
 from pathlib import Path
 
+from owned_process_ledger import (
+    new_launcher_ledger_path,
+    read_launcher_ledger,
+    register_owned_launch,
+    stop_owned_game_processes,
+    stop_owned_process_ids,
+)
+from verify_local_multiplayer_sync import path_for_powershell
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_OUTPUT = ROOT / "runtime" / "hub_student_seed_viability.json"
@@ -21,21 +30,6 @@ CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_local-mp-client"
 
 class VerifyFailure(RuntimeError):
     pass
-
-
-def stop_games() -> None:
-    subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-Command",
-            "Get-Process SolomonDark* -ErrorAction SilentlyContinue | Stop-Process -Force",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
 
 
 def run_command(args: list[str], timeout: float) -> str:
@@ -82,6 +76,16 @@ def launch_isolated_pair(preset: str, timeout: float) -> dict[str, object]:
         "-ClientName",
         "Seed Client",
     ]
+    process_ledger = new_launcher_ledger_path(
+        root=ROOT,
+        label="hub-student-seed-processes",
+    )
+    args.extend(
+        [
+            "-ProcessIdOutputPath",
+            path_for_powershell(process_ledger),
+        ]
+    )
     process = subprocess.Popen(
         args,
         cwd=ROOT,
@@ -140,64 +144,103 @@ def launch_isolated_pair(preset: str, timeout: float) -> dict[str, object]:
     last_probe = 0.0
     last_switch: dict[str, float] = {}
     last_scenes: dict[str, str] = {}
-    while time.monotonic() < deadline:
-        ready, _, _ = select.select([process.stdout], [], [], 0.1)
-        if ready:
-            line = process.stdout.readline()
-            if line:
-                buffer += line
-                parsed = None
-                try:
-                    parsed = extract_json_object(buffer)
-                except VerifyFailure:
+    launch_completed = False
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    buffer += line
                     parsed = None
-                if parsed is not None:
-                    terminate_launcher()
-                    return parsed
-            elif process.poll() is not None:
-                break
+                    try:
+                        parsed = extract_json_object(buffer)
+                    except VerifyFailure:
+                        parsed = None
+                    if parsed is not None:
+                        register_owned_launch(parsed)
+                        launch_completed = True
+                        return parsed
+                elif process.poll() is not None:
+                    break
 
-        now = time.monotonic()
-        if now - last_probe >= 1.0:
-            last_probe = now
-            last_scenes = {
-                "host": query_scene(HOST_PIPE),
-                "client": query_scene(CLIENT_PIPE),
-            }
-            if last_scenes.get("host") == "hub" and last_scenes.get("client") == "hub":
-                terminate_launcher()
-                return {
-                    "fallbackReady": True,
-                    "preset": preset,
-                    "hostLuaPipe": HOST_PIPE,
-                    "clientLuaPipe": CLIENT_PIPE,
-                    "scenes": last_scenes,
+            now = time.monotonic()
+            if now - last_probe >= 1.0:
+                last_probe = now
+                last_scenes = {
+                    "host": query_scene(HOST_PIPE),
+                    "client": query_scene(CLIENT_PIPE),
                 }
-            for name, pipe_name in (("host", HOST_PIPE), ("client", CLIENT_PIPE)):
-                scene = last_scenes.get(name, "")
-                if scene and scene not in {"hub", "transition"} and now - last_switch.get(name, 0.0) >= 5.0:
-                    last_switch[name] = now
-                    request_hub(pipe_name)
+                if (
+                    last_scenes.get("host") == "hub"
+                    and last_scenes.get("client") == "hub"
+                ):
+                    fallback = {
+                        "fallbackReady": True,
+                        "preset": preset,
+                        "hostLuaPipe": HOST_PIPE,
+                        "clientLuaPipe": CLIENT_PIPE,
+                        "scenes": last_scenes,
+                    }
+                    fallback.update(read_launcher_ledger(process_ledger))
+                    register_owned_launch(fallback)
+                    launch_completed = True
+                    return fallback
+                for name, pipe_name in (
+                    ("host", HOST_PIPE),
+                    ("client", CLIENT_PIPE),
+                ):
+                    scene = last_scenes.get(name, "")
+                    if (
+                        scene
+                        and scene not in {"hub", "transition"}
+                        and now - last_switch.get(name, 0.0) >= 5.0
+                    ):
+                        last_switch[name] = now
+                        request_hub(pipe_name)
 
-        if process.poll() is not None:
-            remainder = process.stdout.read()
-            if remainder:
-                buffer += remainder
-            if last_scenes.get("host") == "hub" and last_scenes.get("client") == "hub":
-                return {
-                    "fallbackReady": True,
-                    "preset": preset,
-                    "hostLuaPipe": HOST_PIPE,
-                    "clientLuaPipe": CLIENT_PIPE,
-                    "scenes": last_scenes,
-                }
-            raise VerifyFailure(
-                f"pair launcher exited ({process.returncode}) before both clients reached hub. "
-                f"last_scenes={last_scenes}\n{buffer}"
-            )
+            if process.poll() is not None:
+                remainder = process.stdout.read()
+                if remainder:
+                    buffer += remainder
+                if (
+                    last_scenes.get("host") == "hub"
+                    and last_scenes.get("client") == "hub"
+                ):
+                    fallback = {
+                        "fallbackReady": True,
+                        "preset": preset,
+                        "hostLuaPipe": HOST_PIPE,
+                        "clientLuaPipe": CLIENT_PIPE,
+                        "scenes": last_scenes,
+                    }
+                    fallback.update(read_launcher_ledger(process_ledger))
+                    register_owned_launch(fallback)
+                    launch_completed = True
+                    return fallback
+                raise VerifyFailure(
+                    "pair launcher exited "
+                    f"({process.returncode}) before both clients reached "
+                    f"hub. last_scenes={last_scenes}\n{buffer}"
+                )
 
-    terminate_launcher()
-    raise VerifyFailure(f"timed out waiting for isolated pair hub scenes. last_scenes={last_scenes}\n{buffer}")
+        raise VerifyFailure(
+            "timed out waiting for isolated pair hub scenes. "
+            f"last_scenes={last_scenes}\n{buffer}"
+        )
+    finally:
+        terminate_launcher()
+        try:
+            if not launch_completed:
+                identities = register_owned_launch(
+                    read_launcher_ledger(process_ledger),
+                    require_processes=False,
+                )
+                stop_owned_process_ids(
+                    identity.process_id for identity in identities
+                )
+        finally:
+            process_ledger.unlink(missing_ok=True)
 
 
 def disable_bots() -> dict[str, str]:
@@ -359,7 +402,7 @@ def main() -> int:
         return 1
     finally:
         if not args.keep_running:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

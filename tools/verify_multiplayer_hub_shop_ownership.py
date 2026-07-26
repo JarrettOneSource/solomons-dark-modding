@@ -20,7 +20,7 @@ from verify_local_multiplayer_sync import (
     lua,
     parse_key_values,
     place_player,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_both_hub_settled,
 )
 from verify_multiplayer_hub_inventory_shop_sync import (
@@ -165,7 +165,7 @@ def wait_for(
 
 
 def launch_ready() -> tuple[dict[str, object], int, dict[str, Any]]:
-    stop_games()
+    stop_owned_game_processes()
     launch = launch_pair(allow_focus_steal=True)
     disable_bots()
     wait_for_both_hub_settled()
@@ -340,14 +340,14 @@ def run(args: argparse.Namespace, result: dict[str, Any]) -> dict[str, Any]:
             verify_fomentius(args.timeout, result["fomentius"])
         finally:
             if not args.keep_open:
-                stop_games()
+                stop_owned_game_processes()
     if args.scenario in ("all", "hagatha"):
         result["hagatha"] = {"ok": False}
         try:
             verify_hagatha(args.timeout, result["hagatha"])
         finally:
             if not args.keep_open:
-                stop_games()
+                stop_owned_game_processes()
     result["ok"] = True
     return result
 
@@ -377,7 +377,7 @@ def main() -> int:
             "output": str(OUTPUT),
         }, indent=2, sort_keys=True))
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
     return return_code
 
 

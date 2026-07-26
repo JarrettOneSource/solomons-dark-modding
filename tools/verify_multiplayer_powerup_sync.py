@@ -26,7 +26,7 @@ from verify_local_multiplayer_sync import (
     parse_key_values,
     place_player,
     start_host_testrun_and_wait_for_clients,
-    stop_games,
+    stop_owned_game_processes,
     wait_for_remote,
 )
 from verify_multiplayer_all_upgrade_sync import (
@@ -1142,7 +1142,7 @@ def main() -> int:
 
     result: dict[str, Any] = {"ok": False}
     try:
-        stop_games()
+        stop_owned_game_processes()
         result = run_verifier(
             args.timeout,
             set(args.selected_cases) if args.selected_cases else None,
@@ -1169,7 +1169,7 @@ def main() -> int:
         return 1
     finally:
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
 
 if __name__ == "__main__":

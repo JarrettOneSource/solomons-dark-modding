@@ -21,7 +21,7 @@ from verify_local_multiplayer_sync import (
     HOST_PIPE,
     VerifyFailure,
     parse_int_text,
-    stop_games,
+    stop_owned_game_processes,
 )
 from verify_multiplayer_all_stat_sync import (
     apply_stat_batch,
@@ -632,7 +632,7 @@ def main() -> int:
             encoding="utf-8",
         )
         if not args.keep_open:
-            stop_games()
+            stop_owned_game_processes()
 
     print(
         json.dumps(
