@@ -49,6 +49,25 @@ The fix must therefore make authoritative death terminal even after the
 presentation window, continue reconciling corpse-safe profile and wearable
 visual state while dead, and suppress only the hand-held attachment.
 
+The first fixed-build WAN host-death pass exposed one additional ordering
+constraint before implementation was finalized. The NFO observer's first
+lifecycle sample had already received zero replicated life while the Home
+owner's native HP was still `0.10100000351667`. At that point the replicated
+death-presentation tick and flag were both zero. Opening the durable death
+epoch from life alone therefore drove the observer directly to terminal tick
+150 about 0.9 seconds before the owner entered native death presentation.
+
+Replicated zero life is not, by itself, the commit record for the visual
+transaction: the damage-correction path can publish it before the owner's
+native death handoff. The durable commit record already exists in the
+presentation transaction. During active presentation the flag is set; after
+the five-second window, `CurrentLocalDeathPresentationTick` continues
+publishing the nonzero terminal-safe tick while spectating. Remote playback
+must open a new epoch only after seeing the active flag or a nonzero
+authoritative presentation tick, then keep that epoch alive from terminal
+life until respawn. This still supports late materialization without allowing
+an early life correction to start the corpse animation.
+
 ### Remote deaths detach the staff but never create the stock drop
 
 The current remote death seam calls
@@ -118,8 +137,9 @@ actual rendered Loading Boneyard overlay frame, not on transition entry.
 
 Treat remote death as a durable replicated presentation epoch:
 
-1. establish it for every authoritative-dead participant, including late
-   materialization;
+1. establish it for every authoritative-dead participant after the
+   presentation transaction is committed by its flag or nonzero tick,
+   including late materialization;
 2. reconcile corpse-safe presentation state regardless of packet order;
 3. detach the live attachment and create exactly one stock-compatible dropped
    equipment bouncer per death epoch;
