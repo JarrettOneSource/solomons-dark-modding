@@ -2936,7 +2936,12 @@ def nav_actor_parking_positions(
     pipe_name: str,
     target_x: float,
     target_y: float,
+    candidate_index: int = 1,
 ) -> dict[str, Any]:
+    if candidate_index < 1:
+        raise VerifyFailure(
+            f"invalid actor-light parking candidate index: {candidate_index}"
+        )
     goal_x, goal_y = actor_light_parking_goal(target_x, target_y)
     code = f"""
 local function emit(key, value) print(key .. "=" .. tostring(value)) end
@@ -2961,6 +2966,7 @@ local target_x = {target_x!r}
 local target_y = {target_y!r}
 local goal_x = {goal_x!r}
 local goal_y = {goal_y!r}
+local candidate_index = {candidate_index}
 local candidates = {{}}
 local traversable_count = 0
 for _, cell in ipairs(grid.cells) do
@@ -3000,9 +3006,10 @@ table.sort(candidates, function(a, b)
   if a.x ~= b.x then return a.x < b.x end
   return a.y < b.y
 end)
-local shared = candidates[1]
+local shared = candidates[candidate_index]
 emit("traversable_count", traversable_count)
 emit("candidate_count", #candidates)
+emit("candidate_index", candidate_index)
 emit("goal.x", goal_x)
 emit("goal.y", goal_y)
 emit("available", shared ~= nil)
@@ -3050,41 +3057,46 @@ end
             values["candidate_count"],
             0,
         ),
+        "candidate_index": int(values["candidate_index"], 0),
         "source": (
-            "shared sd.debug.get_nav_grid(1) traversable sample nearest "
-            "the 320-unit target radius, then the fixed actor-light offset"
+            "ranked shared sd.debug.get_nav_grid(1) traversable sample, "
+            "ordered by 320-unit target-radius error and then the fixed "
+            "actor-light offset"
         ),
         "scene_world": int(values["scene_world"], 0),
         "grid_world": int(values["grid_world"], 0),
     }
 
 
-def capture_matched_camera_areas(
+def settle_shared_actor_parking(
     host_pipe: str,
     client_pipe: str,
-    targets: list[dict[str, Any]],
-    evidence_dir: Path,
-    run_index: int,
-    areas: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    if areas is None:
-        areas = []
-    for area_index, target in enumerate(targets, start=1):
-        target_x, target_y = target["position"]
-        area_attempts: list[dict[str, Any]] = []
-        area_result: dict[str, Any] = {
-            "area_index": area_index,
-            "target": target,
-            "attempts": area_attempts,
-        }
-        areas.append(area_result)
-        family_slug = str(target["family"]).replace("_", "-")
+    target_x: float,
+    target_y: float,
+    attempts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if attempts is None:
+        attempts = []
+    candidate_index = 1
+    candidate_count: int | None = None
+    while candidate_count is None or candidate_index <= candidate_count:
         parking = nav_actor_parking_positions(
             host_pipe,
             target_x,
             target_y,
+            candidate_index,
         )
+        reported_candidate_count = int(
+            parking["actor_light_candidate_count"]
+        )
+        if candidate_count is None:
+            candidate_count = reported_candidate_count
+        elif reported_candidate_count != candidate_count:
+            raise VerifyFailure(
+                "native actor-light parking candidate set changed while "
+                f"settling: expected={candidate_count} "
+                f"actual={reported_candidate_count}"
+            )
         owner_placements = {
             "host": place_player(
                 host_pipe,
@@ -3111,14 +3123,84 @@ def capture_matched_camera_areas(
                 stable_seconds=2.0,
             )
         )
-        settled_actor_geometry = settled_actor_parking_geometry(
+        attempt = {
+            "candidate_index": candidate_index,
+            "parking": parking,
+            "owner_placements": owner_placements,
+            "settled_owner_positions": {
+                "host": list(settled_host_actor[:2]),
+                "client": list(settled_client_actor[:2]),
+            },
+        }
+        attempts.append(attempt)
+        try:
+            settled_actor_geometry = settled_actor_parking_geometry(
+                target_x,
+                target_y,
+                {
+                    "host": settled_host_actor[:2],
+                    "client": settled_client_actor[:2],
+                },
+            )
+        except VerifyFailure as error:
+            attempt["ok"] = False
+            attempt["error"] = str(error)
+            candidate_index += 1
+            continue
+        attempt["ok"] = True
+        attempt["settled_actor_geometry"] = settled_actor_geometry
+        return {
+            "parking": parking,
+            "owner_placements": owner_placements,
+            "settled_host_actor": settled_host_actor,
+            "settled_client_actor": settled_client_actor,
+            "settled_actor_geometry": settled_actor_geometry,
+            "attempts": attempts,
+        }
+    errors = [attempt["error"] for attempt in attempts if not attempt["ok"]]
+    raise VerifyFailure(
+        "no native actor-light parking candidate remained valid after "
+        f"placement: target=({target_x},{target_y}) "
+        f"candidates={candidate_count} errors={errors}"
+    )
+
+
+def capture_matched_camera_areas(
+    host_pipe: str,
+    client_pipe: str,
+    targets: list[dict[str, Any]],
+    evidence_dir: Path,
+    run_index: int,
+    areas: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    if areas is None:
+        areas = []
+    for area_index, target in enumerate(targets, start=1):
+        target_x, target_y = target["position"]
+        area_attempts: list[dict[str, Any]] = []
+        area_result: dict[str, Any] = {
+            "area_index": area_index,
+            "target": target,
+            "attempts": area_attempts,
+            "parking_attempts": [],
+        }
+        areas.append(area_result)
+        family_slug = str(target["family"]).replace("_", "-")
+        settled_parking = settle_shared_actor_parking(
+            host_pipe,
+            client_pipe,
             target_x,
             target_y,
-            {
-                "host": settled_host_actor[:2],
-                "client": settled_client_actor[:2],
-            },
+            area_result["parking_attempts"],
         )
+        parking = settled_parking["parking"]
+        owner_placements = settled_parking["owner_placements"]
+        settled_host_actor = settled_parking["settled_host_actor"]
+        settled_client_actor = settled_parking["settled_client_actor"]
+        settled_actor_geometry = settled_parking[
+            "settled_actor_geometry"
+        ]
         host_on_client = local_sync.wait_for_remote_convergence(
             client_pipe,
             HOST_ID,
@@ -3237,10 +3319,11 @@ def capture_matched_camera_areas(
                     )
         area_result["excluded_actors"] = {
             "method": (
-                "both owners are moved without damage to one traversable "
-                "native-nav sample inside player-light range; native "
-                "collision displacement is allowed, then each settled "
-                "owner plus replicated mirror must "
+                "both owners are moved without damage through ranked "
+                "traversable native-nav samples inside player-light range; "
+                "native collision displacement is allowed, and the first "
+                "sample where each settled owner plus replicated mirror "
+                "remains valid must "
                 "settle at least 120 world units beyond the central "
                 "120-world-unit decor ROI"
             ),

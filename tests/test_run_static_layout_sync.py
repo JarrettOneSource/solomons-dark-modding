@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image
 
@@ -441,6 +442,66 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                     "client": [1400.0, 2000.0],
                 },
             )
+
+    def test_actor_parking_retries_native_collision_displacement(self) -> None:
+        candidates = [
+            {
+                "host": [680.0, 2000.0],
+                "client": [680.0, 2000.0],
+                "actor_light_candidate_count": 2,
+                "candidate_index": 1,
+            },
+            {
+                "host": [1000.0, 1680.0],
+                "client": [1000.0, 1680.0],
+                "actor_light_candidate_count": 2,
+                "candidate_index": 2,
+            },
+        ]
+        settled_positions = [
+            [800.0, 2000.0, 0.0],
+            [800.0, 2000.0, 0.0],
+            [1000.0, 1680.0, 0.0],
+            [1000.0, 1680.0, 0.0],
+        ]
+        attempts: list[dict[str, object]] = []
+        with (
+            mock.patch.object(
+                verifier,
+                "nav_actor_parking_positions",
+                side_effect=candidates,
+            ) as parking_samples,
+            mock.patch.object(
+                verifier,
+                "place_player",
+                return_value={"rebind": "true"},
+            ),
+            mock.patch.object(
+                verifier.local_sync,
+                "wait_for_local_transform_settled",
+                side_effect=settled_positions,
+            ),
+        ):
+            result = verifier.settle_shared_actor_parking(
+                "host-pipe",
+                "client-pipe",
+                1000.0,
+                2000.0,
+                attempts,
+            )
+
+        self.assertEqual(parking_samples.call_count, 2)
+        self.assertEqual(result["parking"]["candidate_index"], 2)
+        self.assertFalse(attempts[0]["ok"])
+        self.assertIn("exclusion zone", attempts[0]["error"])
+        self.assertTrue(attempts[1]["ok"])
+        self.assertEqual(
+            result["settled_actor_geometry"]["owner_positions"],
+            {
+                "host": [1000.0, 1680.0],
+                "client": [1000.0, 1680.0],
+            },
+        )
 
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
