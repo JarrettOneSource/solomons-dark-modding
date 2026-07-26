@@ -235,7 +235,6 @@ bool SpawnNativeRemoteParticipantDeathDrop(
     *bouncer_address = bouncer;
     return true;
 }
-
 bool TrySpawnNativeRemoteParticipantDeathDrop(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
@@ -336,4 +335,3 @@ bool TrySpawnNativeRemoteParticipantDeathDrop(
         " item_type=" + std::to_string(source_type));
     return true;
 }
-
