@@ -92,14 +92,33 @@ continues through stock. `FUN_005299A0` is reached through that stock update
 path, so a detour cannot restore a call which no longer occurs. Nearby
 survivor light temporarily masked this gap in terminal captures.
 
-The foundational renderer fix must preserve the real nonzero gameplay slot,
-but explicitly submit the committed remote corpse's stock PlayerActor light
-once from the local-player scene-binding tick. That reconciliation path
-already owns distant remote deaths even when their actor ticks are culled.
-The call temporarily presents only that stock method as slot zero, taking the
-exact local-corpse branch and native anchor/parameters before restoring the
-real slot. It does not force fullbright, write `actor + 0xCC`, create a
-parallel light, or depend on a suppressed remote PlayerActor tick.
+The second implementation explicitly called the stock PlayerActor
+light-submit method from the local-player scene-binding tick. A fresh,
+separated WAN host-death run disproved that timing as well: the terminal
+capture was correct while the survivor was nearby, but the persistent remote
+corpse again read `actor + 0xCC == 0.0` and rendered black after the survivor
+returned 500 units away.
+
+`Arena::Render` at `FUN_0046EC80` establishes the actual per-frame ordering.
+It calls `FUN_0057D4E0` first, which resets the frame's native light
+collection; then it calls vtable slot `+0x30` on the arena light-source actor
+list and submits miscellaneous lights; finally it makes the sole executable
+call to `FUN_0057D5E0` before rendering the world objects which consume the
+light grid. A scene-tick submission happens before `Arena::Render` and is
+therefore discarded by the next `FUN_0057D4E0` reset. This is why calling the
+right stock method at the wrong frame boundary did not survive to
+`FUN_00624B40`.
+
+The foundational renderer fix must preserve the real nonzero gameplay slot
+and submit each committed remote corpse through its stock PlayerActor method
+after the arena's per-frame light reset and before its one light-collection
+finalize call. `FUN_0057D5E0` has exactly one caller, at `0x0046EE6C` in
+`Arena::Render`, so a pre-finalize detour is the narrow native seam. The call
+temporarily presents only the corpse's stock light method as slot zero,
+taking the exact local-corpse branch and native anchor/parameters before
+restoring the real slot. It does not force fullbright, write `actor + 0xCC`,
+create a parallel light, depend on a suppressed remote PlayerActor tick, or
+submit state that the arena immediately clears.
 The death transaction must also remain terminal after the presentation
 window, continue reconciling corpse-safe profile and wearable visual state
 while dead, and suppress only the hand-held attachment.
@@ -204,6 +223,6 @@ Treat remote death as a durable replicated presentation epoch:
 6. apply authenticated host life corrections against the recipient's current
    native maximum; and
 7. anchor the Loading Boneyard display floor to its first rendered frame; and
-8. submit committed remote corpse lights from the local scene-binding tick
-   through the stock slot-zero PlayerActor method while restoring their real
-   slot before returning.
+8. submit committed remote corpse lights at the arena's native pre-finalize
+   frame seam through the stock slot-zero PlayerActor method while restoring
+   their real slot before returning.
