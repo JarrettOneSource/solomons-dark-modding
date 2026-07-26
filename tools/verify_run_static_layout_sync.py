@@ -12,7 +12,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import multiplayer_frame_capture
 import verify_local_multiplayer_sync as local_sync
@@ -39,6 +39,8 @@ from verify_local_multiplayer_sync import (
 
 RUNTIME_OUTPUT = ROOT / "runtime" / "run_static_layout_sync_verification.json"
 CAPTURE_FRAMES_PER_PEER = 16
+CAPTURE_ATTEMPTS_PER_FRAME = 8
+CAPTURE_RETRY_DELAY_SECONDS = 0.25
 DECOR_ROI_HALF_EXTENT = 120.0
 MINIMUM_DECOR_ROI_CLEARANCE = 120.0
 STABLE_TEMPORAL_CHANNEL_RANGE = 2
@@ -54,6 +56,58 @@ MINIMUM_MATCHED_AREA_SEPARATION = 250.0
 
 class ParkingSelectionFailure(VerifyFailure):
     """Raised when every ranked nav sample settles outside the spatial gate."""
+
+
+def capture_information_frame(
+    pipe_name: str,
+    output_path: Path,
+    *,
+    capture: Callable[..., dict[str, Any]] = (
+        multiplayer_frame_capture.capture_game_backbuffer
+    ),
+    attempts: int = CAPTURE_ATTEMPTS_PER_FRAME,
+    retry_delay: float = CAPTURE_RETRY_DELAY_SECONDS,
+) -> tuple[Path, dict[str, Any]]:
+    """Capture one informative frame despite a bounded native damage flash."""
+
+    if attempts <= 0:
+        raise ValueError("capture attempts must be positive")
+
+    rejected_capture_errors: list[str] = []
+    for capture_attempt in range(1, attempts + 1):
+        candidate_path = (
+            output_path
+            if capture_attempt == 1
+            else output_path.with_name(
+                f"{output_path.stem}-retry-{capture_attempt:02d}"
+                f"{output_path.suffix}"
+            )
+        )
+        try:
+            evidence = capture(
+                pipe_name,
+                candidate_path,
+                maximum_dominant_fraction=0.99,
+            )
+            evidence["capture_attempt"] = capture_attempt
+            evidence["low_information_retries"] = len(
+                rejected_capture_errors
+            )
+            evidence["rejected_capture_errors"] = rejected_capture_errors
+            return candidate_path, evidence
+        except VerifyFailure as error:
+            message = str(error)
+            if "blank or low-information" not in message:
+                raise
+            rejected_capture_errors.append(message)
+            if capture_attempt < attempts:
+                time.sleep(retry_delay)
+
+    raise VerifyFailure(
+        "D3D9 backbuffer stayed blank or low-information through bounded "
+        f"layout-frame retries: pipe={pipe_name} attempts={attempts} "
+        f"errors={rejected_capture_errors}"
+    )
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -3478,8 +3532,9 @@ def capture_matched_camera_areas(
             "host": settled_host_camera,
             "client": settled_client_camera,
         }
-        # Nav parking is the only actor mutation.  No damage or spell probe is
-        # allowed in the decor capture phase.
+        # Nav parking is the only geometry mutation.  The isolated launcher
+        # keeps both players alive.  No damage or spell probe is allowed in the
+        # decor capture phase.
         time.sleep(2.0)
         excluded_rectangles: list[list[int]] = []
 
@@ -3531,23 +3586,19 @@ def capture_matched_camera_areas(
                 )
                 host_path = Path(f"{evidence_prefix}-host.png")
                 client_path = Path(f"{evidence_prefix}-client.png")
+                host_path, host_capture = capture_information_frame(
+                    host_pipe,
+                    host_path,
+                )
+                client_path, client_capture = capture_information_frame(
+                    client_pipe,
+                    client_path,
+                )
                 host_paths.append(host_path)
                 client_paths.append(client_path)
                 screenshots = {
-                    "host": (
-                        multiplayer_frame_capture.capture_game_backbuffer(
-                            host_pipe,
-                            host_path,
-                            maximum_dominant_fraction=0.99,
-                        )
-                    ),
-                    "client": (
-                        multiplayer_frame_capture.capture_game_backbuffer(
-                            client_pipe,
-                            client_path,
-                            maximum_dominant_fraction=0.99,
-                        )
-                    ),
+                    "host": host_capture,
+                    "client": client_capture,
                 }
                 host_quality = screenshots["host"]["quality"]
                 client_quality = screenshots["client"]["quality"]
@@ -3778,6 +3829,7 @@ def main() -> int:
                         game_directory=args.game_directory,
                         runtime_root=runtime_root,
                         exact_mod_id=args.exact_mod_id,
+                        god_mode=True,
                     )
                 finally:
                     picker_stop.set()
@@ -3797,6 +3849,18 @@ def main() -> int:
                 )
                 identities = capture_owned_process_identities(identities)
                 run_result["owned_processes"] = identities
+                if launch.get("godModeEnabled") is not True:
+                    raise VerifyFailure(
+                        "layout-only launch did not enable its player "
+                        "survival guard"
+                    )
+                run_result["layout_capture_survival_guard"] = {
+                    "god_mode_enabled": True,
+                    "scope": (
+                        "sustain owner HP/MP only; decor generation and "
+                        "render inputs remain stock"
+                    ),
+                }
 
                 host_pipe = str(
                     launch.get("hostLuaPipe")

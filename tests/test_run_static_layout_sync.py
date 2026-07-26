@@ -551,6 +551,79 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertIn("unsafe native wall", attempts[0]["error"])
         self.assertTrue(attempts[1]["ok"])
 
+    def test_layout_capture_retries_only_low_information_frames(self) -> None:
+        calls: list[Path] = []
+
+        def capture(
+            _pipe_name: str,
+            output_path: Path,
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            calls.append(output_path)
+            if len(calls) == 1:
+                raise verifier.VerifyFailure(
+                    "D3D9 backbuffer capture is blank or low-information"
+                )
+            return {"quality": {"unique_colors": 2000}}
+
+        with mock.patch.object(verifier.time, "sleep") as sleep:
+            selected_path, evidence = verifier.capture_information_frame(
+                "host-pipe",
+                Path("/evidence/frame.png"),
+                capture=capture,
+                attempts=3,
+                retry_delay=0.25,
+            )
+
+        self.assertEqual(
+            selected_path,
+            Path("/evidence/frame-retry-02.png"),
+        )
+        self.assertEqual(evidence["capture_attempt"], 2)
+        self.assertEqual(evidence["low_information_retries"], 1)
+        self.assertEqual(len(evidence["rejected_capture_errors"]), 1)
+        sleep.assert_called_once_with(0.25)
+
+        def unrelated_failure(
+            _pipe_name: str,
+            _output_path: Path,
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            raise verifier.VerifyFailure("capture transport failed")
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "capture transport failed",
+        ):
+            verifier.capture_information_frame(
+                "host-pipe",
+                Path("/evidence/frame.png"),
+                capture=unrelated_failure,
+            )
+
+        def low_information(
+            _pipe_name: str,
+            _output_path: Path,
+            **_kwargs: object,
+        ) -> dict[str, object]:
+            raise verifier.VerifyFailure(
+                "D3D9 backbuffer capture is blank or low-information"
+            )
+
+        with (
+            mock.patch.object(verifier.time, "sleep"),
+            self.assertRaisesRegex(
+                verifier.VerifyFailure,
+                "through bounded layout-frame retries",
+            ),
+        ):
+            verifier.capture_information_frame(
+                "host-pipe",
+                Path("/evidence/frame.png"),
+                capture=low_information,
+                attempts=2,
+            )
+
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)
