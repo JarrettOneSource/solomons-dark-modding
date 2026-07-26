@@ -624,6 +624,73 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 attempts=2,
             )
 
+        profile_slugs: list[str] = []
+
+        def capture_profile(
+            profile_slug: str,
+            frame_attempts: list[dict[str, object]],
+        ) -> tuple[list[Path], list[Path]]:
+            profile_slugs.append(profile_slug)
+            frame_attempts.append(
+                {
+                    "screenshots": {
+                        "host": {"path": f"{profile_slug}-host.png"},
+                        "client": {"path": f"{profile_slug}-client.png"},
+                    }
+                }
+            )
+            return (
+                [Path(f"{profile_slug}-host.png")],
+                [Path(f"{profile_slug}-client.png")],
+            )
+
+        insufficient = {
+            "sufficient_stable_content": False,
+            "bounded_match": False,
+        }
+        sufficient = {
+            "sufficient_stable_content": True,
+            "bounded_match": True,
+        }
+        with (
+            mock.patch.object(
+                verifier,
+                "exact_stable_decor_pixel_comparison",
+                side_effect=[insufficient, sufficient],
+            ),
+            mock.patch.object(
+                verifier,
+                "temporal_minimum_edge_comparison",
+                side_effect=[{"ok": True}, {"ok": True}],
+            ),
+            mock.patch.object(verifier.time, "sleep") as sleep,
+        ):
+            profile = verifier.capture_stable_render_profile(
+                capture_profile,
+                {"width": 400.0, "height": 240.0},
+                Path("/evidence/trees"),
+                attempts=3,
+                retry_delay=0.25,
+            )
+
+        self.assertEqual(
+            profile_slugs,
+            ["simple-lighting", "simple-lighting-retry-02"],
+        )
+        self.assertEqual(profile["accepted_capture_attempt"], 2)
+        self.assertEqual(len(profile["capture_batches"]), 2)
+        self.assertFalse(
+            profile["capture_batches"][0]["stable_decor_pixels"][
+                "sufficient_stable_content"
+            ]
+        )
+        self.assertTrue(
+            profile["stable_decor_pixels"][
+                "sufficient_stable_content"
+            ]
+        )
+        sleep.assert_called_once_with(0.25)
+
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)

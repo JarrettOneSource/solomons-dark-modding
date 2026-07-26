@@ -41,6 +41,8 @@ RUNTIME_OUTPUT = ROOT / "runtime" / "run_static_layout_sync_verification.json"
 CAPTURE_FRAMES_PER_PEER = 16
 CAPTURE_ATTEMPTS_PER_FRAME = 8
 CAPTURE_RETRY_DELAY_SECONDS = 0.25
+STABLE_PROFILE_CAPTURE_ATTEMPTS = 3
+STABLE_PROFILE_CAPTURE_RETRY_DELAY_SECONDS = 0.25
 DECOR_ROI_HALF_EXTENT = 120.0
 MINIMUM_DECOR_ROI_CLEARANCE = 120.0
 STABLE_TEMPORAL_CHANNEL_RANGE = 2
@@ -3340,6 +3342,86 @@ def settle_matched_camera_target(
     )
 
 
+def capture_stable_render_profile(
+    capture_profile_frames: Callable[
+        [str, list[dict[str, Any]]],
+        tuple[list[Path], list[Path]],
+    ],
+    settled_camera: dict[str, float],
+    evidence_prefix: Path,
+    *,
+    excluded_rectangles: list[list[int]] | None = None,
+    attempts: int = STABLE_PROFILE_CAPTURE_ATTEMPTS,
+    retry_delay: float = STABLE_PROFILE_CAPTURE_RETRY_DELAY_SECONDS,
+) -> dict[str, Any]:
+    """Retry a whole simple-lighting batch when it contains too little decor."""
+
+    if attempts <= 0:
+        raise ValueError("stable profile capture attempts must be positive")
+
+    capture_batches: list[dict[str, Any]] = []
+    for capture_attempt in range(1, attempts + 1):
+        profile_slug = (
+            "simple-lighting"
+            if capture_attempt == 1
+            else f"simple-lighting-retry-{capture_attempt:02d}"
+        )
+        frame_attempts: list[dict[str, Any]] = []
+        host_paths, client_paths = capture_profile_frames(
+            profile_slug,
+            frame_attempts,
+        )
+        comparison_prefix = Path(
+            f"{evidence_prefix}-{profile_slug}"
+        )
+        stable_pixels = exact_stable_decor_pixel_comparison(
+            host_paths,
+            client_paths,
+            settled_camera,
+            comparison_prefix,
+            excluded_rectangles=excluded_rectangles,
+        )
+        edge_geometry = temporal_minimum_edge_comparison(
+            host_paths,
+            client_paths,
+            settled_camera,
+            comparison_prefix,
+        )
+        batch = {
+            "capture_attempt": capture_attempt,
+            "profile_slug": profile_slug,
+            "screenshot_pairs": [
+                attempt["screenshots"]
+                for attempt in frame_attempts
+            ],
+            "stable_decor_pixels": stable_pixels,
+            "temporal_minimum_edge_geometry": edge_geometry,
+        }
+        capture_batches.append(batch)
+        if stable_pixels["sufficient_stable_content"]:
+            return {
+                "accepted_capture_attempt": capture_attempt,
+                "capture_batches": capture_batches,
+                "screenshot_pairs": batch["screenshot_pairs"],
+                "stable_decor_pixels": stable_pixels,
+                "temporal_minimum_edge_geometry": edge_geometry,
+            }
+        if capture_attempt < attempts:
+            time.sleep(retry_delay)
+
+    return {
+        "accepted_capture_attempt": None,
+        "capture_batches": capture_batches,
+        "screenshot_pairs": capture_batches[-1]["screenshot_pairs"],
+        "stable_decor_pixels": capture_batches[-1][
+            "stable_decor_pixels"
+        ],
+        "temporal_minimum_edge_geometry": capture_batches[-1][
+            "temporal_minimum_edge_geometry"
+        ],
+    }
+
+
 def capture_matched_camera_areas(
     host_pipe: str,
     client_pipe: str,
@@ -3664,23 +3746,16 @@ def capture_matched_camera_areas(
             ),
         }
         time.sleep(0.5)
-        simple_attempts: list[dict[str, Any]] = []
-        simple_host_paths, simple_client_paths = (
-            capture_profile_frames("simple-lighting", simple_attempts)
-        )
-        stable_pixels = exact_stable_decor_pixel_comparison(
-            simple_host_paths,
-            simple_client_paths,
+        stable_profile = capture_stable_render_profile(
+            capture_profile_frames,
             settled_host_camera,
-            Path(f"{stable_prefix}-simple-lighting"),
+            stable_prefix,
             excluded_rectangles=excluded_rectangles,
         )
-        edge_geometry = temporal_minimum_edge_comparison(
-            simple_host_paths,
-            simple_client_paths,
-            settled_host_camera,
-            Path(f"{stable_prefix}-simple-lighting"),
-        )
+        stable_pixels = stable_profile["stable_decor_pixels"]
+        edge_geometry = stable_profile[
+            "temporal_minimum_edge_geometry"
+        ]
         restored_complex_profile = {
             "host": configure_visual_gate_render_profile(host_pipe),
             "client": configure_visual_gate_render_profile(client_pipe),
@@ -3710,9 +3785,14 @@ def capture_matched_camera_areas(
                     attempt["screenshots"]
                     for attempt in area_attempts
                 ],
-                "simple_lighting_screenshot_pairs": [
-                    attempt["screenshots"]
-                    for attempt in simple_attempts
+                "simple_lighting_screenshot_pairs": stable_profile[
+                    "screenshot_pairs"
+                ],
+                "simple_lighting_capture_attempt": stable_profile[
+                    "accepted_capture_attempt"
+                ],
+                "simple_lighting_capture_batches": stable_profile[
+                    "capture_batches"
                 ],
                 "actors_and_ui_excluded": {
                     "actor_placement": area_result["excluded_actors"],
@@ -3726,7 +3806,8 @@ def capture_matched_camera_areas(
             raise VerifyFailure(
                 "matched-camera stable decor pixels differed: "
                 f"family={target['family']} "
-                f"stable={stable_pixels}"
+                f"stable={stable_pixels} "
+                f"capture_batches={stable_profile['capture_batches']}"
             )
         if not temporal_envelope["exact_match"]:
             raise VerifyFailure(
