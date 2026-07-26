@@ -77,11 +77,20 @@ measured a repeated `0.001` through `0.008` sawtooth with 39 reset edges and
 no exact-zero samples.
 
 `HoldLocalSpectatorDeathVitals` writes zero from the multiplayer service tick.
-The native `PlayerActor` tick then applies passive health regeneration,
-creating the small positive value until the next service write. This makes
-the strict owner-side zero-duration gate timing-dependent even though peers
-correctly observe zero. The fix is to reassert dead-owner vitals immediately
-after the stock local-player tick, at the native mutation boundary.
+The first attempted correction reasserted zero after `PlayerActorTick`
+(`FUN_00548B00`), but a fixed-build WAN raw probe still read `0.001`. Ghidra
+then isolated the actual later writer: the progression object's independent
+virtual tick `FUN_006614D0` adds
+`DAT_007DE860 / DAT_00820230` to progression HP whenever
+`progression + 0x8DE` (Regenerate active) is nonzero. Its vtable entry is
+`0x007A0CDC`; it is not part of `PlayerActorTick`, so the earlier hook was on
+the wrong side of the mutation.
+
+That separate progression tick creates the small positive value until the
+next multiplayer service write. This makes the strict owner-side zero-duration
+gate timing-dependent even though peers correctly observe zero. The fix is to
+reassert dead-owner vitals immediately after the local player's progression
+tick, at the proven native mutation boundary.
 
 A second WAN-only ordering defect was found in the client-death path. Host
 corrections carried the host's earlier `life_max=5000` observation after the
@@ -116,8 +125,7 @@ Treat remote death as a durable replicated presentation epoch:
    equipment bouncer per death epoch;
 4. keep terminal corpse animation and registration state convergent until the
    participant becomes alive again;
-5. reassert local dead-owner life after the native player tick;
+5. reassert local dead-owner life after the native progression tick;
 6. apply authenticated host life corrections against the recipient's current
    native maximum; and
 7. anchor the Loading Boneyard display floor to its first rendered frame.
-
