@@ -60,6 +60,33 @@ class ParkingSelectionFailure(VerifyFailure):
     """Raised when every ranked nav sample settles outside the spatial gate."""
 
 
+def enable_quiet_layout_test_mode(
+    host_pipe: str,
+    client_pipe: str,
+) -> dict[str, dict[str, str]]:
+    """Suppress stock enemy waves before entering the static-layout run."""
+
+    code = r"""
+local function emit(key, value) print(key .. '=' .. tostring(value)) end
+local ok, active = sd.gameplay.set_manual_enemy_spawner_test_mode(true)
+emit('ok', ok)
+emit('active', active)
+"""
+    result: dict[str, dict[str, str]] = {}
+    for label, pipe_name in (
+        ("host", host_pipe),
+        ("client", client_pipe),
+    ):
+        values = parse_key_values(lua(pipe_name, code, timeout=8.0))
+        if values.get("ok") != "true" or values.get("active") != "true":
+            raise VerifyFailure(
+                "failed to suppress stock waves for static-layout capture "
+                f"on {label}: {values}"
+            )
+        result[label] = values
+    return result
+
+
 def capture_information_frame(
     pipe_name: str,
     output_path: Path,
@@ -4073,6 +4100,12 @@ def main() -> int:
                         client_pipe, HOST_ID, HOST_NAME, "hub"
                     ),
                 }
+                run_result["quiet_layout_test_mode"] = (
+                    enable_quiet_layout_test_mode(
+                        host_pipe,
+                        client_pipe,
+                    )
+                )
                 run_result["host_run_entry"] = (
                     start_host_testrun_and_wait_for_clients()
                 )

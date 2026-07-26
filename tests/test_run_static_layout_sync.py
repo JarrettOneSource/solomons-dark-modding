@@ -926,6 +926,48 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         )
         edge_sleep.assert_called_once_with(0.25)
 
+        quiet_calls: list[tuple[str, float]] = []
+
+        def quiet_lua(
+            pipe_name: str,
+            code: str,
+            timeout: float,
+        ) -> str:
+            self.assertIn(
+                "sd.gameplay.set_manual_enemy_spawner_test_mode(true)",
+                code,
+            )
+            quiet_calls.append((pipe_name, timeout))
+            return "ok=true\nactive=true\n"
+
+        with mock.patch.object(verifier, "lua", side_effect=quiet_lua):
+            quiet_mode = verifier.enable_quiet_layout_test_mode(
+                "host-pipe",
+                "client-pipe",
+            )
+        self.assertEqual(
+            quiet_calls,
+            [("host-pipe", 8.0), ("client-pipe", 8.0)],
+        )
+        self.assertEqual(quiet_mode["host"]["active"], "true")
+        self.assertEqual(quiet_mode["client"]["active"], "true")
+
+        with (
+            mock.patch.object(
+                verifier,
+                "lua",
+                return_value="ok=true\nactive=false\n",
+            ),
+            self.assertRaisesRegex(
+                verifier.VerifyFailure,
+                "failed to suppress stock waves",
+            ),
+        ):
+            verifier.enable_quiet_layout_test_mode(
+                "host-pipe",
+                "client-pipe",
+            )
+
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)

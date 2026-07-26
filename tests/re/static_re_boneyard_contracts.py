@@ -373,6 +373,9 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "def capture_matched_camera_areas(",
         "CAPTURE_ATTEMPTS_PER_FRAME = 8",
         "def capture_information_frame(",
+        "def enable_quiet_layout_test_mode(",
+        "sd.gameplay.set_manual_enemy_spawner_test_mode(true)",
+        'run_result["quiet_layout_test_mode"]',
         '"blank or low-information"',
         '"low_information_retries"',
         "god_mode=True",
@@ -432,6 +435,20 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
     if missing_verifier:
         raise StaticReTestFailure(
             "Live Boneyard scenery equality gate is incomplete: " + ", ".join(missing_verifier)
+        )
+    hub_ready_index = verifier.find(
+        'run_result["hub_remote_materialized"]'
+    )
+    quiet_mode_index = verifier.find(
+        'run_result["quiet_layout_test_mode"]'
+    )
+    run_entry_index = verifier.find('run_result["host_run_entry"]')
+    if not (
+        0 <= hub_ready_index < quiet_mode_index < run_entry_index
+    ):
+        raise StaticReTestFailure(
+            "static-layout quiet mode must activate after hub convergence "
+            "and before run entry"
         )
     if "stop_games()" in verifier:
         raise StaticReTestFailure(
