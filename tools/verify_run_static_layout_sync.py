@@ -2612,7 +2612,7 @@ def exact_temporal_envelope_decor_pixel_comparison(
     }
 
 
-def temporal_maximum_edge_comparison(
+def temporal_minimum_edge_comparison(
     host_paths: list[Path],
     client_paths: list[Path],
     camera: dict[str, Any],
@@ -2630,7 +2630,7 @@ def temporal_maximum_edge_comparison(
             composite = source.convert("RGB")
         for path in paths[1:]:
             with Image.open(path) as source:
-                composite = ImageChops.lighter(
+                composite = ImageChops.darker(
                     composite,
                     source.convert("RGB"),
                 )
@@ -2667,14 +2667,14 @@ def temporal_maximum_edge_comparison(
     edge_masks: dict[str, Image.Image] = {}
     artifact_paths: dict[str, str] = {}
     for peer in ("host", "client"):
-        maximum = composites[peer].crop(bounds)
-        maximum_path = Path(
-            f"{evidence_prefix}-{peer}-temporal-maximum-edge-source.png"
+        minimum = composites[peer].crop(bounds)
+        minimum_path = Path(
+            f"{evidence_prefix}-{peer}-temporal-minimum-edge-source.png"
         )
-        maximum.save(maximum_path)
-        artifact_paths[f"{peer}_maximum_path"] = str(maximum_path)
+        minimum.save(minimum_path)
+        artifact_paths[f"{peer}_minimum_path"] = str(minimum_path)
         grayscale = ImageOps.autocontrast(
-            ImageOps.grayscale(maximum),
+            ImageOps.grayscale(minimum),
             cutoff=1,
         ).filter(ImageFilter.GaussianBlur(1.0))
         edges = grayscale.filter(ImageFilter.FIND_EDGES).point(
@@ -2755,8 +2755,8 @@ def temporal_maximum_edge_comparison(
         "tolerance_radius_pixels": 2,
         "sufficient_content": sufficient_content,
         "exact_input_derivation": (
-            "per-channel temporal maximum, 1% autocontrast, one-pixel "
-            "Gaussian blur, FIND_EDGES, threshold 40"
+            "per-channel temporal minimum for persistent geometry, 1% "
+            "autocontrast, one-pixel Gaussian blur, FIND_EDGES, threshold 40"
         ),
         "ok": (
             sufficient_content
@@ -3624,7 +3624,7 @@ def capture_matched_camera_areas(
             Path(f"{stable_prefix}-simple-lighting"),
             excluded_rectangles=excluded_rectangles,
         )
-        edge_geometry = temporal_maximum_edge_comparison(
+        edge_geometry = temporal_minimum_edge_comparison(
             simple_host_paths,
             simple_client_paths,
             settled_host_camera,
@@ -3653,7 +3653,7 @@ def capture_matched_camera_areas(
                 ),
                 "stable_decor_pixels": stable_pixels,
                 "temporal_decor_envelope": temporal_envelope,
-                "temporal_maximum_edge_geometry": edge_geometry,
+                "temporal_minimum_edge_geometry": edge_geometry,
                 "screenshots": area_attempts[0]["screenshots"],
                 "screenshot_pairs": [
                     attempt["screenshots"]
@@ -3685,7 +3685,7 @@ def capture_matched_camera_areas(
             )
         if not edge_geometry["ok"]:
             raise VerifyFailure(
-                "matched-camera temporal-maximum decor edges differed: "
+                "matched-camera temporal-minimum decor edges differed: "
                 f"family={target['family']} edges={edge_geometry}"
             )
     return areas

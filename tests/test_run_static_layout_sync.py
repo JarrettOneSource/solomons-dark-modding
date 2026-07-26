@@ -879,7 +879,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             self.assertFalse(blank["sufficient_stable_content"])
             self.assertFalse(blank["bounded_match"])
 
-    def test_temporal_maximum_edge_gate_rejects_missing_decor(self) -> None:
+    def test_temporal_minimum_edge_gate_rejects_missing_decor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)
             host_paths: list[Path] = []
@@ -905,11 +905,19 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                                     value // 2,
                                 ),
                             )
+                    transient_left = (
+                        90 + frame * 25
+                        if peer == "host"
+                        else 230 + frame * 25
+                    )
+                    for x in range(transient_left, transient_left + 20):
+                        for y in range(70, 170):
+                            image.putpixel((x, y), (255, 255, 255))
                     path = root / f"{peer}-{frame}.png"
                     image.save(path)
                     paths.append(path)
 
-            matching = verifier.temporal_maximum_edge_comparison(
+            matching = verifier.temporal_minimum_edge_comparison(
                 host_paths,
                 client_paths,
                 {"width": 400.0, "height": 240.0},
@@ -929,7 +937,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                         changed.putpixel((x, y), (0, 0, 0))
                 changed.save(path)
 
-            changed = verifier.temporal_maximum_edge_comparison(
+            changed = verifier.temporal_minimum_edge_comparison(
                 host_paths,
                 client_paths,
                 {"width": 400.0, "height": 240.0},
