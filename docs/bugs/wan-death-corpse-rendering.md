@@ -37,17 +37,55 @@ runtime construction, equipment snapshots, and the lethal snapshot can be
 observed in different orders. Loopback normally finishes presentation
 reconciliation first.
 
-The black-host audit frame was not caused by a missing color packet. The NFO
-observer log and the raw actor probe show the expected nonzero primary and
-secondary color blocks had already arrived. The failure is that the remote
-death transition did not treat those visual selectors/colors and the corpse
-frame as one convergent transaction. A later post-presentation probe showed
-the same actor textured again, confirming transient application/transition
-ordering rather than a permanently absent asset.
+The black-host audit frame was not caused by a missing color packet or texture
+upload. The NFO observer log and raw actor probes show the expected nonzero
+primary and secondary color blocks, live visual objects, corpse selectors, and
+terminal frame. A fixed-build client-death run reproduced the black corpse
+after all of those states had converged. Moving the surviving observer close
+to the corpse made the same actor immediately textured without changing its
+visual objects or packet state; moving away made it black again.
 
-The fix must therefore make authoritative death terminal even after the
-presentation window, continue reconciling corpse-safe profile and wearable
-visual state while dead, and suppress only the hand-held attachment.
+The native render scalar at `actor + 0xCC` explains that distance-dependent
+change. `FUN_00624B40` clears the scalar, queries the region light grid through
+`FUN_0057E490`, then multiplies the actor render by the result. The remote
+corpse read `0.0` while black and `1.0` when covered by the nearby survivor's
+light.
+
+The missing light is a specific stock branch, not a general region-grid or
+asset failure:
+
+- PlayerActor's light-submit vfunc is `FUN_005299A0` at `0x005299A0`.
+- It submits the normal player light only when the animation-drive state at
+  `actor + 0x160` is zero **or** the actor slot at `actor + 0x5C` is zero.
+- A local dead owner has slot `0` and death drive `1`, so its corpse retains
+  its normal light.
+- A living remote clone has a nonzero slot and drive `0`, so it is also lit.
+- A replicated remote corpse has both a nonzero slot and death drive `1`.
+  That is the sole combination which skips the stock player light.
+
+Live region-light records confirm the branch. The dying machine retained two
+lights: the local corpse and the remote survivor. The observer retained only
+the local survivor's light. The local corpse record also proves the exact
+stock anchor follows actor heading at a 15-unit offset, with radius `2.6`,
+intensity `1.0`, and flag `1`; this is the record produced by
+`FUN_005299A0`, not a replacement light invented by the multiplayer layer.
+
+WAN timing made this look like texture/order corruption because the remote
+corpse remains temporarily illuminated by nearby participants and by the
+camera positions used during the death transition. At the separated terminal
+evidence positions, its own light is suppressed and the otherwise-correct
+texture is multiplied by zero. The client corpse reported as absent is the
+same failure at a darker background/position, compounded by the separate late
+death-epoch materialization defect.
+
+The foundational renderer fix must preserve the real nonzero gameplay slot,
+but temporarily present a committed remote corpse as slot zero only while
+calling the stock PlayerActor light-submit function. That takes the exact
+local-corpse branch, including its native anchor and light parameters, without
+forcing fullbright, writing `actor + 0xCC`, or creating a parallel light path.
+The death transaction must also remain terminal after the presentation
+window, continue reconciling corpse-safe profile and wearable visual state
+while dead, and suppress only the hand-held attachment.
 
 The first fixed-build WAN host-death pass exposed one additional ordering
 constraint before implementation was finalized. The NFO observer's first
@@ -148,4 +186,6 @@ Treat remote death as a durable replicated presentation epoch:
 5. reassert local dead-owner life after the native progression tick;
 6. apply authenticated host life corrections against the recipient's current
    native maximum; and
-7. anchor the Loading Boneyard display floor to its first rendered frame.
+7. anchor the Loading Boneyard display floor to its first rendered frame; and
+8. route committed remote corpses through the stock slot-zero PlayerActor
+   light-submit branch while restoring their real slot before returning.
