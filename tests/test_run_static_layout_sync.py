@@ -449,20 +449,21 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             )
 
     def test_actor_parking_retries_native_collision_displacement(self) -> None:
-        candidates = [
-            {
-                "host": [680.0, 2000.0],
-                "client": [680.0, 2000.0],
-                "actor_light_candidate_count": 2,
-                "candidate_index": 1,
-            },
-            {
-                "host": [1000.0, 1680.0],
-                "client": [1000.0, 1680.0],
-                "actor_light_candidate_count": 2,
-                "candidate_index": 2,
-            },
-        ]
+        candidate_snapshot = {
+            "host": [680.0, 2000.0],
+            "client": [680.0, 2000.0],
+            "goal": [680.0, 2000.0],
+            "actor_light_candidate_count": 2,
+            "actor_light_candidate_positions": [
+                [680.0, 2000.0],
+                [1000.0, 1680.0],
+            ],
+            "candidate_index": 1,
+            "traversable_sample_count": 2,
+            "source": "test pre-placement snapshot",
+            "scene_world": 1,
+            "grid_world": 1,
+        }
         settled_positions = [
             [800.0, 2000.0, 0.0],
             [800.0, 2000.0, 0.0],
@@ -474,7 +475,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             mock.patch.object(
                 verifier,
                 "nav_actor_parking_positions",
-                side_effect=candidates,
+                return_value=candidate_snapshot,
             ) as parking_samples,
             mock.patch.object(
                 verifier,
@@ -495,7 +496,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 attempts,
             )
 
-        self.assertEqual(parking_samples.call_count, 2)
+        self.assertEqual(parking_samples.call_count, 1)
         self.assertEqual(result["parking"]["candidate_index"], 2)
         self.assertFalse(attempts[0]["ok"])
         self.assertIn("exclusion zone", attempts[0]["error"])

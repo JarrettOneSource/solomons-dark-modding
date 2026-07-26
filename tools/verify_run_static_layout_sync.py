@@ -3102,6 +3102,10 @@ table.sort(candidates, function(a, b)
   if a.x ~= b.x then return a.x < b.x end
   return a.y < b.y
 end)
+for index, candidate in ipairs(candidates) do
+  emit("candidate." .. index .. ".x", candidate.x)
+  emit("candidate." .. index .. ".y", candidate.y)
+end
 local shared = candidates[candidate_index]
 emit("traversable_count", traversable_count)
 emit("candidate_count", #candidates)
@@ -3153,6 +3157,16 @@ end
             values["candidate_count"],
             0,
         ),
+        "actor_light_candidate_positions": [
+            [
+                float(values[f"candidate.{index}.x"]),
+                float(values[f"candidate.{index}.y"]),
+            ]
+            for index in range(
+                1,
+                int(values["candidate_count"], 0) + 1,
+            )
+        ],
         "candidate_index": int(values["candidate_index"], 0),
         "source": (
             "ranked shared sd.debug.get_nav_grid(1) traversable sample, "
@@ -3173,26 +3187,45 @@ def settle_shared_actor_parking(
 ) -> dict[str, Any]:
     if attempts is None:
         attempts = []
-    candidate_index = 1
-    candidate_count: int | None = None
-    while candidate_count is None or candidate_index <= candidate_count:
-        parking = nav_actor_parking_positions(
-            host_pipe,
-            target_x,
-            target_y,
-            candidate_index,
+    parking_snapshot = nav_actor_parking_positions(
+        host_pipe,
+        target_x,
+        target_y,
+    )
+    candidate_positions = parking_snapshot[
+        "actor_light_candidate_positions"
+    ]
+    candidate_count = int(parking_snapshot["actor_light_candidate_count"])
+    if len(candidate_positions) != candidate_count:
+        raise VerifyFailure(
+            "native actor-light parking snapshot is incomplete: "
+            f"expected={candidate_count} actual={len(candidate_positions)}"
         )
-        reported_candidate_count = int(
-            parking["actor_light_candidate_count"]
-        )
-        if candidate_count is None:
-            candidate_count = reported_candidate_count
-        elif reported_candidate_count != candidate_count:
-            raise VerifyFailure(
-                "native actor-light parking candidate set changed while "
-                f"settling: expected={candidate_count} "
-                f"actual={reported_candidate_count}"
-            )
+    for candidate_index, candidate_position in enumerate(
+        candidate_positions,
+        start=1,
+    ):
+        parking = {
+            **actor_light_parking_geometry(
+                target_x,
+                target_y,
+                float(candidate_position[0]),
+                float(candidate_position[1]),
+            ),
+            "goal": list(parking_snapshot["goal"]),
+            "goal_snap_distance": math.dist(
+                candidate_position,
+                parking_snapshot["goal"],
+            ),
+            "traversable_sample_count": parking_snapshot[
+                "traversable_sample_count"
+            ],
+            "actor_light_candidate_count": candidate_count,
+            "candidate_index": candidate_index,
+            "source": parking_snapshot["source"],
+            "scene_world": parking_snapshot["scene_world"],
+            "grid_world": parking_snapshot["grid_world"],
+        }
         owner_placements = {
             "host": place_player(
                 host_pipe,
@@ -3241,7 +3274,6 @@ def settle_shared_actor_parking(
         except VerifyFailure as error:
             attempt["ok"] = False
             attempt["error"] = str(error)
-            candidate_index += 1
             continue
         attempt["ok"] = True
         attempt["settled_actor_geometry"] = settled_actor_geometry
