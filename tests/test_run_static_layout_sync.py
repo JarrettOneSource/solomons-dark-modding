@@ -281,6 +281,74 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
         self.assertEqual(target["nearby_compact"]["position"], [100.0, 100.0])
         self.assertAlmostEqual(target["nearby_compact_distance"], 2**0.5 * 100)
 
+    def test_camera_targets_require_a_real_nav_parking_sample(self) -> None:
+        decor = {
+            "trees": [
+                {
+                    "type_id": 2001,
+                    "position": [1000.0, 1000.0],
+                    "native_index": 1,
+                },
+                {
+                    "type_id": 2001,
+                    "position": [1500.0, 1000.0],
+                    "native_index": 2,
+                },
+            ],
+            "scenery": [
+                {
+                    "type_id": 9999,
+                    "position": [-1000.0, -1000.0],
+                    "native_index": 0,
+                },
+                {
+                    "type_id": 2029,
+                    "position": [1600.0, 2200.0],
+                    "native_index": 3,
+                },
+            ],
+            "compact": [
+                {
+                    "type_id": 21,
+                    "position": [1000.0, 1600.0],
+                    "native_index": 4,
+                },
+                {
+                    "type_id": 7,
+                    "position": [1600.0, 1600.0],
+                    "native_index": 5,
+                },
+                {
+                    "type_id": 99,
+                    "position": [3000.0, 3000.0],
+                    "native_index": 6,
+                },
+            ],
+        }
+        parking_samples = [
+            [1180.0, 1000.0],
+            [680.0, 1600.0],
+            [1280.0, 1600.0],
+            [1280.0, 2200.0],
+        ]
+        targets = verifier.matched_camera_targets(
+            decor,
+            [[-5000.0, -5000.0]],
+            parking_samples,
+        )
+        self.assertEqual(targets[0]["position"], [1500.0, 1000.0])
+        self.assertEqual(
+            targets[0]["preselected_actor_parking_sample"]["position"],
+            [1180.0, 1000.0],
+        )
+        self.assertEqual(
+            targets[0]["preselected_actor_parking_sample"][
+                "target_distance"
+            ],
+            verifier.TARGET_PLAYER_LIGHT_DISTANCE,
+        )
+        self.assertEqual(len(targets), 4)
+
     def test_actor_light_parking_is_shared_outside_roi_and_within_radial_band(
         self,
     ) -> None:
@@ -330,6 +398,48 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 target_y,
                 735.0,
                 2000.0,
+            )
+
+    def test_settled_actor_parking_allows_native_collision_displacement(
+        self,
+    ) -> None:
+        settled = verifier.settled_actor_parking_geometry(
+            1000.0,
+            2000.0,
+            {
+                "host": [680.0, 2000.0],
+                "client": [680.0, 2012.5],
+            },
+        )
+        self.assertEqual(settled["owner_separation"], 12.5)
+        self.assertTrue(settled["native_collision_displacement_allowed"])
+        for owner in ("host", "client"):
+            self.assertGreaterEqual(
+                settled["target_distances"][owner],
+                verifier.MINIMUM_PLAYER_LIGHT_DISTANCE
+                - verifier.NATIVE_COLLISION_RADIAL_TOLERANCE,
+            )
+            self.assertLessEqual(
+                settled["target_distances"][owner],
+                verifier.MAXIMUM_PLAYER_LIGHT_DISTANCE
+                + verifier.NATIVE_COLLISION_RADIAL_TOLERANCE,
+            )
+            self.assertGreaterEqual(
+                settled["decor_roi_clearances"][owner],
+                verifier.MINIMUM_DECOR_ROI_CLEARANCE,
+            )
+
+        with self.assertRaisesRegex(
+            verifier.VerifyFailure,
+            "outside player-light radial band",
+        ):
+            verifier.settled_actor_parking_geometry(
+                1000.0,
+                2000.0,
+                {
+                    "host": [680.0, 2000.0],
+                    "client": [1400.0, 2000.0],
+                },
             )
 
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
@@ -434,7 +544,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                             image.putpixel(
                                 (x, y),
                                 (
-                                    80 + x % 150,
+                                    80 + x % 150 + frame,
                                     60 + y % 140,
                                     40 + (x + y) % 180,
                                 ),
@@ -460,6 +570,10 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             self.assertTrue(result["exact_match"])
             self.assertEqual(result["differing_stable_pixel_count"], 0)
             self.assertTrue(result["stable_pixel_hashes_match"])
+            self.assertEqual(
+                result["maximum_stable_temporal_channel_range"],
+                2,
+            )
             self.assertGreaterEqual(
                 result["stable_visible_pixel_count"],
                 result["minimum_stable_visible_pixel_count"],
@@ -481,6 +595,125 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 envelope["maximum_envelope_channel_gap"],
                 0,
             )
+
+    def test_stable_pixel_gate_rejects_more_than_two_levels_of_drift(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            host_paths: list[Path] = []
+            client_paths: list[Path] = []
+            for frame in range(3):
+                host = Image.new("RGB", (400, 240))
+                tolerated = Image.new("RGB", (400, 240))
+                for x in range(400):
+                    for y in range(240):
+                        pixel = (
+                            80 + x % 100,
+                            60 + y % 100,
+                            40 + (x + y) % 100,
+                        )
+                        host.putpixel((x, y), pixel)
+                        tolerated.putpixel(
+                            (x, y),
+                            tuple(value + 2 for value in pixel),
+                        )
+                host_path = root / f"host-{frame}.png"
+                client_path = root / f"client-{frame}.png"
+                host.save(host_path)
+                tolerated.save(client_path)
+                host_paths.append(host_path)
+                client_paths.append(client_path)
+
+            tolerated = verifier.exact_stable_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "tolerated",
+            )
+            self.assertFalse(tolerated["exact_match"])
+            self.assertTrue(tolerated["bounded_match"])
+            self.assertEqual(tolerated["maximum_stable_channel_delta"], 2)
+
+            for path in client_paths:
+                shifted = Image.new("RGB", (400, 240))
+                for x in range(400):
+                    for y in range(240):
+                        shifted.putpixel(
+                            (x, y),
+                            (
+                                83 + x % 100,
+                                63 + y % 100,
+                                43 + (x + y) % 100,
+                            ),
+                        )
+                shifted.save(path)
+            rejected = verifier.exact_stable_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "rejected",
+            )
+            self.assertFalse(rejected["bounded_match"])
+            self.assertEqual(rejected["maximum_stable_channel_delta"], 3)
+
+    def test_temporal_maximum_edge_gate_rejects_missing_decor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            host_paths: list[Path] = []
+            client_paths: list[Path] = []
+            for frame in range(3):
+                for peer, paths in (
+                    ("host", host_paths),
+                    ("client", client_paths),
+                ):
+                    image = Image.new("RGB", (400, 240), "black")
+                    for x in range(80, 320):
+                        for y in range(48, 192):
+                            value = (
+                                220
+                                if ((x // 4) + (y // 4)) % 2
+                                else 35
+                            )
+                            image.putpixel(
+                                (x, y),
+                                (
+                                    value,
+                                    (value + frame * 7) % 256,
+                                    value // 2,
+                                ),
+                            )
+                    path = root / f"{peer}-{frame}.png"
+                    image.save(path)
+                    paths.append(path)
+
+            matching = verifier.temporal_maximum_edge_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "matching",
+            )
+            self.assertTrue(matching["ok"])
+            self.assertGreaterEqual(
+                matching["host_edge_count"],
+                matching["minimum_edge_count"],
+            )
+
+            for path in client_paths:
+                with Image.open(path) as source:
+                    changed = source.convert("RGB")
+                for x in range(130, 270):
+                    for y in range(60, 180):
+                        changed.putpixel((x, y), (0, 0, 0))
+                changed.save(path)
+
+            changed = verifier.temporal_maximum_edge_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "changed",
+            )
+            self.assertFalse(changed["ok"])
 
 
 if __name__ == "__main__":

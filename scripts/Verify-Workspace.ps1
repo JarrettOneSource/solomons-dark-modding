@@ -57,6 +57,7 @@ if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
     $launcherContextArguments += @("--game-dir", $GameDirectory)
 }
 $instanceRoot = Join-Path $root "runtime/instances/$InstanceName"
+$stageGameExecutable = Join-Path $instanceRoot "stage/SolomonDark.exe"
 $stageBinaryLayout = Join-Path $instanceRoot "stage/.sdmod/config/binary-layout.ini"
 $stageDebugUiConfig = Join-Path $instanceRoot "stage/.sdmod/config/debug-ui.ini"
 
@@ -128,15 +129,39 @@ function Wait-ForFileContent {
 }
 
 function Stop-OwnedSolomonDarkProcess {
-    param([int]$ProcessId)
+    param(
+        [int]$ProcessId,
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedExecutablePath
+    )
 
     if ($ProcessId -le 0) {
         return
     }
-    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-    if ($null -ne $process -and $process.ProcessName -eq "SolomonDark") {
-        Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+    $process = Get-CimInstance `
+        -ClassName Win32_Process `
+        -Filter "ProcessId = $ProcessId" `
+        -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        return
     }
+    $expectedPath = [System.IO.Path]::GetFullPath($ExpectedExecutablePath)
+    $actualPath = [string]$process.ExecutablePath
+    if (
+        [string]::IsNullOrWhiteSpace($actualPath) -or
+        -not [string]::Equals(
+            [System.IO.Path]::GetFullPath($actualPath),
+            $expectedPath,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        Write-Warning (
+            "Refusing to stop PID $ProcessId because its executable path " +
+            "does not match the owned stage."
+        )
+        return
+    }
+    Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
 }
 
 if (Test-Path $instanceRoot) {
@@ -184,7 +209,9 @@ if ($LaunchAndVerifyLoader) {
         )
     }
     finally {
-        Stop-OwnedSolomonDarkProcess -ProcessId $gameProcessId
+        Stop-OwnedSolomonDarkProcess `
+            -ProcessId $gameProcessId `
+            -ExpectedExecutablePath $stageGameExecutable
     }
 }
 

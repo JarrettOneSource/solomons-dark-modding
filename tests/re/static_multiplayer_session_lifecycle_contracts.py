@@ -85,14 +85,15 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         "scripts/Launch-LocalMultiplayerPair.ps1"
     )
 
-    _require_tokens(
+    _require_in_order(
         labels,
-        (
-            'return "not-in-game";',
-            'return "in-hub";',
-            'return "in-boneyard";',
-        ),
-        "lobby activity labels",
+        "const char* LobbySessionStateLabel(LobbySessionState state)",
+        "case LobbySessionState::NotInGame:",
+        'return "not-in-game";',
+        "case LobbySessionState::InHub:",
+        'return "in-hub";',
+        "case LobbySessionState::InBoneyard:",
+        'return "in-boneyard";',
     )
     _require_tokens(
         local_state,

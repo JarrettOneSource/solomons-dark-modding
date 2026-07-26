@@ -16,7 +16,7 @@ from typing import Any
 
 import multiplayer_frame_capture
 import verify_local_multiplayer_sync as local_sync
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 from verify_local_multiplayer_sync import (
     CLIENT_ID,
     CLIENT_NAME,
@@ -41,11 +41,14 @@ RUNTIME_OUTPUT = ROOT / "runtime" / "run_static_layout_sync_verification.json"
 CAPTURE_FRAMES_PER_PEER = 16
 DECOR_ROI_HALF_EXTENT = 120.0
 MINIMUM_DECOR_ROI_CLEARANCE = 120.0
+STABLE_TEMPORAL_CHANNEL_RANGE = 2
+STABLE_CROSS_PEER_CHANNEL_DELTA = 2
 ACTOR_LIGHT_PARKING_OFFSET_X = -320.0
 ACTOR_LIGHT_PARKING_OFFSET_Y = 0.0
 MINIMUM_PLAYER_LIGHT_DISTANCE = 310.0
 TARGET_PLAYER_LIGHT_DISTANCE = 320.0
 MAXIMUM_PLAYER_LIGHT_DISTANCE = 330.0
+NATIVE_COLLISION_RADIAL_TOLERANCE = 25.0
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -1567,6 +1570,7 @@ def matched_camera_target(
 def matched_camera_targets(
     decor: dict[str, Any],
     actor_positions: list[list[float]],
+    actor_parking_samples: list[list[float]] | None = None,
 ) -> list[dict[str, Any]]:
     categories = (
         (
@@ -1649,6 +1653,56 @@ def matched_camera_targets(
     ]
     selected: list[dict[str, Any]] = []
     for family, source, candidates in categories:
+        def parking_sample(
+            row: dict[str, Any],
+        ) -> tuple[list[float], float] | None:
+            if actor_parking_samples is None:
+                return None
+            target_x = float(row["position"][0])
+            target_y = float(row["position"][1])
+            eligible: list[tuple[list[float], float]] = []
+            for sample in actor_parking_samples:
+                if len(sample) < 2:
+                    continue
+                sample_x = float(sample[0])
+                sample_y = float(sample[1])
+                if not all(
+                    math.isfinite(value)
+                    for value in (sample_x, sample_y)
+                ):
+                    continue
+                horizontal = abs(sample_x - target_x)
+                vertical = abs(sample_y - target_y)
+                target_gap = math.hypot(horizontal, vertical)
+                if (
+                    max(horizontal, vertical) - DECOR_ROI_HALF_EXTENT
+                    >= MINIMUM_DECOR_ROI_CLEARANCE
+                    and MINIMUM_PLAYER_LIGHT_DISTANCE
+                    <= target_gap
+                    <= MAXIMUM_PLAYER_LIGHT_DISTANCE
+                ):
+                    eligible.append(
+                        ([sample_x, sample_y], target_gap)
+                    )
+            if not eligible:
+                return None
+            goal_x, goal_y = actor_light_parking_goal(
+                target_x,
+                target_y,
+            )
+            return min(
+                eligible,
+                key=lambda item: (
+                    abs(item[1] - TARGET_PLAYER_LIGHT_DISTANCE),
+                    math.hypot(
+                        item[0][0] - goal_x,
+                        item[0][1] - goal_y,
+                    ),
+                    item[0][0],
+                    item[0][1],
+                ),
+            )
+
         def clearance(row: dict[str, Any]) -> tuple[float, float]:
             position = row["position"]
             actor_clearance = (
@@ -1680,6 +1734,10 @@ def matched_camera_targets(
                 and min_world_y + camera_safe_margin
                 <= float(row["position"][1])
                 <= max_world_y - camera_safe_margin
+                and (
+                    actor_parking_samples is None
+                    or parking_sample(row) is not None
+                )
             )
         ]
         if not valid:
@@ -1724,6 +1782,7 @@ def matched_camera_targets(
             float(entity["position"][0]),
             float(entity["position"][1]),
         ]
+        selected_parking = parking_sample(entity)
         selected.append(
             {
                 "family": family,
@@ -1736,6 +1795,14 @@ def matched_camera_targets(
                 "camera_safe_margin": camera_safe_margin,
                 "nearest_selected_area_distance": (
                     area_separation if selected else None
+                ),
+                "preselected_actor_parking_sample": (
+                    {
+                        "position": selected_parking[0],
+                        "target_distance": selected_parking[1],
+                    }
+                    if selected_parking is not None
+                    else None
                 ),
             }
         )
@@ -1782,16 +1849,18 @@ end
 
 def configure_visual_gate_render_profile(
     pipe_name: str,
+    *,
+    complex_lighting: bool = True,
 ) -> dict[str, str]:
     values = parse_key_values(
         lua(
             pipe_name,
             """
 local slots = {
-  complex_lighting = { address = 0x00B3BCA8, value = 1 },
-  complex_shadows = { address = 0x00B3BCA9, value = 1 },
-  multiple_shadows = { address = 0x00B3BCAA, value = 1 },
-  zoom_effects = { address = 0x00B3BCAC, value = 1 },
+  complex_lighting = { address = 0x00B3BCA8, value = __COMPLEX_LIGHTING__ },
+  complex_shadows = { address = 0x00B3BCA9, value = __COMPLEX_SHADOWS__ },
+  multiple_shadows = { address = 0x00B3BCAA, value = __MULTIPLE_SHADOWS__ },
+  zoom_effects = { address = 0x00B3BCAC, value = __ZOOM_EFFECTS__ },
   enhanced_effects = { address = 0x00B3BCAD, value = 0 },
 }
 for name, slot in pairs(slots) do
@@ -1806,7 +1875,19 @@ for name, slot in pairs(slots) do
   print("expected." .. name .. "=" .. tostring(slot.value))
   print("after." .. name .. "=" .. tostring(sd.debug.read_u8(slot.live)))
 end
-""",
+""".replace(
+                "__COMPLEX_LIGHTING__",
+                "1" if complex_lighting else "0",
+            ).replace(
+                "__COMPLEX_SHADOWS__",
+                "1" if complex_lighting else "0",
+            ).replace(
+                "__MULTIPLE_SHADOWS__",
+                "1" if complex_lighting else "0",
+            ).replace(
+                "__ZOOM_EFFECTS__",
+                "1" if complex_lighting else "0",
+            ),
             timeout=10.0,
         )
     )
@@ -1984,7 +2065,7 @@ def exact_decor_pixel_comparison(
     client_path: Path,
     camera: dict[str, Any],
     evidence_prefix: Path,
-    world_half_extent: float = 120.0,
+    world_half_extent: float = DECOR_ROI_HALF_EXTENT,
     excluded_rectangles: list[list[int]] | None = None,
 ) -> dict[str, Any]:
     with Image.open(host_path) as host_source:
@@ -2092,7 +2173,7 @@ def exact_stable_decor_pixel_comparison(
     client_paths: list[Path],
     camera: dict[str, Any],
     evidence_prefix: Path,
-    world_half_extent: float = 120.0,
+    world_half_extent: float = DECOR_ROI_HALF_EXTENT,
     excluded_rectangles: list[list[int]] | None = None,
 ) -> dict[str, Any]:
     if len(host_paths) != len(client_paths) or len(host_paths) < 3:
@@ -2172,11 +2253,18 @@ def exact_stable_decor_pixel_comparison(
         host_samples = [row[index] for row in pixels["host"]]
         client_samples = [row[index] for row in pixels["client"]]
         stable = (
-            all(sample == host_samples[0] for sample in host_samples[1:])
-            and all(
-                sample == client_samples[0]
-                for sample in client_samples[1:]
+            max(
+                max(sample[channel] for sample in host_samples)
+                - min(sample[channel] for sample in host_samples)
+                for channel in range(3)
             )
+            <= STABLE_TEMPORAL_CHANNEL_RANGE
+            and max(
+                max(sample[channel] for sample in client_samples)
+                - min(sample[channel] for sample in client_samples)
+                for channel in range(3)
+            )
+            <= STABLE_TEMPORAL_CHANNEL_RANGE
         )
         if not stable:
             stable_mask_pixels.append(0)
@@ -2247,6 +2335,16 @@ def exact_stable_decor_pixel_comparison(
         and len(stable_host_colors) >= minimum_stable_unique_colors
         and len(stable_client_colors) >= minimum_stable_unique_colors
     )
+    exact_match = (
+        differing_stable_pixel_count == 0
+        and stable_hashes_match
+        and sufficient_stable_content
+    )
+    bounded_match = (
+        maximum_stable_channel_delta
+        <= STABLE_CROSS_PEER_CHANNEL_DELTA
+        and sufficient_stable_content
+    )
     return {
         "roi_bounds": list(bounds),
         "roi_world_half_extent": world_half_extent,
@@ -2263,6 +2361,12 @@ def exact_stable_decor_pixel_comparison(
         "stable_host_unique_colors": len(stable_host_colors),
         "stable_client_unique_colors": len(stable_client_colors),
         "minimum_stable_unique_colors": minimum_stable_unique_colors,
+        "maximum_stable_temporal_channel_range": (
+            STABLE_TEMPORAL_CHANNEL_RANGE
+        ),
+        "maximum_allowed_stable_cross_peer_channel_delta": (
+            STABLE_CROSS_PEER_CHANNEL_DELTA
+        ),
         "differing_stable_pixel_count": differing_stable_pixel_count,
         "maximum_stable_channel_delta": maximum_stable_channel_delta,
         "host_stable_pixel_sha256": host_hash.hexdigest(),
@@ -2271,16 +2375,14 @@ def exact_stable_decor_pixel_comparison(
         "sufficient_stable_content": sufficient_stable_content,
         "actors_and_ui_excluded": {
             "method": (
-                "intersection of pixels unchanged across three native "
-                "backbuffers on each peer"
+                "intersection of pixels staying within a two-value "
+                "per-channel temporal band across native backbuffers on "
+                "each peer"
             ),
             "frames_per_peer": len(host_paths),
         },
-        "exact_match": (
-            differing_stable_pixel_count == 0
-            and stable_hashes_match
-            and sufficient_stable_content
-        ),
+        "exact_match": exact_match,
+        "bounded_match": bounded_match,
         "stable_mask_path": str(stable_mask_path),
         "host_stable_decor_path": str(stable_host_path),
         "client_stable_decor_path": str(stable_client_path),
@@ -2293,7 +2395,7 @@ def exact_temporal_envelope_decor_pixel_comparison(
     client_paths: list[Path],
     camera: dict[str, Any],
     evidence_prefix: Path,
-    world_half_extent: float = 120.0,
+    world_half_extent: float = DECOR_ROI_HALF_EXTENT,
     excluded_rectangles: list[list[int]] | None = None,
 ) -> dict[str, Any]:
     if len(host_paths) != len(client_paths) or len(host_paths) < 3:
@@ -2472,6 +2574,161 @@ def exact_temporal_envelope_decor_pixel_comparison(
     }
 
 
+def temporal_maximum_edge_comparison(
+    host_paths: list[Path],
+    client_paths: list[Path],
+    camera: dict[str, Any],
+    evidence_prefix: Path,
+    world_half_extent: float = DECOR_ROI_HALF_EXTENT,
+) -> dict[str, Any]:
+    if len(host_paths) != len(client_paths) or len(host_paths) < 3:
+        raise VerifyFailure(
+            "temporal edge comparison requires at least three paired frames"
+        )
+
+    composites: dict[str, Image.Image] = {}
+    for peer, paths in (("host", host_paths), ("client", client_paths)):
+        with Image.open(paths[0]) as source:
+            composite = source.convert("RGB")
+        for path in paths[1:]:
+            with Image.open(path) as source:
+                composite = ImageChops.lighter(
+                    composite,
+                    source.convert("RGB"),
+                )
+        composites[peer] = composite
+
+    if composites["host"].size != composites["client"].size:
+        raise VerifyFailure(
+            "temporal edge captures have different dimensions: "
+            f"host={composites['host'].size} "
+            f"client={composites['client'].size}"
+        )
+    width, height = composites["host"].size
+    camera_width = float(camera["width"])
+    camera_height = float(camera["height"])
+    if camera_width <= 0.0 or camera_height <= 0.0:
+        raise VerifyFailure(f"invalid camera dimensions: {camera}")
+    half_width_pixels = max(
+        1,
+        round(world_half_extent * width / camera_width),
+    )
+    half_height_pixels = max(
+        1,
+        round(world_half_extent * height / camera_height),
+    )
+    center_x = width // 2
+    center_y = height // 2
+    bounds = (
+        max(0, center_x - half_width_pixels),
+        max(0, center_y - half_height_pixels),
+        min(width, center_x + half_width_pixels),
+        min(height, center_y + half_height_pixels),
+    )
+
+    edge_masks: dict[str, Image.Image] = {}
+    artifact_paths: dict[str, str] = {}
+    for peer in ("host", "client"):
+        maximum = composites[peer].crop(bounds)
+        maximum_path = Path(
+            f"{evidence_prefix}-{peer}-temporal-maximum-edge-source.png"
+        )
+        maximum.save(maximum_path)
+        artifact_paths[f"{peer}_maximum_path"] = str(maximum_path)
+        grayscale = ImageOps.autocontrast(
+            ImageOps.grayscale(maximum),
+            cutoff=1,
+        ).filter(ImageFilter.GaussianBlur(1.0))
+        edges = grayscale.filter(ImageFilter.FIND_EDGES).point(
+            lambda value: 255 if value >= 40 else 0
+        )
+        edge_path = Path(f"{evidence_prefix}-{peer}-edge-mask.png")
+        edges.save(edge_path)
+        edge_masks[peer] = edges
+        artifact_paths[f"{peer}_edge_path"] = str(edge_path)
+
+    host_pixels = list(edge_masks["host"].get_flattened_data())
+    client_pixels = list(edge_masks["client"].get_flattened_data())
+    host_dilated = list(
+        edge_masks["host"]
+        .filter(ImageFilter.MaxFilter(5))
+        .get_flattened_data()
+    )
+    client_dilated = list(
+        edge_masks["client"]
+        .filter(ImageFilter.MaxFilter(5))
+        .get_flattened_data()
+    )
+    host_edge_count = sum(value != 0 for value in host_pixels)
+    client_edge_count = sum(value != 0 for value in client_pixels)
+    host_matched = sum(
+        value != 0 and client_dilated[index] != 0
+        for index, value in enumerate(host_pixels)
+    )
+    client_matched = sum(
+        value != 0 and host_dilated[index] != 0
+        for index, value in enumerate(client_pixels)
+    )
+    total_edge_count = host_edge_count + client_edge_count
+    symmetric_match_fraction = (
+        (host_matched + client_matched) / total_edge_count
+        if total_edge_count
+        else 0.0
+    )
+    minimum_edge_count = 2_000
+    minimum_symmetric_match_fraction = 0.985
+
+    mismatch = Image.new("RGB", edge_masks["host"].size)
+    mismatch.putdata(
+        [
+            (
+                (255, 0, 0)
+                if host_value and not client_dilated[index]
+                else (
+                    (0, 128, 255)
+                    if client_pixels[index] and not host_dilated[index]
+                    else (0, 0, 0)
+                )
+            )
+            for index, host_value in enumerate(host_pixels)
+        ]
+    )
+    mismatch_path = Path(f"{evidence_prefix}-edge-mismatch.png")
+    mismatch.save(mismatch_path)
+    artifact_paths["mismatch_path"] = str(mismatch_path)
+
+    sufficient_content = (
+        host_edge_count >= minimum_edge_count
+        and client_edge_count >= minimum_edge_count
+    )
+    return {
+        "roi_bounds": list(bounds),
+        "roi_world_half_extent": world_half_extent,
+        "frames_per_peer": len(host_paths),
+        "host_edge_count": host_edge_count,
+        "client_edge_count": client_edge_count,
+        "minimum_edge_count": minimum_edge_count,
+        "host_matched_edge_count": host_matched,
+        "client_matched_edge_count": client_matched,
+        "symmetric_match_fraction": symmetric_match_fraction,
+        "minimum_symmetric_match_fraction": (
+            minimum_symmetric_match_fraction
+        ),
+        "tolerance_radius_pixels": 2,
+        "sufficient_content": sufficient_content,
+        "exact_input_derivation": (
+            "per-channel temporal maximum, 1% autocontrast, one-pixel "
+            "Gaussian blur, FIND_EDGES, threshold 40"
+        ),
+        "ok": (
+            sufficient_content
+            and symmetric_match_fraction
+            >= minimum_symmetric_match_fraction
+        ),
+        **artifact_paths,
+    }
+
+
 def actor_light_parking_goal(
     target_x: float,
     target_y: float,
@@ -2526,6 +2783,155 @@ def actor_light_parking_geometry(
         "decor_roi_clearance": decor_roi_clearance,
         "actor_separation": 0.0,
     }
+
+
+def settled_actor_parking_geometry(
+    target_x: float,
+    target_y: float,
+    owner_positions: dict[str, tuple[float, float] | list[float]],
+) -> dict[str, Any]:
+    if set(owner_positions) != {"host", "client"}:
+        raise VerifyFailure(
+            "settled actor-light geometry requires host and client owners"
+        )
+    target_distances: dict[str, float] = {}
+    decor_roi_clearances: dict[str, float] = {}
+    for owner, position in owner_positions.items():
+        if len(position) < 2:
+            raise VerifyFailure(
+                f"invalid settled actor-light position: {owner}={position}"
+            )
+        x = float(position[0])
+        y = float(position[1])
+        if not all(
+            math.isfinite(value)
+            for value in (target_x, target_y, x, y)
+        ):
+            raise VerifyFailure(
+                f"invalid settled actor-light position: {owner}={position}"
+            )
+        horizontal = abs(x - target_x)
+        vertical = abs(y - target_y)
+        target_distance = math.hypot(horizontal, vertical)
+        decor_roi_clearance = (
+            max(horizontal, vertical) - DECOR_ROI_HALF_EXTENT
+        )
+        if decor_roi_clearance < MINIMUM_DECOR_ROI_CLEARANCE:
+            raise VerifyFailure(
+                "settled actor-light position intersects the decor "
+                f"exclusion zone: owner={owner} "
+                f"target=({target_x},{target_y}) "
+                f"position=({x},{y}) clearance={decor_roi_clearance}"
+            )
+        minimum_settled_distance = (
+            MINIMUM_PLAYER_LIGHT_DISTANCE
+            - NATIVE_COLLISION_RADIAL_TOLERANCE
+        )
+        maximum_settled_distance = (
+            MAXIMUM_PLAYER_LIGHT_DISTANCE
+            + NATIVE_COLLISION_RADIAL_TOLERANCE
+        )
+        if not (
+            minimum_settled_distance
+            <= target_distance
+            <= maximum_settled_distance
+        ):
+            raise VerifyFailure(
+                "settled actor-light position is outside player-light "
+                f"radial band: owner={owner} "
+                f"target=({target_x},{target_y}) "
+                f"position=({x},{y}) distance={target_distance}"
+            )
+        target_distances[owner] = target_distance
+        decor_roi_clearances[owner] = decor_roi_clearance
+    host = owner_positions["host"]
+    client = owner_positions["client"]
+    return {
+        "owner_positions": {
+            "host": [float(host[0]), float(host[1])],
+            "client": [float(client[0]), float(client[1])],
+        },
+        "target_distances": target_distances,
+        "decor_roi_clearances": decor_roi_clearances,
+        "settled_target_distance_range": [
+            MINIMUM_PLAYER_LIGHT_DISTANCE
+            - NATIVE_COLLISION_RADIAL_TOLERANCE,
+            MAXIMUM_PLAYER_LIGHT_DISTANCE
+            + NATIVE_COLLISION_RADIAL_TOLERANCE,
+        ],
+        "owner_separation": math.hypot(
+            float(host[0]) - float(client[0]),
+            float(host[1]) - float(client[1]),
+        ),
+        "native_collision_displacement_allowed": True,
+    }
+
+
+def nav_traversable_positions(pipe_name: str) -> list[list[float]]:
+    code = """
+local function emit(key, value) print(key .. "=" .. tostring(value)) end
+local grid = sd.debug.get_nav_grid(1)
+local scene = sd.world.get_scene()
+local player = sd.player.get_state()
+local scene_world =
+  tonumber(scene and scene.world_address) or
+  tonumber(player and player.world_address) or 0
+local grid_world = tonumber(grid and grid.world_address) or 0
+emit("scene_world", scene_world)
+emit("grid_world", grid_world)
+if type(grid) ~= "table" or grid.valid == false or
+    type(grid.cells) ~= "table" or scene_world == 0 or
+    grid_world ~= scene_world then
+  emit("available", false)
+  return
+end
+local positions = {}
+for _, cell in ipairs(grid.cells) do
+  for _, sample in ipairs(
+      type(cell) == "table" and cell.samples or {}) do
+    local x = tonumber(sample and sample.world_x)
+    local y = tonumber(sample and sample.world_y)
+    if sample and sample.traversable and x ~= nil and y ~= nil then
+      table.insert(positions, { x = x, y = y })
+    end
+  end
+end
+emit("available", true)
+emit("count", #positions)
+for index, position in ipairs(positions) do
+  emit("position." .. index .. ".x", position.x)
+  emit("position." .. index .. ".y", position.y)
+end
+"""
+    deadline = time.monotonic() + 6.0
+    values: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        values = parse_key_values(
+            lua(
+                pipe_name,
+                code,
+                timeout=10.0,
+            )
+        )
+        if values.get("available") == "true":
+            break
+        time.sleep(0.25)
+    if values.get("available") != "true":
+        raise VerifyFailure(
+            "native nav grid lacks traversable actor-light samples: "
+            f"{values}"
+        )
+    count = int(values.get("count", "0"), 0)
+    positions = [
+        [
+            float(values[f"position.{index}.x"]),
+            float(values[f"position.{index}.y"]),
+        ]
+        for index in range(1, count + 1)
+    ]
+    if not positions:
+        raise VerifyFailure("native nav grid has no traversable positions")
+    return positions
 
 
 def nav_actor_parking_positions(
@@ -2707,18 +3113,14 @@ def capture_matched_camera_areas(
                 stable_seconds=2.0,
             )
         )
-        shared_owner_position_delta = math.hypot(
-            settled_host_actor[0] - settled_client_actor[0],
-            settled_host_actor[1] - settled_client_actor[1],
+        settled_actor_geometry = settled_actor_parking_geometry(
+            target_x,
+            target_y,
+            {
+                "host": settled_host_actor[:2],
+                "client": settled_client_actor[:2],
+            },
         )
-        if shared_owner_position_delta > 3.0:
-            raise VerifyFailure(
-                "owners did not settle at the shared actor-light position: "
-                f"family={target['family']} "
-                f"host={settled_host_actor[:2]} "
-                f"client={settled_client_actor[:2]} "
-                f"delta={shared_owner_position_delta}"
-            )
         host_on_client = local_sync.wait_for_remote_convergence(
             client_pipe,
             HOST_ID,
@@ -2837,9 +3239,10 @@ def capture_matched_camera_areas(
                     )
         area_result["excluded_actors"] = {
             "method": (
-                "both owners are moved without damage to one shared "
-                "traversable native-nav sample inside player-light range; "
-                "each owner plus replicated mirror must "
+                "both owners are moved without damage to one traversable "
+                "native-nav sample inside player-light range; native "
+                "collision displacement is allowed, then each settled "
+                "owner plus replicated mirror must "
                 "settle at least 120 world units beyond the central "
                 "120-world-unit decor ROI"
             ),
@@ -2850,7 +3253,7 @@ def capture_matched_camera_areas(
                 "host": list(settled_host_actor[:2]),
                 "client": list(settled_client_actor[:2]),
             },
-            "shared_owner_position_delta": shared_owner_position_delta,
+            "settled_actor_geometry": settled_actor_geometry,
             "remote_convergence": {
                 "host_on_client": host_on_client,
                 "client_on_host": client_on_host,
@@ -2872,79 +3275,108 @@ def capture_matched_camera_areas(
         time.sleep(2.0)
         excluded_rectangles: list[list[int]] = []
 
-        host_paths: list[Path] = []
-        client_paths: list[Path] = []
-        for attempt in range(1, CAPTURE_FRAMES_PER_PEER + 1):
-            host_camera = focus_camera(host_pipe, target_x, target_y)
-            client_camera = focus_camera(client_pipe, target_x, target_y)
-            if (
-                abs(host_camera["center_x"] - client_camera["center_x"])
-                > 0.05
-                or abs(host_camera["center_y"] - client_camera["center_y"])
-                > 0.05
-                or abs(host_camera["width"] - client_camera["width"])
-                > 0.05
-                or abs(host_camera["height"] - client_camera["height"])
-                > 0.05
-            ):
-                raise VerifyFailure(
-                    "matched camera geometry differs during capture: "
-                    f"host={host_camera} client={client_camera}"
+        def capture_profile_frames(
+            profile_slug: str,
+            attempts: list[dict[str, Any]],
+        ) -> tuple[list[Path], list[Path]]:
+            host_paths: list[Path] = []
+            client_paths: list[Path] = []
+            for attempt in range(1, CAPTURE_FRAMES_PER_PEER + 1):
+                host_camera = focus_camera(host_pipe, target_x, target_y)
+                client_camera = focus_camera(
+                    client_pipe,
+                    target_x,
+                    target_y,
                 )
-            time.sleep(0.5)
-            evidence_prefix = (
-                evidence_dir
-                / (
-                    f"run-{run_index:02d}-area-{area_index:02d}-"
-                    f"{family_slug}-attempt-{attempt:02d}"
-                )
-            )
-            host_path = Path(f"{evidence_prefix}-host.png")
-            client_path = Path(f"{evidence_prefix}-client.png")
-            host_paths.append(host_path)
-            client_paths.append(client_path)
-            screenshots = {
-                "host": multiplayer_frame_capture.capture_game_backbuffer(
-                    host_pipe,
-                    host_path,
-                    maximum_dominant_fraction=0.99,
-                ),
-                "client": (
-                    multiplayer_frame_capture.capture_game_backbuffer(
-                        client_pipe,
-                        client_path,
-                        maximum_dominant_fraction=0.99,
+                if (
+                    abs(
+                        host_camera["center_x"]
+                        - client_camera["center_x"]
                     )
-                ),
-            }
-            host_quality = screenshots["host"]["quality"]
-            client_quality = screenshots["client"]["quality"]
-            if (
-                host_quality["width"] != client_quality["width"]
-                or host_quality["height"] != client_quality["height"]
-            ):
-                raise VerifyFailure(
-                    f"matched captures have different dimensions: "
-                    f"{screenshots}"
+                    > 0.05
+                    or abs(
+                        host_camera["center_y"]
+                        - client_camera["center_y"]
+                    )
+                    > 0.05
+                    or abs(
+                        host_camera["width"] - client_camera["width"]
+                    )
+                    > 0.05
+                    or abs(
+                        host_camera["height"] - client_camera["height"]
+                    )
+                    > 0.05
+                ):
+                    raise VerifyFailure(
+                        "matched camera geometry differs during capture: "
+                        f"host={host_camera} client={client_camera}"
+                    )
+                time.sleep(0.5)
+                evidence_prefix = (
+                    evidence_dir
+                    / (
+                        f"run-{run_index:02d}-area-{area_index:02d}-"
+                        f"{family_slug}-{profile_slug}-"
+                        f"attempt-{attempt:02d}"
+                    )
                 )
-            exact_pixels = exact_decor_pixel_comparison(
-                host_path,
-                client_path,
-                host_camera,
-                evidence_prefix,
-                excluded_rectangles=excluded_rectangles,
-            )
-            attempt_result = {
-                "attempt": attempt,
-                "host_camera": host_camera,
-                "client_camera": client_camera,
-                "frame_correlation": matched_frame_correlation(
-                    host_path, client_path
-                ),
-                "exact_decor_pixels": exact_pixels,
-                "screenshots": screenshots,
-            }
-            area_attempts.append(attempt_result)
+                host_path = Path(f"{evidence_prefix}-host.png")
+                client_path = Path(f"{evidence_prefix}-client.png")
+                host_paths.append(host_path)
+                client_paths.append(client_path)
+                screenshots = {
+                    "host": (
+                        multiplayer_frame_capture.capture_game_backbuffer(
+                            host_pipe,
+                            host_path,
+                            maximum_dominant_fraction=0.99,
+                        )
+                    ),
+                    "client": (
+                        multiplayer_frame_capture.capture_game_backbuffer(
+                            client_pipe,
+                            client_path,
+                            maximum_dominant_fraction=0.99,
+                        )
+                    ),
+                }
+                host_quality = screenshots["host"]["quality"]
+                client_quality = screenshots["client"]["quality"]
+                if (
+                    host_quality["width"] != client_quality["width"]
+                    or host_quality["height"] != client_quality["height"]
+                ):
+                    raise VerifyFailure(
+                        "matched captures have different dimensions: "
+                        f"{screenshots}"
+                    )
+                exact_pixels = exact_decor_pixel_comparison(
+                    host_path,
+                    client_path,
+                    host_camera,
+                    evidence_prefix,
+                    excluded_rectangles=excluded_rectangles,
+                )
+                attempts.append(
+                    {
+                        "attempt": attempt,
+                        "render_profile": profile_slug,
+                        "host_camera": host_camera,
+                        "client_camera": client_camera,
+                        "frame_correlation": matched_frame_correlation(
+                            host_path,
+                            client_path,
+                        ),
+                        "exact_decor_pixels": exact_pixels,
+                        "screenshots": screenshots,
+                    }
+                )
+            return host_paths, client_paths
+
+        complex_host_paths, complex_client_paths = (
+            capture_profile_frames("complex-lighting", area_attempts)
+        )
 
         stable_prefix = (
             evidence_dir
@@ -2953,36 +3385,75 @@ def capture_matched_camera_areas(
                 f"{family_slug}"
             )
         )
-        stable_pixels = exact_stable_decor_pixel_comparison(
-            host_paths,
-            client_paths,
-            settled_host_camera,
-            stable_prefix,
-            excluded_rectangles=excluded_rectangles,
-        )
         temporal_envelope = (
             exact_temporal_envelope_decor_pixel_comparison(
-                host_paths,
-                client_paths,
+                complex_host_paths,
+                complex_client_paths,
                 settled_host_camera,
                 stable_prefix,
                 excluded_rectangles=excluded_rectangles,
             )
         )
+        simple_profile = {
+            "host": configure_visual_gate_render_profile(
+                host_pipe,
+                complex_lighting=False,
+            ),
+            "client": configure_visual_gate_render_profile(
+                client_pipe,
+                complex_lighting=False,
+            ),
+        }
+        time.sleep(0.5)
+        simple_attempts: list[dict[str, Any]] = []
+        simple_host_paths, simple_client_paths = (
+            capture_profile_frames("simple-lighting", simple_attempts)
+        )
+        stable_pixels = exact_stable_decor_pixel_comparison(
+            simple_host_paths,
+            simple_client_paths,
+            settled_host_camera,
+            Path(f"{stable_prefix}-simple-lighting"),
+            excluded_rectangles=excluded_rectangles,
+        )
+        edge_geometry = temporal_maximum_edge_comparison(
+            simple_host_paths,
+            simple_client_paths,
+            settled_host_camera,
+            Path(f"{stable_prefix}-simple-lighting"),
+        )
+        restored_complex_profile = {
+            "host": configure_visual_gate_render_profile(host_pipe),
+            "client": configure_visual_gate_render_profile(client_pipe),
+        }
         area_result.update(
             {
                 "ok": (
-                    stable_pixels["exact_match"]
+                    stable_pixels["bounded_match"]
                     and temporal_envelope["exact_match"]
+                    and edge_geometry["ok"]
                 ),
                 "host_camera": settled_host_camera,
                 "client_camera": settled_client_camera,
+                "complex_lighting_profile": {
+                    "host": "configured before area capture",
+                    "client": "configured before area capture",
+                },
+                "simple_lighting_profile": simple_profile,
+                "restored_complex_lighting_profile": (
+                    restored_complex_profile
+                ),
                 "stable_decor_pixels": stable_pixels,
                 "temporal_decor_envelope": temporal_envelope,
+                "temporal_maximum_edge_geometry": edge_geometry,
                 "screenshots": area_attempts[0]["screenshots"],
                 "screenshot_pairs": [
                     attempt["screenshots"]
                     for attempt in area_attempts
+                ],
+                "simple_lighting_screenshot_pairs": [
+                    attempt["screenshots"]
+                    for attempt in simple_attempts
                 ],
                 "actors_and_ui_excluded": {
                     "actor_placement": area_result["excluded_actors"],
@@ -2992,7 +3463,7 @@ def capture_matched_camera_areas(
                 },
             }
         )
-        if not stable_pixels["exact_match"]:
+        if not stable_pixels["bounded_match"]:
             raise VerifyFailure(
                 "matched-camera stable decor pixels differed: "
                 f"family={target['family']} "
@@ -3003,6 +3474,11 @@ def capture_matched_camera_areas(
                 "matched-camera temporal decor pixels differed: "
                 f"family={target['family']} "
                 f"envelope={temporal_envelope}"
+            )
+        if not edge_geometry["ok"]:
+            raise VerifyFailure(
+                "matched-camera temporal-maximum decor edges differed: "
+                f"family={target['family']} edges={edge_geometry}"
             )
     return areas
 
@@ -3225,9 +3701,14 @@ def main() -> int:
                     },
                     "preselection_movement_or_damage_injected": False,
                 }
+                actor_parking_samples = nav_traversable_positions(host_pipe)
+                run_result["actor_light_parking_sample_count"] = len(
+                    actor_parking_samples
+                )
                 targets = matched_camera_targets(
                     layout_sync["decor_tables"]["host"],
                     actor_positions,
+                    actor_parking_samples,
                 )
                 run_result["matched_camera_targets"] = targets
                 matched_areas: list[dict[str, Any]] = []

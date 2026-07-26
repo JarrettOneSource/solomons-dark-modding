@@ -38,7 +38,18 @@ class LocalMultiplayerProcessIsolationTests(unittest.TestCase):
         self.assertIn("Get-Process -Id $processId", reset)
         self.assertNotIn("$env:APPDATA", reset)
         self.assertNotIn("Get-Process SolomonDark", verify)
-        self.assertIn("Get-Process -Id $ProcessId", verify)
+        self.assertIn("-ClassName Win32_Process", verify)
+        self.assertIn('-Filter "ProcessId = $ProcessId"', verify)
+        self.assertIn("[string]$ExpectedExecutablePath", verify)
+        self.assertIn("$process.ExecutablePath", verify)
+        self.assertIn(
+            "[System.StringComparison]::OrdinalIgnoreCase",
+            verify,
+        )
+        self.assertIn(
+            "-ExpectedExecutablePath $stageGameExecutable",
+            verify,
+        )
         self.assertIn('"--instance", $InstanceName', verify)
         self.assertIn('"--temporary-profile"', verify)
         self.assertIn("$launchResult.launch.processId", verify)

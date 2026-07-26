@@ -15,6 +15,7 @@ def test_lua_content_ids_are_canonical_deterministic_and_load_scoped() -> str:
     validator = _read("SolomonDarkModLauncher/src/Mods/ModManifestValidator.cs")
     launcher_tests = _read("tests/launcher-contracts/Program.cs")
     native_test = _read("tests/native/lua_content_registry_tests.cpp")
+    workflow = _read(".github/workflows/lua-authoring-contracts.yml")
     documentation = _read("docs/lua-content-identity.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
 
@@ -92,6 +93,13 @@ def test_lua_content_ids_are_canonical_deterministic_and_load_scoped() -> str:
         "mod unload left content registered",
     ):
         assert value in native_test, f"native content registry test lacks: {value}"
+    for token in (
+        "Test Lua content identity registry",
+        "SolomonDarkModLoader/src/lua_content_registry.cpp",
+        "tests/native/lua_content_registry_tests.cpp",
+        "&& /tmp/lua-content-registry-tests",
+    ):
+        assert token in workflow, f"content identity CI gate lacks: {token}"
     for token in (
         "sd.content.v1",
         "little-endian 32-bit byte length",
