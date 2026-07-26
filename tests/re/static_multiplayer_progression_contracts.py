@@ -1348,6 +1348,27 @@ def test_manual_primary_target_survives_stock_cursor_refresh() -> str:
     )
 
 
+def test_manual_primary_target_survives_each_spell_dispatch_tick() -> str:
+    dispatch_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_cast_hooks_effect_and_dispatch.inl"
+    )
+    start = dispatch_hooks.index("void __fastcall HookSpellCastDispatcher(")
+    end = dispatch_hooks.index("void __fastcall HookSpellActionBuilder(", start)
+    body = dispatch_hooks[start:end]
+    _require_in_order(
+        body,
+        "ApplyPinnedManualSpawnerPrimaryTarget(actor_address);",
+        "original(self);",
+        "ApplyPinnedManualSpawnerPrimaryTarget(actor_address);",
+    )
+    assert body.count("ApplyPinnedManualSpawnerPrimaryTarget(actor_address);") == 2
+    return (
+        "manual primary casts keep native heading and target state pinned "
+        "around every stock spell-dispatch tick"
+    )
+
+
 def test_new_run_retires_the_prior_host_run_exit_latch() -> str:
     header = _read("SolomonDarkModLoader/include/multiplayer_local_transport.h")
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")

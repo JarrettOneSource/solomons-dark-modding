@@ -434,6 +434,9 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
 
     std::string slot_owner_context;
     std::string player_actor_owner_context;
+    // Stock refreshes local facing from the OS cursor between control-brain
+    // updates. Keep an explicitly pinned scripted target authoritative at the
+    // last boundary consumed by heading-owned native spells.
     InvokeWithBotProgressionSlotOwnerContext(
         actor_address,
         pure_primary_bot_owner_context,
@@ -442,7 +445,9 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
                 actor_address,
                 pure_primary_bot_owner_context,
                 [&] {
+                    (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
                     original(self);
+                    (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
                 },
                 &player_actor_owner_context);
         },

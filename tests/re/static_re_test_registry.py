@@ -159,6 +159,7 @@ from static_multiplayer_progression_contracts import (
     test_level_up_barrier_waits_for_forced_picker_confirmation,
     test_level_up_choice_result_advances_owned_book_before_resume,
     test_lightning_manual_cluster_stays_inside_flat_arena_spatial_grid,
+    test_manual_primary_target_survives_each_spell_dispatch_tick,
     test_manual_primary_target_survives_stock_cursor_refresh,
     test_meditation_transient_counters_self_repair_to_native_bounds,
     test_native_item_recipe_selection_excludes_equipped_items,
@@ -694,6 +695,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "manual primary targets survive stock cursor refresh",
         test_manual_primary_target_survives_stock_cursor_refresh,
+    ),
+    (
+        "manual primary targets survive each spell-dispatch tick",
+        test_manual_primary_target_survives_each_spell_dispatch_tick,
     ),
     (
         "new runs retire the prior host run-exit latch",
