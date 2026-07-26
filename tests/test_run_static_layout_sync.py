@@ -657,6 +657,75 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             self.assertFalse(rejected["bounded_match"])
             self.assertEqual(rejected["maximum_stable_channel_delta"], 3)
 
+    def test_stable_pixel_gate_uses_visible_content_not_dark_fraction(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            host_paths: list[Path] = []
+            client_paths: list[Path] = []
+            for frame in range(3):
+                image = Image.new("RGB", (400, 240), "black")
+                for x in range(80, 180):
+                    for y in range(240):
+                        image.putpixel(
+                            (x, y),
+                            (
+                                30 + x % 180,
+                                20 + y % 180,
+                                15 + (x + y) % 180,
+                            ),
+                        )
+                for x in range(180, 320):
+                    for y in range(240):
+                        image.putpixel(
+                            (x, y),
+                            (
+                                30 + x % 100 + frame * 10,
+                                20 + y % 100 + frame * 10,
+                                15 + (x + y) % 100 + frame * 10,
+                            ),
+                        )
+                for peer, paths in (
+                    ("host", host_paths),
+                    ("client", client_paths),
+                ):
+                    path = root / f"{peer}-{frame}.png"
+                    image.save(path)
+                    paths.append(path)
+
+            result = verifier.exact_stable_decor_pixel_comparison(
+                host_paths,
+                client_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "visible-content",
+            )
+            self.assertLess(result["stable_pixel_fraction"], 0.5)
+            self.assertGreaterEqual(
+                result["stable_visible_pixel_count"],
+                result["minimum_stable_visible_pixel_count"],
+            )
+            self.assertGreaterEqual(
+                result["stable_host_unique_colors"],
+                result["minimum_stable_unique_colors"],
+            )
+            self.assertTrue(result["bounded_match"])
+
+            blank_paths: list[Path] = []
+            for frame in range(3):
+                path = root / f"blank-{frame}.png"
+                Image.new("RGB", (400, 240), "black").save(path)
+                blank_paths.append(path)
+            blank = verifier.exact_stable_decor_pixel_comparison(
+                blank_paths,
+                blank_paths,
+                {"width": 400.0, "height": 240.0},
+                root / "blank-content",
+            )
+            self.assertEqual(blank["stable_pixel_fraction"], 1.0)
+            self.assertFalse(blank["sufficient_stable_content"])
+            self.assertFalse(blank["bounded_match"])
+
     def test_temporal_maximum_edge_gate_rejects_missing_decor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
             root = Path(temp_directory)

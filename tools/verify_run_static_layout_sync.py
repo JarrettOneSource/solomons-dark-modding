@@ -2325,13 +2325,11 @@ def exact_stable_decor_pixel_comparison(
     stable_client.save(stable_client_path)
     stable_difference.save(stable_difference_path)
 
-    minimum_stable_pixel_count = math.ceil(pixel_count * 0.5)
-    minimum_stable_visible_pixel_count = 1024
-    minimum_stable_unique_colors = 32
+    minimum_stable_visible_pixel_count = 1536
+    minimum_stable_unique_colors = 128
     stable_hashes_match = host_hash.digest() == client_hash.digest()
     sufficient_stable_content = (
-        stable_pixel_count >= minimum_stable_pixel_count
-        and stable_visible_pixel_count >= minimum_stable_visible_pixel_count
+        stable_visible_pixel_count >= minimum_stable_visible_pixel_count
         and len(stable_host_colors) >= minimum_stable_unique_colors
         and len(stable_client_colors) >= minimum_stable_unique_colors
     )
@@ -2353,7 +2351,7 @@ def exact_stable_decor_pixel_comparison(
         "excluded_rectangles": excluded_rectangles or [],
         "stable_pixel_count": stable_pixel_count,
         "stable_pixel_fraction": stable_pixel_count / pixel_count,
-        "minimum_stable_pixel_count": minimum_stable_pixel_count,
+        "stable_pixel_fraction_is_diagnostic_only": True,
         "stable_visible_pixel_count": stable_visible_pixel_count,
         "minimum_stable_visible_pixel_count": (
             minimum_stable_visible_pixel_count
