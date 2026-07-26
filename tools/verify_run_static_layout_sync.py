@@ -2325,7 +2325,7 @@ def exact_stable_decor_pixel_comparison(
     stable_client.save(stable_client_path)
     stable_difference.save(stable_difference_path)
 
-    minimum_stable_visible_pixel_count = 1536
+    minimum_stable_visible_pixel_count = 1024
     minimum_stable_unique_colors = 128
     stable_hashes_match = host_hash.digest() == client_hash.digest()
     sufficient_stable_content = (

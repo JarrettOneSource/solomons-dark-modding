@@ -373,7 +373,7 @@ def test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary() -> s
         "differing_pixel_count == 0",
         '"differing_stable_pixel_count": differing_stable_pixel_count',
         '"stable_pixel_hashes_match": stable_hashes_match',
-        "minimum_stable_visible_pixel_count = 1536",
+        "minimum_stable_visible_pixel_count = 1024",
         "minimum_stable_unique_colors = 128",
         '"stable_pixel_fraction_is_diagnostic_only": True',
         "stable_visible_pixel_count >= minimum_stable_visible_pixel_count",

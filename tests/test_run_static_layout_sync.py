@@ -666,7 +666,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             client_paths: list[Path] = []
             for frame in range(3):
                 image = Image.new("RGB", (400, 240), "black")
-                for x in range(80, 180):
+                for x in range(80, 85):
                     for y in range(240):
                         image.putpixel(
                             (x, y),
@@ -701,6 +701,7 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 root / "visible-content",
             )
             self.assertLess(result["stable_pixel_fraction"], 0.5)
+            self.assertLess(result["stable_visible_pixel_count"], 1536)
             self.assertGreaterEqual(
                 result["stable_visible_pixel_count"],
                 result["minimum_stable_visible_pixel_count"],
