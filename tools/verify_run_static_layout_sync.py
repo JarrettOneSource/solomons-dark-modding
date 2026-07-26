@@ -49,6 +49,11 @@ MINIMUM_PLAYER_LIGHT_DISTANCE = 310.0
 TARGET_PLAYER_LIGHT_DISTANCE = 320.0
 MAXIMUM_PLAYER_LIGHT_DISTANCE = 330.0
 NATIVE_COLLISION_RADIAL_TOLERANCE = 25.0
+MINIMUM_MATCHED_AREA_SEPARATION = 250.0
+
+
+class ParkingSelectionFailure(VerifyFailure):
+    """Raised when every ranked nav sample settles outside the spatial gate."""
 
 
 STATIC_LAYOUT_LUA = r"""
@@ -1651,11 +1656,19 @@ def matched_camera_targets(
         / len(all_decor_positions)
         for axis in (0, 1)
     ]
-    selected: list[dict[str, Any]] = []
+    plans: list[dict[str, Any]] = []
     for family, source, candidates in categories:
+        parking_cache: dict[
+            int,
+            tuple[list[float], float] | None,
+        ] = {}
+
         def parking_sample(
             row: dict[str, Any],
         ) -> tuple[list[float], float] | None:
+            cache_key = id(row)
+            if cache_key in parking_cache:
+                return parking_cache[cache_key]
             if actor_parking_samples is None:
                 return None
             target_x = float(row["position"][0])
@@ -1685,12 +1698,13 @@ def matched_camera_targets(
                         ([sample_x, sample_y], target_gap)
                     )
             if not eligible:
+                parking_cache[cache_key] = None
                 return None
             goal_x, goal_y = actor_light_parking_goal(
                 target_x,
                 target_y,
             )
-            return min(
+            parking_cache[cache_key] = min(
                 eligible,
                 key=lambda item: (
                     abs(item[1] - TARGET_PLAYER_LIGHT_DISTANCE),
@@ -1702,23 +1716,15 @@ def matched_camera_targets(
                     item[0][1],
                 ),
             )
+            return parking_cache[cache_key]
 
-        def clearance(row: dict[str, Any]) -> tuple[float, float]:
+        def actor_clearance(row: dict[str, Any]) -> float:
             position = row["position"]
-            actor_clearance = (
+            return (
                 min(math.dist(position, actor) for actor in normalized_actors)
                 if normalized_actors
                 else math.inf
             )
-            area_separation = (
-                min(
-                    math.dist(position, target["position"])
-                    for target in selected
-                )
-                if selected
-                else math.inf
-            )
-            return actor_clearance, area_separation
 
         valid = [
             row
@@ -1727,7 +1733,7 @@ def matched_camera_targets(
                 len(row.get("position", ())) == 2
                 and math.isfinite(float(row["position"][0]))
                 and math.isfinite(float(row["position"][1]))
-                and clearance(row)[0] >= 1000.0
+                and actor_clearance(row) >= 1000.0
                 and min_world_x + camera_safe_margin
                 <= float(row["position"][0])
                 <= max_world_x - camera_safe_margin
@@ -1744,16 +1750,6 @@ def matched_camera_targets(
             raise VerifyFailure(
                 f"matched-camera capture lacks actor-clear {family} "
                 f"candidates"
-            )
-
-        separated = [
-            row
-            for row in valid
-            if not selected or clearance(row)[1] >= 250.0
-        ]
-        if not separated:
-            raise VerifyFailure(
-                f"matched-camera capture lacks a distinct {family} area"
             )
 
         def density_key(row: dict[str, Any]) -> tuple[int, int, float, int]:
@@ -1773,40 +1769,55 @@ def matched_camera_targets(
                 int(row.get("native_index", -1)),
             )
 
-        entity = max(
-            separated,
-            key=density_key,
-        )
-        actor_clearance, area_separation = clearance(entity)
-        target_position = [
-            float(entity["position"][0]),
-            float(entity["position"][1]),
-        ]
-        selected_parking = parking_sample(entity)
-        selected.append(
+        ranked = sorted(valid, key=density_key, reverse=True)
+        distinct: list[dict[str, Any]] = []
+        for entity in ranked:
+            target_position = [
+                float(entity["position"][0]),
+                float(entity["position"][1]),
+            ]
+            if any(
+                math.dist(target_position, target["position"])
+                < MINIMUM_MATCHED_AREA_SEPARATION
+                for target in distinct
+            ):
+                continue
+            selected_parking = parking_sample(entity)
+            distinct.append(
+                {
+                    "family": family,
+                    "source": source,
+                    "position": target_position,
+                    "entity": entity,
+                    "actor_clearance": actor_clearance(entity),
+                    "decor_density_160": density_key(entity)[0],
+                    "decor_density_300": density_key(entity)[1],
+                    "camera_safe_margin": camera_safe_margin,
+                    "preselected_actor_parking_sample": (
+                        {
+                            "position": selected_parking[0],
+                            "target_distance": selected_parking[1],
+                        }
+                        if selected_parking is not None
+                        else None
+                    ),
+                }
+            )
+        if not distinct:
+            raise VerifyFailure(
+                f"matched-camera capture lacks a distinct {family} area"
+            )
+        plans.append(
             {
                 "family": family,
                 "source": source,
-                "position": target_position,
-                "entity": entity,
-                "actor_clearance": actor_clearance,
-                "decor_density_160": density_key(entity)[0],
-                "decor_density_300": density_key(entity)[1],
-                "camera_safe_margin": camera_safe_margin,
-                "nearest_selected_area_distance": (
-                    area_separation if selected else None
+                "minimum_area_separation": (
+                    MINIMUM_MATCHED_AREA_SEPARATION
                 ),
-                "preselected_actor_parking_sample": (
-                    {
-                        "position": selected_parking[0],
-                        "target_distance": selected_parking[1],
-                    }
-                    if selected_parking is not None
-                    else None
-                ),
+                "candidates": distinct,
             }
         )
-    return selected
+    return plans
 
 
 def first_launch_control_picker_worker(
@@ -3158,10 +3169,91 @@ def settle_shared_actor_parking(
             "attempts": attempts,
         }
     errors = [attempt["error"] for attempt in attempts if not attempt["ok"]]
-    raise VerifyFailure(
+    raise ParkingSelectionFailure(
         "no native actor-light parking candidate remained valid after "
         f"placement: target=({target_x},{target_y}) "
         f"candidates={candidate_count} errors={errors}"
+    )
+
+
+def settle_matched_camera_target(
+    host_pipe: str,
+    client_pipe: str,
+    target_plan: dict[str, Any],
+    selected_target_positions: list[list[float]],
+    attempts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if attempts is None:
+        attempts = []
+    for candidate in target_plan["candidates"]:
+        position = [
+            float(candidate["position"][0]),
+            float(candidate["position"][1]),
+        ]
+        nearest_selected_distance = (
+            min(
+                math.dist(position, selected_position)
+                for selected_position in selected_target_positions
+            )
+            if selected_target_positions
+            else math.inf
+        )
+        target_attempt: dict[str, Any] = {
+            "target": candidate,
+            "parking_attempts": [],
+            "nearest_selected_area_distance": (
+                nearest_selected_distance
+                if math.isfinite(nearest_selected_distance)
+                else None
+            ),
+        }
+        attempts.append(target_attempt)
+        if (
+            nearest_selected_distance
+            < MINIMUM_MATCHED_AREA_SEPARATION
+        ):
+            target_attempt["ok"] = False
+            target_attempt["skipped"] = True
+            target_attempt["error"] = (
+                "candidate overlaps a previously accepted matched-camera "
+                f"area: distance={nearest_selected_distance}"
+            )
+            continue
+        try:
+            settled_parking = settle_shared_actor_parking(
+                host_pipe,
+                client_pipe,
+                position[0],
+                position[1],
+                target_attempt["parking_attempts"],
+            )
+        except ParkingSelectionFailure as error:
+            target_attempt["ok"] = False
+            target_attempt["error"] = str(error)
+            continue
+        accepted_target = {
+            **candidate,
+            "nearest_selected_area_distance": (
+                nearest_selected_distance
+                if math.isfinite(nearest_selected_distance)
+                else None
+            ),
+        }
+        target_attempt["ok"] = True
+        target_attempt["accepted"] = True
+        return {
+            "target": accepted_target,
+            "settled_parking": settled_parking,
+            "attempts": attempts,
+        }
+    errors = [
+        attempt["error"]
+        for attempt in attempts
+        if not attempt.get("ok")
+    ]
+    raise VerifyFailure(
+        "no placement-safe matched-camera target remained for "
+        f"family={target_plan['family']} errors={errors}"
     )
 
 
@@ -3176,24 +3268,30 @@ def capture_matched_camera_areas(
     evidence_dir.mkdir(parents=True, exist_ok=True)
     if areas is None:
         areas = []
-    for area_index, target in enumerate(targets, start=1):
-        target_x, target_y = target["position"]
+    selected_target_positions: list[list[float]] = []
+    for area_index, target_plan in enumerate(targets, start=1):
         area_attempts: list[dict[str, Any]] = []
         area_result: dict[str, Any] = {
             "area_index": area_index,
-            "target": target,
+            "family": target_plan["family"],
             "attempts": area_attempts,
-            "parking_attempts": [],
+            "target_attempts": [],
         }
         areas.append(area_result)
-        family_slug = str(target["family"]).replace("_", "-")
-        settled_parking = settle_shared_actor_parking(
+        settled_target = settle_matched_camera_target(
             host_pipe,
             client_pipe,
-            target_x,
-            target_y,
-            area_result["parking_attempts"],
+            target_plan,
+            selected_target_positions,
+            area_result["target_attempts"],
         )
+        target = settled_target["target"]
+        area_result["target"] = target
+        target_x, target_y = target["position"]
+        selected_target_positions.append([target_x, target_y])
+        family_slug = str(target["family"]).replace("_", "-")
+        settled_parking = settled_target["settled_parking"]
+        area_result["parking_attempts"] = settled_parking["attempts"]
         parking = settled_parking["parking"]
         owner_placements = settled_parking["owner_placements"]
         settled_host_actor = settled_parking["settled_host_actor"]

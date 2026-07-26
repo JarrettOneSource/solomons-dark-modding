@@ -337,15 +337,20 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
             [[-5000.0, -5000.0]],
             parking_samples,
         )
-        self.assertEqual(targets[0]["position"], [1500.0, 1000.0])
         self.assertEqual(
-            targets[0]["preselected_actor_parking_sample"]["position"],
+            targets[0]["candidates"][0]["position"],
+            [1500.0, 1000.0],
+        )
+        self.assertEqual(
+            targets[0]["candidates"][0][
+                "preselected_actor_parking_sample"
+            ]["position"],
             [1180.0, 1000.0],
         )
         self.assertEqual(
-            targets[0]["preselected_actor_parking_sample"][
-                "target_distance"
-            ],
+            targets[0]["candidates"][0][
+                "preselected_actor_parking_sample"
+            ]["target_distance"],
             verifier.TARGET_PLAYER_LIGHT_DISTANCE,
         )
         self.assertEqual(len(targets), 4)
@@ -502,6 +507,49 @@ class RunStaticLayoutSyncTest(unittest.TestCase):
                 "client": [1000.0, 1680.0],
             },
         )
+
+    def test_camera_target_retries_when_ranked_area_has_no_safe_parking(
+        self,
+    ) -> None:
+        target_plan = {
+            "family": "large-rocks",
+            "candidates": [
+                {
+                    "family": "large-rocks",
+                    "position": [1000.0, 2400.0],
+                },
+                {
+                    "family": "large-rocks",
+                    "position": [2000.0, 1600.0],
+                },
+            ],
+        }
+        safe_parking = {
+            "parking": {"candidate_index": 1},
+            "attempts": [{"candidate_index": 1, "ok": True}],
+        }
+        attempts: list[dict[str, object]] = []
+        with mock.patch.object(
+            verifier,
+            "settle_shared_actor_parking",
+            side_effect=[
+                verifier.ParkingSelectionFailure("unsafe native wall"),
+                safe_parking,
+            ],
+        ) as settle:
+            result = verifier.settle_matched_camera_target(
+                "host-pipe",
+                "client-pipe",
+                target_plan,
+                [],
+                attempts,
+            )
+
+        self.assertEqual(settle.call_count, 2)
+        self.assertEqual(result["target"]["position"], [2000.0, 1600.0])
+        self.assertFalse(attempts[0]["ok"])
+        self.assertIn("unsafe native wall", attempts[0]["error"])
+        self.assertTrue(attempts[1]["ok"])
 
     def test_exact_pixel_gate_rejects_a_displaced_world_region(self) -> None:
         with tempfile.TemporaryDirectory() as temp_directory:
