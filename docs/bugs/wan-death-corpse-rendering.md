@@ -78,11 +78,28 @@ texture is multiplied by zero. The client corpse reported as absent is the
 same failure at a darker background/position, compounded by the separate late
 death-epoch materialization defect.
 
+The first implementation detoured `FUN_005299A0` and temporarily presented a
+committed remote corpse as slot zero when stock called that function. A
+separated client-death rerun disproved the assumption that the detour alone
+covered corpse persistence: the terminal frame was correct while the survivor
+was nearby, but after restoring the survivor to 500 units away the remote
+corpse again read `actor + 0xCC == 0.0`.
+
+The missed call is deterministic. The tracked remote-death branches in
+`HookPlayerActorTick` quiesce the binding and return without calling the stock
+PlayerActor tick. The local dead owner is not a tracked remote binding and
+continues through stock. `FUN_005299A0` is reached through that stock update
+path, so a detour cannot restore a call which no longer occurs. Nearby
+survivor light temporarily masked this gap in terminal captures.
+
 The foundational renderer fix must preserve the real nonzero gameplay slot,
-but temporarily present a committed remote corpse as slot zero only while
-calling the stock PlayerActor light-submit function. That takes the exact
-local-corpse branch, including its native anchor and light parameters, without
-forcing fullbright, writing `actor + 0xCC`, or creating a parallel light path.
+but explicitly submit the committed remote corpse's stock PlayerActor light
+once from the local-player scene-binding tick. That reconciliation path
+already owns distant remote deaths even when their actor ticks are culled.
+The call temporarily presents only that stock method as slot zero, taking the
+exact local-corpse branch and native anchor/parameters before restoring the
+real slot. It does not force fullbright, write `actor + 0xCC`, create a
+parallel light, or depend on a suppressed remote PlayerActor tick.
 The death transaction must also remain terminal after the presentation
 window, continue reconciling corpse-safe profile and wearable visual state
 while dead, and suppress only the hand-held attachment.
@@ -187,5 +204,6 @@ Treat remote death as a durable replicated presentation epoch:
 6. apply authenticated host life corrections against the recipient's current
    native maximum; and
 7. anchor the Loading Boneyard display floor to its first rendered frame; and
-8. route committed remote corpses through the stock slot-zero PlayerActor
-   light-submit branch while restoring their real slot before returning.
+8. submit committed remote corpse lights from the local scene-binding tick
+   through the stock slot-zero PlayerActor method while restoring their real
+   slot before returning.
