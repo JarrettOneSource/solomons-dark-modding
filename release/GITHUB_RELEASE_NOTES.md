@@ -1,12 +1,13 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.17
+# Solomon Dark Multiplayer Beta v0.1.0-beta.18
 
-- Remote Earth casts no longer produce constant or looping boulder sounds. Replicated casts for every element now play their stock audio exactly once per real event.
-- The giant black texture labeled "Left" no longer appears while spectating; loader status surfaces now stay diagnostics-only.
-- Death animations now finish on every peer, with one consistent five-second death and grace window.
-- Spectator cameras keep dying players in view through their full death presentation instead of appearing to teleport the body, and spectator controls no longer appear over newly summoned minions.
-- Dead players can no longer cast spells or affect the world; the lockout is enforced by multiplayer authority as well as the local UI.
-- A latent x86 hook-decoder bug that could jump into freed memory has been fixed. Run-entry regression testing completed 10/10 runs and 20/20 peer entries with zero crash dumps.
-- **Known issue:** Boneyard trees, large rocks, and ground clutter may still differ slightly between host and client. That fix is in progress for the next beta.
+- Lightning and Air damage work again in multiplayer, and remote spell damage is no longer lost when a network snapshot arrives after the cast.
+- Water and Earth casts now keep their intended aim through native spell dispatch and deal damage correctly for both peers.
+- WAN deaths are now reliable: remote corpses always appear with normal lighting instead of a black silhouette, the dropped staff is replicated, and dead-owner HP stays at exactly zero.
+- Enemies now re-acquire the nearest surviving player after their current target dies.
+- Multiplayer lobbies now survive Game Over. Every peer waits behind the Loading Boneyard barrier and can start another run without rejoining.
+- Host spectator controls and the spectator HUD now display correctly. The launcher no longer triggers a Windows Desktop access-denied dialog.
+- Release coverage was audited and hardened across 859 automated checks.
+- **Known issues:** A Fireball cast by the client occasionally deals no damage; this is under investigation. Earth damage varies strongly with charge hold time, so a tap and a held cast can deal very different damage.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
