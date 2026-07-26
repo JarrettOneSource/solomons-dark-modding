@@ -473,7 +473,6 @@ function Invoke-InstanceLuaExec {
         -ExecutionPolicy Bypass `
         -File $luaExecScript `
         -PipeName $PipeName `
-        -ResponseTimeoutMilliseconds 2500 `
         -Code $Code 2>&1
     $exitCode = $LASTEXITCODE
     $text = ($output | Out-String)

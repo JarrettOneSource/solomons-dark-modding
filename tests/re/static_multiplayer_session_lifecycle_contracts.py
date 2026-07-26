@@ -84,6 +84,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     pair_launcher = _read(
         "scripts/Launch-LocalMultiplayerPair.ps1"
     )
+    lua_exec = _read("scripts/Invoke-LuaExec.ps1")
 
     _require_in_order(
         labels,
@@ -341,10 +342,12 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
         pair_launcher,
         (
             "[switch]$FreshInstall",
-            "-ResponseTimeoutMilliseconds 2500",
+            "function Invoke-InstanceLuaExec",
         ),
-        "bounded isolated multiplayer launcher",
+        "isolated multiplayer launcher",
     )
+    assert "[int]$ResponseTimeoutMilliseconds = 35000" in lua_exec
+    assert "-ResponseTimeoutMilliseconds" not in pair_launcher
     return (
         "native Game Over remains stock-owned while the authenticated lobby "
         "survives and publishes exact not-in-game, in-hub, and in-boneyard state"
