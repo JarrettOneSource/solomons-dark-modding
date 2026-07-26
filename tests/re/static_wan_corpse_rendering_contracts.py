@@ -120,6 +120,51 @@ def test_dead_owner_vitals_are_reasserted_after_the_progression_tick() -> str:
     )
 
 
+def test_committed_remote_corpses_use_the_stock_local_corpse_light_branch() -> str:
+    config = _read("config/binary-layout.ini")
+    hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_actor_lifecycle_hooks.inl"
+    )
+    initialization = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_keyboard_injection.inl"
+    )
+
+    assert "player_actor_light_submit=0x005299A0" in config
+    hook_start = hooks.index(
+        "void __fastcall HookPlayerActorLightSubmit("
+    )
+    hook_end = hooks.index(
+        "bool IsLocalPlayerActorDestructorTarget(",
+        hook_start,
+    )
+    hook = hooks[hook_start:hook_end]
+    _require_in_order(
+        hook,
+        "FindParticipantEntityForActor(actor_address)",
+        "IsNativeRemoteParticipantBinding(binding)",
+        "binding->native_remote_death_epoch_active",
+        "ScopedActorSlotZeroContext slot_context(",
+        "original(self);",
+    )
+    assert "kActorLighting" not in hook
+    assert "TryWriteField<float>" not in hook
+    assert "InstallSafeX86Hook(" in initialization
+    assert "&HookPlayerActorLightSubmit" in initialization
+    assert (
+        "RemoveX86Hook("
+        "&g_gameplay_keyboard_injection.player_actor_light_submit_hook)"
+        in initialization.replace("\n", "")
+    )
+
+    return (
+        "only a committed native remote corpse temporarily takes the stock "
+        "slot-zero PlayerActor light path, with its gameplay slot restored "
+        "by the scoped context"
+    )
+
+
 def test_authoritative_life_correction_uses_the_recipient_native_maximum() -> str:
     correction = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"

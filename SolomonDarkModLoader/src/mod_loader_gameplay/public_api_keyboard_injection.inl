@@ -15,6 +15,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     const auto player_actor_tick = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorTick);
     const auto player_actor_progression_handle =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorEnsureProgressionHandle);
+    const auto player_actor_light_submit =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorLightSubmit);
     const auto player_actor_apply_mana_delta =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorApplyManaDelta);
     const auto player_actor_dtor = ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorDtor);
@@ -105,6 +107,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPowerupPickup);
     if (mouse_helper == 0 || helper == 0 || player_actor_tick == 0 ||
         player_actor_progression_handle == 0 ||
+        player_actor_light_submit == 0 ||
         player_actor_apply_mana_delta == 0 ||
         player_actor_dtor == 0 ||
         player_actor_vtable28 == 0 ||
@@ -987,6 +990,21 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(player_actor_light_submit),
+            reinterpret_cast<void*>(&HookPlayerActorLightSubmit),
+            kPlayerActorLightSubmitHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection.player_actor_light_submit_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install PlayerActor light-submit hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -1070,6 +1088,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " keyboard_edge=" + HexString(helper) +
         " player_tick=" + HexString(player_actor_tick) +
         " player_vslot04=" + HexString(player_actor_progression_handle) +
+        " player_light_submit=" + HexString(player_actor_light_submit) +
         " mana_delta=" + HexString(player_actor_apply_mana_delta) +
         " player_dtor=" + HexString(player_actor_dtor) +
         " player_vslot28=" + HexString(player_actor_vtable28) +
@@ -1124,6 +1143,7 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_progression_handle_hook);
+    RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_light_submit_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_apply_mana_delta_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_dtor_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_vtable28_hook);

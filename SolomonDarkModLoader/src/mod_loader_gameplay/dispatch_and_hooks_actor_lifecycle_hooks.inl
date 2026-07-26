@@ -8,6 +8,29 @@ void __fastcall HookPlayerActorEnsureProgressionHandle(void* self, void* /*unuse
     original(self);
 }
 
+void __fastcall HookPlayerActorLightSubmit(void* self, void* /*unused_edx*/) {
+    const auto original = GetX86HookTrampoline<PlayerActorNoArgMethodFn>(
+        g_gameplay_keyboard_injection.player_actor_light_submit_hook);
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    bool committed_remote_corpse = false;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
+        const auto* binding = FindParticipantEntityForActor(actor_address);
+        committed_remote_corpse =
+            IsNativeRemoteParticipantBinding(binding) &&
+            binding->native_remote_death_epoch_active;
+    }
+
+    ScopedActorSlotZeroContext slot_context(
+        actor_address,
+        committed_remote_corpse);
+    original(self);
+}
+
 bool IsLocalPlayerActorDestructorTarget(uintptr_t actor_address) {
     if (actor_address == 0) {
         return false;

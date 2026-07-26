@@ -9,6 +9,7 @@ uintptr_t kGameplayMouseRefreshHelper = 0;
 uintptr_t kGameplayKeyboardEdgeHelper = 0;
 uintptr_t kPlayerActorTick = 0;
 uintptr_t kPlayerProgressionTick = 0;
+uintptr_t kPlayerActorLightSubmit = 0;
 uintptr_t kActorWorldTick = 0;
 uintptr_t kPlayerActorActionManagerTick = 0;
 uintptr_t kPlayerActorEnsureProgressionHandle = 0;
