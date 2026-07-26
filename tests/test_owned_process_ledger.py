@@ -133,6 +133,15 @@ class OwnedProcessLedgerTests(unittest.TestCase):
         )
         self.assertIn('-Filter "ProcessId = $processId"', script)
         self.assertIn("$process.ExecutablePath", script)
+        self.assertIn(
+            "$decodedTargets = ConvertFrom-Json -InputObject $payload",
+            script,
+        )
+        self.assertIn("$targets = @($decodedTargets)", script)
+        self.assertNotIn(
+            "$targets = @(ConvertFrom-Json -InputObject $payload)",
+            script,
+        )
         self.assertNotIn("Name='SolomonDark.exe'", script)
 
     def test_acquisition_refuses_path_mismatch(self) -> None:
@@ -184,6 +193,15 @@ class OwnedProcessLedgerTests(unittest.TestCase):
             cleanup_script,
         )
         self.assertIn("Stop-Process -Id", cleanup_script)
+        self.assertIn(
+            "$decodedTargets = ConvertFrom-Json -InputObject $payload",
+            cleanup_script,
+        )
+        self.assertIn("$targets = @($decodedTargets)", cleanup_script)
+        self.assertNotIn(
+            "$targets = @(ConvertFrom-Json -InputObject $payload)",
+            cleanup_script,
+        )
         self.assertNotIn("Get-Process SolomonDark", cleanup_script)
 
     def test_cleanup_refuses_changed_path_without_dropping_ledger(

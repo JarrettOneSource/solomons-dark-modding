@@ -211,7 +211,8 @@ def _inspect_identities(
 $ErrorActionPreference = "Stop"
 $payload = [System.Text.Encoding]::UTF8.GetString(
     [System.Convert]::FromBase64String("__PAYLOAD__"))
-$targets = @(ConvertFrom-Json -InputObject $payload)
+$decodedTargets = ConvertFrom-Json -InputObject $payload
+$targets = @($decodedTargets)
 $results = @()
 foreach ($target in $targets) {
     $processId = [int]$target.process_id
@@ -279,7 +280,8 @@ def _stop_identities(
 $ErrorActionPreference = "Stop"
 $payload = [System.Text.Encoding]::UTF8.GetString(
     [System.Convert]::FromBase64String("__PAYLOAD__"))
-$targets = @(ConvertFrom-Json -InputObject $payload)
+$decodedTargets = ConvertFrom-Json -InputObject $payload
+$targets = @($decodedTargets)
 $results = @()
 $refused = $false
 foreach ($target in $targets) {
