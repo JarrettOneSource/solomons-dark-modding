@@ -33,6 +33,13 @@ void NotifyLocalNativeMinionTerminal(
 void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
 
 bool InitializeLocalTransport() {
+    g_local_transport_enabled.store(false, std::memory_order_release);
+    g_local_transport_is_udp.store(false, std::memory_order_release);
+    g_local_teardown_requested.store(false, std::memory_order_release);
+    g_local_transport_teardown_complete.store(
+        true,
+        std::memory_order_release);
+    g_local_transport_host.store(false, std::memory_order_release);
     ResetRunGameOverState("transport_initialize");
     ResetRunLoadingBarrierState("transport_initialize");
     if (!ConfigureLocalTransport()) {
@@ -47,7 +54,6 @@ bool InitializeLocalTransport() {
     ResetSteamGameplayQueues();
 
     g_local_transport.local_session_nonce = GenerateTransportSessionNonce();
-
     if (g_local_transport.backend == GameplayTransportBackend::Steam) {
         if (g_local_transport.local_peer_id == 0) {
             Log("Multiplayer Steam transport requested without an initialized Steam identity.");
@@ -65,6 +71,10 @@ bool InitializeLocalTransport() {
             return false;
         }
         g_local_transport.initialized = true;
+        g_local_transport_enabled.store(true, std::memory_order_release);
+        g_local_transport_host.store(
+            g_local_transport.is_host,
+            std::memory_order_release);
         if (g_local_transport.is_host) {
             g_local_transport_authority_participant_id.store(
                 g_local_transport.local_peer_id,
@@ -130,6 +140,14 @@ bool InitializeLocalTransport() {
         return false;
     }
     g_local_transport.initialized = true;
+    g_local_transport_is_udp.store(true, std::memory_order_release);
+    g_local_transport_enabled.store(true, std::memory_order_release);
+    g_local_transport_host.store(
+        g_local_transport.is_host,
+        std::memory_order_release);
+    g_local_transport_teardown_complete.store(
+        false,
+        std::memory_order_release);
     if (g_local_transport.is_host) {
         g_local_transport_authority_participant_id.store(
             g_local_transport.local_peer_id,
@@ -148,6 +166,33 @@ bool InitializeLocalTransport() {
 }
 
 void ShutdownLocalTransport() {
+    const bool pending_teardown =
+        g_local_teardown_requested.exchange(
+            false,
+            std::memory_order_acq_rel);
+    if (g_local_transport.initialized &&
+        g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
+        const bool teardown_requested =
+            pending_teardown ||
+            g_local_transport.teardown_requested;
+        const bool notify_peers = pending_teardown
+            ? g_local_teardown_notify_peers.load(
+                std::memory_order_acquire)
+            : !g_local_transport.teardown_requested ||
+                g_local_transport.teardown_notify_peers;
+        if (notify_peers) {
+            SendLocalSessionGoodbye(
+                pending_teardown
+                    ? static_cast<SessionGoodbyeReason>(
+                        g_local_teardown_reason.load(
+                            std::memory_order_acquire))
+                    : teardown_requested
+                        ? g_local_transport.teardown_reason
+                        : g_local_transport.is_host
+                            ? SessionGoodbyeReason::LobbyClosed
+                            : SessionGoodbyeReason::Leaving);
+        }
+    }
     ShutdownLocalDeathProgressionTickHook();
     ShutdownLocalLevelUpOptionRollHook();
     ShutdownDeadLevelUpScreenTickHook();
@@ -163,6 +208,12 @@ void ShutdownLocalTransport() {
         WSACleanup();
     }
     g_local_transport = LocalTransportState{};
+    g_local_transport_enabled.store(false, std::memory_order_release);
+    g_local_transport_is_udp.store(false, std::memory_order_release);
+    g_local_transport_host.store(false, std::memory_order_release);
+    g_local_transport_teardown_complete.store(
+        true,
+        std::memory_order_release);
     g_local_transport_authority_participant_id.store(
         0,
         std::memory_order_release);
@@ -221,6 +272,22 @@ void TickLocalTransport(std::uint64_t now_ms) {
     RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
+    if (g_local_teardown_requested.exchange(
+            false,
+            std::memory_order_acq_rel)) {
+        g_local_transport.teardown_reason =
+            static_cast<SessionGoodbyeReason>(
+                g_local_teardown_reason.load(
+                    std::memory_order_acquire));
+        g_local_transport.teardown_notify_peers =
+            g_local_teardown_notify_peers.load(
+                std::memory_order_acquire);
+        g_local_transport.teardown_requested = true;
+    }
+    if (g_local_transport.teardown_requested) {
+        ServiceLocalTransportTeardown(now_ms);
+        return;
+    }
     PruneStaleLocalUdpPeers(now_ms);
     ServiceRunLoadingBarrier(now_ms);
     TickLocalDeathSpectator(now_ms);
@@ -269,18 +336,6 @@ void FlushActiveLocalCastRelease(std::uint64_t now_ms) {
         return;
     }
     SendActiveLocalCastInput(now_ms);
-}
-
-bool IsLocalTransportEnabled() {
-    return g_local_transport.initialized;
-}
-
-bool IsLocalTransportHost() {
-    return g_local_transport.initialized && g_local_transport.is_host;
-}
-
-bool IsLocalTransportClient() {
-    return g_local_transport.initialized && !g_local_transport.is_host;
 }
 
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message) {

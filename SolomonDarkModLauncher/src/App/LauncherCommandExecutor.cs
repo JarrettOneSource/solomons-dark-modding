@@ -84,6 +84,16 @@ internal static class LauncherCommandExecutor
             LauncherMode.EnableMod => ExecuteSetEnabled(command, configuration, manager, enabled: true),
             LauncherMode.DisableMod => ExecuteSetEnabled(command, configuration, manager, enabled: false),
             LauncherMode.JoinPreview => ExecuteJoinPreview(command, configuration, catalog),
+            LauncherMode.InstallModPreview => ExecuteInstallModPreview(
+                command,
+                configuration,
+                catalog),
+            LauncherMode.InstallMod => ExecuteInstallMod(
+                command,
+                configuration,
+                catalog,
+                manager,
+                progress),
             _ => throw new InvalidOperationException($"Unsupported mode: {command.Mode}")
         };
     }
@@ -109,6 +119,54 @@ internal static class LauncherCommandExecutor
             .GetAwaiter()
             .GetResult();
         return new LauncherCommandExecution(command, configuration, catalog, JoinPreview: preview);
+    }
+
+    private static LauncherCommandExecution ExecuteInstallModPreview(
+        LauncherCommand command,
+        LauncherConfiguration configuration,
+        ModCatalog catalog)
+    {
+        var slug = command.TargetModId ??
+            throw new InvalidOperationException(
+                "install-mod-preview requires a mod slug.");
+        var preview = WebsiteModInstaller.PreviewAsync(
+                configuration,
+                catalog,
+                slug,
+                command.LobbyHost.DirectoryBaseUrl)
+            .GetAwaiter()
+            .GetResult();
+        return new LauncherCommandExecution(
+            command,
+            configuration,
+            catalog,
+            ModInstallPreview: preview);
+    }
+
+    private static LauncherCommandExecution ExecuteInstallMod(
+        LauncherCommand command,
+        LauncherConfiguration configuration,
+        ModCatalog catalog,
+        ModManagerService manager,
+        IProgress<UpdateProgress>? progress)
+    {
+        var slug = command.TargetModId ??
+            throw new InvalidOperationException(
+                "install-mod requires a mod slug.");
+        var result = WebsiteModInstaller.InstallAsync(
+                configuration,
+                catalog,
+                slug,
+                command.LobbyHost.DirectoryBaseUrl,
+                progress)
+            .GetAwaiter()
+            .GetResult();
+        return new LauncherCommandExecution(
+            command,
+            configuration,
+            manager.LoadCatalog(),
+            ModInstallPreview: result.Preview,
+            ModInstall: result);
     }
 
     private static LauncherCommandExecution ExecuteStage(

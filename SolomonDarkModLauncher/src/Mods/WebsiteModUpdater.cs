@@ -290,21 +290,23 @@ internal static class WebsiteModUpdater
         return updates;
     }
 
-    private static void Promote(
+    internal static void Promote(
         DiscoveredMod cached,
-        DiscoveredMod current,
+        DiscoveredMod? current,
         MultiplayerModDescriptor required,
         string modsRootPath)
     {
         var normalizedModsRoot = Path.GetFullPath(modsRootPath);
-        var targetPath = Path.GetFullPath(current.RootPath);
+        var targetPath = Path.GetFullPath(
+            current?.RootPath ??
+            Path.Combine(normalizedModsRoot, required.Id));
         if (!string.Equals(
                 Path.GetDirectoryName(targetPath),
                 normalizedModsRoot,
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Installed mod is outside the managed mods directory: {current.Manifest.Id}");
+                $"Installed mod is outside the managed mods directory: {required.Id}");
         }
 
         var folderName = Path.GetFileName(targetPath);
@@ -325,6 +327,17 @@ internal static class WebsiteModUpdater
             {
                 throw new InvalidDataException(
                     $"The staged update for {required.Id} did not match the website package.");
+            }
+
+            if (current is null)
+            {
+                if (Directory.Exists(targetPath))
+                {
+                    throw new InvalidOperationException(
+                        $"The install target already exists: {targetPath}");
+                }
+                Directory.Move(updatePath, targetPath);
+                return;
             }
 
             Directory.Move(targetPath, backupPath);

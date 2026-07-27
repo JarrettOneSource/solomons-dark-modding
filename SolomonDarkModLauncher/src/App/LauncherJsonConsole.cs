@@ -135,6 +135,38 @@ internal static class LauncherJsonConsole
                         DownloadSizeBytes = mod.DownloadSizeBytes
                     }).ToArray()
                 },
+            ModInstallPreview = execution.ModInstallPreview is null
+                ? null
+                : new LauncherJsonModInstallPreview
+                {
+                    Slug = execution.ModInstallPreview.Slug,
+                    Id = execution.ModInstallPreview.Id,
+                    Name = execution.ModInstallPreview.Name,
+                    Version = execution.ModInstallPreview.Version,
+                    FileSizeBytes =
+                        execution.ModInstallPreview.FileSizeBytes,
+                    Disposition =
+                        execution.ModInstallPreview.Disposition switch
+                        {
+                            WebsiteModInstallDisposition.Install =>
+                                "install",
+                            WebsiteModInstallDisposition.Update =>
+                                "update",
+                            WebsiteModInstallDisposition.Current =>
+                                "current",
+                            WebsiteModInstallDisposition.NewerInstalled =>
+                                "newerInstalled",
+                            _ => "unknown"
+                        },
+                    InstalledVersion =
+                        execution.ModInstallPreview.InstalledVersion
+                },
+            ModInstall = execution.ModInstall is null
+                ? null
+                : new LauncherJsonModInstall
+                {
+                    Changed = execution.ModInstall.Changed
+                },
             Stage = execution.StageResult is null
                 ? null
                 : new LauncherJsonStage
@@ -235,6 +267,8 @@ internal static class LauncherJsonConsole
             ModUpdate = null,
             LobbyModSync = null,
             JoinPreview = null,
+            ModInstallPreview = null,
+            ModInstall = null,
             Stage = null,
             Launch = null,
             ModStateChange = null
@@ -269,6 +303,8 @@ internal static class LauncherJsonConsole
             LauncherMode.EnableMod => "enable-mod",
             LauncherMode.DisableMod => "disable-mod",
             LauncherMode.JoinPreview => "join-preview",
+            LauncherMode.InstallModPreview => "install-mod-preview",
+            LauncherMode.InstallMod => "install-mod",
             _ => throw new InvalidOperationException($"Unsupported mode: {mode}")
         };
     }
@@ -284,6 +320,8 @@ internal static class LauncherJsonConsole
         public required LauncherJsonModUpdate? ModUpdate { get; init; }
         public required LauncherJsonLobbyModSync? LobbyModSync { get; init; }
         public required LauncherJsonJoinPreview? JoinPreview { get; init; }
+        public required LauncherJsonModInstallPreview? ModInstallPreview { get; init; }
+        public required LauncherJsonModInstall? ModInstall { get; init; }
         public required LauncherJsonStage? Stage { get; init; }
         public required LauncherJsonLaunch? Launch { get; init; }
         public required LauncherJsonModStateChange? ModStateChange { get; init; }
@@ -340,6 +378,22 @@ internal static class LauncherJsonConsole
         public required int DownloadCount { get; init; }
         public required int UnavailableCount { get; init; }
         public required IReadOnlyList<LauncherJsonJoinPreviewMod> Mods { get; init; }
+    }
+
+    private sealed class LauncherJsonModInstallPreview
+    {
+        public required string Slug { get; init; }
+        public required string Id { get; init; }
+        public required string Name { get; init; }
+        public required string Version { get; init; }
+        public required long FileSizeBytes { get; init; }
+        public required string Disposition { get; init; }
+        public required string? InstalledVersion { get; init; }
+    }
+
+    private sealed class LauncherJsonModInstall
+    {
+        public required bool Changed { get; init; }
     }
 
     private sealed class LauncherJsonJoinPreviewMod

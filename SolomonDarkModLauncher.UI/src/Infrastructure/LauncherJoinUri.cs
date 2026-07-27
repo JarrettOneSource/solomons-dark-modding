@@ -30,6 +30,34 @@ internal static class LauncherJoinUri
         return true;
     }
 
+    public static bool TryParseInstallMod(
+        string? value,
+        out LauncherInstallModActivation activation)
+    {
+        activation = null!;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Scheme, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, "install-mod", StringComparison.Ordinal) ||
+            uri.Port != -1 ||
+            uri.UserInfo.Length != 0 ||
+            uri.Fragment.Length != 0 ||
+            uri.AbsolutePath.Length < 2 ||
+            uri.AbsolutePath[0] != '/' ||
+            uri.AbsolutePath.IndexOf('/', 1) >= 0 ||
+            !TryDecodeSlug(uri.AbsolutePath[1..], out var slug) ||
+            !TryParseDirectoryOnlyQuery(
+                uri.Query,
+                out var directoryBaseUrl))
+        {
+            return false;
+        }
+
+        activation = new LauncherInstallModActivation(
+            slug,
+            directoryBaseUrl);
+        return true;
+    }
+
     private static bool TryParseQuery(
         string query,
         out string directoryBaseUrl,
@@ -97,9 +125,76 @@ internal static class LauncherJoinUri
         uri.UserInfo.Length == 0 &&
         uri.Query.Length == 0 &&
         uri.Fragment.Length == 0;
+
+    private static bool TryDecodeSlug(
+        string encoded,
+        out string slug)
+    {
+        slug = string.Empty;
+        try
+        {
+            slug = Uri.UnescapeDataString(encoded);
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
+        return slug.Length is >= 1 and <= 80 &&
+            slug[0] is >= 'a' and <= 'z' or >= '0' and <= '9' &&
+            slug[^1] is >= 'a' and <= 'z' or >= '0' and <= '9' &&
+            !slug.Contains("--", StringComparison.Ordinal) &&
+            slug.All(character =>
+                character is >= 'a' and <= 'z' or
+                    >= '0' and <= '9' or '-');
+    }
+
+    private static bool TryParseDirectoryOnlyQuery(
+        string query,
+        out string directoryBaseUrl)
+    {
+        directoryBaseUrl = string.Empty;
+        if (query.Length < 2 ||
+            query[1..].Split('&').Length != 1)
+        {
+            return false;
+        }
+
+        var pair = query[1..];
+        var equalsIndex = pair.IndexOf('=');
+        if (equalsIndex <= 0)
+        {
+            return false;
+        }
+        try
+        {
+            if (!string.Equals(
+                    Uri.UnescapeDataString(pair[..equalsIndex]),
+                    "directory",
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+            directoryBaseUrl =
+                Uri.UnescapeDataString(pair[(equalsIndex + 1)..]);
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
+        if (!IsSafeDirectoryUrl(directoryBaseUrl))
+        {
+            return false;
+        }
+        directoryBaseUrl = directoryBaseUrl.TrimEnd('/');
+        return true;
+    }
 }
 
 internal sealed record LauncherJoinActivation(
     ulong LobbyId,
     string DirectoryBaseUrl,
     string? Ticket);
+
+internal sealed record LauncherInstallModActivation(
+    string Slug,
+    string DirectoryBaseUrl);

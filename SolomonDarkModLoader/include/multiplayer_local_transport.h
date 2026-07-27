@@ -26,6 +26,10 @@ void FlushActiveLocalCastRelease(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+void RequestLocalTransportTeardown(
+    SessionGoodbyeReason reason,
+    bool notify_peers);
+bool IsLocalTransportTeardownComplete();
 bool IsLuaModSimulationAuthority();
 void NotifyLocalRunStarted();
 void NotifyLocalRunEnded(std::string_view reason);

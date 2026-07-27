@@ -90,7 +90,19 @@ void HandleSessionGoodbye(
     }
     RemovePeer(message.sender_steam_id);
     if (!g_session.is_host && message.sender_steam_id == g_session.host_steam_id) {
-        SetError("The Steam lobby host ended the multiplayer session.", true);
+        const auto reason =
+            static_cast<SessionGoodbyeReason>(packet.reason);
+        if (reason == SessionGoodbyeReason::LobbyClosed) {
+            Log("Steam multiplayer received a clean host lobby close.");
+            g_session.clean_end_text =
+                "The host closed the lobby.";
+            NotifyRemoteHostSessionClosed();
+        } else {
+            Log("Steam multiplayer host ended the session.");
+            g_session.clean_end_text =
+                "The multiplayer host connection was lost.";
+            NotifySessionAuthorityLost();
+        }
     }
 }
 

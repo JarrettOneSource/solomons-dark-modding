@@ -5,6 +5,8 @@ namespace SolomonDarkModding.IO;
 internal static class LauncherPathPolicy
 {
     public const string ApplicationDataDirectoryName = "SolomonDarkMultiplayerBeta";
+    public const string TestApplicationDataRootEnvironmentVariable =
+        "SDMOD_TEST_APPLICATION_DATA_ROOT";
 
     public static string? TryGetKnownFolder(
         Environment.SpecialFolder folder,
@@ -50,6 +52,31 @@ internal static class LauncherPathPolicy
         }
 
         canWriteDirectory ??= CanWriteDirectory;
+        if (localApplicationDataPath is null)
+        {
+            var testRoot = Environment.GetEnvironmentVariable(
+                TestApplicationDataRootEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(testRoot))
+            {
+                var normalizedTestRoot =
+                    NormalizeAbsolutePath(testRoot);
+                if (normalizedTestRoot is null)
+                {
+                    throw new IOException(
+                        "The isolated launcher data root is not an absolute path.");
+                }
+                var isolatedApplicationRoot = Path.Combine(
+                    normalizedTestRoot,
+                    applicationDirectoryName);
+                if (IsDesktopPath(isolatedApplicationRoot) ||
+                    !canWriteDirectory(isolatedApplicationRoot))
+                {
+                    throw new IOException(
+                        "The isolated launcher data root is not writable.");
+                }
+                return isolatedApplicationRoot;
+            }
+        }
         var candidates = new[]
         {
             localApplicationDataPath ??

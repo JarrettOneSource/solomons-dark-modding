@@ -227,15 +227,19 @@ internal sealed class LauncherUiCommandClient
     {
         var arguments = new List<string>
         {
-            LauncherUiCommandRouting.GetModeToken(mode),
-            "--json",
-            "--progress-json"
+            LauncherUiCommandRouting.GetModeToken(mode)
         };
 
-        if (mode is LauncherUiCommandMode.EnableMod or LauncherUiCommandMode.DisableMod)
+        if (mode is
+            LauncherUiCommandMode.EnableMod or
+            LauncherUiCommandMode.DisableMod or
+            LauncherUiCommandMode.InstallModPreview or
+            LauncherUiCommandMode.InstallMod)
         {
             arguments.Add(targetModId ?? throw new InvalidOperationException("A mod id is required for this command."));
         }
+        arguments.Add("--json");
+        arguments.Add("--progress-json");
 
         if (!string.Equals(instanceName_, "default", StringComparison.Ordinal))
         {

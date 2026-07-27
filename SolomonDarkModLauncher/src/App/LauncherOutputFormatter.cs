@@ -21,6 +21,8 @@ internal static class LauncherOutputFormatter
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  directory-auth       Verify the active Steam user with the lobby directory.",
             "  join-preview         Compare a lobby's website mod list against local mods without launching. Requires --lobby-id.",
+            "  install-mod-preview <slug> Resolve a website mod and compare it with the installed copy.",
+            "  install-mod <slug>   Download, verify, and install or update a website mod.",
             "  enable-mod <mod-id>  Persistently enable a discovered overlay or runtime mod.",
             "  disable-mod <mod-id> Persistently disable a discovered overlay or runtime mod.",
             string.Empty,
@@ -98,11 +100,38 @@ internal static class LauncherOutputFormatter
             case LauncherMode.JoinPreview:
                 AppendJoinPreview(builder, execution.JoinPreview!);
                 break;
+            case LauncherMode.InstallModPreview:
+            case LauncherMode.InstallMod:
+                AppendModInstall(
+                    builder,
+                    execution.ModInstallPreview!,
+                    execution.ModInstall);
+                AppendModList(builder, execution.Catalog);
+                break;
             default:
                 throw new InvalidOperationException($"Unsupported mode: {execution.Command.Mode}");
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static void AppendModInstall(
+        StringBuilder builder,
+        WebsiteModInstallPreview preview,
+        WebsiteModInstallResult? result)
+    {
+        builder.AppendLine(
+            $"Website mod: {preview.Name} ({preview.Slug})");
+        builder.AppendLine($"Launcher mod ID: {preview.Id}");
+        builder.AppendLine($"Website version: {preview.Version}");
+        builder.AppendLine(
+            $"Installed version: {preview.InstalledVersion ?? "(none)"}");
+        builder.AppendLine($"Disposition: {preview.Disposition}");
+        if (result is not null)
+        {
+            builder.AppendLine($"Changed: {result.Changed}");
+        }
+        builder.AppendLine();
     }
 
     public static string FormatError(Exception exception)

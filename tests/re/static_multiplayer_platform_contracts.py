@@ -941,7 +941,8 @@ def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str
     _require_in_order(
         publisher,
         'status?.SessionState == "in-hub"',
-        "if (hubObserved &&",
+        "if (!teardownRequested &&",
+        "hubObserved &&",
         "var result = await AnnounceAsync(",
         "configuration.ActiveMods)",
     )
@@ -988,7 +989,7 @@ def test_website_lobby_links_register_and_route_to_launcher() -> str:
         "LauncherProtocolRegistration.RegisterCurrentExecutable()",
         "LauncherActivationBroker",
         "LauncherJoinUri.TryParse",
-        "viewModel.QueueWebsiteLobbyJoin(activation)",
+        "viewModel.QueueWebsiteLobbyJoin(joinActivation)",
     ):
         assert token in app, f"desktop launcher startup lacks: {token}"
     for token in (

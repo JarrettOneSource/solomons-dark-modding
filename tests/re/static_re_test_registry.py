@@ -406,8 +406,25 @@ from static_re_binary_tooling_contracts import (
     test_staged_binary_matches_analysis_binary,
     test_standalone_animation_drive_applies_dynamic_fields,
 )
+from static_qol_backend_contracts import (
+    test_all_session_end_paths_share_provider_and_directory_teardown,
+    test_live_session_leave_acks_before_canonical_teardown,
+    test_raptisoft_close_url_call_is_runtime_nopped,
+)
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "live-session leave ACK precedes canonical teardown",
+        test_live_session_leave_acks_before_canonical_teardown,
+    ),
+    (
+        "all session end paths share provider and directory teardown",
+        test_all_session_end_paths_share_provider_and_directory_teardown,
+    ),
+    (
+        "Raptisoft close URL call is runtime NOPed",
+        test_raptisoft_close_url_call_is_runtime_nopped,
+    ),
     (
         "Lua run seed is authority-owned and native-applied",
         test_lua_run_seed_is_authority_owned_and_native_applied,

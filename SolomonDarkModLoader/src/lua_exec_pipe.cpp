@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "lua_engine.h"
+#include "multiplayer_session_teardown.h"
 
 #include <Windows.h>
 #include <process.h>
@@ -317,8 +318,8 @@ bool WritePipeMessage(HANDLE pipe, const std::string& message) {
         if (error != ERROR_BROKEN_PIPE && error != ERROR_NO_DATA &&
             !(error == ERROR_OPERATION_ABORTED && IsPipeStopRequested())) {
             LogPipeWin32Failure("FlushFileBuffers", error);
-            return false;
         }
+        return false;
     }
 
     return true;
@@ -414,7 +415,8 @@ unsigned __stdcall PipeServerMain(void*) {
                 payload =
                     "{\"ok\":false,\"print_output\":\"\",\"results\":[],\"error\":\"response exceeded maximum pipe payload size\"}";
             }
-            WritePipeMessage(pipe, payload);
+            const bool delivered = WritePipeMessage(pipe, payload);
+            multiplayer::ResolveSessionLeavePipeResponse(delivered);
             break;
         }
         case PipeReadStatus::MessageTooLarge:

@@ -15,6 +15,19 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (!LauncherStartupArguments.TryParse(
+                e.Args,
+                out var startupArguments))
+        {
+            MessageBox.Show(
+                "The launcher received invalid startup arguments.",
+                "Solomon Dark Revived",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(2);
+            return;
+        }
+        startupArguments.ApplyTestIsolation();
         LauncherShell.UseSafeCurrentDirectory();
 
         // #61 visual-acceptance preview: SDMOD_UI_SETTINGS_PREVIEW=1 opens the
@@ -119,19 +132,10 @@ public partial class App : Application
             return;
         }
 
-        if (e.Args.Length > 1)
-        {
-            MessageBox.Show(
-                "The launcher received too many startup arguments.",
-                "Solomon Dark Revived",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            Shutdown(2);
-            return;
-        }
-
-        activationBroker_ = new LauncherActivationBroker();
-        var activationArgument = e.Args.Length == 1 ? e.Args[0] : string.Empty;
+        activationBroker_ = new LauncherActivationBroker(
+            startupArguments.TestScope);
+        var activationArgument =
+            startupArguments.ActivationArgument;
         activationArgument_ = activationArgument;
         if (!activationBroker_.IsPrimary)
         {
@@ -149,7 +153,15 @@ public partial class App : Application
 
         try
         {
-            LauncherProtocolRegistration.RegisterCurrentExecutable();
+            if (startupArguments.IsTestScoped)
+            {
+                LauncherProtocolRegistration.RegisterCurrentExecutable(
+                    startupArguments.ProtocolCommandScopeArgument);
+            }
+            else
+            {
+                LauncherProtocolRegistration.RegisterCurrentExecutable();
+            }
         }
         catch (Exception ex) when (ex is IOException or
                                    UnauthorizedAccessException or
@@ -184,7 +196,10 @@ public partial class App : Application
                 Activate(window, viewModel, argument);
             }));
         Activate(window, viewModel, activationArgument);
-        _ = CheckForLauncherUpdateAsync(viewModel);
+        if (!startupArguments.IsTestScoped)
+        {
+            _ = CheckForLauncherUpdateAsync(viewModel);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -209,18 +224,25 @@ public partial class App : Application
         {
             return;
         }
-        if (!LauncherJoinUri.TryParse(argument, out var activation))
+        if (LauncherJoinUri.TryParse(argument, out var joinActivation))
         {
-            MessageBox.Show(
-                window,
-                "This lobby link is not valid.",
-                "Solomon Dark Revived",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            viewModel.QueueWebsiteLobbyJoin(joinActivation);
+            return;
+        }
+        if (LauncherJoinUri.TryParseInstallMod(
+                argument,
+                out var installActivation))
+        {
+            viewModel.QueueWebsiteModInstall(installActivation);
             return;
         }
 
-        viewModel.QueueWebsiteLobbyJoin(activation);
+        MessageBox.Show(
+            window,
+            "This Solomon Dark Revived link is not valid.",
+            "Solomon Dark Revived",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private async Task CheckForLauncherUpdateAsync(

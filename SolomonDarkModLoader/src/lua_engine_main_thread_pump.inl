@@ -17,7 +17,9 @@ void ProcessLuaExecQueueOnMainThread() {
 
     auto& mods = LoadedLuaModsStorage();
     lua_State* shared_state =
-        (mods.empty() || mods.front() == nullptr) ? nullptr : mods.front()->state;
+        (mods.empty() || mods.front() == nullptr)
+            ? LuaExecControlStateStorage()
+            : mods.front()->state;
 
     std::vector<std::pair<std::shared_ptr<PendingLuaExecRequest>, LuaExecResult>>
         completed;

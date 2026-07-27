@@ -11,6 +11,8 @@ internal static class MultiplayerLaunchEnvironment
     public const string InviteSteamIdVariable = "SDMOD_STEAM_INVITE_STEAM_ID";
     public const string LobbyPrivacyVariable = "SDMOD_STEAM_LOBBY_PRIVACY";
     public const string QuickStartVariable = "SDMOD_MULTIPLAYER_QUICK_START";
+    public const string DirectoryPublisherVariable =
+        "SDMOD_LOBBY_DIRECTORY_PUBLISHER";
     public const string LocalTransportToken = "local_udp";
 
     public static bool IsLocalTransport(LaunchOptions options) =>
@@ -68,6 +70,9 @@ internal static class MultiplayerLaunchEnvironment
                 multiplayer.LobbyId?.ToString() ?? string.Empty;
             environment[MaxParticipantsVariable] =
                 multiplayer.MaxParticipants.ToString();
+            environment[LobbyPrivacyVariable] =
+                MultiplayerLobbyPrivacyTokens.ToLauncherToken(
+                    multiplayer.Host.Privacy);
             environment[QuickStartVariable] = "1";
             return options with { EnvironmentOverrides = environment };
         }

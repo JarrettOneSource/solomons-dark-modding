@@ -33,6 +33,7 @@ constexpr std::uint64_t kSessionStatusWriteIntervalMs = 1000;
 constexpr std::uint64_t kFriendListRefreshIntervalMs = 5000;
 constexpr std::uint64_t kClientLobbyRecoveryRetryMs = 3000;
 constexpr std::uint64_t kClientLobbyRecoveryTimeoutMs = 120000;
+constexpr std::uint64_t kSteamTeardownGoodbyeGraceMs = 150;
 constexpr std::int32_t kReceiveBatchSize = 64;
 
 enum class SteamSessionPhase {
@@ -94,6 +95,8 @@ struct SteamSessionState {
     bool client_lobby_recovery = false;
     SteamLobbyVisibility lobby_visibility = SteamLobbyVisibility::FriendsOnly;
     SteamSessionPhase phase = SteamSessionPhase::Disabled;
+    SessionGoodbyeReason teardown_reason =
+        SessionGoodbyeReason::Leaving;
     std::uint32_t app_id = 0;
     std::uint32_t max_participants = kDefaultMaxParticipants;
     std::uint32_t next_sequence = 1;
@@ -105,6 +108,7 @@ struct SteamSessionState {
     std::uint64_t pending_api_call = 0;
     std::uint64_t recovery_lobby_id = 0;
     std::uint64_t recovery_started_ms = 0;
+    std::uint64_t teardown_started_ms = 0;
     std::uint64_t last_join_attempt_ms = 0;
     std::uint64_t local_session_nonce = 0;
     std::uint64_t last_hello_send_ms = 0;
@@ -119,6 +123,7 @@ struct SteamSessionState {
     std::string manifest_sha256_text;
     std::string privacy = "friendsOnly";
     std::string launch_token;
+    std::string clean_end_text;
     std::string last_status_signature;
     std::string error_text;
     std::unordered_set<std::uint64_t> lobby_members;
@@ -127,6 +132,13 @@ struct SteamSessionState {
 };
 
 SteamSessionState g_session;
+std::atomic<bool> g_steam_session_enabled{false};
+std::atomic<bool> g_steam_session_host{false};
+std::atomic<bool> g_steam_teardown_requested{false};
+std::atomic<bool> g_steam_teardown_notify_peers{true};
+std::atomic<bool> g_steam_teardown_complete{true};
+std::atomic<std::uint8_t> g_steam_teardown_reason{
+    static_cast<std::uint8_t>(SessionGoodbyeReason::Leaving)};
 
 void RemoveAllPeers();
 

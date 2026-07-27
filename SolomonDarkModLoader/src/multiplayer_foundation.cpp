@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_service_loop.h"
+#include "multiplayer_session_teardown.h"
 #include "runtime_flags.h"
 
 #include <mutex>
@@ -77,6 +78,7 @@ void ShutdownFoundation() {
         return;
     }
 
+    PrepareSessionTeardownForProcessExit();
     MarkRuntimeShuttingDown();
     StopServiceLoop();
     ShutdownRuntimeState();

@@ -270,15 +270,30 @@ bool ConfigureLocalTransport() {
             ? steam.local_steam_id
             : 0;
     } else {
-    g_local_transport.local_port = local_port;
-    g_local_transport.remote_host = remote_host;
-    g_local_transport.remote_port = remote_port;
-    g_local_transport.local_peer_id = ReadParticipantId(local_port);
-    g_local_transport.configured_remote.backend = GameplayTransportBackend::LocalUdp;
-    g_local_transport.configured_remote_valid = ResolveIpv4Endpoint(
-        remote_host,
-        remote_port,
-        &g_local_transport.configured_remote.udp_address);
+        g_local_transport.local_port = local_port;
+        g_local_transport.remote_host = remote_host;
+        g_local_transport.remote_port = remote_port;
+        g_local_transport.max_participants =
+            ReadLocalMaxParticipants();
+        g_local_transport.launch_token =
+            ReadEnvironmentVariable(
+                kLaunchTokenEnvironmentVariable);
+        g_local_transport.manifest_sha256 =
+            ReadEnvironmentVariable(kManifestEnvironmentVariable);
+        g_local_transport.privacy =
+            ToLowerAscii(ReadEnvironmentVariable(
+                kLobbyPrivacyEnvironmentVariable)) == "public"
+            ? "public"
+            : "friendsOnly";
+        g_local_transport.local_peer_id =
+            ReadParticipantId(local_port);
+        g_local_transport.configured_remote.backend =
+            GameplayTransportBackend::LocalUdp;
+        g_local_transport.configured_remote_valid =
+            ResolveIpv4Endpoint(
+                remote_host,
+                remote_port,
+                &g_local_transport.configured_remote.udp_address);
     }
     {
         std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);

@@ -118,12 +118,14 @@
     <ClInclude Include="include\launch_audio_disable.h" />
     <ClInclude Include="include\loading_screen.h" />
     <ClInclude Include="include\native_audio_observability.h" />
+    <ClInclude Include="include\native_close_url_patch.h" />
     <ClInclude Include="include\native_d3d9_lifetime_guard.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
+    <ClInclude Include="include\multiplayer_session_teardown.h" />
     <ClInclude Include="include\multiplayer_native_minion_state.inl" />
     <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
@@ -509,6 +511,7 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_cast_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_profile_loadout_capture.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\local_session_status.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\native_minion_snapshot_sync.inl" />
@@ -524,7 +527,9 @@
     <ClInclude Include="src\multiplayer_local_transport\public_cast_damage_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\public_session_teardown_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\session_teardown_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\run_exit_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\skill_config_and_packet_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl" />
@@ -619,9 +624,11 @@
     <ClCompile Include="src\lua_engine_bindings_bots.cpp" />
     <ClCompile Include="src\lua_engine_bindings_debug.cpp" />
     <ClCompile Include="src\lua_exec_pipe.cpp" />
+    <ClCompile Include="src\lua_exec_control_state.cpp" />
     <ClCompile Include="src\lua_engine_bindings_gameplay.cpp" />
     <ClCompile Include="src\lua_engine_bindings_input.cpp" />
     <ClCompile Include="src\lua_engine_bindings_settings.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_session.cpp" />
     <ClCompile Include="src\lua_settings_runtime.cpp" />
     <ClCompile Include="src\mod_settings.cpp" />
     <ClCompile Include="src\mod_settings_json.cpp" />
@@ -662,6 +669,7 @@
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
     <ClCompile Include="src\launch_audio_disable.cpp" />
     <ClCompile Include="src\native_audio_observability.cpp" />
+    <ClCompile Include="src\native_close_url_patch.cpp" />
     <ClCompile Include="src\native_d3d9_lifetime_guard.cpp" />
     <ClCompile Include="src\mod_loader.cpp" />
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
@@ -672,6 +680,7 @@
     <ClCompile Include="src\multiplayer_runtime_labels.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />
+    <ClCompile Include="src\multiplayer_session_teardown.cpp" />
     <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp" />
     <ClCompile Include="src\multiplayer_steam_gameplay_queue_policy.cpp" />
     <ClCompile Include="src\multiplayer_steam_session.cpp" />

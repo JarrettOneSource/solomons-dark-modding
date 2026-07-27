@@ -209,6 +209,20 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (kind == PacketKind::SessionGoodbye &&
+            received ==
+                static_cast<int>(sizeof(SessionGoodbyePacket))) {
+            SessionGoodbyePacket packet{};
+            std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::SessionGoodbye)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyLocalSessionGoodbye(packet, from);
+            continue;
+        }
         if (kind == PacketKind::LuaRegisteredSpellEffectSnapshot &&
             received >= static_cast<int>(
                 kLuaRegisteredSpellEffectSnapshotPacketPrefixBytes) &&

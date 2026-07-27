@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
+#include "multiplayer_session_teardown.h"
 #include "multiplayer_steam_session.h"
 #include "multiplayer_steam_gameplay_queue.h"
 #include "steam_bootstrap.h"
@@ -139,6 +140,7 @@ bool StartServiceLoop() {
         return true;
     }
 
+    ResetSessionTeardownCoordinator();
     if (!InitializeLocalTransport()) {
         return false;
     }
@@ -259,6 +261,7 @@ void TickGameplayTransportOnAppThread(std::uint64_t now_ms) {
     g_has_gameplay_transport_tick = true;
 
     TickLocalTransport(now_ms);
+    TickSessionTeardownOnAppThread(now_ms);
 }
 
 void FlushGameplayCastReleaseOnAppThread(std::uint64_t now_ms) {

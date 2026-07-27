@@ -113,13 +113,17 @@ void ReconcileLobbyMembers(std::uint64_t now_ms) {
                 "local_lobby_membership_missing");
             return;
         }
-        SetError("Local Steam user is no longer a lobby member.", false);
+        Log(
+            "Local Steam host is no longer a lobby member; ending the "
+            "session through canonical teardown.");
+        NotifySessionAuthorityLost();
         return;
     }
     const auto owner = SteamGetLobbyOwner(g_session.lobby_id);
     if ((g_session.is_host && owner != g_session.local_steam_id) ||
         (!g_session.is_host && owner != g_session.host_steam_id)) {
-        SetError("Steam lobby ownership changed; host migration is not supported.", true);
+        Log("Steam lobby ownership changed; ending the session without host migration.");
+        NotifySessionAuthorityLost();
         return;
     }
 
@@ -309,7 +313,10 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         status << "Steam multiplayer disabled.";
         break;
     }
-    const auto status_text = status.str();
+    const auto status_text =
+        g_session.clean_end_text.empty()
+        ? status.str()
+        : g_session.clean_end_text;
 
     UpdateRuntimeState([&](RuntimeState& state) {
         state.session_transport = SessionTransportKind::Steam;
@@ -400,6 +407,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
               << (g_session.invite_dialog_opened ? 1 : 0) << '|'
               << (any_relayed ? 1 : 0) << '|'
               << maximum_ping << '|'
+              << g_session.clean_end_text << '|'
               << g_session.error_text;
     for (const auto friend_steam_id : friend_steam_ids) {
         signature << "|f:" << friend_steam_id;
@@ -543,9 +551,13 @@ void ServiceClientLobbyRecovery(std::uint64_t now_ms) {
         now_ms >= g_session.recovery_started_ms &&
         now_ms - g_session.recovery_started_ms >=
             kClientLobbyRecoveryTimeoutMs) {
-        SetError(
-            "Steam reconnected, but the authenticated host lobby could not be rejoined.",
-            false);
+        g_session.client_lobby_recovery = false;
+        g_session.clean_end_text =
+            "The multiplayer host connection was lost.";
+        Log(
+            "Steam client lobby recovery expired; ending the session through "
+            "canonical teardown.");
+        NotifySessionAuthorityLost();
         return;
     }
     if (g_session.last_join_attempt_ms != 0 &&

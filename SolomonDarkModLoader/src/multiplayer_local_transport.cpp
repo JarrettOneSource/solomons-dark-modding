@@ -23,10 +23,12 @@
 #include "mod_loader.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "multiplayer_session_teardown.h"
 #include "multiplayer_steam_gameplay_queue.h"
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "steam_bootstrap.h"
+#include "startup_status.h"
 #include "wave_intelligence.h"
 #include "x86_hook.h"
 
@@ -84,6 +86,13 @@ constexpr const char* kRemoteHostEnvironmentVariable = "SDMOD_MULTIPLAYER_REMOTE
 constexpr const char* kRemotePortEnvironmentVariable = "SDMOD_MULTIPLAYER_REMOTE_PORT";
 constexpr const char* kParticipantIdEnvironmentVariable = "SDMOD_MULTIPLAYER_PARTICIPANT_ID";
 constexpr const char* kPlayerNameEnvironmentVariable = "SDMOD_MULTIPLAYER_PLAYER_NAME";
+constexpr const char* kMaxParticipantsEnvironmentVariable =
+    "SDMOD_MULTIPLAYER_MAX_PARTICIPANTS";
+constexpr const char* kLobbyPrivacyEnvironmentVariable =
+    "SDMOD_STEAM_LOBBY_PRIVACY";
+constexpr const char* kLaunchTokenEnvironmentVariable = "SDMOD_LAUNCH_TOKEN";
+constexpr const char* kManifestEnvironmentVariable =
+    "SDMOD_MULTIPLAYER_MANIFEST_SHA256";
 constexpr std::uint16_t kDefaultHostPort = 47770;
 constexpr std::uint16_t kDefaultClientPort = 47771;
 constexpr std::uint64_t kLocalDevParticipantIdBase = 0x2000000000000000ull;
@@ -947,12 +956,25 @@ struct LocalTransportState {
     bool initialized = false;
     bool winsock_initialized = false;
     bool is_host = false;
+    bool teardown_requested = false;
+    bool teardown_notify_peers = true;
+    SessionGoodbyeReason teardown_reason = SessionGoodbyeReason::Leaving;
+    std::uint64_t teardown_started_ms = 0;
+    std::uint64_t last_teardown_send_ms = 0;
+    std::uint32_t teardown_send_count = 0;
     bool suppress_local_level_up_fanout = false;
     GameplayTransportBackend backend = GameplayTransportBackend::LocalUdp;
     SOCKET socket_handle = INVALID_SOCKET;
     std::uint16_t local_port = 0;
     std::string remote_host;
     std::uint16_t remote_port = 0;
+    std::uint32_t max_participants = 4;
+    std::string launch_token;
+    std::string manifest_sha256;
+    std::string privacy = "friendsOnly";
+    std::string clean_end_text;
+    std::string last_session_status_signature;
+    std::uint64_t last_session_status_write_ms = 0;
     bool configured_remote_valid = false;
     TransportPeerEndpoint configured_remote;
     std::uint64_t local_peer_id = 0;
@@ -1120,6 +1142,14 @@ struct LocalTransportState {
 };
 
 LocalTransportState g_local_transport;
+std::atomic<bool> g_local_transport_enabled{false};
+std::atomic<bool> g_local_transport_is_udp{false};
+std::atomic<bool> g_local_teardown_requested{false};
+std::atomic<bool> g_local_teardown_notify_peers{true};
+std::atomic<std::uint8_t> g_local_teardown_reason{
+    static_cast<std::uint8_t>(SessionGoodbyeReason::Leaving)};
+std::atomic<bool> g_local_transport_teardown_complete{true};
+std::atomic<bool> g_local_transport_host{false};
 std::atomic<std::uint64_t> g_local_transport_authority_participant_id{0};
 std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
 std::atomic<std::uint64_t>
@@ -1339,6 +1369,18 @@ std::uint16_t ReadPortEnvironmentVariable(const char* name, std::uint16_t defaul
     return static_cast<std::uint16_t>(parsed);
 }
 
+std::uint32_t ReadLocalMaxParticipants() {
+    std::uint64_t parsed = 0;
+    return TryParseUnsigned64(
+               ReadEnvironmentVariable(
+                   kMaxParticipantsEnvironmentVariable),
+               &parsed) &&
+            parsed >= 2 &&
+            parsed <= 250
+        ? static_cast<std::uint32_t>(parsed)
+        : 4;
+}
+
 std::uint64_t ReadParticipantId(std::uint16_t local_port) {
     const auto text = ReadEnvironmentVariable(kParticipantIdEnvironmentVariable);
     std::uint64_t parsed = 0;
@@ -1517,6 +1559,8 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
 #include "multiplayer_local_transport/outgoing_packet_sync.inl"
+#include "multiplayer_local_transport/local_session_status.inl"
+#include "multiplayer_local_transport/session_teardown_sync.inl"
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
@@ -1611,6 +1655,8 @@ void PublishLocalTransportRuntimeState() {
                 static_cast<std::uint64_t>(GetTickCount64()));
         }
     });
+    PublishLocalSessionStatus(
+        static_cast<std::uint64_t>(GetTickCount64()));
 }
 
 }  // namespace
@@ -1767,6 +1813,7 @@ int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* 
 
 #include "multiplayer_local_transport/public_cast_damage_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_api.inl"
+#include "multiplayer_local_transport/public_session_teardown_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_queue_api.inl"
 #include "multiplayer_local_transport/lua_mod_stream_public.inl"
 

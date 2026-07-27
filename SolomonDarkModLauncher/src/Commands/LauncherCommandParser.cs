@@ -69,6 +69,13 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg is "install-mod-preview" or "install-mod")
+            {
+                mode = ParseMode(arg);
+                targetModId = ReadValue(args, ref index, arg);
+                continue;
+            }
+
             if (arg == "--game-dir")
             {
                 gameDir = ReadValue(args, ref index, arg);
@@ -279,6 +286,8 @@ internal static class LauncherCommandParser
             "list-mods" => LauncherMode.ListMods,
             "directory-auth" => LauncherMode.AuthenticateDirectory,
             "join-preview" => LauncherMode.JoinPreview,
+            "install-mod-preview" => LauncherMode.InstallModPreview,
+            "install-mod" => LauncherMode.InstallMod,
             "enable-mod" => LauncherMode.EnableMod,
             "disable-mod" => LauncherMode.DisableMod,
             _ => throw new InvalidOperationException($"Unsupported mode: {value}")

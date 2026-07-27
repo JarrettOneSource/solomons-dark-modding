@@ -167,7 +167,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         assert token in bindings, f"Lua settings bindings lack: {token}"
     assert "gameplay_seams" not in bindings
     for token in (
-        "ScopedSettingsPrivilegedBindings",
+        "ScopedPrivilegedBindings",
         "InstallLuaSettingsPrivilegedBindings",
         "RemoveLuaSettingsPrivilegedBindings",
         "SetLuaSettingsPrivilegedExecState(state_)",

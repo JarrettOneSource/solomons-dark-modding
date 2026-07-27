@@ -2,6 +2,10 @@ bool InitializeSteamSession() {
     const auto transport = ToLowerAscii(TrimAscii(ReadEnvironmentVariable(kTransportEnvironmentVariable)));
     ResetMultiplayerSessionStatus(GetStageRuntimeDirectory());
     g_session = SteamSessionState{};
+    g_steam_session_enabled.store(false, std::memory_order_release);
+    g_steam_session_host.store(false, std::memory_order_release);
+    g_steam_teardown_requested.store(false, std::memory_order_release);
+    g_steam_teardown_complete.store(true, std::memory_order_release);
     g_session.launch_token =
         TrimAscii(ReadEnvironmentVariable(kLaunchTokenEnvironmentVariable));
     if (transport != "steam") {
@@ -13,6 +17,9 @@ bool InitializeSteamSession() {
     g_session.configured = true;
     g_session.is_host = mode == "host" ||
         (mode.empty() && (role.empty() || role == "host" || role == "server"));
+    g_steam_session_host.store(
+        g_session.is_host,
+        std::memory_order_release);
     g_session.max_participants = ReadMaxParticipants();
     g_session.lobby_visibility = ReadLobbyVisibility();
     g_session.privacy = LobbyPrivacyToken(g_session.lobby_visibility);
@@ -42,6 +49,8 @@ bool InitializeSteamSession() {
     }
 
     g_session.initialized = true;
+    g_steam_session_enabled.store(true, std::memory_order_release);
+    g_steam_teardown_complete.store(false, std::memory_order_release);
     g_session.overlay_enabled = SteamIsOverlayEnabled();
     g_session.local_session_nonce = GenerateSessionNonce();
 
@@ -73,15 +82,19 @@ bool InitializeSteamSession() {
     return g_session.phase != SteamSessionPhase::Error;
 }
 
-void ShutdownSteamSession() {
+void FinalizeSteamSessionTeardown(
+    SessionGoodbyeReason reason,
+    bool notify_peers) {
     if (!g_session.initialized) {
         g_session = SteamSessionState{};
+        g_steam_session_enabled.store(false, std::memory_order_release);
+        g_steam_session_host.store(false, std::memory_order_release);
+        g_steam_teardown_complete.store(true, std::memory_order_release);
         return;
     }
-    SendGoodbyeToAuthenticatedPeers(
-        g_session.is_host
-            ? SessionGoodbyeReason::LobbyClosed
-            : SessionGoodbyeReason::Leaving);
+    if (notify_peers) {
+        SendGoodbyeToAuthenticatedPeers(reason);
+    }
     if (g_session.is_host && g_session.lobby_id != 0) {
         SteamSetLobbyJoinable(g_session.lobby_id, false);
         SteamSetLobbyData(g_session.lobby_id, kLobbyStateKey, kLobbyStateClosed);
@@ -97,9 +110,83 @@ void ShutdownSteamSession() {
     SteamSetRichPresence("connect", nullptr);
     SteamSetRichPresence("status", nullptr);
     g_session = SteamSessionState{};
+    g_steam_session_enabled.store(false, std::memory_order_release);
+    g_steam_session_host.store(false, std::memory_order_release);
+    g_steam_teardown_complete.store(true, std::memory_order_release);
+}
+
+void BeginSteamSessionTeardown(
+    SessionGoodbyeReason reason,
+    bool notify_peers,
+    std::uint64_t now_ms) {
+    if (!g_session.initialized ||
+        g_session.teardown_started_ms != 0) {
+        return;
+    }
+
+    g_session.teardown_reason = reason;
+    g_session.teardown_started_ms =
+        now_ms == 0 ? 1 : now_ms;
+    if (notify_peers) {
+        SendGoodbyeToAuthenticatedPeers(reason);
+    }
+    if (g_session.is_host && g_session.lobby_id != 0) {
+        SteamSetLobbyJoinable(g_session.lobby_id, false);
+        SteamSetLobbyData(
+            g_session.lobby_id,
+            kLobbyStateKey,
+            kLobbyStateClosed);
+    }
+    Log(
+        "Steam session teardown sent its reliable goodbye and entered "
+        "the delivery grace period.");
+}
+
+void ShutdownSteamSession() {
+    const auto reason = static_cast<SessionGoodbyeReason>(
+        g_steam_teardown_reason.load(std::memory_order_acquire));
+    const bool requested =
+        g_steam_teardown_requested.exchange(
+            false,
+            std::memory_order_acq_rel);
+    const bool already_started =
+        g_session.teardown_started_ms != 0;
+    FinalizeSteamSessionTeardown(
+        requested
+            ? reason
+            : already_started
+                ? g_session.teardown_reason
+                : g_session.is_host
+                    ? SessionGoodbyeReason::LobbyClosed
+                    : SessionGoodbyeReason::Leaving,
+        !already_started &&
+            (requested
+                ? g_steam_teardown_notify_peers.load(
+                    std::memory_order_acquire)
+                : true));
 }
 
 void TickSteamSession(std::uint64_t now_ms) {
+    if (g_steam_teardown_requested.exchange(
+            false,
+            std::memory_order_acq_rel)) {
+        BeginSteamSessionTeardown(
+            static_cast<SessionGoodbyeReason>(
+                g_steam_teardown_reason.load(std::memory_order_acquire)),
+            g_steam_teardown_notify_peers.load(std::memory_order_acquire),
+            now_ms);
+    }
+    if (g_session.teardown_started_ms != 0) {
+        if (now_ms <
+            g_session.teardown_started_ms +
+                kSteamTeardownGoodbyeGraceMs) {
+            return;
+        }
+        FinalizeSteamSessionTeardown(
+            g_session.teardown_reason,
+            false);
+        return;
+    }
     if (!g_session.initialized || g_session.phase == SteamSessionPhase::Disabled) {
         return;
     }
@@ -135,7 +222,32 @@ void TickSteamSession(std::uint64_t now_ms) {
 }
 
 bool IsSteamSessionEnabled() {
-    return g_session.initialized;
+    return g_steam_session_enabled.load(std::memory_order_acquire);
+}
+
+bool IsSteamSessionHost() {
+    return g_steam_session_host.load(std::memory_order_acquire);
+}
+
+void RequestSteamSessionTeardown(
+    SessionGoodbyeReason reason,
+    bool notify_peers) {
+    if (!g_steam_session_enabled.load(std::memory_order_acquire)) {
+        g_steam_teardown_complete.store(true, std::memory_order_release);
+        return;
+    }
+    g_steam_teardown_reason.store(
+        static_cast<std::uint8_t>(reason),
+        std::memory_order_release);
+    g_steam_teardown_notify_peers.store(
+        notify_peers,
+        std::memory_order_release);
+    g_steam_teardown_complete.store(false, std::memory_order_release);
+    g_steam_teardown_requested.store(true, std::memory_order_release);
+}
+
+bool IsSteamSessionTeardownComplete() {
+    return g_steam_teardown_complete.load(std::memory_order_acquire);
 }
 
 void RecoverSteamSessionFromGameplayCongestion(

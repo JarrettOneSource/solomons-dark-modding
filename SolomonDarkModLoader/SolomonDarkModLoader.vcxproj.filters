@@ -233,10 +233,16 @@
     <ClInclude Include="include\native_audio_observability.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_close_url_patch.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\native_d3d9_lifetime_guard.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_foundation.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\multiplayer_session_teardown.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_join_flow.h">
@@ -1421,6 +1427,9 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\local_session_status.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_damage_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1430,7 +1439,13 @@
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\public_session_teardown_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\session_teardown_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_progression_snapshot_sync.inl">
@@ -1705,6 +1720,12 @@
     <ClCompile Include="src\lua_engine_bindings_settings.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\lua_engine_bindings_session.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lua_exec_control_state.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_settings_runtime.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1846,6 +1867,9 @@
     <ClInclude Include="src\native_audio_observability\footstep_dispatch_helpers.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClCompile Include="src\native_close_url_patch.cpp">
+      <Filter>Source Files\Support</Filter>
+    </ClCompile>
     <ClCompile Include="src\native_d3d9_lifetime_guard.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
@@ -1874,6 +1898,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_service_loop.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\multiplayer_session_teardown.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp">

@@ -21,6 +21,7 @@
 #include "multiplayer_foundation.h"
 #include "multiplayer_join_flow.h"
 #include "native_audio_observability.h"
+#include "native_close_url_patch.h"
 #include "native_d3d9_lifetime_guard.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
@@ -168,6 +169,7 @@ void ShutdownPartialRuntime() {
     ShutdownLuaCameraRuntime();
     ShutdownDebugUiOverlayConfig();
     ShutdownGameplaySeams();
+    ShutdownNativeCloseUrlPatch();
     ShutdownBinaryLayout();
 }
 
@@ -278,6 +280,24 @@ void Initialize(HMODULE module_handle) {
             startup_status.binary_layout_loaded = false;
             Log("Binary layout failed to load. " + GetBinaryLayoutLoadError());
             Log("Config-driven address resolution and UI seam discovery are unavailable.");
+        }
+
+        {
+            std::string close_url_patch_error;
+            if (!InitializeNativeCloseUrlPatch(
+                    &close_url_patch_error)) {
+                const auto message =
+                    close_url_patch_error.empty()
+                    ? std::string(
+                        "Native close URL patch failed to initialize.")
+                    : close_url_patch_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "close-url-patch-failed",
+                    message);
+                return;
+            }
         }
 
         {
@@ -616,6 +636,9 @@ void Shutdown() {
     RunShutdownStep("lua camera runtime", &ShutdownLuaCameraRuntime);
     RunShutdownStep("debug ui overlay config", &ShutdownDebugUiOverlayConfig);
     RunShutdownStep("gameplay seams", &ShutdownGameplaySeams);
+    RunShutdownStep(
+        "native close URL patch",
+        &ShutdownNativeCloseUrlPatch);
     RunShutdownStep("binary layout", &ShutdownBinaryLayout);
     RunShutdownStep("logger flush", &FlushLogger);
     RunShutdownStep("crash handler", &ShutdownCrashHandler);

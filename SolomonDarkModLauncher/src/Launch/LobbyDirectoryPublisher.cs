@@ -14,13 +14,17 @@ internal sealed record LobbyPublisherConfiguration(
     LobbyHostOptions Host,
     IReadOnlyList<MultiplayerModDescriptor> ActiveMods);
 
+internal sealed record SessionTeardownRequest(
+    string LaunchToken,
+    string RequestedBy);
+
 internal static class LobbyDirectoryPublisher
 {
     public const string InternalCommand = "__publish-lobby";
 
     private const string SecretEnvironmentVariable = "SDMOD_LOBBY_DIRECTORY_SECRET";
     private const string SecretHeader = "X-SDR-Lobby-Secret";
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -156,19 +160,51 @@ internal static class LobbyDirectoryPublisher
 
         ulong announcedLobbyId = 0;
         var hubObserved = false;
+        var teardownRequested = false;
+        var nextDelistAttemptUtc = DateTime.MinValue;
         var nextHeartbeatUtc = DateTime.MinValue;
         try
         {
             using var gameProcess = Process.GetProcessById(configuration.GameProcessId);
             while (!gameProcess.HasExited)
             {
+                teardownRequested = teardownRequested ||
+                    HasValidTeardownRequest(configuration);
+                if (teardownRequested &&
+                    DateTime.UtcNow >= nextDelistAttemptUtc)
+                {
+                    nextDelistAttemptUtc =
+                        DateTime.UtcNow + TimeSpan.FromMilliseconds(250);
+                    if (announcedLobbyId == 0 ||
+                        await TryDelistAsync(
+                            client,
+                            secret!,
+                            announcedLobbyId))
+                    {
+                        WriteTeardownCompletion(
+                            configuration,
+                            announcedLobbyId,
+                            delisted: true,
+                            error: null);
+                        announcedLobbyId = 0;
+                        AppendLog(
+                            logPath,
+                            "Canonical session teardown stopped heartbeats and delisted the website lobby.");
+                        return 0;
+                    }
+                    AppendLog(
+                        logPath,
+                        "Canonical session teardown could not delist the website lobby yet; retrying.");
+                }
+
                 var status = MultiplayerSessionStatusMonitor.TryRead(
                     configuration.StageRootPath,
                     configuration.LaunchToken);
                 hubObserved = hubObserved ||
                     status?.SessionState == "in-hub";
 
-                if (hubObserved &&
+                if (!teardownRequested &&
+                    hubObserved &&
                     DateTime.UtcNow >= nextHeartbeatUtc &&
                     IsPublishableHostStatus(configuration.Host, status))
                 {
@@ -212,7 +248,20 @@ internal static class LobbyDirectoryPublisher
         {
             if (announcedLobbyId != 0)
             {
-                await TryDelistAsync(client, secret!, announcedLobbyId);
+                var delisted = await TryDelistAsync(
+                    client,
+                    secret!,
+                    announcedLobbyId);
+                if (teardownRequested)
+                {
+                    WriteTeardownCompletion(
+                        configuration,
+                        announcedLobbyId,
+                        delisted,
+                        delisted
+                            ? null
+                            : "The website did not acknowledge the lobby delist.");
+                }
             }
         }
 
@@ -310,7 +359,7 @@ internal static class LobbyDirectoryPublisher
         }
     }
 
-    private static async Task TryDelistAsync(
+    private static async Task<bool> TryDelistAsync(
         HttpClient client,
         string secret,
         ulong lobbyId)
@@ -322,14 +371,109 @@ internal static class LobbyDirectoryPublisher
                 $"api/lobbies/{lobbyId}");
             request.Headers.Add(SecretHeader, secret);
             using var response = await client.SendAsync(request);
+            return response.IsSuccessStatusCode ||
+                response.StatusCode == System.Net.HttpStatusCode.NotFound;
         }
         catch (HttpRequestException)
         {
+            return false;
         }
         catch (TaskCanceledException)
         {
+            return false;
         }
     }
+
+    private static bool HasValidTeardownRequest(
+        LobbyPublisherConfiguration configuration)
+    {
+        var requestPath = GetTeardownSignalPath(
+            configuration,
+            ".request.json");
+        try
+        {
+            if (!File.Exists(requestPath))
+            {
+                return false;
+            }
+            var request = JsonSerializer.Deserialize<SessionTeardownRequest>(
+                File.ReadAllText(requestPath),
+                JsonOptions);
+            return request is not null &&
+                string.Equals(
+                    request.LaunchToken,
+                    configuration.LaunchToken,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    request.RequestedBy,
+                    "loader",
+                    StringComparison.Ordinal);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static void WriteTeardownCompletion(
+        LobbyPublisherConfiguration configuration,
+        ulong lobbyId,
+        bool delisted,
+        string? error)
+    {
+        var completionPath = GetTeardownSignalPath(
+            configuration,
+            ".complete.json");
+        var temporaryPath = GetTeardownSignalPath(
+            configuration,
+            ".complete.tmp");
+        var requestPath = GetTeardownSignalPath(
+            configuration,
+            ".request.json");
+        try
+        {
+            File.WriteAllText(
+                temporaryPath,
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        launchToken = configuration.LaunchToken,
+                        lobbyId,
+                        delisted,
+                        error
+                    },
+                    JsonOptions));
+            File.Move(
+                temporaryPath,
+                completionPath,
+                overwrite: true);
+            TryDelete(requestPath);
+        }
+        catch (IOException)
+        {
+            TryDelete(temporaryPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TryDelete(temporaryPath);
+        }
+    }
+
+    private static string GetTeardownSignalPath(
+        LobbyPublisherConfiguration configuration,
+        string suffix) =>
+        Path.Combine(
+            configuration.StageRootPath,
+            ".sdmod",
+            $"session-teardown-{configuration.LaunchToken}{suffix}");
 
     private static string ResolveLauncherExecutable()
     {

@@ -278,6 +278,9 @@ bool& LuaEngineInitializedFlag();
 std::filesystem::path& LuaRuntimeDirectoryStorage();
 RuntimeBootstrap& LuaRuntimeBootstrapStorage();
 std::vector<std::unique_ptr<LoadedLuaMod>>& LoadedLuaModsStorage();
+lua_State*& LuaExecControlStateStorage();
+bool InitializeLuaExecControlState(std::string* error_message);
+void ShutdownLuaExecControlState();
 
 std::vector<std::string> BuildLuaCapabilitySet();
 bool SupportsLuaModRequiredCapabilities(
@@ -314,6 +317,8 @@ void ClearLuaSettingsCallbacks(LoadedLuaMod* mod);
 void PollLuaSettingsReplicationChanges();
 void InstallLuaSettingsPrivilegedBindings(lua_State* state);
 void RemoveLuaSettingsPrivilegedBindings(lua_State* state);
+void InstallLuaSessionPrivilegedBindings(lua_State* state);
+void RemoveLuaSessionPrivilegedBindings(lua_State* state);
 void SetLuaSettingsPrivilegedExecState(lua_State* state);
 lua_State* GetLuaSettingsPrivilegedExecState();
 void PushLuaSettingValue(

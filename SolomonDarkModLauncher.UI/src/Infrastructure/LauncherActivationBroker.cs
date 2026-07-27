@@ -6,14 +6,22 @@ internal sealed class LauncherActivationBroker : IDisposable
 {
     private const string MutexName = @"Local\SolomonDarkMultiplayerBeta";
     private const string PipeName = "SolomonDarkMultiplayerBeta.Activation";
+    private readonly string pipeName_;
     private readonly Mutex mutex_;
     private readonly bool ownsMutex_;
     private readonly CancellationTokenSource cancellation_ = new();
     private Task? listener_;
 
-    public LauncherActivationBroker()
+    public LauncherActivationBroker(string testScope = "")
     {
-        mutex_ = new Mutex(initiallyOwned: true, MutexName, out ownsMutex_);
+        var suffix = string.IsNullOrEmpty(testScope)
+            ? string.Empty
+            : "." + testScope;
+        pipeName_ = PipeName + suffix;
+        mutex_ = new Mutex(
+            initiallyOwned: true,
+            MutexName + suffix,
+            out ownsMutex_);
     }
 
     public bool IsPrimary => ownsMutex_;
@@ -26,7 +34,10 @@ internal sealed class LauncherActivationBroker : IDisposable
                 "Only the primary launcher can start the activation listener.");
         }
 
-        listener_ = ListenAsync(activate, cancellation_.Token);
+        listener_ = ListenAsync(
+            pipeName_,
+            activate,
+            cancellation_.Token);
     }
 
     public bool ForwardActivation(string argument)
@@ -41,7 +52,7 @@ internal sealed class LauncherActivationBroker : IDisposable
         {
             using var client = new NamedPipeClientStream(
                 ".",
-                PipeName,
+                pipeName_,
                 PipeDirection.Out,
                 PipeOptions.Asynchronous);
             client.Connect(5000);
@@ -60,6 +71,7 @@ internal sealed class LauncherActivationBroker : IDisposable
     }
 
     private static async Task ListenAsync(
+        string pipeName,
         Action<string> activate,
         CancellationToken cancellationToken)
     {
@@ -68,7 +80,7 @@ internal sealed class LauncherActivationBroker : IDisposable
             try
             {
                 await using var server = new NamedPipeServerStream(
-                    PipeName,
+                    pipeName,
                     PipeDirection.In,
                     1,
                     PipeTransmissionMode.Byte,

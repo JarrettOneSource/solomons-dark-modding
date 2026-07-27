@@ -322,6 +322,7 @@ void PruneStaleLocalUdpPeers(std::uint64_t now_ms) {
                 g_client_host_run_authorization_mutex);
             g_client_host_run_authorization =
                 ClientHostRunAuthorization{};
+            NotifySessionAuthorityLost();
         }
         Log(
             "Multiplayer local UDP peer timed out. endpoint=" +

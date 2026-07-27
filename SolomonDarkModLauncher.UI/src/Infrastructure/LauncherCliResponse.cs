@@ -11,9 +11,27 @@ internal sealed class LauncherCliResponse
     public LauncherCliModUpdate? ModUpdate { get; set; }
     public LauncherCliLobbyModSync? LobbyModSync { get; set; }
     public LauncherCliJoinPreview? JoinPreview { get; set; }
+    public LauncherCliModInstallPreview? ModInstallPreview { get; set; }
+    public LauncherCliModInstall? ModInstall { get; set; }
     public LauncherCliStage? Stage { get; set; }
     public LauncherCliLaunch? Launch { get; set; }
     public LauncherCliModStateChange? ModStateChange { get; set; }
+}
+
+internal sealed class LauncherCliModInstallPreview
+{
+    public string Slug { get; set; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string Disposition { get; set; } = string.Empty;
+    public string? InstalledVersion { get; set; }
+}
+
+internal sealed class LauncherCliModInstall
+{
+    public bool Changed { get; set; }
 }
 
 internal sealed class LauncherCliModUpdate

@@ -7,6 +7,9 @@ namespace SolomonDarkModLauncher.UI.Views;
 
 public partial class MainWindow : Window
 {
+    private bool closePrepared_;
+    private bool closePreparationRunning_;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -67,15 +70,33 @@ public partial class MainWindow : Window
         Close();
     }
 
-    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    private async void MainWindow_Closing(
+        object? sender,
+        CancelEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel viewModel ||
-            viewModel.CanCloseLauncher())
+        if (closePrepared_ ||
+            DataContext is not MainWindowViewModel viewModel)
         {
             return;
         }
         e.Cancel = true;
-        WindowState = WindowState.Minimized;
+        if (closePreparationRunning_)
+        {
+            return;
+        }
+
+        closePreparationRunning_ = true;
+        IsEnabled = false;
+        try
+        {
+            await viewModel.PrepareForLauncherCloseAsync();
+        }
+        finally
+        {
+            closePrepared_ = true;
+            closePreparationRunning_ = false;
+            Close();
+        }
     }
 
     private void HostSetupCreate_Click(object sender, RoutedEventArgs e)

@@ -85,9 +85,16 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         "Send Logs uploads launcher and loader logs to private website storage.";
     private bool isModDownloadPromptOpen_;
     private string modDownloadPromptText_ = string.Empty;
+    private string modDownloadPromptTitle_ = "The host has mods";
+    private string modDownloadPromptNote_ =
+        "Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session.";
+    private string modDownloadConfirmText_ = "Yes";
+    private string modDownloadDeclineText_ = "No";
     private string? consentedJoinStatusText_;
+    private LauncherInstallModActivation? pendingWebsiteModInstall_;
     private IReadOnlyList<string>? pendingLobbyMods_;
     private bool isJoiningLobby_;
+    private bool launcherCloseStarted_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -360,6 +367,30 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         get => modDownloadPromptText_;
         private set => SetProperty(ref modDownloadPromptText_, value);
+    }
+
+    public string ModDownloadPromptTitle
+    {
+        get => modDownloadPromptTitle_;
+        private set => SetProperty(ref modDownloadPromptTitle_, value);
+    }
+
+    public string ModDownloadPromptNote
+    {
+        get => modDownloadPromptNote_;
+        private set => SetProperty(ref modDownloadPromptNote_, value);
+    }
+
+    public string ModDownloadConfirmText
+    {
+        get => modDownloadConfirmText_;
+        private set => SetProperty(ref modDownloadConfirmText_, value);
+    }
+
+    public string ModDownloadDeclineText
+    {
+        get => modDownloadDeclineText_;
+        private set => SetProperty(ref modDownloadDeclineText_, value);
     }
 
     public bool IsSendingLogs
@@ -1117,6 +1148,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        LauncherCliMultiplayerSession? finalSessionStatus = null;
+        if (!string.IsNullOrWhiteSpace(response.Stage?.StageRoot) &&
+            !string.IsNullOrWhiteSpace(
+                response.Launch?.LaunchToken))
+        {
+            finalSessionStatus =
+                await LauncherMultiplayerSessionStatusReader.ReadAsync(
+                    response.Stage.StageRoot,
+                    response.Launch.LaunchToken,
+                    cancellationToken);
+        }
+
         string? saveCompletionError = null;
         var saveSession = activeSaveSession_;
         activeSaveSession_ = null;
@@ -1157,6 +1200,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(CanLeaveLobby));
             UpdateModSettingsInstance();
             ClearSteamSessionStatus();
+            if (finalSessionStatus?.StatusText is
+                "The host closed the lobby." or
+                "The multiplayer host connection was lost.")
+            {
+                StatusText = finalSessionStatus.StatusText;
+            }
             UpdateActiveSaveSummary();
             RaiseCommandStates();
             StartSteamInviteListener();
@@ -1317,15 +1366,149 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             : "Empty local save";
     }
 
-    public bool CanCloseLauncher()
+    public async Task PrepareForLauncherCloseAsync()
     {
+        if (launcherCloseStarted_)
+        {
+            return;
+        }
+        launcherCloseStarted_ = true;
         if (!HasActiveGame)
         {
+            return;
+        }
+
+        var processId = activeGameProcessId_;
+        var expectedExecutablePath =
+            lastResponse_?.Stage?.StageExecutablePath;
+        if (!TryOpenOwnedStagedProcess(
+                processId,
+                expectedExecutablePath,
+                out var process))
+        {
+            return;
+        }
+
+        using (process)
+        using (var timeout = new CancellationTokenSource(
+                   TimeSpan.FromMilliseconds(4000)))
+        {
+            StatusText = IsInLobby
+                ? liveSessionIsHost_
+                    ? "Closing the lobby before the launcher exits…"
+                    : "Leaving the lobby before the launcher exits…"
+                : "Closing the staged game before the launcher exits…";
+
+            if (IsInLobby &&
+                !string.IsNullOrWhiteSpace(modSettingsPipeName_))
+            {
+                try
+                {
+                    var result = await liveSessionClient_.LeaveAsync(
+                        modSettingsPipeName_,
+                        timeout.Token);
+                    if (!result.Ok)
+                    {
+                        SetError(
+                            string.IsNullOrWhiteSpace(result.Error)
+                                ? "The staged game did not accept its shutdown request."
+                                : $"Session shutdown failed: {result.Error}");
+                    }
+                }
+                catch (OperationCanceledException)
+                    when (timeout.IsCancellationRequested)
+                {
+                }
+            }
+
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+                when (timeout.IsCancellationRequested)
+            {
+            }
+
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.CloseMainWindow();
+                }
+                catch (InvalidOperationException)
+                {
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                }
+                try
+                {
+                    using var gracefulFallback =
+                        new CancellationTokenSource(
+                            TimeSpan.FromMilliseconds(500));
+                    await process.WaitForExitAsync(
+                        gracefulFallback.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: false);
+                    process.WaitForExit(100);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                }
+            }
+        }
+    }
+
+    private static bool TryOpenOwnedStagedProcess(
+        int processId,
+        string? expectedExecutablePath,
+        out Process process)
+    {
+        process = null!;
+        if (processId <= 0 ||
+            string.IsNullOrWhiteSpace(expectedExecutablePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var candidate = Process.GetProcessById(processId);
+            var actualPath = candidate.MainModule?.FileName;
+            if (candidate.HasExited ||
+                string.IsNullOrWhiteSpace(actualPath) ||
+                !string.Equals(
+                    Path.GetFullPath(actualPath),
+                    Path.GetFullPath(expectedExecutablePath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                candidate.Dispose();
+                return false;
+            }
+            process = candidate;
             return true;
         }
-        StatusText =
-            "The launcher stays open while the game runs so local and Proton saves can finish safely.";
-        return false;
+        catch (Exception exception) when (
+            exception is ArgumentException or
+            InvalidOperationException or
+            System.ComponentModel.Win32Exception or
+            IOException or
+            UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private void StartSteamSessionMonitoring(
@@ -1404,6 +1587,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             !string.IsNullOrWhiteSpace(status.ErrorText))
         {
             SetError($"Steam error: {status.ErrorText}");
+        }
+        if (status.StatusText is
+            "The host closed the lobby." or
+            "The multiplayer host connection was lost.")
+        {
+            StatusText = status.StatusText;
         }
     }
 
@@ -1617,6 +1806,97 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         TryStartPendingLobbyJoin();
     }
 
+    public void QueueWebsiteModInstall(LauncherInstallModActivation activation)
+    {
+        if (IsBusy ||
+            IsModDownloadPromptOpen ||
+            IsCrashPromptOpen ||
+            IsLauncherUpdatePromptOpen)
+        {
+            SetError(
+                $"The launcher is busy and cannot install '{activation.Slug}' right now. Try the link again when the current action finishes.");
+            StatusText = "Mod install link was not started.";
+            return;
+        }
+
+        _ = PreviewWebsiteModInstallAsync(activation);
+    }
+
+    private async Task PreviewWebsiteModInstallAsync(
+        LauncherInstallModActivation activation)
+    {
+        pendingWebsiteModInstall_ = null;
+        DirectoryUrl = activation.DirectoryBaseUrl;
+        var succeeded = await ExecuteUiCommandAsync(
+            LauncherUiCommandMode.InstallModPreview,
+            $"Checking mod '{activation.Slug}'…",
+            activation.Slug);
+        var preview = succeeded
+            ? lastResponse_?.ModInstallPreview
+            : null;
+        if (preview is null)
+        {
+            return;
+        }
+
+        if (preview.Disposition is "current" or "newerInstalled")
+        {
+            StatusText = preview.Disposition == "current"
+                ? $"{preview.Name} {preview.Version} is already installed and current."
+                : $"{preview.Name} is already installed at newer version {preview.InstalledVersion}.";
+            return;
+        }
+
+        var sourceHost = new Uri(activation.DirectoryBaseUrl).Authority;
+        ModDownloadItems.Clear();
+        var detail = $"{preview.Name} {preview.Version} — {FormatSize(preview.FileSizeBytes)}";
+        if (!string.IsNullOrWhiteSpace(preview.InstalledVersion))
+        {
+            detail += $" (updates {preview.InstalledVersion})";
+        }
+        ModDownloadItems.Add(detail);
+        ModDownloadPromptTitle = preview.Disposition == "update"
+            ? $"Update {preview.Name}"
+            : $"Install {preview.Name}";
+        ModDownloadPromptText = preview.Disposition == "update"
+            ? $"Update {preview.Name} to {preview.Version} from {sourceHost}?"
+            : $"Install {preview.Name} {preview.Version} from {sourceHost}?";
+        ModDownloadPromptNote =
+            "The launcher will download the package from this source, verify its manifest and file hashes, and then place it in the Mods tab.";
+        ModDownloadConfirmText = preview.Disposition == "update"
+            ? "Update"
+            : "Install";
+        ModDownloadDeclineText = "Cancel";
+        pendingWebsiteModInstall_ = activation;
+        StatusText = "Waiting for your mod install choice.";
+        IsModDownloadPromptOpen = true;
+    }
+
+    private async Task InstallWebsiteModAsync(
+        LauncherInstallModActivation activation)
+    {
+        var succeeded = await ExecuteUiCommandAsync(
+            LauncherUiCommandMode.InstallMod,
+            $"Installing mod '{activation.Slug}'…",
+            activation.Slug);
+        if (!succeeded)
+        {
+            return;
+        }
+
+        var preview = lastResponse_?.ModInstallPreview;
+        var result = lastResponse_?.ModInstall;
+        if (preview is null || result is null)
+        {
+            SetError("The launcher did not return a mod installation result.");
+            StatusText = "The mod install result was incomplete.";
+            return;
+        }
+        StatusText = result.Changed
+            ? $"{preview.Name} {preview.Version} is installed and available in the Mods tab."
+            : $"{preview.Name} {preview.Version} is already installed and current.";
+    }
+
     public void OfferLauncherUpdate(string version)
     {
         AvailableLauncherVersion = $"v{version}";
@@ -1680,6 +1960,15 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ExecuteLobbyPrimaryAction()
     {
+        if (IsLocalUdpDevelopmentLaunch() &&
+            !lobbyLaunchState_.JoinedLobbyId.HasValue)
+        {
+            _ = ExecuteUiCommandAsync(
+                LauncherUiCommandMode.LaunchSteamJoin,
+                $"Launching local game for lobby {LobbyId}…");
+            return;
+        }
+
         if (lobbyLaunchState_.PrimaryAction == LobbyPrimaryAction.LaunchGame)
         {
             _ = LaunchJoinedLobbyAsync();
@@ -1688,6 +1977,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         JoinLobbyDirect();
     }
+
+    private static bool IsLocalUdpDevelopmentLaunch() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable(
+                "SDMOD_MULTIPLAYER_TRANSPORT"),
+            "local_udp",
+            StringComparison.OrdinalIgnoreCase);
 
     private void JoinLobbyDirect()
     {
@@ -1795,8 +2091,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 ModDownloadItems.Add(line);
             }
 
+            ModDownloadPromptTitle = "The host has mods";
             ModDownloadPromptText =
                 "The host has mods enabled, would you like to download them to join?";
+            ModDownloadPromptNote =
+                "Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session.";
+            ModDownloadConfirmText = "Yes";
+            ModDownloadDeclineText = "No";
+            pendingWebsiteModInstall_ = null;
             consentedJoinStatusText_ = joinStatusText;
             StatusText = "Waiting for your mod download choice.";
             IsModDownloadPromptOpen = true;
@@ -1813,6 +2115,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (!IsModDownloadPromptOpen)
         {
+            return;
+        }
+
+        if (pendingWebsiteModInstall_ is { } activation)
+        {
+            pendingWebsiteModInstall_ = null;
+            IsModDownloadPromptOpen = false;
+            _ = InstallWebsiteModAsync(activation);
             return;
         }
 
@@ -2006,6 +2316,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (!IsModDownloadPromptOpen)
         {
+            return;
+        }
+
+        if (pendingWebsiteModInstall_ is not null)
+        {
+            pendingWebsiteModInstall_ = null;
+            IsModDownloadPromptOpen = false;
+            StatusText = "Mod installation canceled.";
             return;
         }
 

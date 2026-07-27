@@ -15,6 +15,9 @@ internal static class LauncherUiCommandRouting
             LauncherUiCommandMode.PrepareSteamJoin => "stage",
             LauncherUiCommandMode.LaunchSteamJoin => "launch",
             LauncherUiCommandMode.JoinPreview => "join-preview",
+            LauncherUiCommandMode.InstallModPreview =>
+                "install-mod-preview",
+            LauncherUiCommandMode.InstallMod => "install-mod",
             LauncherUiCommandMode.Stage => "stage",
             LauncherUiCommandMode.ListMods => "list-mods",
             LauncherUiCommandMode.EnableMod => "enable-mod",

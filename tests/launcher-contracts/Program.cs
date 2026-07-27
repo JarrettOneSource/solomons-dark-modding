@@ -44,6 +44,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
     ("automatic website sync with offline fallback", TestAutomaticWebsiteSyncAsync),
     ("website join URI", TestWebsiteJoinUriAsync),
+    ("website install-mod URI", TestWebsiteInstallModUriAsync),
+    ("website install-mod UI command ordering", TestWebsiteInstallModUiCommandOrderingAsync),
+    ("scoped activation isolation", TestScopedActivationIsolationAsync),
+    ("website install-mod pipeline", TestWebsiteInstallModPipelineAsync),
     ("clean install enables zero mods", TestCleanInstallEnablesZeroModsAsync),
     ("crash capture archive", TestCrashCaptureArchiveAsync),
     ("isolated local save catalog", TestIsolatedLocalSaveCatalogAsync),
@@ -3346,6 +3350,240 @@ static Task TestWebsiteJoinUriAsync()
     return Task.CompletedTask;
 }
 
+static Task TestWebsiteInstallModUriAsync()
+{
+    const string valid =
+        "solomondarkrevived://install-mod/arcane-bots?directory=http%3A%2F%2F127.0.0.1%3A5173";
+    Require(
+        LauncherJoinUri.TryParseInstallMod(valid, out var activation),
+        "valid install-mod URI was rejected");
+    Require(
+        activation.Slug == "arcane-bots" &&
+        activation.DirectoryBaseUrl == "http://127.0.0.1:5173",
+        "install-mod URI fields changed");
+
+    var invalid = new[]
+    {
+        "solomondarkrevived://install-mod/arcane-bots",
+        "solomondarkrevived://install-mod/Arcane?directory=https%3A%2F%2Fmods.example.test",
+        "solomondarkrevived://install-mod/arcane--bots?directory=https%3A%2F%2Fmods.example.test",
+        "solomondarkrevived://install-mod/arcane/bots?directory=https%3A%2F%2Fmods.example.test",
+        "solomondarkrevived://install-mod/arcane-bots?directory=http%3A%2F%2Fmods.example.test",
+        "solomondarkrevived://install-mod/arcane-bots?directory=https%3A%2F%2Fuser%40mods.example.test",
+        "solomondarkrevived://install-mod/arcane-bots?directory=https%3A%2F%2Fmods.example.test&extra=x",
+        "solomondarkrevived://install-mod/arcane-bots?directory=https%3A%2F%2Fmods.example.test%23fragment",
+    };
+    foreach (var value in invalid)
+    {
+        Require(
+            !LauncherJoinUri.TryParseInstallMod(value, out _),
+            $"unsafe install-mod URI was accepted: {value}");
+    }
+
+    var command = LauncherCommandParser.Parse(
+        [
+            "install-mod",
+            "arcane-bots",
+            "--directory-url",
+            "http://127.0.0.1:5173"
+        ]);
+    Require(
+        command.Mode == LauncherMode.InstallMod &&
+        command.TargetModId == "arcane-bots" &&
+        command.LobbyHost.DirectoryBaseUrl == "http://127.0.0.1:5173",
+        "install-mod CLI routing changed");
+    return Task.CompletedTask;
+}
+
+static Task TestWebsiteInstallModUiCommandOrderingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    var previous = Environment.GetEnvironmentVariable(
+        LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable);
+    try
+    {
+        Environment.SetEnvironmentVariable(
+            LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable,
+            root);
+        var client = new LauncherUiCommandClient();
+        var preview = client.BuildCommandPreview(
+            LauncherUiCommandMode.InstallModPreview,
+            "arcane-bots");
+        var install = client.BuildCommandPreview(
+            LauncherUiCommandMode.InstallMod,
+            "arcane-bots");
+        Require(
+            preview.StartsWith(
+                "SolomonDarkModLauncher.exe install-mod-preview arcane-bots --json --progress-json",
+                StringComparison.Ordinal) &&
+            install.StartsWith(
+                "SolomonDarkModLauncher.exe install-mod arcane-bots --json --progress-json",
+                StringComparison.Ordinal),
+            "website install-mod UI put JSON flags between the verb and its slug");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(
+            LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable,
+            previous);
+        Directory.Delete(root, recursive: true);
+    }
+    return Task.CompletedTask;
+}
+
+static Task TestScopedActivationIsolationAsync()
+{
+    Require(
+        LauncherStartupArguments.TryParse(
+            ["--test-activation-scope=qol-browser"],
+            out var primary) &&
+        primary.IsTestScoped &&
+        primary.TestScope == "qol-browser" &&
+        primary.ActivationArgument.Length == 0,
+        "scoped primary launcher arguments were rejected");
+    const string activation =
+        "solomondarkrevived://install-mod/arcane-bots" +
+        "?directory=http%3A%2F%2F127.0.0.1%3A5173";
+    Require(
+        LauncherStartupArguments.TryParse(
+            [
+                "--test-activation-scope=qol-browser",
+                activation
+            ],
+            out var secondary) &&
+        secondary.ActivationArgument == activation &&
+        secondary.ProtocolCommandScopeArgument ==
+            "--test-activation-scope=qol-browser",
+        "scoped browser activation did not retain its URI");
+    Require(
+        !LauncherStartupArguments.TryParse(
+            ["--test-activation-scope=QOL"],
+            out _) &&
+        !LauncherStartupArguments.TryParse(
+            [
+                "--test-activation-scope=qol",
+                activation,
+                "extra"
+            ],
+            out _),
+        "unsafe scoped activation arguments were accepted");
+
+    var previous = Environment.GetEnvironmentVariable(
+        LauncherPathPolicy
+            .TestApplicationDataRootEnvironmentVariable);
+    try
+    {
+        primary.ApplyTestIsolation();
+        var isolatedRoot = Environment.GetEnvironmentVariable(
+            LauncherPathPolicy
+                .TestApplicationDataRootEnvironmentVariable);
+        Require(
+            !string.IsNullOrWhiteSpace(isolatedRoot) &&
+            isolatedRoot.Contains(
+                Path.Combine(
+                    ".sdmod-test-data",
+                    "qol-browser"),
+                StringComparison.OrdinalIgnoreCase),
+            "scoped launcher did not isolate application data");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(
+            LauncherPathPolicy
+                .TestApplicationDataRootEnvironmentVariable,
+            previous);
+    }
+    return Task.CompletedTask;
+}
+
+static async Task TestWebsiteInstallModPipelineAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modsRoot = Path.Combine(root, "mods");
+        var cacheRoot = Path.Combine(root, "cache");
+        var handler = new InstallModDirectoryHandler();
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://mods.example.test/community/")
+        };
+
+        var empty = ModCatalog.CreateExact([]);
+        var preview = await WebsiteModInstaller.PreviewAsync(
+            empty,
+            InstallModDirectoryHandler.Slug,
+            client);
+        Require(
+            preview.Disposition == WebsiteModInstallDisposition.Install &&
+            preview.Name == InstallModDirectoryHandler.Name &&
+            preview.Version == "1.0.0",
+            "new website mod was not offered as an install");
+
+        var progress = new RecordingProgress();
+        var installed = await WebsiteModInstaller.InstallAsync(
+            empty,
+            modsRoot,
+            cacheRoot,
+            InstallModDirectoryHandler.Slug,
+            client,
+            progress);
+        Require(installed.Changed, "new website mod was not installed");
+        var installedRoot = Path.Combine(
+            modsRoot,
+            InstallModDirectoryHandler.Id);
+        Require(
+            ModDiscovery.DiscoverRoot(installedRoot).Manifest.Version == "1.0.0",
+            "installed website mod did not appear in the managed Mods directory");
+        Require(
+            progress.Values.Any(value =>
+                value.Phase == UpdateProgressPhase.Verifying) &&
+            progress.Values.Last().Phase == UpdateProgressPhase.Completed,
+            "install-mod did not use the verified package pipeline");
+
+        var v1Catalog = ModCatalog.CreateExact(
+            [ModDiscovery.DiscoverRoot(installedRoot)]);
+        var current = await WebsiteModInstaller.PreviewAsync(
+            v1Catalog,
+            InstallModDirectoryHandler.Slug,
+            client);
+        Require(
+            current.Disposition == WebsiteModInstallDisposition.Current,
+            "current website mod was not recognized");
+
+        handler.Publish("1.1.0");
+        var update = await WebsiteModInstaller.PreviewAsync(
+            v1Catalog,
+            InstallModDirectoryHandler.Slug,
+            client);
+        Require(
+            update.Disposition == WebsiteModInstallDisposition.Update &&
+            update.InstalledVersion == "1.0.0",
+            "older website mod was not offered an update");
+        var updated = await WebsiteModInstaller.InstallAsync(
+            v1Catalog,
+            modsRoot,
+            cacheRoot,
+            InstallModDirectoryHandler.Slug,
+            client);
+        Require(
+            updated.Changed &&
+            ModDiscovery.DiscoverRoot(installedRoot).Manifest.Version == "1.1.0",
+            "install-mod update did not atomically replace the older edition");
+
+        await RequireThrowsAsync<InvalidOperationException>(
+            () => WebsiteModInstaller.PreviewAsync(
+                ModCatalog.CreateExact([]),
+                "unknown-mod",
+                client),
+            "unknown website mod did not fail explicitly");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static Task TestLauncherReleaseSelectionAsync()
 {
     Require(
@@ -3742,6 +3980,22 @@ static void RequireThrows<TException>(Action action, string message)
     throw new InvalidOperationException(message);
 }
 
+static async Task RequireThrowsAsync<TException>(
+    Func<Task> action,
+    string message)
+    where TException : Exception
+{
+    try
+    {
+        await action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
+}
+
 file sealed class RecordingProgress : IProgress<UpdateProgress>
 {
     public List<UpdateProgress> Values { get; } = [];
@@ -3780,6 +4034,128 @@ file sealed class PackageHandler(byte[] package) : HttpMessageHandler
         {
             Content = new ByteArrayContent(package)
         });
+    }
+}
+
+file sealed class InstallModDirectoryHandler : HttpMessageHandler
+{
+    public const string Slug = "arcane-bots";
+    public const string Id = "tests.install-link";
+    public const string Name = "Install Link Test";
+
+    private byte[] package_ = [];
+    private string version_ = string.Empty;
+    private string packageSha256_ = string.Empty;
+    private string contentSha256_ = string.Empty;
+    private int versionId_;
+
+    public InstallModDirectoryHandler()
+    {
+        Publish("1.0.0");
+    }
+
+    public void Publish(string version)
+    {
+        version_ = version;
+        versionId_++;
+        var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                $$"""
+                {
+                  "id": "{{Id}}",
+                  "name": "{{Name}}",
+                  "version": "{{version}}",
+                  "runtime": {
+                    "apiVersion": "0.2.0",
+                    "entryScript": "scripts/main.lua",
+                    "requiredCapabilities": [],
+                    "optionalCapabilities": []
+                  }
+                }
+                """),
+            ["scripts/main.lua"] = Encoding.UTF8.GetBytes(
+                $"-- {version}\nreturn true\n")
+        };
+        package_ = BuildZip(entries);
+        packageSha256_ = Convert.ToHexString(
+            SHA256.HashData(package_)).ToLowerInvariant();
+        contentSha256_ = HashContent(entries);
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var path = request.RequestUri?.AbsolutePath;
+        if (request.Method == HttpMethod.Get &&
+            path == $"/community/api/mods/{Slug}")
+        {
+            return Task.FromResult(Json(
+                $$"""
+                {"slug":"{{Slug}}","name":"{{Name}}","launcherModId":"{{Id}}","versions":[{"id":{{versionId_}},"manifestVersion":"{{version_}}","packageSha256":"{{packageSha256_}}","contentSha256":"{{contentSha256_}}","fileSize":{{package_.Length}}}]}
+                """));
+        }
+        if (request.Method == HttpMethod.Get &&
+            path ==
+            $"/community/api/mods/{Slug}/versions/{versionId_}/download")
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(package_)
+            });
+        }
+        return Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private static HttpResponseMessage Json(string value) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                value,
+                Encoding.UTF8,
+                "application/json")
+        };
+
+    private static byte[] BuildZip(
+        IReadOnlyDictionary<string, byte[]> entries)
+    {
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(
+                   buffer,
+                   ZipArchiveMode.Create,
+                   leaveOpen: true))
+        {
+            foreach (var pair in entries)
+            {
+                var entry = archive.CreateEntry(
+                    pair.Key,
+                    CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                stream.Write(pair.Value);
+            }
+        }
+        return buffer.ToArray();
+    }
+
+    private static string HashContent(
+        IReadOnlyDictionary<string, byte[]> entries)
+    {
+        using var aggregate =
+            IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var pair in entries.OrderBy(
+                     pair => pair.Key,
+                     StringComparer.Ordinal))
+        {
+            var fileHash = Convert.ToHexString(
+                SHA256.HashData(pair.Value)).ToLowerInvariant();
+            aggregate.AppendData(
+                Encoding.UTF8.GetBytes(
+                    $"{pair.Key}\0{fileHash}\n"));
+        }
+        return Convert.ToHexString(
+            aggregate.GetHashAndReset()).ToLowerInvariant();
     }
 }
 

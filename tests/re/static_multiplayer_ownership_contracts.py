@@ -415,7 +415,8 @@ def test_steam_pair_recovers_lobby_membership_and_requires_stable_readiness() ->
         "if (current.find(g_session.local_steam_id) == current.end())",
         "if (!g_session.is_host)",
         "BeginClientLobbyRecovery(",
-        'SetError("Local Steam user is no longer a lobby member.", false);',
+        '"Local Steam host is no longer a lobby member; ending the "',
+        "NotifySessionAuthorityLost();",
     )
     for token in (
         "SteamEventKind::SteamServersDisconnected",

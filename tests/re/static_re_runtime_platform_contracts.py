@@ -1267,8 +1267,8 @@ def test_launcher_saves_are_isolated_link_gated_and_proton_persisted() -> str:
         (backup_text, "if (usesDirectoryMirror_)"),
         (backup_text, "SaveDirectoryMirror.Replace("),
         (backup_text, "await BackupCoreAsync(cancellationToken);"),
-        (main_window_text, "public bool CanCloseLauncher()"),
-        (main_window_text, "The launcher stays open while the game runs"),
+        (main_window_text, "public async Task PrepareForLauncherCloseAsync()"),
+        (main_window_text, "Closing the staged game before the launcher exits"),
     )
     missing = [token for text, token in required_pairs if token not in text]
     if missing:

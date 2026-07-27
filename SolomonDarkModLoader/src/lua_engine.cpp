@@ -210,30 +210,29 @@ bool EnsureSdGlobal(lua_State* state) {
     return has_registry_sd;
 }
 
-class ScopedSettingsPrivilegedBindings final {
+class ScopedPrivilegedBindings final {
 public:
-    ScopedSettingsPrivilegedBindings(
+    ScopedPrivilegedBindings(
         lua_State* state,
         bool active)
         : state_(state), active_(active) {
         if (active_) {
             SetLuaSettingsPrivilegedExecState(state_);
             InstallLuaSettingsPrivilegedBindings(state_);
+            InstallLuaSessionPrivilegedBindings(state_);
         }
     }
-
-    ~ScopedSettingsPrivilegedBindings() {
+    ~ScopedPrivilegedBindings() {
         if (active_) {
+            RemoveLuaSessionPrivilegedBindings(state_);
             RemoveLuaSettingsPrivilegedBindings(state_);
             SetLuaSettingsPrivilegedExecState(nullptr);
         }
     }
-
 private:
     lua_State* state_ = nullptr;
     bool active_ = false;
 };
-
 LuaExecResult ExecuteLuaCodeOnLockedState(
     lua_State* state,
     const std::string& code,
@@ -254,7 +253,7 @@ LuaExecResult ExecuteLuaCodeOnLockedState(
         lua_settop(state, stack_top_before);
         return response;
     }
-    ScopedSettingsPrivilegedBindings privileged_bindings(
+    ScopedPrivilegedBindings privileged_bindings(
         state,
         privileged);
 
@@ -533,7 +532,6 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
 void LogLuaMessage(const LoadedLuaMod& mod, const std::string& message) {
     Log("[lua][" + mod.descriptor.id + "] " + message);
 }
-
 }  // namespace detail
 
 bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_message) {
@@ -552,6 +550,9 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     runtime_directory = bootstrap.runtime_root / "lua";
     std::filesystem::create_directories(runtime_directory);
     loaded_mods.clear();
+    if (!detail::InitializeLuaExecControlState(error_message)) {
+        return false;
+    }
     ResetLuaContentRegistry();
     ResetLuaItemRuntime();
     ResetLuaModStateStore();
@@ -560,10 +561,12 @@ bool InitializeLuaEngine(const RuntimeBootstrap& bootstrap, std::string* error_m
     detail::ResetLuaEventFilterRegistrations();
     detail::ResetLuaHotReloadRuntime();
     if (!InitializeWaveIntelligence(bootstrap.stage_root, error_message)) {
+        detail::ShutdownLuaExecControlState();
         return false;
     }
     if (!InitializeLuaDrawRuntime(bootstrap.stage_root, error_message)) {
         ShutdownWaveIntelligence();
+        detail::ShutdownLuaExecControlState();
         return false;
     }
     InitializeLuaUiRuntime(error_message);
@@ -605,6 +608,7 @@ void ShutdownLuaEngine() {
         detail::CloseLuaStateForMod(it->get());
     }
     loaded_mods.clear();
+    detail::ShutdownLuaExecControlState();
     ResetLuaContentRegistry();
     ResetLuaItemRuntime();
     ResetLuaModStateStore();

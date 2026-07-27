@@ -1249,7 +1249,7 @@
                 <StackPanel>
                     <TextBlock FontSize="16"
                                FontWeight="SemiBold"
-                               Text="The host has mods" />
+                               Text="{Binding ModDownloadPromptTitle}" />
                     <TextBlock Margin="0,8,0,0"
                                FontSize="13"
                                Foreground="{StaticResource TextSecondaryBrush}"
@@ -1288,18 +1288,18 @@
                     <TextBlock Margin="0,10,0,0"
                                FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}"
-                               Text="Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session."
+                               Text="{Binding ModDownloadPromptNote}"
                                TextWrapping="Wrap" />
 
                     <StackPanel Margin="0,16,0,0"
                                 HorizontalAlignment="Right"
                                 Orientation="Horizontal">
-                        <Button Content="No"
+                        <Button Content="{Binding ModDownloadDeclineText}"
                                 Command="{Binding DeclineModDownloadCommand}"
                                 Margin="0"
                                 MinWidth="86"
                                 Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button Content="Yes"
+                        <Button Content="{Binding ModDownloadConfirmText}"
                                 Command="{Binding ConfirmModDownloadCommand}"
                                 Margin="10,0,0,0"
                                 MinWidth="86"

@@ -34,6 +34,9 @@ internal static class StagedGameLauncher
         "SDMOD_MULTIPLAYER_PLAYER_NAME",
         "SDMOD_LUA_EXEC_PIPE_NAME",
         "SDMOD_LOADING_SCREEN_CAPTURE_DIRECTORY",
+        "SDMOD_MULTIPLAYER_QUICK_START_RUN",
+        "SDMOD_MULTIPLAYER_QUICK_START_ELEMENT",
+        "SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE",
         TestBlankBoneyardEnvironmentVariable
     };
 
@@ -81,6 +84,14 @@ internal static class StagedGameLauncher
                 LobbyHostOptions.CreateDefault()));
         var usesLocalTransport =
             MultiplayerLaunchEnvironment.IsLocalTransport(options);
+        var publishDirectory = multiplayer?.Mode ==
+                MultiplayerLaunchMode.Host &&
+            (!usesLocalTransport ||
+             IsLoopbackDirectory(
+                 multiplayer.Host.DirectoryBaseUrl));
+        options = ApplyDirectoryPublisherFlag(
+            options,
+            publishDirectory);
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
         options = ApplyLaunchToken(options, launchToken);
@@ -126,23 +137,25 @@ internal static class StagedGameLauncher
             }
 
             MultiplayerSessionStatus? multiplayerSessionStatus = null;
-            if (!usesLocalTransport &&
-                multiplayer?.Mode == MultiplayerLaunchMode.Host)
+            if (multiplayer?.Mode == MultiplayerLaunchMode.Host)
             {
                 multiplayerSessionStatus =
                     MultiplayerSessionStatusMonitor.WaitForHostReady(
                         stage.StageRootPath,
                         launchToken,
                         process);
-                LobbyDirectoryPublisher.TryStart(
-                    stage.StageRootPath,
-                    process.Id,
-                    launchToken,
-                    multiplayer.Host,
-                    stage.MultiplayerCompatibility.EnabledMods);
+                if (publishDirectory)
+                {
+                    LobbyDirectoryPublisher.TryStart(
+                        stage.StageRootPath,
+                        process.Id,
+                        launchToken,
+                        multiplayer.Host,
+                        stage.MultiplayerCompatibility.EnabledMods);
+                }
             }
-            else if (!usesLocalTransport &&
-                     multiplayer?.Mode == MultiplayerLaunchMode.Join)
+            else if (multiplayer?.Mode ==
+                     MultiplayerLaunchMode.Join)
             {
                 multiplayerSessionStatus = multiplayer.LobbyId.HasValue
                     ? MultiplayerSessionStatusMonitor.WaitForConnectedJoin(
@@ -269,6 +282,29 @@ internal static class StagedGameLauncher
         }
     }
 
+    private static LaunchOptions ApplyDirectoryPublisherFlag(
+        LaunchOptions options,
+        bool enabled)
+    {
+        var environment = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        if (options.EnvironmentOverrides is not null)
+        {
+            foreach (var pair in options.EnvironmentOverrides)
+            {
+                environment[pair.Key] = pair.Value;
+            }
+        }
+        environment[
+            MultiplayerLaunchEnvironment.DirectoryPublisherVariable] =
+            enabled ? "1" : "0";
+        return options with { EnvironmentOverrides = environment };
+    }
+
+    private static bool IsLoopbackDirectory(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.IsLoopback;
+
     private static string? TryResolveRetailAppDataPath()
     {
         var appDataRoot = LauncherPathPolicy.TryGetKnownFolder(
@@ -340,6 +376,8 @@ internal static class StagedGameLauncher
                 environmentOverrides[variableName] = value;
             }
         }
+        environmentOverrides["SDMOD_LUA_EXEC_PIPE_NAME"] =
+            $"SolomonDarkModLoader_LuaExec_{configuration.Workspace.InstanceName}";
 
         return options with { EnvironmentOverrides = environmentOverrides };
     }

@@ -15,4 +15,6 @@ internal sealed record LauncherCommandExecution(
     LobbyModSyncResult? LobbyModSync = null,
     StageBuildResult? StageResult = null,
     InjectedGame? LaunchedGame = null,
-    LobbyJoinPreview? JoinPreview = null);
+    LobbyJoinPreview? JoinPreview = null,
+    WebsiteModInstallPreview? ModInstallPreview = null,
+    WebsiteModInstallResult? ModInstall = null);

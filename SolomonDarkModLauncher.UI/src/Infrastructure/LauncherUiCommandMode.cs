@@ -10,5 +10,7 @@ internal enum LauncherUiCommandMode
     Stage,
     ListMods,
     EnableMod,
-    DisableMod
+    DisableMod,
+    InstallModPreview,
+    InstallMod
 }
