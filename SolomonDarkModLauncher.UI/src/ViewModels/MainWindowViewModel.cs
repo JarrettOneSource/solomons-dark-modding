@@ -112,7 +112,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => CanInteract());
         HowToPlayCommand = new RelayCommand(_ => IsHowToPlayOpen = true);
-        HostSteamCommand = new RelayCommand(_ => OpenHostSetup(), _ => CanStartNewGame());
+        HostSteamCommand = new RelayCommand(
+            _ =>
+            {
+                if (IsInLobby)
+                {
+                    _ = LeaveLiveSessionAsync();
+                }
+                else
+                {
+                    OpenHostSetup();
+                }
+            },
+            _ => IsInLobby ? !IsBusy : CanStartNewGame());
         JoinSteamCommand = new RelayCommand(
             _ => ExecuteLobbyPrimaryAction(),
             _ => CanJoinLobbyId());
@@ -278,6 +290,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref isInLobby_, value))
             {
                 OnPropertyChanged(nameof(CanLeaveLobby));
+                OnPropertyChanged(nameof(HostButtonText));
+                HostSteamCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -588,7 +602,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public string HostButtonText => IsBusy ? "Wait" : "Host Game";
+    public string HostButtonText =>
+        IsBusy ? "Wait" : IsInLobby ? "Leave Lobby" : "Host Game";
 
     public string JoinGameButtonText => lobbyLaunchState_.PrimaryButtonText;
 
@@ -1437,6 +1452,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             }
         }
 
+        liveSessionIsHost_ = status.IsHost;
+        liveSessionMemberCount_ = status.Members.Count;
         IsInLobby = true;
     }
 
@@ -1447,6 +1464,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(JoinGameButtonText));
         OnPropertyChanged(nameof(CanLeaveLobby));
         IsInLobby = false;
+        liveSessionIsHost_ = false;
+        liveSessionMemberCount_ = 0;
         LobbyTitleText = string.Empty;
         LobbyIdText = string.Empty;
         LobbyPlayersLabel = string.Empty;
@@ -1467,6 +1486,73 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void CancelHostSetup()
     {
         IsHostSetupOpen = false;
+    }
+
+    // #68 live-session leave over the loader's sd.__session_leave verb.
+    private bool liveSessionIsHost_;
+    private int liveSessionMemberCount_;
+    private readonly LiveSessionRuntimeClient liveSessionClient_ = new();
+
+    private async Task LeaveLiveSessionAsync()
+    {
+        if (IsBusy || !IsInLobby)
+        {
+            return;
+        }
+
+        var isHost = liveSessionIsHost_;
+        var others = Math.Max(0, liveSessionMemberCount_ - 1);
+        var message = !isHost
+            ? "Leave this lobby?"
+            : others switch
+            {
+                0 => "Close your lobby?",
+                1 => "Close your lobby? One other player will be disconnected.",
+                _ => $"Close your lobby? {others} other players will be disconnected."
+            };
+        if (MessageBox.Show(
+                message,
+                isHost ? "Close Lobby" : "Leave Lobby",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(modSettingsPipeName_))
+        {
+            SetError("The game's command channel is not available yet.");
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = isHost
+            ? "The launcher closes the lobby."
+            : "The launcher leaves the lobby.";
+        try
+        {
+            var result = await liveSessionClient_.LeaveAsync(
+                modSettingsPipeName_,
+                lifetimeCancellation_.Token);
+            if (result.Ok)
+            {
+                StatusText = isHost ? "Lobby closed." : "Left the lobby.";
+            }
+            else
+            {
+                SetError(string.IsNullOrWhiteSpace(result.Error)
+                    ? "The game did not accept the leave request."
+                    : $"Leave failed: {result.Error}");
+            }
+        }
+        catch (OperationCanceledException)
+            when (lifetimeCancellation_.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     public void CloseHowToPlay()
