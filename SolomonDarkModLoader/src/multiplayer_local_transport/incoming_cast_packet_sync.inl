@@ -266,6 +266,10 @@ bool ApplyParticipantCastPacket(
     const auto phase = input_phase;
     const bool release_phase = phase == CastInputPhase::Released;
     request.cast_sequence = packet.cast_sequence;
+    // Synthetic and real remote participants share the same phase-driven
+    // native replay path. The host authorizes damage from its own synthetic
+    // participant separately at the native damage boundary; observer peers
+    // retain the ordinary nonlocal-projectile suppression.
     request.remote_input_controlled = true;
     if (cast_kind == CastKind::Secondary) {
         if (!input_tracker.start_queued) {

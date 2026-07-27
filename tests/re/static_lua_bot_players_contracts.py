@@ -47,6 +47,18 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_cast_packet_sync.inl"
     )
+    cast_dispatch = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_cast_hooks.inl"
+    )
+    damage_dispatch = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "badguy_damage_hook.inl"
+    )
+    cast_gate_patches = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/bot_casting/"
+        "native_cast_gate_patches.inl"
+    )
     synthetic_cast = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "synthetic_participant_cast_sync.inl"
@@ -151,8 +163,39 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "authenticated_host_synthetic",
         "QueueBotCast(request)",
         "RelayCastPacketToPeers(packet, from);",
+        "request.remote_input_controlled = true;",
     ):
         assert token in cast_ingress, f"shared replicated cast ingress lacks: {token}"
+    assert "kLocalPlayerActorGlobal" not in cast_ingress
+    for token in (
+        "host synthetic Fireball damage source registered",
+        "RememberHostSyntheticDamageSource(",
+        "multiplayer::IsLocalTransportHost()",
+        "ParticipantControllerKind::LuaBrain",
+    ):
+        assert token in cast_dispatch, f"synthetic cast ownership lacks: {token}"
+    for token in (
+        "IsAuthorizedHostSyntheticFireballDamage(",
+        "FindHostSyntheticDamageSourceParticipant(",
+        "source_gameplay_slot != 0",
+        "host synthetic Fireball native damage authorized",
+        "const auto result = original(self);",
+    ):
+        assert token in damage_dispatch, f"synthetic damage authority lacks: {token}"
+    for token in (
+        "fireball_hit_damage_projectile_group_gate",
+        "kFireballHitDamageProjectileGroupGateBranch",
+    ):
+        assert token in cast_gate_patches, f"synthetic Fireball gate lacks: {token}"
+    fireball_gate = cast_gate_patches[
+        cast_gate_patches.index(
+            '"fireball_hit_damage_projectile_group_gate"'
+        ) :
+    ]
+    fireball_gate = fireball_gate[: fireball_gate.index("        },")]
+    assert "            2," in fireball_gate, (
+        "the Fireball damage gate is a two-byte short JNZ"
+    )
 
     for token in (
         "&LuaBotsSpawn",
@@ -195,4 +238,67 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "Lua bots register as host-owned synthetic remote participants, use the "
         "ordinary slot actor and authenticated State/Frame/Cast rails, and "
         "retire through a reliable participant tombstone"
+    )
+
+
+def test_lua_bot_player_docs_and_acceptance_surface() -> str:
+    docs = _read("docs/lua-bots.md")
+    reverse_engineering = _read(
+        "docs/reverse-engineering/"
+        "synthetic-participant-bots-2026-07-26.md"
+    )
+    stubs = _read("api/lua/sd.lua")
+    verifier = _read("tools/verify_lua_bot_players.py")
+
+    for token in (
+        "sd.bots.spawn",
+        "sd.bots.list",
+        "bot:despawn()",
+        "bot:move_to",
+        "bot:stop()",
+        "bot:cast",
+        "bot:position()",
+        "bot:hp()",
+        "bot:max_hp()",
+        "bot:alive()",
+        "bot:slot()",
+        "bot:participant_id()",
+        'sd.events.on("runtime.tick"',
+        "only the multiplayer host can control bots",
+    ):
+        assert token in docs, f"Lua bot documentation lacks: {token}"
+
+    for token in (
+        "`0x005CB870`",
+        "`0x00641090`",
+        "`0x00548B00`",
+        "`0x0054CAF0`",
+        "`0x005E5196`",
+        "`75 6D`",
+        "remote_input_controlled=true",
+        "phase2/result.json",
+    ):
+        assert token in reverse_engineering, (
+            f"synthetic participant RE note lacks: {token}"
+        )
+
+    for token in (
+        "function sd_bots.spawn(...) end",
+        "function sd_bots.list(...) end",
+    ):
+        assert token in stubs, f"generated bot API inventory lacks: {token}"
+
+    for token in (
+        'choices=("lifecycle", "control")',
+        "HOST_PORT = 48811",
+        "CLIENT_PORT = 48812",
+        "enable_audio=False",
+        "native Fire projectile lifecycle on both peers",
+        "standard terminal bot corpse on both peers",
+    ):
+        assert token in verifier, f"bot acceptance verifier lacks: {token}"
+
+    return (
+        "The public handle API, runtime-tick brain contract, RE evidence, "
+        "generated editor inventory, and isolated two-peer acceptance stay in sync"
     )

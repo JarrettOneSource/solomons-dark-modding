@@ -207,6 +207,7 @@ Status legend: **works now** · **tier-N** (planned in roadmap) · **NEW** (gap 
 | Sounds from mod dir | `sd.audio` mod-local sample loading | 07 | tier-2 (+ requirement detail) |
 | Per-shot camera shake | `sd.camera.shake` wrapping the game's native shake routine (RE: trace Earthquake/Boulder impacts) | tier-3 sharpened | NEW RE item (degrade to HUD kick until found) |
 | Peer-visible bullets/decals | Broadcast events → local presentation (cheap path) or generic modded-effect channel (full path) | 03 / 04 | tier-1 |
+| Bot-owned primary damage | Synthetic remote participant cast ingress + exact host projectile authority at the stock damage seam | bot/player seam | works now for stock Fire primary; registered Glock primary still needs `sd.spells` owner routing |
 
 **Roadmap deltas this mod introduces** (to fold into `lua-seam-roadmap.md`): primary-slot
 registration + weld pairing under seam 04 · `sd.combat.deal_damage` with riders (new
@@ -214,7 +215,11 @@ seam) · `drop.picked_up` under seam 02 · draw layers + `sd.vfx.spawn` under se
 custom input listening under `sd.input` · atlas packer as `sd.sprites` v1 · mod-local
 audio loading under seam 07 · `sd.camera.shake` via native-shake RE (trace
 Earthquake/Boulder) · native cursor sprite/visibility control · custom-resource recipe
-in authoring docs.
+in authoring docs. The bot-player delivery also exposed and closed one framework gap:
+remote presentation projectiles were always damage-suppressed. A host-owned
+synthetic participant now authorizes only its exact mapped projectile at the
+stock damage hook; observers and ordinary nonlocal projectiles remain
+presentation-only.
 
 ---
 

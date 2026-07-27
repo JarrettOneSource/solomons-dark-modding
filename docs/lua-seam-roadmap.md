@@ -111,10 +111,11 @@ shared state; simulation calls auto-route to the owner).
   Built-in notify events are `runtime.tick`, `run.started`, `run.ended`, `wave.started`,
   `wave.completed`, `enemy.death`, `enemy.spawned`, `spell.cast`, `gold.changed`,
   `drop.spawned`, `level.up`.
-- **`sd.bots`** — full ally-bot runtime: `create/destroy/clear/update`, `move_to/stop/
-  face/face_target`, `cast`, `get_state`, `get_participant_state`, `get_participants`,
-  `get_nameplate`, `get_skill_choices/choose_skill`, primary-attack helpers. Per-entity
-  stat pools; bots are participants.
+- **`sd.bots`** — multiplayer-native `spawn/list` handles with
+  `despawn/move_to/stop/cast/position/hp/max_hp/alive/slot/participant_id`.
+  Each bot is a host-owned synthetic remote participant materialized through
+  the stock gameplay-slot rail. Legacy mechanics/diagnostic functions remain
+  available for low-level probes. See `lua-bots.md`.
 - **`sd.ui`** — semantic read/automation plus bounded native-authored surfaces, panels,
   labels, buttons, local presentation callbacks, and authority-routed simulation actions.
 - **`sd.input`** — key/scancode/binding press, normalized clicks, mouse holds, movement

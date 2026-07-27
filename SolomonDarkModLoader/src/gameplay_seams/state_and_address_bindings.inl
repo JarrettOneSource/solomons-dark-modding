@@ -180,6 +180,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_028_slot_gate_branch", kSpellCast028SlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_3ee_slot_gate_branch", kSpellCast3EESlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_3f0_slot_gate_branch", kSpellCast3F0SlotGateBranch),
+        SDMOD_ADDR("gameplay.cast_gate_patches", "fireball_hit_damage_projectile_group_gate_branch", kFireballHitDamageProjectileGroupGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "fireball_hit_secondary_effect_projectile_group_gate_branch", kFireballHitSecondaryEffectProjectileGroupGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "magic_missile_hit_damage_projectile_group_gate_branch", kMagicMissileHitDamageProjectileGroupGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "dampen_stock_effect_block", kDampenStockEffectBlock),

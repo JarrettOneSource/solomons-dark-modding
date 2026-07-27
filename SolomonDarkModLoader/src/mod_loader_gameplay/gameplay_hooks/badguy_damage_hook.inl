@@ -204,6 +204,42 @@ void ObserveLocalReplicatedEnemyDamageAfterNativeCall(
         true);
 }
 
+bool IsAuthorizedHostSyntheticFireballDamage(
+    uintptr_t source_actor_address,
+    std::uint64_t* participant_id) {
+    if (participant_id != nullptr) {
+        *participant_id = 0;
+    }
+    if (!multiplayer::IsLocalTransportHost() ||
+        source_actor_address == 0) {
+        return false;
+    }
+
+    const auto synthetic_participant_id =
+        FindHostSyntheticDamageSourceParticipant(source_actor_address);
+    if (synthetic_participant_id == 0) {
+        return false;
+    }
+
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    const auto* participant =
+        multiplayer::FindParticipant(
+            runtime_state,
+            synthetic_participant_id);
+    if (participant == nullptr ||
+        !multiplayer::IsRemoteParticipant(*participant) ||
+        !multiplayer::IsLuaControlledParticipant(*participant) ||
+        !participant->runtime.valid ||
+        !participant->runtime.in_run) {
+        return false;
+    }
+
+    if (participant_id != nullptr) {
+        *participant_id = synthetic_participant_id;
+    }
+    return true;
+}
+
 std::uint8_t __fastcall HookBadguyDamage(
     void* self,
     void* /*unused_edx*/) {
@@ -214,6 +250,41 @@ std::uint8_t __fastcall HookBadguyDamage(
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t context_source = 0;
+    std::uint32_t source_native_type_id = 0;
+    std::int8_t source_gameplay_slot = 0;
+    const bool have_source =
+        g_gameplay_keyboard_injection.damage_context_source_address != 0 &&
+        memory.TryReadValue(
+            g_gameplay_keyboard_injection.damage_context_source_address,
+            &context_source) &&
+        context_source != 0 &&
+        memory.TryReadField(
+            context_source,
+            kGameObjectTypeIdOffset,
+            &source_native_type_id) &&
+        memory.TryReadField(
+            context_source,
+            kDamageSourceGameplaySlotOffset,
+            &source_gameplay_slot);
+    if (have_source &&
+        source_native_type_id == kFireballDamageSourceNativeTypeId &&
+        source_gameplay_slot != 0) {
+        std::uint64_t synthetic_participant_id = 0;
+        if (!IsAuthorizedHostSyntheticFireballDamage(
+                context_source,
+                &synthetic_participant_id)) {
+            return 0;
+        }
+        Log(
+            "[bots] host synthetic Fireball native damage authorized. "
+            "participant_id=" +
+            std::to_string(synthetic_participant_id) +
+            " projectile_actor=" + HexString(context_source) +
+            " target_actor=" + HexString(actor_address));
+    }
+
     const auto local_damage_capture =
         CaptureLocalReplicatedEnemyDamageBeforeNativeCall(actor_address);
     const auto call_original = [&]() {
@@ -223,9 +294,7 @@ std::uint8_t __fastcall HookBadguyDamage(
             local_damage_capture);
         return result;
     };
-    auto& memory = ProcessMemory::Instance();
     std::uint32_t native_type_id = 0;
-    uintptr_t context_source = 0;
     if (actor_address == 0 ||
         !memory.TryReadField(
             actor_address,

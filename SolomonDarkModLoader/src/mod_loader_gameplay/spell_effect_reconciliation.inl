@@ -40,6 +40,7 @@ bool IsReplicatedPrimarySpellEffect(std::uint32_t native_type_id) {
 void ClearReplicatedSpellEffectBindings() {
     g_replicated_spell_effect_bindings.clear();
     g_observed_replicated_spell_effect_serials.clear();
+    ClearHostSyntheticDamageSources();
     ClearPendingReplicatedSpellEffectMaterialization();
     multiplayer::UpdateRuntimeState([](multiplayer::RuntimeState& state) {
         state.spell_effect_apply = multiplayer::SpellEffectApplyRuntimeInfo{};

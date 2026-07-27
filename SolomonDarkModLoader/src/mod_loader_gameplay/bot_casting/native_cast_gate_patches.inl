@@ -9,7 +9,7 @@ struct NativeCastGatePatch {
     std::size_t byte_count = 6;
 };
 
-std::array<NativeCastGatePatch, 10> g_native_cast_gate_patches = {};
+std::array<NativeCastGatePatch, 11> g_native_cast_gate_patches = {};
 
 bool BytesEqual(
     const std::array<std::uint8_t, 6>& left,
@@ -208,11 +208,27 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
             nops,
         },
         {
+            // The downstream badguy-damage hook admits only a projectile
+            // explicitly registered to a host-owned synthetic participant.
+            // Real remote and observer-side Fireballs still reach that hook
+            // with nonlocal ownership and are rejected before stock damage.
+            "fireball_hit_damage_projectile_group_gate",
+            kFireballHitDamageProjectileGroupGateBranch,
+            0,
+            {},
+            nops,
+            false,
+            false,
+            2,
+        },
+        {
             // Fireball's first projectile-group check at 0x005E5196 owns
-            // impact damage and stays intact. This second check only skips
-            // FUN_00642BF0. Let remote presentation projectiles enter that
-            // effect builder: spawned Embers inherit the nonlocal group byte,
-            // so their own native hit gate still suppresses observer damage.
+            // impact damage. The loader widens it above, then applies the
+            // participant authority predicate in HookBadguyDamage. This
+            // second check only skips FUN_00642BF0; widening it lets remote
+            // presentation projectiles enter that effect builder. Spawned
+            // Embers inherit the nonlocal group byte, so their native hit
+            // gate still suppresses observer damage.
             "fireball_hit_secondary_effect_projectile_group_gate",
             kFireballHitSecondaryEffectProjectileGroupGateBranch,
             0,
@@ -253,6 +269,8 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
         " spell_028=" + HexString(kSpellCast028SlotGateBranch) +
         " spell_3ee=" + HexString(kSpellCast3EESlotGateBranch) +
         " spell_3f0=" + HexString(kSpellCast3F0SlotGateBranch) +
+        " fireball_damage=" +
+            HexString(kFireballHitDamageProjectileGroupGateBranch) +
         " fireball_secondary_effect=" +
             HexString(kFireballHitSecondaryEffectProjectileGroupGateBranch) +
         " magic_missile_hit=" + HexString(kMagicMissileHitDamageProjectileGroupGateBranch));

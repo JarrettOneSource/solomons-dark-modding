@@ -170,6 +170,7 @@ extern uintptr_t kSpellCast010SlotGateBranch;
 extern uintptr_t kSpellCast028SlotGateBranch;
 extern uintptr_t kSpellCast3EESlotGateBranch;
 extern uintptr_t kSpellCast3F0SlotGateBranch;
+extern uintptr_t kFireballHitDamageProjectileGroupGateBranch;
 extern uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch;
 extern uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch;
 extern uintptr_t kDampenStockEffectBlock;

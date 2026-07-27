@@ -566,6 +566,7 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
     }
 
     bool observe_emission = false;
+    bool authorize_host_synthetic_damage = false;
     std::uint64_t bot_id = 0;
     std::uint32_t cast_sequence = 0;
     std::uint32_t expected_projectile_type = 0;
@@ -598,6 +599,10 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
             }
 
             observe_emission = true;
+            authorize_host_synthetic_damage =
+                multiplayer::IsLocalTransportHost() &&
+                binding->controller_kind ==
+                    multiplayer::ParticipantControllerKind::LuaBrain;
             bot_id = binding->bot_id;
             cast_sequence = ongoing.remote_input_cast_sequence;
             expected_projectile_type = ongoing.remote_per_cast_projectile_expected_type;
@@ -636,6 +641,18 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
     ongoing.remote_per_cast_projectile_emission_latched = true;
     ongoing.remote_per_cast_projectile_observed = true;
     ongoing.remote_per_cast_projectile_observed_actor = emitted_projectile_actor;
+    if (authorize_host_synthetic_damage &&
+        expected_projectile_type == kFireballDamageSourceNativeTypeId) {
+        RememberHostSyntheticDamageSource(
+            emitted_projectile_actor,
+            binding->bot_id);
+        Log(
+            "[bots] host synthetic Fireball damage source registered. "
+            "participant_id=" +
+            std::to_string(binding->bot_id) +
+            " cast_sequence=" + std::to_string(cast_sequence) +
+            " projectile_actor=" + HexString(emitted_projectile_actor));
+    }
     Log(
         "[bots] latched first remote per-cast primary emission. bot_id=" +
         std::to_string(binding->bot_id) +

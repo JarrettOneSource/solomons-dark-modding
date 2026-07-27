@@ -74,6 +74,18 @@ uintptr_t ResolveDamageSourceOwnerActorAddress(uintptr_t source_address) {
         }
     }
 
+    const auto synthetic_participant_id =
+        FindHostSyntheticDamageSourceParticipant(source_address);
+    if (synthetic_participant_id != 0) {
+        std::lock_guard<std::recursive_mutex> lock(
+            g_participant_entities_mutex);
+        const auto* binding =
+            FindParticipantEntity(synthetic_participant_id);
+        if (binding != nullptr) {
+            return binding->actor_address;
+        }
+    }
+
     for (const auto& [participant_id, effects] :
          g_replicated_spell_effect_bindings) {
         const auto effect = std::find_if(

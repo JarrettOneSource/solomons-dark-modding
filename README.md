@@ -260,6 +260,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
 - `docs/lua-sprites.md` — mod-owned runtime atlases, bundle authoring, sandboxing, and limits.
 - `docs/lua-authoring.md` — generated LuaLS/EmmyLua stubs, opt-in entry-script hot reload, and the in-game exec console.
+- `docs/lua-bots.md` — host-authoritative synthetic remote bot participants, handle API, brain ticks, and multiplayer acceptance.
 - `docs/lua-rng.md` — authority-owned native run seeds and multiplayer run-nonce behavior.
 - `docs/lua-nav.md` — bounded address-free native grid and path-segment queries.
 - `docs/lua-event-filters.md` — synchronous owner-side damage rewrites, cancellation, ordering, and live acceptance.

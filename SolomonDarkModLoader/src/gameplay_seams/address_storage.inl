@@ -148,6 +148,7 @@ uintptr_t kSpellCast010SlotGateBranch = 0;
 uintptr_t kSpellCast028SlotGateBranch = 0;
 uintptr_t kSpellCast3EESlotGateBranch = 0;
 uintptr_t kSpellCast3F0SlotGateBranch = 0;
+uintptr_t kFireballHitDamageProjectileGroupGateBranch = 0;
 uintptr_t kFireballHitSecondaryEffectProjectileGroupGateBranch = 0;
 uintptr_t kMagicMissileHitDamageProjectileGroupGateBranch = 0;
 uintptr_t kDampenStockEffectBlock = 0;
