@@ -190,7 +190,6 @@ SteamGameplayOutboundQueuePolicy::Service(
             peer_pressure.first_limit_exceeded_ms = now_ms;
             stats_.backpressure_episodes += 1;
         }
-        peer_pressure.last_limit_exceeded_ms = now_ms;
         peer_pressure.retry_after_ms =
             now_ms + kLimitRetryIntervalMs;
 

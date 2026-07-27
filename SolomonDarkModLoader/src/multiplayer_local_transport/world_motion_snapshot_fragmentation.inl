@@ -503,12 +503,14 @@ bool TryApplyWorldMotionSnapshotFragment(
          actor_index < packet.actor_count;
          ++actor_index) {
         const auto& motion = packet.actors[actor_index];
+        const auto network_actor_id =
+            motion.network_actor_id;
         const auto actor = actors_by_id.find(
-            motion.network_actor_id);
+            network_actor_id);
         if (actor == actors_by_id.end() ||
             actor->second == nullptr ||
             !fragment_actor_ids.insert(
-                motion.network_actor_id).second) {
+                network_actor_id).second) {
             return false;
         }
     }
@@ -518,11 +520,13 @@ bool TryApplyWorldMotionSnapshotFragment(
          actor_index < packet.actor_count;
          ++actor_index) {
         const auto& motion = packet.actors[actor_index];
+        const auto network_actor_id =
+            motion.network_actor_id;
         const auto actor = actors_by_id.find(
-            motion.network_actor_id);
+            network_actor_id);
         auto& last_snapshot_id =
             merge_state->last_snapshot_id_by_actor[
-                motion.network_actor_id];
+                network_actor_id];
         if (last_snapshot_id != 0 &&
             !IsPacketSequenceNewer(
                 packet.snapshot_id,

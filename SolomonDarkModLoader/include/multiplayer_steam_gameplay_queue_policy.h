@@ -74,7 +74,6 @@ private:
         bool limited = false;
         bool recovery_reported = false;
         std::uint64_t first_limit_exceeded_ms = 0;
-        std::uint64_t last_limit_exceeded_ms = 0;
         std::uint64_t retry_after_ms = 0;
         std::uint64_t dropped_disposable_packets = 0;
     };
