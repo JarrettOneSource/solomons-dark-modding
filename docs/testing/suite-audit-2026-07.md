@@ -331,6 +331,18 @@ Raw per-cell JSON and exact screenshot paths are indexed in
 - `/mnt/d/codex-evidence/suite-audit-20260725/visual-review/loopback-element-matrix-contact-sheet.png`
 - `/mnt/d/codex-evidence/suite-audit-20260725/visual-review/wan-element-matrix-contact-sheet.png`
 
+### Issue #52 resolution — 2026-07-27
+
+The historical table above is retained as the audit observation. The
+client-Earth magnitude was later isolated as **CLIENT-ONLY INFLATION**, not
+stock balance: beta.18 wrote the unrelated `1956` primary-stat normalization
+into the packet-driven replay Boulder's native damage fields, and the host
+allowed that observer replay to apply a second contact beside the client's
+stock claim. The exact six-cell post-fix matrix makes the 2-frame, 170-frame,
+and full-charge host/client endpoints bit-identical while preserving the
+pre-fix host stock endpoints. Full trace and evidence:
+[`earth-boulder-damage-formula-2026-07-27.md`](../reverse-engineering/earth-boulder-damage-formula-2026-07-27.md).
+
 ## Live spawn/death/spectate lifecycle
 
 ### Home-PC loopback pair

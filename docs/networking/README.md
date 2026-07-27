@@ -50,6 +50,13 @@ damage bounds, caster distance, and enemy lifecycle, and it only accepts a
 claimed target transform inside the normal drift guard. Explicit damage claims
 remain position-strict.
 
+Native player-authored spell contact is owner-local. Packet-driven replay
+actors remain presentation-only and are rejected before they can mutate a
+replicated run enemy. A host owner's stock contact is authoritative directly;
+a client owner's stock contact is observed and serialized through
+`EnemyDamageClaimPacket`. This prevents an observer replay from stacking a
+second native hit beside the owner's claim.
+
 ## Implementation boundary
 
 The current source has the multiplayer foundation, participant rail, and a

@@ -67,6 +67,22 @@ inside the 96 KiB/s budget. The old full-state format required twenty
 1,032-byte fragments per generation, or 20,640 bytes; at 5 Hz it exceeded the
 same budget and was necessarily stretched.
 
+## Player-authored enemy damage ownership
+
+Native player-authored contact executes only on the cast owner's process.
+Host-owned contact mutates the host enemy directly. Client-owned contact is
+observed around `Badguy::Contact`, reduced to the exact native HP endpoint,
+and sent in `EnemyDamageClaimPacket`; the host validates it and writes
+`min(current_host_hp, client_after_hp)`. No transport-side damage multiplier
+is applied.
+
+Packet-driven replay spell actors are presentation-only on the receiving
+process and are rejected before they can mutate a replicated run enemy. This
+gate is distinct from host-owned `LuaBrain` participants, whose native
+contacts remain host-authoritative. Issue #52 demonstrated why the boundary
+must be explicit: an observer-side Earth replay once stacked a second native
+contact beside the client's valid stock claim.
+
 ## Optimization archaeology
 
 The recent optimization series has one behavioral implementation commit and

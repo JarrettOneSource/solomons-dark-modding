@@ -1952,6 +1952,14 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (badguy_damage_hook_text, "CaptureLocalReplicatedEnemyDamageBeforeNativeCall"),
         (badguy_damage_hook_text, "ResolveDamageSourceParticipantId(context_source)"),
         (badguy_damage_hook_text, "ObserveLocalPlayerReplicatedRunEnemyDamageEvent"),
+        (
+            badguy_damage_hook_text,
+            "ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage",
+        ),
+        (
+            badguy_damage_hook_text,
+            "IsPacketDrivenRemoteParticipantBinding(binding)",
+        ),
         (world_snapshot_reconciliation_text, "const bool has_damage_baseline"),
         (world_snapshot_reconciliation_text, "const bool observed_local_damage"),
         (world_snapshot_reconciliation_text, "kReplicatedRunEnemyDamageObservationEpsilon"),
@@ -2614,6 +2622,71 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     if missing:
         raise StaticReTestFailure(
             "local multiplayer transport wiring missing token(s): " + ", ".join(missing))
+
+    remote_damage_gate_start = badguy_damage_hook_text.index(
+        "bool ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage("
+    )
+    remote_damage_gate_end = badguy_damage_hook_text.index(
+        "std::uint8_t __fastcall HookBadguyDamage(",
+        remote_damage_gate_start,
+    )
+    remote_damage_gate = badguy_damage_hook_text[
+        remote_damage_gate_start:remote_damage_gate_end
+    ]
+    for token in (
+        "multiplayer::IsLocalTransportEnabled()",
+        "multiplayer::GetLocalRunEnemyNetworkActorId(",
+        "ResolveDamageSourceParticipantId(source_actor_address)",
+        "source_participant_id == local_participant_id",
+        "IsPacketDrivenRemoteParticipantBinding(binding)",
+    ):
+        if token not in remote_damage_gate:
+            raise StaticReTestFailure(
+                "packet-driven remote damage ownership gate missing: " + token
+            )
+
+    badguy_damage_start = badguy_damage_hook_text.index(
+        "std::uint8_t __fastcall HookBadguyDamage("
+    )
+    badguy_damage_body = badguy_damage_hook_text[badguy_damage_start:]
+    suppress_call = badguy_damage_body.index(
+        "ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage("
+    )
+    claim_capture = badguy_damage_body.index(
+        "CaptureLocalReplicatedEnemyDamageBeforeNativeCall("
+    )
+    if suppress_call >= claim_capture:
+        raise StaticReTestFailure(
+            "packet-driven remote native damage is not rejected before "
+            "local-owner claim capture"
+        )
+    suppressed_body_start = badguy_damage_body.index(
+        "if (have_source &&\n"
+        "        ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage("
+    )
+    suppressed_body_end = badguy_damage_body.index(
+        "    if (have_source &&\n"
+        "        source_native_type_id == kFireballDamageSourceNativeTypeId",
+        suppressed_body_start,
+    )
+    suppressed_body = badguy_damage_body[
+        suppressed_body_start:suppressed_body_end
+    ]
+    for token in (
+        "CaptureEarthBoulderDamageBeforeNativeCall(actor_address)",
+        "ObserveEarthBoulderDamageAfterNativeCall(",
+        "return 0;",
+    ):
+        if token not in suppressed_body:
+            raise StaticReTestFailure(
+                "packet-driven remote native damage suppression missing: " +
+                token
+            )
+    if "ResetActiveDamageContext();" in suppressed_body:
+        raise StaticReTestFailure(
+            "packet-driven remote damage suppression clears the shared "
+            "source context before a multi-target native contact loop ends"
+        )
 
     # TryListSceneActors includes the 0xFA1 hub scene/runtime record alongside
     # actual factory actors. Treating every finite shared-hub record as an

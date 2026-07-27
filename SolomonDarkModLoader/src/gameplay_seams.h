@@ -228,8 +228,6 @@ extern uintptr_t kMovementSpeedScalarGlobal;
 extern uintptr_t kMovementVelocityDampingGlobal;
 extern uintptr_t kGameTimingScaleGlobal;
 extern uintptr_t kWaterPrimaryControlBrainRangeGlobal;
-extern uintptr_t kEarthBoulderDamageOutputScaleGlobal;
-extern uintptr_t kEarthBoulderReleaseDamageScaleGlobal;
 extern uintptr_t kEarthBoulderReleaseDamageFloorGlobal;
 extern uintptr_t kEarthBoulderReleaseDamageCapScaleGlobal;
 extern uintptr_t kEarthBoulderReleaseGrowthStopMinChargeGlobal;

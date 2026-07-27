@@ -220,8 +220,8 @@ python3 tests/re/run_live_boulder_impact_projection_probe.py
 ```
 
 That wrapper drives the existing Earth element damage harness and then asserts
-the native boulder object, release policy, native damage-output scale diagnostics,
-live Boulder release-base damage field, native finalizer floor/cap handling, native
+the native boulder object, release policy, live Boulder release-base damage
+field, native finalizer floor/cap handling, native
 secondary-reach diagnostics, and native target-lethal release evidence. The static suite also
 guards the held-charge retarget contract: Earth Boulder follows the bot's live
 target while charging, then freezes that target at release and commits cleanup

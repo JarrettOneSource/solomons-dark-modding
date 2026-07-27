@@ -5,8 +5,10 @@
 Live beta.18 WAN testing reported that a client-owned Earth Boulder dealt its
 authoritative damage but never appeared on the host. Fireball remained visible
 in the same ownership direction. The damage claim path is outside this
-investigation; the unexplained client-Earth `3032.56` damage component remains
-parked as issue #52.
+investigation; at this historical checkpoint the client-Earth `3032.56`
+damage component remained parked as issue #52. It was subsequently traced and
+fixed in
+[`earth-boulder-damage-formula-2026-07-27.md`](earth-boulder-damage-formula-2026-07-27.md).
 
 This note records the remote visual lifecycle before changing it. Static
 evidence came from the beta.18 executable and the multiplayer spell-effect
@@ -186,6 +188,12 @@ calls for every cast. The raw HP deltas were `3014.8784179688`,
 preserves both the documented fixed-170-frame native baseline and the parked
 issue-#52 client-origin magnitude family. This investigation did not reveal
 the source of that magnitude and made no damage change.
+
+The follow-up found that beta.18 multiplied the observer replay's native
+release base by the unrelated primary-stat normalization constant `1956` and
+then allowed that replay to mutate enemy HP. The final matrix removes that
+overwrite, suppresses packet-driven observer contact damage, and proves exact
+host/client equality without changing stock balance.
 
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/earth-client-damage-matrix-5x.json`
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/earth-damage-5x-contact-sheet.png`

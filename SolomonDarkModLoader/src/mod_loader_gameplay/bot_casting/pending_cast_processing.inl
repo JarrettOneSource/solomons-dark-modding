@@ -20,13 +20,9 @@ void RefreshRemoteCastInputReleaseState(
 struct BotBoulderReleaseHoldWrites {
     bool charge = false;
     bool release_charge = false;
-    bool release_damage = false;
-    bool release_base_damage = false;
     bool growth_rate = false;
     bool growth_stop_eligible = false;
     float growth_stop_min_charge = 0.0f;
-    float damage_output_scale = 0.0f;
-    float scaled_release_base_damage = 0.0f;
 };
 
 struct BotCastActivitySnapshot {
@@ -69,8 +65,7 @@ bool HasBotNativeCastActivity(const BotCastActivitySnapshot& snapshot) {
 BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge(
     ProcessMemory& memory,
     const BotNativeActiveSpellObjectState& active_spell_state,
-    float release_charge,
-    bool write_release_damage_fields) {
+    float release_charge) {
     BotBoulderReleaseHoldWrites writes{};
     if (active_spell_state.object == 0 ||
         !std::isfinite(release_charge) ||
@@ -88,26 +83,6 @@ BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge(
             active_spell_state.object,
             kSpellObjectReleaseChargeOffset,
             release_charge);
-    if (write_release_damage_fields) {
-        writes.damage_output_scale = ResolveEarthBoulderDamageOutputScale();
-        writes.scaled_release_base_damage =
-            ResolveEarthBoulderScaledReleaseBaseDamage(
-                active_spell_state.release_base_damage,
-                writes.damage_output_scale);
-        if (std::isfinite(writes.scaled_release_base_damage) &&
-            writes.scaled_release_base_damage > 0.0f) {
-            writes.release_damage =
-                memory.TryWriteField<float>(
-                    active_spell_state.object,
-                    kSpellObjectReleaseDamageOffset,
-                    writes.scaled_release_base_damage);
-            writes.release_base_damage =
-                memory.TryWriteField<float>(
-                    active_spell_state.object,
-                    kSpellObjectReleaseBaseDamageOffset,
-                    writes.scaled_release_base_damage);
-        }
-    }
     writes.growth_stop_min_charge =
         ResolveEarthBoulderReleaseGrowthStopMinCharge();
     writes.growth_stop_eligible =
@@ -832,10 +807,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             float release_charge = earth_damage_projection.charge;
             float release_base_damage = earth_damage_projection.base_damage;
             float release_projected_damage = earth_damage_projection.projected_damage;
-            float release_damage_output_scale =
-                earth_damage_projection.damage_output_scale;
-            float release_damage_scale =
-                earth_damage_projection.release_damage_scale;
             float release_damage_floor =
                 earth_damage_projection.release_damage_floor;
             float release_damage_cap_scale =
@@ -851,18 +822,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 release_charge = active_spell_state.charge;
             }
             if (!std::isfinite(release_base_damage) || release_base_damage <= 0.0f) {
-                release_base_damage =
-                    ResolveEarthBoulderScaledReleaseBaseDamage(
-                        active_spell_state.release_base_damage,
-                        release_damage_output_scale);
-            }
-            if (!std::isfinite(release_damage_output_scale) ||
-                release_damage_output_scale <= 0.0f) {
-                release_damage_output_scale = ResolveEarthBoulderDamageOutputScale();
-            }
-            if (!std::isfinite(release_damage_scale) ||
-                release_damage_scale <= 0.0f) {
-                release_damage_scale = ResolveEarthBoulderReleaseDamageScale();
+                release_base_damage = active_spell_state.release_base_damage;
             }
             if (!std::isfinite(release_damage_floor) ||
                 release_damage_floor < 0.0f) {
@@ -881,7 +841,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     ProjectEarthBoulderReleaseDamage(
                         release_base_damage,
                         release_charge,
-                        release_damage_scale,
                         release_damage_floor,
                         release_damage_cap_scale);
                 release_projected_hp_damage = release_projected_release_damage;
@@ -898,10 +857,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ongoing.bounded_release_base_damage = release_base_damage;
             ongoing.bounded_release_projected_damage =
                 release_projected_damage;
-            ongoing.bounded_release_damage_output_scale =
-                release_damage_output_scale;
-            ongoing.bounded_release_damage_scale =
-                release_damage_scale;
             ongoing.bounded_release_damage_floor =
                 release_damage_floor;
             ongoing.bounded_release_damage_cap_scale =
@@ -944,8 +899,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             (void)HoldBotBoulderAtReleaseCharge(
                 memory,
                 active_spell_state,
-                ongoing.bounded_release_charge,
-                false);
+                ongoing.bounded_release_charge);
         }
         const bool startup_timeout_hit =
             ongoing.startup_in_progress &&
@@ -1058,8 +1012,7 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                 HoldBotBoulderAtReleaseCharge(
                     memory,
                     active_spell_state,
-                    finalized_release_charge,
-                    true);
+                    finalized_release_charge);
             const std::string release_reason =
                 ongoing.bounded_release_at_max_size
                     ? std::string("max_size")
@@ -1100,10 +1053,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     (earth_native_min_release_charge_reached ? std::string("1") : std::string("0")) +
                 " progression_level=" + std::to_string(earth_damage_projection.progression_level) +
                 " base_damage=" + std::to_string(earth_damage_projection.base_damage) +
-                " damage_output_scale=" +
-                    std::to_string(earth_damage_projection.damage_output_scale) +
-                " release_damage_scale=" +
-                    std::to_string(earth_damage_projection.release_damage_scale) +
                 " release_damage_floor=" +
                     std::to_string(earth_damage_projection.release_damage_floor) +
                 " release_damage_cap_scale=" +
@@ -1147,14 +1096,6 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     (release_hold_writes.release_charge ? std::string("1") : std::string("0")) +
                 " release_charge_hold=" +
                     (release_hold_writes.charge ? std::string("1") : std::string("0")) +
-                " release_damage_hold=" +
-                    (release_hold_writes.release_damage ? std::string("1") : std::string("0")) +
-                " release_base_damage_hold=" +
-                    (release_hold_writes.release_base_damage ? std::string("1") : std::string("0")) +
-                " release_scaled_base_damage=" +
-                    std::to_string(release_hold_writes.scaled_release_base_damage) +
-                " release_damage_output_scale_hold=" +
-                    std::to_string(release_hold_writes.damage_output_scale) +
                 " release_growth_stop=" +
                     (release_hold_writes.growth_rate ? std::string("1") : std::string("0")) +
                 " release_growth_stop_eligible=" +

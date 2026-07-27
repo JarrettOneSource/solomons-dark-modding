@@ -252,10 +252,6 @@ void FinishBotCastNativeLifecycle(
                   " release_base_damage=" + std::to_string(state.bounded_release_base_damage) +
                   " release_projected_damage=" +
                       std::to_string(state.bounded_release_projected_damage) +
-                  " release_damage_output_scale=" +
-                      std::to_string(state.bounded_release_damage_output_scale) +
-                  " release_damage_scale=" +
-                      std::to_string(state.bounded_release_damage_scale) +
                   " release_damage_floor=" +
                       std::to_string(state.bounded_release_damage_floor) +
                   " release_damage_cap_scale=" +

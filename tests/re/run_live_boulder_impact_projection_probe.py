@@ -62,31 +62,18 @@ def validate_projection_formula(release: dict[str, Any], failures: list[str]) ->
     charge = release_charge(release)
     base_damage = as_float(release.get("base_damage"))
     projected_damage = as_float(release.get("projected_damage"))
-    damage_output_scale = as_float(release.get("damage_output_scale"))
-    release_damage_scale = as_float(release.get("release_damage_scale"))
     release_damage_floor = as_float(release.get("release_damage_floor"))
     release_damage_cap_scale = as_float(release.get("release_damage_cap_scale"))
     projected_release_damage = as_float(release.get("projected_release_damage"))
     projected_hp_damage = as_float(release.get("projected_hp_damage"))
     expected = base_damage * charge * charge
-    scaled_base_damage = base_damage * release_damage_scale
     expected_release = max(
         release_damage_floor,
-        min(expected * release_damage_scale, scaled_base_damage * release_damage_cap_scale),
+        min(expected, base_damage * release_damage_cap_scale),
     )
     expected_hp = expected_release
     require(math.isfinite(charge) and charge > 0.0, f"invalid boulder charge: {charge}", failures)
     require(math.isfinite(base_damage) and base_damage > 0.0, f"invalid base damage: {base_damage}", failures)
-    require(
-        math.isfinite(damage_output_scale) and damage_output_scale > 0.0,
-        f"invalid damage output scale: {damage_output_scale}",
-        failures,
-    )
-    require(
-        math.isfinite(release_damage_scale) and release_damage_scale > 0.0,
-        f"invalid release damage scale: {release_damage_scale}",
-        failures,
-    )
     require(
         math.isfinite(release_damage_floor) and release_damage_floor >= 0.0,
         f"invalid release damage floor: {release_damage_floor}",
@@ -153,8 +140,6 @@ def normalize_release_evidence(
         "release_charge": "obj_charge",
         "release_base_damage": "base_damage",
         "release_projected_damage": "projected_damage",
-        "release_damage_output_scale": "damage_output_scale",
-        "release_damage_scale": "release_damage_scale",
         "release_damage_floor": "release_damage_floor",
         "release_damage_cap_scale": "release_damage_cap_scale",
         "release_projected_release_damage": "projected_release_damage",

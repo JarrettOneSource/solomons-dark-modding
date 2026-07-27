@@ -241,8 +241,6 @@ struct ParticipantEntityBinding {
         float bounded_release_charge = 0.0f;
         float bounded_release_base_damage = 0.0f;
         float bounded_release_projected_damage = 0.0f;
-        float bounded_release_damage_output_scale = 0.0f;
-        float bounded_release_damage_scale = 0.0f;
         float bounded_release_damage_floor = 0.0f;
         float bounded_release_damage_cap_scale = 0.0f;
         float bounded_release_projected_release_damage = 0.0f;

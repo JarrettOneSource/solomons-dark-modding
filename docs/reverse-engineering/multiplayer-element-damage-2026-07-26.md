@@ -98,6 +98,14 @@ Air remained `4.2333984375` / `4.18359375` and Ether remained
 both peers. Raw results and both-peer screenshots are under
 `/mnt/d/codex-evidence/element-damage-20260726/post-fix/`.
 
+The remaining Earth magnitude became issue #52. Its 2026-07-27 follow-up
+proved client-only loader inflation: the host's packet-driven replay used an
+unrelated `1956` primary-stat normalization constant and applied a second
+native contact beside the client's stock claim. The correction leaves stock
+damage unchanged and makes the controlled host/client Earth endpoints
+bit-identical; see
+[`earth-boulder-damage-formula-2026-07-27.md`](earth-boulder-damage-formula-2026-07-27.md).
+
 Fire shares the stale-heading symptom, and the fix removed the host-origin
 intermittency: five consecutive host casts each dealt exactly `4.0`. It did
 not close the whole Fire defect. The five client-origin casts were

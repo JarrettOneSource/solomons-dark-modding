@@ -20,8 +20,6 @@ struct BotBoulderDamageProjectionSnapshot {
     float charge = 0.0f;
     float base_damage = 0.0f;
     float projected_damage = 0.0f;
-    float damage_output_scale = 0.0f;
-    float release_damage_scale = 0.0f;
     float release_damage_floor = 0.0f;
     float release_damage_cap_scale = 0.0f;
     float projected_release_damage = 0.0f;
@@ -34,15 +32,12 @@ struct BotBoulderDamageProjectionSnapshot {
 float ProjectEarthBoulderReleaseDamage(
     float native_base_damage,
     float release_charge,
-    float release_damage_scale,
     float release_damage_floor,
     float release_damage_cap_scale) {
     if (!std::isfinite(native_base_damage) ||
         native_base_damage <= 0.0f ||
         !std::isfinite(release_charge) ||
         release_charge <= 0.0f ||
-        !std::isfinite(release_damage_scale) ||
-        release_damage_scale <= 0.0f ||
         !std::isfinite(release_damage_floor) ||
         release_damage_floor < 0.0f ||
         !std::isfinite(release_damage_cap_scale) ||
@@ -50,38 +45,15 @@ float ProjectEarthBoulderReleaseDamage(
         return 0.0f;
     }
 
-    const auto scaled_base_damage = native_base_damage * release_damage_scale;
     const auto quadratic_damage =
-        scaled_base_damage * release_charge * release_charge;
+        native_base_damage * release_charge * release_charge;
     const auto capped_damage =
-        (std::min)(quadratic_damage, scaled_base_damage * release_damage_cap_scale);
+        (std::min)(
+            quadratic_damage,
+            native_base_damage * release_damage_cap_scale);
     return release_damage_floor <= capped_damage
         ? capped_damage
         : release_damage_floor;
-}
-
-float ResolveEarthBoulderScaledReleaseBaseDamage(
-    float live_release_base_damage,
-    float damage_output_scale) {
-    if (!std::isfinite(live_release_base_damage) ||
-        live_release_base_damage <= 0.0f) {
-        return 0.0f;
-    }
-    if (!std::isfinite(damage_output_scale) ||
-        damage_output_scale <= 0.0f) {
-        return live_release_base_damage;
-    }
-    if (live_release_base_damage >= damage_output_scale) {
-        return live_release_base_damage;
-    }
-
-    const auto scaled_release_base_damage =
-        live_release_base_damage * damage_output_scale;
-    if (!std::isfinite(scaled_release_base_damage) ||
-        scaled_release_base_damage <= 0.0f) {
-        return live_release_base_damage;
-    }
-    return scaled_release_base_damage;
 }
 
 bool TryPopulateBoulderProjectionTarget(
@@ -269,34 +241,17 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
     if (release_charge <= 0.0f) {
         return snapshot;
     }
-    const auto damage_output_scale = ResolveEarthBoulderDamageOutputScale();
-    const auto release_damage_scale = ResolveEarthBoulderReleaseDamageScale();
     const auto release_damage_floor = ResolveEarthBoulderReleaseDamageFloor();
     const auto release_damage_cap_scale = ResolveEarthBoulderReleaseDamageCapScale();
-    if (!std::isfinite(damage_output_scale) ||
-        damage_output_scale <= 0.0f ||
-        !std::isfinite(release_damage_scale) ||
-        release_damage_scale <= 0.0f ||
-        !std::isfinite(release_damage_floor) ||
+    if (!std::isfinite(release_damage_floor) ||
         release_damage_floor < 0.0f ||
         !std::isfinite(release_damage_cap_scale) ||
         release_damage_cap_scale <= 0.0f) {
         return snapshot;
     }
-    const auto resolved_native_damage =
-        ResolveEarthBoulderScaledReleaseBaseDamage(
-            live_release_base_damage,
-            damage_output_scale);
-    if (!std::isfinite(resolved_native_damage) ||
-        resolved_native_damage <= 0.0f) {
-        return snapshot;
-    }
-
     snapshot.progression_level = progression_level;
     snapshot.charge = release_charge;
-    snapshot.base_damage = resolved_native_damage;
-    snapshot.damage_output_scale = damage_output_scale;
-    snapshot.release_damage_scale = release_damage_scale;
+    snapshot.base_damage = live_release_base_damage;
     snapshot.release_damage_floor = release_damage_floor;
     snapshot.release_damage_cap_scale = release_damage_cap_scale;
     snapshot.projected_damage =
@@ -305,7 +260,6 @@ BotBoulderDamageProjectionSnapshot ReadBotBoulderDamageProjectionSnapshot(
         ProjectEarthBoulderReleaseDamage(
             snapshot.base_damage,
             snapshot.charge,
-            snapshot.release_damage_scale,
             snapshot.release_damage_floor,
             snapshot.release_damage_cap_scale);
     snapshot.projected_hp_damage = snapshot.projected_release_damage;

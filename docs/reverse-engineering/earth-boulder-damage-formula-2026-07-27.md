@@ -245,7 +245,7 @@ is no reference to `0x007A03F0` in the dispatcher `0x00544C60`, release
 finalizer `0x005E5450`, contact tick `0x00620B60`, contact dispatcher
 `0x0063E7D0`, or `Badguy::Contact` at `0x0048A290`.
 
-This matters because beta.18's remote-Boulder replay currently reads
+This matters because beta.18's remote-Boulder replay read
 `0x007A03F0` as `earth_boulder_damage_output_scale`. When the live native
 release base is `10`, `ResolveEarthBoulderScaledReleaseBaseDamage` changes it
 to:
@@ -281,8 +281,8 @@ that prediction with exact single-precision operands.
 
 ## Client damage-claim serialization
 
-The generic claim path preserves the damage produced by native contact; it
-does not multiply it.
+The generic claim path preserves the local owner's native contact; it does not
+multiply it.
 
 1. `HookBadguyDamage` captures client HP immediately before
    `Badguy::Contact` only when the damage source resolves to the local
@@ -308,11 +308,25 @@ does not multiply it.
 
    and writes that endpoint directly.
 
-Consequently, a client-native inflated contact is serialized as an inflated
-HP endpoint and converges exactly on the host. The claim path explains the
-zero peer difference, but not the magnitude's origin. The origin is upstream:
-the remote-Boulder replay's write of `mDamage * 1956` into native damage
-fields.
+The client-local Boulder in the issue-#52 path was stock: its level-one
+170-frame contact contributed `1.541015625`, and that exact endpoint went
+through the claim path. Independently, beta.18 materialized a packet-driven
+replay Boulder on the host. That replay wrote `mDamage * 1956` into its own
+native damage fields and was still allowed to call `Badguy::Contact`.
+
+When the claim arrived first, the host applied the stock endpoint and then
+subtracted the replay contact as a second hit. The archived exact transition
+was therefore:
+
+```text
+client-local stock claim =    1.5410156250
+host remote replay contact = 3032.5610351562
+final converged delta =      3034.1020507812
+```
+
+The claim path explains the stock component and endpoint convergence. It did
+not create or scale the `3032.56` component. Its source was the independent
+host-side remote replay contact.
 
 ## Controlled loopback experiment
 
@@ -337,28 +351,28 @@ The authoritative-host endpoints were:
 
 Both peers converged to the same endpoint bit pattern in all six cells. Every
 native contact observation also decomposed bit-exactly. Representative
-authoritative terms are:
+contact terms are:
 
 | Case | `M` | Flat terms | Multipliers | `B` | `R` or overwrite | `C` | Native pool | Stored HP delta |
 | --- | ---: | --- | --- | ---: | --- | ---: | ---: | ---: |
 | instant host | `10` | all `0` | all `1` | `10` | `R=1` | `0.30124989151955` | `0.90751492977142` (`0x3F6852E6`) | `0.90625` |
-| instant client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.29999989271164` | `1760.3988037109` (`0x44DC0CC3`) | `1760.3984375` |
+| instant client replay on host | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.29999989271164` | `1760.3988037109` (`0x44DC0CC3`) | `1760.3984375` |
 | 170-frame host | `10` | all `0` | all `1` | `10` | `R=1` | `0.39249980449677` | `1.5405609607697` (`0x3FC5311A`) | `1.5390625` |
-| 170-frame client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.38374981284142` | `2880.482421875` (`0x453407B8`) | `2880.484375` |
+| 170-frame client replay on host | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.38374981284142` | `2880.482421875` (`0x453407B8`) | `2880.484375` |
 | full host | `10` | all `0` | all `1` | `10` | `R=1` | `1.0` | `10.0` (`0x41200000`) | `10.0` |
-| full client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `1.0` | `19560.0` (`0x4698D000`) | `19560.0` |
+| full client replay on host | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `1.0` | `19560.0` (`0x4698D000`) | `19560.0` |
 
 The two contact lanes are always `native_pool / 2`; the small differences
 between a native pool and the recorded fixture delta are exactly the
 single-precision HP-store granularity at `50000`.
 
 The receiving peer also materializes its own replay Boulder. For a host cast,
-the client observer exhibits the same bad `19560` replay contact, but it is
-not authoritative and the host's stock endpoint wins. For a client cast, the
-host's replay is authoritative; its inflated native endpoint is therefore
-the endpoint serialized back to both peers. That directionality explains why
-the suite saw a client-cast-only family even though the bad replay write
-exists on either receiving peer.
+the client observer exhibits the same bad `19560` replay contact, but the
+host's stock world endpoint corrects it. For a client cast, the observer is
+the host, so its replay mutates the authoritative enemy directly in addition
+to the client's stock claim. That directionality explains why the suite saw
+a client-cast-only family even though the bad replay write existed on either
+receiving peer.
 
 Charge explains variation *within* each family: `C ~= 0.30` gives about
 `1760`, `C ~= 0.39` gives the audited `~3000` family, and `C = 1` gives
@@ -373,11 +387,35 @@ the other `1.541015625` to the observed `3034.1020507812` total.
 **CLIENT-ONLY INFLATION.** Issue #52 is a loader defect, not stock balance.
 The host- and client-cast families are unequal under pinned conditions, and
 the authoritative client-cast path contains one extra named factor:
-`0x007A03F0 = 1956`. The claim serializer preserves the resulting endpoint
-without scaling it. The required action is therefore to remove the
-stat-vector normalization and all loader writes to native Boulder damage
-fields from the remote replay seam, while retaining native charge/growth
-control.
+`0x007A03F0 = 1956`. The claim serializer contributes only the stock local
+contact and applies no scale; the host's independent replay contact supplies
+the inflated component.
+
+### Action
+
+The correction closes the native-damage ownership class rather than adding an
+Earth-specific compensation:
+
+1. Remote Boulder replay no longer resolves or applies
+   `0x007A03F0 = 1956`. `HoldBotBoulderAtReleaseCharge` no longer writes
+   `Boulder + 0x1F4` or `Boulder + 0x1F8`; stock code owns both fields.
+2. The loader's target-lethal projection reads the live release base at
+   `Boulder + 0x1F8` and mirrors only the finalizer's charge-square,
+   floor, and cap arithmetic. It does not assume the conditional `0.5`
+   branch was taken.
+3. `HookBadguyDamage` now rejects native enemy damage from a
+   packet-driven remote participant when the target is a replicated run
+   enemy. The local cast owner remains the only process allowed to execute
+   that spell contact. A client owner serializes its stock contact through
+   `EnemyDamageClaimPacket`; a host owner applies it directly. Host-owned
+   `LuaBrain` synthetic participants remain host-authoritative and are not
+   classified as packet-driven on the host.
+4. The layout names now describe the retail constants:
+   `primary_spell_stat_output_normalization=0x007A03F0` and
+   `earth_boulder_conditional_release_multiplier=0x007DE808`.
+
+The remote replay still materializes, grows, releases, collides, and supplies
+presentation. It no longer owns a second enemy HP mutation.
 
 ## Static evidence
 
@@ -404,9 +442,33 @@ Key records are:
 - `ghidra-skill-row-flags.log` — Earth class and Siege Mage eligibility row
   construction.
 
-## Post-fix proof status
+## Post-fix proof
 
-Pending at this evidence checkpoint. The fix must make host and client
-authoritative endpoints bit-equal for the instant and full-charge controls,
-remove every `1956` replay observation, and preserve the pre-fix host-cast
-endpoint bits.
+The final six-cell matrix is:
+
+```text
+/mnt/d/codex-evidence/earth-damage-20260727/post-fix-final/earth-damage-matrix.json
+```
+
+It used only `edmg-host` and `edmg-client` on ports `48911` and `48912`,
+with `audioDisabled=true`. The JSON records the launcher-returned PIDs and
+the exact worktree-staged executables revalidated and stopped during cleanup.
+
+| Hold | Host casts | Client casts | Exact equality |
+| --- | ---: | ---: | --- |
+| 2 frames | `0.90625` (`0x3F680000`) | `0.90625` (`0x3F680000`) | yes |
+| 170 frames | `1.5390625` (`0x3FC50000`) | `1.5390625` (`0x3FC50000`) | yes |
+| full, 900 frames | `10.0` (`0x41200000`) | `10.0` (`0x41200000`) | yes |
+
+All six cells have exact host/client HP convergence and bit-exact formula
+decomposition. Every cast produced an applied local-owner observation with
+the stock pool. Three cells also reached native contact on the packet-driven
+observer; each had `hp_delta=0`, `hp_delta_bits=0`, and
+`hp_store_path=contact_suppressed`. No observation contained the `1956`
+overwrite. The pre-fix host-cast instant and full-charge endpoint bits remain
+unchanged.
+
+**Final resolution: CLIENT-ONLY INFLATION FIXED.** Issue #52 is explained and
+fixed as a multiplayer replay-authority defect. The level-one stock curve
+remains `10 * C^2`, subject only to its traced native conditional multiplier,
+floor, and cap; no stock balance number changed.

@@ -37,3 +37,11 @@ Per the investigation boundary, no Earth product code or matrix charge policy
 is changed here. The existing directional values remain the regression
 baseline until a separately authorized investigation identifies the
 client-origin source of the additional `3032.5610351562` transition.
+
+## Resolution
+
+The 2026-07-27 issue-#52 follow-up proved that the extra transition came from
+an observer replay whose release base was overwritten with
+`mDamage * 1956`, not from the stock charge curve. See
+[`earth-boulder-damage-formula-2026-07-27.md`](earth-boulder-damage-formula-2026-07-27.md)
+for the complete formula, claim trace, correction, and exact post-fix matrix.

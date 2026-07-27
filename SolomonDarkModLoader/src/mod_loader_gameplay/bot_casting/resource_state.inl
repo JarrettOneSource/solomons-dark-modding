@@ -323,28 +323,6 @@ float ResolveEarthBoulderBaseDamage(
     return stats.damage;
 }
 
-float ResolveEarthBoulderDamageOutputScale() {
-    float scale = 0.0f;
-    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderDamageOutputScaleGlobal, &scale)) {
-        return 0.0f;
-    }
-    if (!std::isfinite(scale) || scale <= 0.0f) {
-        return 0.0f;
-    }
-    return scale;
-}
-
-float ResolveEarthBoulderReleaseDamageScale() {
-    float scale = 0.0f;
-    if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageScaleGlobal, &scale)) {
-        return 0.0f;
-    }
-    if (!std::isfinite(scale) || scale <= 0.0f) {
-        return 0.0f;
-    }
-    return scale;
-}
-
 float ResolveEarthBoulderReleaseDamageFloor() {
     float floor = 0.0f;
     if (!TryReadResolvedGameDoubleAsFloat(kEarthBoulderReleaseDamageFloorGlobal, &floor)) {

@@ -551,6 +551,35 @@ bool IsAuthorizedHostSyntheticFireballDamage(
     return true;
 }
 
+bool ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage(
+    uintptr_t target_actor_address,
+    uintptr_t source_actor_address) {
+    if (!multiplayer::IsLocalTransportEnabled() ||
+        target_actor_address == 0 ||
+        source_actor_address == 0 ||
+        multiplayer::GetLocalRunEnemyNetworkActorId(
+            target_actor_address) == 0) {
+        return false;
+    }
+    const auto source_participant_id =
+        ResolveDamageSourceParticipantId(source_actor_address);
+    const auto local_participant_id =
+        multiplayer::GetLocalTransportParticipantId();
+    if (source_participant_id == 0 ||
+        local_participant_id == 0 ||
+        source_participant_id == local_participant_id) {
+        return false;
+    }
+    std::lock_guard<std::recursive_mutex> lock(
+        g_participant_entities_mutex);
+    const auto* binding =
+        FindParticipantEntity(source_participant_id);
+    if (!IsPacketDrivenRemoteParticipantBinding(binding)) {
+        return false;
+    }
+    return true;
+}
+
 std::uint8_t __fastcall HookBadguyDamage(
     void* self,
     void* /*unused_edx*/) {
@@ -579,6 +608,16 @@ std::uint8_t __fastcall HookBadguyDamage(
             context_source,
             kDamageSourceGameplaySlotOffset,
             &source_gameplay_slot);
+    if (have_source &&
+        ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage(
+            actor_address,
+            context_source)) {
+        const auto earth_boulder_damage_capture =
+            CaptureEarthBoulderDamageBeforeNativeCall(actor_address);
+        ObserveEarthBoulderDamageAfterNativeCall(
+            earth_boulder_damage_capture);
+        return 0;
+    }
     if (have_source &&
         source_native_type_id == kFireballDamageSourceNativeTypeId &&
         source_gameplay_slot != 0) {

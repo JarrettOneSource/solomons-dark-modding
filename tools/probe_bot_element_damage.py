@@ -441,12 +441,10 @@ def build_native_projectile_spawn_validation(
         matching_release is not None
         and release_reason == "target_lethal"
         and finite_float(float(matching_release.get("projected_release_damage", 0.0)))
-        and finite_float(float(matching_release.get("release_damage_scale", 0.0)))
         and finite_float(float(matching_release.get("release_damage_floor", 0.0)))
         and finite_float(float(matching_release.get("release_damage_cap_scale", 0.0)))
         and finite_float(float(matching_release.get("projected_hp_damage", 0.0)))
         and finite_float(float(matching_release.get("target_hp", 0.0)))
-        and float(matching_release.get("release_damage_scale", 0.0)) > 0.0
         and float(matching_release.get("release_damage_floor", 0.0)) >= 0.0
         and float(matching_release.get("release_damage_cap_scale", 0.0)) > 0.0
         and float(matching_release.get("projected_release_damage", 0.0)) > 0.0
@@ -682,8 +680,6 @@ def build_native_spell_stat_validation(
                     "damage_getter_attempt": parse_cast_startup_value(line, "damage_getter_attempt"),
                     "damage_getter_seh": parse_cast_startup_value(line, "damage_getter_seh"),
                     "base_damage": parse_log_float(line, "base_damage"),
-                    "damage_output_scale": parse_log_float(line, "damage_output_scale"),
-                    "release_damage_scale": parse_log_float(line, "release_damage_scale"),
                     "release_damage_floor": parse_log_float(line, "release_damage_floor"),
                     "release_damage_cap_scale": parse_log_float(line, "release_damage_cap_scale"),
                     "projected_damage": parse_log_float(line, "projected_damage"),
@@ -710,10 +706,6 @@ def build_native_spell_stat_validation(
                     "projection_target_in_impact": parse_cast_startup_value(line, "projection_target_in_impact"),
                     "release_charge_write": parse_cast_startup_value(line, "release_charge_write"),
                     "release_charge_hold": parse_cast_startup_value(line, "release_charge_hold"),
-                    "release_damage_hold": parse_cast_startup_value(line, "release_damage_hold"),
-                    "release_base_damage_hold": parse_cast_startup_value(line, "release_base_damage_hold"),
-                    "release_scaled_base_damage": parse_log_float(line, "release_scaled_base_damage"),
-                    "release_damage_output_scale_hold": parse_log_float(line, "release_damage_output_scale_hold"),
                     "release_growth_stop": parse_cast_startup_value(line, "release_growth_stop"),
                     "release_growth_stop_eligible": parse_cast_startup_value(line, "release_growth_stop_eligible"),
                     "release_growth_stop_min_charge": parse_log_float(line, "release_growth_stop_min_charge"),
@@ -756,8 +748,6 @@ def build_native_spell_stat_validation(
                     "release_charge": parse_log_float(line, "release_charge"),
                     "release_base_damage": parse_log_float(line, "release_base_damage"),
                     "release_projected_damage": parse_log_float(line, "release_projected_damage"),
-                    "release_damage_output_scale": parse_log_float(line, "release_damage_output_scale"),
-                    "release_damage_scale": parse_log_float(line, "release_damage_scale"),
                     "release_damage_floor": parse_log_float(line, "release_damage_floor"),
                     "release_damage_cap_scale": parse_log_float(line, "release_damage_cap_scale"),
                     "release_projected_release_damage": parse_log_float(line, "release_projected_release_damage"),
@@ -894,12 +884,10 @@ def build_native_spell_stat_validation(
             and int(matching_complete.get("cleanup_requested", 0)) == 1
             and int(matching_complete.get("post_release_ticks", 0)) >= EXPECTED_EARTH_RELEASE_EDGE_TICKS
             and finite_float(float(matching_release.get("projected_release_damage", 0.0)))
-            and finite_float(float(matching_release.get("release_damage_scale", 0.0)))
             and finite_float(float(matching_release.get("release_damage_floor", 0.0)))
             and finite_float(float(matching_release.get("release_damage_cap_scale", 0.0)))
             and finite_float(float(matching_release.get("projected_hp_damage", 0.0)))
             and finite_float(float(matching_release.get("target_hp", 0.0)))
-            and float(matching_release.get("release_damage_scale", 0.0)) > 0.0
             and float(matching_release.get("release_damage_floor", 0.0)) >= 0.0
             and float(matching_release.get("release_damage_cap_scale", 0.0)) > 0.0
             and float(matching_release.get("projected_release_damage", 0.0)) > 0.0

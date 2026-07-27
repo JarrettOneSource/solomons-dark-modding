@@ -162,6 +162,17 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
         "kBoundedHeldDamageThresholdPostReleaseWorldUpdateTicks",
         "native_cleanup_release",
         "release_damage_native",
+        "ResolveEarthBoulderScaledReleaseBaseDamage",
+        "ResolveEarthBoulderDamageOutputScale",
+        "ResolveEarthBoulderReleaseDamageScale",
+        "kEarthBoulderDamageOutputScaleGlobal",
+        "kEarthBoulderReleaseDamageScaleGlobal",
+        "earth_boulder_damage_output_scale",
+        "earth_boulder_release_damage_scale",
+        "damage_output_scale",
+        "scaled_release_base_damage",
+        "release_damage_hold",
+        "release_base_damage_hold",
     )
     present_forbidden = [token for token in forbidden_tokens if token in combined_text]
     if present_forbidden:
@@ -183,15 +194,12 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
         "obj_release_base_damage",
         "earth_max_size_reached",
         "earth_target_lethal_release_ready",
-        "ResolveEarthBoulderDamageOutputScale",
-        "ResolveEarthBoulderReleaseDamageScale",
         "ResolveEarthBoulderReleaseDamageFloor",
         "ResolveEarthBoulderReleaseDamageCapScale",
-        "kEarthBoulderDamageOutputScaleGlobal",
-        "kEarthBoulderReleaseDamageScaleGlobal",
         "kEarthBoulderReleaseDamageFloorGlobal",
         "kEarthBoulderReleaseDamageCapScaleGlobal",
-        "earth_boulder_release_damage_scale",
+        "primary_spell_stat_output_normalization=0x007A03F0",
+        "earth_boulder_conditional_release_multiplier=0x007DE808",
         "earth_boulder_release_damage_floor",
         "earth_boulder_release_damage_cap_scale",
         "ongoing.bounded_release_requested",
@@ -204,7 +212,6 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
         "progression_level",
         "base_damage",
         "projected_damage",
-        "damage_output_scale",
         "projected_release_damage",
         "projected_hp_damage",
         "projection_target_in_impact",
@@ -218,7 +225,25 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
     if "ResolveEarthBoulderBaseDamage(" in projection_text:
         raise StaticReTestFailure(
             "held Boulder projection still rebuilds native spell stats instead of reading the live Boulder release base")
-    return "Earth boulder damage resolver uses live Boulder release fields and named native stat seams"
+    hold_body = re.search(
+        r"BotBoulderReleaseHoldWrites HoldBotBoulderAtReleaseCharge\((?P<body>.*?)\n}\n\nbool StopOngoingBotCastForManaReserve",
+        processing_text,
+        re.DOTALL,
+    )
+    if hold_body is None:
+        raise StaticReTestFailure(
+            "held Boulder charge adapter was not found"
+        )
+    for forbidden_write in (
+        "kSpellObjectReleaseDamageOffset",
+        "kSpellObjectReleaseBaseDamageOffset",
+    ):
+        if forbidden_write in hold_body.group("body"):
+            raise StaticReTestFailure(
+                "held Boulder charge adapter still writes a native damage field: " +
+                forbidden_write
+            )
+    return "Earth boulder damage stays native-owned while replay controls only charge and growth"
 
 
 def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
@@ -246,8 +271,8 @@ def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
         "earth_boulder_contact_tick=0x00620B60",
         "damage_context_primary=0x0081C6E8",
         "damage_context_secondary=0x0081C6EC",
-        "earth_boulder_damage_output_scale=0x007A03F0",
-        "earth_boulder_release_damage_scale=0x007DE808",
+        "primary_spell_stat_output_normalization=0x007A03F0",
+        "earth_boulder_conditional_release_multiplier=0x007DE808",
         "earth_boulder_release_damage_floor=0x007DE8F0",
         "earth_boulder_release_damage_cap_scale=0x00784740",
         "earth_boulder_release_growth_stop_min_charge=0x0078567C",
@@ -390,7 +415,7 @@ def test_boulder_projection_is_read_only_native_formula() -> str:
         "TryListSceneActors",
         "native_boulder_impact_victim_scan",
         "!candidate.native_radius_damage_eligible",
-        "native_base_damage * release_damage_scale",
+        "native_base_damage * release_charge * release_charge",
         "snapshot.projected_release_damage",
         "snapshot.projected_hp_damage",
         "snapshot.projected_hp_damage = snapshot.projected_release_damage",
