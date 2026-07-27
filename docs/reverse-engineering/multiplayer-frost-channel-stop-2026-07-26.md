@@ -123,14 +123,67 @@ Input-only attempt evidence:
 - `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-input-only-logs/client-solomondarkmodloader.log`
 - `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-input-only-logs/host-solomondarkmodloader.log`
 
+### Input plus idle control brain correction falsified
+
+A second correction combined released synthetic input with an idle authored
+control brain before the stock tick. Five more audio-disabled client-to-host
+trials still produced only the harmless initial stop on the observer. The
+observer refcount remained `1` in all five trials, while the caster recorded
+its real release stop each time:
+
+| Trial | caster release stop ms | observer stop count | observer refcount |
+| ---: | ---: | ---: | ---: |
+| 1 | `345067421` | `1` | `1` |
+| 2 | `345075328` | `1` | `1` |
+| 3 | `345083265` | `1` | `1` |
+| 4 | `345091125` | `1` | `1` |
+| 5 | `345098984` | `1` | `1` |
+
+The host received each explicit release and retired each replay two
+post-release processing passes later. In trial 1, for example, release arrived
+at `20:23:48.091` and cleanup ran at `20:23:48.094`. The failure therefore
+remained a missing stock transition edge, not transport latency.
+
+Focused disassembly of the stock transition path identified the remaining
+precondition:
+
+1. `0x00549027` tests actor `+0x160`, the animation-drive state. A nonzero
+   value sets the transition guard for the tick.
+2. `0x00549046` tests actor `+0x1EC`, the no-interrupt flag. A nonzero value
+   sets the same guard.
+3. `0x005495F2` tests that guard. When set, control jumps directly to the
+   current/previous comparison without clearing or selecting a current
+   primary.
+4. Only with a clear guard does `0x00549602` write current primary `+0x270`
+   to zero before the optional selection at `0x0054964A`.
+5. `0x005496E5` then compares current and previous, reaching the Frost stop at
+   `0x00549725` for the required `0x20 -> 0` transition.
+
+On the first stock tick with remote input low, `+0x160` and `+0x1EC` still
+describe the preceding held frame. The early transition block therefore
+skips the current-primary clear. The spell handler later in that tick consumes
+released input and clears those fields, but replay settlement can retire the
+cast before another stock tick. Retirement writes both current and previous
+primary IDs to zero, erasing the edge.
+
+Evidence:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-two-tick-attempt-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-two-tick-logs/client-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-two-tick-logs/host-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/dump_frost_transition.py`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/find_frost_latch_writes.py`
+
 ## Fix contract
 
 Once a remote-controlled unbounded held primary has become active and its
 release or timeout state is observed,
 `OngoingCastShouldDriveSyntheticCastInput()` must return `false`. The next
-stock remote-actor tick must also run with the authored control brain idled so
-it cannot reselect the primary. Stock can then consume the `0x20 -> 0` edge
-and stop the loop before the existing post-tick settle logic retires the cast.
+stock remote-actor tick must also run with the authored control brain idled,
+animation-drive state `+0x160` clear, and no-interrupt flag `+0x1EC` clear.
+Those are the native local-release preconditions: stock can clear the current
+primary, consume the `0x20 -> 0` edge, and stop the loop before the existing
+post-tick settle logic retires the cast.
 
 This should be a held-primary lifecycle rule, not a Frost audio special case.
 Bounded held primaries keep their existing explicit release-edge path, and
