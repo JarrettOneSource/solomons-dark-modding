@@ -168,11 +168,11 @@ class LoadingScreenContractTests(unittest.TestCase):
             ROOT
             / "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
         ).read_text(encoding="utf-8")
-        ui_progress = (
+        ui_progress_path = (
             ROOT
             / "SolomonDarkModLauncher.UI/src/ViewModels/"
             "MatchLoadingProgress.cs"
-        ).read_text(encoding="utf-8")
+        )
         ui_view_model = (
             ROOT
             / "SolomonDarkModLauncher.UI/src/ViewModels/"
@@ -188,44 +188,16 @@ class LoadingScreenContractTests(unittest.TestCase):
             / "SolomonDarkModLauncher/src/App/"
             "LauncherCommandExecutor.cs"
         ).read_text(encoding="utf-8")
-        self.assertIn(
-            'Link="Assets\\Wizards_dire_BG.png"',
-            ui_project,
-        )
-        self.assertIn('Stretch="UniformToFill"', ui_view)
-        self.assertIn('Height="18*"', ui_view)
-        self.assertIn('Color="#B3000000"', ui_view)
-        self.assertIn('Width="60*"', ui_view)
-        self.assertIn('Height="9"', ui_view)
-        self.assertIn(
-            'Style="{StaticResource MatchLoadingProgressBarStyle}"',
-            ui_view,
-        )
-        self.assertIn(
-            'x:Key="MatchLoadingProgressBarStyle"',
-            ui_theme,
-        )
-        self.assertIn(
-            "MatchLoadingPresentationDelayMilliseconds = 150",
-            ui_view_model,
-        )
-        self.assertIn(
-            "MatchLoadingStage.SynchronizingHostMods",
-            ui_progress,
-        )
-        self.assertIn(
-            "completed / (double)total",
-            ui_progress,
-        )
-        self.assertIn(
-            "Value = Math.Max(Value, nextValue)",
-            ui_progress,
-        )
-        self.assertIn(
-            "UpdateProgressScope.LobbyModSync",
-            command_executor,
-        )
-        self.assertNotIn("Task.Delay", ui_progress)
+        # Owner direction (2026-07-27): the desktop launcher window never
+        # presents the match loading screen. The art ships to the staged
+        # game only; the launcher keeps its plain utility progress UI.
+        self.assertFalse(ui_progress_path.exists())
+        self.assertNotIn("Wizards_dire_BG", ui_project)
+        self.assertNotIn("Wizards_dire_BG", ui_view)
+        self.assertNotIn("MatchLoadingProgressBarStyle", ui_view)
+        self.assertNotIn("MatchLoadingProgressBarStyle", ui_theme)
+        self.assertNotIn("MatchLoading", ui_view_model)
+        self.assertNotIn("UpdateProgressScope", command_executor)
 
     def test_live_verifier_uses_only_the_fieldfix_instances_and_ports(self) -> None:
         verifier = (
@@ -250,6 +222,13 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn('"gameLaunched": False', launcher_verifier)
         self.assertIn(
             "visibleStateUnchanged",
+            launcher_verifier,
+        )
+        self.assertIn("OVERLAY_MARKERS", launcher_verifier)
+        self.assertIn("Reading the host's grimoire", launcher_verifier)
+        self.assertIn('"Match loading progress"', launcher_verifier)
+        self.assertIn(
+            'record["overlayAbsent"] = True',
             launcher_verifier,
         )
         self.assertNotIn("Start-Process SolomonDark.exe", launcher_verifier)

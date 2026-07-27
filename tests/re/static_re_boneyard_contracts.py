@@ -258,7 +258,7 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
     launcher_ui = _read(
         "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
     )
-    launcher_ui_progress = _read(
+    launcher_ui_progress_path = ROOT / (
         "SolomonDarkModLauncher.UI/src/ViewModels/"
         "MatchLoadingProgress.cs"
     )
@@ -413,37 +413,32 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
         raise StaticReTestFailure(
             "loading screen asset is not staged and packaged with the loader"
         )
-    for token, source in (
-        ('Source="/Assets/Wizards_dire_BG.png"', launcher_ui),
-        ('Stretch="UniformToFill"', launcher_ui),
-        ('Height="18*"', launcher_ui),
-        ('Color="#B3000000"', launcher_ui),
-        ('Width="60*"', launcher_ui),
-        ('Height="9"', launcher_ui),
-        (
-            "MatchLoadingPresentationDelayMilliseconds = 150",
-            launcher_ui_view_model,
-        ),
-        (
-            "Value = Math.Max(Value, nextValue)",
-            launcher_ui_progress,
-        ),
-        (
-            'Style="{StaticResource MatchLoadingProgressBarStyle}"',
-            launcher_ui,
-        ),
-        ('x:Key="MatchLoadingProgressBarStyle"', launcher_ui_theme),
-        ("UpdateProgressScope.LobbyModSync", launcher_executor),
-        ("completed / (double)total", launcher_ui_progress),
-    ):
-        if token not in source:
-            raise StaticReTestFailure(
-                f"pre-game loading-screen contract is missing: {token}"
-            )
-    if "Task.Delay" in launcher_ui_progress:
+    if launcher_ui_progress_path.exists():
         raise StaticReTestFailure(
-            "pre-game match progress advances from a timer"
+            "the desktop launcher must not carry a match loading "
+            "progress model; the loading screen belongs to the staged "
+            "game only (owner direction, 2026-07-27)"
         )
+    for token, source, where in (
+        ("Wizards_dire_BG", launcher_ui, "MainWindow.xaml"),
+        ("MatchLoadingProgressBarStyle", launcher_ui, "MainWindow.xaml"),
+        (
+            "MatchLoadingProgressBarStyle",
+            launcher_ui_theme,
+            "LauncherTheme.xaml",
+        ),
+        ("MatchLoading", launcher_ui_view_model, "MainWindowViewModel.cs"),
+        (
+            "UpdateProgressScope",
+            launcher_executor,
+            "LauncherCommandExecutor.cs",
+        ),
+    ):
+        if token in source:
+            raise StaticReTestFailure(
+                "the desktop launcher window must not present the match "
+                f"loading screen: {token} found in {where}"
+            )
     for token in (
         'INSTANCE_PREFIX = "ffix"',
         "HOST_PORT = 49711",
@@ -459,10 +454,11 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
             )
 
     return (
-        "loading progress is monotonic and sourced from launcher mod sync, "
-        "Steam route/authentication, host/world/wave checkpoints, native "
-        "Boneyard work, and run-barrier milestones; rendering uses the shared "
-        "D3D9 lifetime seam and canonical packaged art"
+        "loading progress is monotonic and sourced from Steam "
+        "route/authentication, host/world/wave checkpoints, native Boneyard "
+        "work, and run-barrier milestones; the desktop launcher window "
+        "presents no loading screen; rendering uses the shared D3D9 "
+        "lifetime seam and canonical packaged art"
     )
 
 

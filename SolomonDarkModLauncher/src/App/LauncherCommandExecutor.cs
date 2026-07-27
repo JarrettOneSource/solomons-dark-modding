@@ -50,16 +50,13 @@ internal static class LauncherCommandExecutor
         if (RequiresLobbyModSync(command) &&
             command.SteamLobbyId is { } lobbyId)
         {
-            var lobbyProgress = progress is null
-                ? null
-                : new LobbyModSyncProgress(progress);
             lobbyModSync = LobbyModSynchronizer.SynchronizeAsync(
                     configuration,
                     catalog,
                     lobbyId,
                     command.LobbyHost.DirectoryBaseUrl,
                     command.LobbyTicket,
-                    lobbyProgress)
+                    progress)
                 .GetAwaiter()
                 .GetResult();
             catalog = lobbyModSync.Catalog;
@@ -105,20 +102,6 @@ internal static class LauncherCommandExecutor
         command.Mode is LauncherMode.Launch or LauncherMode.Stage &&
         command.MultiplayerMode == MultiplayerLaunchMode.Join &&
         command.SteamLobbyId is not null;
-
-    private sealed class LobbyModSyncProgress(
-        IProgress<UpdateProgress> inner) :
-        IProgress<UpdateProgress>
-    {
-        public void Report(UpdateProgress value)
-        {
-            inner.Report(
-                value with
-                {
-                    Scope = UpdateProgressScope.LobbyModSync
-                });
-        }
-    }
 
     private static LauncherCommandExecution ExecuteJoinPreview(
         LauncherCommand command,

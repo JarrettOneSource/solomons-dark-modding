@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Capture real pre-game join/mod-sync loading stages without launching the game."""
+"""Prove the launcher keeps its plain utility UI through real pre-game join/mod sync.
+
+The desktop launcher window must never present the match loading screen
+(owner direction, 2026-07-27); that presentation belongs to the staged
+game's D3D9 renderer only. This verifier drives a real join preview,
+consent, and throttled mod download without launching the game, and fails
+if any overlay signature becomes visible.
+"""
 
 from __future__ import annotations
 
@@ -19,11 +26,13 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE_ROOT = Path("/mnt/d/codex-evidence/fieldfix-20260727")
+EVIDENCE_ROOT = Path(
+    "/mnt/d/codex-evidence/launcher-plain-sync-20260727"
+)
 GAME_DIRECTORY = Path(
     "/mnt/c/Users/User/Documents/GitHub/SB Modding/"
     "Solomon Dark/SolomonDarkAbandonware"
@@ -32,8 +41,17 @@ UI_EXECUTABLE = (
     ROOT / "dist/ui/SolomonDarkMultiplayerBeta.exe"
 )
 CAPTURE_SCRIPT = ROOT / "scripts/capture_window.py"
-BACKGROUND = ROOT / "assets/loading/Wizards_dire_BG.png"
 OUTPUT_PATH = EVIDENCE_ROOT / "match-loading-screen-live.json"
+
+# Signatures of the removed launcher match-loading overlay: its themed
+# status labels and the a11y name of its dedicated progress bar. None of
+# these may ever be visible in the launcher window; the plain UI's own
+# elements ("Update progress", status text) are the only progress surface.
+OVERLAY_MARKERS = (
+    "Reading the host's grimoire",
+    "Waiting for your mod choice",
+    "Match loading progress",
+)
 
 INSTANCE_NAME = "ffix-loading"
 TEST_SCOPE = "ffix-loading"
@@ -47,6 +65,16 @@ DOWNLOAD_PAUSE_BYTES = 1024 * 1024
 
 class MatchLoadingFailure(RuntimeError):
     pass
+
+
+def _assert_overlay_absent(names: list[str]) -> None:
+    for name in names:
+        for marker in OVERLAY_MARKERS:
+            if marker in name:
+                raise MatchLoadingFailure(
+                    "the launcher window presented match loading "
+                    f"screen content: {marker!r} appeared as {name!r}"
+                )
 
 
 def _windows_path(path: Path) -> str:
@@ -625,42 +653,12 @@ def _prepare_isolated_state() -> None:
 
 def _image_metrics(path: Path) -> dict[str, Any]:
     with Image.open(path) as image_file:
-        image = image_file.convert("RGB")
-        width, height = image.size
-        upper = image.crop(
-            (0, 0, width, int(height * 0.70))
-        )
-        with Image.open(BACKGROUND) as background_file:
-            background = background_file.convert("RGB")
-            scale = max(
-                width / background.width,
-                height / background.height,
-            )
-            resized = background.resize(
-                (
-                    round(background.width * scale),
-                    round(background.height * scale),
-                ),
-                Image.Resampling.BILINEAR,
-            )
-            left = (resized.width - width) // 2
-            top = (resized.height - height) // 2
-            expected = resized.crop(
-                (left, top, left + width, top + height)
-            )
-        difference = ImageChops.difference(
-            upper,
-            expected.crop((0, 0, width, upper.height)),
-        )
-        mean_error = sum(
-            ImageStat.Stat(difference).mean
-        ) / 3
+        width, height = image_file.size
     return {
         "path": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "width": width,
         "height": height,
-        "coverCropUpperMeanError": mean_error,
     }
 
 
@@ -723,13 +721,14 @@ def verify(output_path: Path) -> dict[str, Any]:
                 )
             inspecting_names = _wait_for_names(
                 ui_pid,
-                lambda names: any(
-                    "Reading the host's grimoire" in name
-                    for name in names
-                ) and "5%" in names,
+                lambda names: (
+                    "The launcher checks the host's mod list."
+                    in names
+                ),
                 timeout=10,
-                label="host-mod inspection loading stage",
+                label="plain host-mod inspection status",
             )
+            _assert_overlay_absent(inspecting_names)
             inspecting_path = (
                 capture_root / "01-inspecting-host-mods.png"
             )
@@ -741,11 +740,11 @@ def verify(output_path: Path) -> dict[str, Any]:
                 lambda names: (
                     "The host has mods" in names
                     and "Yes" in names
-                    and "10%" in names
                 ),
                 timeout=15,
-                label="host-mod consent loading stage",
+                label="plain host-mod consent dialog",
             )
+            _assert_overlay_absent(consent_names)
             consent_path = (
                 capture_root / "02-awaiting-mod-consent.png"
             )
@@ -772,11 +771,12 @@ def verify(output_path: Path) -> dict[str, Any]:
                         for name in names
                     )
                     and any("1 MB of 4 MB" in name for name in names)
-                    and "17%" in names
+                    and "Update progress" in names
                 ),
                 timeout=10,
-                label="real mod download loading stage",
+                label="plain mod download progress",
             )
+            _assert_overlay_absent(stalled_names_a)
             download_path_a = (
                 capture_root / "03-mod-sync-paused-a.png"
             )
@@ -796,9 +796,8 @@ def verify(output_path: Path) -> dict[str, Any]:
             record["stages"] = [
                 {
                     "stage": "inspecting_host_mods",
-                    "progress": 5,
                     "status":
-                        "Reading the host's grimoire…",
+                        "The launcher checks the host's mod list.",
                     "visibleText": inspecting_names,
                     "capture": _image_metrics(
                         inspecting_path
@@ -806,14 +805,11 @@ def verify(output_path: Path) -> dict[str, Any]:
                 },
                 {
                     "stage": "awaiting_mod_consent",
-                    "progress": 10,
-                    "status": "Waiting for your mod choice…",
                     "visibleText": consent_names,
                     "capture": _image_metrics(consent_path),
                 },
                 {
                     "stage": "synchronizing_host_mods",
-                    "progress": 17,
                     "source": {
                         "bytesCompleted":
                             fixture.download_bytes_sent,
@@ -825,6 +821,8 @@ def verify(output_path: Path) -> dict[str, Any]:
                     ),
                 },
             ]
+            record["overlayAbsent"] = True
+            record["overlayMarkers"] = list(OVERLAY_MARKERS)
             record["stalledStage"] = {
                 "waitMilliseconds": 1000,
                 "visibleStateUnchanged": True,

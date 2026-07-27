@@ -15,8 +15,6 @@ namespace SolomonDarkModLauncher.UI.ViewModels;
 
 internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
-    private const int MatchLoadingPresentationDelayMilliseconds = 150;
-
     private readonly LauncherUiCommandClient client_;
     private readonly SteamWebsiteSessionClient steamWebsiteSessionClient_;
     private readonly CrashReportSubmissionClient crashReportSubmissionClient_;
@@ -26,7 +24,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SteamInviteListenerClient steamInviteListener_ = new();
     private readonly SteamLobbySessionClient steamLobbySession_ = new();
     private readonly LobbyLaunchState lobbyLaunchState_ = new();
-    private readonly MatchLoadingProgress matchLoadingProgress_ = new();
     private readonly StringBuilder transcriptBuilder_ = new();
     private readonly CancellationTokenSource lifetimeCancellation_ = new();
     private LauncherCliResponse? lastResponse_;
@@ -97,7 +94,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private LauncherInstallModActivation? pendingWebsiteModInstall_;
     private IReadOnlyList<string>? pendingLobbyMods_;
     private bool isJoiningLobby_;
-    private bool isMatchLoadingVisible_;
     private bool launcherCloseStarted_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
@@ -292,24 +288,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         get => isUpdateProgressComplete_;
         private set => SetProperty(ref isUpdateProgressComplete_, value);
     }
-
-    public bool IsMatchLoadingVisible
-    {
-        get => isMatchLoadingVisible_;
-        private set => SetProperty(ref isMatchLoadingVisible_, value);
-    }
-
-    public string MatchLoadingStatusText =>
-        matchLoadingProgress_.Label;
-
-    public string MatchLoadingDetailText =>
-        matchLoadingProgress_.Detail;
-
-    public double MatchLoadingProgressValue =>
-        matchLoadingProgress_.Value;
-
-    public string MatchLoadingPercentText =>
-        matchLoadingProgress_.PercentText;
 
     public bool IsInLobby
     {
@@ -1789,12 +1767,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var privacy = HostPrivacyPublic ? "public" : "friends";
         IsHostSetupOpen = false;
 
-        BeginMatchLoading(MatchLoadingStage.PreparingSession);
         await ExecuteUiCommandAsync(
             LauncherUiCommandMode.HostSteam,
             "The launcher starts the lobby.",
             hostOptions: new LauncherHostOptions(privacy, maxPlayers));
-        EndMatchLoading();
     }
 
     private void OnSteamInviteNotification(
@@ -1975,11 +1951,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         UpdateProgressValue = presentation.Value;
         IsUpdateProgressError = presentation.IsError;
         IsUpdateProgressComplete = presentation.IsComplete;
-        if (matchLoadingProgress_.Active)
-        {
-            matchLoadingProgress_.ObserveModSync(progress);
-            NotifyMatchLoadingChanged();
-        }
     }
 
     public void ReportLauncherUpdateFailure(string message)
@@ -1998,7 +1969,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (IsLocalUdpDevelopmentLaunch() &&
             !lobbyLaunchState_.JoinedLobbyId.HasValue)
         {
-            _ = LaunchLocalDevelopmentLobbyAsync();
+            _ = ExecuteUiCommandAsync(
+                LauncherUiCommandMode.LaunchSteamJoin,
+                $"Launching local game for lobby {LobbyId}…");
             return;
         }
 
@@ -2009,15 +1982,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         JoinLobbyDirect();
-    }
-
-    private async Task LaunchLocalDevelopmentLobbyAsync()
-    {
-        BeginMatchLoading(MatchLoadingStage.LaunchingGame);
-        await ExecuteUiCommandAsync(
-            LauncherUiCommandMode.LaunchSteamJoin,
-            $"Launching local game for lobby {LobbyId}…");
-        EndMatchLoading();
     }
 
     private static bool IsLocalUdpDevelopmentLaunch() =>
@@ -2056,7 +2020,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         pendingLobbyMods_ = null;
-        BeginMatchLoading(MatchLoadingStage.InspectingHostMods);
         IsBusy = true;
         StatusText = "The launcher checks the host's mod list.";
         CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.JoinPreview);
@@ -2067,7 +2030,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            EndMatchLoading();
             SetError(ex.Message);
             StatusText = "The command failed. Read the error message.";
             IsBusy = false;
@@ -2091,7 +2053,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (preview.HostProtocolVersion is { } hostProtocol &&
             hostProtocol != preview.LocalProtocolVersion)
         {
-            EndMatchLoading();
             SetError(
                 "The host is on a different Solomon Dark Revived version " +
                 $"(host: {preview.HostLoaderVersion ?? "unknown"}, you: {Version}). " +
@@ -2102,7 +2063,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (preview.UnavailableCount > 0)
         {
-            EndMatchLoading();
             var unavailable = preview.Mods
                 .Where(mod => mod.State == "unavailable")
                 .Select(mod => $"{mod.DisplayName} {mod.Version}");
@@ -2147,7 +2107,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             pendingWebsiteModInstall_ = null;
             consentedJoinStatusText_ = joinStatusText;
             StatusText = "Waiting for your mod download choice.";
-            AdvanceMatchLoading(MatchLoadingStage.AwaitingModConsent);
             IsModDownloadPromptOpen = true;
             return;
         }
@@ -2177,23 +2136,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             $"The launcher joins lobby {LobbyId}.";
         consentedJoinStatusText_ = null;
         IsModDownloadPromptOpen = false;
-        AdvanceMatchLoading(MatchLoadingStage.SynchronizingHostMods);
         _ = PrepareLobbyJoinAsync(joinStatusText);
     }
 
     private async Task PrepareLobbyJoinAsync(string joinStatusText)
     {
-        AdvanceMatchLoading(MatchLoadingStage.SynchronizingHostMods);
         if (!await ExecuteUiCommandAsync(
                 LauncherUiCommandMode.PrepareSteamJoin,
                 joinStatusText))
         {
-            EndMatchLoading();
             return;
         }
 
-        AdvanceMatchLoading(MatchLoadingStage.PreparingSession);
-        AdvanceMatchLoading(MatchLoadingStage.JoiningSteamLobby);
         StartSteamLobbyMembership();
     }
 
@@ -2201,7 +2155,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (!ulong.TryParse(LobbyId, out var lobbyId) || lobbyId == 0)
         {
-            EndMatchLoading();
             SetError("Enter a valid Steam lobby ID.");
             StatusText = "The lobby was not joined.";
             return;
@@ -2221,7 +2174,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             IOException or
             System.ComponentModel.Win32Exception)
         {
-            EndMatchLoading();
             isJoiningLobby_ = false;
             SetError(exception.Message);
             StatusText = "The lobby was not joined.";
@@ -2238,7 +2190,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         LobbyId = lobbyId.ToString();
-        BeginMatchLoading(MatchLoadingStage.LaunchingGame);
         steamLobbySession_.Leave();
         StatusText = $"Launching game for lobby {lobbyId}…";
         var launched = await ExecuteUiCommandAsync(
@@ -2246,11 +2197,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             StatusText);
         if (launched)
         {
-            EndMatchLoading();
             return;
         }
 
-        EndMatchLoading();
         ClearLobbyDetails();
         StartSteamInviteListener();
     }
@@ -2262,7 +2211,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        EndMatchLoading();
         steamLobbySession_.Leave();
         pendingLobbyMods_ = null;
         ClearLobbyDetails();
@@ -2293,7 +2241,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (notification.Kind is "joined" or "status" &&
             notification.LobbyId is { } lobbyId)
         {
-            AdvanceMatchLoading(MatchLoadingStage.LobbyReady);
             isJoiningLobby_ = false;
             lobbyLaunchState_.MarkJoined(lobbyId);
             OnPropertyChanged(nameof(JoinGameButtonText));
@@ -2302,7 +2249,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             ClearError();
             StatusText =
                 $"Joined lobby {lobbyId}. Click Launch Game when you are ready.";
-            EndMatchLoading();
             RaiseCommandStates();
             return;
         }
@@ -2312,7 +2258,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        EndMatchLoading();
         steamLobbySession_.Leave();
         isJoiningLobby_ = false;
         pendingLobbyMods_ = null;
@@ -2390,7 +2335,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         consentedJoinStatusText_ = null;
         pendingLobbyMods_ = null;
-        EndMatchLoading();
         IsModDownloadPromptOpen = false;
         StatusText = "Join canceled. No mods were downloaded.";
         TryStartPendingLobbyJoin();
@@ -2402,57 +2346,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         >= 1024 => $"{bytes / 1024.0:0.#} KB",
         _ => $"{bytes} bytes"
     };
-
-    private void BeginMatchLoading(MatchLoadingStage stage)
-    {
-        matchLoadingProgress_.Begin(stage);
-        IsMatchLoadingVisible = false;
-        NotifyMatchLoadingChanged();
-        _ = RevealMatchLoadingAfterDelayAsync(
-            matchLoadingProgress_.Sequence);
-    }
-
-    private void AdvanceMatchLoading(MatchLoadingStage stage)
-    {
-        matchLoadingProgress_.Advance(stage);
-        NotifyMatchLoadingChanged();
-    }
-
-    private async Task RevealMatchLoadingAfterDelayAsync(long sequence)
-    {
-        try
-        {
-            await Task.Delay(
-                MatchLoadingPresentationDelayMilliseconds,
-                lifetimeCancellation_.Token);
-        }
-        catch (OperationCanceledException)
-            when (lifetimeCancellation_.IsCancellationRequested)
-        {
-            return;
-        }
-
-        if (matchLoadingProgress_.Active &&
-            matchLoadingProgress_.Sequence == sequence)
-        {
-            IsMatchLoadingVisible = true;
-        }
-    }
-
-    private void EndMatchLoading()
-    {
-        matchLoadingProgress_.End();
-        IsMatchLoadingVisible = false;
-        NotifyMatchLoadingChanged();
-    }
-
-    private void NotifyMatchLoadingChanged()
-    {
-        OnPropertyChanged(nameof(MatchLoadingStatusText));
-        OnPropertyChanged(nameof(MatchLoadingDetailText));
-        OnPropertyChanged(nameof(MatchLoadingProgressValue));
-        OnPropertyChanged(nameof(MatchLoadingPercentText));
-    }
 
     private void StopSteamInviteListener()
     {
