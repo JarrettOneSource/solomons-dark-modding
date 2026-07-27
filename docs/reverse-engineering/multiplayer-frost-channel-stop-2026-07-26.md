@@ -194,9 +194,9 @@ processes record exactly one real Frost start and release stop, both final
 loop refcounts are zero, and observer stop latency is no more than one 50 ms
 snapshot interval relative to the caster stop.
 
-## Post-fix acceptance
+## Initial release-edge validation
 
-The final held-primary lifecycle correction passed five audio-disabled
+The held-primary lifecycle correction passed five audio-disabled
 client-to-host trials. Each process recorded one Frost start and two stock
 stop calls (the harmless selection stop plus the real release stop), and every
 final loop refcount was zero.
@@ -219,3 +219,46 @@ Evidence:
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/frost-stop-client-to-host-5x.json`
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/logs/client-solomondarkmodloader.log`
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/logs/host-solomondarkmodloader.log`
+
+## Registry revalidation and remaining latency edge
+
+The permanent native-audio registry then re-ran the same lifecycle without
+temporary function traces. It proved the refcount correction, but a longer
+four-trial sample caught one latency failure:
+
+| Trial | caster stop ms | observer stop ms | latency ms |
+| ---: | ---: | ---: | ---: |
+| 1 | `350436937` | `350436968` | `31` |
+| 2 | `350439406` | `350439453` | `47` |
+| 3 | `350441796` | `350441843` | `47` |
+| 4 | `350444250` | `350444328` | `78` |
+
+Trial 4 provides exact causal timing. The caster's stock loop stop ran at
+`21:53:24.858`, but the AppMain-owned transport did not send the explicit
+release packet until `21:53:24.886`, 28 ms later. The host applied that packet
+at `21:53:24.917`, then the remote stock actor produced the stop at
+`21:53:24.934`. No app-thread tick-gap diagnostic occurred in that interval;
+the observed 78 ms is therefore product scheduling, not attributed external
+load.
+
+Two ordinary scheduling boundaries remained:
+
+1. the local `PlayerActor` stock tick could stop the caster loop after the
+   current AppMain transport pass, leaving release transmission for the next
+   AppMain pass; and
+2. `ApplyRemoteCastPacket()` updated `BotCastInputState` immediately, but the
+   remote stock-tick path normally copied that state into `ongoing_cast` only
+   in its post-stock `ProcessPendingBotCast()` pass.
+
+The durable correction is still a held-primary lifecycle rule. After each
+local stock player tick, the gameplay transport owner must flush an active
+cast release immediately when input is no longer held. Before each remote
+stock actor tick, the replay must sample the matching `BotCastInputState`
+release/timeout state directly. This removes both extra AppMain/actor passes;
+the existing stock transition still owns `SoundLoop_Stop`.
+
+Evidence:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/frost-loop-lifecycle-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/client-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/host-solomondarkmodloader.log`
