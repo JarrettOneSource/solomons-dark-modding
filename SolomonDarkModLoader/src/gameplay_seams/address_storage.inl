@@ -368,6 +368,7 @@ std::size_t kBoneyardScrubVariantOffset = 0;
 std::size_t kBoneyardGoodieTimerOffset = 0;
 std::size_t kSpellEffectMotionXOffset = 0;
 std::size_t kSpellEffectMotionYOffset = 0;
+std::size_t kMagicMissileHeadingOffset = 0;
 std::size_t kEmberVerticalPositionOffset = 0;
 std::size_t kEmberVerticalVelocityOffset = 0;
 std::size_t kEmberDamageOffset = 0;

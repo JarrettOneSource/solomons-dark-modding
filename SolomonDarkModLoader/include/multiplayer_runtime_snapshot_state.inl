@@ -105,6 +105,7 @@ struct SpellEffectBindingRuntimeInfo {
     std::int32_t local_actor_slot = -1;
     std::int32_t local_firewalker_source_slot = -1;
     bool matched = false;
+    bool snapshot_materialized = false;
     bool active = false;
     bool terminal = false;
     float authoritative_x = 0.0f;
@@ -125,6 +126,8 @@ struct SpellEffectApplyRuntimeInfo {
     std::uint32_t matched_firewalker_effect_count = 0;
     std::uint32_t created_ember_effect_count = 0;
     std::uint32_t created_firewalker_effect_count = 0;
+    std::uint32_t created_primary_effect_count = 0;
+    std::uint32_t transferred_primary_effect_count = 0;
     std::uint32_t terminal_effect_count = 0;
     std::uint32_t max_matched_effect_count = 0;
     std::uint32_t max_matched_ember_effect_count = 0;
@@ -139,6 +142,8 @@ struct SpellEffectApplyRuntimeInfo {
     std::uint64_t cumulative_ember_runtime_write_count = 0;
     std::uint64_t cumulative_ember_create_count = 0;
     std::uint64_t cumulative_firewalker_create_count = 0;
+    std::uint64_t cumulative_primary_create_count = 0;
+    std::uint64_t cumulative_primary_transfer_count = 0;
     std::uint64_t cumulative_firewalker_runtime_write_count = 0;
     std::uint64_t cumulative_terminal_write_count = 0;
     std::vector<SpellEffectBindingRuntimeInfo> bindings;

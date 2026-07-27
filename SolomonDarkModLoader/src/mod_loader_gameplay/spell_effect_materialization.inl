@@ -1,5 +1,6 @@
 constexpr std::uint64_t kReplicatedEmberNaturalReplayGraceMs = 16;
 constexpr std::uint64_t kReplicatedEmberRemoteReplaySettleGraceMs = 1750;
+constexpr std::uint64_t kReplicatedPrimaryNaturalReplayGraceMs = 16;
 constexpr std::int32_t kFireEmbersProgressionEntryIndex = 17;
 
 std::unordered_map<std::uint64_t, std::unordered_map<std::uint32_t, std::uint64_t>>
@@ -201,6 +202,27 @@ bool ShouldMaterializeMissingReplicatedSpellEffect(
     if (IsValidReplicatedFirewalkerRuntime(effect)) {
         return effect.active && !effect.terminal;
     }
+    if (IsReplicatedPrimarySpellEffect(effect.native_type_id)) {
+        if (!effect.active || effect.terminal) {
+            return false;
+        }
+        auto& first_seen_by_serial =
+            g_pending_replicated_spell_effect_materialization[
+                owner_participant_id];
+        const auto [it, inserted] =
+            first_seen_by_serial.try_emplace(effect.effect_serial, now_ms);
+        if (inserted) {
+            return false;
+        }
+        if (now_ms < it->second) {
+            it->second = now_ms;
+            return false;
+        }
+        // Native cast replay gets one complete spell-effect snapshot interval
+        // to create the stock projectile before presentation catch-up runs.
+        return now_ms - it->second >=
+               kReplicatedPrimaryNaturalReplayGraceMs;
+    }
     if (!effect.motion_valid ||
         !std::isfinite(effect.motion_x) ||
         !std::isfinite(effect.motion_y) ||
@@ -385,6 +407,47 @@ bool TrySeedReplicatedSpellEffectState(
         return false;
     }
 
+    if (IsReplicatedPrimarySpellEffect(effect.native_type_id)) {
+        if (!effect.active || effect.terminal ||
+            kDamageSourceGameplaySlotOffset == 0) {
+            return false;
+        }
+        const auto source_slot =
+            static_cast<std::int8_t>(owner_gameplay_slot);
+        if (!memory.TryWriteField(
+                actor_address,
+                kDamageSourceGameplaySlotOffset,
+                source_slot)) {
+            return false;
+        }
+        if (effect.native_type_id ==
+            kReplicatedEtherPrimaryNativeTypeId) {
+            return kMagicMissileHeadingOffset != 0 &&
+                   memory.TryWriteField(
+                       actor_address,
+                       kMagicMissileHeadingOffset,
+                       effect.heading);
+        }
+        if (effect.native_type_id ==
+            kReplicatedFireballPrimaryNativeTypeId) {
+            return effect.motion_valid &&
+                   std::isfinite(effect.motion_x) &&
+                   std::isfinite(effect.motion_y) &&
+                   memory.TryWriteField(
+                       actor_address,
+                       kSpellEffectMotionXOffset,
+                       effect.motion_x) &&
+                   memory.TryWriteField(
+                       actor_address,
+                       kSpellEffectMotionYOffset,
+                       effect.motion_y);
+        }
+        // Boulder owns recursive rock lists at +0x13C rather than generic
+        // motion. Its stock constructor/tick build those presentation rocks;
+        // authoritative snapshots drive only the actor transform.
+        return effect.native_type_id ==
+               kReplicatedEarthBoulderNativeTypeId;
+    }
     if (effect.native_type_id == kReplicatedFireEmberNativeTypeId) {
         return effect.motion_valid &&
                std::isfinite(effect.motion_x) &&
@@ -435,7 +498,8 @@ bool TryCreateReplicatedSpellEffect(
     if (world_address == 0 ||
         owner_gameplay_slot < kFirstWizardBotSlot ||
         owner_gameplay_slot >= static_cast<int>(kGameplayPlayerSlotCount) ||
-        (effect.native_type_id != kReplicatedFireEmberNativeTypeId &&
+        (!IsReplicatedPrimarySpellEffect(effect.native_type_id) &&
+         effect.native_type_id != kReplicatedFireEmberNativeTypeId &&
          effect.native_type_id != kReplicatedFirewalkerTrailNativeTypeId)) {
         return false;
     }

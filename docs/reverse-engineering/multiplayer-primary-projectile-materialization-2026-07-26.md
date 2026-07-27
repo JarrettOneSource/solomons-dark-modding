@@ -118,3 +118,82 @@ The repair belongs in the shared spell-effect materialization seam:
 Native replay remains the first choice. The fallback owns presentation only:
 it must not synthesize damage, alter spell balance, or replace the source
 contact/claim lifecycle.
+
+## Implemented ownership model
+
+The shared reconciler now admits the complete primary-projectile class:
+MagicMissile `0x7D3`, Fireball `0x7D4`, and Boulder `0x7D5`. It gives native
+cast replay one 16 ms spell-effect snapshot interval to create the actor. If
+no compatible actor exists after that interval, the loader creates and
+registers a presentation actor through the same stock factory/world seams used
+by the existing Ember and Firewalker catch-up path.
+
+The snapshot binding records whether its actor was created by that catch-up
+path. Natural actors retain stock transform, motion, collision, and teardown
+ownership. Snapshot-created actors follow the authoritative transform and are
+retired with the terminal serial. A late natural actor replaces a
+snapshot-created binding after the presentation actor is marked for stock
+removal.
+
+The class layouts remain distinct:
+
+- MagicMissile receives its scalar internal heading at `+0x13C`;
+- Fireball receives velocity at `+0x13C/+0x140`;
+- Boulder does not receive either write because those offsets begin its
+  recursive rock ownership.
+
+`config/binary-layout.ini` therefore exposes
+`gameplay.offsets.magic_missile_heading` separately even though its numeric
+offset equals Fireball's first motion field. Static RE contracts reject a
+return to universal primary-projectile motion writes.
+
+The constructors' stock defaults keep catch-up actors presentation-only.
+MagicMissile and Fireball begin with zero damage payload state, while Boulder
+is never run through its release finalizer. Authoritative damage remains on
+the source contact/claim path.
+
+## Post-fix live evidence
+
+The first instrumented post-fix loopback cast reproduced the reported missing
+native-replay branch directly. The host had no natural Boulder binding; one
+snapshot interval later its registry reported:
+
+- `snapshot_materialized=true`;
+- owner gameplay slot `1`;
+- `effect_serial=1`;
+- authoritative position error `0.0`.
+
+The host backbuffer showed the charged rock beside the client-owned caster.
+That evidence is preserved at:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/boulder-post-fix-direct-catchup-first-run.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/screenshots/trial-01/host-observer.png`
+
+The isolated regression then repeated the direct catch-up path five times.
+Every trial reported a snapshot-created `0x7D5` in slot `1` with zero position
+error, and every host/client screenshot visibly contained the rock. All five
+launches used `audioDisabled=true`, the `sfx` prefix and ports
+`48611/48612`, followed by exact staged-executable PID cleanup:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/primary-materialization-isolated-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/isolated-5x-contact-sheet.png`
+
+A separate five-cast, single-session client-to-host damage matrix retained
+exact peer convergence in every cell and recorded observer Boulder tick/draw
+calls for every cast. The raw HP deltas were `3014.8784179688`,
+`2956.0327148438`, `2957.5737304688`, `1.541015625`, and
+`3013.3374023438`; both peers agreed to `0.0` difference each time. This
+preserves both the documented fixed-170-frame native baseline and the parked
+issue-#52 client-origin magnitude family. This investigation did not reveal
+the source of that magnitude and made no damage change.
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/earth-client-damage-matrix-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-boulder/earth-damage-5x-contact-sheet.png`
+
+Finally, fresh client-origin Fire, Water, Air, and Ether captures show the
+same effects on both peers. Water, Air, and Ether damage matched the prior
+converged matrix classes; Fire reproduced the already-documented intermittent
+zero-contact cell while still showing Fireball on both peers.
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-other-elements/other-elements-contact-sheet.png`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-other-elements/`

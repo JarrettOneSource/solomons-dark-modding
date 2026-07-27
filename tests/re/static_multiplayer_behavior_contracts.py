@@ -1024,7 +1024,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
             spell_effect_sync,
             "if (IsReplicatedSpellEffectMotionNativeType(actor.object_type_id)",
         ),
-        (spell_effect_reconciliation, "if (effect.transform_valid && !native_replay_driven_primary)"),
+        (spell_effect_reconciliation, "if (effect.transform_valid && !preserve_native_primary)"),
     ):
         assert token in source, (
             f"Magic Storm authoritative effect-transform path lacks: {token}"

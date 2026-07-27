@@ -5,6 +5,7 @@ struct ReplicatedSpellEffectBinding {
     std::uint32_t native_type_id = 0;
     std::uint16_t effect_ordinal = 0;
     uintptr_t actor_address = 0;
+    bool snapshot_materialized = false;
 };
 
 std::unordered_map<
@@ -18,10 +19,21 @@ constexpr std::uint64_t kReplicatedSpellEffectSnapshotFreshMs = 500;
 constexpr float kReplicatedSpellEffectBindingMaxDistance = 1024.0f;
 constexpr std::uint32_t kReplicatedEtherPrimaryNativeTypeId = 0x07D3;
 constexpr std::uint32_t kReplicatedFireballPrimaryNativeTypeId = 0x07D4;
-constexpr std::uint32_t kReplicatedWaterPrimaryNativeTypeId = 0x07D5;
+constexpr std::uint32_t kReplicatedEarthBoulderNativeTypeId = 0x07D5;
 constexpr std::uint32_t kReplicatedFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kReplicatedFirewalkerTrailNativeTypeId = 0x07EE;
 constexpr std::uint32_t kReplicatedMagicTrapNativeTypeId = 0x07F5;
+
+bool IsReplicatedPrimarySpellEffect(std::uint32_t native_type_id) {
+    switch (native_type_id) {
+    case kReplicatedEtherPrimaryNativeTypeId:
+    case kReplicatedFireballPrimaryNativeTypeId:
+    case kReplicatedEarthBoulderNativeTypeId:
+        return true;
+    default:
+        return false;
+    }
+}
 
 #include "spell_effect_materialization.inl"
 
@@ -49,22 +61,12 @@ const SDModSceneActorState* FindSpellEffectSceneActor(
 }
 
 bool IsNativeReplayDrivenPrimarySpellEffect(std::uint32_t native_type_id) {
-    switch (native_type_id) {
-    case kReplicatedEtherPrimaryNativeTypeId:
-    case kReplicatedFireballPrimaryNativeTypeId:
-    case kReplicatedWaterPrimaryNativeTypeId:
-        return true;
-    default:
-        return false;
-    }
+    return IsReplicatedPrimarySpellEffect(native_type_id);
 }
 
-bool TryRequestReplicatedSpellEffectRetirement(
-    uintptr_t actor_address,
-    const multiplayer::SpellEffectSnapshot& effect) {
-    if (actor_address == 0 ||
-        !effect.terminal ||
-        effect.native_type_id != kReplicatedMagicTrapNativeTypeId) {
+bool TryRequestReplicatedPresentationEffectRetirement(
+    uintptr_t actor_address) {
+    if (actor_address == 0) {
         return false;
     }
 
@@ -89,10 +91,22 @@ bool TryRequestReplicatedSpellEffectRetirement(
            pending_remove != 0;
 }
 
+bool TryRequestReplicatedSpellEffectRetirement(
+    uintptr_t actor_address,
+    const multiplayer::SpellEffectSnapshot& effect) {
+    if (actor_address == 0 ||
+        !effect.terminal ||
+        effect.native_type_id != kReplicatedMagicTrapNativeTypeId) {
+        return false;
+    }
+    return TryRequestReplicatedPresentationEffectRetirement(actor_address);
+}
+
 bool TryApplyReplicatedSpellEffectState(
     uintptr_t actor_address,
     int owner_gameplay_slot,
     const multiplayer::SpellEffectSnapshot& effect,
+    bool snapshot_materialized,
     multiplayer::SpellEffectApplyRuntimeInfo* apply_info) {
     if (actor_address == 0 || apply_info == nullptr) {
         return false;
@@ -100,15 +114,14 @@ bool TryApplyReplicatedSpellEffectState(
 
     auto& memory = ProcessMemory::Instance();
     bool wrote_any = false;
-    // These projectiles are already recreated by the remote participant's
-    // native cast. Reapplying an authoritative terminal snapshot here pins the
-    // live projectile at its last network position before stock collision can
-    // run, suppressing Fireball impact/Explode/Embers on the observer. Native
-    // replay owns their motion and collision lifecycle; snapshot application
-    // remains authoritative for child effects that are not cast independently.
-    const bool native_replay_driven_primary =
-        IsNativeReplayDrivenPrimarySpellEffect(effect.native_type_id);
-    if (effect.transform_valid && !native_replay_driven_primary) {
+    // Natural replay projectiles retain stock motion and collision ownership.
+    // A snapshot-created primary is presentation-only, so it follows the
+    // authoritative transform until its serial terminates or a late natural
+    // replay actor replaces it.
+    const bool preserve_native_primary =
+        IsNativeReplayDrivenPrimarySpellEffect(effect.native_type_id) &&
+        !snapshot_materialized;
+    if (effect.transform_valid && !preserve_native_primary) {
         const bool wrote_transform =
             memory.TryWriteField(
                 actor_address,
@@ -132,7 +145,7 @@ bool TryApplyReplicatedSpellEffectState(
         }
     }
 
-    if (effect.motion_valid && !native_replay_driven_primary) {
+    if (effect.motion_valid && !preserve_native_primary) {
         const bool wrote_motion =
             memory.TryWriteField(
                 actor_address,
@@ -162,6 +175,11 @@ bool TryApplyReplicatedSpellEffectState(
     }
 
     if (effect.terminal) {
+        if (snapshot_materialized &&
+            TryRequestReplicatedPresentationEffectRetirement(actor_address)) {
+            apply_info->terminal_write_count += 1;
+            wrote_any = true;
+        }
         if (TryRequestReplicatedSpellEffectRetirement(
                 actor_address,
                 effect)) {
@@ -337,9 +355,14 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                 apply_info.terminal_effect_count += 1;
             }
             auto binding_it = owner_bindings.find(effect.effect_serial);
+            const bool allow_active_primary_recovery =
+                IsReplicatedPrimarySpellEffect(effect.native_type_id) &&
+                effect.active &&
+                !effect.terminal;
             if (binding_it == owner_bindings.end() &&
-                observed_serials.find(effect.effect_serial) ==
-                    observed_serials.end() &&
+                (allow_active_primary_recovery ||
+                 observed_serials.find(effect.effect_serial) ==
+                     observed_serials.end()) &&
                 (effect.active || effect.terminal)) {
                 auto matched_actor_address =
                     MatchReplicatedSpellEffectActor(
@@ -347,6 +370,7 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                         bound_actor_addresses,
                         owner_gameplay.gameplay_slot,
                         effect);
+                bool snapshot_materialized = false;
                 const bool should_materialize =
                     matched_actor_address == 0 &&
                     ShouldMaterializeMissingReplicatedSpellEffect(
@@ -360,6 +384,7 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                         owner_gameplay.gameplay_slot,
                         effect,
                         &matched_actor_address)) {
+                    snapshot_materialized = true;
                     SDModSceneActorState created_actor{};
                     created_actor.valid = true;
                     created_actor.actor_address = matched_actor_address;
@@ -375,6 +400,9 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                     } else if (effect.native_type_id ==
                                kReplicatedFirewalkerTrailNativeTypeId) {
                         apply_info.created_firewalker_effect_count += 1;
+                    } else if (IsReplicatedPrimarySpellEffect(
+                                   effect.native_type_id)) {
+                        apply_info.created_primary_effect_count += 1;
                     }
                 }
                 if (matched_actor_address != 0) {
@@ -390,13 +418,41 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                     binding.native_type_id = effect.native_type_id;
                     binding.effect_ordinal = effect.effect_ordinal;
                     binding.actor_address = matched_actor_address;
+                    binding.snapshot_materialized =
+                        snapshot_materialized;
                     binding_it = owner_bindings
                         .emplace(effect.effect_serial, binding)
                         .first;
                     bound_actor_addresses.insert(matched_actor_address);
                 }
             }
+            if (binding_it != owner_bindings.end() &&
+                binding_it->second.snapshot_materialized &&
+                IsReplicatedPrimarySpellEffect(
+                    effect.native_type_id) &&
+                effect.active &&
+                !effect.terminal) {
+                const auto natural_actor_address =
+                    MatchReplicatedSpellEffectActor(
+                        actors,
+                        bound_actor_addresses,
+                        owner_gameplay.gameplay_slot,
+                        effect);
+                if (natural_actor_address != 0 &&
+                    TryRequestReplicatedPresentationEffectRetirement(
+                        binding_it->second.actor_address)) {
+                    // Keep the retiring presentation address reserved for
+                    // this pass so another serial cannot bind to it before
+                    // stock removes it.
+                    bound_actor_addresses.insert(natural_actor_address);
+                    binding_it->second.actor_address =
+                        natural_actor_address;
+                    binding_it->second.snapshot_materialized = false;
+                    apply_info.transferred_primary_effect_count += 1;
+                }
+            }
             if (effect.terminal) {
+                observed_serials.insert(effect.effect_serial);
                 ForgetPendingReplicatedSpellEffectMaterialization(
                     snapshot.owner_participant_id,
                     effect.effect_serial);
@@ -421,6 +477,8 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
             if (binding_it != owner_bindings.end()) {
                 const auto actor_address = binding_it->second.actor_address;
                 binding_info.local_actor_address = actor_address;
+                binding_info.snapshot_materialized =
+                    binding_it->second.snapshot_materialized;
                 std::int8_t local_actor_slot = -1;
                 if (ProcessMemory::Instance().TryReadField(
                         actor_address,
@@ -454,6 +512,7 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
                     actor_address,
                     owner_gameplay.gameplay_slot,
                     effect,
+                    binding_it->second.snapshot_materialized,
                     &apply_info);
                 float local_x = effect.position_x;
                 float local_y = effect.position_y;
@@ -505,6 +564,12 @@ void ApplyReplicatedSpellEffectSnapshotsIfActive(std::uint64_t now_ms) {
             apply_info.cumulative_firewalker_create_count =
                 previous.cumulative_firewalker_create_count +
                 apply_info.created_firewalker_effect_count;
+            apply_info.cumulative_primary_create_count =
+                previous.cumulative_primary_create_count +
+                apply_info.created_primary_effect_count;
+            apply_info.cumulative_primary_transfer_count =
+                previous.cumulative_primary_transfer_count +
+                apply_info.transferred_primary_effect_count;
             apply_info.cumulative_firewalker_runtime_write_count =
                 previous.cumulative_firewalker_runtime_write_count +
                 apply_info.firewalker_runtime_write_count;

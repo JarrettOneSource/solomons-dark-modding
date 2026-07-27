@@ -244,7 +244,7 @@ bool IsSupportedNonRecipeLootItem(
 }
 constexpr std::uint32_t kEtherPrimaryNativeTypeId = 0x07D3;
 constexpr std::uint32_t kFireballPrimaryNativeTypeId = 0x07D4;
-constexpr std::uint32_t kWaterPrimaryNativeTypeId = 0x07D5;
+constexpr std::uint32_t kEarthBoulderNativeTypeId = 0x07D5;
 constexpr std::uint32_t kFireEmberNativeTypeId = 0x07D6;
 constexpr std::uint32_t kFirewalkerTrailNativeTypeId = 0x07EE;
 constexpr std::uint32_t kMagicStormNativeTypeId = 0x07F0;

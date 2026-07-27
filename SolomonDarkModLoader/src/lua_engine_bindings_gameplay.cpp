@@ -1688,7 +1688,7 @@ int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
     lua_setfield(state, -2, "snapshots");
 
     const auto& apply = runtime.spell_effect_apply;
-    lua_createtable(state, 0, 34);
+    lua_createtable(state, 0, 38);
     lua_pushboolean(state, apply.valid ? 1 : 0);
     lua_setfield(state, -2, "valid");
     lua_pushinteger(state, static_cast<lua_Integer>(apply.applied_ms));
@@ -1709,6 +1709,12 @@ int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
     lua_setfield(state, -2, "created_ember_effect_count");
     lua_pushinteger(state, static_cast<lua_Integer>(apply.created_firewalker_effect_count));
     lua_setfield(state, -2, "created_firewalker_effect_count");
+    lua_pushinteger(state, static_cast<lua_Integer>(apply.created_primary_effect_count));
+    lua_setfield(state, -2, "created_primary_effect_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.transferred_primary_effect_count));
+    lua_setfield(state, -2, "transferred_primary_effect_count");
     lua_pushinteger(state, static_cast<lua_Integer>(apply.terminal_effect_count));
     lua_setfield(state, -2, "terminal_effect_count");
     lua_pushinteger(state, static_cast<lua_Integer>(apply.max_matched_effect_count));
@@ -1749,6 +1755,14 @@ int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
     lua_setfield(state, -2, "cumulative_firewalker_create_count");
     lua_pushinteger(
         state,
+        static_cast<lua_Integer>(apply.cumulative_primary_create_count));
+    lua_setfield(state, -2, "cumulative_primary_create_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(apply.cumulative_primary_transfer_count));
+    lua_setfield(state, -2, "cumulative_primary_transfer_count");
+    lua_pushinteger(
+        state,
         static_cast<lua_Integer>(apply.cumulative_firewalker_runtime_write_count));
     lua_setfield(state, -2, "cumulative_firewalker_runtime_write_count");
     lua_pushinteger(
@@ -1758,7 +1772,7 @@ int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
     lua_createtable(state, static_cast<int>(apply.bindings.size()), 0);
     int binding_index = 1;
     for (const auto& binding : apply.bindings) {
-        lua_createtable(state, 0, 20);
+        lua_createtable(state, 0, 21);
         lua_pushinteger(state, static_cast<lua_Integer>(binding.owner_participant_id));
         lua_setfield(state, -2, "owner_participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(binding.owner_gameplay_slot));
@@ -1783,6 +1797,8 @@ int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
         lua_setfield(state, -2, "local_firewalker_source_slot");
         lua_pushboolean(state, binding.matched ? 1 : 0);
         lua_setfield(state, -2, "matched");
+        lua_pushboolean(state, binding.snapshot_materialized ? 1 : 0);
+        lua_setfield(state, -2, "snapshot_materialized");
         lua_pushboolean(state, binding.active ? 1 : 0);
         lua_setfield(state, -2, "active");
         lua_pushboolean(state, binding.terminal ? 1 : 0);

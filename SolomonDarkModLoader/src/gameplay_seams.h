@@ -381,6 +381,7 @@ extern std::size_t kBoneyardScrubVariantOffset;
 extern std::size_t kBoneyardGoodieTimerOffset;
 extern std::size_t kSpellEffectMotionXOffset;
 extern std::size_t kSpellEffectMotionYOffset;
+extern std::size_t kMagicMissileHeadingOffset;
 extern std::size_t kEmberVerticalPositionOffset;
 extern std::size_t kEmberVerticalVelocityOffset;
 extern std::size_t kEmberDamageOffset;

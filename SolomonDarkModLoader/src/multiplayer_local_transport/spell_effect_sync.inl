@@ -2,7 +2,7 @@ bool IsReplicatedSpellEffectNativeType(std::uint32_t native_type_id) {
     switch (native_type_id) {
     case kEtherPrimaryNativeTypeId:
     case kFireballPrimaryNativeTypeId:
-    case kWaterPrimaryNativeTypeId:
+    case kEarthBoulderNativeTypeId:
     case kFireEmberNativeTypeId:
     case kFirewalkerTrailNativeTypeId:
     case kMagicStormNativeTypeId:
@@ -15,9 +15,7 @@ bool IsReplicatedSpellEffectNativeType(std::uint32_t native_type_id) {
 
 bool IsReplicatedSpellEffectMotionNativeType(std::uint32_t native_type_id) {
     switch (native_type_id) {
-    case kEtherPrimaryNativeTypeId:
     case kFireballPrimaryNativeTypeId:
-    case kWaterPrimaryNativeTypeId:
     case kFireEmberNativeTypeId:
         return true;
     default:

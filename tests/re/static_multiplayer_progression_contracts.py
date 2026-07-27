@@ -912,23 +912,82 @@ def test_primary_spell_effect_snapshots_do_not_fight_native_replay() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "spell_effect_reconciliation.inl"
     )
+    materialization = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "spell_effect_materialization.inl"
+    )
+    capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "spell_effect_sync.inl"
+    )
+    binary_layout = _read("config/binary-layout.ini")
+    gameplay_seams = _read("SolomonDarkModLoader/src/gameplay_seams.h")
+    size_bindings = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
+    address_storage = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    verifier = _read(
+        "tools/verify_multiplayer_primary_projectile_materialization.py"
+    )
     for token in (
         "bool IsNativeReplayDrivenPrimarySpellEffect(",
         "kReplicatedEtherPrimaryNativeTypeId",
         "kReplicatedFireballPrimaryNativeTypeId",
-        "kReplicatedWaterPrimaryNativeTypeId",
-        "const bool native_replay_driven_primary =",
-        "effect.transform_valid && !native_replay_driven_primary",
-        "effect.motion_valid && !native_replay_driven_primary",
+        "kReplicatedEarthBoulderNativeTypeId",
+        "const bool preserve_native_primary =",
+        "!snapshot_materialized",
+        "effect.transform_valid && !preserve_native_primary",
+        "effect.motion_valid && !preserve_native_primary",
+        "TryRequestReplicatedPresentationEffectRetirement(",
+        "binding_it->second.snapshot_materialized = false",
         "TryWriteReplicatedEmberRuntime(actor_address, effect)",
         "TryWriteReplicatedFirewalkerRuntime(",
     ):
         assert token in reconciliation, (
             f"spell-effect ownership contract lacks: {token}"
         )
+    for token in (
+        "kReplicatedPrimaryNaturalReplayGraceMs = 16",
+        "IsReplicatedPrimarySpellEffect(effect.native_type_id)",
+        "kMagicMissileHeadingOffset",
+        "kReplicatedEarthBoulderNativeTypeId",
+        "kDamageSourceGameplaySlotOffset",
+    ):
+        assert token in materialization, (
+            f"primary-projectile materialization contract lacks: {token}"
+        )
+    assert "magic_missile_heading=0x13C" in binary_layout
+    assert "kMagicMissileHeadingOffset" in gameplay_seams
+    assert '"magic_missile_heading", kMagicMissileHeadingOffset' in size_bindings
+    assert "std::size_t kMagicMissileHeadingOffset = 0;" in address_storage
+    motion_classifier = capture[
+        capture.index("bool IsReplicatedSpellEffectMotionNativeType(") :
+        capture.index("bool TryCaptureLocalSpellEffectState(")
+    ]
+    assert "case kFireballPrimaryNativeTypeId:" in motion_classifier
+    assert "case kFireEmberNativeTypeId:" in motion_classifier
+    assert "kEtherPrimaryNativeTypeId" not in motion_classifier
+    assert "kEarthBoulderNativeTypeId" not in motion_classifier
+    for token in (
+        'parser.add_argument("--instance-prefix", default="sfx")',
+        'parser.add_argument("--host-port", type=int, default=48611)',
+        'parser.add_argument("--client-port", type=int, default=48612)',
+        "enable_audio=False",
+        "actor_pending_remove",
+        "snapshot_materialized=True",
+        "cumulative_primary_create_count",
+        "capture_game_backbuffer(",
+        "run_isolated_trial(",
+        "audio.stop_owned_processes(expected)",
+    ):
+        assert token in verifier, (
+            f"primary-projectile live regression lacks: {token}"
+        )
     return (
-        "native replay exclusively owns primary-projectile motion while "
-        "replicated snapshots continue to synchronize child effects"
+        "natural replay keeps primary-projectile ownership while a one-snapshot "
+        "presentation fallback covers missing remote actors"
     )
 
 

@@ -116,6 +116,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "boneyard_goodie_timer", kBoneyardGoodieTimerOffset),
         SDMOD_SIZE("gameplay.offsets", "spell_effect_motion_x", kSpellEffectMotionXOffset),
         SDMOD_SIZE("gameplay.offsets", "spell_effect_motion_y", kSpellEffectMotionYOffset),
+        SDMOD_SIZE("gameplay.offsets", "magic_missile_heading", kMagicMissileHeadingOffset),
         SDMOD_SIZE("gameplay.offsets", "ember_vertical_position", kEmberVerticalPositionOffset),
         SDMOD_SIZE("gameplay.offsets", "ember_vertical_velocity", kEmberVerticalVelocityOffset),
         SDMOD_SIZE("gameplay.offsets", "ember_damage", kEmberDamageOffset),
