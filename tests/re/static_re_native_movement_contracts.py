@@ -1198,7 +1198,7 @@ def test_accepted_native_shims_are_documented() -> str:
     required_tokens = (
         "# Accepted Native Shims",
         "Cast gate patches and progression-slot owner context",
-        "Active spell object lookup and Boulder release normalization",
+        "Active spell object lookup and Boulder release observation",
         "Native spell stats and mana spend scaling",
         "Source-profile staging for wizard visuals",
         "Movement and pathfinding bridge",
