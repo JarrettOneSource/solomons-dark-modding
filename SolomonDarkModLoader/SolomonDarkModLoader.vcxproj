@@ -497,6 +497,7 @@
     <ClInclude Include="src\multiplayer_local_transport\loot_snapshot_capture.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_cast_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\local_profile_loadout_capture.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\native_minion_snapshot_sync.inl" />
@@ -516,6 +517,9 @@
     <ClInclude Include="src\multiplayer_local_transport\run_exit_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\skill_config_and_packet_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_cast_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_outgoing_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_state_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_hub_presentation_and_loot_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_fragmentation.inl" />
@@ -525,6 +529,7 @@
     <ClInclude Include="src\multiplayer_steam_session\network_messages.inl" />
     <ClInclude Include="src\multiplayer_steam_session\public_lifecycle.inl" />
     <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl" />
+    <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl" />

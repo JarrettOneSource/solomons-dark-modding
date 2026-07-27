@@ -133,4 +133,3 @@ position with zero HP and drive state 1.
 - no cell-grid collision reimplementation;
 - no direct enemy-health write; and
 - no client-side synthetic damage authority.
-

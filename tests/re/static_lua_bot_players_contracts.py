@@ -35,6 +35,10 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "local_state_packet_sync.inl"
     )
+    state_writer += _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "synthetic_participant_state_sync.inl"
+    )
     state_reader = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_participant_state_sync.inl"
@@ -42,6 +46,10 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     state_sender = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_packet_sync.inl"
+    )
+    state_sender += _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "synthetic_participant_outgoing_sync.inl"
     )
     cast_ingress = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
@@ -65,6 +73,10 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     )
     lua_bindings = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
+    )
+    lua_bindings += _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_bots/"
+        "participant_handle_bindings.inl"
     )
     steam_members = "\n".join(
         (

@@ -1352,6 +1352,9 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\local_profile_loadout_capture.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1409,6 +1412,15 @@
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_cast_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_outgoing_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_state_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\world_snapshot_capture.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1434,6 +1446,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl">
