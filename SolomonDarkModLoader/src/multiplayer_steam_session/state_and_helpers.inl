@@ -21,9 +21,6 @@ constexpr const char* kLobbyStateClosed = "closed";
 constexpr const char* kMemberProtocolKey = "sdmod_protocol";
 constexpr const char* kMemberManifestKey = "sdmod_manifest";
 
-constexpr std::uint32_t kDefaultMaxParticipants = 4;
-// Steam matchmaking caps lobby membership at 250.
-constexpr std::uint32_t kMaximumSupportedParticipants = 250;
 constexpr std::uint64_t kHelloRetryIntervalMs = 1000;
 constexpr std::uint64_t kKeepaliveIntervalMs = 2000;
 constexpr std::uint64_t kAuthenticatedPeerTimeoutMs = 30000;
@@ -98,7 +95,7 @@ struct SteamSessionState {
     SessionGoodbyeReason teardown_reason =
         SessionGoodbyeReason::Leaving;
     std::uint32_t app_id = 0;
-    std::uint32_t max_participants = kDefaultMaxParticipants;
+    std::uint32_t max_participants = kDefaultParticipantCapacity;
     std::uint32_t next_sequence = 1;
     std::uint64_t local_steam_id = 0;
     std::uint64_t lobby_id = 0;
@@ -230,17 +227,39 @@ bool TryParseLobbyIdFromConnectString(
            *lobby_id != 0;
 }
 
-std::uint32_t ReadMaxParticipants() {
-    std::uint64_t parsed = 0;
-    if (!TryParseUnsigned64(
-            TrimAscii(ReadEnvironmentVariable(kMaxParticipantsEnvironmentVariable)),
-            &parsed)) {
-        return kDefaultMaxParticipants;
+bool TryReadMaxParticipants(
+    std::uint32_t* max_participants,
+    std::string* error_message) {
+    if (max_participants == nullptr) {
+        return false;
     }
-    return static_cast<std::uint32_t>((std::clamp<std::uint64_t>)(
-        parsed,
-        2,
-        kMaximumSupportedParticipants));
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    const auto configured =
+        TrimAscii(ReadEnvironmentVariable(kMaxParticipantsEnvironmentVariable));
+    if (configured.empty()) {
+        *max_participants = kDefaultParticipantCapacity;
+        return true;
+    }
+
+    std::uint64_t parsed = 0;
+    if (!TryParseUnsigned64(configured, &parsed) ||
+        parsed > (std::numeric_limits<std::uint32_t>::max)() ||
+        !IsSupportedParticipantCapacity(
+            static_cast<std::uint32_t>(parsed))) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Multiplayer capacity must be between " +
+                std::to_string(kMinimumParticipantCapacity) +
+                " and the native " +
+                std::to_string(kNativeParticipantCapacity) +
+                "-participant ceiling.";
+        }
+        return false;
+    }
+    *max_participants = static_cast<std::uint32_t>(parsed);
+    return true;
 }
 
 int HexNibble(char ch) {

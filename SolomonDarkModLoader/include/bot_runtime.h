@@ -283,7 +283,10 @@ void ShutdownBotRuntime();
 bool IsBotRuntimeInitialized();
 void TickBotRuntime(std::uint64_t monotonic_ms);
 
-bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id);
+bool CreateBot(
+    const BotCreateRequest& request,
+    std::uint64_t* out_bot_id,
+    std::string* error_message = nullptr);
 bool DestroyBot(std::uint64_t bot_id);
 void DestroyAllBots();
 bool UpdateBot(const BotUpdateRequest& request);

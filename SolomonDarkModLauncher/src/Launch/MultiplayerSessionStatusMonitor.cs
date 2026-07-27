@@ -37,7 +37,8 @@ internal sealed record MultiplayerSessionMember(
     int GameplaySlot,
     bool IsHost,
     bool IsLocal,
-    bool IsSynthetic);
+    bool IsSynthetic,
+    bool IsBot);
 
 internal static class MultiplayerSessionStatusMonitor
 {

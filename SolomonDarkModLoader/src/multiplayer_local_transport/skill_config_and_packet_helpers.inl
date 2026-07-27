@@ -245,6 +245,23 @@ bool ConfigureLocalTransport() {
 
     const auto role = ToLowerAscii(ReadEnvironmentVariable(kRoleEnvironmentVariable));
     const bool is_host = role.empty() || role == "host" || role == "server";
+    const auto configured_capacity =
+        ReadEnvironmentVariable(kMaxParticipantsEnvironmentVariable);
+    std::uint64_t parsed_capacity = kDefaultParticipantCapacity;
+    if ((!configured_capacity.empty() &&
+         !TryParseUnsigned64(configured_capacity, &parsed_capacity)) ||
+        parsed_capacity > (std::numeric_limits<std::uint32_t>::max)() ||
+        !IsSupportedParticipantCapacity(
+            static_cast<std::uint32_t>(parsed_capacity))) {
+        Log(
+            "Multiplayer local transport rejected unsupported capacity. value=" +
+            configured_capacity +
+            " native_ceiling=" +
+            std::to_string(kNativeParticipantCapacity));
+        g_local_transport = LocalTransportState{};
+        g_local_transport.configured = true;
+        return false;
+    }
     const auto local_port = ReadPortEnvironmentVariable(
         kLocalPortEnvironmentVariable,
         is_host ? kDefaultHostPort : kDefaultClientPort);
@@ -261,6 +278,10 @@ bool ConfigureLocalTransport() {
     ResetReplicatedLuaTimeControl();
     g_local_transport.configured = true;
     g_local_transport.is_host = is_host;
+    g_local_transport.max_participants =
+        static_cast<std::uint32_t>(parsed_capacity);
+    g_local_transport.launch_token =
+        ReadEnvironmentVariable(kLaunchTokenEnvironmentVariable);
     g_local_transport.backend = steam_requested
         ? GameplayTransportBackend::Steam
         : GameplayTransportBackend::LocalUdp;
@@ -273,11 +294,6 @@ bool ConfigureLocalTransport() {
         g_local_transport.local_port = local_port;
         g_local_transport.remote_host = remote_host;
         g_local_transport.remote_port = remote_port;
-        g_local_transport.max_participants =
-            ReadLocalMaxParticipants();
-        g_local_transport.launch_token =
-            ReadEnvironmentVariable(
-                kLaunchTokenEnvironmentVariable);
         g_local_transport.manifest_sha256 =
             ReadEnvironmentVariable(kManifestEnvironmentVariable);
         g_local_transport.privacy =

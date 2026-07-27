@@ -46,7 +46,7 @@ bool InitializeLocalTransport() {
         g_local_transport_authority_participant_id.store(
             0,
             std::memory_order_release);
-        return true;
+        return !g_local_transport.configured;
     }
     g_local_transport_authority_participant_id.store(
         0,

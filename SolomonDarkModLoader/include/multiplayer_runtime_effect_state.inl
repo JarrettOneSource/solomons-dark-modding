@@ -156,7 +156,8 @@ struct RuntimeState {
     std::uint32_t steam_app_id = 0;
     std::uint64_t steam_lobby_id = 0;
     std::uint64_t steam_host_id = 0;
-    std::uint32_t session_max_participants = 0;
+    std::uint32_t session_max_participants = 4;
+    std::uint32_t session_human_participant_count = 1;
     std::uint32_t authenticated_peer_count = 0;
     std::int32_t steam_route_ping_ms = 0;
     std::uint64_t local_steam_id = 0;
@@ -201,10 +202,25 @@ struct RuntimeState {
 
 constexpr std::uint64_t kLocalParticipantId = 1ull;
 constexpr std::uint64_t kFirstLuaControlledParticipantId = 0x1000000000001000ull;
+constexpr std::uint32_t kMinimumParticipantCapacity = 2;
+constexpr std::uint32_t kDefaultParticipantCapacity = 4;
+// Gameplay_Ctor (0x005CC800) allocates exactly four player/progression slots.
+// Gameplay_CreatePlayerSlot (0x005CB870) does not guard a fifth slot, so this
+// is a native memory-safety boundary rather than a matchmaking preference.
+constexpr std::uint32_t kNativeParticipantCapacity = 4;
 constexpr std::size_t kParticipantTransformHistoryCapacity = 8;
 constexpr std::size_t kWorldSnapshotHistoryCapacity = 8;
 
 MultiplayerCharacterProfile DefaultCharacterProfile();
+bool IsSupportedParticipantCapacity(std::uint32_t capacity);
+std::uint32_t ResolveParticipantCapacity(const RuntimeState& state);
+std::size_t CountHumanParticipantSeats(const RuntimeState& state);
+std::size_t CountBotParticipantSeats(const RuntimeState& state);
+std::size_t CountOccupiedParticipantSeats(const RuntimeState& state);
+bool HasOpenParticipantSeat(const RuntimeState& state);
+bool CanAdmitHumanParticipant(
+    const RuntimeState& state,
+    std::size_t prospective_human_count);
 bool IsValidCharacterProfile(const MultiplayerCharacterProfile& profile);
 bool IsValidParticipantSceneIntent(const ParticipantSceneIntent& scene_intent);
 ParticipantSceneIntent DefaultParticipantSceneIntent();

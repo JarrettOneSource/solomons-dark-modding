@@ -27,30 +27,45 @@ bool IsBotRuntimeInitialized() {
     return g_bot_runtime_initialized;
 }
 
-bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
+bool CreateBot(
+    const BotCreateRequest& request,
+    std::uint64_t* out_bot_id,
+    std::string* error_message) {
     if (out_bot_id != nullptr) {
         *out_bot_id = 0;
     }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
 
     std::scoped_lock lock(g_bot_runtime_mutex);
-    if (!g_bot_runtime_initialized || !IsValidCreateRequest(request)) {
+    if (!g_bot_runtime_initialized) {
+        if (error_message != nullptr) {
+            *error_message = "bot framework unavailable";
+        }
+        return false;
+    }
+    if (!IsValidCreateRequest(request)) {
+        if (error_message != nullptr) {
+            *error_message = "invalid bot request";
+        }
         return false;
     }
 
     const auto participant_state = SnapshotRuntimeState();
-    const auto occupied_remote_slots =
-        static_cast<std::size_t>(
-            std::count_if(
-                participant_state.participants.begin(),
-                participant_state.participants.end(),
-                [](const ParticipantInfo& participant) {
-                    return IsRemoteParticipant(participant);
-                }));
-    if (occupied_remote_slots >= 3) {
+    const auto occupied_participant_seats =
+        CountOccupiedParticipantSeats(participant_state);
+    const auto participant_capacity =
+        ResolveParticipantCapacity(participant_state);
+    if (!HasOpenParticipantSeat(participant_state)) {
+        if (error_message != nullptr) {
+            *error_message = "lobby full";
+        }
         Log(
-            "[bots] create rejected; all multiplayer participant slots are occupied. "
-            "remote_participants=" +
-            std::to_string(occupied_remote_slots));
+            "[bots] create rejected; lobby full. occupied_participants=" +
+            std::to_string(occupied_participant_seats) +
+            " max_participants=" +
+            std::to_string(participant_capacity));
         return false;
     }
 
@@ -69,6 +84,9 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
             Log(
                 "[bots] create rejected; the local multiplayer participant "
                 "does not have a usable spawn transform.");
+            if (error_message != nullptr) {
+                *error_message = "spawn transform unavailable";
+            }
             return false;
         }
         if (!sync_has_transform) {
@@ -128,6 +146,11 @@ bool CreateBot(const BotCreateRequest& request, std::uint64_t* out_bot_id) {
             "[bots] create rejected by multiplayer participant transport. bot_id=" +
             std::to_string(bot_id) +
             " error=" + transport_error);
+        if (error_message != nullptr) {
+            *error_message = transport_error.empty()
+                ? "participant transport rejected bot"
+                : transport_error;
+        }
         return false;
     }
 

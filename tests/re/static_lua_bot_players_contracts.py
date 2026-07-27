@@ -15,6 +15,13 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     runtime_lifecycle = _read(
         "SolomonDarkModLoader/src/bot_runtime/public_api/lifecycle_api.inl"
     )
+    runtime_state = _read(
+        "SolomonDarkModLoader/include/"
+        "multiplayer_runtime_effect_state.inl"
+    )
+    runtime_state += _read(
+        "SolomonDarkModLoader/src/multiplayer_runtime_state.cpp"
+    )
     entity_lifecycle = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "bot_registry_and_movement_participant_lifecycle.inl"
@@ -85,7 +92,41 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
                 "SolomonDarkModLoader/src/multiplayer_steam_session/"
                 "lobby_and_events.inl"
             ),
+            _read(
+                "SolomonDarkModLoader/src/multiplayer_steam_session/"
+                "lobby_event_handlers.inl"
+            ),
+            _read(
+                "SolomonDarkModLoader/src/multiplayer_steam_session/"
+                "state_and_helpers.inl"
+            ),
         )
+    )
+    local_transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    local_transport += _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_participant_state_sync.inl"
+    )
+    session_status = _read(
+        "SolomonDarkModLoader/include/startup_status.h"
+    )
+    session_status += _read(
+        "SolomonDarkModLoader/src/startup_status.cpp"
+    )
+    launcher_member = _read(
+        "SolomonDarkModLauncher.UI/src/ViewModels/"
+        "LobbyMemberViewModel.cs"
+    )
+    launcher_roster = _read(
+        "SolomonDarkModLauncher.UI/App.xaml"
+    )
+    launcher_roster += _read(
+        "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
+    )
+    capacity_verifier = _read(
+        "tools/verify_bot_capacity_membership.py"
     )
 
     for token in (
@@ -116,13 +157,27 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "state.participants.erase(",
         "TryDispatchDestroy(",
     )
-    assert "occupied_remote_slots >= 3" in runtime_lifecycle
+    for token in (
+        "kNativeParticipantCapacity = 4",
+        "Gameplay_Ctor (0x005CC800)",
+        "CountHumanParticipantSeats(",
+        "CountBotParticipantSeats(",
+        "CountOccupiedParticipantSeats(",
+    ):
+        assert token in runtime_state, f"shared participant capacity lacks: {token}"
+    for token in (
+        "CountOccupiedParticipantSeats(participant_state)",
+        "ResolveParticipantCapacity(participant_state)",
+        '*error_message = "lobby full";',
+    ):
+        assert token in runtime_lifecycle, f"bot capacity gate lacks: {token}"
+    assert "occupied_remote_slots >= 3" not in runtime_lifecycle
 
     for token in (
         "TrySpawnGameplaySlotBotParticipantEntity(",
         "CreateGameplaySlotBotActor(",
         "FinalizeGameplaySlotBotRegistration(",
-        "All gameplay bot slots (1..3) are occupied.",
+        "No native participant seat is available.",
     ):
         combined = entity_lifecycle + materialization
         assert token in combined, f"ordinary remote-player materialization lacks: {token}"
@@ -235,6 +290,8 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         '"slot"',
         '"participant_id"',
         "only the multiplayer host can control bots",
+        "lua_pushnil(state)",
+        "error_message.data()",
     ):
         assert token in lua_bindings, f"sd.bots handle API lacks: {token}"
 
@@ -242,9 +299,73 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "participant_id",
         "gameplay_slot",
         "is_synthetic",
+        "is_bot",
         "IsLuaControlledParticipant(participant)",
+        "CanAdmitHumanParticipant(",
+        "SessionHelloResultCode::LobbyFull",
+        'text = "The lobby is full"',
     ):
         assert token in steam_members, f"synthetic member status lacks: {token}"
+    for token in (
+        "capacity_rejected_participant_ids",
+        "CountOccupiedParticipantSeats(runtime)",
+        "ResolveParticipantCapacity(runtime)",
+        "lobby full",
+    ):
+        assert token in local_transport, (
+            f"local human admission capacity lacks: {token}"
+        )
+    for token in (
+        "bool is_bot = false;",
+        'stream << ", \\"isBot\\": true";',
+    ):
+        assert token in session_status, (
+            f"backward-compatible bot member schema lacks: {token}"
+        )
+    for token in (
+        '? "BOT"',
+        "TagUsesGold",
+        "member.IsBot || member.IsHost",
+    ):
+        assert token in launcher_member, (
+            f"launcher bot roster model lacks: {token}"
+        )
+    for token in (
+        'x:Key="LobbyMemberChipStyle"',
+        'Value="{StaticResource GoldOutlineBorderBrush}"',
+        'Text="{Binding TagText}"',
+        'ItemTemplate="{StaticResource LobbyMemberRowTemplate}"',
+    ):
+        assert token in launcher_roster, (
+            f"launcher BOT chip visual lacks: {token}"
+        )
+    for token in (
+        'INSTANCE_PREFIX = "bcap"',
+        "HOST_PORT = 49811",
+        "CLIENT_PORT = 49812",
+        'environment["SDMOD_DISABLE_AUDIO"] = "1"',
+        'environment["SDMOD_ENABLE_AUDIO"] = "0"',
+        '"SDMOD_MULTIPLAYER_MAX_PARTICIPANTS"',
+        '"-NoTileWindows"',
+        '"-NoLuaAutomation"',
+        '"structuredLuaResult": [None, "lobby full"]',
+        '"renderMechanism": "WPF RenderTargetBitmap in launcher process"',
+        '"That lobby is full."',
+        '"ticketIssued": True',
+        "stop_owned_process(",
+        "actual.casefold() != expected_path.casefold()",
+    ):
+        assert token in capacity_verifier, (
+            f"capacity acceptance verifier lacks: {token}"
+        )
+    for forbidden in (
+        '"-EnableThird"',
+        '"-EnableAudio"',
+        '"-AllowFocusSteal"',
+    ):
+        assert forbidden not in capacity_verifier, (
+            f"capacity acceptance verifier enables a forbidden mode: {forbidden}"
+        )
 
     return (
         "Lua bots register as host-owned synthetic remote participants, use the "

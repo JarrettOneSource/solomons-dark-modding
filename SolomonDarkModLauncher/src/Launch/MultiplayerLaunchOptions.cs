@@ -9,8 +9,8 @@ internal sealed record MultiplayerLaunchOptions(
     LobbyHostOptions Host)
 {
     public const int DefaultMaxParticipants = 4;
-    // Steam matchmaking caps lobby membership at 250.
-    public const int MaximumSupportedParticipants = 250;
+    // Solomon Dark allocates exactly four gameplay player/progression slots.
+    public const int MaximumSupportedParticipants = 4;
 
     public static MultiplayerLaunchOptions Create(
         MultiplayerLaunchMode mode,

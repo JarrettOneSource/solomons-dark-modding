@@ -54,6 +54,10 @@ local function clear_handle(context)
   context.debug.participant_id = 0
 end
 
+local function is_lobby_full(message)
+  return tostring(message or "") == "lobby full"
+end
+
 function Manager:new(brain, steering, shared, debug)
   return setmetatable({
     brain = brain,
@@ -134,6 +138,7 @@ function Manager:adopt_context(context, handles, claimed)
       context.participant_id = participant_id
       context.debug.participant_id = participant_id
       context.debug.last_error = ""
+      context.capacity_refused = false
       claimed[participant_id] = true
       self.shared.log(context, "adopted")
       return context.bot
@@ -173,6 +178,7 @@ function Manager:ensure_context(
     local message =
       tostring(error_message or bot or "spawn rejected")
     context.debug.last_error = message
+    context.capacity_refused = is_lobby_full(message)
     return nil, message
   end
 
@@ -180,6 +186,7 @@ function Manager:ensure_context(
   context.participant_id = handle_participant_id(bot)
   context.debug.participant_id = context.participant_id
   context.debug.last_error = ""
+  context.capacity_refused = false
   handles[context.participant_id] = bot
   claimed[context.participant_id] = true
   self.shared.log(context, "spawned")
@@ -189,15 +196,37 @@ end
 function Manager:sync_debug()
   local bots = {}
   local participant_ids = {}
+  local active_bot_count = 0
+  local capacity_refused_count = 0
   for index, context in ipairs(self.contexts) do
     context.roster_index = index
     context.debug.roster_index = index
     bots[index] = context.debug
     participant_ids[index] = context.participant_id
+    if context.bot ~= nil and context.participant_id > 0 then
+      active_bot_count = active_bot_count + 1
+    end
+    if context.capacity_refused == true then
+      capacity_refused_count = capacity_refused_count + 1
+    end
   end
   self.debug.bots = bots
   self.debug.participant_ids = participant_ids
   self.debug.roster_size = #self.contexts
+  self.debug.active_bot_count = active_bot_count
+  self.debug.desired_bot_count = #self.contexts
+  self.debug.capacity_refused_count = capacity_refused_count
+  local status =
+    tostring(active_bot_count) .. " of " ..
+    tostring(#self.contexts) .. " bots active"
+  if active_bot_count < #self.contexts and
+      capacity_refused_count > 0 then
+    status = status .. " — lobby full"
+  end
+  if self.debug.status ~= status then
+    self.debug.status = status
+    self.shared.log(nil, status)
+  end
 
   local first = self.contexts[1]
   if first ~= nil then
@@ -262,7 +291,8 @@ function Manager:apply(rows, authority, now_ms)
       true,
       handles,
       claimed)
-    if spawn_error ~= nil then
+    if spawn_error ~= nil and
+        not is_lobby_full(spawn_error) then
       table.insert(
         errors,
         "roster entry " .. tostring(index) ..
@@ -291,8 +321,11 @@ function Manager:tick(now_ms, authority)
       false,
       handles,
       claimed)
-    if spawn_error ~= nil or
-        (context.bot == nil and context.debug.last_error ~= "") then
+    if (spawn_error ~= nil and
+        not is_lobby_full(spawn_error)) or
+        (context.bot == nil and
+         context.debug.last_error ~= "" and
+         not is_lobby_full(context.debug.last_error)) then
       table.insert(
         errors,
         "roster entry " .. tostring(index) ..
@@ -342,7 +375,8 @@ function Manager:respawn_all(now_ms, authority)
       true,
       handles,
       claimed)
-    if spawn_error ~= nil then
+    if spawn_error ~= nil and
+        not is_lobby_full(spawn_error) then
       table.insert(
         errors,
         "roster entry " .. tostring(index) ..

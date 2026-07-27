@@ -313,13 +313,20 @@ void HandleSessionHello(
                    g_session.manifest_sha256.size()) != 0) {
         result = SessionHelloResultCode::ManifestMismatch;
     } else {
-        std::uint32_t authenticated_count = 1;
+        std::size_t authenticated_human_count = 1;
         for (const auto& [steam_id, peer] : g_session.peers) {
             if (steam_id != message.sender_steam_id && peer.authenticated) {
-                authenticated_count += 1;
+                authenticated_human_count += 1;
             }
         }
-        if (authenticated_count >= g_session.max_participants) {
+        ++authenticated_human_count;
+        const auto runtime = SnapshotRuntimeState();
+        const auto prospective_human_count = (std::max)(
+            authenticated_human_count,
+            g_session.lobby_members.size());
+        if (!CanAdmitHumanParticipant(
+                runtime,
+                prospective_human_count)) {
             result = SessionHelloResultCode::LobbyFull;
         }
     }

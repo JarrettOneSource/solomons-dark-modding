@@ -123,6 +123,91 @@ bool RemotePlayerExtrapolatesAtMostOneArrival() {
                "remote extrapolation ignored the stopped movement intent");
 }
 
+bool ParticipantCapacityCountsHumansAndBotsTogether() {
+    using namespace sdmod::multiplayer;
+
+    RuntimeState state;
+    if (!Require(
+            kNativeParticipantCapacity == 4 &&
+                kDefaultParticipantCapacity == 4 &&
+                kMinimumParticipantCapacity == 2,
+            "participant capacity constants do not match the native four-slot ceiling") ||
+        !Require(
+            IsSupportedParticipantCapacity(2) &&
+                IsSupportedParticipantCapacity(4) &&
+                !IsSupportedParticipantCapacity(1) &&
+                !IsSupportedParticipantCapacity(5),
+            "participant capacity validation crossed the native ceiling") ||
+        !Require(
+            ResolveParticipantCapacity(state) == 4,
+            "default participant capacity is not four")) {
+        return false;
+    }
+
+    ParticipantInfo local;
+    local.participant_id = kLocalParticipantId;
+    local.kind = ParticipantKind::LocalHuman;
+    local.controller_kind = ParticipantControllerKind::Native;
+    local.transport_connected = true;
+    state.participants.push_back(local);
+
+    ParticipantInfo remote_human;
+    remote_human.participant_id = 2;
+    remote_human.kind = ParticipantKind::RemoteParticipant;
+    remote_human.controller_kind = ParticipantControllerKind::Native;
+    remote_human.transport_connected = true;
+    state.participants.push_back(remote_human);
+
+    ParticipantInfo first_bot;
+    first_bot.participant_id = kFirstLuaControlledParticipantId;
+    first_bot.kind = ParticipantKind::RemoteParticipant;
+    first_bot.controller_kind = ParticipantControllerKind::LuaBrain;
+    first_bot.transport_connected = true;
+    state.participants.push_back(first_bot);
+
+    auto second_bot = first_bot;
+    second_bot.participant_id += 1;
+    state.participants.push_back(second_bot);
+
+    if (!Require(
+            CountHumanParticipantSeats(state) == 2,
+            "connected local and remote humans did not consume two seats") ||
+        !Require(
+            CountBotParticipantSeats(state) == 2,
+            "Lua-controlled participants did not consume two seats") ||
+        !Require(
+            CountOccupiedParticipantSeats(state) == 4,
+            "humans and bots were not counted against one capacity") ||
+        !Require(
+            !HasOpenParticipantSeat(state) &&
+                !CanAdmitHumanParticipant(state, 3),
+            "a full bot-backed lobby admitted another participant")) {
+        return false;
+    }
+
+    state.participants.pop_back();
+    if (!Require(
+            HasOpenParticipantSeat(state) &&
+                CanAdmitHumanParticipant(state, 3),
+            "despawning a bot did not free a human participant seat")) {
+        return false;
+    }
+    state.participants.push_back(second_bot);
+
+    state.session_human_participant_count = 3;
+    if (!Require(
+            CountHumanParticipantSeats(state) == 3 &&
+                CountOccupiedParticipantSeats(state) == 5,
+            "lobby membership did not reserve seats for humans before runtime materialization")) {
+        return false;
+    }
+
+    state.session_max_participants = 2;
+    return Require(
+        ResolveParticipantCapacity(state) == 2,
+        "supported configured capacity was ignored");
+}
+
 bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
@@ -212,6 +297,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
 int main() {
     if (!FixedWorldDelayDoesNotAmplifyArrivalJitter() ||
         !RemotePlayerExtrapolatesAtMostOneArrival() ||
+        !ParticipantCapacityCountsHumansAndBotsTogether() ||
         !PacketSplitsHaveBoundedVariableWireSizes()) {
         return 1;
     }

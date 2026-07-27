@@ -20,7 +20,14 @@ bool InitializeSteamSession() {
     g_steam_session_host.store(
         g_session.is_host,
         std::memory_order_release);
-    g_session.max_participants = ReadMaxParticipants();
+    std::string capacity_error;
+    if (!TryReadMaxParticipants(
+            &g_session.max_participants,
+            &capacity_error)) {
+        SetError(capacity_error, false);
+        PublishSessionRuntime(GetTickCount64());
+        return false;
+    }
     g_session.lobby_visibility = ReadLobbyVisibility();
     g_session.privacy = LobbyPrivacyToken(g_session.lobby_visibility);
     g_session.open_invite_dialog = ReadBooleanEnvironmentVariable(

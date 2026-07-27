@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using SolomonDarkModLauncher.Launch;
 
 namespace SolomonDarkModLauncher.Steam;
 
@@ -441,7 +442,7 @@ internal static class SteamLobbySession
             var memberCount = Math.Clamp(
                 getNumLobbyMembers_(matchmaking_, lobbyId),
                 0,
-                250);
+                MultiplayerLaunchOptions.MaximumSupportedParticipants);
             var members = new List<LobbyMemberSnapshot>(memberCount);
             for (var index = 0; index < memberCount; index++)
             {
@@ -467,7 +468,10 @@ internal static class SteamLobbySession
             var maxParticipants = int.TryParse(
                 GetLobbyData(lobbyId, "sdmod_max_players"),
                 out var parsedMax)
-                ? Math.Clamp(parsedMax, 2, 250)
+                ? Math.Clamp(
+                    parsedMax,
+                    2,
+                    MultiplayerLaunchOptions.MaximumSupportedParticipants)
                 : Math.Max(2, members.Count);
             return new LobbySnapshot(
                 lobbyId,

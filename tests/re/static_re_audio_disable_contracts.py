@@ -949,6 +949,9 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "tools/sample_private_region_entrances.py",
         "tools/trace_rich_item_startup.py",
     }
+    hard_disabled_python = {
+        "tools/verify_bot_capacity_membership.py",
+    }
     reference_only_python = {
         "tools/verify_lua_bot_brain.py",
         "tools/verify_lua_bot_players.py",
@@ -990,11 +993,21 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
             + " discovered="
             + ",".join(sorted(discovered_scripts))
         )
-    if discovered_python != direct_python | reference_only_python:
+    if discovered_python != (
+        direct_python |
+        hard_disabled_python |
+        reference_only_python
+    ):
         raise StaticReTestFailure(
             "Python launcher surface inventory changed without an audio "
             "policy update: expected="
-            + ",".join(sorted(direct_python | reference_only_python))
+            + ",".join(
+                sorted(
+                    direct_python |
+                    hard_disabled_python |
+                    reference_only_python
+                )
+            )
             + " discovered="
             + ",".join(sorted(discovered_python))
         )
@@ -1028,6 +1041,14 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         if (
             "--disable-audio" not in text
             or "--enable-audio" not in text
+        ):
+            failures.append(relative_path)
+    for relative_path in sorted(hard_disabled_python):
+        text = read_text(ROOT / relative_path)
+        if (
+            'environment["SDMOD_DISABLE_AUDIO"] = "1"' not in text
+            or 'environment["SDMOD_ENABLE_AUDIO"] = "0"' not in text
+            or "-EnableAudio" in text
         ):
             failures.append(relative_path)
     if failures:

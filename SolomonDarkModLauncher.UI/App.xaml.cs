@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Text.Json;
 using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.ViewModels;
@@ -29,6 +30,61 @@ public partial class App : Application
         }
         startupArguments.ApplyTestIsolation();
         LauncherShell.UseSafeCurrentDirectory();
+
+        // #71 visual-acceptance preview: render an actual session-status
+        // roster in-process, before activation, registration, updates, or CLI
+        // work can touch an installed launcher.
+        var lobbyPreviewStatusPath =
+            Environment.GetEnvironmentVariable("SDMOD_UI_LOBBY_PREVIEW_STATUS");
+        if (!string.IsNullOrWhiteSpace(lobbyPreviewStatusPath))
+        {
+            try
+            {
+                var status = JsonSerializer.Deserialize<LauncherCliMultiplayerSession>(
+                    File.ReadAllText(lobbyPreviewStatusPath),
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    }) ?? throw new InvalidOperationException(
+                        "Lobby preview status JSON was empty.");
+                status.Members ??= [];
+                var lobbyPreviewViewModel = new LobbyRosterPreviewViewModel(
+                    status,
+                    Environment.GetEnvironmentVariable(
+                        "SDMOD_UI_LOBBY_PREVIEW_LABEL") ?? string.Empty);
+                var previewWindow = new LobbyRosterPreviewWindow(
+                    lobbyPreviewViewModel);
+                previewWindow.ContentRendered += (_, _) =>
+                {
+                    var outputPath = Environment.GetEnvironmentVariable(
+                        "SDMOD_UI_LOBBY_PREVIEW_RTB");
+                    if (string.IsNullOrWhiteSpace(outputPath))
+                    {
+                        return;
+                    }
+                    RenderTargetBitmapCapture.Save(
+                        previewWindow,
+                        outputPath);
+                    Shutdown(0);
+                };
+                MainWindow = previewWindow;
+                previewWindow.Show();
+            }
+            catch (Exception exception) when (
+                exception is IOException or
+                UnauthorizedAccessException or
+                JsonException or
+                InvalidOperationException)
+            {
+                MessageBox.Show(
+                    exception.Message,
+                    "Lobby roster preview",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown(2);
+            }
+            return;
+        }
 
         // #61 visual-acceptance preview: SDMOD_UI_SETTINGS_PREVIEW=1 opens the
         // mod settings dialog against the stub source and exits with it —
@@ -101,17 +157,9 @@ public partial class App : Application
 
                     try
                     {
-                        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                            (int)previewWindow.ActualWidth,
-                            (int)previewWindow.ActualHeight,
-                            96,
-                            96,
-                            System.Windows.Media.PixelFormats.Pbgra32);
-                        bitmap.Render(previewWindow);
-                        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
-                        using FileStream stream = File.Create(rtbPath);
-                        encoder.Save(stream);
+                        RenderTargetBitmapCapture.Save(
+                            previewWindow,
+                            rtbPath);
                         Log($"rtb saved {previewWindow.ActualWidth}x{previewWindow.ActualHeight} -> {rtbPath}");
                     }
                     catch (Exception ex)

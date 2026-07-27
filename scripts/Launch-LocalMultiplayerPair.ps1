@@ -6,6 +6,8 @@ param(
     [UInt16]$HostPort = 47770,
     [UInt16]$ClientPort = 47771,
     [UInt16]$ThirdPort = 47772,
+    [ValidateRange(2, 4)]
+    [int]$MaxParticipants = 4,
     [UInt16]$HostRemotePort = 0,
     [UInt16]$ClientRemotePort = 0,
     [string]$RemoteHost = "127.0.0.1",
@@ -357,6 +359,7 @@ function Start-MultiplayerInstance {
         SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE = ""
         SDMOD_MULTIPLAYER_QUICK_START_RUN = $(if (
             $QuickStartRun -and $Role -eq "host") { "1" } else { "" })
+        SDMOD_MULTIPLAYER_MAX_PARTICIPANTS = [string]$MaxParticipants
     }
     if ($NoLuaAutomation -and $null -ne $CreateSelection) {
         $env.SDMOD_MULTIPLAYER_QUICK_START_ELEMENT =

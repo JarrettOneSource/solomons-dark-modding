@@ -497,11 +497,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref hostPlayerCountText_, value);
     }
 
-    // Steam matchmaking caps lobby membership at 250.
+    // Solomon Dark allocates exactly four gameplay player/progression slots.
     public int HostPlayerCount =>
         int.TryParse(hostPlayerCountText_.Trim(), out var count)
-            ? Math.Clamp(count, 2, 250)
-            : 4;
+            ? count
+            : 0;
 
     public bool HostPrivacyFriends
     {
@@ -1622,7 +1622,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var membersSignature = string.Join(
             "\n",
             status.Members.Select(member =>
-                $"{member.SteamId}|{member.IsHost}|{member.IsLocal}|{member.Name}"));
+                $"{member.ParticipantId}|{member.IsHost}|{member.IsLocal}|{member.IsBot}|{member.Name}"));
         if (membersSignature != lobbyMembersSignature_)
         {
             lobbyMembersSignature_ = membersSignature;
@@ -1756,9 +1756,15 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var privacy = HostPrivacyPublic ? "public" : "friends";
         var maxPlayers = HostPlayerCount;
-        HostPlayerCountText = maxPlayers.ToString();
+        if (maxPlayers is < 2 or > 4)
+        {
+            SetError(
+                "Player count must be between 2 and the native 4-player ceiling.");
+            return;
+        }
+
+        var privacy = HostPrivacyPublic ? "public" : "friends";
         IsHostSetupOpen = false;
 
         await ExecuteUiCommandAsync(
@@ -2289,7 +2295,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var membersSignature = string.Join(
             "\n",
             notification.Members.Select(member =>
-                $"{member.SteamId}|{member.IsHost}|{member.IsLocal}|{member.Name}"));
+                $"{member.ParticipantId}|{member.IsHost}|{member.IsLocal}|{member.IsBot}|{member.Name}"));
         if (membersSignature != lobbyMembersSignature_)
         {
             lobbyMembersSignature_ = membersSignature;

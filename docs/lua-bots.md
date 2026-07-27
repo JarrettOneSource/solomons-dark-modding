@@ -39,6 +39,12 @@ bot:despawn()
 - `name`: a nonempty persona name of at most 31 bytes.
 - `class`: `fire`, `water`, `earth`, `air`, or `ether`.
 
+Humans and bots consume the same configured lobby capacity. Solomon Dark has
+four native player slots, so `maxParticipants` may be two through four. If
+there is no open seat, `spawn` returns `nil, "lobby full"`; it never clamps the
+roster or crashes the game. A later despawn or human departure frees the seat
+for the next spawn attempt.
+
 The returned handle stores only the participant ID. Every method resolves
 current runtime state, so it cannot retain a stale actor pointer across scene
 changes or despawn.

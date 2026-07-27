@@ -60,6 +60,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
+    ("bot member status compatibility", TestBotMemberStatusCompatibilityAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
     ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync),
     ("shared mod settings validation vectors", TestModSettingsValidationVectorsAsync),
@@ -1690,10 +1691,10 @@ static Task TestManualLobbyLaunchStateAsync()
 static Task TestSteamLobbyCapacityBoundsAsync()
 {
     var command = LauncherCommandParser.Parse(
-        ["launch", "--multiplayer", "host", "--max-players", "250"]);
+        ["launch", "--multiplayer", "host", "--max-players", "4"]);
     Require(
-        command.MultiplayerMaxParticipants == 250,
-        "launcher parser lost Steam's maximum lobby capacity");
+        command.MultiplayerMaxParticipants == 4,
+        "launcher parser lost the native participant ceiling");
 
     var launch = MultiplayerLaunchEnvironment.Apply(
         new LaunchOptions(),
@@ -1704,8 +1705,8 @@ static Task TestSteamLobbyCapacityBoundsAsync()
             command.MultiplayerMaxParticipants,
             openInviteDialog: false));
     Require(
-        launch.EnvironmentOverrides?[MultiplayerLaunchEnvironment.MaxParticipantsVariable] == "250",
-        "launcher did not pass Steam's maximum lobby capacity to the loader");
+        launch.EnvironmentOverrides?[MultiplayerLaunchEnvironment.MaxParticipantsVariable] == "4",
+        "launcher did not pass the native participant ceiling to the loader");
 
     RequireThrows<InvalidOperationException>(
         () => LauncherCommandParser.Parse(
@@ -1713,8 +1714,92 @@ static Task TestSteamLobbyCapacityBoundsAsync()
         "launcher accepted a lobby capacity below two");
     RequireThrows<InvalidOperationException>(
         () => LauncherCommandParser.Parse(
-            ["launch", "--multiplayer", "host", "--max-players", "251"]),
-        "launcher accepted a lobby capacity above Steam's limit");
+            ["launch", "--multiplayer", "host", "--max-players", "5"]),
+        "launcher accepted a capacity above the native participant ceiling");
+
+    return Task.CompletedTask;
+}
+
+static Task TestBotMemberStatusCompatibilityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var statusDirectory = Path.Combine(root, ".sdmod");
+        Directory.CreateDirectory(statusDirectory);
+        File.WriteAllText(
+            Path.Combine(statusDirectory, "multiplayer-session-status.json"),
+            """
+            {
+              "launchToken": "capacity-proof",
+              "enabled": true,
+              "isHost": true,
+              "phase": "Connected",
+              "gamePhase": "hub",
+              "sessionState": "in-hub",
+              "appId": 0,
+              "lobbyId": 42,
+              "hostSteamId": 42,
+              "localSteamId": 42,
+              "personaName": "Host",
+              "privacy": "local",
+              "protocolVersion": 86,
+              "manifestSha256": "",
+              "friendSteamIds": [],
+              "maxParticipants": 4,
+              "authenticatedPeerCount": 1,
+              "overlayEnabled": false,
+              "inviteDialogOpened": false,
+              "inviteSent": false,
+              "routeRelayed": false,
+              "routePingMs": 0,
+              "members": [
+                {
+                  "steamId": 42,
+                  "participantId": 42,
+                  "name": "Host",
+                  "gameplaySlot": 0,
+                  "isHost": true,
+                  "isLocal": true,
+                  "isSynthetic": false
+                },
+                {
+                  "steamId": 0,
+                  "participantId": 1152921504606851072,
+                  "name": "Ember",
+                  "gameplaySlot": 2,
+                  "isHost": false,
+                  "isLocal": false,
+                  "isSynthetic": true,
+                  "isBot": true
+                }
+              ],
+              "statusText": "ready",
+              "errorText": ""
+            }
+            """);
+
+        var status = MultiplayerSessionStatusMonitor.TryRead(
+            root,
+            "capacity-proof");
+        Require(status is not null, "launcher did not read bot member status");
+        var parsedStatus = status!;
+        Require(
+            parsedStatus.Members.Length == 2,
+            "launcher lost session members while reading bot status");
+        Require(
+            !parsedStatus.Members[0].IsBot,
+            "missing isBot did not remain backward-compatible false");
+        Require(
+            parsedStatus.Members[1].IsBot &&
+                parsedStatus.Members[1].IsSynthetic &&
+                parsedStatus.Members[1].GameplaySlot == 2,
+            "bot membership identity was not preserved");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 
     return Task.CompletedTask;
 }

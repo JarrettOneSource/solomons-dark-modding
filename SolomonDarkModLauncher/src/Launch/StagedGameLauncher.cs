@@ -32,6 +32,7 @@ internal static class StagedGameLauncher
         "SDMOD_MULTIPLAYER_REMOTE_PORT",
         "SDMOD_MULTIPLAYER_PARTICIPANT_ID",
         "SDMOD_MULTIPLAYER_PLAYER_NAME",
+        MultiplayerLaunchEnvironment.MaxParticipantsVariable,
         "SDMOD_LUA_EXEC_PIPE_NAME",
         "SDMOD_LOADING_SCREEN_CAPTURE_DIRECTORY",
         "SDMOD_MULTIPLAYER_QUICK_START_RUN",

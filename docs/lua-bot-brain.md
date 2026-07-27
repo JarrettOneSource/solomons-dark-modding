@@ -1,7 +1,7 @@
 # Autonomous Lua bot-brain roster
 
 `mods/bot-brain/` is the opt-in reference brain for host-owned synthetic
-participants. Its host-scoped `roster` list contains zero to three ordered rows:
+participants. Its host-scoped `roster` list contains zero to four ordered rows:
 name, element (`fire`, `water`, `earth`, `air`, or `ether`), and discipline
 (`skirmisher`, `guardian`, or `striker`). The mod is disabled by default, so an
 ordinary game never gains an unsolicited participant.
@@ -21,11 +21,13 @@ startup, live reload, and replicated list changes it compares rows by order:
 - a new row spawns with that row's name and element; and
 - a changed name, element, or discipline despawns and respawns the row.
 
-Retirement uses the reliable participant tombstone path. Creation remains
-subject to the three stock remote gameplay slots. If a row cannot claim a
-slot, the context remains desired and retries on later authority ticks, while
-the immediate settings reload returns an `entry_errors.roster` message naming
-the row. A rejection never crashes the mod or game.
+Retirement uses the reliable participant tombstone path. Solomon Dark has four
+native player/progression slots, so humans and bots share one four-participant
+lobby capacity. If a row cannot claim an open seat, the context remains desired
+and retries on later authority ticks. Expected capacity refusals are summarized
+in `bot_brain_debug.status` (for example,
+`2 of 4 bots active — lobby full`) instead of becoming reconciliation errors.
+A rejection never crashes the mod or game.
 
 The brain never creates a standalone actor, writes an actor transform, or
 drives a second native AI loop. All contexts run from `runtime.tick`, and
@@ -96,8 +98,9 @@ The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
 `bots` is an ordered array matching the roster. Each row reports identity,
 participant ID, mode, HP ratio, accepted movement/casts, attack window,
 discipline thresholds, and guardian ward distance. Root scalar fields mirror
-the first row for compatibility with the existing wave-five verifier. This is
-acceptance telemetry, not a gameplay control API.
+the first row for compatibility with the existing wave-five verifier. The root
+also reports desired, active, and capacity-refused counts plus the aggregate
+status string. This is acceptance telemetry, not a gameplay control API.
 
 The existing retail-schedule longevity gate remains:
 

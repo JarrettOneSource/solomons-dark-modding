@@ -197,6 +197,63 @@ MultiplayerCharacterProfile DefaultCharacterProfile() {
     return MultiplayerCharacterProfile{};
 }
 
+bool IsSupportedParticipantCapacity(std::uint32_t capacity) {
+    return capacity >= kMinimumParticipantCapacity &&
+           capacity <= kNativeParticipantCapacity;
+}
+
+std::uint32_t ResolveParticipantCapacity(const RuntimeState& state) {
+    return IsSupportedParticipantCapacity(state.session_max_participants)
+        ? state.session_max_participants
+        : kDefaultParticipantCapacity;
+}
+
+std::size_t CountHumanParticipantSeats(const RuntimeState& state) {
+    const auto runtime_human_count = static_cast<std::size_t>(
+        std::count_if(
+            state.participants.begin(),
+            state.participants.end(),
+            [](const ParticipantInfo& participant) {
+                return IsLocalHumanParticipant(participant) ||
+                       (IsRemoteParticipant(participant) &&
+                        IsNativeControlledParticipant(participant) &&
+                        participant.transport_connected);
+            }));
+    return (std::max)(
+        runtime_human_count,
+        static_cast<std::size_t>(state.session_human_participant_count));
+}
+
+std::size_t CountBotParticipantSeats(const RuntimeState& state) {
+    return static_cast<std::size_t>(
+        std::count_if(
+            state.participants.begin(),
+            state.participants.end(),
+            [](const ParticipantInfo& participant) {
+                return IsLuaControlledParticipant(participant);
+            }));
+}
+
+std::size_t CountOccupiedParticipantSeats(const RuntimeState& state) {
+    return CountHumanParticipantSeats(state) +
+           CountBotParticipantSeats(state);
+}
+
+bool HasOpenParticipantSeat(const RuntimeState& state) {
+    return CountOccupiedParticipantSeats(state) <
+           ResolveParticipantCapacity(state);
+}
+
+bool CanAdmitHumanParticipant(
+    const RuntimeState& state,
+    std::size_t prospective_human_count) {
+    const auto capacity =
+        static_cast<std::size_t>(ResolveParticipantCapacity(state));
+    const auto bot_count = CountBotParticipantSeats(state);
+    return prospective_human_count <= capacity &&
+           bot_count <= capacity - prospective_human_count;
+}
+
 ParticipantSceneIntent DefaultParticipantSceneIntent() {
     return ParticipantSceneIntent{};
 }

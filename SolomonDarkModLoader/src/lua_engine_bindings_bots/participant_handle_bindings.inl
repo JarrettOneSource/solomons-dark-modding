@@ -553,12 +553,17 @@ int LuaBotsSpawn(lua_State* state) {
     std::uint64_t participant_id = 0;
     if (!multiplayer::CreateBot(
             request,
-            &participant_id) ||
+            &participant_id,
+            &error_message) ||
         participant_id == 0) {
+        if (error_message.empty()) {
+            error_message =
+                "the bot could not claim a multiplayer participant slot";
+        }
         return PushBotOperationError(
             state,
             true,
-            "the bot could not claim a multiplayer participant slot");
+            error_message);
     }
     PushBotHandle(state, participant_id);
     return 1;

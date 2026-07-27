@@ -199,8 +199,11 @@ void WriteMultiplayerSessionStatus(
                << ", \"isHost\": " << (member.is_host ? "true" : "false")
                << ", \"isLocal\": " << (member.is_local ? "true" : "false")
                << ", \"isSynthetic\": "
-               << (member.is_synthetic ? "true" : "false")
-               << "}";
+               << (member.is_synthetic ? "true" : "false");
+        if (member.is_bot) {
+            stream << ", \"isBot\": true";
+        }
+        stream << "}";
     }
     stream << (snapshot.members.empty() ? "],\n" : "\n  ],\n");
     stream << "  \"statusText\": \""

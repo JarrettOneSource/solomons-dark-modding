@@ -55,7 +55,7 @@
         "scope": "host",
         "group": "Bots",
         "min_items": 0,
-        "max_items": 3,
+        "max_items": 4,
         "item_label": "{name} · {element} {discipline}",
         "item": {
           "fields": [

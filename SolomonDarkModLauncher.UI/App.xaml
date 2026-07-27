@@ -7,6 +7,58 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="src/Themes/LauncherTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="LobbyMemberChipStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource InputBackgroundBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="3" />
+                <Setter Property="Padding" Value="6,1" />
+                <Setter Property="Margin" Value="8,0,0,0" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding TagText}" Value="">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding TagUsesGold}" Value="True">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderBrush" Value="{StaticResource GoldOutlineBorderBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <DataTemplate x:Key="LobbyMemberRowTemplate">
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Margin="0,0,9,0"
+                               VerticalAlignment="Center"
+                               FontSize="9"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="&#x25C6;" />
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="13"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Text="{Binding Name}"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border Style="{StaticResource LobbyMemberChipStyle}">
+                        <TextBlock FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding TagText}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground"
+                                            Value="{StaticResource TextSecondaryBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TagUsesGold}" Value="True">
+                                            <Setter Property="Foreground"
+                                                    Value="{StaticResource GoldOutlineTextBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+                </StackPanel>
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -43,7 +43,10 @@ void PublishLocalSessionStatus(
         : g_local_transport.remote_port;
 
     std::vector<MultiplayerSessionMemberSnapshot> members;
-    members.reserve(g_local_transport.peers.size() + 1);
+    members.reserve(
+        g_local_transport.peers.size() +
+        CountBotParticipantSeats(runtime) +
+        1);
     MultiplayerSessionMemberSnapshot local;
     local.steam_id = g_local_transport.local_peer_id;
     local.participant_id = g_local_transport.local_peer_id;
@@ -86,6 +89,25 @@ void PublishLocalSessionStatus(
         member.is_host = peer.participant_id == host_id;
         members.push_back(std::move(member));
     }
+    for (const auto& participant : runtime.participants) {
+        if (!IsLuaControlledParticipant(participant)) {
+            continue;
+        }
+
+        MultiplayerSessionMemberSnapshot member;
+        member.participant_id = participant.participant_id;
+        member.name = participant.name;
+        member.gameplay_slot = -1;
+        member.is_synthetic = true;
+        member.is_bot = true;
+        BotSnapshot bot_snapshot;
+        if (ReadParticipantSnapshot(
+                participant.participant_id,
+                &bot_snapshot)) {
+            member.gameplay_slot = bot_snapshot.gameplay_slot;
+        }
+        members.push_back(std::move(member));
+    }
     std::sort(
         members.begin(),
         members.end(),
@@ -95,6 +117,9 @@ void PublishLocalSessionStatus(
             }
             if (left.is_local != right.is_local) {
                 return left.is_local;
+            }
+            if (left.is_bot != right.is_bot) {
+                return !left.is_bot;
             }
             return left.participant_id < right.participant_id;
         });
@@ -120,7 +145,10 @@ void PublishLocalSessionStatus(
     for (const auto& member : members) {
         signature << '|' << member.participant_id
                   << ':' << member.name
-                  << ':' << (member.is_host ? 'h' : '-');
+                  << ':' << (member.is_host ? 'h' : '-')
+                  << ':' << (member.is_local ? 'l' : '-')
+                  << ':' << (member.is_bot ? 'b' : '-')
+                  << ':' << member.gameplay_slot;
     }
     const auto current_signature = signature.str();
     if (!force &&

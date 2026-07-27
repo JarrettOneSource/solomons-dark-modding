@@ -234,7 +234,8 @@ internal static class LauncherJsonConsole
                                     GameplaySlot = member.GameplaySlot,
                                     IsHost = member.IsHost,
                                     IsLocal = member.IsLocal,
-                                    IsSynthetic = member.IsSynthetic
+                                    IsSynthetic = member.IsSynthetic,
+                                    IsBot = member.IsBot
                                 }).ToArray(),
                             StatusText = session.StatusText,
                             ErrorText = session.ErrorText
@@ -515,6 +516,7 @@ internal static class LauncherJsonConsole
         public required bool IsHost { get; init; }
         public required bool IsLocal { get; init; }
         public required bool IsSynthetic { get; init; }
+        public required bool IsBot { get; init; }
     }
 
     private sealed class LauncherJsonModStateChange

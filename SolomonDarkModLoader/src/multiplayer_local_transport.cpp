@@ -968,7 +968,7 @@ struct LocalTransportState {
     std::uint16_t local_port = 0;
     std::string remote_host;
     std::uint16_t remote_port = 0;
-    std::uint32_t max_participants = 4;
+    std::uint32_t max_participants = kDefaultParticipantCapacity;
     std::string launch_token;
     std::string manifest_sha256;
     std::string privacy = "friendsOnly";
@@ -1056,6 +1056,7 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
+    std::unordered_set<std::uint64_t> capacity_rejected_participant_ids;
     std::unordered_map<std::uint64_t, std::uint32_t>
         last_participant_frame_sequence_by_participant;
     std::unordered_map<std::uint64_t, std::uint32_t>
@@ -1369,18 +1370,6 @@ std::uint16_t ReadPortEnvironmentVariable(const char* name, std::uint16_t defaul
     return static_cast<std::uint16_t>(parsed);
 }
 
-std::uint32_t ReadLocalMaxParticipants() {
-    std::uint64_t parsed = 0;
-    return TryParseUnsigned64(
-               ReadEnvironmentVariable(
-                   kMaxParticipantsEnvironmentVariable),
-               &parsed) &&
-            parsed >= 2 &&
-            parsed <= 250
-        ? static_cast<std::uint32_t>(parsed)
-        : 4;
-}
-
 std::uint64_t ReadParticipantId(std::uint16_t local_port) {
     const auto text = ReadEnvironmentVariable(kParticipantIdEnvironmentVariable);
     std::uint64_t parsed = 0;
@@ -1622,6 +1611,7 @@ void PublishLocalTransportRuntimeState() {
             queue_stats.last_send_failure_result;
     }
 
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     UpdateRuntimeState([&](RuntimeState& state) {
         state.transport_packets_sent = g_local_transport.packets_sent;
         state.transport_packets_received = g_local_transport.packets_received;
@@ -1635,6 +1625,19 @@ void PublishLocalTransportRuntimeState() {
             state.session_is_host = g_local_transport.is_host;
             state.session_status = SessionStatus::Ready;
             state.session_transport = SessionTransportKind::LocalUdp;
+            state.session_max_participants =
+                g_local_transport.max_participants;
+            state.session_human_participant_count =
+                static_cast<std::uint32_t>(
+                    std::count_if(
+                        state.participants.begin(),
+                        state.participants.end(),
+                        [](const ParticipantInfo& participant) {
+                            return IsLocalHumanParticipant(participant) ||
+                                   (IsRemoteParticipant(participant) &&
+                                    IsNativeControlledParticipant(participant) &&
+                                    participant.transport_connected);
+                        }));
             std::ostringstream status;
             status << "Local UDP multiplayer transport ready. role="
                    << (g_local_transport.is_host ? "host" : "client")
@@ -1655,8 +1658,7 @@ void PublishLocalTransportRuntimeState() {
                 static_cast<std::uint64_t>(GetTickCount64()));
         }
     });
-    PublishLocalSessionStatus(
-        static_cast<std::uint64_t>(GetTickCount64()));
+    PublishLocalSessionStatus(now_ms);
 }
 
 }  // namespace

@@ -227,7 +227,7 @@ tables, schedules) without new per-mod machinery.
 ```json
 { "key": "roster", "type": "list", "label": "Bot roster",
   "scope": "host", "group": "Bots",
-  "min_items": 0, "max_items": 3,
+  "min_items": 0, "max_items": 4,
   "item_label": "{name} · {element} {discipline}",
   "item": { "fields": [
     { "key": "name", "type": "text", "label": "Name",

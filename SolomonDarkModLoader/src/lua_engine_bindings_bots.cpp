@@ -134,9 +134,13 @@ int LuaBotsCreate(lua_State* state) {
     }
 
     std::uint64_t bot_id = 0;
-    if (!multiplayer::CreateBot(request, &bot_id)) {
+    if (!multiplayer::CreateBot(request, &bot_id, &error_message)) {
         lua_pushnil(state);
-        return 1;
+        lua_pushlstring(
+            state,
+            error_message.data(),
+            error_message.size());
+        return 2;
     }
 
     lua_pushinteger(state, static_cast<lua_Integer>(bot_id));

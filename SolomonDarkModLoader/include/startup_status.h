@@ -36,6 +36,7 @@ struct MultiplayerSessionMemberSnapshot {
     bool is_host = false;
     bool is_local = false;
     bool is_synthetic = false;
+    bool is_bot = false;
 };
 
 struct MultiplayerSessionStatusSnapshot {

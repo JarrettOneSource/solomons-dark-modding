@@ -61,6 +61,30 @@ void ApplyRemoteStatePacket(
             from)) {
         return;
     }
+    if (!synthetic_participant && IsLocalTransportHost()) {
+        const auto runtime = SnapshotRuntimeState();
+        const auto* existing =
+            FindParticipant(runtime, packet.participant_id);
+        if (existing == nullptr &&
+            !HasOpenParticipantSeat(runtime)) {
+            if (g_local_transport.capacity_rejected_participant_ids.insert(
+                    packet.participant_id).second) {
+                Log(
+                    "Multiplayer local transport rejected participant; lobby full. "
+                    "participant_id=" +
+                    std::to_string(packet.participant_id) +
+                    " occupied_participants=" +
+                    std::to_string(
+                        CountOccupiedParticipantSeats(runtime)) +
+                    " max_participants=" +
+                    std::to_string(
+                        ResolveParticipantCapacity(runtime)));
+            }
+            return;
+        }
+        g_local_transport.capacity_rejected_participant_ids.erase(
+            packet.participant_id);
+    }
     if (synthetic_participant) {
         UpsertPeerEndpoint(
             from,

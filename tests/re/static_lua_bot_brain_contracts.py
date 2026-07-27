@@ -52,7 +52,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     assert roster_entry["type"] == "list"
     assert roster_entry["scope"] == "host"
     assert roster_entry["min_items"] == 0
-    assert roster_entry["max_items"] == 3
+    assert roster_entry["max_items"] == 4
     fields = {
         field["key"]: field
         for field in roster_entry["item"]["fields"]
@@ -111,6 +111,10 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "roster entry ",
         "last_spawn_attempt_ms",
         "self.brain.new(",
+        'tostring(message or "") == "lobby full"',
+        '" bots active"',
+        '" — lobby full"',
+        "capacity_refused_count",
     ):
         assert token in roster, f"bot roster reconciliation lacks: {token}"
     for token in (
@@ -166,7 +170,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         )
 
     for token in (
-        "zero to three ordered rows",
+        "zero to four ordered rows",
         "a changed name",
         "`sd.nav.test_segment`",
         "`bot:cast(0, target.x, target.y, 80)`",
@@ -204,7 +208,8 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     assert "stop_game_processes(" not in verifier
 
     return (
-        "The opt-in ordered roster runs three native-routed disciplines on "
+        "The opt-in ordered roster fills up to four capacity-bounded seats "
+        "with three native-routed disciplines on "
         "authority ticks while retaining the retail three-run wave-five gate"
     )
 

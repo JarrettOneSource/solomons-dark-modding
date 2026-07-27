@@ -111,7 +111,6 @@ struct GameplayAllyHudRow {
     std::string display_name;
 };
 
-constexpr std::size_t kGameplayAllyHudNativeSlotCount = 5;
 constexpr float kGameplayAllyHudReservedLabelWidth = 128.0f;
 constexpr float kGameplayAllyHudNameHorizontalPadding = 2.0f;
 constexpr float kGameplayAllyHudLabelBaselineOffset = 7.0f;

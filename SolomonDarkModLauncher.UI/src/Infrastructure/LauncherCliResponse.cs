@@ -182,9 +182,13 @@ internal sealed class LauncherCliMultiplayerSession
 internal sealed class LauncherCliLobbyMember
 {
     public ulong SteamId { get; set; }
+    public ulong ParticipantId { get; set; }
     public string Name { get; set; } = string.Empty;
+    public int GameplaySlot { get; set; } = -1;
     public bool IsHost { get; set; }
     public bool IsLocal { get; set; }
+    public bool IsSynthetic { get; set; }
+    public bool IsBot { get; set; }
 }
 
 internal sealed class LauncherCliModStateChange

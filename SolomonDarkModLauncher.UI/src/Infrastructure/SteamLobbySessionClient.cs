@@ -142,13 +142,22 @@ internal sealed class SteamLobbySessionClient : IDisposable
                         payload.Privacy ?? string.Empty,
                         payload.MaxParticipants,
                         payload.Members.Select(member =>
-                            new LauncherCliLobbyMember
+                        {
+                            var steamId = ParseSteamId(member.SteamId) ?? 0;
+                            return new LauncherCliLobbyMember
                             {
-                                SteamId = ParseSteamId(member.SteamId) ?? 0,
+                                SteamId = steamId,
+                                ParticipantId =
+                                    ParseSteamId(member.ParticipantId) ??
+                                    steamId,
                                 Name = member.Name ?? string.Empty,
+                                GameplaySlot = member.GameplaySlot,
                                 IsHost = member.IsHost,
-                                IsLocal = member.IsLocal
-                            }).ToArray(),
+                                IsLocal = member.IsLocal,
+                                IsSynthetic = member.IsSynthetic,
+                                IsBot = member.IsBot
+                            };
+                        }).ToArray(),
                         payload.Error ?? string.Empty));
             }
         }
@@ -224,8 +233,12 @@ internal sealed class SteamLobbySessionClient : IDisposable
     private sealed class SteamLobbyMemberPayload
     {
         public string? SteamId { get; set; }
+        public string? ParticipantId { get; set; }
         public string? Name { get; set; }
+        public int GameplaySlot { get; set; } = -1;
         public bool IsHost { get; set; }
         public bool IsLocal { get; set; }
+        public bool IsSynthetic { get; set; }
+        public bool IsBot { get; set; }
     }
 }

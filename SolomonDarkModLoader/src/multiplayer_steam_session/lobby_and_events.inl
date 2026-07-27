@@ -72,9 +72,11 @@ bool ValidateJoinedLobby(std::string* error_message) {
     if (!TryParseUnsigned64(
             SteamGetLobbyData(g_session.lobby_id, kLobbyMaxParticipantsKey),
             &advertised_max) ||
-        advertised_max < 2 ||
-        advertised_max > kMaximumSupportedParticipants) {
-        *error_message = "Lobby participant limit is unsupported.";
+        advertised_max > (std::numeric_limits<std::uint32_t>::max)() ||
+        !IsSupportedParticipantCapacity(
+            static_cast<std::uint32_t>(advertised_max))) {
+        *error_message =
+            "Lobby participant limit exceeds the native four-player ceiling.";
         return false;
     }
     if (SteamGetLobbyData(g_session.lobby_id, kLobbyStateKey) != kLobbyStateOpen) {
@@ -217,9 +219,12 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
     }
     const auto& friend_steam_ids = g_session.immediate_friend_ids;
 
+    const auto participant_snapshot = SnapshotRuntimeState();
     std::vector<MultiplayerSessionMemberSnapshot> members;
     if (g_session.lobby_id != 0 && !g_session.lobby_members.empty()) {
-        members.reserve(g_session.lobby_members.size() + 3);
+        members.reserve(
+            g_session.lobby_members.size() +
+            CountBotParticipantSeats(participant_snapshot));
         for (const auto member_steam_id : g_session.lobby_members) {
             MultiplayerSessionMemberSnapshot member;
             member.steam_id = member_steam_id;
@@ -239,7 +244,6 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             members.push_back(std::move(member));
         }
     }
-    const auto participant_snapshot = SnapshotRuntimeState();
     for (const auto& participant : participant_snapshot.participants) {
         if (!IsLuaControlledParticipant(participant)) {
             continue;
@@ -249,6 +253,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         member.participant_id = participant.participant_id;
         member.name = participant.name;
         member.is_synthetic = true;
+        member.is_bot = true;
         BotSnapshot bot_snapshot;
         if (ReadParticipantSnapshot(participant.participant_id, &bot_snapshot)) {
             member.gameplay_slot = bot_snapshot.gameplay_slot;
@@ -325,6 +330,10 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         state.steam_lobby_id = g_session.lobby_id;
         state.steam_host_id = g_session.host_steam_id;
         state.session_max_participants = g_session.max_participants;
+        state.session_human_participant_count =
+            static_cast<std::uint32_t>((std::max<std::size_t>)(
+                1,
+                g_session.lobby_members.size()));
         state.authenticated_peer_count = authenticated_count;
         state.steam_route_relayed = any_relayed;
         state.steam_route_ping_ms = maximum_ping;
@@ -416,6 +425,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         signature << '|' << member.participant_id << ':'
                   << (member.is_host ? 'h' : '-') << ':'
                   << (member.is_synthetic ? 's' : '-') << ':'
+                  << (member.is_bot ? 'b' : '-') << ':'
                   << member.gameplay_slot << ':' << member.name;
     }
     const auto status_signature = signature.str();

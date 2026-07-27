@@ -272,7 +272,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     }
     assert entries["kite_radius"]["default"] == 340
     assert entries["roster"]["type"] == "list"
-    assert entries["roster"]["max_items"] == 3
+    assert entries["roster"]["max_items"] == 4
     assert "persona_name" not in entries
     assert entries["respawn_bot"]["confirm"] is True
     for token in (

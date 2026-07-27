@@ -44,7 +44,7 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     (void)TryFindOpenGameplayBotSlot(gameplay_address, &target_slot);
     if (target_slot < 0) {
         if (error_message != nullptr) {
-            *error_message = "All gameplay bot slots (1..3) are occupied.";
+            *error_message = "No native participant seat is available.";
         }
         return false;
     }
