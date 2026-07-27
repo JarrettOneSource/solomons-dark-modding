@@ -947,6 +947,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "tools/trace_rich_item_startup.py",
     }
     reference_only_python = {
+        "tools/verify_lua_bot_brain.py",
         "tools/verify_lua_bot_players.py",
         "tools/verify_multiplayer_organic_enemy_cast_timing.py",
         "tools/verify_multiplayer_replicated_audio_events.py",

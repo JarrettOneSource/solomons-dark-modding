@@ -155,3 +155,5 @@ acceptance covers the complete handle contract, collision-aware move/stop,
 Fire cast/effect/damage convergence, native damage into the bot, standard
 death epoch/corpse presentation, and hostile retargeting.
 
+The opt-in autonomous implementation and its three-run wave-five gate are
+documented in [`lua-bot-brain.md`](lua-bot-brain.md).
