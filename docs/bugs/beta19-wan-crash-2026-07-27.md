@@ -1,10 +1,10 @@
 # Beta.19 WAN disconnect and native crashes (2026-07-27)
 
-Status: root causes proven and foundational fixes implemented; full release
-battery pending. This document records the artifact inventory, peer-correlated
-timeline, dump forensics, static reverse engineering, transport failure chain,
-and the ownership fixes. No source fix was started before the findings were
-committed.
+Status: root causes proven, foundational fixes implemented, and the full
+beta.20 pre-release battery passed. This document records the artifact
+inventory, peer-correlated timeline, dump forensics, static reverse
+engineering, transport failure chain, and ownership fixes. No source fix was
+started before the findings were committed.
 
 ## Scope and names
 
@@ -638,3 +638,20 @@ device pointer global     0x04EA2760
 The harness then posted `WM_CLOSE` only to that PID's main window. The process
 exited normally, produced no minidump, and left a zero-byte crash log. No
 owner installation or process was read, modified, or stopped.
+
+## Final validation
+
+The then-current battery passed after the fixes were committed:
+
+- source organization: 600 source/header fragments;
+- Release native/launcher/UI/updater build: 0 warnings, 0 errors;
+- `Verify-Workspace.ps1 -Configuration Release` against the requested retail
+  game directory, isolated as `ndrop-workspace`;
+- Python discovery: 382/382;
+- static reverse-engineering contracts: 281/281;
+- Windows launcher contracts: 37/37;
+- Steam gameplay queue fault-injection regression;
+- world-motion identity projection regression.
+
+The evidence supports shipping both ownership fixes in beta.20. No beta.19
+hotfix release was cut from this investigation.
