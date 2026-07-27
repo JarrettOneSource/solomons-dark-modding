@@ -273,22 +273,35 @@ Recovered Golem-specific state includes:
 | Offset | Meaning |
 | --- | --- |
 | `+0x164/+0x166` | current target actor group/world slot |
-| near `+0x168` | target/steering validity and heading sentinel |
+| `+0x168` | steering heading/sentinel (`float`, `-1.0` means no turn requested) |
+| `+0x16C` | steering angular step (`float`) |
 | `+0x170/+0x174` | current/max HP |
-| `+0x178/+0x17C` | gait and articulation state |
-| `+0x1E8/+0x1EC` | additional gait/articulation phases |
+| `+0x178` | target-resolution poll timer (`int32`, reset to `50`) |
+| `+0x17C` | locomotion/interpolation sample counter (`int32`, consumed modulo `100`) |
+| `+0x180..+0x1D4` | articulated-body interpolation points and phase accumulators |
+| `+0x1E8/+0x1EC` | primary/secondary gait pose lanes (`int32`) |
 | `+0x1F0/+0x1F4` | primary/secondary attack damage |
 | `+0x1F8` | attack timer |
 | `+0x200` | attack cooldown |
 | `+0x208` | assembly/native age |
 | `+0x210` | Iron |
 | `+0x214` | reflect ratio |
-| `+0x218` | target refresh state |
-| `+0x21C` | attack/animation phase |
+| `+0x218` | ambient boulder/effect timer (`int32`, initialized to `300`, then reset to `100`) |
+| `+0x21C` | cyclic animation phase (`float`) |
+| `+0x220/+0x224` | randomized visual phase values (`float`) |
 | `+0x228..+0x23C` | embedded articulated-part list |
 
 Target acquisition and attack-driving branches require `actor + 0x5C == 0`.
 This is the stock authority boundary behind the loopback directionality.
+
+The field types above are not inferred from nearby values. In
+`Golem::Tick`, `+0x178` is decremented as an integer and reset to `50`,
+`+0x17C` is incremented as an integer and reduced modulo `100`, and `+0x21C`
+is advanced and wrapped with floating-point operations. The loopback probe
+independently observed `+0x21C` bit patterns `0x40DCCC4B` and `0x40D332B2`,
+which decode to animation phases `6.899938` and `6.599938`, respectively.
+Treating the first two fields as motion floats or the last field as an integer
+therefore corrupts the replication contract.
 
 Golem has no natural expiry timer. It persists until one of:
 
