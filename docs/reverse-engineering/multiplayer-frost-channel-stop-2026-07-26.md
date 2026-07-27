@@ -79,7 +79,7 @@ actor tick:
    `OngoingCastShouldDriveSyntheticCastInput()` before calling the stock actor
    tick, then writes that result to the gameplay cast-intent and mouse-left
    fields.
-2. The current implementation returns `true` unconditionally for unbounded
+2. The beta.18 implementation returns `true` unconditionally for unbounded
    held primaries such as Frost and Air once startup has completed. It does
    not inspect `remote_input_release_requested` or
    `remote_input_timed_out`.
@@ -94,13 +94,43 @@ previous=0x20)` to `(current=0, previous=0)`. The following stock tick sees no
 transition, so `0x00549725` never runs and the remote Frost loop remains
 referenced.
 
+### Input-only correction falsified
+
+The first correction made the pre-stock input rule return `false` for an
+active remote unbounded held primary after release. A Release build then ran
+five additional client-to-host trials with `SDMOD_DISABLE_AUDIO=1`; the
+traces remained active while the stock BASS device was suppressed.
+
+All five trials still missed the observer's second stop call and ended with
+the observer Frost refcount at `1`. For example, trial 1 recorded the caster
+release stop at monotonic `344751453`, the host received the release at
+`20:18:32.100`, and replay cleanup ran at `20:18:32.115`, but no host Frost
+stop appeared.
+
+That result exposed the second half of the same native edge. Before the stock
+tick, remote replay also reapplies its authored selection state and retains
+the control-brain target. The stock path at `0x0054964A` can therefore select
+Frost again even when synthetic mouse input is low, before the
+current/previous comparison executes. The existing bounded Earth release path
+already prevents this reselection by clearing the authored control-brain
+target and setting its state ID to the ordinary unknown/idle sentinel for the
+release tick. Unbounded held remote primaries lacked the equivalent release
+edge.
+
+Input-only attempt evidence:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-input-only-attempt-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-input-only-logs/client-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/investigation/frost-input-only-logs/host-solomondarkmodloader.log`
+
 ## Fix contract
 
 Once a remote-controlled unbounded held primary has become active and its
 release or timeout state is observed,
 `OngoingCastShouldDriveSyntheticCastInput()` must return `false`. The next
-stock remote-actor tick can then consume the `0x20 -> 0` edge and stop the
-loop before the existing post-tick settle logic retires the cast.
+stock remote-actor tick must also run with the authored control brain idled so
+it cannot reselect the primary. Stock can then consume the `0x20 -> 0` edge
+and stop the loop before the existing post-tick settle logic retires the cast.
 
 This should be a held-primary lifecycle rule, not a Frost audio special case.
 Bounded held primaries keep their existing explicit release-edge path, and
