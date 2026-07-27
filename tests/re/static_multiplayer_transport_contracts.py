@@ -285,9 +285,9 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         assert token in transport, f"snapshot stream budget contract lacks: {token}"
 
     for token in (
-        "BuildWorldMotionSnapshot(complete_snapshot)",
-        "SameWorldSnapshotIdentity(",
-        "identity_changed",
+        "BuildWorldMotionSnapshotForIdentity(",
+        "last_sent_world_identity_snapshot",
+        "needs_initial_identity",
         "SteamNetworkSendMode::ReliableNoNagle",
         "SteamNetworkSendMode::UnreliableNoDelay",
     ):
@@ -317,6 +317,8 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     assert "pending_world_motion_snapshots" not in transport
     for token in (
         "MissingFragmentsDoNotWithholdOtherEnemies",
+        "MotionProjectionKeepsPublishedIdentityStable",
+        "BuildWorldMotionSnapshotForIdentity(",
         "TryApplyWorldMotionSnapshotFragment(",
         "later fragment could not independently update enemies",
         "out-of-order fragment regressed enemy motion",
@@ -326,6 +328,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         )
     for token in (
         "tests/native/world_motion_fragment_merge_tests.cpp",
+        "tests/native/steam_gameplay_queue_policy_tests.cpp",
         "tests.test_multiplayer_organic_enemy_cast_timing_verifier",
     ):
         assert token in workflow, (

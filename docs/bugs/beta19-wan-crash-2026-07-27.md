@@ -1,9 +1,10 @@
 # Beta.19 WAN disconnect and native crashes (2026-07-27)
 
-Status: root causes proven; implementation pending. This checkpoint records
-the completed artifact inventory, peer-correlated timeline, dump forensics,
-static reverse engineering, and transport failure chain. No source fix was
-started before these findings were committed.
+Status: root causes proven and foundational fixes implemented; full release
+battery pending. This document records the artifact inventory, peer-correlated
+timeline, dump forensics, static reverse engineering, transport failure chain,
+and the ownership fixes. No source fix was started before the findings were
+committed.
 
 ## Scope and names
 
@@ -547,3 +548,93 @@ close. Accordingly, the defensible combined chain is **disconnect, then
 close, then stock D3D crash**. It is not crash, then peer disconnect. The
 common native crash class still requires a single ownership fix because it
 can fault both a concurrent asset worker and later global destructors.
+
+## Foundational fixes
+
+### Congestion ownership
+
+The Steam gameplay boundary now has a per-peer outbound policy:
+
+- `k_EResultLimitExceeded` starts a 250 ms backoff instead of a tight retry
+  loop.
+- A rejected reliable packet is retained ahead of later traffic for that peer.
+- Disposable packets are reduced to the newest pending probe while the peer is
+  congested. A congested peer cannot head-of-line block other peers.
+- Any successful retry clears the pressure episode.
+- Two seconds of continuous limit rejection emits one route-recovery event,
+  well before the 30-second authentication timeout.
+- Client congestion closes the failed host route and restarts the authenticated
+  hello. Host congestion suspends only that peer, closes its route, and permits
+  the existing validated keepalive/hello paths to reauthenticate it.
+- A route reset discards the old session's queued packets at the peer-ownership
+  boundary. Periodic reliable state and identity checkpoints repopulate the
+  fresh session.
+
+The producer was fixed at the same time. Reliable world identity is now
+published at its bandwidth-limited checkpoint cadence even when actor identity
+changes. Between checkpoints, disposable motion is projected onto the last
+published identity: existing actors keep moving, while newly created or
+retired actors wait at most one checkpoint interval for structural
+publication. Thus structural churn cannot bypass the reliable budget, and
+motion remains useful rather than freezing the whole world.
+
+### Native D3D device ownership
+
+The loader now owns one process-lifetime reference to the retail
+`IDirect3DDevice9`. Installation validates the exact retail instruction
+
+```asm
+0040D0CF  89 1D E8 01 B4 00  mov [00B401E8], ebx
+```
+
+against the relocated device-global operand, retains the live device, replaces
+that single clear with six NOPs, and republishes the retained pointer. The
+stock run loop still releases its own reference. The device itself and its
+global remain valid until process termination, after the asset worker and CRT
+SpriteBundle destructors have finished.
+
+This is intentionally process ownership, not a loader subsystem resource.
+Releasing it during ordinary loader shutdown would recreate the same lifetime
+inversion. It also avoids patching either crash instruction or adding
+call-site null checks.
+
+## Deterministic reproduction and targeted verification
+
+Before the queue change, a Windows harness compiled the production
+`multiplayer_steam_gameplay_queue.cpp` with an injected
+`SendMessageToUser` result of 25. It queued one reliable packet and serviced
+twice. The exact pre-fix result was:
+
+```text
+REPRODUCED: a reliable packet rejected with result 25 was removed permanently;
+the second service pass had nothing to retry
+```
+
+The regression now injects the same result into the extracted production
+policy and proves:
+
+- temporary saturation retains and later delivers reliable traffic;
+- disposable traffic coalesces without blocking another peer;
+- sustained saturation emits exactly one route reset after two seconds;
+- resetting that peer removes the old route's backlog;
+- structural actor churn keeps motion compatible with the last published
+  identity until the next reliable checkpoint.
+
+The actual WAN route transition cannot be forced deterministically through
+Steam on one local account. The result-25 boundary is therefore injected
+directly, which is closer to the proven failure than delayed gameplay
+application: the field client received no packet at all.
+
+An isolated native launch used instance `ndrop-d3dguard`, with audio disabled,
+under
+`C:\sd-netdrop-20260727\runtime\instances\ndrop-d3dguard\stage`.
+For exact owned PID 27264, read-only process inspection proved:
+
+```text
+device-clear instruction  90 90 90 90 90 90
+device pointer global     0x04EA2760
+```
+
+The harness then posted `WM_CLOSE` only to that PID's main window. The process
+exited normally, produced no minidump, and left a zero-byte crash log. No
+owner installation or process was read, modified, or stopped.

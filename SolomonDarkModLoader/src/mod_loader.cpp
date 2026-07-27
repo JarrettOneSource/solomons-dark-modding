@@ -20,6 +20,7 @@
 #include "multiplayer_foundation.h"
 #include "multiplayer_join_flow.h"
 #include "native_audio_observability.h"
+#include "native_d3d9_lifetime_guard.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
 #include "runtime_flags.h"
@@ -275,6 +276,24 @@ void Initialize(HMODULE module_handle) {
             startup_status.binary_layout_loaded = false;
             Log("Binary layout failed to load. " + GetBinaryLayoutLoadError());
             Log("Config-driven address resolution and UI seam discovery are unavailable.");
+        }
+
+        {
+            std::string d3d_lifetime_error;
+            if (!InitializeNativeD3d9LifetimeGuard(
+                    &d3d_lifetime_error)) {
+                const auto message = d3d_lifetime_error.empty()
+                    ? std::string(
+                        "Native D3D9 process-lifetime guard "
+                        "failed to initialize.")
+                    : d3d_lifetime_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "d3d-lifetime-guard-failed",
+                    message);
+                return;
+            }
         }
 
         {

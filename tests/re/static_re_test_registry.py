@@ -309,6 +309,7 @@ from static_re_steam_contracts import (
     test_packet_send_mode_dispatch_is_type_safe,
     test_player_state_exports_native_heading_for_bot_spawn,
     test_solomon_dark_steam_app_id_is_consistent,
+    test_steam_send_queue_owns_backpressure_and_route_recovery,
     test_steam_friend_hub_lifecycle_soak_is_wired,
     test_steam_friend_multiplayer_contract_is_wired,
     test_steam_pair_driver_rejects_ended_runs_before_client_navigation,
@@ -387,6 +388,7 @@ from static_re_binary_tooling_contracts import (
     test_multiplayer_launch_preflights_steam_before_starting_game,
     test_native_derived_wizard_visuals_are_layout_backed,
     test_native_global_reads_do_not_use_loader_substitutes,
+    test_native_d3d_device_lifetime_outlives_stock_teardown,
     test_path_builder_does_not_walk_to_unrequested_alternate_goals,
     test_path_builder_expands_cells_before_los_smoothing,
     test_process_termination_has_no_joinable_static_worker_destructors,
@@ -1199,6 +1201,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_world_snapshots_are_complete_mtu_sized_generations,
     ),
     (
+        "Steam send queue owns backpressure and route recovery",
+        test_steam_send_queue_owns_backpressure_and_route_recovery,
+    ),
+    (
         "run enemy materialization preserves exact native type",
         test_run_enemy_materialization_preserves_exact_native_type,
     ),
@@ -1300,6 +1306,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_automation_launch_surfaces_default_to_disabled_audio,
     ),
     ("binary layout identity is staged", test_binary_layout_matches_staged_layout_identity),
+    (
+        "native D3D device lifetime outlives stock teardown",
+        test_native_d3d_device_lifetime_outlives_stock_teardown,
+    ),
     ("residual probe and skill-choice offsets are layout-backed", test_residual_probe_and_skill_choice_offsets_are_layout_backed),
     ("second residual runtime offsets and trace addresses are layout-backed", test_second_residual_runtime_and_trace_addresses_are_layout_backed),
     ("Remaining native addresses and probe offsets are layout-backed", test_remaining_native_addresses_and_probe_offsets_are_layout_backed),

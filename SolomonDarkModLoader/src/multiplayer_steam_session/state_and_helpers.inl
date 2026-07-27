@@ -415,6 +415,7 @@ void SuspendPeerForReauthentication(std::uint64_t steam_id) {
     if (steam_id == 0 || peer_it == g_session.peers.end()) {
         return;
     }
+    ResetSteamGameplayPeerSendQueue(steam_id);
     UnregisterSteamGameplayPeer(steam_id);
     auto& peer = peer_it->second;
     peer.authenticated = false;
@@ -425,6 +426,7 @@ void ResetPeerForReauthentication(std::uint64_t steam_id) {
     if (steam_id == 0) {
         return;
     }
+    ResetSteamGameplayPeerSendQueue(steam_id);
     UnregisterSteamGameplayPeer(steam_id);
     g_session.peers.erase(steam_id);
 }

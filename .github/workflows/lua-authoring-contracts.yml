@@ -75,6 +75,14 @@ jobs:
           tests/native/world_motion_fragment_merge_tests.cpp
           -o /tmp/world-motion-fragment-merge-tests
           && /tmp/world-motion-fragment-merge-tests
+      - name: Test Steam gameplay send backpressure
+        run: >-
+          g++ -std=c++17 -Wall -Wextra -Werror
+          -ISolomonDarkModLoader/include
+          SolomonDarkModLoader/src/multiplayer_steam_gameplay_queue_policy.cpp
+          tests/native/steam_gameplay_queue_policy_tests.cpp
+          -o /tmp/steam-gameplay-queue-policy-tests
+          && /tmp/steam-gameplay-queue-policy-tests
       - name: Test x86 hook instruction relocation
         run: >-
           g++ -std=c++17 -Wall -Wextra -pedantic

@@ -15,25 +15,13 @@ namespace sdmod::multiplayer {
 namespace {
 
 constexpr std::size_t kMaximumQueuedInboundEvents = 1024;
-constexpr std::size_t kMaximumQueuedOutboundPackets = 1024;
-constexpr std::size_t kMaximumSendsPerServiceTick = 256;
 constexpr std::uint64_t kSendFailureLogIntervalMs = 1000;
-
-struct SteamGameplayOutboundPacket {
-    std::uint64_t remote_steam_id = 0;
-    SteamNetworkSendMode mode = SteamNetworkSendMode::UnreliableNoNagle;
-    std::vector<std::uint8_t> payload;
-};
 
 std::mutex g_queue_mutex;
 std::deque<SteamGameplayInboundEvent> g_inbound_events;
-std::deque<SteamGameplayOutboundPacket> g_outbound_packets;
-SteamGameplayQueueStats g_queue_stats;
+SteamGameplayOutboundQueuePolicy g_outbound_queue;
+std::uint64_t g_dropped_inbound_packets = 0;
 std::uint64_t g_last_send_failure_log_ms = 0;
-
-bool IsReliable(SteamNetworkSendMode mode) {
-    return mode == SteamNetworkSendMode::ReliableNoNagle;
-}
 
 bool MakeInboundRoom() {
     if (g_inbound_events.size() < kMaximumQueuedInboundEvents) {
@@ -48,36 +36,10 @@ bool MakeInboundRoom() {
         });
     if (disposable != g_inbound_events.end()) {
         g_inbound_events.erase(disposable);
-        g_queue_stats.dropped_inbound_packets += 1;
+        g_dropped_inbound_packets += 1;
         return true;
     }
-    g_queue_stats.dropped_inbound_packets += 1;
-    return false;
-}
-
-bool MakeOutboundRoom(bool reliable) {
-    if (g_outbound_packets.size() < kMaximumQueuedOutboundPackets) {
-        return true;
-    }
-    const auto disposable = std::find_if(
-        g_outbound_packets.begin(),
-        g_outbound_packets.end(),
-        [](const SteamGameplayOutboundPacket& packet) {
-            return !IsReliable(packet.mode);
-        });
-    if (disposable != g_outbound_packets.end()) {
-        g_outbound_packets.erase(disposable);
-        g_queue_stats.dropped_outbound_packets += 1;
-        g_queue_stats.send_failures += 1;
-        g_queue_stats.last_send_failure_result = -1;
-        return true;
-    }
-    g_queue_stats.dropped_outbound_packets += 1;
-    if (reliable) {
-        g_queue_stats.reliable_send_failures += 1;
-    }
-    g_queue_stats.send_failures += 1;
-    g_queue_stats.last_send_failure_result = -1;
+    g_dropped_inbound_packets += 1;
     return false;
 }
 
@@ -86,9 +48,15 @@ bool MakeOutboundRoom(bool reliable) {
 void ResetSteamGameplayQueues() {
     std::scoped_lock lock(g_queue_mutex);
     g_inbound_events.clear();
-    g_outbound_packets.clear();
-    g_queue_stats = SteamGameplayQueueStats{};
+    g_outbound_queue.Reset();
+    g_dropped_inbound_packets = 0;
     g_last_send_failure_log_ms = 0;
+}
+
+void ResetSteamGameplayPeerSendQueue(
+    std::uint64_t remote_steam_id) {
+    std::scoped_lock lock(g_queue_mutex);
+    g_outbound_queue.ResetPeer(remote_steam_id);
 }
 
 bool QueueSteamGameplayPeerConnected(
@@ -170,84 +138,66 @@ bool QueueSteamGameplayPacketSend(
         return false;
     }
     std::scoped_lock lock(g_queue_mutex);
-    if (!MakeOutboundRoom(IsReliable(mode))) {
-        return false;
-    }
-    SteamGameplayOutboundPacket packet;
-    packet.remote_steam_id = remote_steam_id;
-    packet.mode = mode;
-    const auto* begin = static_cast<const std::uint8_t*>(data);
-    packet.payload.assign(begin, begin + size);
-    g_outbound_packets.push_back(std::move(packet));
-    return true;
+    return g_outbound_queue.Queue(
+        remote_steam_id,
+        data,
+        size,
+        mode);
 }
 
-void ServiceSteamGameplaySendQueue() {
-    std::vector<SteamGameplayOutboundPacket> pending;
-    {
-        std::scoped_lock lock(g_queue_mutex);
-        const auto count = (std::min)(
-            g_outbound_packets.size(),
-            kMaximumSendsPerServiceTick);
-        pending.reserve(count);
-        for (std::size_t index = 0; index < count; ++index) {
-            pending.push_back(std::move(g_outbound_packets.front()));
-            g_outbound_packets.pop_front();
-        }
-    }
-
-    std::uint64_t sent = 0;
-    std::uint64_t failed = 0;
-    std::uint64_t reliable_failed = 0;
-    std::int32_t last_failure_result = 0;
-    for (const auto& packet : pending) {
-        std::int32_t result_code = 0;
-        if (SteamSendNetworkMessage(
-                packet.remote_steam_id,
-                packet.payload.data(),
-                packet.payload.size(),
-                packet.mode,
-                &result_code)) {
-            sent += 1;
-            continue;
-        }
-        failed += 1;
-        if (IsReliable(packet.mode)) {
-            reliable_failed += 1;
-        }
-        last_failure_result = result_code;
-    }
-
+std::vector<SteamGameplayCongestionEvent>
+ServiceSteamGameplaySendQueue() {
     bool should_log_failure = false;
-    std::uint64_t total_failures = 0;
+    SteamGameplayQueueStats stats;
+    std::vector<SteamGameplayCongestionEvent> events;
     {
         std::scoped_lock lock(g_queue_mutex);
-        g_queue_stats.packets_sent += sent;
-        g_queue_stats.send_failures += failed;
-        g_queue_stats.reliable_send_failures += reliable_failed;
-        if (failed != 0) {
-            g_queue_stats.last_send_failure_result = last_failure_result;
+        const auto before =
+            g_outbound_queue.SnapshotStats().send_failures;
+        events = g_outbound_queue.Service(
+            static_cast<std::uint64_t>(GetTickCount64()),
+            [](std::uint64_t remote_steam_id,
+               const void* data,
+               std::size_t size,
+               SteamNetworkSendMode mode,
+               std::int32_t* result_code) {
+                return SteamSendNetworkMessage(
+                    remote_steam_id,
+                    data,
+                    size,
+                    mode,
+                    result_code);
+            });
+        stats = g_outbound_queue.SnapshotStats();
+        if (stats.send_failures != before) {
             const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
             if (g_last_send_failure_log_ms == 0 ||
                 now_ms >= g_last_send_failure_log_ms +
                     kSendFailureLogIntervalMs) {
                 g_last_send_failure_log_ms = now_ms;
                 should_log_failure = true;
-                total_failures = g_queue_stats.send_failures;
             }
         }
     }
     if (should_log_failure) {
         Log(
             "Steam gameplay send rejected. result=" +
-            std::to_string(last_failure_result) +
-            " failures=" + std::to_string(total_failures));
+            std::to_string(stats.last_send_failure_result) +
+            " failures=" + std::to_string(stats.send_failures) +
+            " queued=" +
+            std::to_string(stats.queued_outbound_packets) +
+            " congested_peers=" +
+            std::to_string(stats.congested_peers));
     }
+    return events;
 }
 
 SteamGameplayQueueStats SnapshotSteamGameplayQueueStats() {
     std::scoped_lock lock(g_queue_mutex);
-    return g_queue_stats;
+    auto stats = g_outbound_queue.SnapshotStats();
+    stats.dropped_inbound_packets =
+        g_dropped_inbound_packets;
+    return stats;
 }
 
 }  // namespace sdmod::multiplayer

@@ -176,40 +176,35 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
         sizeof(WorldSnapshotPacket);
 
     if (complete_snapshot.scene_kind == WorldSceneKind::Run) {
-        const auto motion_snapshot =
-            BuildWorldMotionSnapshot(complete_snapshot);
-        const auto motion_fragment_count =
-            WorldMotionSnapshotFragmentCountForActorCount(
-                static_cast<std::uint32_t>(
-                    motion_snapshot.actors.size()));
-        const auto motion_generation_wire_size =
-            static_cast<std::size_t>(motion_fragment_count) *
-            sizeof(WorldMotionSnapshotPacket);
-        const auto motion_interval_ms =
-            BandwidthLimitedSnapshotIntervalMs(
-                motion_generation_wire_size,
-                kLocalTransportRunWorldMotionIntervalMs,
-                kLocalTransportWorldSnapshotBudgetBytesPerSecond);
-        if (now_ms -
-                g_local_transport.last_world_snapshot_send_ms <
-            motion_interval_ms) {
-            return;
-        }
-
-        const bool identity_changed =
+        const bool needs_initial_identity =
             !g_local_transport
-                 .have_last_sent_world_identity_snapshot ||
-            !SameWorldSnapshotIdentity(
-                complete_snapshot,
-                g_local_transport
-                    .last_sent_world_identity_snapshot);
+                 .have_last_sent_world_identity_snapshot;
+        const bool identity_timeline_changed =
+            !needs_initial_identity &&
+            (complete_snapshot.authority_participant_id !=
+                    g_local_transport
+                        .last_sent_world_identity_snapshot
+                        .authority_participant_id ||
+             complete_snapshot.scene_epoch !=
+                    g_local_transport
+                        .last_sent_world_identity_snapshot
+                        .scene_epoch ||
+             complete_snapshot.run_nonce !=
+                    g_local_transport
+                        .last_sent_world_identity_snapshot
+                        .run_nonce ||
+             complete_snapshot.scene_kind !=
+                    g_local_transport
+                        .last_sent_world_identity_snapshot
+                        .scene_kind);
         const auto reliable_checkpoint_interval_ms =
             BandwidthLimitedSnapshotIntervalMs(
                 full_generation_wire_size,
                 kLocalTransportWorldSnapshotReliableCheckpointIntervalMs,
                 kLocalTransportWorldReliableCheckpointBudgetBytesPerSecond);
         const bool reliable_checkpoint =
-            identity_changed ||
+            needs_initial_identity ||
+            identity_timeline_changed ||
             now_ms -
                     g_local_transport
                         .last_world_snapshot_reliable_checkpoint_ms >=
@@ -238,6 +233,29 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
                 complete_snapshot;
             g_local_transport
                 .have_last_sent_world_identity_snapshot = true;
+        }
+
+        const auto motion_snapshot =
+            BuildWorldMotionSnapshotForIdentity(
+                complete_snapshot,
+                g_local_transport
+                    .last_sent_world_identity_snapshot);
+        const auto motion_fragment_count =
+            WorldMotionSnapshotFragmentCountForActorCount(
+                static_cast<std::uint32_t>(
+                    motion_snapshot.actors.size()));
+        const auto motion_generation_wire_size =
+            static_cast<std::size_t>(motion_fragment_count) *
+            sizeof(WorldMotionSnapshotPacket);
+        const auto motion_interval_ms =
+            BandwidthLimitedSnapshotIntervalMs(
+                motion_generation_wire_size,
+                kLocalTransportRunWorldMotionIntervalMs,
+                kLocalTransportWorldSnapshotBudgetBytesPerSecond);
+        if (now_ms -
+                g_local_transport.last_world_snapshot_send_ms <
+            motion_interval_ms) {
+            return;
         }
 
         std::vector<WorldMotionSnapshotPacket> motion_packets;

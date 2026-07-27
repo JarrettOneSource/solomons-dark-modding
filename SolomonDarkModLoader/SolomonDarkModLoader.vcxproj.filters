@@ -227,6 +227,9 @@
     <ClInclude Include="include\native_audio_observability.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_d3d9_lifetime_guard.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_foundation.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -282,6 +285,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="include\multiplayer_steam_gameplay_queue_policy.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_steam_session.h">
@@ -1807,6 +1813,9 @@
     <ClCompile Include="src\native_audio_observability.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
+    <ClCompile Include="src\native_d3d9_lifetime_guard.cpp">
+      <Filter>Source Files\Support</Filter>
+    </ClCompile>
     <ClCompile Include="src\mod_loader.cpp">
       <Filter>Source Files\Loader</Filter>
     </ClCompile>
@@ -1835,6 +1844,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\multiplayer_steam_gameplay_queue_policy.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_steam_session.cpp">

@@ -104,6 +104,42 @@ CompleteWorldMotionSnapshotPacketState BuildWorldMotionSnapshot(
     return motion;
 }
 
+CompleteWorldMotionSnapshotPacketState
+BuildWorldMotionSnapshotForIdentity(
+    const CompleteWorldSnapshotPacketState& snapshot,
+    const CompleteWorldSnapshotPacketState& identity) {
+    CompleteWorldMotionSnapshotPacketState motion;
+    motion.authority_participant_id =
+        snapshot.authority_participant_id;
+    motion.scene_epoch = snapshot.scene_epoch;
+    motion.run_nonce = snapshot.run_nonce;
+    motion.snapshot_id = snapshot.snapshot_id;
+    motion.scene_kind = snapshot.scene_kind;
+
+    std::unordered_map<
+        std::uint64_t,
+        const WorldActorSnapshotPacketState*> current_by_id;
+    current_by_id.reserve(snapshot.actors.size());
+    for (const auto& actor : snapshot.actors) {
+        current_by_id.emplace(
+            actor.network_actor_id,
+            &actor);
+    }
+
+    motion.actors.reserve(identity.actors.size());
+    for (const auto& identity_actor : identity.actors) {
+        const auto current = current_by_id.find(
+            identity_actor.network_actor_id);
+        motion.actors.push_back(
+            BuildWorldActorMotionPacketState(
+                current != current_by_id.end() &&
+                        current->second != nullptr
+                    ? *current->second
+                    : identity_actor));
+    }
+    return motion;
+}
+
 bool IsValidWorldActorMotionPacketState(
     const WorldActorMotionPacketState& actor) {
     if (actor.network_actor_id == 0 ||
@@ -515,60 +551,5 @@ bool TryApplyWorldMotionSnapshotFragment(
         return false;
     }
     *out_snapshot = merge_state->snapshot;
-    return true;
-}
-
-bool SameWorldActorIdentity(
-    const WorldActorSnapshotPacketState& left,
-    const WorldActorSnapshotPacketState& right) {
-    constexpr std::uint8_t kIdentityFlags =
-        WorldActorSnapshotFlagTrackedEnemy |
-        WorldActorSnapshotFlagLifecycleOwned |
-        WorldActorSnapshotFlagRunStatic |
-        WorldActorSnapshotFlagNativeMinion;
-    return left.network_actor_id == right.network_actor_id &&
-        left.native_type_id == right.native_type_id &&
-        left.enemy_type == right.enemy_type &&
-        left.actor_slot == right.actor_slot &&
-        left.world_slot == right.world_slot &&
-        (left.flags & kIdentityFlags) ==
-            (right.flags & kIdentityFlags) &&
-        left.lua_enemy_spawn_flags ==
-            right.lua_enemy_spawn_flags &&
-        left.lua_content_id == right.lua_content_id &&
-        left.lua_spawn_hp == right.lua_spawn_hp &&
-        left.lua_spawn_chase_speed ==
-            right.lua_spawn_chase_speed &&
-        left.lua_spawn_attack_speed ==
-            right.lua_spawn_attack_speed &&
-        left.lua_spawn_scale == right.lua_spawn_scale &&
-        left.native_minion.owner_participant_id ==
-            right.native_minion.owner_participant_id &&
-        left.native_minion.state_flags ==
-            right.native_minion.state_flags &&
-        left.native_minion.terminal_reason ==
-            right.native_minion.terminal_reason;
-}
-
-bool SameWorldSnapshotIdentity(
-    const CompleteWorldSnapshotPacketState& left,
-    const CompleteWorldSnapshotPacketState& right) {
-    if (left.authority_participant_id !=
-            right.authority_participant_id ||
-        left.scene_epoch != right.scene_epoch ||
-        left.run_nonce != right.run_nonce ||
-        left.scene_kind != right.scene_kind ||
-        left.actors.size() != right.actors.size()) {
-        return false;
-    }
-    for (std::size_t index = 0;
-         index < left.actors.size();
-         ++index) {
-        if (!SameWorldActorIdentity(
-                left.actors[index],
-                right.actors[index])) {
-            return false;
-        }
-    }
     return true;
 }

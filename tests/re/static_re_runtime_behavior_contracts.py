@@ -963,7 +963,7 @@ def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread
         (service_loop_text, "g_session_transport_lifecycle_mutex"),
         (service_thread_body, "SteamBootstrapTick();"),
         (service_thread_body, "TickSteamSession(now_ms);"),
-        (service_thread_body, "ServiceSteamGameplaySendQueue();"),
+        (service_thread_body, "ServiceSteamGameplaySendQueue())"),
         (service_loop_text, "void TickGameplayTransportOnAppThread"),
         (public_pump_text, "multiplayer::TickGameplayTransportOnAppThread("),
         (local_transport_public_api_text, "void ApplyQueuedSteamGameplayEvents("),
@@ -972,7 +972,7 @@ def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread
         (local_transport_public_api_text, "QueueSteamGameplayPeerDisconnected("),
         (local_transport_public_api_text, "QueueSteamGameplayPacketReceived("),
         (outgoing_packet_text, "QueueSteamGameplayPacketSend("),
-        (steam_gameplay_queue_text, "void ServiceSteamGameplaySendQueue()"),
+        (steam_gameplay_queue_text, "ServiceSteamGameplaySendQueue()"),
         (run_exit_reentry_verifier_text, 'PAIR_BACKEND == "wsl"'),
         (
             run_exit_reentry_verifier_text,

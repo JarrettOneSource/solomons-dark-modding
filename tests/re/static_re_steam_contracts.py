@@ -196,6 +196,75 @@ def test_packet_send_mode_dispatch_is_type_safe() -> str:
     return "Steam send-mode selection is type-safe, keeps ordinary world generations disposable, and uses bounded reliable convergence checkpoints"
 
 
+def test_steam_send_queue_owns_backpressure_and_route_recovery() -> str:
+    policy_header = read_text(
+        ROOT
+        / "SolomonDarkModLoader/include/"
+        "multiplayer_steam_gameplay_queue_policy.h"
+    )
+    policy_source = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/"
+        "multiplayer_steam_gameplay_queue_policy.cpp"
+    )
+    service_loop = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+    )
+    session = "\n".join(
+        read_text(ROOT / relative)
+        for relative in (
+            "SolomonDarkModLoader/src/multiplayer_steam_session/"
+            "state_and_helpers.inl",
+            "SolomonDarkModLoader/src/multiplayer_steam_session/"
+            "public_lifecycle.inl",
+        )
+    )
+    outgoing = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_packet_sync.inl"
+    )
+    native_test = read_text(
+        ROOT / "tests/native/steam_gameplay_queue_policy_tests.cpp"
+    )
+
+    required = (
+        (policy_header, "kResultLimitExceeded = 25"),
+        (policy_header, "kLimitRetryIntervalMs = 250"),
+        (policy_header, "kCongestionRecoveryIntervalMs = 2000"),
+        (policy_source, "RequeueReliableBeforePeerPackets("),
+        (policy_source, "CoalesceDisposablePackets("),
+        (policy_source, "pressure.recovery_reported = true"),
+        (service_loop, "RecoverSteamSessionFromGameplayCongestion("),
+        (session, '"gameplay_send_congestion"'),
+        (session, "SteamCloseNetworkSession(remote_steam_id)"),
+        (session, "ResetSteamGameplayPeerSendQueue(steam_id)"),
+        (outgoing, "BuildWorldMotionSnapshotForIdentity("),
+        (outgoing, "needs_initial_identity"),
+        (outgoing, "identity_timeline_changed"),
+        (native_test, "ReliablePacketsSurviveTemporaryLimitExceeded"),
+        (native_test, "DisposableTrafficCoalescesWithoutBlockingOtherPeers"),
+        (native_test, "SustainedLimitExceededRequestsOneRouteRecovery"),
+    )
+    missing = [token for text, token in required if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "Steam backpressure ownership is incomplete: "
+            + ", ".join(missing)
+        )
+
+    if "identity_changed ||" in outgoing:
+        raise StaticReTestFailure(
+            "world identity churn still bypasses the reliable checkpoint budget"
+        )
+
+    return (
+        "Steam result-25 backpressure retains reliable packets, coalesces "
+        "disposable state, preserves peer fairness, and resets a saturated "
+        "route before the authentication timeout"
+    )
+
+
 def test_steam_pair_driver_rejects_ended_runs_before_client_navigation() -> str:
     query_text = read_text(ROOT / "tools/verify_local_multiplayer_sync.py")
     driver_text = read_text(ROOT / "tools/drive_steam_friend_active_pair.py")

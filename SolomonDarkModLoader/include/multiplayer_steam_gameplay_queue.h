@@ -1,5 +1,6 @@
 #pragma once
 
+#include "multiplayer_steam_gameplay_queue_policy.h"
 #include "steam_bootstrap.h"
 
 #include <cstddef>
@@ -24,16 +25,8 @@ struct SteamGameplayInboundEvent {
     std::vector<std::uint8_t> payload;
 };
 
-struct SteamGameplayQueueStats {
-    std::uint64_t packets_sent = 0;
-    std::uint64_t send_failures = 0;
-    std::uint64_t reliable_send_failures = 0;
-    std::uint64_t dropped_outbound_packets = 0;
-    std::uint64_t dropped_inbound_packets = 0;
-    std::int32_t last_send_failure_result = 0;
-};
-
 void ResetSteamGameplayQueues();
+void ResetSteamGameplayPeerSendQueue(std::uint64_t remote_steam_id);
 
 bool QueueSteamGameplayPeerConnected(
     std::uint64_t steam_id,
@@ -52,7 +45,8 @@ bool QueueSteamGameplayPacketSend(
     const void* data,
     std::size_t size,
     SteamNetworkSendMode mode);
-void ServiceSteamGameplaySendQueue();
+std::vector<SteamGameplayCongestionEvent>
+ServiceSteamGameplaySendQueue();
 SteamGameplayQueueStats SnapshotSteamGameplayQueueStats();
 
 }  // namespace sdmod::multiplayer

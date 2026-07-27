@@ -117,6 +117,7 @@
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
     <ClInclude Include="include\launch_audio_disable.h" />
     <ClInclude Include="include\native_audio_observability.h" />
+    <ClInclude Include="include\native_d3d9_lifetime_guard.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
@@ -136,6 +137,7 @@
     <ClInclude Include="include\multiplayer_runtime_state.inl" />
     <ClInclude Include="src\multiplayer_runtime_participant_sampling.inl" />
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
+    <ClInclude Include="include\multiplayer_steam_gameplay_queue_policy.h" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
     <ClInclude Include="include\native_enemy_types.h" />
@@ -649,6 +651,7 @@
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
     <ClCompile Include="src\launch_audio_disable.cpp" />
     <ClCompile Include="src\native_audio_observability.cpp" />
+    <ClCompile Include="src\native_d3d9_lifetime_guard.cpp" />
     <ClCompile Include="src\mod_loader.cpp" />
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />
@@ -659,6 +662,7 @@
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />
     <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp" />
+    <ClCompile Include="src\multiplayer_steam_gameplay_queue_policy.cpp" />
     <ClCompile Include="src\multiplayer_steam_session.cpp" />
     <ClCompile Include="src\native_enemy_lifecycle.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />

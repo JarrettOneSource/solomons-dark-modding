@@ -133,6 +133,80 @@ def test_binary_layout_matches_staged_layout_identity() -> str:
     return "root and staged binary layouts declare the expected game version/image base"
 
 
+def test_native_d3d_device_lifetime_outlives_stock_teardown() -> str:
+    layout = read_text(BINARY_LAYOUT)
+    guard = read_text(
+        ROOT / "SolomonDarkModLoader/src/native_d3d9_lifetime_guard.cpp"
+    )
+    loader = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader.cpp")
+    project = read_text(MOD_LOADER_PROJECT)
+    filters = read_text(MOD_LOADER_PROJECT_FILTERS)
+
+    required = (
+        (layout, "[native_d3d_lifetime]"),
+        (layout, "device_pointer_global=0x00B401E8"),
+        (layout, "device_pointer_clear=0x0040D0CF"),
+        (guard, "device->AddRef()"),
+        (guard, "ValidateDeviceClearInstruction("),
+        (guard, "kMovAbsoluteFromEbxOpcode0 = 0x89"),
+        (guard, "kMovAbsoluteFromEbxOpcode1 = 0x1D"),
+        (guard, "memory.TryWrite(\n                device_clear,"),
+        (guard, "g_process_lifetime_device = device"),
+        (loader, "InitializeNativeD3d9LifetimeGuard("),
+        (project, r"src\native_d3d9_lifetime_guard.cpp"),
+        (filters, r"src\native_d3d9_lifetime_guard.cpp"),
+    )
+    missing = [token for text, token in required if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "native D3D lifetime ownership is incomplete: "
+            + ", ".join(missing)
+        )
+
+    guard_install = loader.find("InitializeNativeD3d9LifetimeGuard(")
+    audio_install = loader.find("InitializeLaunchAudioDisable(")
+    if not 0 <= guard_install < audio_install:
+        raise StaticReTestFailure(
+            "D3D process-lifetime ownership is not installed immediately "
+            "after binary-layout discovery"
+        )
+    if "ShutdownNativeD3d9LifetimeGuard" in loader:
+        raise StaticReTestFailure(
+            "normal subsystem teardown can release the process-owned D3D guard"
+        )
+
+    binary = ABANDONWARE_BINARY.read_bytes()
+    pe_offset = struct.unpack_from("<I", binary, 0x3C)[0]
+    section_count = struct.unpack_from("<H", binary, pe_offset + 6)[0]
+    optional_size = struct.unpack_from("<H", binary, pe_offset + 20)[0]
+    optional = pe_offset + 24
+    image_base = struct.unpack_from("<I", binary, optional + 28)[0]
+    target_rva = 0x0040D0CF - image_base
+    section_table = optional + optional_size
+    target_bytes = None
+    for index in range(section_count):
+        section = section_table + index * 40
+        virtual_size, virtual_address, raw_size, raw_offset = struct.unpack_from(
+            "<IIII", binary, section + 8
+        )
+        mapped_size = max(virtual_size, raw_size)
+        if virtual_address <= target_rva < virtual_address + mapped_size:
+            file_offset = raw_offset + target_rva - virtual_address
+            target_bytes = binary[file_offset : file_offset + 6]
+            break
+    if target_bytes != bytes.fromhex("89 1d e8 01 b4 00"):
+        raise StaticReTestFailure(
+            "configured D3D device-clear seam no longer matches "
+            f"retail bytes: {target_bytes!r}"
+        )
+
+    return (
+        "the loader retains the retail D3D9 device for process lifetime and "
+        "suppresses the single stock global-clear instruction that raced the "
+        "asset worker and CRT SpriteBundle destruction"
+    )
+
+
 def test_residual_probe_and_skill_choice_offsets_are_layout_backed() -> str:
     layout_text = read_text(BINARY_LAYOUT)
     skill_choices_text = read_bot_skill_choice_source()

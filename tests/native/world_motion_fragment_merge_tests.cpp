@@ -164,13 +164,69 @@ bool NewIdentityRefreshesUntouchedEnemies() {
             "new identity did not refresh an untouched fragment");
 }
 
+bool MotionProjectionKeepsPublishedIdentityStable() {
+    const auto identity = MakeSnapshot(30, 0.0f);
+    auto current = MakeSnapshot(31, 100.0f);
+    current.actors.pop_back();
+    auto new_actor = current.actors.back();
+    new_actor.network_actor_id = 9999;
+    new_actor.position_x = 999.0f;
+    current.actors.push_back(new_actor);
+
+    const auto motion =
+        BuildWorldMotionSnapshotForIdentity(
+            current,
+            identity);
+    if (!Require(
+            motion.snapshot_id == current.snapshot_id &&
+                motion.actors.size() ==
+                    identity.actors.size(),
+            "motion projection changed its published identity size") ||
+        !Require(
+            motion.actors.front().network_actor_id ==
+                    identity.actors.front().network_actor_id &&
+                motion.actors.front().position_x == 100.0f,
+            "motion projection did not update a retained actor") ||
+        !Require(
+            motion.actors.back().network_actor_id ==
+                    identity.actors.back().network_actor_id &&
+                motion.actors.back().position_x == 11.0f,
+            "motion projection exposed structural churn before checkpoint")) {
+        return false;
+    }
+
+    std::uint32_t next_packet_sequence = 1;
+    std::vector<WorldMotionSnapshotPacket> packets;
+    if (!Require(
+            BuildWorldMotionSnapshotFragmentPackets(
+                motion,
+                &next_packet_sequence,
+                &packets),
+            "projected motion could not be fragmented")) {
+        return false;
+    }
+    WorldMotionSnapshotMergeState merge_state;
+    CompleteWorldSnapshotPacketState merged;
+    return Require(
+               TryApplyWorldMotionSnapshotFragment(
+                   packets.front(),
+                   identity,
+                   &merge_state,
+                   &merged),
+               "identity-backed projected motion was rejected") &&
+        Require(
+            merged.actors.front().position_x == 100.0f,
+            "identity-backed projected motion did not apply");
+}
+
 }  // namespace
 }  // namespace sdmod::multiplayer
 
 int main() {
     using namespace sdmod::multiplayer;
     if (!MissingFragmentsDoNotWithholdOtherEnemies() ||
-        !NewIdentityRefreshesUntouchedEnemies()) {
+        !NewIdentityRefreshesUntouchedEnemies() ||
+        !MotionProjectionKeepsPublishedIdentityStable()) {
         return 1;
     }
     std::cout << "World motion fragment merge tests passed\n";
