@@ -18,6 +18,9 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     verifier = _read("tools/verify_lua_bot_brain.py")
 
     assert manifest["id"] == "bot.brain"
+    assert manifest["name"] == "Lua Bots"
+    assert manifest["version"] == "1.0.0"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.20"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
     required_capabilities = set(
@@ -26,6 +29,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     for capability in (
         "events.runtime.tick",
         "state.replicated.read",
+        "settings.list",
         "nav.read",
         "waves.read",
         "bots.runtime",
@@ -202,4 +206,85 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     return (
         "The opt-in ordered roster runs three native-routed disciplines on "
         "authority ticks while retaining the retail three-run wave-five gate"
+    )
+
+
+def test_lua_bot_brain_late_join_waits_for_complete_host_settings() -> str:
+    engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
+    mod_loading = _read(
+        "SolomonDarkModLoader/src/lua_engine_mod_loading.cpp"
+    )
+    settings = _read(
+        "SolomonDarkModLoader/src/lua_settings_runtime.cpp"
+    )
+    verifier = _read("tools/verify_bot_publication_flow.py")
+    launcher = _read("scripts/Launch-BotPublicationPair.ps1")
+
+    _require_in_order(
+        engine,
+        "InitializeLuaSettingsForMod(mod, error_message)",
+        "ShouldDeferLuaEntryForHostSettings(mod)",
+        "entry_script_deferred_for_host_settings = true",
+        "return true",
+        "luaL_newstate()",
+    )
+    _require_in_order(
+        settings,
+        "RequiresHostSettingsBarrier",
+        '"settings.list"',
+        "HaveCompleteReplicatedHostSettings",
+        "IsActiveClientSession()",
+        "TryGetReplicatedValue",
+    )
+    _require_in_order(
+        settings,
+        "if (mod->entry_script_deferred_for_host_settings)",
+        "HaveCompleteReplicatedHostSettings(*mod)",
+        "authoritative host settings ready before entry script",
+        "CreateLuaStateForMod(",
+        "started deferred entry script after host settings",
+        "InitializeLuaHotReloadState(mod)",
+        "ApplyEffectiveChange(",
+    )
+    assert (
+        "entry script waiting for the authoritative host-settings checkpoint"
+        in mod_loading
+    )
+
+    for token in (
+        'INSTANCE_PREFIX = "bpub"',
+        "HOST_PORT = 49411",
+        "CLIENT_PORT = 49412",
+        "clientStartupRosterWasNotLocalDefault",
+        "clientOnChangedCount",
+        "clientEntryOrdering",
+        "waitingLogOffset",
+        "authoritativeReadyMonotonicMs",
+        "entryStartedMonotonicMs",
+        "downloadedModCount",
+        "nonemptyCrashArtifacts",
+    ):
+        assert token in verifier, (
+            f"publication verifier lacks late-join proof: {token}"
+        )
+    assert "verify_local_multiplayer_sync" not in verifier
+
+    for token in (
+        '$hostPort = 49411',
+        '$clientPort = 49412',
+        '$hostInstance = "bpub-host"',
+        '$clientInstance = "bpub-client"',
+        'SDMOD_DISABLE_AUDIO = "1"',
+        'SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"',
+        '"--multiplayer", "join"',
+        '"--lobby-id", $LobbyId',
+    ):
+        assert token in launcher, (
+            f"publication pair launcher lacks isolation contract: {token}"
+        )
+
+    return (
+        "A late-joining client starts Lua Bots only after the complete "
+        "authoritative host-settings checkpoint and proves one-change "
+        "mid-session convergence on the isolated publication pair"
     )

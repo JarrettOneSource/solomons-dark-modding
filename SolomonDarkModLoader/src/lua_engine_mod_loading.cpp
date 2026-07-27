@@ -100,10 +100,16 @@ void LoadLuaModsForBootstrap(
                 continue;
             }
 
-            LogLuaMessage(
-                *live_mod,
-                "loaded entry script: " + mod->entry_script_path.string());
-            InitializeLuaHotReloadState(live_mod);
+            if (live_mod->entry_script_deferred_for_host_settings) {
+                LogLuaMessage(
+                    *live_mod,
+                    "entry script waiting for the authoritative host-settings checkpoint.");
+            } else {
+                LogLuaMessage(
+                    *live_mod,
+                    "loaded entry script: " + mod->entry_script_path.string());
+                InitializeLuaHotReloadState(live_mod);
+            }
             loaded_contracts.insert(mod->provides.begin(), mod->provides.end());
         }
 

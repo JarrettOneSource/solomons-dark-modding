@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using SolomonDarkModding.Versioning;
 using SolomonDarkModding.Updates;
+using SolomonDarkModLauncher.Infrastructure;
 using SolomonDarkModLauncher.Target;
 
 namespace SolomonDarkModLauncher.Mods;
@@ -231,11 +232,13 @@ internal static class WebsiteModUpdater
         IReadOnlyDictionary<string, DiscoveredMod> installed,
         CancellationToken cancellationToken)
     {
-        var request = new UpdateRequest(installed.Values
-            .Select(mod => new InstalledModRequest(
-                mod.Manifest.Id,
-                mod.Manifest.Version))
-            .ToArray());
+        var request = new UpdateRequest(
+            LauncherVersionInfo.Informational,
+            installed.Values
+                .Select(mod => new InstalledModRequest(
+                    mod.Manifest.Id,
+                    mod.Manifest.Version))
+                .ToArray());
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(UpdateMetadataTimeout);
         using var response = await client.PostAsJsonAsync(
@@ -280,7 +283,8 @@ internal static class WebsiteModUpdater
                 update.Version!,
                 update.ContentSha256!.ToLowerInvariant(),
                 update.PackageSha256!.ToLowerInvariant(),
-                update.DownloadUrl));
+                update.DownloadUrl,
+                MinimumLoaderVersion: update.MinimumLoaderVersion));
         }
 
         return updates;
@@ -374,7 +378,7 @@ internal static class WebsiteModUpdater
         value is { Length: 64 } && value.All(character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');
 
-    private sealed record UpdateRequest(InstalledModRequest[] Mods);
+    private sealed record UpdateRequest(string LoaderVersion, InstalledModRequest[] Mods);
     private sealed record InstalledModRequest(string Id, string Version);
     private sealed record UpdateResponse(UpdateResponseItem[]? Updates);
     private sealed record UpdateResponseItem(
@@ -382,5 +386,6 @@ internal static class WebsiteModUpdater
         string? Version,
         string? ContentSha256,
         string? PackageSha256,
-        string? DownloadUrl);
+        string? DownloadUrl,
+        string? MinimumLoaderVersion);
 }

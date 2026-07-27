@@ -234,14 +234,26 @@ function Invoke-LauncherWithEnvironment {
                 }
             }
             if ($process.HasExited) {
-                # WaitForExit also drains the redirected streams. Without it,
-                # a fast launcher exit can leave only the first buffered chunk
-                # visible here, producing a valid-but-truncated JSON document.
-                $process.WaitForExit()
-                $stdout = Read-MultiplayerProcessOutput -Path $stdoutPath
-                $stderr = Read-MultiplayerProcessOutput -Path $stderrPath
-                if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-                    $result = ConvertFrom-MultiplayerLauncherJson -Text $stdout
+                # Do not call parameterless WaitForExit here. The launched game
+                # can inherit the launcher's redirected handles, which keeps
+                # .NET's asynchronous stream drain open for the life of the
+                # game even though the launcher itself has exited.
+                [void]$process.WaitForExit(1000)
+                $drainDeadline = (Get-Date).AddSeconds(2)
+                do {
+                    $stdout = Read-MultiplayerProcessOutput -Path $stdoutPath
+                    $stderr = Read-MultiplayerProcessOutput -Path $stderrPath
+                    if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+                        $result = ConvertFrom-MultiplayerLauncherJson -Text $stdout
+                    }
+                    if ($null -ne $result) {
+                        break
+                    }
+                    Start-Sleep -Milliseconds 50
+                } while ((Get-Date) -lt $drainDeadline)
+                if ($null -eq $result) {
+                    $stdout = Read-MultiplayerProcessOutput -Path $stdoutPath
+                    $stderr = Read-MultiplayerProcessOutput -Path $stderrPath
                 }
                 break
             }

@@ -78,6 +78,8 @@ internal static class StagedGameLauncher
                 MultiplayerLaunchOptions.DefaultMaxParticipants,
                 openInviteDialog: true,
                 LobbyHostOptions.CreateDefault()));
+        var usesLocalTransport =
+            MultiplayerLaunchEnvironment.IsLocalTransport(options);
         options = ApplySteamBootstrap(configuration, stage, options);
         var launchToken = Guid.NewGuid().ToString("N");
         options = ApplyLaunchToken(options, launchToken);
@@ -112,7 +114,8 @@ internal static class StagedGameLauncher
                 throw new InvalidOperationException(
                     $"SolomonDarkModLoader startup failed ({startupStatus.Code}): {startupStatus.Message}");
             }
-            if (multiplayer?.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join &&
+            if (!usesLocalTransport &&
+                (multiplayer?.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join) &&
                 (!startupStatus.SteamTransportReady ||
                  !startupStatus.MultiplayerFoundationReady))
             {
@@ -122,7 +125,8 @@ internal static class StagedGameLauncher
             }
 
             MultiplayerSessionStatus? multiplayerSessionStatus = null;
-            if (multiplayer?.Mode == MultiplayerLaunchMode.Host)
+            if (!usesLocalTransport &&
+                multiplayer?.Mode == MultiplayerLaunchMode.Host)
             {
                 multiplayerSessionStatus =
                     MultiplayerSessionStatusMonitor.WaitForHostReady(
@@ -136,7 +140,8 @@ internal static class StagedGameLauncher
                     multiplayer.Host,
                     stage.MultiplayerCompatibility.EnabledMods);
             }
-            else if (multiplayer?.Mode == MultiplayerLaunchMode.Join)
+            else if (!usesLocalTransport &&
+                     multiplayer?.Mode == MultiplayerLaunchMode.Join)
             {
                 multiplayerSessionStatus = multiplayer.LobbyId.HasValue
                     ? MultiplayerSessionStatusMonitor.WaitForConnectedJoin(

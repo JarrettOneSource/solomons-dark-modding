@@ -361,6 +361,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "sprites.local.register", "sprites.local.read",
         "runtime.mod.info",
         "settings.self",
+        "settings.list",
         "storage.profile.local",
         "timer.local.scheduler",
         "bus.local.contracts",
@@ -449,6 +450,10 @@ bool CreateLuaStateForMod(
     if (!InitializeLuaSettingsForMod(mod, error_message)) {
         return false;
     }
+    if (ShouldDeferLuaEntryForHostSettings(mod)) {
+        mod->entry_script_deferred_for_host_settings = true;
+        return true;
+    }
     mod->state = luaL_newstate();
     if (mod->state == nullptr) {
         *error_message = "luaL_newstate failed.";
@@ -470,6 +475,7 @@ bool CreateLuaStateForMod(
         return false;
     }
 
+    mod->entry_script_deferred_for_host_settings = false;
     return true;
 }
 
@@ -498,6 +504,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
         mod->state = nullptr;
     }
     mod->runtime_tick_registered = false;
+    mod->entry_script_deferred_for_host_settings = false;
     mod->content_registration_open = false;
     mod->run_started_registered = false;
     mod->run_ended_registered = false;

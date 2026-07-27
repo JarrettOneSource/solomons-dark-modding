@@ -40,6 +40,13 @@ internal static class ModManifestValidator
                 $"Manifest version must use semantic versioning: {manifestPath}");
         }
 
+        if (manifest.MinimumLoaderVersion is not null &&
+            !SemanticVersion.TryParse(manifest.MinimumLoaderVersion, out _))
+        {
+            throw new InvalidOperationException(
+                $"Manifest minimumLoaderVersion must use semantic versioning: {manifestPath}");
+        }
+
         if (manifest.Overlays.Count == 0 && !manifest.RequiresRuntime)
         {
             throw new InvalidOperationException(

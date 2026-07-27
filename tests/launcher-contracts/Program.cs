@@ -25,6 +25,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("website package install and cache", TestWebsitePackageInstallAsync),
     ("automatic mod updates", TestAutomaticModUpdatesAsync),
     ("semantic version ordering", TestSemanticVersionOrderingAsync),
+    ("minimum loader compatibility", TestMinimumLoaderCompatibilityAsync),
     ("launcher release selection", TestLauncherReleaseSelectionAsync),
     ("launcher download progress", TestLauncherDownloadProgressAsync),
     ("update progress JSON protocol", TestUpdateProgressJsonProtocolAsync),
@@ -1372,6 +1373,28 @@ static Task TestMultiplayerQuickStartLaunchRoutingAsync()
         join.EnvironmentOverrides?[MultiplayerLaunchEnvironment.QuickStartVariable] == "1",
         "explicit multiplayer join launch did not enable quick start");
 
+    var localJoin = MultiplayerLaunchEnvironment.Apply(
+        new LaunchOptions(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [MultiplayerLaunchEnvironment.TransportVariable] = "local_udp",
+                [MultiplayerLaunchEnvironment.RoleVariable] = "client"
+            }),
+        MultiplayerLaunchOptions.Create(
+            MultiplayerLaunchMode.Join,
+            lobbyId: 123,
+            inviteSteamId: null,
+            MultiplayerLaunchOptions.DefaultMaxParticipants,
+            openInviteDialog: true));
+    Require(
+        localJoin.EnvironmentOverrides?[
+            MultiplayerLaunchEnvironment.TransportVariable] == "local_udp" &&
+        localJoin.EnvironmentOverrides?[
+            MultiplayerLaunchEnvironment.RoleVariable] == "client" &&
+        localJoin.EnvironmentOverrides?[
+            MultiplayerLaunchEnvironment.LobbyIdVariable] == "123",
+        "concrete website join replaced the explicit local test transport");
+
     var disabled = MultiplayerLaunchEnvironment.Apply(
         host,
         MultiplayerLaunchOptions.Create(
@@ -2348,6 +2371,9 @@ static async Task TestAutomaticModUpdatesAsync()
         Require(
             handler.RequestedIds.SequenceEqual(["tests.auto-update"]),
             "website updater requested the wrong installed mod");
+        Require(
+            handler.LoaderVersion == "0.1.0-beta.20",
+            "website updater omitted the current loader version");
         var updated = ModDiscovery.DiscoverRoot(currentRoot);
         Require(updated.Manifest.Version == "1.1.0", "installed manifest version did not advance");
         Require(
@@ -2476,6 +2502,65 @@ static Task TestSemanticVersionOrderingAsync()
         !SemanticVersion.TryParse("1.0", out _) &&
         !SemanticVersion.TryParse("1.0.0-beta.01", out _),
         "invalid semantic versions were accepted");
+    return Task.CompletedTask;
+}
+
+static Task TestMinimumLoaderCompatibilityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        Directory.CreateDirectory(Path.Combine(root, "scripts"));
+        var manifestPath = Path.Combine(root, "manifest.json");
+        File.WriteAllText(Path.Combine(root, "scripts", "main.lua"), "return true\n");
+        File.WriteAllText(
+            manifestPath,
+            """
+            {
+              "id": "tests.minimum-loader",
+              "name": "Minimum Loader Test",
+              "version": "1.0.0",
+              "minimumLoaderVersion": "0.1.0-beta.20",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+
+        var mod = ModDiscovery.DiscoverRoot(root);
+        Require(
+            !ModCompatibility.IsLoaderCompatible(mod.Manifest, "0.1.0-beta.19"),
+            "beta.19 accepted a beta.20-only mod");
+        Require(
+            ModCompatibility.IsLoaderCompatible(mod.Manifest, "0.1.0-beta.20"),
+            "beta.20 rejected a beta.20-compatible mod");
+        Require(
+            ModCompatibility.IsLoaderCompatible(mod.Manifest, "0.1.0"),
+            "stable loader did not satisfy a prerelease minimum");
+
+        File.WriteAllText(
+            manifestPath,
+            File.ReadAllText(manifestPath).Replace(
+                "0.1.0-beta.20",
+                "beta.20",
+                StringComparison.Ordinal));
+        var rejected = false;
+        try
+        {
+            ModDiscovery.DiscoverRoot(root);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+        Require(rejected, "invalid minimumLoaderVersion was accepted");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
     return Task.CompletedTask;
 }
 
@@ -2992,6 +3077,9 @@ static async Task TestWebsiteLobbyPreflightAsync()
         Require(result.Catalog.FindById("tests.unrelated") is null, "unrelated local mod remained selected");
         Require(handler.JoinManifestRequests == 1, "preflight did not request the join manifest once");
         Require(handler.ResolveRequests == 1, "preflight did not resolve the missing package once");
+        Require(
+            handler.ResolveLoaderVersion == "0.1.0-beta.20",
+            "preflight resolution omitted the current loader version");
         Require(handler.DownloadRequests == 1, "preflight did not download the missing package once");
         Require(
             progress.Values.Any(value => value.Phase == UpdateProgressPhase.Downloading) &&
@@ -3678,8 +3766,9 @@ file sealed class LobbyDirectoryHandler(
     public int JoinManifestRequests { get; private set; }
     public int ResolveRequests { get; private set; }
     public int DownloadRequests { get; private set; }
+    public string? ResolveLoaderVersion { get; private set; }
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
@@ -3688,7 +3777,7 @@ file sealed class LobbyDirectoryHandler(
             path == "/community/api/lobbies/42/join-manifest")
         {
             JoinManifestRequests++;
-            return Json(
+            return await Json(
                 $$"""
                 {"lobbyId":"42","build":{"appId":3362180,"protocolVersion":{{HostProtocolVersion}},"manifestSha256":"{{HostManifestSha256}}","loaderVersion":"{{HostLoaderVersion}}"},"mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}"}]}
                 """);
@@ -3699,16 +3788,19 @@ file sealed class LobbyDirectoryHandler(
             ResolveRequests++;
             if (rejectResolution)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
             }
+            var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(payload);
+            ResolveLoaderVersion = document.RootElement.GetProperty("loaderVersion").GetString();
             if (resolveReportsMissing)
             {
-                return Json(
+                return await Json(
                     $$"""
                     {"mods":[],"missing":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}"}]}
                     """);
             }
-            return Json(
+            return await Json(
                 $$"""
                 {"mods":[{"id":"{{required.Id}}","version":"{{required.Version}}","contentSha256":"{{required.ContentSha256}}","packageSha256":"{{packageSha256}}","name":"{{WebsiteModName}}","fileSize":4096,"downloadUrl":"api/mods/tests/versions/1/download"}],"missing":[]}
                 """);
@@ -3718,13 +3810,13 @@ file sealed class LobbyDirectoryHandler(
             path == "/community/api/mods/tests/versions/1/download")
         {
             DownloadRequests++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(package)
-            });
+            };
         }
 
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        return new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 
     private static Task<HttpResponseMessage> Json(string value) =>
@@ -3740,6 +3832,7 @@ file sealed class ModUpdateHandler(
     string packageSha256) : HttpMessageHandler
 {
     public IReadOnlyList<string> RequestedIds { get; private set; } = [];
+    public string? LoaderVersion { get; private set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -3750,6 +3843,7 @@ file sealed class ModUpdateHandler(
         {
             var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
             using var document = JsonDocument.Parse(payload);
+            LoaderVersion = document.RootElement.GetProperty("loaderVersion").GetString();
             RequestedIds = document.RootElement
                 .GetProperty("mods")
                 .EnumerateArray()

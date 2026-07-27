@@ -85,6 +85,8 @@ local debug = {
   participant_id = 0,
   participant_ids = {},
   roster_size = 0,
+  startup_roster = nil,
+  startup_apply_count = 0,
   bots = {},
   mode = "waiting",
   kite_radius = shared.threat_radius,
@@ -96,6 +98,7 @@ local debug = {
   last_settings_change_key = "",
   last_roster_new_size = -1,
   last_roster_old_size = -1,
+  last_roster_new_value = nil,
   respawn_action_count = 0,
   reconciliation_error_count = 0,
   last_reconciliation_error = "",
@@ -128,10 +131,13 @@ local state = {
   focus_active = false,
 }
 
+local startup_roster = sd.settings.get("roster")
 local startup_errors = manager:apply(
-  sd.settings.get("roster"),
+  startup_roster,
   simulation_authority(),
   state.last_now_ms)
+debug.startup_roster = startup_roster
+debug.startup_apply_count = 1
 if #startup_errors > 0 then
   log(nil, table.concat(startup_errors, "; "))
 end
@@ -181,6 +187,7 @@ sd.settings.on_changed(function(key, new_value, old_value)
     debug.focus_bot_key = new_value
   elseif key == "roster" then
     debug.last_roster_new_size = #new_value
+    debug.last_roster_new_value = new_value
     debug.last_roster_old_size =
       type(old_value) == "table" and #old_value or -1
     local errors = manager:apply(

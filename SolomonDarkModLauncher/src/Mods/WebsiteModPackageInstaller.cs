@@ -445,6 +445,20 @@ internal static class WebsiteModPackageInstaller
             throw new InvalidDataException(
                 $"The website returned the wrong package identity for {required.Id}.");
         }
+
+        if (resolved.MinimumLoaderVersion is not null &&
+            (!SolomonDarkModding.Versioning.SemanticVersion.TryParse(
+                resolved.MinimumLoaderVersion,
+                out var minimum) ||
+             !SolomonDarkModding.Versioning.SemanticVersion.TryParse(
+                SolomonDarkModLauncher.Infrastructure.LauncherVersionInfo.Informational,
+                out var current) ||
+             current!.CompareTo(minimum) < 0))
+        {
+            throw new InvalidOperationException(
+                $"{resolved.Id} requires Solomon Dark Mod Loader " +
+                $"{resolved.MinimumLoaderVersion} or newer.");
+        }
     }
 
     private static void ValidateDownloadedMod(
@@ -457,6 +471,8 @@ internal static class WebsiteModPackageInstaller
             throw new InvalidDataException(
                 $"Downloaded mod manifest identity does not match {required.Id} {required.Version}.");
         }
+
+        ModCompatibility.EnsureLoaderCompatible(mod.Manifest);
 
         var downloadedDll = Directory.EnumerateFiles(
                 mod.RootPath,

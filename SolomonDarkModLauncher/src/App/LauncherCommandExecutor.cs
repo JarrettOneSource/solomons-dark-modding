@@ -152,13 +152,17 @@ internal static class LauncherCommandExecutor
             command.LobbyHost);
         if (multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join)
         {
-            if (!stageResult.SteamBootstrap.ReadyForInitialization)
+            if (!MultiplayerLaunchEnvironment.IsLocalTransportRequested() &&
+                !stageResult.SteamBootstrap.ReadyForInitialization)
             {
                 throw new InvalidOperationException(
                     "Steam multiplayer requires an x86 steam_api.dll. Install the Steamworks SDK runtime, " +
                     "place it under assets/steam/win32, or pass --steam-api-dll <path>.");
             }
-            SteamLaunchPreflight.EnsureAvailable(stageResult.SteamBootstrap);
+            if (!MultiplayerLaunchEnvironment.IsLocalTransportRequested())
+            {
+                SteamLaunchPreflight.EnsureAvailable(stageResult.SteamBootstrap);
+            }
         }
         var launchedGame = StagedGameLauncher.Launch(
             stageResult,

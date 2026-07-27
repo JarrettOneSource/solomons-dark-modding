@@ -17,7 +17,13 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     persistence = _read(
         "SolomonDarkModLoader/src/mod_settings_persistence.cpp"
     )
-    runtime = _read("SolomonDarkModLoader/src/lua_settings_runtime.cpp")
+    runtime = (
+        _read("SolomonDarkModLoader/src/lua_settings_runtime.cpp")
+        + _read(
+            "SolomonDarkModLoader/src/"
+            "lua_settings_runtime_actions.inl"
+        )
+    )
     bindings = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_settings.cpp"
     )

@@ -398,6 +398,9 @@
     <ClInclude Include="src\lua_engine_main_thread_pump.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_settings_runtime_actions.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_engine_registered_spell_effect_parsing.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

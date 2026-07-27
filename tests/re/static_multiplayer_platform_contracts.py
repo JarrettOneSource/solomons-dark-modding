@@ -547,17 +547,22 @@ def test_pair_launcher_drains_redirected_json_output() -> str:
     for token in (
         "function Read-MultiplayerProcessOutput",
         "[System.IO.FileShare]::ReadWrite",
-        "$process.WaitForExit()",
+        "[void]$process.WaitForExit(1000)",
+        "$drainDeadline = (Get-Date).AddSeconds(2)",
+        "Start-Sleep -Milliseconds 50",
         "ConvertFrom-MultiplayerLauncherJson -Text $stdout",
         "if ($null -ne $process -and -not $process.HasExited)",
     ):
         assert token in process_helper, f"launcher process helper lacks: {token}"
     _require_in_order(
         process_helper,
-        "$process.WaitForExit()",
+        "[void]$process.WaitForExit(1000)",
         "$stdout = Read-MultiplayerProcessOutput -Path $stdoutPath",
         "$result = ConvertFrom-MultiplayerLauncherJson -Text $stdout",
+        "Start-Sleep -Milliseconds 50",
+        "} while ((Get-Date) -lt $drainDeadline)",
     )
+    assert "$process.WaitForExit()" not in process_helper
     for token in (
         '"LocalMultiplayerLauncher.Process.ps1"',
         "Invoke-LauncherWithEnvironment",

@@ -71,4 +71,5 @@ internal sealed record WebsiteResolvedMod(
     string PackageSha256,
     string DownloadUrl,
     string? Name = null,
-    long? FileSizeBytes = null);
+    long? FileSizeBytes = null,
+    string? MinimumLoaderVersion = null);

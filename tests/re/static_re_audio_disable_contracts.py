@@ -936,6 +936,9 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "scripts/Replay-UiSandbox.ps1",
         "scripts/Verify-Workspace.ps1",
     }
+    hard_disabled_powershell = {
+        "scripts/Launch-BotPublicationPair.ps1",
+    }
     direct_shell = {
         "scripts/Launch-WslSteamMultiplayerClient.sh",
     }
@@ -978,7 +981,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         ):
             discovered_python.add(path.relative_to(ROOT).as_posix())
 
-    expected_scripts = direct_powershell | direct_shell
+    expected_scripts = direct_powershell | hard_disabled_powershell | direct_shell
     if discovered_scripts != expected_scripts:
         raise StaticReTestFailure(
             "automation launcher surface inventory changed without an audio "
@@ -1002,6 +1005,15 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         if (
             "--disable-audio" not in text
             or "[switch]$EnableAudio" not in text
+        ):
+            failures.append(relative_path)
+    for relative_path in sorted(hard_disabled_powershell):
+        text = read_text(ROOT / relative_path)
+        if (
+            "--disable-audio" not in text
+            or 'SDMOD_DISABLE_AUDIO = "1"' not in text
+            or 'SDMOD_ENABLE_AUDIO = "0"' not in text
+            or "EnableAudio" in text
         ):
             failures.append(relative_path)
     for relative_path in sorted(direct_shell):
@@ -1061,5 +1073,6 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
 
     return (
         "all direct and delegated repo automation launch surfaces default "
-        "to --disable-audio and expose an explicit audio-test opt-out"
+        "to --disable-audio, with general tools exposing an explicit "
+        "audio-test opt-out and publication proof hard-disabled"
     )

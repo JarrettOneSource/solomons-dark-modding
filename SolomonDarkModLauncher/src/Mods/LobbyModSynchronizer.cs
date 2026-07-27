@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using SolomonDarkModLauncher.Infrastructure;
 using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.Target;
 
@@ -412,10 +413,12 @@ internal static class LobbyModSynchronizer
         IReadOnlyList<MultiplayerModDescriptor> missing,
         CancellationToken cancellationToken)
     {
-        var body = new ResolveRequest(missing.Select(mod => new ResolveModRequest(
-            mod.Id,
-            mod.Version,
-            mod.ContentSha256)).ToArray());
+        var body = new ResolveRequest(
+            LauncherVersionInfo.Informational,
+            missing.Select(mod => new ResolveModRequest(
+                mod.Id,
+                mod.Version,
+                mod.ContentSha256)).ToArray());
         using var response = await client.PostAsJsonAsync(
             "api/mods/resolve",
             body,
@@ -437,6 +440,14 @@ internal static class LobbyModSynchronizer
             throw new InvalidDataException("The website returned invalid mod resolution metadata.");
         }
 
+        if (result.Incompatible is { Length: > 0 })
+        {
+            var incompatible = result.Incompatible[0];
+            throw new InvalidOperationException(
+                $"{incompatible.Id ?? "The requested mod"} requires Solomon Dark Mod Loader " +
+                $"{incompatible.MinimumLoaderVersion ?? "a newer version"} or newer.");
+        }
+
         var resolved = new Dictionary<string, WebsiteResolvedMod>(StringComparer.OrdinalIgnoreCase);
         foreach (var mod in result.Mods)
         {
@@ -454,7 +465,8 @@ internal static class LobbyModSynchronizer
                         mod.PackageSha256!.ToLowerInvariant(),
                         mod.DownloadUrl,
                         mod.Name,
-                        mod.FileSize)))
+                        mod.FileSize,
+                        mod.MinimumLoaderVersion)))
             {
                 throw new InvalidDataException("The website returned invalid resolved mod metadata.");
             }
@@ -490,9 +502,16 @@ internal static class LobbyModSynchronizer
         int? ProtocolVersion,
         string? ManifestSha256,
         string? LoaderVersion);
-    private sealed record ResolveRequest(ResolveModRequest[] Mods);
+    private sealed record ResolveRequest(string LoaderVersion, ResolveModRequest[] Mods);
     private sealed record ResolveModRequest(string Id, string Version, string ContentSha256);
-    private sealed record ResolveResponse(ResolvedModResponse[]? Mods, ApiModDescriptor[]? Missing);
+    private sealed record ResolveResponse(
+        ResolvedModResponse[]? Mods,
+        ApiModDescriptor[]? Missing,
+        IncompatibleModResponse[]? Incompatible);
+    private sealed record IncompatibleModResponse(
+        string? Id,
+        string? Version,
+        string? MinimumLoaderVersion);
     private sealed record ResolvedModResponse(
         string? Id,
         string? Version,
@@ -500,5 +519,6 @@ internal static class LobbyModSynchronizer
         string? PackageSha256,
         string? DownloadUrl,
         string? Name,
-        long? FileSize);
+        long? FileSize,
+        string? MinimumLoaderVersion);
 }

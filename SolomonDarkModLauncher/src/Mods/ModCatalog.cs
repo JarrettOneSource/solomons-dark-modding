@@ -30,6 +30,7 @@ internal sealed class ModCatalog
         var enabledIds = new HashSet<string>(
             enabledMods.Select(mod => mod.Manifest.Id),
             StringComparer.OrdinalIgnoreCase);
+        EnsureLoaderCompatibility(enabledMods);
         EnsureRuntimeContractsResolved(enabledMods);
 
         return new ModCatalog
@@ -57,6 +58,7 @@ internal sealed class ModCatalog
             throw new InvalidOperationException(
                 "The exact multiplayer mod set did not resolve to every requested mod.");
         }
+        EnsureLoaderCompatibility(discovered);
         EnsureRuntimeContractsResolved(discovered);
 
         return new ModCatalog
@@ -114,6 +116,15 @@ internal sealed class ModCatalog
                         $"Mod {mod.Manifest.Id} requires missing runtime contract: {requiredContract}");
                 }
             }
+        }
+    }
+
+    private static void EnsureLoaderCompatibility(
+        IReadOnlyList<DiscoveredMod> enabledMods)
+    {
+        foreach (var mod in enabledMods)
+        {
+            ModCompatibility.EnsureLoaderCompatible(mod.Manifest);
         }
     }
 

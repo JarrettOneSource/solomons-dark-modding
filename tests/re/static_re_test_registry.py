@@ -26,6 +26,7 @@ from static_lua_bot_players_contracts import (
     test_lua_bots_are_synthetic_remote_participants,
 )
 from static_lua_bot_brain_contracts import (
+    test_lua_bot_brain_late_join_waits_for_complete_host_settings,
     test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated,
 )
 from static_lua_draw_contracts import (
@@ -532,6 +533,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua bot brain is rostered and wave-five gated",
         test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated,
+    ),
+    (
+        "Lua bot brain late join waits for complete host settings",
+        test_lua_bot_brain_late_join_waits_for_complete_host_settings,
     ),
     (
         "flat Boneyard fixture matches the native SyncBuffer envelope",

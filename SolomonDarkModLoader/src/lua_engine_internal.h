@@ -223,6 +223,7 @@ struct LoadedLuaMod {
     RuntimeModDescriptor descriptor;
     std::vector<std::string> capabilities;
     lua_State* state = nullptr;
+    bool entry_script_deferred_for_host_settings = false;
     bool content_registration_open = false;
     bool runtime_tick_registered = false;
     bool run_started_registered = false;
@@ -308,6 +309,7 @@ void DispatchPendingLuaUiActions();
 bool InitializeLuaSettingsForMod(
     LoadedLuaMod* mod,
     std::string* error_message);
+bool ShouldDeferLuaEntryForHostSettings(const LoadedLuaMod* mod);
 void ClearLuaSettingsCallbacks(LoadedLuaMod* mod);
 void PollLuaSettingsReplicationChanges();
 void InstallLuaSettingsPrivilegedBindings(lua_State* state);
