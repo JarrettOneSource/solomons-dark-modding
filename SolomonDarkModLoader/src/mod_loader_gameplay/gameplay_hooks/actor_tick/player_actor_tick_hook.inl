@@ -542,11 +542,32 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 binding->ongoing_cast) &&
             binding->ongoing_cast.bounded_release_requested &&
             binding->ongoing_cast.bounded_release_edge_pending;
+        const bool apply_remote_held_release_edge =
+            binding->ongoing_cast.active &&
+            binding->ongoing_cast.remote_input_controlled &&
+            binding->ongoing_cast.saw_activity &&
+            OngoingCastRequiresHeldCastInputDuringNativeTick(
+                binding->ongoing_cast) &&
+            (binding->ongoing_cast.remote_input_release_requested ||
+             binding->ongoing_cast.remote_input_timed_out);
         if (apply_bounded_release_edge) {
             binding->ongoing_cast.bounded_release_edge_pending = false;
+        }
+        if (apply_remote_held_release_edge) {
+            // Stock samples these two fields before the spell handler consumes
+            // released input. Clear the prior held frame's transition guard so
+            // this tick can produce the native current/previous release edge.
+            ClearLiveWizardActorAnimationDriveState(actor_address);
+            (void)memory.TryWriteField<std::uint8_t>(
+                actor_address,
+                kActorNoInterruptFlagOffset,
+                0);
+        }
+        if (apply_bounded_release_edge || apply_remote_held_release_edge) {
             // A replicated caster uses an authored control-brain target to
             // produce the held action. Retaining that target makes stock select
-            // Earth again at 0x0054964A before it compares current/previous.
+            // the primary again at 0x0054964A before it compares
+            // current/previous.
             // Move that control brain to its ordinary idle state for the rest
             // of the release lifecycle; cast cleanup restores the prior
             // selection state.

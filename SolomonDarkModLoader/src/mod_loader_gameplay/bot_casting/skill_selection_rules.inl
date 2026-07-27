@@ -310,6 +310,13 @@ bool OngoingCastShouldDriveSyntheticCastInput(
     if (ongoing.startup_in_progress) {
         return true;
     }
+    if (ongoing.remote_input_controlled &&
+        ongoing.saw_activity &&
+        (ongoing.remote_input_release_requested ||
+         ongoing.remote_input_timed_out) &&
+        OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing)) {
+        return false;
+    }
     if (OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing)) {
         return true;
     }

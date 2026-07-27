@@ -193,3 +193,29 @@ Post-fix acceptance is five client-to-host loopback trials in which both
 processes record exactly one real Frost start and release stop, both final
 loop refcounts are zero, and observer stop latency is no more than one 50 ms
 snapshot interval relative to the caster stop.
+
+## Post-fix acceptance
+
+The final held-primary lifecycle correction passed five audio-disabled
+client-to-host trials. Each process recorded one Frost start and two stock
+stop calls (the harmless selection stop plus the real release stop), and every
+final loop refcount was zero.
+
+| Trial | caster release stop ms | observer release stop ms | latency ms |
+| ---: | ---: | ---: | ---: |
+| 1 | `345794593` | `345794640` | `47` |
+| 2 | `345797343` | `345797390` | `47` |
+| 3 | `345800078` | `345800093` | `15` |
+| 4 | `345802750` | `345802796` | `46` |
+| 5 | `345805375` | `345805421` | `46` |
+
+All five latencies are within the 50 ms snapshot interval. The launch record
+has `audioDisabled=true`; both logs confirm stock BASS initialization was
+suppressed, so validation relied exclusively on the instrumented native stop
+edge.
+
+Evidence:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/frost-stop-client-to-host-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/logs/client-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix/logs/host-solomondarkmodloader.log`

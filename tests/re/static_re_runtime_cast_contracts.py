@@ -38,6 +38,7 @@ from static_re_contract_support import (
     RUNTIME_DEBUG_WATCH_MANAGEMENT,
     RUNTIME_DEBUG_WATCH_REGISTRATION,
     RUN_LIFECYCLE_SPELL_CAST_HOOKS,
+    SKILL_SELECTION_RULES,
     STEAM_FRIEND_ACTIVE_PAIR_VISUALS_VERIFIER,
     STEAM_FRIEND_HUB_VISUALS_VERIFIER,
     StaticReTestFailure,
@@ -481,6 +482,8 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
 
 def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
     processing_text = read_text(PENDING_CAST_PROCESSING)
+    selection_rules_text = read_text(SKILL_SELECTION_RULES)
+    player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
 
     target_lost_guard = re.search(
         r"const bool target_lost =(?P<body>.*?);",
@@ -533,7 +536,129 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
         raise StaticReTestFailure(
             "remote held input can still hit the generic safety cap while sender input is active")
 
-    return "remote held input casts defer lifecycle cleanup to sender release or timeout"
+    drive_rule = re.search(
+        r"bool OngoingCastShouldDriveSyntheticCastInput\("
+        r"(?P<body>.*?)"
+        r"\n\}",
+        selection_rules_text,
+        re.DOTALL,
+    )
+    if drive_rule is None:
+        raise StaticReTestFailure("synthetic cast-input drive rule was not found")
+    drive_body = drive_rule.group("body")
+    required_release_edge_tokens = (
+        "ongoing.remote_input_controlled",
+        "ongoing.saw_activity",
+        "ongoing.remote_input_release_requested",
+        "ongoing.remote_input_timed_out",
+        "OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing)",
+        "return false;",
+    )
+    missing_release_edge_tokens = [
+        token for token in required_release_edge_tokens
+        if token not in drive_body
+    ]
+    if missing_release_edge_tokens:
+        raise StaticReTestFailure(
+            "remote held-primary release cannot reach the stock transition edge: " +
+            ", ".join(missing_release_edge_tokens))
+
+    startup_pos = drive_body.find("ongoing.startup_in_progress")
+    remote_release_pos = drive_body.find("ongoing.remote_input_controlled")
+    held_default_pos = drive_body.rfind(
+        "OngoingCastRequiresHeldCastInputDuringNativeTick(ongoing)")
+    bounded_pos = drive_body.find(
+        "OngoingCastRequiresBoundedHeldCastInputDuringNativeTick(ongoing)")
+    if not (
+        0 <= startup_pos < remote_release_pos < held_default_pos < bounded_pos
+    ):
+        raise StaticReTestFailure(
+            "remote held-primary release must drop synthetic input after startup "
+            "and before the generic held-input rule")
+
+    drive_input_pos = player_tick_text.find(
+        "const bool drive_stock_cast_input")
+    stock_tick_pos = player_tick_text.find(
+        "original(self);",
+        drive_input_pos,
+    )
+    if not (0 <= drive_input_pos < stock_tick_pos):
+        raise StaticReTestFailure(
+            "remote held-primary release is not presented before the stock actor tick")
+
+    remote_release_edge_pos = player_tick_text.find(
+        "const bool apply_remote_held_release_edge")
+    combined_release_edge_pos = player_tick_text.find(
+        "if (apply_bounded_release_edge || apply_remote_held_release_edge)")
+    remote_native_guard = re.search(
+        r"if \(apply_remote_held_release_edge\) \{(?P<body>.*?)\n        \}",
+        player_tick_text[
+            remote_release_edge_pos:combined_release_edge_pos
+        ],
+        re.DOTALL,
+    )
+    if remote_native_guard is None:
+        raise StaticReTestFailure(
+            "remote held-primary release does not clear its native transition guard")
+    missing_native_guard_tokens = [
+        token for token in (
+            "ClearLiveWizardActorAnimationDriveState(actor_address);",
+            "kActorNoInterruptFlagOffset",
+            "std::uint8_t",
+            "0",
+        )
+        if token not in remote_native_guard.group("body")
+    ]
+    if missing_native_guard_tokens:
+        raise StaticReTestFailure(
+            "remote held-primary release is missing native transition guard clear token(s): " +
+            ", ".join(missing_native_guard_tokens))
+    clear_target_pos = player_tick_text.find(
+        "ClearSelectionBrainTarget(",
+        combined_release_edge_pos,
+    )
+    clear_state_pos = player_tick_text.find(
+        "kActorControlBrainStateIdOffset",
+        combined_release_edge_pos,
+    )
+    release_stock_tick_pos = player_tick_text.find(
+        "original(self);",
+        combined_release_edge_pos,
+    )
+    release_edge_body = player_tick_text[
+        remote_release_edge_pos:combined_release_edge_pos
+    ]
+    required_release_edge_body_tokens = (
+        "ongoing_cast.remote_input_controlled",
+        "ongoing_cast.saw_activity",
+        "ongoing_cast.remote_input_release_requested",
+        "ongoing_cast.remote_input_timed_out",
+        "OngoingCastRequiresHeldCastInputDuringNativeTick(",
+    )
+    missing_release_edge_body_tokens = [
+        token for token in required_release_edge_body_tokens
+        if token not in release_edge_body
+    ]
+    if (
+        missing_release_edge_body_tokens
+        or not (
+            0 <= remote_release_edge_pos
+            < combined_release_edge_pos
+            < clear_target_pos
+            < clear_state_pos
+            < release_stock_tick_pos
+        )
+    ):
+        raise StaticReTestFailure(
+            "remote held-primary release must idle the authored control brain "
+            "before the stock transition tick: " +
+            ", ".join(missing_release_edge_body_tokens))
+
+    return (
+        "remote held input casts defer cleanup to sender input and present "
+        "release through cleared native guards and an idle control brain to "
+        "the stock transition edge"
+    )
 
 
 def test_local_primary_network_capture_is_single_owner_and_preserves_lua_events() -> str:
