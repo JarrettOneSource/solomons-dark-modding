@@ -4,6 +4,22 @@ The production website does not have draft or unlisted mod visibility. Creating
 a mod through `POST /api/mods` makes it public immediately. Keep the production
 submission until the v0.1.0-beta.20 loader release is live.
 
+## Publication hold
+
+The v0.1.0-beta.20 release currently published from commit `6776382` was cut
+concurrently before the Lua Bots publication runtime and launcher work landed
+on `main` at `914322c`. Its launcher does not send the loader version required
+by the website compatibility gate, and its runtime does not advertise the
+`settings.list` capability required by this package. Do not publish Lua Bots
+against those assets.
+
+The owner must first choose one of these release fixes:
+
+1. replace/reissue the beta.20 release from `914322c` or newer and verify its
+   published asset; or
+2. ship a newer beta and update this package's minimum loader version and
+   listing copy to match it.
+
 The prepared package is:
 
 ```text
