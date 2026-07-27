@@ -205,7 +205,97 @@ acceptance = screenshots of the dialog rendering the bot-brain dogfood block
 
 In-game settings overlay; modifier-chord keybinds; multiline/rich text; color
 type; cross-mod settings reads; Lua-side writes; per-profile setting sets;
-website surface. Each is additive later without contract breaks.
+website surface. Each is additive later without contract breaks. Structured
+list entries were promoted out of this section into §10 (v2) on 2026-07-27 by
+owner request.
+
+## 10. v2 — structured `list` entries (owner-requested 2026-07-27)
+
+Motivating case: the bot-brain roster — add/remove bots and pick each bot's
+element and discipline. The general capability is an ordered list of composite
+items; a `list` entry closes the whole "custom datatype" class (rosters, loot
+tables, schedules) without new per-mod machinery.
+
+### Declaration
+
+```json
+{ "key": "roster", "type": "list", "label": "Bot roster",
+  "scope": "host", "group": "Bots",
+  "min_items": 0, "max_items": 3,
+  "item_label": "{name} · {element} {discipline}",
+  "item": { "fields": [
+    { "key": "name", "type": "text", "label": "Name",
+      "default": "Ember", "max_length": 31 },
+    { "key": "element", "type": "choice", "label": "Element",
+      "default": "fire",
+      "choices": [ { "value": "fire", "label": "Fire" },
+                   { "value": "water", "label": "Water" },
+                   { "value": "earth", "label": "Earth" },
+                   { "value": "air", "label": "Air" },
+                   { "value": "ether", "label": "Ether" } ] },
+    { "key": "discipline", "type": "choice", "label": "Discipline",
+      "default": "skirmisher",
+      "choices": [ { "value": "skirmisher", "label": "Skirmisher — kite and cast" },
+                   { "value": "guardian", "label": "Guardian — protect a player" },
+                   { "value": "striker", "label": "Striker — aggressive pressure" } ] }
+  ] },
+  "default": [ { "name": "Ember", "element": "fire",
+                 "discipline": "skirmisher" } ] }
+```
+
+### Rules
+
+- `item.fields`: 1–12 fields; field types are `toggle` | `number` | `text` |
+  `choice` ONLY (no keybind/action/list inside items — validation stays
+  recursive-but-bounded and rows render as a flat sub-form). Field keys obey
+  the §1 key rules, unique within the item.
+- `min_items` (default 0) ≤ `max_items` (required, 1–32). `default` is an
+  array whose every item validates against `item.fields` (missing fields take
+  the field default; unknown fields are invalid) and whose length is within
+  bounds.
+- `item_label`: ≤64 chars; `{field_key}` placeholders substitute that field's
+  display value (choice → its label) for row headers in the UI and for logs.
+- One `list` value serializes as a JSON array of flat objects; the persisted
+  form (§2), the replicated form (§4), and the Lua form are the same shape. A
+  mod's total serialized list value is capped at 8192 UTF-8 bytes; the
+  validator rejects declarations whose worst-case default exceeds it and the
+  store/runtime reject oversized saves with a per-entry error.
+- Lua: `sd.settings.get("roster")` returns an array of tables (copies, still
+  read-only); `on_changed` fires once per changed list KEY with the whole new
+  and old arrays. Item-level diffing is the mod's business.
+- `requires_restart`, `scope`, and validation fail-safe behave exactly as for
+  scalar entries.
+
+### UI (frontend contract)
+
+A list entry renders as a card: header row (label, badges, "n of max" count),
+one row per item showing its `item_label` with expand/edit, remove, and
+move-up/down affordances, and an Add button (disabled at `max_items`; new items
+are created from field defaults and open expanded). Expanded rows reuse the §1
+per-type controls verbatim. Inline validation per field; the entry is invalid
+(Save gated) while any row field is invalid or the count is out of bounds.
+Read-only/host lock dims the whole card and disables all affordances.
+
+### Bot-brain roster semantics (reference consumer, binding for the mod)
+
+The dogfood `roster` above replaces the single hard-coded bot. On apply (start
+or live reload/replication), the brain reconciles running bots against the
+roster by list order: missing bots spawn (subject to free gameplay slots —
+spawn rejection surfaces in the entry error, not a crash), removed bots
+despawn, and a row whose element or discipline changed respawns that bot. The
+`persona_name` scalar entry is superseded by per-row names and is removed from
+the dogfood block in the same commit. Disciplines are brain profiles (ATC
+spec): `skirmisher` = the shipped kite-and-cast behavior; `guardian` = anchor
+within a leash radius of the nearest human player, engaging only threats that
+approach the ward; `striker` = tighter engage range, faster cast cadence,
+flee threshold at 20% instead of 35%. All three keep native traversability,
+the replicated cast ingress, and the wave-transition movement rules.
+
+### Sequencing note
+
+v2 work lands only after the v0.1.0-beta.19 tag is verified; the release is
+pinned to main `9720424` and this addendum ships in the first post-release
+commit.
 
 ## 9. Implementation notes
 
