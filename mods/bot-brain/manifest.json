@@ -47,13 +47,80 @@
         "group": "Combat"
       },
       {
-        "key": "persona_name",
-        "type": "text",
-        "label": "Bot name",
-        "default": "Ember",
-        "max_length": 31,
+        "key": "roster",
+        "type": "list",
+        "label": "Bot roster",
         "scope": "host",
-        "requires_restart": true
+        "group": "Bots",
+        "min_items": 0,
+        "max_items": 3,
+        "item_label": "{name} · {element} {discipline}",
+        "item": {
+          "fields": [
+            {
+              "key": "name",
+              "type": "text",
+              "label": "Name",
+              "default": "Ember",
+              "max_length": 31
+            },
+            {
+              "key": "element",
+              "type": "choice",
+              "label": "Element",
+              "default": "fire",
+              "choices": [
+                {
+                  "value": "fire",
+                  "label": "Fire"
+                },
+                {
+                  "value": "water",
+                  "label": "Water"
+                },
+                {
+                  "value": "earth",
+                  "label": "Earth"
+                },
+                {
+                  "value": "air",
+                  "label": "Air"
+                },
+                {
+                  "value": "ether",
+                  "label": "Ether"
+                }
+              ]
+            },
+            {
+              "key": "discipline",
+              "type": "choice",
+              "label": "Discipline",
+              "default": "skirmisher",
+              "choices": [
+                {
+                  "value": "skirmisher",
+                  "label": "Skirmisher — kite and cast"
+                },
+                {
+                  "value": "guardian",
+                  "label": "Guardian — protect a player"
+                },
+                {
+                  "value": "striker",
+                  "label": "Striker — aggressive pressure"
+                }
+              ]
+            }
+          ]
+        },
+        "default": [
+          {
+            "name": "Ember",
+            "element": "fire",
+            "discipline": "skirmisher"
+          }
+        ]
       },
       {
         "key": "think_profile",

@@ -76,9 +76,10 @@ shared state; simulation calls auto-route to the owner).
 - **`sd.storage`** — per-mod local profile `get/set/delete/clear/snapshot` with bounded,
   transactional persistence under the launcher's isolated mod data root.
 - **`sd.settings`** — per-mod read-only manifest settings with typed
-  `get/get_all`, live `on_changed`, action handlers, passive foreground keybind
-  reads, launcher-owned atomic persistence, and framework-owned host scope over
-  the reliable session-state stream. See `lua-settings.md`.
+  `get/get_all`, bounded structured-list values, live `on_changed`, action
+  handlers, passive foreground keybind reads, launcher-owned atomic
+  persistence, and framework-owned host scope over the reliable session-state
+  stream. See `lua-settings.md`.
 - **`sd.timer`** — bounded per-mod `after/every/sequence/cancel/clear` scheduling on the
   monotonic runtime tick; callbacks and handles are released when the mod unloads.
 - **`sd.bus`** — bounded synchronous local publish/subscribe with manifest-declared

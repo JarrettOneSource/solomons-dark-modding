@@ -50,6 +50,7 @@ jobs:
           -ISolomonDarkModLoader/src
           SolomonDarkModLoader/src/mod_settings_json.cpp
           SolomonDarkModLoader/src/mod_settings.cpp
+          SolomonDarkModLoader/src/mod_settings_list.cpp
           SolomonDarkModLoader/src/mod_settings_values.cpp
           SolomonDarkModLoader/src/mod_settings_persistence.cpp
           tests/native/mod_settings_validation_vectors_tests.cpp

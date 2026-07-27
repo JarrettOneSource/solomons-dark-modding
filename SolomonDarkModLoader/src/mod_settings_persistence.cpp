@@ -1,6 +1,7 @@
 #include "mod_settings.h"
 
 #include "mod_settings_json.h"
+#include "mod_settings_list.h"
 
 #include <chrono>
 #include <fstream>
@@ -17,20 +18,16 @@ using settings_json::Value;
 constexpr int kReadAttemptCount = 3;
 constexpr auto kReadRetryDelay = std::chrono::milliseconds(10);
 
-bool ConvertValue(const Value& source, ModSettingValue* value) {
-    switch (source.type) {
-    case Type::Boolean:
-        *value = ModSettingValue::Boolean(source.boolean_value);
-        return true;
-    case Type::Number:
-        *value = ModSettingValue::Number(source.number_value);
-        return true;
-    case Type::String:
-        *value = ModSettingValue::String(source.string_value);
-        return true;
-    default:
-        return false;
-    }
+bool ConvertValue(
+    const Value& source,
+    const ModSettingEntry& entry,
+    ModSettingValue* value,
+    std::string* error) {
+    return detail::ConvertJsonModSettingValue(
+        entry,
+        source,
+        value,
+        error);
 }
 
 }  // namespace
@@ -93,17 +90,17 @@ bool ParsePersistedModSettingsJson(
             continue;
         }
         ModSettingValue value;
-        if (!ConvertValue(source, &value)) {
-            result->warnings.push_back(
-                "ignored persisted setting '" + key +
-                "': value must be a boolean, number, or string");
-            continue;
-        }
         std::string value_error;
-        if (!ValidateModSettingValue(*entry, value, &value_error)) {
-            result->warnings.push_back(
+        if (!ConvertValue(
+                source,
+                *entry,
+                &value,
+                &value_error)) {
+            const auto warning =
                 "ignored persisted setting '" + key +
-                "': " + value_error);
+                "': " + value_error;
+            result->warnings.push_back(warning);
+            result->entry_errors.emplace(key, value_error);
             continue;
         }
         result->values.emplace(key, std::move(value));

@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -143,7 +144,10 @@ void TestPersistedValueFiltering() {
     if (parsed.values.size() != 1 ||
         parsed.values.at("enabled") !=
             sdmod::ModSettingValue::Boolean(false) ||
-        parsed.warnings.size() != 3) {
+        parsed.warnings.size() != 3 ||
+        parsed.entry_errors.size() != 1 ||
+        parsed.entry_errors.find("count") ==
+            parsed.entry_errors.end()) {
         Fail("persisted settings did not filter invalid, action, and unknown values");
     }
 
@@ -178,13 +182,27 @@ int main(int argc, char** argv) {
     }
     const auto& required_rules =
         RequireField(fixture, "requiredRules", Type::Array);
+    const auto& required_value_rules =
+        RequireField(fixture, "requiredValueRules", Type::Array);
     const auto& vectors = RequireField(fixture, "vectors", Type::Array);
+    const auto& value_vectors =
+        RequireField(fixture, "valueVectors", Type::Array);
     std::set<std::string, std::less<>> required;
+    std::set<std::string, std::less<>> required_values;
     std::map<std::string, std::pair<bool, bool>, std::less<>> coverage;
+    std::map<std::string, std::pair<bool, bool>, std::less<>>
+        value_coverage;
+    std::map<std::string, const Value*, std::less<>> manifests;
     for (const auto& rule : required_rules.array_value) {
         if (rule.type != Type::String ||
             !required.insert(rule.string_value).second) {
             Fail("requiredRules contains an invalid or duplicate rule");
+        }
+    }
+    for (const auto& rule : required_value_rules.array_value) {
+        if (rule.type != Type::String ||
+            !required_values.insert(rule.string_value).second) {
+            Fail("requiredValueRules contains an invalid or duplicate rule");
         }
     }
 
@@ -200,6 +218,9 @@ int main(int argc, char** argv) {
         const auto& rules = RequireField(vector, "rules", Type::Array);
         const auto& manifest =
             RequireField(vector, "manifest", Type::Object);
+        if (!manifests.emplace(name, &manifest).second) {
+            Fail("validation vectors contain a duplicate name: " + name);
+        }
 
         sdmod::ModSettingsManifestResult result;
         if (!sdmod::ParseModSettingsManifestJson(
@@ -225,6 +246,81 @@ int main(int argc, char** argv) {
         }
         ++passed;
     }
+    for (const auto& vector : value_vectors.array_value) {
+        if (vector.type != Type::Object) {
+            Fail("value validation vector must be an object");
+        }
+        const auto& name =
+            RequireField(vector, "name", Type::String).string_value;
+        const auto expected =
+            RequireField(vector, "valid", Type::Boolean).boolean_value;
+        const auto& rules = RequireField(vector, "rules", Type::Array);
+        const auto& definition_name =
+            RequireField(
+                vector,
+                "definitionVector",
+                Type::String).string_value;
+        const auto& entry_key =
+            RequireField(vector, "entryKey", Type::String).string_value;
+        const auto* source_value = vector.Find("value");
+        const auto definition = manifests.find(definition_name);
+        if (source_value == nullptr || definition == manifests.end()) {
+            Fail(name + ": value vector references missing fixture data");
+        }
+
+        sdmod::ModSettingsManifestResult declaration;
+        if (!sdmod::ParseModSettingsManifestJson(
+                sdmod::settings_json::Serialize(*definition->second),
+                &declaration) ||
+            !declaration.has_settings ||
+            !declaration.valid) {
+            Fail(
+                name + ": referenced declaration is invalid: " +
+                declaration.error);
+        }
+
+        Value persisted;
+        persisted.type = Type::Object;
+        Value schema_version;
+        schema_version.type = Type::Number;
+        schema_version.number_value = 1.0;
+        persisted.object_value.emplace(
+            "schemaVersion",
+            std::move(schema_version));
+        Value persisted_values;
+        persisted_values.type = Type::Object;
+        persisted_values.object_value.emplace(entry_key, *source_value);
+        persisted.object_value.emplace(
+            "values",
+            std::move(persisted_values));
+
+        sdmod::ModSettingsValuesResult parsed;
+        if (!sdmod::ParsePersistedModSettingsJson(
+                sdmod::settings_json::Serialize(persisted),
+                declaration.declaration,
+                &parsed) ||
+            !parsed.valid) {
+            Fail(name + ": persisted-value validator call failed");
+        }
+        const auto actual =
+            parsed.values.find(entry_key) != parsed.values.end();
+        if (actual != expected) {
+            Fail(
+                name + ": expected value valid=" +
+                (expected ? "true" : "false") +
+                ", actual valid=" + (actual ? "true" : "false"));
+        }
+        for (const auto& rule : rules.array_value) {
+            if (rule.type != Type::String ||
+                required_values.find(rule.string_value) ==
+                    required_values.end()) {
+                Fail(name + ": value vector names an unknown rule");
+            }
+            auto& covered = value_coverage[rule.string_value];
+            (expected ? covered.first : covered.second) = true;
+        }
+        ++passed;
+    }
 
     for (const auto& rule : required) {
         const auto found = coverage.find(rule);
@@ -234,11 +330,22 @@ int main(int argc, char** argv) {
             Fail(rule + ": requires at least one accept and reject vector");
         }
     }
+    for (const auto& rule : required_values) {
+        const auto found = value_coverage.find(rule);
+        if (found == value_coverage.end() ||
+            !found->second.first ||
+            !found->second.second) {
+            Fail(
+                rule +
+                ": requires at least one accept and reject value vector");
+        }
+    }
     TestCanonicalKeybindNamespace();
     TestInvalidManifestUnicode();
     TestPersistedValueFiltering();
     std::cout << "PASS: " << passed
               << " mod-settings validation vectors; "
-              << required.size() << " rules covered\n";
+              << required.size() + required_values.size()
+              << " rules covered\n";
     return 0;
 }

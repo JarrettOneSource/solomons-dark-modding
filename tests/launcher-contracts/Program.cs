@@ -94,13 +94,26 @@ static Task TestModSettingsValidationVectorsAsync()
         .EnumerateArray()
         .Select(rule => rule.GetString() ?? string.Empty)
         .ToHashSet(StringComparer.Ordinal);
+    var requiredValueRules = root.GetProperty("requiredValueRules")
+        .EnumerateArray()
+        .Select(rule => rule.GetString() ?? string.Empty)
+        .ToHashSet(StringComparer.Ordinal);
     var accepts = new HashSet<string>(StringComparer.Ordinal);
     var rejects = new HashSet<string>(StringComparer.Ordinal);
+    var valueAccepts = new HashSet<string>(StringComparer.Ordinal);
+    var valueRejects = new HashSet<string>(StringComparer.Ordinal);
+    var manifests = new Dictionary<string, JsonElement>(
+        StringComparer.Ordinal);
     var service = new ModSettingsManifestService();
     var count = 0;
     foreach (var vector in root.GetProperty("vectors").EnumerateArray())
     {
         var name = vector.GetProperty("name").GetString() ?? string.Empty;
+        Require(
+            manifests.TryAdd(
+                name,
+                vector.GetProperty("manifest").Clone()),
+            $"duplicate validation vector name '{name}'");
         var expected = vector.GetProperty("valid").GetBoolean();
         var validation = service.ValidateJson(
             vector.GetProperty("manifest").GetRawText());
@@ -119,6 +132,67 @@ static Task TestModSettingsValidationVectorsAsync()
         }
         count++;
     }
+    foreach (var vector in root.GetProperty("valueVectors").EnumerateArray())
+    {
+        var name = vector.GetProperty("name").GetString() ?? string.Empty;
+        var expected = vector.GetProperty("valid").GetBoolean();
+        var definitionName =
+            vector.GetProperty("definitionVector").GetString() ??
+            string.Empty;
+        var entryKey =
+            vector.GetProperty("entryKey").GetString() ?? string.Empty;
+        Require(
+            manifests.TryGetValue(definitionName, out var manifest),
+            $"{name}: referenced definition vector was not found");
+        var validation = service.ValidateJson(manifest.GetRawText());
+        Require(
+            validation.Status == ModSettingsManifestStatus.Valid &&
+            validation.Definition is not null,
+            $"{name}: referenced definition is invalid: {validation.Error}");
+
+        var temporaryRoot = CreateTemporaryDirectory();
+        try
+        {
+            var store = new ModSettingsStore(service);
+            var path = store.GetSettingsPath(
+                temporaryRoot,
+                "vector.value");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(
+                path,
+                $$"""
+                {
+                  "schemaVersion": 1,
+                  "values": {
+                    "{{entryKey}}": {{vector.GetProperty("value").GetRawText()}}
+                  }
+                }
+                """);
+            var snapshot = store.Load(
+                temporaryRoot,
+                "vector.value",
+                validation.Definition!);
+            var actual = snapshot.Warnings.Count == 0;
+            Require(
+                actual == expected,
+                $"{name}: expected value valid={expected}, warnings={string.Join("; ", snapshot.Warnings)}");
+        }
+        finally
+        {
+            Directory.Delete(temporaryRoot, recursive: true);
+        }
+
+        foreach (var ruleElement in
+                 vector.GetProperty("rules").EnumerateArray())
+        {
+            var rule = ruleElement.GetString() ?? string.Empty;
+            Require(
+                requiredValueRules.Contains(rule),
+                $"{name}: value vector names unknown rule '{rule}'");
+            (expected ? valueAccepts : valueRejects).Add(rule);
+        }
+        count++;
+    }
 
     foreach (var rule in required)
     {
@@ -126,7 +200,13 @@ static Task TestModSettingsValidationVectorsAsync()
             accepts.Contains(rule) && rejects.Contains(rule),
             $"{rule}: C# suite requires one accept and reject vector");
     }
-    Require(count >= 30, "shared validation vector coverage regressed");
+    foreach (var rule in requiredValueRules)
+    {
+        Require(
+            valueAccepts.Contains(rule) && valueRejects.Contains(rule),
+            $"{rule}: C# suite requires one accept and reject value vector");
+    }
+    Require(count >= 70, "shared validation vector coverage regressed");
     var expectedKeybinds = Enumerable.Range('A', 26)
         .Select(value => ((char)value).ToString())
         .Concat(Enumerable.Range(0, 10).Select(value => value.ToString()))
@@ -240,6 +320,118 @@ static async Task TestModSettingsBackendServicesAsync()
             loaded.Warnings.Count == 0,
             "settings store did not round-trip typed values");
 
+        var listManifestJson = fixture.RootElement
+            .GetProperty("vectors")
+            .EnumerateArray()
+            .Single(vector =>
+                vector.GetProperty("name").GetString() ==
+                    "accept_structured_list_entry")
+            .GetProperty("manifest")
+            .GetRawText();
+        var listValidation =
+            manifestService.ValidateJson(listManifestJson);
+        Require(
+            listValidation.Status == ModSettingsManifestStatus.Valid &&
+            listValidation.Definition is not null,
+            $"settings service rejected list schema: {listValidation.Error}");
+        var normalizedListDefault = listValidation.Definition!
+            .Find("roster")!
+            .DefaultValue!
+            .ListValue
+            .Single();
+        Require(
+            normalizedListDefault.Count == 4 &&
+            normalizedListDefault["enabled"].BooleanValue &&
+            normalizedListDefault["weight"].NumberValue == 1.5,
+            "settings model did not expose a normalized list default");
+        var partialListRow =
+            new Dictionary<string, ModSettingValue>(StringComparer.Ordinal)
+            {
+                ["name"] = ModSettingValue.String("River"),
+                ["element"] = ModSettingValue.String("water")
+            };
+        var listValues = new Dictionary<string, ModSettingValue>(
+            StringComparer.Ordinal)
+        {
+            ["roster"] = ModSettingValue.List([partialListRow])
+        };
+        store.Save(
+            root,
+            "vector.list",
+            listValidation.Definition!,
+            listValues);
+        var loadedList = store.Load(
+            root,
+            "vector.list",
+            listValidation.Definition!);
+        var loadedRow = loadedList.Values["roster"].ListValue.Single();
+        Require(
+            loadedList.Warnings.Count == 0 &&
+            loadedRow.Count == 4 &&
+            loadedRow["enabled"].BooleanValue &&
+            loadedRow["weight"].NumberValue == 1.5 &&
+            loadedRow["name"].StringValue == "River" &&
+            loadedRow["element"].StringValue == "water",
+            "settings store did not normalize and round-trip a flat list row");
+        using (var listDocument = JsonDocument.Parse(
+                   File.ReadAllText(
+                       store.GetSettingsPath(root, "vector.list"))))
+        {
+            var persistedRow = listDocument.RootElement
+                .GetProperty("values")
+                .GetProperty("roster")[0];
+            Require(
+                persistedRow.ValueKind == JsonValueKind.Object &&
+                persistedRow.EnumerateObject().Count() == 4 &&
+                persistedRow.GetProperty("name").GetString() == "River",
+                "settings store did not persist the list as flat JSON objects");
+        }
+
+        var sizeManifestJson = fixture.RootElement
+            .GetProperty("vectors")
+            .EnumerateArray()
+            .Single(vector =>
+                vector.GetProperty("name").GetString() ==
+                    "accept_list_schema_with_small_default_and_large_valid_runtime_space")
+            .GetProperty("manifest")
+            .GetRawText();
+        var sizeValidation =
+            manifestService.ValidateJson(sizeManifestJson);
+        Require(
+            sizeValidation.Status == ModSettingsManifestStatus.Valid &&
+            sizeValidation.Definition is not null,
+            $"settings service rejected list-size schema: {sizeValidation.Error}");
+        var oversizedRows = Enumerable.Range(0, 32)
+            .Select(_ =>
+                (IReadOnlyDictionary<string, ModSettingValue>)
+                new Dictionary<string, ModSettingValue>(
+                    StringComparer.Ordinal))
+            .ToArray();
+        var oversizedRejected = false;
+        try
+        {
+            store.Save(
+                root,
+                "vector.oversized",
+                sizeValidation.Definition!,
+                new Dictionary<string, ModSettingValue>(
+                    StringComparer.Ordinal)
+                {
+                    ["rows"] = ModSettingValue.List(oversizedRows)
+                });
+        }
+        catch (ModSettingsEntryValidationException exception)
+            when (exception.EntryKey == "rows" &&
+                  exception.Message.Contains(
+                      "8192",
+                      StringComparison.Ordinal))
+        {
+            oversizedRejected = true;
+        }
+        Require(
+            oversizedRejected,
+            "settings store accepted an oversized normalized list save");
+
         File.WriteAllText(
             path,
             """
@@ -318,8 +510,34 @@ static async Task TestModSettingsBackendServicesAsync()
             reload.Ok &&
             reload.Changed.SequenceEqual(
                 new[] { "kite_radius", "think_profile" }) &&
+            reload.EntryErrors.Count == 0 &&
             reload.Error.Length == 0,
             "runtime client did not decode privileged reload result");
+
+        var entryErrorPipe =
+            $"sdmod-settings-contract-{Guid.NewGuid():N}";
+        var entryErrorServer = ServeLuaExecResponseAsync(
+            entryErrorPipe,
+            "__settings_reload",
+            """
+            {"ok":true,"print_output":"","results":["0","roster","one or more settings failed to apply","roster","roster entry 3 could not claim a gameplay slot"],"error":""}
+            """);
+        var entryErrorReload = await runtimeClient.ReloadAsync(
+            entryErrorPipe,
+            "bot.brain");
+        await entryErrorServer;
+        Require(
+            !entryErrorReload.Ok &&
+            entryErrorReload.Changed.SequenceEqual(["roster"]) &&
+            entryErrorReload.EntryErrors.TryGetValue(
+                "roster",
+                out var rosterError) &&
+            rosterError.Contains(
+                "entry 3",
+                StringComparison.Ordinal) &&
+            entryErrorReload.Error ==
+                "one or more settings failed to apply",
+            "runtime client did not decode a per-entry reload error");
 
         var actionPipe =
             $"sdmod-settings-contract-{Guid.NewGuid():N}";
@@ -419,6 +637,17 @@ static async Task TestModSettingsCoordinatorAsync()
         Require(
             persisted.Values["kite_radius"].NumberValue == 500,
             "coordinator did not read its atomic persisted save");
+        var invalidSave = await service.SaveAsync(
+            "bot.brain",
+            new Dictionary<string, ModSettingValue>
+            {
+                ["kite_radius"] = ModSettingValue.Number(999)
+            });
+        Require(
+            !invalidSave.Ok &&
+            invalidSave.EntryErrors.ContainsKey("kite_radius") &&
+            runtime.ReloadCalls == 0,
+            "coordinator did not surface a per-entry save validation error");
 
         context.Update(new OwnedModSettingsInstance
         {

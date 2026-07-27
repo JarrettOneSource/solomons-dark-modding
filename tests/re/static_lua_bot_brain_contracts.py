@@ -1,4 +1,4 @@
-"""Contracts for the autonomous synthetic-participant bot brain."""
+"""Contracts for the autonomous synthetic-participant bot roster."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ import re
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
-def test_lua_bot_brain_is_host_owned_native_routed_and_wave_five_gated() -> str:
-    manifest_text = _read("mods/bot-brain/manifest.json")
-    manifest = json.loads(manifest_text)
+def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
+    manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     main = _read("mods/bot-brain/scripts/main.lua")
+    roster = _read("mods/bot-brain/scripts/roster.lua")
+    brain = _read("mods/bot-brain/scripts/brain.lua")
     steering = _read("mods/bot-brain/scripts/steering.lua")
     docs = _read("docs/lua-bot-brain.md")
     verifier = _read("tools/verify_lua_bot_brain.py")
@@ -38,48 +39,98 @@ def test_lua_bot_brain_is_host_owned_native_routed_and_wave_five_gated() -> str:
             f"bot brain manifest lacks {capability}"
         )
 
+    entries = {
+        entry["key"]: entry
+        for entry in manifest["settings"]["entries"]
+    }
+    assert "persona_name" not in entries
+    roster_entry = entries["roster"]
+    assert roster_entry["type"] == "list"
+    assert roster_entry["scope"] == "host"
+    assert roster_entry["min_items"] == 0
+    assert roster_entry["max_items"] == 3
+    fields = {
+        field["key"]: field
+        for field in roster_entry["item"]["fields"]
+    }
+    assert set(fields) == {"name", "element", "discipline"}
+    assert [choice["value"] for choice in fields["element"]["choices"]] == [
+        "fire",
+        "water",
+        "earth",
+        "air",
+        "ether",
+    ]
+    assert [
+        choice["value"]
+        for choice in fields["discipline"]["choices"]
+    ] == ["skirmisher", "guardian", "striker"]
+
     _require_in_order(
         main,
-        "sd.state.is_authority",
-        "ensure_bot(now_ms)",
-        "choose_pending_skill()",
-        "steering.live_enemies",
-        "steering.kite_direction",
-        "steering.nearest_cast_target",
-        "steering.nearest_enemy",
-        "steering.approach_direction",
-        "issue_movement(",
-        "issue_primary_cast(",
+        'sd.settings.get("roster")',
+        'sd.settings.on_changed(function(key, new_value, old_value)',
+        'elseif key == "roster" then',
+        "manager:apply(",
+        'sd.events.on("runtime.tick"',
+        "manager:tick(now_ms, authority)",
     )
+    _require_in_order(
+        roster,
+        "rows_match(existing.row, normalized_row)",
+        "self:retire_context(context)",
+        "self.contexts = next_contexts",
+        "self:ensure_context(",
+    )
+    _require_in_order(
+        brain,
+        "sd.bots.get_primary_attack_window",
+        "context.steering.nearest_cast_target",
+        "issue_movement(",
+        "issue_primary_cast(context, now_ms, target)",
+    )
+
     for token in (
-        'bot_name = "Ember"',
-        'bot_class = "fire"',
-        "think_interval_ms = 250",
-        "approach_move_interval_ms = 1000",
-        "kite_move_interval_ms = 250",
-        "flee_move_interval_ms = 250",
-        "threat_radius = 340.0",
-        "flee_threat_radius = 900.0",
-        "flee_threshold = 0.35",
-        "flee_recovery_threshold = 0.45",
+        "sd.state.is_authority",
+        'sd.settings.is_keybind_down("focus_bot_key")',
+        'sd.settings.on_action("respawn_bot"',
+        'rawset(_G, "bot_brain_debug"',
+        "manager:reset_run(true)",
+        "manager:reset_run(false)",
+    ):
+        assert token in main, f"bot roster wiring lacks: {token}"
+    for token in (
         "sd.bots.spawn",
         "sd.bots.list",
-        "bot:participant_id()",
-        "bot:position()",
-        "bot:hp()",
-        "bot:max_hp()",
-        "bot:alive()",
+        "context.bot:despawn()",
+        "class = context.row.element",
+        "roster entry ",
+        "last_spawn_attempt_ms",
+        "self.brain.new(",
+    ):
+        assert token in roster, f"bot roster reconciliation lacks: {token}"
+    for token in (
+        "cast_interval_ms = 500",
+        "cast_interval_ms = 300",
+        "flee_threshold = 0.35",
+        "flee_threshold = 0.20",
+        "leash_radius = 260.0",
+        "engage_radius = 380.0",
+        "engage_radius = 240.0",
+        'controller_kind or "") == "Native"',
+        "ward_distance < previous - 0.5",
+        "movement_radius",
         "sd.nav.test_segment",
-        "bot:move_to(target.x, target.y)",
-        "bot:cast(",
-        "sd.bots.get_primary_attack_window",
+        "context.bot:move_to(target.x, target.y)",
+        "context.bot:cast(",
         "sd.bots.get_skill_choices",
         "sd.bots.choose_skill",
-        'sd.events.on("runtime.tick"',
-        'sd.events.on("run.started"',
-        'rawset(_G, "bot_brain_debug"',
+        'context.row.element == "fire"',
+        "priority[16] = 2",
+        "priority[18] = 3",
+        "priority[17] = 4",
     ):
-        assert token in main, f"bot brain control policy lacks: {token}"
+        assert token in brain, f"bot discipline policy lacks: {token}"
 
     for token in (
         "actor.tracked_enemy == true",
@@ -96,7 +147,7 @@ def test_lua_bot_brain_is_host_owned_native_routed_and_wave_five_gated() -> str:
     ):
         assert token in steering, f"bot steering policy lacks: {token}"
 
-    combined_lua = main + steering
+    combined_lua = main + roster + brain + steering
     for forbidden in (
         r"sd\.bots\.(?:create|update|move_to|cast|destroy|clear)\s*\(",
         r"sd\.debug",
@@ -104,24 +155,25 @@ def test_lua_bot_brain_is_host_owned_native_routed_and_wave_five_gated() -> str:
         r"kLocalPlayerActorGlobal",
         r"HookMonsterPathfindingRefreshTarget",
         r"write_(?:float|ptr|u32|i32)",
+        r"persona_name",
     ):
         assert re.search(forbidden, combined_lua) is None, (
-            f"bot brain contains forbidden legacy control path: {forbidden}"
+            f"bot brain contains forbidden legacy path: {forbidden}"
         )
 
     for token in (
-        "inverse-distance-weighted",
-        "arena center",
+        "zero to three ordered rows",
+        "a changed name",
         "`sd.nav.test_segment`",
-        "approaches the nearest enemy",
-        "less than 35% HP",
-        "above 45% HP",
-        "bot:move_to",
-        "bot:cast(0, target.x, target.y, 80)",
-        "retail staged `data/wave.txt`",
-        "Three consecutive",
+        "`bot:cast(0, target.x, target.y, 80)`",
+        "nearest living human",
+        "260 world units",
+        "faster 300 ms cadence",
+        "flees only below 20% HP",
+        "ms2-host",
+        "49211/49212",
     ):
-        assert token in docs, f"bot brain documentation lacks: {token}"
+        assert token in docs, f"bot roster documentation lacks: {token}"
 
     for token in (
         'INSTANCE_PREFIX = "bot"',
@@ -148,7 +200,6 @@ def test_lua_bot_brain_is_host_owned_native_routed_and_wave_five_gated() -> str:
     assert "stop_game_processes(" not in verifier
 
     return (
-        "The opt-in fire brain runs only on host ticks, steers synthetic "
-        "participant handles through native movement/cast ingress, and requires "
-        "three retail-schedule wave-five runs with telemetry and peer visuals"
+        "The opt-in ordered roster runs three native-routed disciplines on "
+        "authority ticks while retaining the retail three-run wave-five gate"
     )

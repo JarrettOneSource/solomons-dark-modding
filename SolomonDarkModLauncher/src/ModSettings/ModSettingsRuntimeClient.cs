@@ -9,6 +9,8 @@ public sealed record ModSettingsRuntimeResult
     public bool Ok { get; init; }
     public IReadOnlyList<string> Changed { get; init; } =
         Array.Empty<string>();
+    public IReadOnlyDictionary<string, string> EntryErrors { get; init; } =
+        new Dictionary<string, string>();
     public string Error { get; init; } = string.Empty;
 }
 
@@ -43,9 +45,13 @@ public sealed class ModSettingsRuntimeClient :
         var literal = EscapeLuaAscii(modId);
         var code =
             $"local r=sd.__settings_reload(\"{literal}\");" +
-            "return r.ok and \"1\" or \"0\"," +
+            "local k={};for n in pairs(r.entry_errors or {})do " +
+            "k[#k+1]=n end;table.sort(k);local o={" +
+            "r.ok and \"1\" or \"0\"," +
             "table.concat(r.changed or {},string.char(31))," +
-            "r.error or \"\"";
+            "r.error or \"\"};for _,n in ipairs(k)do " +
+            "o[#o+1]=n;o[#o+1]=r.entry_errors[n] end;" +
+            "return table.unpack(o)";
         var response = await ExecuteAsync(
             pipeName,
             code,
@@ -64,6 +70,20 @@ public sealed class ModSettingsRuntimeClient :
                 Error = "Loader returned an incomplete reload result."
             };
         }
+        if ((response.Results.Count - 3) % 2 != 0)
+        {
+            return new ModSettingsRuntimeResult
+            {
+                Error = "Loader returned malformed per-entry reload errors."
+            };
+        }
+        var entryErrors = new Dictionary<string, string>(
+            StringComparer.Ordinal);
+        for (var index = 3; index < response.Results.Count; index += 2)
+        {
+            entryErrors[response.Results[index]] =
+                response.Results[index + 1];
+        }
         return new ModSettingsRuntimeResult
         {
             Ok = response.Results[0] == "1",
@@ -72,6 +92,7 @@ public sealed class ModSettingsRuntimeClient :
                 : response.Results[1].Split(
                     '\u001f',
                     StringSplitOptions.RemoveEmptyEntries),
+            EntryErrors = entryErrors,
             Error = response.Results[2]
         };
     }

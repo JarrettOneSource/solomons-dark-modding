@@ -119,7 +119,22 @@ public sealed class ModSettingsService : IModSettingsService
         ArgumentNullException.ThrowIfNull(values);
         var mod = FindMod(modId);
         var definition = RequireDefinition(mod);
-        _store.Save(_stageRootPath, mod.ModId, definition, values);
+        try
+        {
+            _store.Save(_stageRootPath, mod.ModId, definition, values);
+        }
+        catch (ModSettingsEntryValidationException exception)
+        {
+            return new ModSettingsRuntimeResult
+            {
+                EntryErrors =
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        [exception.EntryKey] = exception.Message
+                    },
+                Error = "One or more settings are invalid."
+            };
+        }
 
         var instance = _instanceContext.Current;
         if (instance.State == ModSettingsGameInstanceState.NotRunning)

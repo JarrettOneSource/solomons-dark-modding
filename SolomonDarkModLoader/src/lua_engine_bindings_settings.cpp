@@ -7,6 +7,51 @@
 #include <string_view>
 
 namespace sdmod::detail {
+
+void PushLuaSettingValue(
+    lua_State* state,
+    const ModSettingValue& value) {
+    switch (value.type) {
+    case ModSettingValueType::Boolean:
+        lua_pushboolean(state, value.boolean_value ? 1 : 0);
+        break;
+    case ModSettingValueType::Number:
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(value.number_value));
+        break;
+    case ModSettingValueType::String:
+        lua_pushlstring(
+            state,
+            value.string_value.data(),
+            value.string_value.size());
+        break;
+    case ModSettingValueType::List:
+        lua_createtable(
+            state,
+            static_cast<int>(value.list_value.size()),
+            0);
+        for (std::size_t item_index = 0;
+             item_index < value.list_value.size();
+             ++item_index) {
+            const auto& item = value.list_value[item_index];
+            lua_createtable(
+                state,
+                0,
+                static_cast<int>(item.size()));
+            for (const auto& [key, field] : item) {
+                PushLuaSettingValue(state, field);
+                lua_setfield(state, -2, key.c_str());
+            }
+            lua_rawseti(
+                state,
+                -2,
+                static_cast<lua_Integer>(item_index + 1));
+        }
+        break;
+    }
+}
+
 namespace {
 
 bool DeclaresSettingsCapability(const LoadedLuaMod& mod) {
@@ -42,27 +87,6 @@ void RequireArgumentCount(
             api_name,
             expected,
             expected == 1 ? "" : "s");
-    }
-}
-
-void PushValue(
-    lua_State* state,
-    const ModSettingValue& value) {
-    switch (value.type) {
-    case ModSettingValueType::Boolean:
-        lua_pushboolean(state, value.boolean_value ? 1 : 0);
-        break;
-    case ModSettingValueType::Number:
-        lua_pushnumber(
-            state,
-            static_cast<lua_Number>(value.number_value));
-        break;
-    case ModSettingValueType::String:
-        lua_pushlstring(
-            state,
-            value.string_value.data(),
-            value.string_value.size());
-        break;
     }
 }
 
@@ -108,7 +132,7 @@ int LuaSettingsGet(lua_State* state) {
             key_view,
             "is unknown or has no value");
     }
-    PushValue(state, *value);
+    PushLuaSettingValue(state, *value);
     return 1;
 }
 
@@ -122,7 +146,7 @@ int LuaSettingsGetAll(lua_State* state) {
         static_cast<int>(mod->effective_settings_values.size()));
     for (const auto& [key, value] :
          mod->effective_settings_values) {
-        PushValue(state, value);
+        PushLuaSettingValue(state, value);
         lua_setfield(state, -2, key.c_str());
     }
     return 1;
@@ -282,7 +306,7 @@ void PushOperationResult(
     lua_State* state,
     const LuaSettingsOperationResult& result,
     bool include_changed) {
-    lua_createtable(state, 0, include_changed ? 3 : 2);
+    lua_createtable(state, 0, include_changed ? 4 : 2);
     lua_pushboolean(state, result.ok ? 1 : 0);
     lua_setfield(state, -2, "ok");
     lua_pushlstring(
@@ -308,6 +332,18 @@ void PushOperationResult(
                 static_cast<lua_Integer>(index + 1));
         }
         lua_setfield(state, -2, "changed");
+        lua_createtable(
+            state,
+            0,
+            static_cast<int>(result.entry_errors.size()));
+        for (const auto& [key, error] : result.entry_errors) {
+            lua_pushlstring(
+                state,
+                error.data(),
+                error.size());
+            lua_setfield(state, -2, key.c_str());
+        }
+        lua_setfield(state, -2, "entry_errors");
     }
 }
 

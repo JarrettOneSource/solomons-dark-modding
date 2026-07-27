@@ -114,7 +114,10 @@ Mods that declare a `settings` block must list capability `settings.self` to
 read them. All access is to the mod's OWN settings; there is no cross-mod read
 in v1. Values from Lua are read-only in v1 (the UI is the single writer).
 
-- `sd.settings.get(key)` → typed value (boolean | number | string). Unknown key → nil + error string.
+- `sd.settings.get(key)` → typed value (boolean | number | string | list
+  array). A list is returned as a fresh array of fresh flat row tables on every
+  read, so mutating the Lua copy cannot mutate effective settings. Unknown key
+  → nil + error string.
 - `sd.settings.get_all()` → table of key → value.
 - `sd.settings.on_changed(fn(key, new_value, old_value))` — fires for each
   changed key on live-apply and on host-scope replication updates. Never fires
@@ -154,8 +157,11 @@ mod capability grants; exec-pipe callers only):
 
 - `sd.__settings_reload("<mod_id>")` — loader re-reads the persisted file,
   validates, diffs against effective values, applies, fires `on_changed` per
-  changed key, and returns a result table `{ ok, changed = {...}, error }`
-  serialized back over the pipe.
+  changed key, and returns a result table
+  `{ ok, changed = {...}, entry_errors = { [key] = message }, error }`
+  serialized back over the pipe. `entry_errors` reports value rejection and a
+  consumer's `on_changed` apply failure (for example, a roster row that cannot
+  claim a gameplay slot) without crashing or suppressing other keys.
 - `sd.__settings_invoke_action("<mod_id>", "<key>")` — runs the registered
   handler; returns `{ ok, error }` (unregistered handler or scope violation is
   `ok = false`).
@@ -323,8 +329,26 @@ commit.
   storage, owned-instance state, reload, and action calls behind the interface
   consumed by a thin WPF adapter. Shared vectors are
   `tests/fixtures/mod-settings-validation-vectors.json`.
+- Structured-list declarations are represented by the existing
+  `ModSettingEntry` / `ModSettingDefinition` models: list bounds, row label,
+  and bounded scalar item fields are properties of the same entry. Values use
+  the existing `ModSettingValue` discriminated model with an ordered list of
+  flat objects. Both validators normalize missing row fields from their
+  declared defaults before validating the 8192-byte compact UTF-8 JSON cap.
+  Persistence writes JSON arrays of flat objects; host scope converts that
+  same normalized shape to an array of Lua mod-state objects on the reserved
+  `SDMOD:settings` stream. Save validation failures and runtime callback
+  failures are returned in the reload result's `entry_errors` map.
+- `mods/bot-brain/scripts/roster.lua` owns list-order reconciliation and
+  `brain.lua` owns one behavior context per roster row. Changed rows are
+  retired before replacements spawn; failed spawns remain desired and retry
+  on later authority ticks while the immediate reload reports the numbered row
+  error. All mutations still use bot handles, native path tests, and slot-0
+  replicated cast ingress.
 - `mods/bot-brain/` exercises every v1 type. End-to-end acceptance is
-  `tools/verify_mod_settings_lifecycle.py`, fixed to the isolated `mset` pair.
+  `tools/verify_mod_settings_lifecycle.py`, fixed to the isolated `ms2` pair
+  and ports 49211/49212. It also exercises the v2 roster on both peers,
+  ordered despawn/respawn, all three disciplines, and slot-exhaustion errors.
   No new Solomon Dark native address or layout offset was added. Keybind reads
   use only the operating-system `GetForegroundWindow`,
   `GetWindowThreadProcessId`, and `GetAsyncKeyState` APIs.

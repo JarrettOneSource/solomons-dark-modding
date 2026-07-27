@@ -30,7 +30,35 @@
     "choice.default",
     "keybind.default",
     "action.default",
-    "action.confirm"
+    "action.confirm",
+    "list.item.schema",
+    "list.item.field_count",
+    "list.item.field_type",
+    "list.item.field_key",
+    "list.item.field_key_unique",
+    "list.item.field_schema",
+    "list.item.field_default",
+    "list.min_items",
+    "list.max_items",
+    "list.item_bounds",
+    "list.default.type",
+    "list.default.count",
+    "list.default.item_type",
+    "list.default.missing_field",
+    "list.default.unknown_field",
+    "list.default.field_value",
+    "list.item_label.length",
+    "list.item_label.placeholder",
+    "list.declaration_size"
+  ],
+  "requiredValueRules": [
+    "list.value.type",
+    "list.value.count",
+    "list.value.item_type",
+    "list.value.missing_field",
+    "list.value.unknown_field",
+    "list.value.field_value",
+    "list.value.serialized_size"
   ],
   "vectors": [
     {
@@ -736,6 +764,900 @@
           ]
         }
       }
+    },
+    {
+      "name": "accept_structured_list_entry",
+      "valid": true,
+      "rules": [
+        "entry.type", "entry.scope", "entry.requires_restart",
+        "list.item.schema", "list.item.field_count", "list.item.field_type",
+        "list.item.field_key", "list.item.field_key_unique",
+        "list.item.field_schema", "list.item.field_default",
+        "list.min_items", "list.max_items", "list.item_bounds",
+        "list.default.type", "list.default.count",
+        "list.default.item_type", "list.default.missing_field",
+        "list.default.unknown_field", "list.default.field_value",
+        "list.item_label.length", "list.item_label.placeholder",
+        "list.declaration_size"
+      ],
+      "manifest": {
+        "id": "vector.list",
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "roster",
+              "type": "list",
+              "label": "Roster",
+              "description": "Ordered composite rows.",
+              "group": "Bots",
+              "scope": "host",
+              "requires_restart": true,
+              "min_items": 0,
+              "max_items": 3,
+              "item_label": "{name} · {element}",
+              "item": {
+                "fields": [
+                  {
+                    "key": "enabled",
+                    "type": "toggle",
+                    "label": "Enabled",
+                    "default": true
+                  },
+                  {
+                    "key": "weight",
+                    "type": "number",
+                    "label": "Weight",
+                    "default": 1.5,
+                    "min": 0,
+                    "max": 10,
+                    "step": 0.5
+                  },
+                  {
+                    "key": "name",
+                    "type": "text",
+                    "label": "Name",
+                    "default": "Ember",
+                    "max_length": 31,
+                    "placeholder": "Bot name"
+                  },
+                  {
+                    "key": "element",
+                    "type": "choice",
+                    "label": "Element",
+                    "default": "fire",
+                    "choices": [
+                      { "value": "fire", "label": "Fire" },
+                      { "value": "water", "label": "Water" }
+                    ]
+                  }
+                ]
+              },
+              "default": [
+                { "name": "River", "element": "water" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "accept_list_schema_with_small_default_and_large_valid_runtime_space",
+      "valid": true,
+      "rules": [
+        "list.item.field_count", "list.max_items",
+        "list.default.count", "list.declaration_size"
+      ],
+      "manifest": {
+        "id": "vector.list.size",
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "rows",
+              "type": "list",
+              "label": "Rows",
+              "max_items": 32,
+              "item": {
+                "fields": [
+                  {
+                    "key": "first",
+                    "type": "text",
+                    "label": "First",
+                    "default": "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001",
+                    "max_length": 30
+                  },
+                  {
+                    "key": "second",
+                    "type": "text",
+                    "label": "Second",
+                    "default": "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001",
+                    "max_length": 30
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_missing",
+      "valid": false,
+      "rules": ["list.item.schema"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_unknown_field",
+      "valid": false,
+      "rules": ["list.item.schema"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "v",
+                    "type": "toggle",
+                    "label": "V",
+                    "default": true
+                  }
+                ],
+                "future": true
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_with_zero_item_fields",
+      "valid": false,
+      "rules": ["list.item.field_count"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": { "fields": [] },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_with_thirteen_item_fields",
+      "valid": false,
+      "rules": ["list.item.field_count"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  { "key": "f01", "type": "toggle", "label": "F1", "default": true },
+                  { "key": "f02", "type": "toggle", "label": "F2", "default": true },
+                  { "key": "f03", "type": "toggle", "label": "F3", "default": true },
+                  { "key": "f04", "type": "toggle", "label": "F4", "default": true },
+                  { "key": "f05", "type": "toggle", "label": "F5", "default": true },
+                  { "key": "f06", "type": "toggle", "label": "F6", "default": true },
+                  { "key": "f07", "type": "toggle", "label": "F7", "default": true },
+                  { "key": "f08", "type": "toggle", "label": "F8", "default": true },
+                  { "key": "f09", "type": "toggle", "label": "F9", "default": true },
+                  { "key": "f10", "type": "toggle", "label": "F10", "default": true },
+                  { "key": "f11", "type": "toggle", "label": "F11", "default": true },
+                  { "key": "f12", "type": "toggle", "label": "F12", "default": true },
+                  { "key": "f13", "type": "toggle", "label": "F13", "default": true }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_nested_list_item_field",
+      "valid": false,
+      "rules": ["list.item.field_type"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "nested",
+                    "type": "list",
+                    "label": "Nested",
+                    "max_items": 1,
+                    "item": { "fields": [] },
+                    "default": []
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_keybind_list_item_field",
+      "valid": false,
+      "rules": ["list.item.field_type"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "key",
+                    "type": "keybind",
+                    "label": "Key",
+                    "default": "NONE"
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_bad_list_item_field_key",
+      "valid": false,
+      "rules": ["list.item.field_key"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "Bad-Key",
+                    "type": "toggle",
+                    "label": "Bad",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_duplicate_list_item_field_key",
+      "valid": false,
+      "rules": ["list.item.field_key_unique"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "same",
+                    "type": "toggle",
+                    "label": "A",
+                    "default": true
+                  },
+                  {
+                    "key": "same",
+                    "type": "text",
+                    "label": "B",
+                    "default": ""
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_scope_on_list_item_field",
+      "valid": false,
+      "rules": ["list.item.field_schema"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "scope": "host",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_field_without_default",
+      "valid": false,
+      "rules": [
+        "list.item.field_default",
+        "list.default.missing_field"
+      ],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value"
+                  }
+                ]
+              },
+              "default": [{}]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_invalid_list_item_field_default",
+      "valid": false,
+      "rules": ["list.item.field_default"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "number",
+                    "label": "Value",
+                    "default": 11,
+                    "min": 0,
+                    "max": 10
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_negative_list_min_items",
+      "valid": false,
+      "rules": ["list.min_items"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "min_items": -1,
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_max_items_above_thirty_two",
+      "valid": false,
+      "rules": ["list.max_items"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 33,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_min_above_max",
+      "valid": false,
+      "rules": ["list.item_bounds"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "min_items": 2,
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_not_array",
+      "valid": false,
+      "rules": ["list.default.type"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_count_outside_bounds",
+      "valid": false,
+      "rules": ["list.default.count"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "min_items": 1,
+              "max_items": 2,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_item_not_object",
+      "valid": false,
+      "rules": ["list.default.item_type"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": [true]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_unknown_field",
+      "valid": false,
+      "rules": ["list.default.unknown_field"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": [{ "future": true }]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_invalid_field_value",
+      "valid": false,
+      "rules": ["list.default.field_value"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "number",
+                    "label": "Value",
+                    "default": 1,
+                    "min": 0,
+                    "max": 2
+                  }
+                ]
+              },
+              "default": [{ "value": 3 }]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_label_over_sixty_four_characters",
+      "valid": false,
+      "rules": ["list.item_label.length"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item_label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_label_unknown_placeholder",
+      "valid": false,
+      "rules": ["list.item_label.placeholder"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item_label": "{missing}",
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_item_label_unclosed_placeholder",
+      "valid": false,
+      "rules": ["list.item_label.placeholder"],
+      "manifest": {
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "x",
+              "type": "list",
+              "label": "X",
+              "max_items": 1,
+              "item_label": "{value",
+              "item": {
+                "fields": [
+                  {
+                    "key": "value",
+                    "type": "toggle",
+                    "label": "Value",
+                    "default": true
+                  }
+                ]
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reject_list_default_over_serialized_cap",
+      "valid": false,
+      "rules": ["list.declaration_size"],
+      "manifest": {
+        "id": "vector.list.size",
+        "settings": {
+          "version": 1,
+          "entries": [
+            {
+              "key": "rows",
+              "type": "list",
+              "label": "Rows",
+              "max_items": 32,
+              "item": {
+                "fields": [
+                  {
+                    "key": "first",
+                    "type": "text",
+                    "label": "First",
+                    "default": "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001",
+                    "max_length": 30
+                  },
+                  {
+                    "key": "second",
+                    "type": "text",
+                    "label": "Second",
+                    "default": "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001",
+                    "max_length": 30
+                  }
+                ]
+              },
+              "default": [
+                {}, {}, {}, {}, {}, {}, {}, {},
+                {}, {}, {}, {}, {}, {}, {}, {},
+                {}, {}, {}, {}, {}, {}, {}, {},
+                {}, {}, {}, {}, {}, {}, {}, {}
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "valueVectors": [
+    {
+      "name": "accept_complete_list_value",
+      "valid": true,
+      "rules": [
+        "list.value.type", "list.value.count",
+        "list.value.item_type", "list.value.missing_field",
+        "list.value.unknown_field", "list.value.field_value",
+        "list.value.serialized_size"
+      ],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [
+        {
+          "enabled": false,
+          "weight": 2.5,
+          "name": "Ember",
+          "element": "fire"
+        }
+      ]
+    },
+    {
+      "name": "accept_list_value_with_missing_fields",
+      "valid": true,
+      "rules": ["list.value.missing_field"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [{ "name": "Defaults" }]
+    },
+    {
+      "name": "reject_list_value_not_array",
+      "valid": false,
+      "rules": ["list.value.type"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": {}
+    },
+    {
+      "name": "reject_list_value_count_above_max",
+      "valid": false,
+      "rules": ["list.value.count"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [{}, {}, {}, {}]
+    },
+    {
+      "name": "reject_list_value_item_not_object",
+      "valid": false,
+      "rules": ["list.value.item_type"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [false]
+    },
+    {
+      "name": "reject_list_value_unknown_field",
+      "valid": false,
+      "rules": ["list.value.unknown_field"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [{ "future": true }]
+    },
+    {
+      "name": "reject_list_value_invalid_field",
+      "valid": false,
+      "rules": ["list.value.field_value"],
+      "definitionVector": "accept_structured_list_entry",
+      "entryKey": "roster",
+      "value": [{ "weight": 11 }]
+    },
+    {
+      "name": "reject_list_value_over_serialized_cap_after_defaults",
+      "valid": false,
+      "rules": [
+        "list.value.missing_field",
+        "list.value.serialized_size"
+      ],
+      "definitionVector": "accept_list_schema_with_small_default_and_large_valid_runtime_space",
+      "entryKey": "rows",
+      "value": [
+        {}, {}, {}, {}, {}, {}, {}, {},
+        {}, {}, {}, {}, {}, {}, {}, {},
+        {}, {}, {}, {}, {}, {}, {}, {},
+        {}, {}, {}, {}, {}, {}, {}, {}
+      ]
     }
   ]
 }

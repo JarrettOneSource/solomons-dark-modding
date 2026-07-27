@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Loopback acceptance for manifest-backed Lua mod settings."""
+"""Live loopback acceptance for structured mod settings and bot rosters."""
 
 from __future__ import annotations
 
@@ -26,18 +26,37 @@ FORBIDDEN_OWNER_INSTALL = Path(
     "SolomonDarkMultiplayerBeta-v0.1.0-beta.12"
 )
 EVIDENCE_ROOT = Path(
-    "/mnt/d/codex-evidence/mod-settings-20260727"
+    "/mnt/d/codex-evidence/mod-settings-v2-20260727"
 )
-INSTANCE_PREFIX = "mset"
-HOST_PORT = 49011
-CLIENT_PORT = 49012
-HOST_PIPE = "SolomonDarkModLoader_LuaExec_mset-host"
-CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_mset-client"
+INSTANCE_PREFIX = "ms2"
+HOST_PORT = 49211
+CLIENT_PORT = 49212
+HOST_PIPE = "SolomonDarkModLoader_LuaExec_ms2-host"
+CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_ms2-client"
 EXACT_MOD_ID = "bot.brain"
-INITIAL_KITE_RADIUS = 100
-RELOADED_KITE_RADIUS = 900
-INITIAL_PERSONA = "MsetBot"
-RESTART_PERSONA = "RestartedBot"
+
+INITIAL_ROSTER = [
+    {"name": "Ward", "element": "water", "discipline": "guardian"},
+    {"name": "Spark", "element": "air", "discipline": "striker"},
+]
+RECONCILED_ROSTER = [
+    {"name": "Spark", "element": "earth", "discipline": "striker"},
+]
+SKIRMISHER_ROSTER = [
+    {"name": "Spark", "element": "earth", "discipline": "skirmisher"},
+]
+EXHAUSTED_ROSTER = [
+    {"name": "Spark", "element": "earth", "discipline": "skirmisher"},
+    {"name": "Bulwark", "element": "water", "discipline": "guardian"},
+    {"name": "Needle", "element": "air", "discipline": "striker"},
+]
+ELEMENT_IDS = {
+    "fire": 0,
+    "water": 1,
+    "earth": 2,
+    "air": 3,
+    "ether": 4,
+}
 
 
 class ModSettingsLifecycleFailure(RuntimeError):
@@ -90,94 +109,137 @@ def _atomic_write_settings(
     return path
 
 
-def _seed_persisted_values(evidence_dir: Path) -> None:
-    host_values: dict[str, object] = {
-        "kite_radius": INITIAL_KITE_RADIUS,
-        "offense_enabled": False,
-        "persona_name": INITIAL_PERSONA,
-        "think_profile": "standard",
-        "focus_bot_key": "NONE",
-    }
-    client_values: dict[str, object] = {
-        "kite_radius": 700,
+def _settings_values(roster: list[dict[str, str]], think: str) -> dict[str, object]:
+    return {
+        "kite_radius": 340,
         "offense_enabled": True,
-        "persona_name": "ClientLocalBot",
-        "think_profile": "relaxed",
+        "roster": roster,
+        "think_profile": think,
         "focus_bot_key": "NONE",
     }
-    host_path = _atomic_write_settings("host", host_values)
-    client_path = _atomic_write_settings("client", client_values)
+
+
+def _seed_persisted_values(evidence_dir: Path) -> None:
+    host_path = _atomic_write_settings(
+        "host",
+        _settings_values(INITIAL_ROSTER, "standard"),
+    )
+    client_path = _atomic_write_settings(
+        "client",
+        _settings_values(
+            [
+                {
+                    "name": "ClientLocal",
+                    "element": "fire",
+                    "discipline": "skirmisher",
+                }
+            ],
+            "relaxed",
+        ),
+    )
     shutil.copy2(host_path, evidence_dir / "host-settings-initial.json")
     shutil.copy2(client_path, evidence_dir / "client-settings-initial.json")
 
 
 PROBE = """
 local function emit(key, value)
-  if value == nil then
-    value = ""
-  end
+  if value == nil then value = "" end
   print(key .. "=" .. tostring(value))
 end
 
 local scene = sd.world.get_scene()
 emit("scene", scene and (scene.name or scene.kind) or "")
 emit("authority", sd.state.is_authority())
-for _, key in ipairs({
-  "kite_radius",
-  "offense_enabled",
-  "persona_name",
-  "think_profile",
-  "focus_bot_key"
-}) do
-  local value, error_message = sd.settings.get(key)
-  emit("setting." .. key, value)
-  emit("setting_error." .. key, error_message or "")
-end
+emit("setting.think_profile", sd.settings.get("think_profile"))
 
-local bots = sd.bots.list() or {}
-local bot = bots[1]
-local participant_id = bot and tonumber(bot:participant_id()) or 0
-emit("bot.count", #bots)
-emit("bot.participant_id", participant_id)
-if bot ~= nil then
-  local ok, x, y = pcall(function() return bot:position() end)
-  emit("bot.position_ok", ok and x ~= nil and y ~= nil)
-  emit("bot.x", x or 0)
-  emit("bot.y", y or 0)
-end
-
-local multiplayer = sd.runtime.get_multiplayer_state()
-local bot_member = nil
-for _, participant in ipairs(multiplayer and multiplayer.participants or {}) do
-  if tonumber(participant.participant_id) == participant_id then
-    bot_member = participant
-  end
-end
-emit("bot.name", bot_member and bot_member.name or "")
+local first = sd.settings.get("roster") or {}
+local original_name = first[1] and first[1].name or ""
+if first[1] then first[1].name = "mutated-copy" end
+local effective = sd.settings.get("roster") or {}
 emit(
-  "bot.controller",
-  bot_member and bot_member.controller_kind or "")
+  "setting.roster.copy_isolated",
+  (effective[1] and effective[1].name or "") == original_name)
+emit("setting.roster.count", #effective)
+for index = 1, 3 do
+  local row = effective[index] or {}
+  emit("setting.roster." .. index .. ".name", row.name or "")
+  emit("setting.roster." .. index .. ".element", row.element or "")
+  emit(
+    "setting.roster." .. index .. ".discipline",
+    row.discipline or "")
+end
+
+local handles = sd.bots.list() or {}
+local active_ids = {}
+emit("actual.count", #handles)
+for index, handle in ipairs(handles) do
+  local participant_id = tonumber(handle:participant_id()) or 0
+  active_ids[#active_ids + 1] = tostring(participant_id)
+  local snapshot = sd.bots.get_participant_state(participant_id)
+  emit("actual." .. index .. ".participant_id", participant_id)
+  emit("actual." .. index .. ".name", snapshot and snapshot.name or "")
+  emit(
+    "actual." .. index .. ".element_id",
+    snapshot and snapshot.profile and snapshot.profile.element_id or -1)
+end
+emit("actual.participant_ids", table.concat(active_ids, ","))
 
 local debug_state = rawget(_G, "bot_brain_debug")
-for _, key in ipairs({
-  "active",
-  "mode",
-  "live_enemy_count",
-  "threat_count",
-  "nearest_enemy_distance",
-  "kite_radius",
-  "offense_enabled",
-  "think_profile",
-  "persona_name",
-  "settings_change_count",
-  "last_settings_change_key",
-  "respawn_action_count"
-}) do
-  local value = ""
-  if type(debug_state) == "table" then
-    value = debug_state[key]
+emit(
+  "brain.settings_change_count",
+  debug_state and debug_state.settings_change_count or 0)
+emit(
+  "brain.last_settings_change_key",
+  debug_state and debug_state.last_settings_change_key or "")
+emit(
+  "brain.last_roster_new_size",
+  debug_state and debug_state.last_roster_new_size or -1)
+emit(
+  "brain.last_roster_old_size",
+  debug_state and debug_state.last_roster_old_size or -1)
+emit(
+  "brain.reconciliation_error_count",
+  debug_state and debug_state.reconciliation_error_count or 0)
+emit(
+  "brain.last_reconciliation_error",
+  debug_state and debug_state.last_reconciliation_error or "")
+emit(
+  "brain.roster_size",
+  debug_state and debug_state.roster_size or 0)
+for index = 1, 3 do
+  local item =
+    debug_state and debug_state.bots and debug_state.bots[index] or {}
+  local brain_participant_id = tonumber(item.participant_id) or 0
+  local brain_snapshot = brain_participant_id > 0 and
+    sd.bots.get_participant_state(brain_participant_id) or nil
+  emit(
+    "brain.bot." .. index .. ".actual_element_id",
+    brain_snapshot and brain_snapshot.profile and
+      brain_snapshot.profile.element_id or -1)
+  for _, key in ipairs({
+    "name",
+    "element",
+    "discipline",
+    "participant_id",
+    "active",
+    "mode",
+    "hp_ratio",
+    "think_count",
+    "move_accepted",
+    "cast_accepted",
+    "attack_window_max",
+    "flee_threshold",
+    "flee_recovery_threshold",
+    "cast_interval_ms",
+    "engage_radius",
+    "guardian_leash_radius",
+    "guardian_ward_distance",
+    "guardian_human_participant_id",
+    "guardian_engaging",
+    "last_error"
+  }) do
+    emit("brain.bot." .. index .. "." .. key, item[key])
   end
-  emit("brain." .. key, value)
 end
 """
 
@@ -209,6 +271,18 @@ def _integer(
         return int(raw, 10)
     except (TypeError, ValueError):
         return int(_number(values, key, float(default)))
+
+
+def _participant_ids(values: dict[str, str]) -> set[int]:
+    result: set[int] = set()
+    for value in values.get("actual.participant_ids", "").split(","):
+        try:
+            participant_id = int(value)
+        except ValueError:
+            continue
+        if participant_id > 0:
+            result.add(participant_id)
+    return result
 
 
 def _wait(
@@ -247,19 +321,9 @@ local result = sd.__settings_reload("{EXACT_MOD_ID}")
 print("ok=" .. tostring(result.ok))
 print("changed=" .. table.concat(result.changed or {{}}, ","))
 print("error=" .. tostring(result.error or ""))
-"""
-    return local_sync.parse_key_values(
-        local_sync.lua(pipe_name, code, timeout=10.0)
-    )
-
-
-def _invoke_action(pipe_name: str) -> dict[str, str]:
-    code = f"""
-local result = sd.__settings_invoke_action(
-  "{EXACT_MOD_ID}",
-  "respawn_bot")
-print("ok=" .. tostring(result.ok))
-print("error=" .. tostring(result.error or ""))
+for key, message in pairs(result.entry_errors or {{}}) do
+  print("entry_error." .. key .. "=" .. tostring(message))
+end
 """
     return local_sync.parse_key_values(
         local_sync.lua(pipe_name, code, timeout=10.0)
@@ -282,27 +346,33 @@ def _start_testrun() -> None:
     )
 
 
-def _start_waves() -> dict[str, str]:
-    response = local_sync.parse_key_values(
-        local_sync.lua(
-            HOST_PIPE,
-            """
-print("prelude=" ..
-  tostring(sd.gameplay.enable_combat_prelude()))
-print("waves=" ..
-  tostring(sd.gameplay.start_waves()))
-""",
-            timeout=10.0,
-        )
-    )
+def _roster_matches(
+    values: dict[str, str],
+    expected: list[dict[str, str]],
+) -> bool:
     if (
-        response.get("prelude") != "true"
-        or response.get("waves") != "true"
+        _integer(values, "setting.roster.count") != len(expected)
+        or values.get("setting.roster.copy_isolated") != "true"
     ):
-        raise ModSettingsLifecycleFailure(
-            f"stock waves did not start: {response}"
-        )
-    return response
+        return False
+    for index, row in enumerate(expected, start=1):
+        prefix = f"setting.roster.{index}."
+        if any(values.get(prefix + key) != row[key] for key in row):
+            return False
+    return True
+
+
+def _brain_roster_matches(
+    values: dict[str, str],
+    expected: list[dict[str, str]],
+) -> bool:
+    if _integer(values, "brain.roster_size") != len(expected):
+        return False
+    for index, row in enumerate(expected, start=1):
+        prefix = f"brain.bot.{index}."
+        if any(values.get(prefix + key) != row[key] for key in row):
+            return False
+    return True
 
 
 def _initial_values_converged(
@@ -310,33 +380,121 @@ def _initial_values_converged(
 ) -> bool:
     host = views["host"]
     client = views["client"]
-    participant_id = _integer(host, "bot.participant_id")
+    host_ids = [
+        _integer(host, f"brain.bot.{index}.participant_id")
+        for index in (1, 2)
+    ]
+    client_ids = [
+        _integer(client, f"brain.bot.{index}.participant_id")
+        for index in (1, 2)
+    ]
     return (
         host.get("scene") == "hub"
         and client.get("scene") == "hub"
         and host.get("authority") == "true"
         and client.get("authority") == "false"
-        and _number(host, "setting.kite_radius") ==
-            INITIAL_KITE_RADIUS
-        and _number(client, "setting.kite_radius") ==
-            INITIAL_KITE_RADIUS
-        and host.get("setting.offense_enabled") == "false"
-        and client.get("setting.offense_enabled") == "false"
-        and host.get("setting.persona_name") == INITIAL_PERSONA
-        and client.get("setting.persona_name") == INITIAL_PERSONA
         and host.get("setting.think_profile") == "standard"
         and client.get("setting.think_profile") == "relaxed"
-        and host.get("brain.persona_name") == INITIAL_PERSONA
-        and host.get("brain.offense_enabled") == "false"
-        and _number(host, "brain.kite_radius") ==
-            INITIAL_KITE_RADIUS
-        and participant_id > 0
-        and _integer(client, "bot.participant_id") == participant_id
-        and host.get("bot.name") == INITIAL_PERSONA
-        and client.get("bot.name") == INITIAL_PERSONA
-        and host.get("bot.controller") == "LuaBrain"
-        and client.get("bot.controller") == "LuaBrain"
+        and _roster_matches(host, INITIAL_ROSTER)
+        and _roster_matches(client, INITIAL_ROSTER)
+        and _brain_roster_matches(host, INITIAL_ROSTER)
+        and _brain_roster_matches(client, INITIAL_ROSTER)
+        and _integer(host, "actual.count") == 2
+        and _integer(client, "actual.count") == 2
+        and len(set(host_ids)) == 2
+        and min(host_ids) > 0
+        and client_ids == host_ids
+        and _integer(
+            host,
+            "brain.bot.1.actual_element_id",
+        ) == ELEMENT_IDS["water"]
+        and _integer(
+            host,
+            "brain.bot.2.actual_element_id",
+        ) == ELEMENT_IDS["air"]
+        and _integer(
+            client,
+            "brain.bot.1.actual_element_id",
+        ) == ELEMENT_IDS["water"]
+        and _integer(
+            client,
+            "brain.bot.2.actual_element_id",
+        ) == ELEMENT_IDS["air"]
     )
+
+
+def _disciplines_measurable(values: dict[str, str]) -> bool:
+    guardian = "brain.bot.1."
+    striker = "brain.bot.2."
+    leash = _number(values, guardian + "guardian_leash_radius")
+    ward_distance = _number(values, guardian + "guardian_ward_distance")
+    return (
+        values.get("scene") == "testrun"
+        and values.get(guardian + "active") == "true"
+        and values.get(striker + "active") == "true"
+        and _integer(
+            values,
+            guardian + "guardian_human_participant_id",
+        ) > 0
+        and leash > 0
+        and 0 < ward_distance <= leash
+        and math.isclose(
+            _number(values, guardian + "flee_threshold"),
+            0.35,
+        )
+        and math.isclose(
+            _number(values, striker + "flee_threshold"),
+            0.20,
+        )
+        and _integer(values, guardian + "cast_interval_ms") == 500
+        and _integer(values, striker + "cast_interval_ms") == 300
+        and _number(values, striker + "engage_radius") <
+            _number(values, guardian + "engage_radius")
+        and _number(values, guardian + "attack_window_max") > 0
+        and _number(values, striker + "attack_window_max") > 0
+        and _integer(values, guardian + "move_accepted") > 0
+        and _integer(values, striker + "move_accepted") > 0
+    )
+
+
+def _write_roster(
+    roster: list[dict[str, str]],
+    evidence_dir: Path,
+    label: str,
+) -> Path:
+    path = _atomic_write_settings(
+        "host",
+        _settings_values(roster, "standard"),
+    )
+    shutil.copy2(path, evidence_dir / f"host-settings-{label}.json")
+    return path
+
+
+def _stage_crash_artifacts(started_at: float) -> list[str]:
+    artifacts: list[str] = []
+    for role in ("host", "client"):
+        log_dir = _stage_root(role) / ".sdmod" / "logs"
+        if not log_dir.is_dir():
+            continue
+        for path in log_dir.glob("*crash*"):
+            stat = path.stat()
+            if stat.st_size > 0 and stat.st_mtime >= started_at:
+                artifacts.append(str(path))
+    return artifacts
+
+
+def _require_owned_stage_paths(launch: dict[str, object]) -> None:
+    for role in ("host", "client"):
+        raw = str(launch.get(f"{role}ExecutablePath") or "")
+        normalized = raw.replace("/", "\\").casefold()
+        expected = (
+            f"\\sd-mod-settings-v2-20260727\\runtime\\instances\\"
+            f"{INSTANCE_PREFIX}-{role}\\stage\\solomondark.exe"
+        )
+        if not normalized.endswith(expected.casefold()):
+            raise ModSettingsLifecycleFailure(
+                f"{role} executable escaped the exact verifier stage: {raw}"
+            )
 
 
 def _copy_runtime_evidence(evidence_dir: Path) -> dict[str, str]:
@@ -362,11 +520,10 @@ def _copy_runtime_evidence(evidence_dir: Path) -> dict[str, str]:
             ),
         ):
             source = stage / relative
-            if not source.is_file():
-                continue
-            destination = evidence_dir / output_name
-            shutil.copy2(source, destination)
-            copied[output_name] = str(destination)
+            if source.is_file():
+                destination = evidence_dir / output_name
+                shutil.copy2(source, destination)
+                copied[output_name] = str(destination)
     return copied
 
 
@@ -380,8 +537,9 @@ def verify_lifecycle(
     evidence_dir.mkdir(parents=True, exist_ok=True)
     _seed_persisted_values(evidence_dir)
     launch: dict[str, object] = {}
+    started_at = time.time()
     result: dict[str, Any] = {
-        "contract": "mod-settings-lifecycle-v1",
+        "contract": "mod-settings-structured-list-v2",
         "startedUtc": _utc_now(),
         "instancePrefix": INSTANCE_PREFIX,
         "ports": {"host": HOST_PORT, "client": CLIENT_PORT},
@@ -417,6 +575,7 @@ def verify_lifecycle(
             raise ModSettingsLifecycleFailure(
                 f"isolated launch contract failed: {launch}"
             )
+        _require_owned_stage_paths(launch)
 
         initial = _wait(
             lambda: {
@@ -424,190 +583,239 @@ def verify_lifecycle(
                 "client": _query(CLIENT_PIPE),
             },
             _initial_values_converged,
-            timeout=30.0,
-            label="persisted startup values and host replication",
+            timeout=45.0,
+            label="two-row startup roster and host replication",
         )
-        result["initial"] = initial
+        result["initialRoster"] = initial
+        old_ids = {
+            _integer(
+                initial["host"],
+                f"brain.bot.{index}.participant_id",
+            )
+            for index in (1, 2)
+        }
 
         _start_testrun()
         local_sync.wait_for_scene(HOST_PIPE, "testrun", timeout=45.0)
         local_sync.wait_for_scene(CLIENT_PIPE, "testrun", timeout=45.0)
-        result["waveStart"] = _start_waves()
-
-        before = _wait(
+        disciplines = _wait(
             lambda: _query(HOST_PIPE),
-            lambda values: (
-                values.get("scene") == "testrun"
-                and values.get("brain.active") == "true"
-                and values.get("brain.mode") == "approach"
-                and _integer(values, "brain.live_enemy_count") > 0
-                and _integer(values, "brain.threat_count") == 0
-                and INITIAL_KITE_RADIUS <
-                    _number(values, "brain.nearest_enemy_distance")
-                    <= RELOADED_KITE_RADIUS
-                and _number(values, "brain.kite_radius") ==
-                    INITIAL_KITE_RADIUS
-            ),
+            _disciplines_measurable,
             timeout=timeout_seconds,
-            label="pre-reload kite telemetry",
+            label="guardian leash and striker behavior profile",
         )
-        result["behaviorBeforeReload"] = before
-        host_change_count = _integer(
-            before,
+        result["disciplineBehavior"] = disciplines
+        host_changes = _integer(
+            disciplines,
             "brain.settings_change_count",
         )
-        client_before = _query(CLIENT_PIPE)
-        client_change_count = _integer(
-            client_before,
+        client_changes = _integer(
+            _query(CLIENT_PIPE),
             "brain.settings_change_count",
         )
 
-        reloaded_values: dict[str, object] = {
-            "kite_radius": RELOADED_KITE_RADIUS,
-            "offense_enabled": False,
-            "persona_name": RESTART_PERSONA,
-            "think_profile": "standard",
-            "focus_bot_key": "NONE",
-        }
-        reloaded_path = _atomic_write_settings(
-            "host",
-            reloaded_values,
+        _write_roster(
+            RECONCILED_ROSTER,
+            evidence_dir,
+            "reconciled",
         )
-        shutil.copy2(
-            reloaded_path,
-            evidence_dir / "host-settings-reloaded.json",
-        )
-        reload_result = _reload(HOST_PIPE)
-        result["reload"] = reload_result
+        reconciliation_reload = _reload(HOST_PIPE)
+        result["reconciliationReload"] = reconciliation_reload
         if (
-            reload_result.get("ok") != "true"
-            or reload_result.get("changed") != "kite_radius"
-            or reload_result.get("error", "") != ""
+            reconciliation_reload.get("ok") != "true"
+            or reconciliation_reload.get("changed") != "roster"
+            or reconciliation_reload.get("error", "") != ""
         ):
             raise ModSettingsLifecycleFailure(
-                f"live reload returned an unexpected result: {reload_result}"
+                "remove-and-edit reload failed: "
+                f"{reconciliation_reload}"
             )
 
-        after = _wait(
+        reconciled = _wait(
             lambda: {
                 "host": _query(HOST_PIPE),
                 "client": _query(CLIENT_PIPE),
             },
             lambda views: (
-                _number(
-                    views["host"],
-                    "setting.kite_radius",
-                ) == RELOADED_KITE_RADIUS
-                and _number(
+                _roster_matches(views["host"], RECONCILED_ROSTER)
+                and _roster_matches(
                     views["client"],
-                    "setting.kite_radius",
-                ) == RELOADED_KITE_RADIUS
-                and _number(
+                    RECONCILED_ROSTER,
+                )
+                and _brain_roster_matches(
                     views["host"],
-                    "brain.kite_radius",
-                ) == RELOADED_KITE_RADIUS
-                and _integer(
-                    views["host"],
-                    "brain.settings_change_count",
-                ) > host_change_count
-                and _integer(
+                    RECONCILED_ROSTER,
+                )
+                and _brain_roster_matches(
                     views["client"],
-                    "brain.settings_change_count",
-                ) > client_change_count
+                    RECONCILED_ROSTER,
+                )
+                and _integer(views["host"], "actual.count") == 1
+                and _integer(views["client"], "actual.count") == 1
+                and not (
+                    _participant_ids(views["host"]) & old_ids
+                )
                 and _integer(
                     views["host"],
-                    "brain.threat_count",
-                ) > 0
-                and 0 < _number(
-                    views["host"],
-                    "brain.nearest_enemy_distance",
-                ) <= RELOADED_KITE_RADIUS
-                and views["host"].get("setting.persona_name") ==
-                    INITIAL_PERSONA
-                and views["client"].get("setting.persona_name") ==
-                    INITIAL_PERSONA
-                and views["host"].get("brain.persona_name") ==
-                    INITIAL_PERSONA
-            ),
-            timeout=20.0,
-            label="live apply, callback, behavior delta, and replication",
-        )
-        result["behaviorAfterReload"] = after
-        persisted_after_reload = json.loads(
-            reloaded_path.read_text(encoding="utf-8")
-        )
-        if (
-            persisted_after_reload["values"]["persona_name"]
-            != RESTART_PERSONA
-        ):
-            raise ModSettingsLifecycleFailure(
-                "requires_restart value was not persisted"
-            )
-        result["requiresRestart"] = {
-            "persisted": RESTART_PERSONA,
-            "hostEffective": after["host"]["setting.persona_name"],
-            "clientEffective": after["client"]["setting.persona_name"],
-            "liveChangedKeys": reload_result["changed"],
-        }
-
-        old_participant_id = _integer(
-            after["host"],
-            "bot.participant_id",
-        )
-        old_action_count = _integer(
-            after["host"],
-            "brain.respawn_action_count",
-        )
-        client_action = _invoke_action(CLIENT_PIPE)
-        result["clientAction"] = client_action
-        if (
-            client_action.get("ok") != "false"
-            or "session authority" not in
-                client_action.get("error", "").lower()
-        ):
-            raise ModSettingsLifecycleFailure(
-                f"client host action was not rejected: {client_action}"
-            )
-
-        host_action = _invoke_action(HOST_PIPE)
-        result["hostAction"] = host_action
-        if (
-            host_action.get("ok") != "true"
-            or host_action.get("error", "") != ""
-        ):
-            raise ModSettingsLifecycleFailure(
-                f"host action failed: {host_action}"
-            )
-        respawned = _wait(
-            lambda: {
-                "host": _query(HOST_PIPE),
-                "client": _query(CLIENT_PIPE),
-            },
-            lambda views: (
-                _integer(
-                    views["host"],
-                    "brain.respawn_action_count",
-                ) > old_action_count
-                and _integer(
-                    views["host"],
-                    "bot.participant_id",
+                    "brain.bot.1.participant_id",
                 ) > 0
                 and _integer(
-                    views["host"],
-                    "bot.participant_id",
-                ) != old_participant_id
-                and _integer(
                     views["client"],
-                    "bot.participant_id",
+                    "brain.bot.1.participant_id",
                 ) == _integer(
                     views["host"],
-                    "bot.participant_id",
+                    "brain.bot.1.participant_id",
+                )
+                and _integer(
+                    views["host"],
+                    "brain.bot.1.actual_element_id",
+                ) == ELEMENT_IDS["earth"]
+                and _integer(
+                    views["client"],
+                    "brain.bot.1.actual_element_id",
+                ) == ELEMENT_IDS["earth"]
+                and _integer(
+                    views["host"],
+                    "brain.settings_change_count",
+                ) == host_changes + 1
+                and _integer(
+                    views["client"],
+                    "brain.settings_change_count",
+                ) == client_changes + 1
+                and _integer(
+                    views["host"],
+                    "brain.last_roster_old_size",
+                ) == 2
+                and _integer(
+                    views["host"],
+                    "brain.last_roster_new_size",
+                ) == 1
+                and _integer(
+                    views["client"],
+                    "brain.last_roster_old_size",
+                ) == 2
+                and _integer(
+                    views["client"],
+                    "brain.last_roster_new_size",
+                ) == 1
+            ),
+            timeout=30.0,
+            label="ordered despawn, element respawn, and list replication",
+        )
+        result["reconciledRoster"] = reconciled
+        striker_id = _integer(
+            reconciled["host"],
+            "brain.bot.1.participant_id",
+        )
+
+        _write_roster(
+            SKIRMISHER_ROSTER,
+            evidence_dir,
+            "skirmisher",
+        )
+        skirmisher_reload = _reload(HOST_PIPE)
+        result["skirmisherReload"] = skirmisher_reload
+        if (
+            skirmisher_reload.get("ok") != "true"
+            or skirmisher_reload.get("changed") != "roster"
+        ):
+            raise ModSettingsLifecycleFailure(
+                f"skirmisher reload failed: {skirmisher_reload}"
+            )
+        skirmisher = _wait(
+            lambda: _query(HOST_PIPE),
+            lambda values: (
+                _brain_roster_matches(values, SKIRMISHER_ROSTER)
+                and _integer(
+                    values,
+                    "brain.bot.1.participant_id",
+                ) > 0
+                and _integer(
+                    values,
+                    "brain.bot.1.participant_id",
+                ) != striker_id
+                and values.get("brain.bot.1.active") == "true"
+                and math.isclose(
+                    _number(
+                        values,
+                        "brain.bot.1.flee_threshold",
+                    ),
+                    0.35,
+                )
+                and _integer(
+                    values,
+                    "brain.bot.1.cast_interval_ms",
+                ) == 500
+                and _number(
+                    values,
+                    "brain.bot.1.engage_radius",
+                ) == 340
+                and _integer(
+                    values,
+                    "brain.bot.1.move_accepted",
+                ) > 0
+            ),
+            timeout=30.0,
+            label="shipped skirmisher profile after discipline respawn",
+        )
+        result["skirmisherBehavior"] = skirmisher
+
+        _write_roster(
+            EXHAUSTED_ROSTER,
+            evidence_dir,
+            "slot-exhaustion",
+        )
+        exhausted_reload = _reload(HOST_PIPE)
+        result["slotExhaustionReload"] = exhausted_reload
+        entry_error = exhausted_reload.get("entry_error.roster", "")
+        if (
+            exhausted_reload.get("ok") != "false"
+            or exhausted_reload.get("changed") != "roster"
+            or not entry_error
+            or "roster entry 3" not in entry_error.lower()
+        ):
+            raise ModSettingsLifecycleFailure(
+                "slot exhaustion did not return a roster entry error: "
+                f"{exhausted_reload}"
+            )
+
+        survived = _wait(
+            lambda: {
+                "host": _query(HOST_PIPE),
+                "client": _query(CLIENT_PIPE),
+            },
+            lambda views: (
+                _roster_matches(views["host"], EXHAUSTED_ROSTER)
+                and _roster_matches(
+                    views["client"],
+                    EXHAUSTED_ROSTER,
+                )
+                and _brain_roster_matches(
+                    views["host"],
+                    EXHAUSTED_ROSTER,
+                )
+                and _integer(views["host"], "actual.count") == 2
+                and _integer(views["client"], "actual.count") == 2
+                and _integer(
+                    views["host"],
+                    "brain.bot.3.participant_id",
+                ) == 0
+                and bool(
+                    views["host"].get(
+                        "brain.bot.3.last_error",
+                    )
                 )
             ),
-            timeout=25.0,
-            label="host action respawn round trip",
+            timeout=20.0,
+            label="slot-exhaustion survival and replication",
         )
-        result["respawned"] = respawned
+        result["slotExhaustionSurvived"] = survived
+        crashes = _stage_crash_artifacts(started_at)
+        result["newCrashArtifacts"] = crashes
+        if crashes:
+            raise ModSettingsLifecycleFailure(
+                f"new exact-stage crash artifacts appeared: {crashes}"
+            )
         result["success"] = True
     except BaseException as exc:
         failure = exc
@@ -643,9 +851,7 @@ def verify_lifecycle(
             json.dumps(result, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        print(
-            f"SUCCESS={result['success']} RESULT={result_path}"
-        )
+        print(f"SUCCESS={result['success']} RESULT={result_path}")
 
     if failure is not None:
         raise failure
@@ -654,11 +860,7 @@ def verify_lifecycle(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--game-dir",
-        type=Path,
-        default=GAME_DIRECTORY,
-    )
+    parser.add_argument("--game-dir", type=Path, default=GAME_DIRECTORY)
     parser.add_argument(
         "--launcher",
         type=Path,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the loopback mod-settings lifecycle verifier."""
+"""Tests for the structured mod-settings loopback verifier."""
 
 from __future__ import annotations
 
@@ -19,18 +19,56 @@ if str(TOOLS_ROOT) not in sys.path:
 import verify_mod_settings_lifecycle as verifier  # noqa: E402
 
 
+def roster_view(
+    roster: list[dict[str, str]],
+    *,
+    authority: bool,
+    think: str,
+    participant_ids: list[int],
+) -> dict[str, str]:
+    values = {
+        "scene": "hub",
+        "authority": str(authority).lower(),
+        "setting.think_profile": think,
+        "setting.roster.copy_isolated": "true",
+        "setting.roster.count": str(len(roster)),
+        "brain.roster_size": str(len(roster)),
+        "actual.count": str(len(roster)),
+        "actual.participant_ids": ",".join(
+            str(value) for value in participant_ids
+        ),
+        "actual.1.element_id": "1",
+        "actual.2.element_id": "3",
+    }
+    for index, row in enumerate(roster, start=1):
+        for key, value in row.items():
+            values[f"setting.roster.{index}.{key}"] = value
+            values[f"brain.bot.{index}.{key}"] = value
+        values[f"brain.bot.{index}.participant_id"] = str(
+            participant_ids[index - 1]
+        )
+        values[f"brain.bot.{index}.actual_element_id"] = str(
+            verifier.ELEMENT_IDS[row["element"]]
+        )
+    return values
+
+
 class ModSettingsLifecycleVerifierTests(unittest.TestCase):
     def test_isolation_contract_is_fixed(self) -> None:
-        self.assertEqual(verifier.INSTANCE_PREFIX, "mset")
-        self.assertEqual(verifier.HOST_PORT, 49011)
-        self.assertEqual(verifier.CLIENT_PORT, 49012)
+        self.assertEqual(verifier.INSTANCE_PREFIX, "ms2")
+        self.assertEqual(verifier.HOST_PORT, 49211)
+        self.assertEqual(verifier.CLIENT_PORT, 49212)
         self.assertEqual(
             verifier.HOST_PIPE,
-            "SolomonDarkModLoader_LuaExec_mset-host",
+            "SolomonDarkModLoader_LuaExec_ms2-host",
         )
         self.assertEqual(
             verifier.CLIENT_PIPE,
-            "SolomonDarkModLoader_LuaExec_mset-client",
+            "SolomonDarkModLoader_LuaExec_ms2-client",
+        )
+        self.assertEqual(
+            verifier.EVIDENCE_ROOT,
+            Path("/mnt/d/codex-evidence/mod-settings-v2-20260727"),
         )
         source = (TOOLS_ROOT / "verify_mod_settings_lifecycle.py").read_text(
             encoding="utf-8"
@@ -39,8 +77,8 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
         self.assertIn("kill_existing=False", source)
         self.assertIn("stop_exact_game_processes(launch)", source)
         self.assertNotIn("stop_game_processes(", source)
-        self.assertNotIn("48911", source)
-        self.assertNotIn("48912", source)
+        self.assertNotIn("49011", source)
+        self.assertNotIn("49012", source)
 
     def test_fixture_writer_uses_canonical_atomic_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -48,14 +86,14 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
             with mock.patch.object(verifier, "ROOT", temporary_root):
                 path = verifier._atomic_write_settings(
                     "host",
-                    {"kite_radius": 500},
+                    {"roster": verifier.INITIAL_ROSTER},
                 )
             self.assertEqual(
                 path,
                 temporary_root
                 / "runtime"
                 / "instances"
-                / "mset-host"
+                / "ms2-host"
                 / "stage"
                 / ".sdmod"
                 / "mod-settings"
@@ -65,43 +103,53 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 json.loads(path.read_text(encoding="utf-8")),
                 {
                     "schemaVersion": 1,
-                    "values": {"kite_radius": 500},
+                    "values": {"roster": verifier.INITIAL_ROSTER},
                 },
             )
-            self.assertEqual(
-                list(path.parent.glob("*.tmp")),
-                [],
-            )
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
-    def test_initial_predicate_separates_host_and_local_scope(self) -> None:
-        common = {
-            "scene": "hub",
-            "setting.kite_radius": "100",
-            "setting.offense_enabled": "false",
-            "setting.persona_name": "MsetBot",
-            "brain.persona_name": "MsetBot",
-            "brain.offense_enabled": "false",
-            "brain.kite_radius": "100",
-            "bot.count": "1",
-            "bot.participant_id": "77",
-            "bot.name": "MsetBot",
-            "bot.controller": "LuaBrain",
-        }
+    def test_initial_predicate_proves_host_list_replication(self) -> None:
+        participant_ids = [101, 102]
         views = {
-            "host": {
-                **common,
-                "authority": "true",
-                "setting.think_profile": "standard",
-            },
-            "client": {
-                **common,
-                "authority": "false",
-                "setting.think_profile": "relaxed",
-            },
+            "host": roster_view(
+                verifier.INITIAL_ROSTER,
+                authority=True,
+                think="standard",
+                participant_ids=participant_ids,
+            ),
+            "client": roster_view(
+                verifier.INITIAL_ROSTER,
+                authority=False,
+                think="relaxed",
+                participant_ids=participant_ids,
+            ),
         }
         self.assertTrue(verifier._initial_values_converged(views))
-        views["client"]["setting.kite_radius"] = "700"
+        views["client"]["setting.roster.2.element"] = "fire"
         self.assertFalse(verifier._initial_values_converged(views))
+
+    def test_discipline_predicate_requires_live_leash_and_thresholds(self) -> None:
+        values = {
+            "scene": "testrun",
+            "brain.bot.1.active": "true",
+            "brain.bot.2.active": "true",
+            "brain.bot.1.guardian_human_participant_id": "51",
+            "brain.bot.1.guardian_leash_radius": "260",
+            "brain.bot.1.guardian_ward_distance": "180",
+            "brain.bot.1.flee_threshold": "0.35",
+            "brain.bot.2.flee_threshold": "0.20",
+            "brain.bot.1.cast_interval_ms": "500",
+            "brain.bot.2.cast_interval_ms": "300",
+            "brain.bot.1.engage_radius": "380",
+            "brain.bot.2.engage_radius": "240",
+            "brain.bot.1.attack_window_max": "275",
+            "brain.bot.2.attack_window_max": "250",
+            "brain.bot.1.move_accepted": "2",
+            "brain.bot.2.move_accepted": "2",
+        }
+        self.assertTrue(verifier._disciplines_measurable(values))
+        values["brain.bot.1.guardian_ward_distance"] = "261"
+        self.assertFalse(verifier._disciplines_measurable(values))
 
     def test_integer_parser_preserves_uint64_participant_ids(self) -> None:
         first = "1152921504606851072"
@@ -114,63 +162,41 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
             verifier._integer({"participant": second}, "participant"),
             int(second),
         )
-        self.assertNotEqual(
-            verifier._integer({"participant": first}, "participant"),
-            verifier._integer({"participant": second}, "participant"),
-        )
 
     def test_lifecycle_always_uses_exact_launch_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             evidence = Path(temporary)
-            reloaded = evidence / "bot.brain.json"
-            reloaded.write_text(
-                json.dumps(
-                    {
-                        "schemaVersion": 1,
-                        "values": {
-                            "persona_name": verifier.RESTART_PERSONA
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-            initial = {"host": {}, "client": {}}
-            before = {
-                "brain.settings_change_count": "0",
-                "bot.participant_id": "10",
-                "brain.respawn_action_count": "0",
-            }
-            client_before = {"brain.settings_change_count": "1"}
-            after = {
+            initial = {
                 "host": {
-                    "setting.persona_name": verifier.INITIAL_PERSONA,
-                    "brain.persona_name": verifier.INITIAL_PERSONA,
-                    "bot.participant_id": "10",
-                    "brain.respawn_action_count": "0",
+                    "brain.bot.1.participant_id": "10",
+                    "brain.bot.2.participant_id": "11",
                 },
-                "client": {
-                    "setting.persona_name": verifier.INITIAL_PERSONA,
-                    "bot.participant_id": "10",
-                },
+                "client": {},
             }
-            respawned = {
-                "host": {"bot.participant_id": "11"},
-                "client": {"bot.participant_id": "11"},
+            disciplines = {"brain.settings_change_count": "0"}
+            reconciled = {
+                "host": {"brain.bot.1.participant_id": "12"},
+                "client": {},
             }
+            skirmisher = {"brain.bot.1.participant_id": "13"}
+            survived = {"host": {}, "client": {}}
             launch = {
                 "audioDisabled": True,
                 "hostPort": verifier.HOST_PORT,
                 "clientPort": verifier.CLIENT_PORT,
                 "hostProcessId": 101,
-                "hostExecutablePath": "C:/stage/host/SolomonDark.exe",
+                "hostExecutablePath": (
+                    "C:/sd-mod-settings-v2-20260727/runtime/instances/"
+                    "ms2-host/stage/SolomonDark.exe"
+                ),
                 "clientProcessId": 102,
-                "clientExecutablePath": "C:/stage/client/SolomonDark.exe",
+                "clientExecutablePath": (
+                    "C:/sd-mod-settings-v2-20260727/runtime/instances/"
+                    "ms2-client/stage/SolomonDark.exe"
+                ),
             }
             with (
-                mock.patch.object(
-                    verifier,
-                    "_seed_persisted_values",
-                ),
+                mock.patch.object(verifier, "_seed_persisted_values"),
                 mock.patch.object(
                     verifier.local_sync,
                     "launch_pair",
@@ -179,7 +205,13 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 mock.patch.object(
                     verifier,
                     "_wait",
-                    side_effect=[initial, before, after, respawned],
+                    side_effect=[
+                        initial,
+                        disciplines,
+                        reconciled,
+                        skirmisher,
+                        survived,
+                    ],
                 ),
                 mock.patch.object(verifier, "_start_testrun"),
                 mock.patch.object(
@@ -188,41 +220,31 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 ),
                 mock.patch.object(
                     verifier,
-                    "_start_waves",
-                    return_value={"prelude": "true", "waves": "true"},
-                ),
-                mock.patch.object(
-                    verifier,
                     "_query",
-                    return_value=client_before,
+                    return_value={"brain.settings_change_count": "0"},
                 ),
-                mock.patch.object(
-                    verifier,
-                    "_atomic_write_settings",
-                    return_value=reloaded,
-                ),
+                mock.patch.object(verifier, "_write_roster"),
                 mock.patch.object(
                     verifier,
                     "_reload",
-                    return_value={
-                        "ok": "true",
-                        "changed": "kite_radius",
-                        "error": "",
-                    },
+                    side_effect=[
+                        {"ok": "true", "changed": "roster", "error": ""},
+                        {"ok": "true", "changed": "roster", "error": ""},
+                        {
+                            "ok": "false",
+                            "changed": "roster",
+                            "error": "one or more settings failed to apply",
+                            "entry_error.roster": (
+                                "roster entry 3 could not spawn: "
+                                "no free gameplay slot"
+                            ),
+                        },
+                    ],
                 ),
                 mock.patch.object(
                     verifier,
-                    "_invoke_action",
-                    side_effect=[
-                        {
-                            "ok": "false",
-                            "error": (
-                                "host-scope action requires "
-                                "session authority"
-                            ),
-                        },
-                        {"ok": "true", "error": ""},
-                    ],
+                    "_stage_crash_artifacts",
+                    return_value=[],
                 ),
                 mock.patch.object(
                     verifier,

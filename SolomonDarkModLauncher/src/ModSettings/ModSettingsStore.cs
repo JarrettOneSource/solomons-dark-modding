@@ -11,6 +11,13 @@ public sealed record ModSettingsSnapshot
         Array.Empty<string>();
 }
 
+public sealed class ModSettingsEntryValidationException(
+    string entryKey,
+    string message) : Exception(message)
+{
+    public string EntryKey { get; } = entryKey;
+}
+
 public interface IModSettingsStore
 {
     ModSettingsSnapshot Load(
@@ -110,22 +117,27 @@ public sealed class ModSettingsStore(
                         $"ignored persisted action setting '{property.Name}'");
                     continue;
                 }
-                if (!TryReadValue(property.Value, out var value))
+                if (!TryReadValue(
+                        property.Value,
+                        entry,
+                        out var value,
+                        out var readError))
                 {
                     warnings.Add(
-                        $"ignored persisted setting '{property.Name}': value must be a boolean, number, or string");
+                        $"ignored persisted setting '{property.Name}': {readError}");
                     continue;
                 }
-                if (!_manifestService.TryValidateValue(
+                if (!_manifestService.TryNormalizeValue(
                         entry,
                         value,
+                        out var normalized,
                         out var error))
                 {
                     warnings.Add(
                         $"ignored persisted setting '{property.Name}': {error}");
                     continue;
                 }
-                values[property.Name] = value;
+                values[property.Name] = normalized;
             }
         }
         catch (Exception exception) when (
@@ -160,15 +172,17 @@ public sealed class ModSettingsStore(
                 throw new InvalidOperationException(
                     $"Action setting '{pair.Key}' cannot be persisted.");
             }
-            if (!_manifestService.TryValidateValue(
+            if (!_manifestService.TryNormalizeValue(
                     entry,
                     pair.Value,
+                    out var normalizedValue,
                     out var error))
             {
-                throw new InvalidOperationException(
+                throw new ModSettingsEntryValidationException(
+                    pair.Key,
                     $"Invalid value for setting '{pair.Key}': {error}");
             }
-            normalized.Add(pair.Key, pair.Value);
+            normalized.Add(pair.Key, normalizedValue);
         }
 
         var path = GetSettingsPath(stageRootPath, modId);
@@ -239,6 +253,67 @@ public sealed class ModSettingsStore(
 
     private static bool TryReadValue(
         JsonElement source,
+        ModSettingDefinition entry,
+        out ModSettingValue value,
+        out string error)
+    {
+        if (entry.Type == ModSettingType.List)
+        {
+            if (source.ValueKind != JsonValueKind.Array)
+            {
+                value = ModSettingValue.Boolean(false);
+                error = "value must be an array";
+                return false;
+            }
+            var items =
+                new List<IReadOnlyDictionary<string, ModSettingValue>>();
+            var itemIndex = 0;
+            foreach (var sourceItem in source.EnumerateArray())
+            {
+                if (sourceItem.ValueKind != JsonValueKind.Object)
+                {
+                    value = ModSettingValue.Boolean(false);
+                    error =
+                        $"list item {itemIndex + 1} must be an object";
+                    return false;
+                }
+                EnsureNoDuplicateFields(
+                    sourceItem,
+                    $"list item {itemIndex + 1}");
+                var item =
+                    new SortedDictionary<string, ModSettingValue>(
+                        StringComparer.Ordinal);
+                foreach (var field in sourceItem.EnumerateObject())
+                {
+                    if (!TryReadScalarValue(
+                            field.Value,
+                            out var fieldValue))
+                    {
+                        value = ModSettingValue.Boolean(false);
+                        error =
+                            $"list item {itemIndex + 1} field '{field.Name}' must be a boolean, number, or string";
+                        return false;
+                    }
+                    item.Add(field.Name, fieldValue);
+                }
+                items.Add(item);
+                itemIndex++;
+            }
+            value = ModSettingValue.List(items);
+            error = string.Empty;
+            return true;
+        }
+        if (TryReadScalarValue(source, out value))
+        {
+            error = string.Empty;
+            return true;
+        }
+        error = "value must be a boolean, number, or string";
+        return false;
+    }
+
+    private static bool TryReadScalarValue(
+        JsonElement source,
         out ModSettingValue value)
     {
         switch (source.ValueKind)
@@ -269,16 +344,39 @@ public sealed class ModSettingsStore(
         string key,
         ModSettingValue value)
     {
+        writer.WritePropertyName(key);
+        WriteValue(writer, value);
+    }
+
+    private static void WriteValue(
+        Utf8JsonWriter writer,
+        ModSettingValue value)
+    {
         switch (value.Type)
         {
             case ModSettingValueType.Boolean:
-                writer.WriteBoolean(key, value.BooleanValue);
+                writer.WriteBooleanValue(value.BooleanValue);
                 break;
             case ModSettingValueType.Number:
-                writer.WriteNumber(key, value.NumberValue);
+                writer.WriteNumberValue(value.NumberValue);
                 break;
             case ModSettingValueType.String:
-                writer.WriteString(key, value.StringValue);
+                writer.WriteStringValue(value.StringValue);
+                break;
+            case ModSettingValueType.List:
+                writer.WriteStartArray();
+                foreach (var item in value.ListValue)
+                {
+                    writer.WriteStartObject();
+                    foreach (var field in item.OrderBy(
+                                 pair => pair.Key,
+                                 StringComparer.Ordinal))
+                    {
+                        WriteValue(writer, field.Key, field.Value);
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
                 break;
         }
     }

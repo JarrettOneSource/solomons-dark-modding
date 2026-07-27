@@ -16,11 +16,8 @@ extern "C" {
 
 namespace sdmod::detail {
 namespace {
-
 constexpr char kReplicatedSettingsModId[] = "SDMOD:settings";
-
 thread_local lua_State* g_privileged_settings_exec_state = nullptr;
-
 class ScopedSuspendedSettingsPrivilege final {
 public:
     explicit ScopedSuspendedSettingsPrivilege(lua_State* callback_state)
@@ -43,7 +40,6 @@ private:
     lua_State* callback_state_ = nullptr;
     lua_State* privileged_state_ = nullptr;
 };
-
 std::string JsonEscape(std::string_view value) {
     std::string escaped;
     for (const auto raw : value) {
@@ -73,7 +69,6 @@ std::string JsonEscape(std::string_view value) {
     }
     return escaped;
 }
-
 void LogSettingsError(
     std::string_view event,
     const LoadedLuaMod& mod,
@@ -118,11 +113,25 @@ LuaModValue ToReplicatedValue(const ModSettingValue& source) {
         value.type = LuaModValueType::String;
         value.string_value = source.string_value;
         break;
+    case ModSettingValueType::List:
+        value.type = LuaModValueType::Array;
+        value.array_value.reserve(source.list_value.size());
+        for (const auto& source_item : source.list_value) {
+            LuaModValue item;
+            item.type = LuaModValueType::Object;
+            for (const auto& [key, source_field] : source_item) {
+                item.object_value.emplace(
+                    key,
+                    ToReplicatedValue(source_field));
+            }
+            value.array_value.push_back(std::move(item));
+        }
+        break;
     }
     return value;
 }
 
-bool FromReplicatedValue(
+bool FromReplicatedScalarValue(
     const LuaModValue& source,
     ModSettingValue* value) {
     switch (source.type) {
@@ -144,6 +153,54 @@ bool FromReplicatedValue(
     }
 }
 
+bool FromReplicatedValue(
+    const ModSettingEntry& entry,
+    const LuaModValue& source,
+    ModSettingValue* value) {
+    if (entry.type != ModSettingType::List) {
+        ModSettingValue scalar;
+        if (!FromReplicatedScalarValue(source, &scalar)) {
+            return false;
+        }
+        std::string validation_error;
+        return NormalizeModSettingValue(
+            entry,
+            scalar,
+            value,
+            &validation_error);
+    }
+    if (source.type != LuaModValueType::Array) {
+        return false;
+    }
+    std::vector<ModSettingListItem> items;
+    items.reserve(source.array_value.size());
+    for (const auto& source_item : source.array_value) {
+        if (source_item.type != LuaModValueType::Object) {
+            return false;
+        }
+        ModSettingListItem item;
+        for (const auto& [key, source_field] :
+             source_item.object_value) {
+            const auto* field = entry.FindItemField(key);
+            ModSettingValue field_value;
+            if (field == nullptr ||
+                !FromReplicatedScalarValue(
+                    source_field,
+                    &field_value)) {
+                return false;
+            }
+            item.emplace(key, std::move(field_value));
+        }
+        items.push_back(std::move(item));
+    }
+    std::string validation_error;
+    return NormalizeModSettingValue(
+        entry,
+        ModSettingValue::List(std::move(items)),
+        value,
+        &validation_error);
+}
+
 std::string ReplicatedKey(
     const LoadedLuaMod& mod,
     std::string_view setting_key) {
@@ -160,14 +217,10 @@ bool TryGetReplicatedValue(
             kReplicatedSettingsModId,
             ReplicatedKey(mod, entry.key),
             &replicated) ||
-        !FromReplicatedValue(replicated, value)) {
+        !FromReplicatedValue(entry, replicated, value)) {
         return false;
     }
-    std::string validation_error;
-    return ValidateModSettingValue(
-        entry,
-        *value,
-        &validation_error);
+    return true;
 }
 
 bool PublishHostValue(
@@ -178,8 +231,21 @@ bool PublishHostValue(
         entry.scope != ModSettingScope::Host) {
         return true;
     }
+    ModSettingValue normalized;
+    std::string validation_error;
+    if (!NormalizeModSettingValue(
+            entry,
+            value,
+            &normalized,
+            &validation_error)) {
+        LogSettingsError(
+            "replication_value_invalid",
+            mod,
+            validation_error);
+        return false;
+    }
     const auto key = ReplicatedKey(mod, entry.key);
-    const auto replicated = ToReplicatedValue(value);
+    const auto replicated = ToReplicatedValue(normalized);
     std::uint64_t revision = 0;
     std::string error;
     if (!SetLuaModStateValue(
@@ -208,6 +274,7 @@ bool PublishHostValue(
 bool ReadLocalValues(
     LoadedLuaMod* mod,
     ModSettingValues* values,
+    std::map<std::string, std::string, std::less<>>* entry_errors,
     std::string* error_message) {
     values->clear();
     error_message->clear();
@@ -248,60 +315,48 @@ bool ReadLocalValues(
             *mod,
             warning);
     }
+    if (entry_errors != nullptr) {
+        *entry_errors = std::move(persisted.entry_errors);
+    }
     for (auto& [key, value] : persisted.values) {
         (*values)[key] = std::move(value);
     }
     return true;
 }
 
-void PushSettingValue(
-    lua_State* state,
-    const ModSettingValue& value) {
-    switch (value.type) {
-    case ModSettingValueType::Boolean:
-        lua_pushboolean(state, value.boolean_value ? 1 : 0);
-        break;
-    case ModSettingValueType::Number:
-        lua_pushnumber(
-            state,
-            static_cast<lua_Number>(value.number_value));
-        break;
-    case ModSettingValueType::String:
-        lua_pushlstring(
-            state,
-            value.string_value.data(),
-            value.string_value.size());
-        break;
-    }
-}
-
-void DispatchChanged(
+std::string DispatchChanged(
     LoadedLuaMod* mod,
     const std::string& key,
     const ModSettingValue& next,
     const ModSettingValue& previous) {
     if (mod == nullptr || mod->state == nullptr) {
-        return;
+        return {};
     }
+    std::string callback_error;
     const auto callbacks = mod->settings_changed_callbacks;
     ScopedSuspendedSettingsPrivilege suspended_privilege(mod->state);
     for (const auto reference : callbacks) {
         lua_rawgeti(mod->state, LUA_REGISTRYINDEX, reference);
         lua_pushlstring(mod->state, key.data(), key.size());
-        PushSettingValue(mod->state, next);
-        PushSettingValue(mod->state, previous);
+        PushLuaSettingValue(mod->state, next);
+        PushLuaSettingValue(mod->state, previous);
         if (lua_pcall(mod->state, 3, 0, 0) != LUA_OK) {
             const auto* error = lua_tostring(mod->state, -1);
+            const std::string message =
+                error == nullptr
+                    ? "unknown Lua error"
+                    : error;
             LogLuaMessage(
                 *mod,
                 "settings on_changed callback failed: " +
-                    std::string(
-                        error == nullptr
-                            ? "unknown Lua error"
-                            : error));
+                    message);
+            if (callback_error.empty()) {
+                callback_error = message;
+            }
             lua_pop(mod->state, 1);
         }
     }
+    return callback_error;
 }
 
 void ApplyEffectiveChange(
@@ -309,6 +364,7 @@ void ApplyEffectiveChange(
     const ModSettingEntry& entry,
     const ModSettingValue& next,
     std::vector<std::string>* changed,
+    std::map<std::string, std::string, std::less<>>* entry_errors,
     bool notify) {
     const auto found =
         mod->effective_settings_values.find(entry.key);
@@ -325,10 +381,15 @@ void ApplyEffectiveChange(
         changed->push_back(entry.key);
     }
     if (notify) {
-        DispatchChanged(mod, entry.key, next, previous);
+        const auto callback_error =
+            DispatchChanged(mod, entry.key, next, previous);
+        if (!callback_error.empty() && entry_errors != nullptr) {
+            auto& message = (*entry_errors)[entry.key];
+            if (!message.empty()) message.append("; live apply failed: ");
+            message.append(callback_error);
+        }
     }
 }
-
 LoadedLuaMod* FindLoadedSettingsMod(std::string_view mod_id) {
     const auto& mods = LoadedLuaModsStorage();
     const auto found = std::find_if(
@@ -392,6 +453,7 @@ bool InitializeLuaSettingsForMod(
     ReadLocalValues(
         mod,
         &mod->local_settings_values,
+        nullptr,
         &persisted_error);
     if (reinitializing) {
         for (const auto& entry :
@@ -483,6 +545,7 @@ void PollLuaSettingsReplicationChanges() {
                     entry,
                     next,
                     nullptr,
+                    nullptr,
                     !entry.requires_restart);
             }
         }
@@ -507,12 +570,19 @@ LuaSettingsOperationResult ReloadLuaSettings(
     }
 
     ModSettingValues next_local;
+    std::map<std::string, std::string, std::less<>>
+        persisted_entry_errors;
     std::string read_error;
-    if (!ReadLocalValues(mod, &next_local, &read_error)) {
+    if (!ReadLocalValues(
+            mod,
+            &next_local,
+            &persisted_entry_errors,
+            &read_error)) {
         result.error =
             "failed to reload persisted settings: " + read_error;
         return result;
     }
+    result.entry_errors = std::move(persisted_entry_errors);
     for (const auto& entry : mod->settings_declaration.entries) {
         if (entry.type == ModSettingType::Action ||
             entry.requires_restart) {
@@ -546,6 +616,7 @@ LuaSettingsOperationResult ReloadLuaSettings(
             entry,
             local->second,
             &result.changed,
+            &result.entry_errors,
             true);
         if (changed &&
             !PublishHostValue(*mod, entry, local->second)) {
@@ -555,7 +626,10 @@ LuaSettingsOperationResult ReloadLuaSettings(
             return result;
         }
     }
-    result.ok = true;
+    result.ok = result.entry_errors.empty();
+    if (!result.ok && result.error.empty()) {
+        result.error = "one or more settings failed to apply";
+    }
     return result;
 }
 

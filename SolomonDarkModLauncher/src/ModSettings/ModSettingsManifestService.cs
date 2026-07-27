@@ -1,4 +1,7 @@
+using System.Buffers;
+using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -93,10 +96,18 @@ public sealed partial class ModSettingsManifestService :
     public bool TryValidateValue(
         ModSettingDefinition entry,
         ModSettingValue value,
+        out string error) =>
+        TryNormalizeValue(entry, value, out _, out error);
+
+    public bool TryNormalizeValue(
+        ModSettingDefinition entry,
+        ModSettingValue value,
+        out ModSettingValue normalized,
         out string error)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(value);
+        normalized = value;
         error = string.Empty;
         switch (entry.Type)
         {
@@ -181,6 +192,12 @@ public sealed partial class ModSettingsManifestService :
             case ModSettingType.Action:
                 error = "action entries do not have values";
                 return false;
+            case ModSettingType.List:
+                return TryNormalizeListValue(
+                    entry,
+                    value,
+                    out normalized,
+                    out error);
             default:
                 error = "setting type is invalid";
                 return false;
@@ -245,6 +262,7 @@ public sealed partial class ModSettingsManifestService :
             "choice" => ModSettingType.Choice,
             "keybind" => ModSettingType.Keybind,
             "action" => ModSettingType.Action,
+            "list" => ModSettingType.List,
             _ => throw new SettingsValidationException(
                 $"{prefix}.type is not a supported settings type")
         };
@@ -281,6 +299,7 @@ public sealed partial class ModSettingsManifestService :
         IReadOnlyList<ModSettingChoice> choices =
             Array.Empty<ModSettingChoice>();
         var confirm = false;
+        ParsedListSchema? listSchema = null;
 
         if (type == ModSettingType.Number)
         {
@@ -343,6 +362,10 @@ public sealed partial class ModSettingsManifestService :
             }
             confirm = OptionalBoolean(element, "confirm", prefix);
         }
+        else if (type == ModSettingType.List)
+        {
+            listSchema = ParseListSchema(element, prefix);
+        }
 
         ModSettingValue? defaultValue = null;
         if (type != ModSettingType.Action)
@@ -352,7 +375,9 @@ public sealed partial class ModSettingsManifestService :
                 throw new SettingsValidationException(
                     $"{prefix}.default is required for non-action entries");
             }
-            defaultValue = ReadValue(defaultElement, $"{prefix}.default");
+            defaultValue = type == ModSettingType.List
+                ? ReadListValue(defaultElement, $"{prefix}.default")
+                : ReadValue(defaultElement, $"{prefix}.default");
         }
 
         var result = new ModSettingDefinition
@@ -372,15 +397,27 @@ public sealed partial class ModSettingsManifestService :
             MaxLength = maxLength,
             Placeholder = placeholder,
             Choices = choices,
-            Confirm = confirm
+            Confirm = confirm,
+            MinItems = listSchema?.MinItems ?? 0,
+            MaxItems = listSchema?.MaxItems ?? 0,
+            ItemLabel = listSchema?.ItemLabel ?? string.Empty,
+            ItemFields = listSchema?.ItemFields ??
+                Array.Empty<ModSettingDefinition>()
         };
-        if (defaultValue is not null &&
-            !TryValidateValue(result, defaultValue, out var valueError))
+        if (defaultValue is null)
+        {
+            return result;
+        }
+        if (!TryNormalizeValue(
+                result,
+                defaultValue,
+                out var normalizedDefault,
+                out var valueError))
         {
             throw new SettingsValidationException(
                 $"{prefix}.default is invalid: {valueError}");
         }
-        return result;
+        return result with { DefaultValue = normalizedDefault };
     }
 
     private static IReadOnlyList<ModSettingChoice> ParseChoices(
@@ -483,6 +520,10 @@ public sealed partial class ModSettingsManifestService :
                 break;
             case ModSettingType.Action:
                 fields.Add("confirm");
+                break;
+            case ModSettingType.List:
+                fields.UnionWith(
+                    ["min_items", "max_items", "item_label", "item"]);
                 break;
         }
         return fields;
@@ -693,6 +734,442 @@ public sealed partial class ModSettingsManifestService :
         {
             throw new SettingsValidationException(
                 $"{field} must be valid UTF-8");
+        }
+    }
+
+    public const int MaximumSerializedListValueBytes = 8192;
+
+    private sealed record ParsedListSchema(
+        int MinItems,
+        int MaxItems,
+        string ItemLabel,
+        IReadOnlyList<ModSettingDefinition> ItemFields);
+
+    private ParsedListSchema ParseListSchema(
+        JsonElement element,
+        string prefix)
+    {
+        var rawMaxItems = RequireNumber(element, "max_items", prefix);
+        if (!IsIntegral(rawMaxItems) ||
+            rawMaxItems < 1 ||
+            rawMaxItems > 32)
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.max_items must be an integer from 1 through 32");
+        }
+        var maxItems = checked((int)rawMaxItems);
+        var rawMinItems = OptionalNumber(
+            element,
+            "min_items",
+            prefix,
+            0);
+        if (!IsIntegral(rawMinItems) ||
+            rawMinItems < 0 ||
+            rawMinItems > maxItems)
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.min_items must be an integer from 0 through max_items");
+        }
+        var minItems = checked((int)rawMinItems);
+
+        var itemLabel = OptionalString(element, "item_label", prefix);
+        ValidateCharacterCount(
+            itemLabel,
+            0,
+            64,
+            $"{prefix}.item_label");
+        var item = RequireProperty(
+            element,
+            "item",
+            JsonValueKind.Object,
+            prefix);
+        EnsureOnlyFields(item, $"{prefix}.item", "fields");
+        var fieldsElement = RequireProperty(
+            item,
+            "fields",
+            JsonValueKind.Array,
+            $"{prefix}.item");
+        if (fieldsElement.GetArrayLength() is < 1 or > 12)
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.item.fields must contain 1-12 fields");
+        }
+
+        var fields = new List<ModSettingDefinition>();
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var index = 0;
+        foreach (var fieldElement in fieldsElement.EnumerateArray())
+        {
+            var field = ParseListItemField(
+                fieldElement,
+                $"{prefix}.item.fields[{index}]");
+            if (!keys.Add(field.Key))
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.item.fields contains duplicate key '{field.Key}'");
+            }
+            fields.Add(field);
+            index++;
+        }
+        ValidateItemLabel(itemLabel, fields, prefix);
+        return new ParsedListSchema(
+            minItems,
+            maxItems,
+            itemLabel,
+            fields);
+    }
+
+    private ModSettingDefinition ParseListItemField(
+        JsonElement element,
+        string prefix)
+    {
+        RequireKind(
+            element,
+            JsonValueKind.Object,
+            $"{prefix} must be an object");
+        EnsureNoDuplicateProperties(element, prefix);
+        var key = RequireString(element, "key", prefix);
+        if (!SettingKeyRegex().IsMatch(key))
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.key must match ^[a-z0-9_]{{1,48}}$");
+        }
+        var typeName = RequireString(element, "type", prefix);
+        var type = typeName switch
+        {
+            "toggle" => ModSettingType.Toggle,
+            "number" => ModSettingType.Number,
+            "text" => ModSettingType.Text,
+            "choice" => ModSettingType.Choice,
+            _ => throw new SettingsValidationException(
+                $"{prefix}.type must be toggle, number, text, or choice")
+        };
+        EnsureOnlyFields(
+            element,
+            prefix,
+            AllowedListItemFields(type).ToArray());
+
+        var label = RequireString(element, "label", prefix);
+        ValidateCharacterCount(label, 1, 64, $"{prefix}.label");
+        var description = OptionalString(
+            element,
+            "description",
+            prefix);
+        ValidateCharacterCount(
+            description,
+            0,
+            256,
+            $"{prefix}.description");
+
+        var minimum = 0d;
+        var maximum = 0d;
+        var step = 1d;
+        var integer = false;
+        var maxLength = 256;
+        var placeholder = string.Empty;
+        IReadOnlyList<ModSettingChoice> choices =
+            Array.Empty<ModSettingChoice>();
+        if (type == ModSettingType.Number)
+        {
+            minimum = RequireNumber(element, "min", prefix);
+            maximum = RequireNumber(element, "max", prefix);
+            if (!(minimum < maximum))
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.min must be less than max");
+            }
+            step = OptionalNumber(element, "step", prefix, 1);
+            if (!(step > 0))
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.step must be a number greater than zero");
+            }
+            integer = OptionalBoolean(element, "integer", prefix);
+            if (integer &&
+                (!IsIntegral(minimum) ||
+                 !IsIntegral(maximum) ||
+                 !IsIntegral(step)))
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.min, max, and step must be integral when integer is true");
+            }
+        }
+        else if (type == ModSettingType.Text)
+        {
+            var rawMaxLength = OptionalNumber(
+                element,
+                "max_length",
+                prefix,
+                256);
+            if (!IsIntegral(rawMaxLength) ||
+                rawMaxLength < 1 ||
+                rawMaxLength > 1024)
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.max_length must be an integer from 1 through 1024");
+            }
+            maxLength = checked((int)rawMaxLength);
+            placeholder = OptionalString(
+                element,
+                "placeholder",
+                prefix);
+            ValidateUnicode(placeholder, $"{prefix}.placeholder");
+        }
+        else if (type == ModSettingType.Choice)
+        {
+            choices = ParseChoices(element, prefix);
+        }
+
+        if (!TryGetProperty(element, "default", out var defaultElement))
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.default is required");
+        }
+        var defaultValue = ReadValue(
+            defaultElement,
+            $"{prefix}.default");
+        var result = new ModSettingDefinition
+        {
+            Key = key,
+            Type = type,
+            Label = label,
+            Description = description,
+            DefaultValue = defaultValue,
+            Minimum = minimum,
+            Maximum = maximum,
+            Step = step,
+            Integer = integer,
+            MaxLength = maxLength,
+            Placeholder = placeholder,
+            Choices = choices
+        };
+        if (!TryNormalizeValue(
+                result,
+                defaultValue,
+                out var normalizedDefault,
+                out var valueError))
+        {
+            throw new SettingsValidationException(
+                $"{prefix}.default is invalid: {valueError}");
+        }
+        return result with { DefaultValue = normalizedDefault };
+    }
+
+    private static HashSet<string> AllowedListItemFields(
+        ModSettingType type)
+    {
+        var fields = new HashSet<string>(
+            ["key", "type", "label", "description", "default"],
+            StringComparer.Ordinal);
+        switch (type)
+        {
+            case ModSettingType.Number:
+                fields.UnionWith(["min", "max", "step", "integer"]);
+                break;
+            case ModSettingType.Text:
+                fields.UnionWith(["max_length", "placeholder"]);
+                break;
+            case ModSettingType.Choice:
+                fields.Add("choices");
+                break;
+        }
+        return fields;
+    }
+
+    private static ModSettingValue ReadListValue(
+        JsonElement source,
+        string prefix)
+    {
+        RequireKind(
+            source,
+            JsonValueKind.Array,
+            $"{prefix} value must be an array");
+        var items =
+            new List<IReadOnlyDictionary<string, ModSettingValue>>();
+        var index = 0;
+        foreach (var itemElement in source.EnumerateArray())
+        {
+            var itemPrefix = $"{prefix}[{index}]";
+            RequireKind(
+                itemElement,
+                JsonValueKind.Object,
+                $"{itemPrefix} must be an object");
+            EnsureNoDuplicateProperties(itemElement, itemPrefix);
+            var item = new SortedDictionary<string, ModSettingValue>(
+                StringComparer.Ordinal);
+            foreach (var property in itemElement.EnumerateObject())
+            {
+                item.Add(
+                    property.Name,
+                    ReadValue(
+                        property.Value,
+                        $"{itemPrefix}.{property.Name}"));
+            }
+            items.Add(item);
+            index++;
+        }
+        return ModSettingValue.List(items);
+    }
+
+    private static void ValidateItemLabel(
+        string itemLabel,
+        IReadOnlyList<ModSettingDefinition> fields,
+        string prefix)
+    {
+        var position = 0;
+        while (position < itemLabel.Length)
+        {
+            if (itemLabel[position] == '}')
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.item_label contains an unmatched '}}'");
+            }
+            if (itemLabel[position] != '{')
+            {
+                position++;
+                continue;
+            }
+            var close = itemLabel.IndexOf('}', position + 1);
+            if (close < 0)
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.item_label contains an unclosed placeholder");
+            }
+            var key = itemLabel[(position + 1)..close];
+            if (!SettingKeyRegex().IsMatch(key) ||
+                !fields.Any(field =>
+                    string.Equals(
+                        field.Key,
+                        key,
+                        StringComparison.Ordinal)))
+            {
+                throw new SettingsValidationException(
+                    $"{prefix}.item_label references unknown field '{{{key}}}'");
+            }
+            position = close + 1;
+        }
+    }
+
+    private bool TryNormalizeListValue(
+        ModSettingDefinition entry,
+        ModSettingValue value,
+        out ModSettingValue normalized,
+        out string error)
+    {
+        normalized = value;
+        if (value.Type != ModSettingValueType.List)
+        {
+            error = "value must be an array";
+            return false;
+        }
+        if (value.ListValue.Count < entry.MinItems ||
+            value.ListValue.Count > entry.MaxItems)
+        {
+            error =
+                "list value count is outside min_items and max_items";
+            return false;
+        }
+
+        var normalizedItems =
+            new List<IReadOnlyDictionary<string, ModSettingValue>>();
+        for (var itemIndex = 0;
+             itemIndex < value.ListValue.Count;
+             itemIndex++)
+        {
+            var item = value.ListValue[itemIndex];
+            foreach (var key in item.Keys)
+            {
+                if (entry.FindItemField(key) is null)
+                {
+                    error =
+                        $"list item {itemIndex + 1} contains unknown field '{key}'";
+                    return false;
+                }
+            }
+
+            var normalizedItem =
+                new SortedDictionary<string, ModSettingValue>(
+                    StringComparer.Ordinal);
+            foreach (var field in entry.ItemFields)
+            {
+                var source = item.TryGetValue(field.Key, out var found)
+                    ? found
+                    : field.DefaultValue!;
+                if (!TryNormalizeValue(
+                        field,
+                        source,
+                        out var normalizedField,
+                        out var fieldError))
+                {
+                    error =
+                        $"list item {itemIndex + 1} field '{field.Key}' is invalid: {fieldError}";
+                    return false;
+                }
+                normalizedItem.Add(field.Key, normalizedField);
+            }
+            normalizedItems.Add(normalizedItem);
+        }
+
+        normalized = ModSettingValue.List(normalizedItems);
+        if (SerializedListValueBytes(normalized) >
+            MaximumSerializedListValueBytes)
+        {
+            error = "serialized list value exceeds 8192 UTF-8 bytes";
+            return false;
+        }
+        error = string.Empty;
+        return true;
+    }
+
+    private static int SerializedListValueBytes(ModSettingValue value)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(
+            buffer,
+            new JsonWriterOptions
+            {
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+        WriteCompactValue(writer, value);
+        writer.Flush();
+        return buffer.WrittenCount;
+    }
+
+    private static void WriteCompactValue(
+        Utf8JsonWriter writer,
+        ModSettingValue value)
+    {
+        switch (value.Type)
+        {
+            case ModSettingValueType.Boolean:
+                writer.WriteBooleanValue(value.BooleanValue);
+                break;
+            case ModSettingValueType.Number:
+                writer.WriteRawValue(
+                    value.NumberValue.ToString(
+                        "G17",
+                        CultureInfo.InvariantCulture),
+                    skipInputValidation: true);
+                break;
+            case ModSettingValueType.String:
+                writer.WriteStringValue(value.StringValue);
+                break;
+            case ModSettingValueType.List:
+                writer.WriteStartArray();
+                foreach (var item in value.ListValue)
+                {
+                    writer.WriteStartObject();
+                    foreach (var field in item.OrderBy(
+                                 pair => pair.Key,
+                                 StringComparer.Ordinal))
+                    {
+                        writer.WritePropertyName(field.Key);
+                        WriteCompactValue(writer, field.Value);
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                break;
         }
     }
 

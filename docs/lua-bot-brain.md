@@ -1,103 +1,121 @@
-# Autonomous Lua bot brain
+# Autonomous Lua bot-brain roster
 
-`mods/bot-brain/` is the opt-in reference brain for a host-owned synthetic
-participant. It creates one fire-class player named `Ember` through
-`sd.bots.spawn` and controls only the returned participant handle. The mod is
-disabled by default so starting an ordinary game does not add an unsolicited
-session member; select `bot.brain` to run it.
+`mods/bot-brain/` is the opt-in reference brain for host-owned synthetic
+participants. Its host-scoped `roster` list contains zero to three ordered rows:
+name, element (`fire`, `water`, `earth`, `air`, or `ether`), and discipline
+(`skirmisher`, `guardian`, or `striker`). The mod is disabled by default, so an
+ordinary game never gains an unsolicited participant.
 
-Its manifest dogfoods every v1 launcher setting type. With no persisted settings
-file, the effective values remain the original behavior exactly: `Ember`, a
-250 ms think cadence, a 340-unit kite radius, offense enabled, and no camera
-keybind. The launcher can change the host-scoped kite radius and offense toggle,
-choose a local 250/400 ms think profile, bind a local focus key, or invoke the
-confirmed host-only respawn action. Persona changes are persisted with
-`requires_restart` and are not applied to the live participant.
+The default roster contains one fire skirmisher named `Ember`. The earlier
+`persona_name` scalar is gone; names belong to rows. The other launcher
+controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
+cadence, local focus key, and the confirmed host-only roster respawn action.
+
+## Ordered reconciliation
+
+`scripts/roster.lua` maintains one `brain.lua` context per list position. At
+startup, live reload, and replicated list changes it compares rows by order:
+
+- an unchanged row keeps its participant and behavior state;
+- a removed row despawns through its bot handle;
+- a new row spawns with that row's name and element; and
+- a changed name, element, or discipline despawns and respawns the row.
+
+Retirement uses the reliable participant tombstone path. Creation remains
+subject to the three stock remote gameplay slots. If a row cannot claim a
+slot, the context remains desired and retries on later authority ticks, while
+the immediate settings reload returns an `entry_errors.roster` message naming
+the row. A rejection never crashes the mod or game.
 
 The brain never creates a standalone actor, writes an actor transform, or
-drives a second native AI loop. Its callback runs every 250 ms on the existing
-`runtime.tick` service, and `sd.state.is_authority()` keeps decisions on the
-transport host. Clients receive the ordinary participant State, Frame, and Cast
-traffic.
+drives a second native AI loop. All contexts run from `runtime.tick`, and
+`sd.state.is_authority()` keeps decisions on the transport host. Clients adopt
+read-only handles for focus/diagnostics and receive the normal participant
+State, Frame, Cast, and retirement traffic.
 
-## Movement policy
+## Shared native movement and offense
 
-Each think tick reads the address-free authority snapshot from
-`sd.world.get_replicated_actors()` and keeps live rows whose
-`tracked_enemy` flag is true. Enemies within 340 world units contribute an
-inverse-distance-weighted vector pointing away from the threat. This leaves a
-usable band inside the native fire-primary range instead of repelling the bot
-before it can attack.
+Every discipline samples `sd.world.get_replicated_actors()` and keeps live
+`tracked_enemy` rows. Candidate destinations come from short steering
+lookaheads clamped to the current arena. Every candidate must pass
+`sd.nav.test_segment` before `bot:move_to`; there is no Lua grid fallback or
+teleport.
 
-`sd.nav.get_grid(1)` supplies the current connected arena bounds. The brain
-blends threat repulsion with an inward vector whose weight rises near the
-perimeter. If the inward component would point back through a threat, the brain
-keeps only its tangential component and caps its weight, so center recovery
-cannot reverse the escape vector. When live enemies are outside both the
-threat radius and cast range, it approaches the nearest enemy with the same
-center bias, shortening that move to stop just inside the live native attack
-window rather than crossing through the target. With no live enemy it orbits
-the arena center, so it keeps moving during spawn gaps and wave transitions.
-Candidate destinations are short look-ahead points clamped to those bounds.
-Each candidate must first pass the native
-`sd.nav.test_segment` placement-and-path query; accepted candidates are then
-submitted through `bot:move_to`. The brain never substitutes its own cell-grid
-test. Long approach destinations are held for one second before retargeting so
-native player movement can advance instead of being reset every think tick.
-Once a threat enters the kite radius, and throughout flee mode, the brain
-retargets every 250 ms.
+Each bot asks `sd.bots.get_primary_attack_window(participant_id)` for its own
+live class primary. A cast uses
+`bot:cast(0, target.x, target.y, 80)`, so Fire, Water, Earth, Air, and Ether all
+enter through the same replicated participant-cast ingress. Rejected casts
+remain rejected; there is no alternate damage path. Native level-up offers
+prefer Health Up. Fire bots retain the shipped Fireball, Explode, then Embers
+fallback order; other elements otherwise take their first stock option.
 
-At less than 35% HP the bot enters flee mode. It increases the repulsion and
-look-ahead weights, expands threat sampling to 900 units, continues center
-recovery, and issues no casts. It returns to normal kiting only above 45% HP.
+With no enemies, contexts continue short orbit/anchor movement. That preserves
+native movement across spawn gaps and wave transitions rather than stopping
+the actor or replacing the stock movement tick.
 
-## Offense and progression
+## Disciplines
 
-The brain asks `sd.bots.get_primary_attack_window` for the live fire-primary
-range. It selects the nearest live enemy in that window and attempts
-`bot:cast(0, target.x, target.y, 80)` on a bounded 500 ms cadence. Rejected
-attempts remain rejected; there is no alternate damage path.
+### Skirmisher
 
-When the bot receives a native level-up choice, the brain resolves the current
-generation through `sd.bots.get_skill_choices` and
-`sd.bots.choose_skill`. It prefers Health Up, then Fireball, Explode, and
-Embers when those stock choices are present, otherwise the first native option.
+Skirmisher is the shipped kite-and-cast policy. Enemies inside the configured
+kite radius contribute inverse-distance-weighted repulsion, blended with arena
+center recovery that cannot reverse through a threat. It casts on a 500 ms
+cadence. Below 35% HP it flees with a 900-unit threat sample and longer
+lookahead; it resumes kiting above 45%.
 
-## Operational diagnostics
+When enemies sit outside both threat and class-primary range, the skirmisher
+approaches the nearest enemy and stops just inside its live attack window.
+Long approach destinations are held for one second; kite and flee destinations
+retarget every 250 ms.
 
-The mod publishes an address-free, read-only `bot_brain_debug` table in its own
-Lua state for acceptance tooling. It reports the current mode, participant ID,
-wave, HP, target, accepted movement and casts, skill choices, and accumulated
-kite distance. It is not a gameplay control API.
+### Guardian
 
-The live verifier launches only `bot-host` and `bot-client` on ports 48811 and
-48812 with audio disabled:
+Guardian selects the nearest living human (`controller_kind == Native`) as its
+ward. Its advertised leash is 260 world units; movement destinations are
+constrained 30 units inside that boundary, and a context outside the inner
+return threshold steers directly toward the ward. Native path validation still
+decides whether each return or orbit destination is accepted.
+
+The guardian records enemy distance to the ward on successive think ticks. It
+engages only enemies within 380 units whose ward distance is decreasing.
+Enemies moving away or merely existing elsewhere in the arena are not cast
+targets. The guardian retains the skirmisher's 500 ms cast cadence and
+35%/45% flee hysteresis; while actually fleeing, it may evade any nearby enemy
+but still does not cast.
+
+### Striker
+
+Striker uses a tighter 240-unit engage range and 220-unit threat radius, casts
+on a faster 300 ms cadence, and flees only below 20% HP. It recovers above 30%.
+It otherwise uses the same native path checks, class-primary attack-window
+lookup, replicated slot-0 cast ingress, and wave-transition movement.
+
+## Diagnostics and acceptance
+
+The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
+`bots` is an ordered array matching the roster. Each row reports identity,
+participant ID, mode, HP ratio, accepted movement/casts, attack window,
+discipline thresholds, and guardian ward distance. Root scalar fields mirror
+the first row for compatibility with the existing wave-five verifier. This is
+acceptance telemetry, not a gameplay control API.
+
+The existing retail-schedule longevity gate remains:
 
 ```bash
 python3 tools/verify_lua_bot_brain.py --runs 3
 ```
 
-It uses the retail staged `data/wave.txt` with no wave override. Each fresh
-pair must reach wave 5 with the bot alive. The verifier writes a
-`result.json` for every run containing an HP timeline, casts issued and
-accepted, kite-path distance, level-up choices, terminal HP, exact process
-cleanup, and copied runtime logs/status. It also captures both peers at wave 3
-or later immediately after an accepted cast while live enemies and a target
-are present. For that evidence frame only, the verifier uses the
-presentation-local camera focus seam on each peer to center the bot, then
-releases both focus requests. Three consecutive successful runs are required.
-
-The settings-specific loopback gate is separate:
+The structured-settings gate is:
 
 ```bash
 python3 tools/verify_mod_settings_lifecycle.py
 ```
 
-It launches only `mset-host` and `mset-client` on ports 49011/49012 with audio
-disabled. It proves persisted startup values, a 100-to-900 kite-radius live
-delta in the brain's threat telemetry, host-to-client value and callback
-replication, client action rejection, host respawn success, and
-`requires_restart` persistence without live application. It stops only the
-launcher-returned PIDs after their executable paths resolve inside those exact
-stages and writes results and logs to
-`/mnt/d/codex-evidence/mod-settings-20260727/`.
+It launches only `ms2-host` and `ms2-client` on UDP ports 49211/49212 with
+audio disabled. The live proof covers two different elements/disciplines,
+strict guardian leash distance, the striker's distinct threshold/cadence,
+skirmisher movement, removal plus element respawn, client list replication and
+copy isolation, and a numbered slot-exhaustion reload error with both game
+processes still responsive. Cleanup targets only the exact launcher-returned
+PIDs whose executable paths match the two `ms2` stages. Evidence is written to
+`/mnt/d/codex-evidence/mod-settings-v2-20260727/`.

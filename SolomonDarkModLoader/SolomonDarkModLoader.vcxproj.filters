@@ -200,6 +200,9 @@
     <ClInclude Include="src\mod_settings_json.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_settings_list.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_hub_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1685,6 +1688,9 @@
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_settings_json.cpp">
+      <Filter>Source Files\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mod_settings_list.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_settings_persistence.cpp">

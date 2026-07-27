@@ -1,6 +1,7 @@
 #include "mod_settings.h"
 
 #include "mod_settings_json.h"
+#include "mod_settings_list.h"
 
 #include <algorithm>
 #include <cmath>
@@ -272,6 +273,11 @@ std::unordered_set<std::string> AllowedFieldsForType(
         allowed.insert("choices");
     } else if (type == "action") {
         allowed.insert("confirm");
+    } else if (type == "list") {
+        allowed.insert("min_items");
+        allowed.insert("max_items");
+        allowed.insert("item_label");
+        allowed.insert("item");
     }
     return allowed;
 }
@@ -450,6 +456,8 @@ bool ParseEntry(
         entry->type = ModSettingType::Keybind;
     } else if (type == "action") {
         entry->type = ModSettingType::Action;
+    } else if (type == "list") {
+        entry->type = ModSettingType::List;
     } else {
         return Fail(
             error,
@@ -487,6 +495,13 @@ bool ParseEntry(
             label,
             false,
             &entry->confirm,
+            error);
+    }
+    if (entry->type == ModSettingType::List) {
+        return detail::ParseListModSettingEntry(
+            object,
+            label,
+            entry,
             error);
     }
 

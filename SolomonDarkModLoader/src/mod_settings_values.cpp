@@ -9,9 +9,9 @@
 namespace sdmod {
 namespace {
 
-bool Fail(std::string* error_message, const char* message) {
+bool Fail(std::string* error_message, std::string message) {
     if (error_message != nullptr) {
-        *error_message = message;
+        *error_message = std::move(message);
     }
     return false;
 }
@@ -20,68 +20,43 @@ bool IsIntegral(double value) {
     return std::isfinite(value) && std::floor(value) == value;
 }
 
-}  // namespace
-
-ModSettingValue ModSettingValue::Boolean(bool value) {
-    ModSettingValue result;
-    result.type = ModSettingValueType::Boolean;
-    result.boolean_value = value;
-    return result;
-}
-
-ModSettingValue ModSettingValue::Number(double value) {
-    ModSettingValue result;
-    result.type = ModSettingValueType::Number;
-    result.number_value = value;
-    return result;
-}
-
-ModSettingValue ModSettingValue::String(std::string value) {
-    ModSettingValue result;
-    result.type = ModSettingValueType::String;
-    result.string_value = std::move(value);
-    return result;
-}
-
-bool operator==(
-    const ModSettingValue& left,
-    const ModSettingValue& right) {
-    if (left.type != right.type) {
-        return false;
-    }
-    switch (left.type) {
+settings_json::Value ToJsonValue(const ModSettingValue& source) {
+    settings_json::Value result;
+    switch (source.type) {
     case ModSettingValueType::Boolean:
-        return left.boolean_value == right.boolean_value;
+        result.type = settings_json::Type::Boolean;
+        result.boolean_value = source.boolean_value;
+        break;
     case ModSettingValueType::Number:
-        return left.number_value == right.number_value;
+        result.type = settings_json::Type::Number;
+        result.number_value = source.number_value;
+        break;
     case ModSettingValueType::String:
-        return left.string_value == right.string_value;
+        result.type = settings_json::Type::String;
+        result.string_value = source.string_value;
+        break;
+    case ModSettingValueType::List:
+        result.type = settings_json::Type::Array;
+        result.array_value.reserve(source.list_value.size());
+        for (const auto& source_item : source.list_value) {
+            settings_json::Value item;
+            item.type = settings_json::Type::Object;
+            for (const auto& [key, source_field] : source_item) {
+                item.object_value.emplace(
+                    key,
+                    ToJsonValue(source_field));
+            }
+            result.array_value.push_back(std::move(item));
+        }
+        break;
     }
-    return false;
+    return result;
 }
 
-bool operator!=(
-    const ModSettingValue& left,
-    const ModSettingValue& right) {
-    return !(left == right);
-}
-
-const ModSettingEntry* ModSettingsDeclaration::Find(
-    std::string_view key) const {
-    const auto found = std::find_if(
-        entries.begin(),
-        entries.end(),
-        [&](const ModSettingEntry& entry) { return entry.key == key; });
-    return found == entries.end() ? nullptr : &*found;
-}
-
-bool ValidateModSettingValue(
+bool ValidateScalarModSettingValue(
     const ModSettingEntry& entry,
     const ModSettingValue& value,
     std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
     switch (entry.type) {
     case ModSettingType::Toggle:
         if (value.type != ModSettingValueType::Boolean) {
@@ -143,8 +118,189 @@ bool ValidateModSettingValue(
         return true;
     case ModSettingType::Action:
         return Fail(error_message, "action entries do not have values");
+    case ModSettingType::List:
+        return Fail(error_message, "nested list values are not supported");
     }
     return Fail(error_message, "setting type is invalid");
+}
+
+}  // namespace
+
+ModSettingValue ModSettingValue::Boolean(bool value) {
+    ModSettingValue result;
+    result.type = ModSettingValueType::Boolean;
+    result.boolean_value = value;
+    return result;
+}
+
+ModSettingValue ModSettingValue::Number(double value) {
+    ModSettingValue result;
+    result.type = ModSettingValueType::Number;
+    result.number_value = value;
+    return result;
+}
+
+ModSettingValue ModSettingValue::String(std::string value) {
+    ModSettingValue result;
+    result.type = ModSettingValueType::String;
+    result.string_value = std::move(value);
+    return result;
+}
+
+ModSettingValue ModSettingValue::List(
+    std::vector<ModSettingListItem> value) {
+    ModSettingValue result;
+    result.type = ModSettingValueType::List;
+    result.list_value = std::move(value);
+    return result;
+}
+
+bool operator==(
+    const ModSettingValue& left,
+    const ModSettingValue& right) {
+    if (left.type != right.type) {
+        return false;
+    }
+    switch (left.type) {
+    case ModSettingValueType::Boolean:
+        return left.boolean_value == right.boolean_value;
+    case ModSettingValueType::Number:
+        return left.number_value == right.number_value;
+    case ModSettingValueType::String:
+        return left.string_value == right.string_value;
+    case ModSettingValueType::List:
+        return left.list_value == right.list_value;
+    }
+    return false;
+}
+
+bool operator!=(
+    const ModSettingValue& left,
+    const ModSettingValue& right) {
+    return !(left == right);
+}
+
+const ModSettingEntry* ModSettingsDeclaration::Find(
+    std::string_view key) const {
+    const auto found = std::find_if(
+        entries.begin(),
+        entries.end(),
+        [&](const ModSettingEntry& entry) { return entry.key == key; });
+    return found == entries.end() ? nullptr : &*found;
+}
+
+const ModSettingEntry* ModSettingEntry::FindItemField(
+    std::string_view item_key) const {
+    const auto found = std::find_if(
+        item_fields.begin(),
+        item_fields.end(),
+        [&](const ModSettingEntry& field) {
+            return field.key == item_key;
+        });
+    return found == item_fields.end() ? nullptr : &*found;
+}
+
+bool ValidateModSettingValue(
+    const ModSettingEntry& entry,
+    const ModSettingValue& value,
+    std::string* error_message) {
+    ModSettingValue normalized;
+    return NormalizeModSettingValue(
+        entry,
+        value,
+        &normalized,
+        error_message);
+}
+
+bool NormalizeModSettingValue(
+    const ModSettingEntry& entry,
+    const ModSettingValue& value,
+    ModSettingValue* normalized,
+    std::string* error_message) {
+    if (normalized == nullptr) {
+        return false;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (entry.type != ModSettingType::List) {
+        if (!ValidateScalarModSettingValue(
+                entry,
+                value,
+                error_message)) {
+            return false;
+        }
+        *normalized = value;
+        return true;
+    }
+    if (value.type != ModSettingValueType::List) {
+        return Fail(error_message, "value must be an array");
+    }
+    if (value.list_value.size() < entry.min_items ||
+        value.list_value.size() > entry.max_items) {
+        return Fail(
+            error_message,
+            "list value count is outside min_items and max_items");
+    }
+
+    std::vector<ModSettingListItem> normalized_items;
+    normalized_items.reserve(value.list_value.size());
+    for (std::size_t item_index = 0;
+         item_index < value.list_value.size();
+         ++item_index) {
+        const auto& item = value.list_value[item_index];
+        for (const auto& [key, ignored] : item) {
+            (void)ignored;
+            if (entry.FindItemField(key) == nullptr) {
+                return Fail(
+                    error_message,
+                    "list item " + std::to_string(item_index + 1) +
+                        " contains unknown field '" + key + "'");
+            }
+        }
+        ModSettingListItem normalized_item;
+        for (const auto& field : entry.item_fields) {
+            const auto found = item.find(field.key);
+            const auto& source =
+                found == item.end() ? field.default_value : found->second;
+            ModSettingValue normalized_field;
+            std::string field_error;
+            if (!NormalizeModSettingValue(
+                    field,
+                    source,
+                    &normalized_field,
+                    &field_error)) {
+                return Fail(
+                    error_message,
+                    "list item " + std::to_string(item_index + 1) +
+                        " field '" + field.key + "' is invalid: " +
+                        field_error);
+            }
+            normalized_item.emplace(
+                field.key,
+                std::move(normalized_field));
+        }
+        normalized_items.push_back(std::move(normalized_item));
+    }
+
+    auto normalized_list =
+        ModSettingValue::List(std::move(normalized_items));
+    if (SerializedModSettingListValueBytes(normalized_list) >
+        kModSettingListMaxSerializedBytes) {
+        return Fail(
+            error_message,
+            "serialized list value exceeds 8192 UTF-8 bytes");
+    }
+    *normalized = std::move(normalized_list);
+    return true;
+}
+
+std::size_t SerializedModSettingListValueBytes(
+    const ModSettingValue& value) {
+    if (value.type != ModSettingValueType::List) {
+        return 0;
+    }
+    return settings_json::Serialize(ToJsonValue(value)).size();
 }
 
 bool IsCanonicalModSettingKeybind(std::string_view value) {

@@ -10,6 +10,9 @@ from static_multiplayer_contract_support import _read, _require_in_order
 def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     header = _read("SolomonDarkModLoader/include/mod_settings.h")
     validator = _read("SolomonDarkModLoader/src/mod_settings.cpp")
+    list_validator = _read(
+        "SolomonDarkModLoader/src/mod_settings_list.cpp"
+    )
     values = _read("SolomonDarkModLoader/src/mod_settings_values.cpp")
     persistence = _read(
         "SolomonDarkModLoader/src/mod_settings_persistence.cpp"
@@ -23,6 +26,10 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     manifest_service = _read(
         "SolomonDarkModLauncher/src/ModSettings/"
         "ModSettingsManifestService.cs"
+    )
+    models = _read(
+        "SolomonDarkModLauncher/src/ModSettings/"
+        "ModSettingsModels.cs"
     )
     store = _read(
         "SolomonDarkModLauncher/src/ModSettings/ModSettingsStore.cs"
@@ -43,18 +50,24 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     )
     bot_manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     brain = _read("mods/bot-brain/scripts/main.lua")
+    brain_policy = _read("mods/bot-brain/scripts/brain.lua")
+    roster = _read("mods/bot-brain/scripts/roster.lua")
     verifier = _read("tools/verify_mod_settings_lifecycle.py")
     design = _read("docs/design/mod-settings-2026-07-27.md")
     api_docs = _read("docs/lua-settings.md")
     roadmap = _read("docs/lua-seam-roadmap.md")
     generated = _read("api/lua/sd.lua")
 
+    bot_scripts = brain + brain_policy
     for token in (
         "ModSettingsManifestResult",
         "ModSettingsValuesResult",
         "ParseModSettingsManifestJson",
         "LoadPersistedModSettings",
         "ValidateModSettingValue",
+        "NormalizeModSettingValue",
+        "SerializedModSettingListValueBytes",
+        "kModSettingListMaxSerializedBytes = 8192",
         "IsCanonicalModSettingKeybind",
     ):
         assert token in header, f"native settings contract lacks: {token}"
@@ -69,12 +82,25 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     ):
         assert token in validator, f"native manifest validation lacks: {token}"
     for token in (
+        "item.fields must contain 1-12 fields",
+        "type must be toggle, number, text, or choice",
+        "max_items must be an integer from 1 through 32",
+        "min_items must be an integer from 0 through max_items",
+        "item_label references unknown field",
+        "ConvertJsonModSettingValue",
+        "NormalizeModSettingValue",
+    ):
+        assert token in list_validator, (
+            f"native list validation lacks: {token}"
+        )
+    for token in (
         "value must be a single line",
         "value exceeds max_length UTF-8 bytes",
         "MOUSE3",
         "MOUSE4",
         "MOUSE5",
         "number >= 1 && number <= 24",
+        "serialized list value exceeds 8192 UTF-8 bytes",
     ):
         assert token in values, f"native value validation lacks: {token}"
     for token in (
@@ -97,12 +123,17 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "GetLuaSettingsPrivilegedExecState",
         "persisted_schema_invalid",
         "manifest_validation_failed",
+        "LuaModValueType::Array",
+        "LuaModValueType::Object",
+        "ModSettingValueType::List",
+        "result.entry_errors",
     ):
         assert token in runtime, f"settings runtime lacks: {token}"
     assert 'kReplicatedSettingsModId[] = "sd.settings"' not in runtime
     _require_in_order(
         runtime,
-        "ReadLocalValues(mod, &next_local, &read_error)",
+        "ModSettingValues next_local;",
+        "ReadLocalValues(",
         "mod->local_settings_values[entry.key] = value->second",
         "ApplyEffectiveChange(",
         "PublishHostValue(",
@@ -125,6 +156,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         '"sd.__settings_reload"',
         '"sd.__settings_invoke_action"',
         "RemoveLuaSettingsPrivilegedBindings",
+        '"entry_errors"',
     ):
         assert token in bindings, f"Lua settings bindings lack: {token}"
     assert "gameplay_seams" not in bindings
@@ -147,6 +179,9 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "MOUSE4",
         "MOUSE5",
         "F24",
+        "TryNormalizeListValue",
+        "MaximumSerializedListValueBytes = 8192",
+        "item.fields must contain 1-12 fields",
     ):
         assert token in manifest_service, f"C# validation lacks: {token}"
     _require_in_order(
@@ -156,6 +191,23 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "File.Move(temporaryPath, path, overwrite: true)",
     )
     assert "throwOnInvalidBytes: true" in store
+    for token in (
+        "ModSettingValueType.List",
+        "ModSettingsEntryValidationException",
+        "TryNormalizeValue",
+        "writer.WriteStartArray()",
+    ):
+        assert token in store, f"C# list store lacks: {token}"
+    for token in (
+        "List",
+        "ListValue",
+        "MinItems",
+        "MaxItems",
+        "ItemLabel",
+        "ItemFields",
+        "TryNormalizeValue",
+    ):
+        assert token in models, f"C# list models lack: {token}"
     assert "IModSettingsDiscoveryService" in discovery
     for token in (
         "public interface IModSettingsService",
@@ -175,6 +227,8 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "__settings_reload",
         "__settings_invoke_action",
         "NamedPipeClientStream",
+        "EntryErrors",
+        "r.entry_errors",
     ):
         assert token in runtime_client, f"launcher pipe client lacks: {token}"
 
@@ -186,6 +240,16 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     assert required_rules
     assert required_rules <= accepted
     assert required_rules <= rejected
+    required_value_rules = set(fixture["requiredValueRules"])
+    value_accepted: set[str] = set()
+    value_rejected: set[str] = set()
+    for vector in fixture["valueVectors"]:
+        (value_accepted if vector["valid"] else value_rejected).update(
+            vector["rules"]
+        )
+    assert required_value_rules
+    assert required_value_rules <= value_accepted
+    assert required_value_rules <= value_rejected
 
     assert "settings.self" in bot_manifest["runtime"]["requiredCapabilities"]
     entries = {
@@ -195,47 +259,58 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     assert set(entries) == {
         "kite_radius",
         "offense_enabled",
+        "roster",
         "think_profile",
-        "persona_name",
         "focus_bot_key",
         "respawn_bot",
     }
     assert entries["kite_radius"]["default"] == 340
-    assert entries["persona_name"]["requires_restart"] is True
+    assert entries["roster"]["type"] == "list"
+    assert entries["roster"]["max_items"] == 3
+    assert "persona_name" not in entries
     assert entries["respawn_bot"]["confirm"] is True
     for token in (
         'sd.settings.get("kite_radius")',
-        'sd.settings.get("persona_name")',
-        "not CONFIG.offense_enabled",
-        'sd.settings.on_changed(function(key, new_value)',
+        'sd.settings.get("roster")',
+        "not context.shared.offense_enabled",
+        'sd.settings.on_changed(function(key, new_value, old_value)',
         'sd.settings.is_keybind_down("focus_bot_key")',
         'sd.settings.on_action("respawn_bot"',
-        "state.bot:despawn()",
+        "manager:respawn_all(",
     ):
-        assert token in brain, f"bot settings dogfood lacks: {token}"
+        assert token in bot_scripts, f"bot settings dogfood lacks: {token}"
+    for token in (
+        "context.bot:despawn()",
+        "class = context.row.element",
+        "roster entry ",
+    ):
+        assert token in roster, f"roster reconciliation lacks: {token}"
 
     for token in (
-        'INSTANCE_PREFIX = "mset"',
-        "HOST_PORT = 49011",
-        "CLIENT_PORT = 49012",
+        'INSTANCE_PREFIX = "ms2"',
+        "HOST_PORT = 49211",
+        "CLIENT_PORT = 49212",
         "enable_audio=False",
         "kill_existing=False",
         "os.replace(temporary, path)",
         "stop_exact_game_processes(launch)",
-        "brain.nearest_enemy_distance",
-        "brain.threat_count",
+        "guardian_ward_distance",
+        "flee_threshold",
+        "entry_error.roster",
+        "EXHAUSTED_ROSTER",
         "__settings_reload",
-        "__settings_invoke_action",
     ):
         assert token in verifier, f"lifecycle verifier lacks: {token}"
     assert "stop_game_processes(" not in verifier
-    assert "48911" not in verifier and "48912" not in verifier
+    assert "49011" not in verifier and "49012" not in verifier
 
     for token in (
         "sd.settings.is_keybind_down(entry_key)",
         "Harness keyboard injection",
         "reliable Lua mod-state stream",
         "No new Solomon Dark native address",
+        "entry_errors",
+        "8192-byte compact UTF-8 JSON cap",
     ):
         assert token in design, f"normative implementation notes lack: {token}"
     for token in (
@@ -243,7 +318,9 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "MOUSE3",
         "MOUSE5",
         "requires_restart",
-        "mset-host",
+        "Structured lists",
+        "ms2-host",
+        "49211/49212",
     ):
         assert token in api_docs, f"settings API docs lack: {token}"
     assert "**`sd.settings`**" in roadmap

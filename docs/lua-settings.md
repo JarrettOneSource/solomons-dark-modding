@@ -19,13 +19,16 @@ only product writer.
 
 ## API
 
-- `sd.settings.get(key) -> boolean | number | string`
+- `sd.settings.get(key) -> boolean | number | string | table`
   returns one non-action value. An unknown key or action returns
-  `nil, error_string`.
+  `nil, error_string`. A `list` value is an array of flat row tables. Each call
+  returns fresh tables; changing them does not change the effective value.
 - `sd.settings.get_all() -> table` returns every effective non-action value.
 - `sd.settings.on_changed(fn) -> true` registers
   `fn(key, new_value, old_value)`. It fires once per live-applied local value or
   host replication update. It never fires for `requires_restart`.
+  A list change fires once for the list key with the complete new and old
+  arrays; there are no row-level callbacks.
 - `sd.settings.on_action(key, fn) -> true` registers the calling mod's action
   handler. Registration rejects unknown and non-action keys.
 - `sd.settings.is_keybind_down(entry_key) -> bool` resolves a declared keybind
@@ -42,6 +45,57 @@ The canonical names are `A`–`Z`, `0`–`9`, `F1`–`F24`, `SPACE`, `TAB`, `ENT
 `SHIFT`, `CTRL`, `ALT`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `MOUSE3`, `MOUSE4`,
 `MOUSE5`, and `NONE`.
 
+## Structured lists
+
+A `list` declaration contains `min_items`, required `max_items` (1–32), an
+optional 64-character `item_label`, and `item.fields`. Each list has 1–12
+flat fields, and each field reuses the existing `toggle`, `number`, `text`, or
+`choice` schema. Keybinds, actions, and nested lists are rejected. Missing row
+fields take their field defaults; unknown fields are rejected.
+
+```json
+{
+  "key": "roster",
+  "type": "list",
+  "label": "Bot roster",
+  "scope": "host",
+  "min_items": 0,
+  "max_items": 3,
+  "item_label": "{name} · {element}",
+  "item": {
+    "fields": [
+      {
+        "key": "name",
+        "type": "text",
+        "label": "Name",
+        "default": "Ember",
+        "max_length": 31
+      },
+      {
+        "key": "element",
+        "type": "choice",
+        "label": "Element",
+        "default": "fire",
+        "choices": [
+          { "value": "fire", "label": "Fire" },
+          { "value": "water", "label": "Water" }
+        ]
+      }
+    ]
+  },
+  "default": [
+    { "name": "Ember", "element": "fire" }
+  ]
+}
+```
+
+The default, persisted value, replicated value, and Lua value all have the same
+ordered JSON-array shape. The normalized compact serialization is limited to
+8192 UTF-8 bytes at declaration and at Save/reload. Host replication uses the
+existing reliable `SDMOD:settings` mod-state stream and preserves list order.
+Invalid persisted list values fall back to the manifest default like invalid
+scalar values.
+
 ## Effective values
 
 At launch, each value is the valid persisted value or its manifest default.
@@ -52,6 +106,9 @@ rejected on clients.
 
 The launcher Save order is atomic persistence followed by the owned instance's
 named-pipe reload call. Reload diffs only entries without `requires_restart`.
+Reload returns `entry_errors`, keyed by setting key, when a value is rejected
+or a mod's live-apply callback cannot reconcile it. Other valid keys still
+apply, and a callback failure is reported rather than crashing the game.
 The internal `sd.__settings_reload` and `sd.__settings_invoke_action` functions
 exist only during privileged exec-pipe requests. They are not mod API functions,
 cannot be requested in a manifest, and are removed again before normal mod code
@@ -59,14 +116,18 @@ continues.
 
 ## Reference implementation and acceptance
 
-`mods/bot-brain` declares all six v1 types and applies kite radius, offense,
-think cadence, persona, focus key, and respawn behavior. Run the isolated
-lifecycle acceptance after a Release build:
+`mods/bot-brain` declares the v1 scalar/action controls plus the v2 `roster`
+list. It applies kite radius, offense, think cadence, per-row bot identity,
+focus key, and roster respawn behavior. Run the isolated lifecycle acceptance
+after a Release build:
 
 ```bash
 python3 tools/verify_mod_settings_lifecycle.py
 ```
 
-It uses only `mset-host`/`mset-client`, UDP ports 49011/49012, disabled audio,
-and exact launcher-returned staged process IDs. Results and copied runtime logs
-are written under `/mnt/d/codex-evidence/mod-settings-20260727/`.
+It uses only `ms2-host`/`ms2-client`, UDP ports 49211/49212, disabled audio,
+and exact launcher-returned staged process IDs. It proves two-row startup and
+replication, copied Lua list reads, ordered removal and element respawn,
+guardian/striker/skirmisher behavior, and a slot-exhaustion `entry_errors`
+result without a crash. Results and copied runtime logs are written under
+`/mnt/d/codex-evidence/mod-settings-v2-20260727/`.

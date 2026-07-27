@@ -268,6 +268,7 @@ struct LoadedLuaMod {
 struct LuaSettingsOperationResult {
     bool ok = false;
     std::vector<std::string> changed;
+    std::map<std::string, std::string, std::less<>> entry_errors;
     std::string error;
 };
 
@@ -313,6 +314,9 @@ void InstallLuaSettingsPrivilegedBindings(lua_State* state);
 void RemoveLuaSettingsPrivilegedBindings(lua_State* state);
 void SetLuaSettingsPrivilegedExecState(lua_State* state);
 lua_State* GetLuaSettingsPrivilegedExecState();
+void PushLuaSettingValue(
+    lua_State* state,
+    const ModSettingValue& value);
 LuaSettingsOperationResult ReloadLuaSettings(std::string_view mod_id);
 LuaSettingsOperationResult InvokeLuaSettingsAction(
     std::string_view mod_id,

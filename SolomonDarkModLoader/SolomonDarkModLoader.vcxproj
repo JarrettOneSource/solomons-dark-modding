@@ -239,6 +239,7 @@
     <ClInclude Include="src\runtime_debug_internal.h" />
     <ClInclude Include="src\lua_engine_internal.h" />
     <ClInclude Include="src\mod_settings_json.h" />
+    <ClInclude Include="src\mod_settings_list.h" />
     <ClInclude Include="src\lua_source_loader.h" />
     <ClInclude Include="src\lua_engine_event_queue.inl" />
     <ClInclude Include="src\lua_engine_event_public_api.inl" />
@@ -614,6 +615,7 @@
     <ClCompile Include="src\lua_settings_runtime.cpp" />
     <ClCompile Include="src\mod_settings.cpp" />
     <ClCompile Include="src\mod_settings_json.cpp" />
+    <ClCompile Include="src\mod_settings_list.cpp" />
     <ClCompile Include="src\mod_settings_persistence.cpp" />
     <ClCompile Include="src\mod_settings_values.cpp" />
     <ClCompile Include="src\lua_engine_parser_helpers.cpp" />
