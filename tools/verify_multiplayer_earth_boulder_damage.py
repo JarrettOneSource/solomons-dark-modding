@@ -105,9 +105,12 @@ def parse_int(value: str | None, default: int = 0) -> int:
     if not value:
         return default
     try:
-        return int(value, 16) if value.startswith(("0x", "0X")) else int(float(value))
+        return int(value, 0)
     except (TypeError, ValueError):
-        return default
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
 
 
 def parse_float(value: str | None, default: float = 0.0) -> float:
@@ -124,6 +127,14 @@ def float32(value: float) -> float:
 
 def float_bits(value: float) -> int:
     return struct.unpack("<I", struct.pack("<f", value))[0]
+
+
+def native_fadd(left: float, right: float) -> float:
+    return float32(float32(left) + float32(right))
+
+
+def native_fmul(left: float, right: float) -> float:
+    return float32(float32(left) * float32(right))
 
 
 def sha256(path: Path) -> str:
@@ -303,29 +314,35 @@ def decompose_observation(
     else:
         configured_damage = damage_ranks[rank]
 
-    additive = (
-        observation["progression_base_additive"]
-        + configured_damage
-        + observation["progression_global_flat"]
-        + observation["progression_spell_flat"]
-        + observation["progression_class_flat"]
-    )
-    computed_actor_damage = float32(
-        additive
-        * observation["progression_global_multiplier"]
-        * observation["progression_spell_multiplier"]
-        * observation["progression_class_multiplier"]
-        * observation["progression_siege_multiplier"]
-    )
+    additive = float32(observation["progression_base_additive"])
+    for term in (
+        configured_damage,
+        observation["progression_global_flat"],
+        observation["progression_spell_flat"],
+        observation["progression_class_flat"],
+    ):
+        additive = native_fadd(additive, term)
+    computed_actor_damage = additive
+    for factor in (
+        observation["progression_global_multiplier"],
+        observation["progression_spell_multiplier"],
+        observation["progression_class_multiplier"],
+        observation["progression_siege_multiplier"],
+    ):
+        computed_actor_damage = native_fmul(
+            computed_actor_damage,
+            factor,
+        )
+    computed_actor_damage = max(0.0, computed_actor_damage)
     actor_damage = observation["actor_stat_damage"]
     release_base = observation["release_base_damage"]
-    early_base = float32(actor_damage * 0.5)
+    early_base = native_fmul(actor_damage, 0.5)
     full_base = actor_damage
-    loader_scaled_base = float32(actor_damage * 1956.0)
+    loader_scaled_base = native_fmul(actor_damage, 1956.0)
     if observation["release_base_damage_bits"] == float_bits(early_base):
-        release_path = "stock_early_half"
+        release_path = "stock_conditional_half"
     elif observation["release_base_damage_bits"] == float_bits(full_base):
-        release_path = "stock_full_unhalved"
+        release_path = "stock_native_unhalved"
     elif observation["release_base_damage_bits"] == float_bits(
         loader_scaled_base
     ):
@@ -333,22 +350,29 @@ def decompose_observation(
     else:
         release_path = "unresolved"
 
-    expected_pool = float32(
-        max(
-            0.25,
-            min(
-                release_base
-                * observation["charge"]
-                * observation["charge"],
-                release_base * 1.25,
-            ),
+    # Direct3D leaves the retail process's x87 precision control at 24-bit.
+    # The two FMUL instructions at 0x005E549B/0x005E54A1 therefore round in
+    # sequence, which matters by one ULP for the instant-release samples.
+    charge = float32(observation["charge"])
+    base_times_charge = native_fmul(release_base, charge)
+    quadratic_damage = native_fmul(base_times_charge, charge)
+    cap_damage = native_fmul(release_base, 1.25)
+    release_floor = float32(0.25)
+    capped_damage = min(quadratic_damage, cap_damage)
+    expected_pool = max(release_floor, capped_damage)
+    if quadratic_damage > cap_damage:
+        release_limit = "cap"
+    elif capped_damage < release_floor:
+        release_limit = "floor"
+    else:
+        release_limit = "quadratic"
+    payload = float32(
+        min(
+            float32(observation["target_hp_before"]),
+            float32(observation["release_damage_pool"]),
         )
     )
-    payload = min(
-        observation["target_hp_before"],
-        observation["release_damage_pool"],
-    )
-    expected_lane = float32(payload * 0.5)
+    expected_lane = native_fmul(payload, 0.5)
     expected_hp_single_store = float32(
         observation["target_hp_before"]
         - observation["damage_lane_primary"]
@@ -410,6 +434,17 @@ def decompose_observation(
             release_base / actor_damage if actor_damage != 0 else math.nan
         ),
         "release_path": release_path,
+        "release_arithmetic": "x87_24_bit_sequential_fmul",
+        "base_times_charge": base_times_charge,
+        "base_times_charge_bits": float_bits(base_times_charge),
+        "quadratic_damage": quadratic_damage,
+        "quadratic_damage_bits": float_bits(quadratic_damage),
+        "release_cap_multiplier": 1.25,
+        "release_cap_damage": cap_damage,
+        "release_cap_damage_bits": float_bits(cap_damage),
+        "release_floor": release_floor,
+        "release_floor_bits": float_bits(release_floor),
+        "release_limit_selected": release_limit,
         "expected_release_damage_pool": expected_pool,
         "expected_release_damage_pool_bits": float_bits(expected_pool),
         "release_pool_exact": release_pool_exact,
@@ -485,6 +520,7 @@ def run_cell(
             TARGET_X,
             TARGET_Y,
             network_actor_id,
+            require_local_binding=False,
         ),
         "client": kill.find_target(
             client_pipe,
@@ -494,8 +530,10 @@ def run_cell(
         ),
     }
     actor_addresses = {
-        peer: parse_int(binding.get("local.actor_address"))
-        for peer, binding in bindings.items()
+        "host": int(enemy["actor_address"]),
+        "client": parse_int(
+            bindings["client"].get("local.actor_address")
+        ),
     }
     if any(address == 0 for address in actor_addresses.values()):
         raise local_sync.VerifyFailure(
@@ -547,6 +585,7 @@ def run_cell(
             TARGET_X,
             TARGET_Y,
             network_actor_id,
+            require_local_binding=False,
         ),
         "client": kill.find_target(
             client_pipe,
@@ -556,8 +595,10 @@ def run_cell(
         ),
     }
     actor_addresses = {
-        peer: parse_int(binding.get("local.actor_address"))
-        for peer, binding in bindings.items()
+        "host": int(enemy["actor_address"]),
+        "client": parse_int(
+            bindings["client"].get("local.actor_address")
+        ),
     }
     before = {
         "host": exact_target_state(
@@ -676,6 +717,10 @@ def run_cell(
         row["release_path"] == "loader_1956_overwrite"
         for row in formula_rows
     )
+    result["authority_loader_1956_overwrite_observed"] = any(
+        row["formula"]["release_path"] == "loader_1956_overwrite"
+        for row in observations["host"]
+    )
     stage(
         f"{condition} {caster_peer}: damage={endpoint_delta} "
         f"bits=0x{float_bits(endpoint_delta):08X} "
@@ -715,12 +760,12 @@ def compare_matrix(
         }
 
     host_scaled = any(
-        cell["loader_1956_overwrite_observed"]
+        cell["authority_loader_1956_overwrite_observed"]
         for cell in cells
         if cell["caster_peer"] == "host"
     )
     client_scaled = any(
-        cell["loader_1956_overwrite_observed"]
+        cell["authority_loader_1956_overwrite_observed"]
         for cell in cells
         if cell["caster_peer"] == "client"
     )

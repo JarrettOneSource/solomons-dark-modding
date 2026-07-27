@@ -1,6 +1,6 @@
 # Earth Boulder damage formula (2026-07-27)
 
-## Scope and phase-one status
+## Scope and verdict
 
 Issue #52 asks where the client-cast Earth damage family near `3032.56`
 comes from. This is an explanation-first investigation: changing a stock
@@ -26,17 +26,17 @@ magnitude, not synchronization.
 
 Phase one is a static trace against the retail executable with SHA-256
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
-It identifies a concrete client-only inflation mechanism in the loader. The
-required controlled host/client experiments are intentionally still pending
-at this commit, so the final issue verdict appears only after that evidence is
-collected.
+It identified a concrete inflation mechanism in the loader. The subsequent
+controlled matrix proved the final verdict: **CLIENT-ONLY INFLATION**. Stock
+balance is not changed; the remote replay seam is corrected below.
 
 ## Stock input and notation
 
 The shipped `data/wizardskills/boulder.cfg` `mDamage` row is:
 
 ```text
-0, 10, 30, 50, 75, 100, 130, 160, 200, 250, 300, 350, 400, 450, 500
+0, 10, 30, 50, 75, 100, 120, 140, 160, 180, 200, 220, 240,
+260, 280, 300, 320, 340, 360, 380, 400, 420, 440, 460, 480, 500
 ```
 
 For the formulas below:
@@ -46,8 +46,9 @@ For the formulas below:
 - `C` is the live Boulder charge at `Boulder + 0x74`;
 - `P` is the caster's live progression/stat object;
 - `M` is `mDamage` at the skill row's effective rank;
-- `R` is the stock release-path multiplier: `0.5` for an early/manual
-  release and `1.0` for automatic release at maximum charge;
+- `R` is the stock dispatcher multiplier: `0.5` only when the Boulder is
+  below maximum charge and either release predicate at `0x00545142` or
+  `0x005450E7` is true; otherwise it is `1.0`;
 - `B` is the live pre-release spell damage written to
   `PlayerActor + 0x298`; and
 - `D` is the released Boulder damage pool at `Boulder + 0x1F4`.
@@ -130,30 +131,43 @@ to `Boulder + 0x1D8`, and toughness from `PlayerActor + 0x29C` to
 `Boulder + 0x1E8`.
 
 While held, `0x00545122` advances growth from the Hasten Rocks rate and the
-Earth cast-speed helper. When `C` is still below the maximum at
-`Boulder + 0x1FC`, the stock manual-release branch at `0x00545155` uses
-instructions `0x00545165` and `0x00545171` to multiply both damage fields
-by the double constant `0.5` at `0x007DE808`. When charge exceeds `0.3`
-(`0x0078567C`), the dispatcher also stops further growth.
+Earth cast-speed helper. The constructor initializes `Boulder + 0x1FC` to
+`1.0`; the dispatcher can increase that maximum by configured `mChance / 100`
+at `0x00544D5A`.
 
-When `C` has reached the maximum, the comparison at `0x00545100` skips the
-manual-release block. The split/release path at `0x005FA6D0` then calls the
-finalizer without halving the base.
+The comparison ending at `0x00545100` enters the conditional block only while
+`C < Boulder[+0x1FC]`. Inside that block, `0x00545142` and `0x005450E7`
+evaluate two stock release predicates. Only if either predicate is true do
+the conditional-half block at `0x00545155`, specifically instructions
+`0x00545165` and `0x00545171`, multiply both damage fields by the double
+constant `0.5` at `0x007DE808`. If both predicates are false, or if charge
+has reached the maximum, the base remains unhalved. The split/release path at
+`0x005FA6D0` subsequently calls the finalizer. When the conditional half is
+taken and charge exceeds `0.3` (`0x0078567C`), the dispatcher also stops
+further growth.
 
 Thus immediately before finalization:
 
 ```text
 release_base = B * R
-R = 0.5  when manually released before maximum charge
-R = 1.0  when maximum charge causes automatic release
+R = 0.5  iff C < maximum and (predicate_0x00545142 ||
+                              predicate_0x005450E7)
+R = 1.0  otherwise
 ```
+
+This distinction matters. The real-input frame-queue path used by the
+controlled experiment did not take the conditional-half branch at any of its
+three hold points. Its stock release base was bit-exactly `10`, including at
+charges below `1.0`. Calling every below-maximum release a half-damage release
+would therefore be incorrect.
 
 ### 4. Convert charge to the released damage pool
 
 The Boulder release virtual at `0x005E5450` computes:
 
 ```text
-quadratic = (B * R) * C^2
+base_charge = round_f32((B * R) * C)
+quadratic   = round_f32(base_charge * C)
 cap       = (B * R) * 1.25
 D         = max(0.25, min(quadratic, cap))
 ```
@@ -161,20 +175,25 @@ D         = max(0.25, min(quadratic, cap))
 The instruction at `0x005E54DE` writes `D` to `Boulder + 0x1F4`, and the
 finalizer copies `C` to `Boulder + 0x1FC`. The floor constant is the double
 `0.25` at `0x007DE8F0`; the cap multiplier is the double `1.25` at
-`0x00784740`.
+`0x00784740`. The exact instruction order is `FLD C`,
+`FMUL release_base` at `0x005E549B`, then `FMUL C` at `0x005E54A1`.
+The live process rounds after each multiply at the active 24-bit x87
+precision. This is observable, not cosmetic: the instant stock sample is
+`0x3F6852E6`; evaluating the decimal operands as one host-language
+double-precision expression gives the adjacent, wrong `0x3F6852E7`.
 
 For a neutral level-one caster, `B = 10`. The stock curve is therefore:
 
 ```text
-early/manual: D = max(0.25, min(5  * C^2,  6.25))
-maximum:      D = max(0.25, min(10 * C^2, 12.50))
+conditional half: D = max(0.25, min(5  * C^2,  6.25))
+unhalved:         D = max(0.25, min(10 * C^2, 12.50))
 ```
 
-The fixed-hold baseline `1.541015625` implies an early-release charge of
-`sqrt(1.541015625 / 5) = 0.5551604498`; phase two records the underlying
-single-precision charge rather than relying on decimal log rounding. A
-maximum charge of `1.0` takes the unhalved automatic branch and produces
-exactly `10.0`, matching the solo baseline without another term.
+The controlled fixed-hold trace records `C = 0.39249980449677`,
+`release_base = 10`, and native pool `1.5405609607697`. Subtraction from the
+`50000` HP fixture stores an endpoint delta of `1.5390625` because one float
+ULP at that HP is `0.00390625`. A maximum charge of `1.0` produces exactly
+`10.0`. No missing damage term is needed for either stock result.
 
 ### 5. Apply contact damage
 
@@ -237,10 +256,10 @@ to:
 
 `HoldBotBoulderAtReleaseCharge` then writes `19560` into both
 `Boulder + 0x1F4` and `Boulder + 0x1F8`. That hold write is repeated at the
-replay release boundary and overwrites the native early-release half. The
-finalizer therefore sees `19560`, not the stock level-one early-release base
-of `5`. This is a second use of a stat-vector normalization constant that
-stock Boulder contact damage never uses.
+replay release boundary and overwrites the native damage fields. The
+finalizer therefore sees `19560`, not the stock level-one base of `10`.
+This is a second use of a stat-vector normalization constant that stock
+Boulder contact damage never uses.
 
 The archived beta.18 loader log already records a replay with rounded live
 charge `0.392500`, `release_scaled_base_damage=19560`, and
@@ -255,11 +274,10 @@ The same log's `ProjectEarthBoulderReleaseDamage` estimate incorrectly
 applies another `0.5` and reports `1506.668701`; the real HP transition is
 the unhalved `projected_damage` value. A nearby rounded charge `0.388750`
 produces the `2956.0327148438` family. The occasional independent
-`1.541015625` transition is the stock early-release path with `B=10` and
-`R=0.5`. This static decomposition explains both modes and predicts a
-direction-dependent remote replay defect; phase two must prove that
-prediction under pinned host/client conditions and preserve the exact
-single-precision operands.
+`1.541015625` transition is the local stock path with `B=10`, `R=1`, and
+charge near `0.3925`. This static decomposition predicts a
+direction-dependent remote replay defect; the controlled matrix below tests
+that prediction with exact single-precision operands.
 
 ## Client damage-claim serialization
 
@@ -296,6 +314,71 @@ zero peer difference, but not the magnitude's origin. The origin is upstream:
 the remote-Boulder replay's write of `mDamage * 1956` into native damage
 fields.
 
+## Controlled loopback experiment
+
+The pre-fix matrix launched only the worktree-staged `edmg-host` and
+`edmg-client` instances, on ports `48911` and `48912`, with audio disabled.
+Every cell used the same level-one Earth caster state and one frozen native
+type-`1001` enemy at `(1800, 1750)` with exactly `50000` HP. The full record,
+including launcher-returned PIDs, exact cleanup paths, raw bit patterns,
+formula terms, and claim convergence samples, is:
+
+```text
+/mnt/d/codex-evidence/earth-damage-20260727/pre-fix/earth-damage-matrix.json
+```
+
+The authoritative-host endpoints were:
+
+| Hold | Host casts | Client casts | Host-side release base for authoritative contact |
+| --- | ---: | ---: | --- |
+| 2 frames | `0.90625` (`0x3F680000`) | `1761.3046875` (`0x44DC29C0`) | host cast: `10`; client cast: `19560` |
+| 170 frames | `1.5390625` (`0x3FC50000`) | `2880.484375` (`0x453407C0`) | host cast: `10`; client cast: `19560` |
+| full, 900 frames | `10.0` (`0x41200000`) | `19560.0` (`0x4698D000`) | host cast: `10`; client cast: `19560` |
+
+Both peers converged to the same endpoint bit pattern in all six cells. Every
+native contact observation also decomposed bit-exactly. Representative
+authoritative terms are:
+
+| Case | `M` | Flat terms | Multipliers | `B` | `R` or overwrite | `C` | Native pool | Stored HP delta |
+| --- | ---: | --- | --- | ---: | --- | ---: | ---: | ---: |
+| instant host | `10` | all `0` | all `1` | `10` | `R=1` | `0.30124989151955` | `0.90751492977142` (`0x3F6852E6`) | `0.90625` |
+| instant client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.29999989271164` | `1760.3988037109` (`0x44DC0CC3`) | `1760.3984375` |
+| 170-frame host | `10` | all `0` | all `1` | `10` | `R=1` | `0.39249980449677` | `1.5405609607697` (`0x3FC5311A`) | `1.5390625` |
+| 170-frame client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `0.38374981284142` | `2880.482421875` (`0x453407B8`) | `2880.484375` |
+| full host | `10` | all `0` | all `1` | `10` | `R=1` | `1.0` | `10.0` (`0x41200000`) | `10.0` |
+| full client | `10` | all `0` | all `1` | `10` | `10 * 1956 = 19560` | `1.0` | `19560.0` (`0x4698D000`) | `19560.0` |
+
+The two contact lanes are always `native_pool / 2`; the small differences
+between a native pool and the recorded fixture delta are exactly the
+single-precision HP-store granularity at `50000`.
+
+The receiving peer also materializes its own replay Boulder. For a host cast,
+the client observer exhibits the same bad `19560` replay contact, but it is
+not authoritative and the host's stock endpoint wins. For a client cast, the
+host's replay is authoritative; its inflated native endpoint is therefore
+the endpoint serialized back to both peers. That directionality explains why
+the suite saw a client-cast-only family even though the bad replay write
+exists on either receiving peer.
+
+Charge explains variation *within* each family: `C ~= 0.30` gives about
+`1760`, `C ~= 0.39` gives the audited `~3000` family, and `C = 1` gives
+`19560` after the erroneous overwrite. Charge does not explain the factor of
+`1956` between stock and inflated families. The archived exact issue-#52
+sample used the same overwrite and a charge near `0.39375`, producing the
+additional `3032.5610351562` transition; its local stock contact contributed
+the other `1.541015625` to the observed `3034.1020507812` total.
+
+### Verdict
+
+**CLIENT-ONLY INFLATION.** Issue #52 is a loader defect, not stock balance.
+The host- and client-cast families are unequal under pinned conditions, and
+the authoritative client-cast path contains one extra named factor:
+`0x007A03F0 = 1956`. The claim serializer preserves the resulting endpoint
+without scaling it. The required action is therefore to remove the
+stat-vector normalization and all loader writes to native Boulder damage
+fields from the remote replay seam, while retaining native charge/growth
+control.
+
 ## Static evidence
 
 Headless Ghidra output is archived under:
@@ -321,22 +404,9 @@ Key records are:
 - `ghidra-skill-row-flags.log` — Earth class and Siege Mage eligibility row
   construction.
 
-## Phase-two decision rule
+## Post-fix proof status
 
-The static trace predicts **client-only inflation**, not stock-correct
-balance. That is not yet the final verdict. The controlled matrix must
-demonstrate all of the following before code changes:
-
-- host and client use the same class, level, fixture, HP, and measured charge;
-- an instant release and a pinned held release expose the stock and inflated
-  families;
-- every observed delta is reproduced from logged `M`, caster-stat terms,
-  release multiplier, charge, floor/cap choice, contact payload, and claim
-  endpoint; and
-- the `1956` term appears only on the replayed client-origin path.
-
-If those conditions hold, the required action is to remove the normalized
-stat-output scalar and all damage-field overwrites from the remote replay
-seam, leaving native Boulder code as the sole owner of `+0x1F4/+0x1F8`.
-If host and client instead produce the same family from identical stock
-terms, no gameplay number may change and the audit model must be corrected.
+Pending at this evidence checkpoint. The fix must make host and client
+authoritative endpoints bit-equal for the instant and full-charge controls,
+remove every `1956` replay observation, and preserve the pre-fix host-cast
+endpoint bits.

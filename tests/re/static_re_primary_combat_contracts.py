@@ -300,6 +300,8 @@ def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
         "0x00545171",
         "0x005FA6D0",
         "0x005E5450",
+        "0x005E549B",
+        "0x005E54A1",
         "0x005E54DE",
         "0x00620B60",
         "0x0062125C",
@@ -332,8 +334,10 @@ def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
         )
 
     required_formula_tokens = (
-        "early/manual: D = max(0.25, min(5  * C^2,  6.25))",
-        "maximum:      D = max(0.25, min(10 * C^2, 12.50))",
+        "conditional half: D = max(0.25, min(5  * C^2,  6.25))",
+        "unhalved:         D = max(0.25, min(10 * C^2, 12.50))",
+        "R = 0.5  iff C < maximum",
+        "CLIENT-ONLY INFLATION",
         "HP delta = payload/2 + payload/2 = payload",
         "The retail executable has one",
         "primary_stat_output[0] = mDamage * 1956",
