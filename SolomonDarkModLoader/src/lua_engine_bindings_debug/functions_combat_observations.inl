@@ -83,6 +83,145 @@ int LuaDebugGetLocalCastObservation(lua_State* state) {
     return 1;
 }
 
+// sd.debug.reset_earth_boulder_damage_observations() -> boolean
+int LuaDebugResetEarthBoulderDamageObservations(lua_State* state) {
+    ResetEarthBoulderDamageObservations();
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// sd.debug.take_earth_boulder_damage_observations() -> array
+int LuaDebugTakeEarthBoulderDamageObservations(lua_State* state) {
+    std::vector<SDModEarthBoulderDamageObservation> observations;
+    (void)TakeEarthBoulderDamageObservations(&observations);
+
+    lua_createtable(state, static_cast<int>(observations.size()), 0);
+    for (std::size_t index = 0; index < observations.size(); ++index) {
+        const auto& observation = observations[index];
+        lua_createtable(state, 0, 72);
+        const auto set_integer =
+            [&](const char* name, lua_Integer value) {
+                lua_pushinteger(state, value);
+                lua_setfield(state, -2, name);
+            };
+        const auto set_float =
+            [&](const char* name, float value) {
+                lua_pushnumber(state, static_cast<lua_Number>(value));
+                lua_setfield(state, -2, name);
+                const std::string bits_name =
+                    std::string(name) + "_bits";
+                std::uint32_t bits = 0;
+                std::memcpy(&bits, &value, sizeof(bits));
+                lua_pushinteger(
+                    state,
+                    static_cast<lua_Integer>(bits));
+                lua_setfield(state, -2, bits_name.c_str());
+            };
+
+        lua_pushboolean(state, observation.valid ? 1 : 0);
+        lua_setfield(state, -2, "valid");
+        set_integer(
+            "sequence",
+            static_cast<lua_Integer>(observation.sequence));
+        set_integer(
+            "source_participant_id",
+            static_cast<lua_Integer>(
+                observation.source_participant_id));
+        set_integer(
+            "source_actor_address",
+            static_cast<lua_Integer>(
+                observation.source_actor_address));
+        set_integer(
+            "owner_actor_address",
+            static_cast<lua_Integer>(
+                observation.owner_actor_address));
+        set_integer(
+            "progression_address",
+            static_cast<lua_Integer>(
+                observation.progression_address));
+        set_integer(
+            "target_actor_address",
+            static_cast<lua_Integer>(
+                observation.target_actor_address));
+        set_integer(
+            "source_native_type_id",
+            static_cast<lua_Integer>(
+                observation.source_native_type_id));
+        set_integer(
+            "source_gameplay_slot",
+            static_cast<lua_Integer>(
+                observation.source_gameplay_slot));
+        set_integer(
+            "progression_level",
+            static_cast<lua_Integer>(
+                observation.progression_level));
+        set_integer(
+            "effective_rank",
+            static_cast<lua_Integer>(
+                observation.effective_rank));
+        set_float(
+            "progression_base_additive",
+            observation.progression_base_additive);
+        set_float(
+            "configured_rank_damage",
+            observation.configured_rank_damage);
+        set_float(
+            "progression_global_flat",
+            observation.progression_global_flat);
+        set_float(
+            "progression_spell_flat",
+            observation.progression_spell_flat);
+        set_float(
+            "progression_class_flat",
+            observation.progression_class_flat);
+        set_float(
+            "progression_global_multiplier",
+            observation.progression_global_multiplier);
+        set_float(
+            "progression_spell_multiplier",
+            observation.progression_spell_multiplier);
+        set_float(
+            "progression_class_multiplier",
+            observation.progression_class_multiplier);
+        set_float(
+            "progression_siege_multiplier",
+            observation.progression_siege_multiplier);
+        set_float(
+            "actor_stat_damage",
+            observation.actor_stat_damage);
+        set_float("charge", observation.charge);
+        set_float("growth_rate", observation.growth_rate);
+        set_float("release_charge", observation.release_charge);
+        set_float(
+            "release_damage_pool",
+            observation.release_damage_pool);
+        set_float(
+            "release_base_damage",
+            observation.release_base_damage);
+        set_float("maximum_charge", observation.maximum_charge);
+        set_float("toughness", observation.toughness);
+        set_float(
+            "damage_lane_primary",
+            observation.damage_lane_primary);
+        set_float(
+            "damage_lane_secondary",
+            observation.damage_lane_secondary);
+        set_float(
+            "target_hp_before",
+            observation.target_hp_before);
+        set_float(
+            "target_hp_after",
+            observation.target_hp_after);
+        set_float("target_max_hp", observation.target_max_hp);
+        set_float("hp_delta", observation.hp_delta);
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    return 1;
+}
+
 // sd.debug.get_actor_modifiers(actor_address) -> array|nil
 int LuaDebugGetActorModifiers(lua_State* state) {
     const auto actor_address =

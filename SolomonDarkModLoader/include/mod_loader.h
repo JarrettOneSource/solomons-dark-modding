@@ -203,6 +203,39 @@ struct SDModLocalManaDeltaObservation {
     float last_delta = 0.0f;
 };
 
+struct SDModEarthBoulderDamageObservation {
+    bool valid = false;
+    std::uint64_t sequence = 0;
+    std::uint64_t source_participant_id = 0;
+    uintptr_t source_actor_address = 0, owner_actor_address = 0;
+    uintptr_t progression_address = 0, target_actor_address = 0;
+    std::uint32_t source_native_type_id = 0;
+    std::int32_t source_gameplay_slot = -1;
+    std::int32_t progression_level = 0;
+    std::uint16_t effective_rank = 0;
+    float progression_base_additive = 0.0f, configured_rank_damage = 0.0f;
+    float progression_global_flat = 0.0f;
+    float progression_spell_flat = 0.0f;
+    float progression_class_flat = 0.0f;
+    float progression_global_multiplier = 0.0f;
+    float progression_spell_multiplier = 0.0f;
+    float progression_class_multiplier = 0.0f;
+    float progression_siege_multiplier = 0.0f;
+    float actor_stat_damage = 0.0f;
+    float charge = 0.0f;
+    float growth_rate = 0.0f;
+    float release_charge = 0.0f;
+    float release_damage_pool = 0.0f;
+    float release_base_damage = 0.0f;
+    float maximum_charge = 0.0f;
+    float toughness = 0.0f;
+    float damage_lane_primary = 0.0f, damage_lane_secondary = 0.0f;
+    float target_hp_before = 0.0f;
+    float target_hp_after = 0.0f;
+    float target_max_hp = 0.0f;
+    float hp_delta = 0.0f;
+};
+
 struct SDModNativeModifierState {
     std::uint32_t type_id = 0;
     std::int32_t duration_ticks = 0;

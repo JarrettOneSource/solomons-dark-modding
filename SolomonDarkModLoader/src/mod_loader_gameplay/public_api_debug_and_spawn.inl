@@ -90,6 +90,27 @@ bool TakeLocalPlayerManaDeltaObservation(
     return observation->valid;
 }
 
+void ResetEarthBoulderDamageObservations() {
+    std::lock_guard<std::mutex> lock(
+        g_earth_boulder_damage_observation_mutex);
+    g_earth_boulder_damage_observation_armed = true;
+    g_next_earth_boulder_damage_observation_sequence = 1;
+    g_earth_boulder_damage_observations.clear();
+}
+
+bool TakeEarthBoulderDamageObservations(
+    std::vector<SDModEarthBoulderDamageObservation>* observations) {
+    if (observations == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(
+        g_earth_boulder_damage_observation_mutex);
+    *observations = std::move(g_earth_boulder_damage_observations);
+    g_earth_boulder_damage_observations.clear();
+    g_earth_boulder_damage_observation_armed = false;
+    return !observations->empty();
+}
+
 bool TryGetGameplaySelectionDebugState(SDModGameplaySelectionDebugState* state) {
     if (state == nullptr) {
         return false;

@@ -46,7 +46,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 76);
+    lua_createtable(state, 0, 78);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -167,6 +167,14 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugGetLocalCastObservation,
         "get_local_cast_observation");
+    RegisterFunction(
+        state,
+        &LuaDebugResetEarthBoulderDamageObservations,
+        "reset_earth_boulder_damage_observations");
+    RegisterFunction(
+        state,
+        &LuaDebugTakeEarthBoulderDamageObservations,
+        "take_earth_boulder_damage_observations");
     RegisterFunction(state, &LuaDebugGetActorModifiers, "get_actor_modifiers");
     RegisterFunction(
         state,

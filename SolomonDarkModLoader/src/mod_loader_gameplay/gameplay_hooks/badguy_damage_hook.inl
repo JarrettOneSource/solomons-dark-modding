@@ -204,6 +204,317 @@ void ObserveLocalReplicatedEnemyDamageAfterNativeCall(
         true);
 }
 
+struct EarthBoulderDamageCapture {
+    bool eligible = false;
+    bool terms_valid = false;
+    SDModEarthBoulderDamageObservation observation;
+};
+
+EarthBoulderDamageCapture CaptureEarthBoulderDamageBeforeNativeCall(
+    uintptr_t target_actor_address) {
+    EarthBoulderDamageCapture capture;
+    {
+        std::lock_guard<std::mutex> lock(
+            g_earth_boulder_damage_observation_mutex);
+        if (!g_earth_boulder_damage_observation_armed ||
+            g_earth_boulder_damage_observations.size() >=
+                kMaximumEarthBoulderDamageObservations) {
+            return capture;
+        }
+    }
+
+    auto& state = g_gameplay_keyboard_injection;
+    if (target_actor_address == 0 ||
+        state.damage_context_source_address == 0 ||
+        state.damage_context_primary_address == 0 ||
+        state.damage_context_secondary_address !=
+            state.damage_context_primary_address + sizeof(float)) {
+        return capture;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    auto& observation = capture.observation;
+    if (!memory.TryReadValue(
+            state.damage_context_source_address,
+            &observation.source_actor_address) ||
+        observation.source_actor_address == 0 ||
+        !memory.TryReadField(
+            observation.source_actor_address,
+            kGameObjectTypeIdOffset,
+            &observation.source_native_type_id) ||
+        observation.source_native_type_id !=
+            kWaterPrimaryDamageSourceNativeTypeId) {
+        return capture;
+    }
+    capture.eligible = true;
+    observation.target_actor_address = target_actor_address;
+
+    observation.owner_actor_address =
+        ResolveDamageSourceOwnerActorAddress(
+            observation.source_actor_address);
+    observation.source_participant_id =
+        ResolveDamageSourceParticipantId(
+            observation.source_actor_address);
+    const bool have_progression =
+        observation.owner_actor_address != 0 &&
+        TryResolveDamageSourceProgressionAddress(
+            observation.source_actor_address,
+            &observation.progression_address) &&
+        observation.progression_address != 0;
+
+    constexpr std::size_t kBoulderSkillIndex = 40;
+    constexpr std::size_t kEarthSpellClass = 4;
+    uintptr_t progression_table_address = 0;
+    std::int32_t progression_table_count = 0;
+    std::int8_t source_gameplay_slot = -1;
+    bool terms_valid =
+        have_progression &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kDamageSourceGameplaySlotOffset,
+            &source_gameplay_slot) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionLevelOffset,
+            &observation.progression_level) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &progression_table_address) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &progression_table_count) &&
+        progression_table_address != 0 &&
+        progression_table_count > static_cast<std::int32_t>(kBoulderSkillIndex) &&
+        memory.TryReadField(
+            progression_table_address +
+                kBoulderSkillIndex *
+                    kStandaloneWizardProgressionEntryStride,
+            kStandaloneWizardProgressionEntryEffectiveRankOffset,
+            &observation.effective_rank) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellDamageBaseAdditiveOffset,
+            &observation.progression_base_additive) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellDamageGlobalFlatOffset,
+            &observation.progression_global_flat) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellFlatBaseOffset +
+                kBoulderSkillIndex * sizeof(float),
+            &observation.progression_spell_flat) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellClassFlatBaseOffset +
+                kEarthSpellClass * sizeof(float),
+            &observation.progression_class_flat) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellDamageGlobalMultiplierOffset,
+            &observation.progression_global_multiplier) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellMultiplierBaseOffset +
+                kBoulderSkillIndex * sizeof(float),
+            &observation.progression_spell_multiplier) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionSpellClassMultiplierBaseOffset +
+                kEarthSpellClass * sizeof(float),
+            &observation.progression_class_multiplier) &&
+        memory.TryReadField(
+            observation.progression_address,
+            kProgressionOffensiveDamageMultiplierOffset,
+            &observation.progression_siege_multiplier) &&
+        memory.TryReadField(
+            observation.owner_actor_address,
+            kActorSpellConfig298Offset,
+            &observation.actor_stat_damage) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectChargeOffset,
+            &observation.charge) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectGrowthRateOffset,
+            &observation.growth_rate) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectReleaseChargeOffset,
+            &observation.release_charge) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectReleaseDamageOffset,
+            &observation.release_damage_pool) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectReleaseBaseDamageOffset,
+            &observation.release_base_damage) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectMaxChargeOffset,
+            &observation.maximum_charge) &&
+        memory.TryReadField(
+            observation.source_actor_address,
+            kSpellObjectToughnessOffset,
+            &observation.toughness) &&
+        memory.TryReadValue(
+            state.damage_context_primary_address,
+            &observation.damage_lane_primary) &&
+        memory.TryReadValue(
+            state.damage_context_secondary_address,
+            &observation.damage_lane_secondary) &&
+        memory.TryReadField(
+            target_actor_address,
+            kEnemyCurrentHpOffset,
+            &observation.target_hp_before) &&
+        memory.TryReadField(
+            target_actor_address,
+            kEnemyMaxHpOffset,
+            &observation.target_max_hp);
+    observation.source_gameplay_slot =
+        static_cast<std::int32_t>(source_gameplay_slot);
+
+    const std::array<float, 20> finite_terms = {
+        observation.progression_base_additive,
+        observation.progression_global_flat,
+        observation.progression_spell_flat,
+        observation.progression_class_flat,
+        observation.progression_global_multiplier,
+        observation.progression_spell_multiplier,
+        observation.progression_class_multiplier,
+        observation.progression_siege_multiplier,
+        observation.actor_stat_damage,
+        observation.charge,
+        observation.growth_rate,
+        observation.release_charge,
+        observation.release_damage_pool,
+        observation.release_base_damage,
+        observation.maximum_charge,
+        observation.toughness,
+        observation.damage_lane_primary,
+        observation.damage_lane_secondary,
+        observation.target_hp_before,
+        observation.target_max_hp,
+    };
+    terms_valid =
+        terms_valid &&
+        std::all_of(
+            finite_terms.begin(),
+            finite_terms.end(),
+            [](float value) { return std::isfinite(value); });
+
+    const double multiplier_product =
+        static_cast<double>(observation.progression_global_multiplier) *
+        static_cast<double>(observation.progression_spell_multiplier) *
+        static_cast<double>(observation.progression_class_multiplier) *
+        static_cast<double>(observation.progression_siege_multiplier);
+    if (terms_valid &&
+        std::isfinite(multiplier_product) &&
+        multiplier_product != 0.0) {
+        observation.configured_rank_damage = static_cast<float>(
+            static_cast<double>(observation.actor_stat_damage) /
+                multiplier_product -
+            static_cast<double>(observation.progression_base_additive) -
+            static_cast<double>(observation.progression_global_flat) -
+            static_cast<double>(observation.progression_spell_flat) -
+            static_cast<double>(observation.progression_class_flat));
+        terms_valid =
+            std::isfinite(observation.configured_rank_damage);
+    } else {
+        terms_valid = false;
+    }
+
+    capture.terms_valid = terms_valid;
+    return capture;
+}
+
+void ObserveEarthBoulderDamageAfterNativeCall(
+    const EarthBoulderDamageCapture& capture) {
+    if (!capture.eligible) {
+        return;
+    }
+
+    auto observation = capture.observation;
+    const bool have_hp_after =
+        ProcessMemory::Instance().TryReadField(
+            observation.target_actor_address,
+            kEnemyCurrentHpOffset,
+            &observation.target_hp_after) &&
+        std::isfinite(observation.target_hp_after);
+    if (have_hp_after) {
+        observation.hp_delta =
+            observation.target_hp_before - observation.target_hp_after;
+    }
+    observation.valid =
+        capture.terms_valid &&
+        have_hp_after &&
+        std::isfinite(observation.hp_delta) &&
+        observation.hp_delta >= 0.0f;
+
+    {
+        std::lock_guard<std::mutex> lock(
+            g_earth_boulder_damage_observation_mutex);
+        if (!g_earth_boulder_damage_observation_armed ||
+            g_earth_boulder_damage_observations.size() >=
+                kMaximumEarthBoulderDamageObservations) {
+            return;
+        }
+        observation.sequence =
+            g_next_earth_boulder_damage_observation_sequence++;
+        g_earth_boulder_damage_observations.push_back(observation);
+    }
+
+    const auto trace_float = [](float value) {
+        return std::to_string(value) +
+            "(bits=" + HexString(FloatToBits(value)) + ")";
+    };
+    Log(
+        "[earth-damage-trace] sequence=" +
+        std::to_string(observation.sequence) +
+        " valid=" + std::to_string(observation.valid ? 1 : 0) +
+        " participant_id=" +
+        std::to_string(observation.source_participant_id) +
+        " source=" + HexString(observation.source_actor_address) +
+        " owner=" + HexString(observation.owner_actor_address) +
+        " progression=" + HexString(observation.progression_address) +
+        " target=" + HexString(observation.target_actor_address) +
+        " native_type=" + HexString(observation.source_native_type_id) +
+        " slot=" + std::to_string(observation.source_gameplay_slot) +
+        " level=" + std::to_string(observation.progression_level) +
+        " rank=" + std::to_string(observation.effective_rank) +
+        " base_add=" + trace_float(observation.progression_base_additive) +
+        " rank_damage=" + trace_float(observation.configured_rank_damage) +
+        " global_flat=" + trace_float(observation.progression_global_flat) +
+        " spell_flat=" + trace_float(observation.progression_spell_flat) +
+        " class_flat=" + trace_float(observation.progression_class_flat) +
+        " global_mul=" +
+        trace_float(observation.progression_global_multiplier) +
+        " spell_mul=" +
+        trace_float(observation.progression_spell_multiplier) +
+        " class_mul=" +
+        trace_float(observation.progression_class_multiplier) +
+        " siege_mul=" +
+        trace_float(observation.progression_siege_multiplier) +
+        " actor_damage=" + trace_float(observation.actor_stat_damage) +
+        " charge=" + trace_float(observation.charge) +
+        " growth_rate=" + trace_float(observation.growth_rate) +
+        " release_charge=" + trace_float(observation.release_charge) +
+        " release_pool=" + trace_float(observation.release_damage_pool) +
+        " release_base=" + trace_float(observation.release_base_damage) +
+        " maximum_charge=" + trace_float(observation.maximum_charge) +
+        " toughness=" + trace_float(observation.toughness) +
+        " lane_primary=" + trace_float(observation.damage_lane_primary) +
+        " lane_secondary=" +
+        trace_float(observation.damage_lane_secondary) +
+        " hp_before=" + trace_float(observation.target_hp_before) +
+        " hp_after=" + trace_float(observation.target_hp_after) +
+        " hp_delta=" + trace_float(observation.hp_delta));
+}
+
 bool IsAuthorizedHostSyntheticFireballDamage(
     uintptr_t source_actor_address,
     std::uint64_t* participant_id) {
@@ -288,7 +599,11 @@ std::uint8_t __fastcall HookBadguyDamage(
     const auto local_damage_capture =
         CaptureLocalReplicatedEnemyDamageBeforeNativeCall(actor_address);
     const auto call_original = [&]() {
+        const auto earth_boulder_damage_capture =
+            CaptureEarthBoulderDamageBeforeNativeCall(actor_address);
         const auto result = original(self);
+        ObserveEarthBoulderDamageAfterNativeCall(
+            earth_boulder_damage_capture);
         ObserveLocalReplicatedEnemyDamageAfterNativeCall(
             actor_address,
             local_damage_capture);

@@ -251,6 +251,22 @@ def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
         "earth_boulder_release_damage_floor=0x007DE8F0",
         "earth_boulder_release_damage_cap_scale=0x00784740",
         "earth_boulder_release_growth_stop_min_charge=0x0078567C",
+        "standalone_wizard_progression_entry_effective_rank=0x22",
+        "spell_object_charge=0x74",
+        "spell_object_growth_rate=0x1D8",
+        "spell_object_toughness=0x1E8",
+        "spell_object_release_charge=0x1F0",
+        "spell_object_release_damage=0x1F4",
+        "spell_object_release_base_damage=0x1F8",
+        "spell_object_max_charge=0x1FC",
+        "progression_spell_damage_base_additive=0x84",
+        "progression_spell_damage_global_multiplier=0xF4",
+        "progression_offensive_damage_multiplier=0xF8",
+        "progression_spell_damage_global_flat=0xFC",
+        "progression_spell_class_multiplier_base=0x100",
+        "progression_spell_class_flat_base=0x120",
+        "progression_spell_multiplier_base=0x140",
+        "progression_spell_flat_base=0x288",
     )
     missing_layout = [
         token for token in required_layout_tokens if token not in layout_text

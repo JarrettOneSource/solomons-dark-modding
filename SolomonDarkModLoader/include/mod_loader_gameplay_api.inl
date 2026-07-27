@@ -85,6 +85,9 @@ bool RestoreLocalPlayerMana(
 bool ResetLocalPlayerManaDeltaObservation();
 bool TakeLocalPlayerManaDeltaObservation(
     SDModLocalManaDeltaObservation* observation);
+void ResetEarthBoulderDamageObservations();
+bool TakeEarthBoulderDamageObservations(
+    std::vector<SDModEarthBoulderDamageObservation>* observations);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,

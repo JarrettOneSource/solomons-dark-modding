@@ -22,6 +22,12 @@ std::unordered_map<uintptr_t, std::uint64_t>
     g_host_synthetic_damage_source_participants;
 std::mutex g_local_mana_delta_observation_mutex;
 SDModLocalManaDeltaObservation g_local_mana_delta_observation;
+constexpr std::size_t kMaximumEarthBoulderDamageObservations = 32;
+std::mutex g_earth_boulder_damage_observation_mutex;
+bool g_earth_boulder_damage_observation_armed = false;
+std::uint64_t g_next_earth_boulder_damage_observation_sequence = 1;
+std::vector<SDModEarthBoulderDamageObservation>
+    g_earth_boulder_damage_observations;
 
 ObservedActorAnimationDriveProfile g_observed_idle_animation_profile;
 ObservedActorAnimationDriveProfile g_observed_moving_animation_profile;
