@@ -6,7 +6,7 @@
   "fields": {
     "name": "Lua Bots",
     "summary": "Add AI teammates to any lobby — they play like real players.",
-    "description": "Spawns up to three bot players that join your session as real party members: they take a player slot, show up in the member list and ally HUD on every machine, get targeted by enemies, and fight, die, and respawn through the same systems as humans. Configure your roster in the launcher's mod settings: name each bot, pick its element (fire, water, earth, air, or ether) and its discipline — Skirmisher kites and casts, Guardian bodyguards a human player, Striker fights up close and reckless. Change the roster mid-game and it applies live; in multiplayer the host controls the roster and it syncs to everyone automatically. Requires v0.1.0-beta.20 or newer.",
+    "description": "Spawns up to three bot players that join your session as real party members: they take a player slot, show up in the member list and ally HUD on every machine, get targeted by enemies, and fight, die, and respawn through the same systems as humans. Configure your roster in the launcher's mod settings: name each bot, pick its element (fire, water, earth, air, or ether) and its discipline — Skirmisher kites and casts, Guardian bodyguards a human player, Striker fights up close and reckless. Change the roster mid-game and it applies live; in multiplayer the host controls the roster and it syncs to everyone automatically. Requires v0.1.0-beta.21 or newer.",
     "tags": "",
     "version": "1.0.0"
   },

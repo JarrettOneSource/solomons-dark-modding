@@ -147,7 +147,8 @@ launcher is impossible. The enforceable official-distribution contract is:
   cannot start it even after an out-of-band manual extraction.
 
 The public listing must remain offline until the beta.20 launcher and the
-matching Website contract are released.
+matching Website contract are released. The owner decision below supersedes
+that original release target.
 
 ## Owner retarget decision (2026-07-27)
 

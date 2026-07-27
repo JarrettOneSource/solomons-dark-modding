@@ -20,7 +20,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
     assert manifest["version"] == "1.0.0"
-    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.20"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.21"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
     required_capabilities = set(

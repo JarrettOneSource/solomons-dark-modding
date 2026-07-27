@@ -48,11 +48,24 @@ class WebsiteModPackagerTests(unittest.TestCase):
             submission["fields"]["description"],
             listing["description"],
         )
+        self.assertTrue(
+            listing["description"].endswith(
+                "Requires v0.1.0-beta.21 or newer."
+            )
+        )
         self.assertEqual(
             submission["fields"]["version"],
             manifest["version"],
         )
         self.assertEqual(listing["manifestId"], manifest["id"])
+        self.assertEqual(
+            listing["minimumLoaderVersion"],
+            manifest["minimumLoaderVersion"],
+        )
+        self.assertEqual(
+            manifest["minimumLoaderVersion"],
+            "0.1.0-beta.21",
+        )
         self.assertEqual(listing["screenshots"], [])
         self.assertEqual(submission["files"]["screenshots"], [])
 
@@ -83,7 +96,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             self.assertEqual(details["version"], "1.0.0")
             self.assertEqual(
                 details["minimumLoaderVersion"],
-                "0.1.0-beta.20",
+                "0.1.0-beta.21",
             )
             self.assertEqual(
                 details["packageSha256"],

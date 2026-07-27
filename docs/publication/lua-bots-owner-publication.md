@@ -2,23 +2,14 @@
 
 The production website does not have draft or unlisted mod visibility. Creating
 a mod through `POST /api/mods` makes it public immediately. Keep the production
-submission until the v0.1.0-beta.20 loader release is live.
+submission until the v0.1.0-beta.21 loader release is live.
 
-## Publication hold
+## Release decision
 
-The v0.1.0-beta.20 release currently published from commit `6776382` was cut
-concurrently before the Lua Bots publication runtime and launcher work landed
-on `main` at `914322c`. Its launcher does not send the loader version required
-by the website compatibility gate, and its runtime does not advertise the
-`settings.list` capability required by this package. Do not publish Lua Bots
-against those assets.
-
-The owner must first choose one of these release fixes:
-
-1. replace/reissue the beta.20 release from `914322c` or newer and verify its
-   published asset; or
-2. ship a newer beta and update this package's minimum loader version and
-   listing copy to match it.
+The owner decided that the published v0.1.0-beta.20 tag at `6776382` stays
+exactly as released. Do not replace its assets or move its tag. Lua Bots is
+retargeted to v0.1.0-beta.21 and must remain offline until that release is
+public.
 
 The prepared package is:
 
@@ -27,25 +18,26 @@ The prepared package is:
 ```
 
 - Package SHA-256:
-  `6382bde4adbaeefb648011e1feb43618fd6411d1f8bf22b63ad7c005c66b1974`
+  `792e03211ab073d2c42c02ca660e4eb6be0569450cd39fc2f88a3cfb9edf1a40`
 - Content SHA-256:
-  `889373adfe0ab08641374b95689b35ea9c15965644df69da8ece39856b93f6bc`
+  `5d35c66ce289b0a281f0edb227dc54906fdc6b181f39d3040c8c883ccb2097f8`
 
 Before submission, merge and deploy the Website compatibility work from
 `codex/botpub-website-20260727`. It teaches the production package inspector,
-resolve endpoint, and update endpoint about the beta.20 minimum-loader field.
+resolve endpoint, and update endpoint about the beta.21 minimum-loader field.
 
-1. Sign in to the owner account at `https://solomondarker.com`.
-2. Open the mod submission form.
-3. Upload the verified `lua-bots-1.0.0.zip` artifact.
-4. Enter the exact values from `lua-bots-submission.json`.
-5. Leave all screenshot slots empty. Screenshots can be added after creation.
-6. Confirm the upload version is `1.0.0`; it must equal `manifest.version`.
-7. Submit only after v0.1.0-beta.20 is public.
-8. Verify the public detail response reports manifest id `bot.brain`, version
-   `1.0.0`, and minimum loader `0.1.0-beta.20`.
-9. From a beta.20 launcher, install the listing and verify the Mods-tab settings
-   gear before announcing it.
+1. Publish v0.1.0-beta.21 and verify its public launcher/runtime assets.
+2. Merge and deploy `codex/botpub-website-20260727`.
+3. Sign in to the owner account at `https://solomondarker.com`.
+4. Open the mod submission form.
+5. Upload the verified `lua-bots-1.0.0.zip` artifact.
+6. Enter the exact values from `lua-bots-submission.json`.
+7. Leave all screenshot slots empty. Screenshots can be added after creation.
+8. Confirm the upload version is `1.0.0`; it must equal `manifest.version`.
+9. Verify the public detail response reports manifest id `bot.brain`, version
+   `1.0.0`, and minimum loader `0.1.0-beta.21`.
+10. From a beta.21 launcher, install the listing and verify the Mods-tab
+    settings gear before announcing it.
 
 Future updates use the listing's **Add version** flow
 (`POST /api/mods/{slug}/versions`). Keep `manifest.id` equal to `bot.brain`,
