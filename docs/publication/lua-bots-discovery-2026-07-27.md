@@ -148,3 +148,16 @@ launcher is impossible. The enforceable official-distribution contract is:
 
 The public listing must remain offline until the beta.20 launcher and the
 matching Website contract are released.
+
+## Owner retarget decision (2026-07-27)
+
+The published v0.1.0-beta.20 tag at `6776382` remains immutable. The owner
+explicitly rejected a beta.20 reissue so its installed population cannot fork.
+Lua Bots is therefore retargeted to v0.1.0-beta.21:
+
+- `minimumLoaderVersion` and the official-distribution compatibility floor are
+  `0.1.0-beta.21`;
+- the listing requirement sentence names v0.1.0-beta.21;
+- the production listing remains offline until beta.21 is published; and
+- `codex/botpub-website-20260727` remains undeployed until the owner/ATC merges
+  it as part of the same-day publication flip.
