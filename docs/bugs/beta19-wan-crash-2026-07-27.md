@@ -1,9 +1,9 @@
 # Beta.19 WAN disconnect and native crashes (2026-07-27)
 
 Status: investigation in progress. This checkpoint records the completed
-artifact inventory, peer-correlated timeline, and native dump forensics.
-Static reverse engineering, root-cause proof, and any fix are deliberately
-pending.
+artifact inventory, peer-correlated timeline, dump forensics, and static
+reverse engineering of both native faults. Transport root-cause proof and any
+fix are deliberately pending.
 
 ## Scope and names
 
@@ -246,14 +246,15 @@ eip=00a207e5 esp=0153f728 ebp=0153f734
 
 The game image was rebased to `0x00A00000`. Its timestamp
 (`0x581A0BF3`), checksum (`0x00483B1C`), and image size (`0x007AC000`)
-identify the expected retail executable. The fault and full native chain,
-converted to retail static addresses, are:
+identify the expected retail executable. The fault and frame-pointer chain
+reported by CDB, converted to retail static addresses, is:
 
 ```text
 0x004207E5  mov edx, dword ptr [eax]  ; eax == 0
 0x004137D0
 0x00412FB0
 0x005A77A7
+0x005B6993  hidden FPO frame recovered from the raw stack
 0x0074812F
 0x007487BE  native thread entry
 KERNEL32!BaseThreadInitThunk
@@ -278,3 +279,150 @@ triage suggestion that the owner crash has `esi == 0`; in the saved context,
 Dump evidence alone cannot name the two stock functions or prove whether a
 loader hook caused either state. That requires resolving every native frame
 and caller edge against the retail binary before any fix is considered.
+
+## Static reverse engineering
+
+Ghidra 12.0.3 analyzed the retail `SolomonDark.exe` from a read-only project
+replica. Both fault addresses dereference the same native global:
+`DAT_00B401E8`, which `config/binary-layout.ini` independently identifies as
+`device_pointer_global`. It is the stock process-wide
+`IDirect3DDevice9 *`. The nulls are not actor, participant, projectile, or
+minion pointers.
+
+### Device ownership and shutdown order
+
+The relevant stock lifecycle is:
+
+1. `FUN_0043FF70` calls `Direct3DCreate9` and
+   `IDirect3D9::CreateDevice(..., &DAT_00B401E8)`.
+2. `FUN_0040C690`, the native application run loop, starts asset work with
+   `__beginthread(LAB_0040B550, ...)`.
+3. The run loop polls virtual slot `+0xF4`, resolved through the owner's
+   `MyApp` vtable to `FUN_0040DEC0`. That function returns the close flag at
+   `DAT_00B40207`.
+4. After the flag becomes nonzero, the run loop calls virtual slot `+0xF8`
+   (`FUN_0040E430`) and proceeds to graphics teardown. That virtual function
+   disposes another owned object and calls slot `+0xB4`; it does not join the
+   asset worker.
+5. At `0x0040D091` the run loop unbinds stage-zero texture state. It releases
+   the D3D device and interface, then writes zero to `DAT_00B401E8` at
+   `0x0040D0CF`.
+6. `FUN_0068C500` returns after the run loop. CRT exit then destroys `MyApp`
+   and its global bundle collection, whose texture cleanup still assumes the
+   device exists.
+
+The device global has 129 static references in 44 functions. Its initialization
+is the `CreateDevice` out parameter above, and the only direct native write of
+zero is the run-loop teardown at `0x0040D0CF`. The loader's D3D9 seam reads
+the configured global to acquire the device and patches the live device's
+`Reset` and `EndScene` vtable slots. It does not assign or clear the native
+global.
+
+### Client B fault at `0x00441221`
+
+`0x00441221` is in `FUN_00441180`, the stock texture-slot allocation and
+creation routine:
+
+```asm
+mov ecx, dword ptr [DAT_00B401E8]
+mov edx, dword ptr [ecx]          ; fault: device == null
+mov ecx, dword ptr [edx+0x5c]
+call ecx                          ; IDirect3DDevice9::CreateTexture
+```
+
+`FUN_00441180` has one direct caller, texture upload routine
+`FUN_00440F70`. Every direct call into that uploader is from the image loader
+`FUN_00420140` (two sites) or its two adjacent image helpers
+`FUN_00420640` and `FUN_004206A0`. The captured path resolves completely:
+
+```text
+FUN_00441180  texture allocation / CreateTexture
+FUN_00440F70  texture pixel upload
+FUN_00420140  image load
+FUN_004130F8  image page-set load
+FUN_004E0DD0  BadGuys atlas builder
+LAB_0040B550  MyApp asset worker
+native thread entry
+```
+
+The `BadGuys` identity is independently fixed by vtable `0x00799F14`,
+constructor `0x005AC9D0`, and singleton `0x00819978`. The worker entry calls
+`MyApp` vtable slot `+0xBC`, resolved to `FUN_005B69D0`, which dispatches
+compiled asset/singleton builders including this atlas path.
+
+The menu had already rendered, so the device was successfully initialized.
+The asset worker was still uploading the BadGuys atlas when another thread
+cleared the process-wide device during shutdown. The crash occurred 264 ms
+after the deactivation log. The incomplete dump cannot prove which window
+message initiated client B's close, but static ownership proves the immediate
+defect: native teardown neither joins nor excludes the asset worker before
+releasing and clearing the device.
+
+### Owner fault at `0x004207E5`
+
+`0x004207E5` is in `FUN_00420760`, the central stock SpriteBundle
+texture-slot release routine:
+
+```asm
+mov eax, dword ptr [DAT_00B401E8]
+mov edx, dword ptr [eax]          ; fault: device == null
+mov eax, dword ptr [edx+0x104]
+call eax                          ; IDirect3DDevice9::SetTexture(0, null)
+```
+
+Its complete direct-caller set is `FUN_00413760`, `FUN_00417290`,
+`FUN_004174E0`, `FUN_00417200`, `FUN_00500B90`, and `FUN_005BED10`.
+The dump selected the first path. Resolving the captured frames and the raw
+stack gives:
+
+```text
+FUN_00420760  SpriteBundle texture-slot release / SetTexture
+FUN_00413760  bulk SpriteBundle release
+FUN_00412F70  SpriteBundle destructor
+FUN_005A76D0  global bundle collection destructor
+FUN_005B6500  MyApp destructor (return 0x005B6993)
+CRT exit / native thread entry
+```
+
+`0x005B6993` is an optimized frame omitted by CDB's frame-pointer unwind but
+present as the live return address on the raw stack. It is immediately after
+the `FUN_005A76D0` call in the `MyApp` destructor. This closes the apparent
+gap between the bundle destructor and CRT exit.
+
+The owner dump supplies the lifecycle state, not merely a static possibility.
+With its `+0x00600000` image relocation applied:
+
+- `DAT_00B401E8` is zero;
+- close flag `DAT_00B40207` is one;
+- the `MyApp` object is live at `0x00E1F630` with vtable
+  `0x0079A004` after removing relocation;
+- its deep-pause, light-pause, and deactivated bytes at `+0xC23`,
+  `+0xC24`, and `+0xC25` are all zero.
+
+Stock window procedure `FUN_00443440` only queues activation state for
+`WM_ACTIVATEAPP`; its close path sets `DAT_00B40207`. The loader focus bypass
+changes a false `WM_ACTIVATEAPP` to true and clears the app's deactivated byte.
+The dump confirms that those pause/deactivation fields were already clear.
+The deactivation log is therefore a shutdown/focus-loss symptom, not the
+owner crash trigger.
+
+The owner exited the native run loop through its close state, which released
+and cleared the D3D device. CRT destruction then called the SpriteBundle
+release routine after that lifetime had ended. Its unconditional `SetTexture`
+dispatch through the cleared global caused the fault.
+
+### Static verdict
+
+The two addresses are different manifestations of one stock shutdown-lifetime
+class:
+
+- a concurrent asset worker uses the D3D device after run-loop teardown;
+- later static object destruction uses the D3D device after run-loop teardown.
+
+Neither saved fault stack includes the loader, and none of the beta.18-to-.19
+minion, projectile catch-up, damage-observer, or synthetic-participant paths
+can reach either native chain. The crashes are real native defects, but they
+occur while the processes are closing and do not explain why the owner's
+host-to-client Steam stream failed roughly one minute earlier. The transport
+failure remains a separate root-cause question; no fix is justified until
+that one-way rejection is explained too.
