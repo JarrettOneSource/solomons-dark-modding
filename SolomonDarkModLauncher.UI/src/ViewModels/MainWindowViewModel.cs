@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using SolomonDarkModding.Updates;
+using SolomonDarkModLauncher.ModSettings;
 using SolomonDarkModLauncher.UI.Infrastructure;
 using SolomonDarkModLauncher.UI.ViewModels.ModSettings;
 using SolomonDarkModLauncher.UI.Views;
@@ -1023,6 +1024,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             activeGameProcessId_ = processId;
             OnPropertyChanged(nameof(HasActiveGame));
             OnPropertyChanged(nameof(CanLeaveLobby));
+            UpdateModSettingsInstance();
             RaiseCommandStates();
             try
             {
@@ -1138,6 +1140,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             activeGameProcessId_ = 0;
             OnPropertyChanged(nameof(HasActiveGame));
             OnPropertyChanged(nameof(CanLeaveLobby));
+            UpdateModSettingsInstance();
             ClearSteamSessionStatus();
             UpdateActiveSaveSummary();
             RaiseCommandStates();
@@ -1379,6 +1382,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ApplySteamSessionStatus(LauncherCliMultiplayerSession status)
     {
+        modSettingsSessionStatus_ = status;
+        UpdateModSettingsInstance();
         UpdateLobbyDetails(status);
         if (status.Phase == "Error" &&
             !string.IsNullOrWhiteSpace(status.ErrorText))
@@ -1966,6 +1971,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             pendingLobbyMods_ = null;
         }
+        modSettingsSessionStatus_ = null;
+        UpdateModSettingsInstance();
         ClearLobbyDetails();
     }
 
@@ -2040,6 +2047,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             mod.SettingsRequested -= OnModSettingsRequested;
         }
 
+        EnsureModSettingsService(response.Configuration);
+
         Mods.Clear();
         foreach (var mod in response.Mods)
         {
@@ -2083,11 +2092,72 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             mod.Id);
     }
 
-    // #61 mod-settings frontend. Until the #60 service layer lands, the stub
-    // source (SDMOD_UI_SETTINGS_STUB=1) drives the dialog for visual work; the
-    // production adapter replaces settingsSource_ during integration.
+    // #61 mod-settings frontend over the #60 service layer.
+    // SDMOD_UI_SETTINGS_STUB=1 substitutes the stub source for visual work.
+    private readonly ModSettingsInstanceContext modSettingsInstanceContext_ = new();
+    private IModSettingsService? modSettingsService_;
     private IModSettingsSource? settingsSource_ =
         StubModSettingsSource.Enabled ? new StubModSettingsSource() : null;
+    private string modSettingsModsRoot_ = string.Empty;
+    private string modSettingsStageRoot_ = string.Empty;
+    private string modSettingsPipeName_ = string.Empty;
+    private LauncherCliMultiplayerSession? modSettingsSessionStatus_;
+
+    private void EnsureModSettingsService(LauncherCliConfiguration? configuration)
+    {
+        if (StubModSettingsSource.Enabled
+            || configuration is null
+            || string.IsNullOrWhiteSpace(configuration.ModsRoot)
+            || string.IsNullOrWhiteSpace(configuration.StageRoot))
+        {
+            return;
+        }
+
+        if (modSettingsService_ is not null
+            && configuration.ModsRoot == modSettingsModsRoot_
+            && configuration.StageRoot == modSettingsStageRoot_)
+        {
+            return;
+        }
+
+        modSettingsModsRoot_ = configuration.ModsRoot;
+        modSettingsStageRoot_ = configuration.StageRoot;
+        modSettingsPipeName_ = string.IsNullOrWhiteSpace(configuration.Instance)
+            ? "SolomonDarkModLoader_LuaExec"
+            : $"SolomonDarkModLoader_LuaExec_{configuration.Instance}";
+
+        var manifestService = new ModSettingsManifestService();
+        modSettingsService_ = new ModSettingsService(
+            configuration.ModsRoot,
+            configuration.StageRoot,
+            new ModSettingsDiscoveryService(manifestService),
+            new ModSettingsStore(manifestService),
+            new ModSettingsRuntimeClient(),
+            modSettingsInstanceContext_);
+        settingsSource_ = new ModSettingsSourceAdapter(modSettingsService_);
+        UpdateModSettingsInstance();
+    }
+
+    private void UpdateModSettingsInstance()
+    {
+        var state = ModSettingsGameInstanceState.NotRunning;
+        if (activeGameProcessId_ > 0)
+        {
+            state = modSettingsSessionStatus_ is { Enabled: true, LobbyId: not 0 } session
+                ? session.IsHost
+                    ? ModSettingsGameInstanceState.RunningHost
+                    : ModSettingsGameInstanceState.RunningClientInSession
+                : ModSettingsGameInstanceState.RunningSolo;
+        }
+
+        modSettingsInstanceContext_.Update(new OwnedModSettingsInstance
+        {
+            State = state,
+            PipeName = state == ModSettingsGameInstanceState.NotRunning
+                ? string.Empty
+                : modSettingsPipeName_
+        });
+    }
 
     private void ApplyModSettingsState(ModItemViewModel mod)
     {
@@ -2096,9 +2166,17 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        ModSettingsSchema schema = settingsSource_.GetSchema(mod.Id);
-        mod.SettingsState = schema.State;
-        mod.SettingsValidationError = schema.ValidationError;
+        try
+        {
+            ModSettingsSchema schema = settingsSource_.GetSchema(mod.Id);
+            mod.SettingsState = schema.State;
+            mod.SettingsValidationError = schema.ValidationError;
+        }
+        catch (KeyNotFoundException)
+        {
+            mod.SettingsState = ModSettingsBlockState.None;
+            mod.SettingsValidationError = null;
+        }
     }
 
     private void OnModSettingsRequested(ModItemViewModel mod)

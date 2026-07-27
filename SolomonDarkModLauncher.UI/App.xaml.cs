@@ -38,8 +38,31 @@ public partial class App : Application
             try
             {
                 Log("preview starting");
+
+                // SDMOD_UI_SETTINGS_PREVIEW_REAL="<modsRoot>|<stageRoot>" runs
+                // the dialog over the real #60 service chain instead of the stub.
+                ViewModels.ModSettings.IModSettingsSource source;
+                string? real = Environment.GetEnvironmentVariable("SDMOD_UI_SETTINGS_PREVIEW_REAL");
+                if (real?.Split('|') is [{ } modsRoot, { } stageRoot])
+                {
+                    var manifestService = new SolomonDarkModLauncher.ModSettings.ModSettingsManifestService();
+                    source = new ViewModels.ModSettings.ModSettingsSourceAdapter(
+                        new SolomonDarkModLauncher.ModSettings.ModSettingsService(
+                            modsRoot,
+                            stageRoot,
+                            new SolomonDarkModLauncher.ModSettings.ModSettingsDiscoveryService(manifestService),
+                            new SolomonDarkModLauncher.ModSettings.ModSettingsStore(manifestService),
+                            new SolomonDarkModLauncher.ModSettings.ModSettingsRuntimeClient(),
+                            new SolomonDarkModLauncher.ModSettings.ModSettingsInstanceContext()));
+                    Log($"preview using REAL services modsRoot={modsRoot} stageRoot={stageRoot}");
+                }
+                else
+                {
+                    source = new ViewModels.ModSettings.StubModSettingsSource();
+                }
+
                 var previewViewModel = new ViewModels.ModSettings.ModSettingsDialogViewModel(
-                    new ViewModels.ModSettings.StubModSettingsSource(),
+                    source,
                     "bot.brain");
                 var previewWindow = new ModSettingsWindow(previewViewModel);
                 previewWindow.Loaded += (_, _) => Log("preview window loaded");

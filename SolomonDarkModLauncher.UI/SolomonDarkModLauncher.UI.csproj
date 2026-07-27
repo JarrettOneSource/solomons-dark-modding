@@ -20,6 +20,12 @@
     <Compile Include="..\Shared\LauncherPathPolicy.cs" Link="Shared\LauncherPathPolicy.cs" />
     <Compile Include="..\Shared\SemanticVersion.cs" Link="Shared\SemanticVersion.cs" />
     <Compile Include="..\Shared\UpdateProgress.cs" Link="Shared\UpdateProgress.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsModels.cs" Link="ModSettings\ModSettingsModels.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsManifestService.cs" Link="ModSettings\ModSettingsManifestService.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsDiscoveryService.cs" Link="ModSettings\ModSettingsDiscoveryService.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsStore.cs" Link="ModSettings\ModSettingsStore.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsRuntimeClient.cs" Link="ModSettings\ModSettingsRuntimeClient.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsService.cs" Link="ModSettings\ModSettingsService.cs" />
     <ProjectReference Include="..\SolomonDarkModLauncher\SolomonDarkModLauncher.csproj"
                       Condition="'$(RuntimeIdentifier)' == ''"
                       ReferenceOutputAssembly="false"

@@ -348,11 +348,18 @@
                     </StackPanel>
                     <ComboBox Grid.Column="1"
                               Margin="16,0,0,0"
+                              MaxWidth="260"
                               VerticalAlignment="Center"
                               Style="{StaticResource DarkComboBoxStyle}"
                               ItemsSource="{Binding Choices}"
-                              SelectedItem="{Binding Selected}"
-                              DisplayMemberPath="Label" />
+                              SelectedItem="{Binding Selected}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </Grid>
             </Border>
         </DataTemplate>
