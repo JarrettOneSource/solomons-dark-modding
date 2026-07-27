@@ -122,6 +122,9 @@
     <ClInclude Include="include\bot_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\bot_spawn_placement.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\d3d9_end_scene_hook.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -854,6 +857,9 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl">
       <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_spawn_placement.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -1113,6 +1119,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_bot_spawn_placement.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl">

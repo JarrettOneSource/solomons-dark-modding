@@ -15,6 +15,13 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     runtime_lifecycle = _read(
         "SolomonDarkModLoader/src/bot_runtime/public_api/lifecycle_api.inl"
     )
+    spawn_placement = _read(
+        "SolomonDarkModLoader/include/bot_spawn_placement.h"
+    )
+    spawn_placement += _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_spawn_placement.inl"
+    )
     runtime_state = _read(
         "SolomonDarkModLoader/include/"
         "multiplayer_runtime_effect_state.inl"
@@ -172,12 +179,40 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     ):
         assert token in runtime_lifecycle, f"bot capacity gate lacks: {token}"
     assert "occupied_remote_slots >= 3" not in runtime_lifecycle
+    _require_in_order(
+        runtime_lifecycle,
+        "TryResolveBotSpawnPlacement(",
+        "const auto bot_id = g_next_bot_id++;",
+        "UpsertRemoteParticipant(",
+    )
+    for token in (
+        "FindNearestClearBotSpawnPlacement(",
+        "BotSpawnPlacementSearchBound(",
+        "kBotSpawnPlacementRadiusMultiples = 12",
+        "CallMovementCollisionTestCirclePlacementSafe(",
+        "CallMovementCollisionTestCirclePlacementExtendedSafe(",
+        "kMovementCollisionTestCirclePlacement",
+        "kMovementCollisionTestCirclePlacementExtended",
+        "const std::uint32_t overlap_allow_mask = 0;",
+        "reserved_bot_placements",
+        "reserved_distance_squared",
+        "reservation_count=",
+        '"no clear spawn position"',
+        '"spawn placement unavailable"',
+        "[bots] native spawn placement accepted.",
+    ):
+        assert token in spawn_placement, (
+            f"native-safe bot spawn placement lacks: {token}"
+        )
+    assert "TryBuildGameplayPathGridSnapshot(" not in spawn_placement
+    assert "TryResolveNearestTraversablePlacement(" not in spawn_placement
 
     for token in (
         "TrySpawnGameplaySlotBotParticipantEntity(",
         "CreateGameplaySlotBotActor(",
         "FinalizeGameplaySlotBotRegistration(",
         "No native participant seat is available.",
+        "ResolveBotParticipantSpawnTransform(",
     ):
         combined = entity_lifecycle + materialization
         assert token in combined, f"ordinary remote-player materialization lacks: {token}"
@@ -352,6 +387,10 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         '"renderMechanism": "WPF RenderTargetBitmap in launcher process"',
         '"That lobby is full."',
         '"ticketIssued": True',
+        '"nativeSpawnPlacement"',
+        '"hubMovement"',
+        '"boneyardMovement"',
+        '"blockedNaiveAnchorRegression"',
         "stop_owned_process(",
         "actual.casefold() != expected_path.casefold()",
     ):

@@ -8,6 +8,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import shutil
@@ -166,6 +167,17 @@ def integer(values: dict[str, str], key: str, default: int = 0) -> int:
             return int(float(raw))
         except ValueError:
             return default
+
+
+def number(
+    values: dict[str, str],
+    key: str,
+    default: float = math.nan,
+) -> float:
+    try:
+        return float(values.get(key, str(default)).strip())
+    except ValueError:
+        return default
 
 
 def lua(pipe_name: str, code: str, timeout: float = 15.0) -> str:
@@ -470,6 +482,12 @@ for index, handle in ipairs(handles) do
   emit("actual." .. index .. ".id", participant_id)
   emit("actual." .. index .. ".name", state and state.name or "")
   emit("actual." .. index .. ".slot", state and state.gameplay_slot or -1)
+  emit("actual." .. index .. ".x", state and state.x or "")
+  emit("actual." .. index .. ".y", state and state.y or "")
+  emit(
+    "actual." .. index .. ".actor",
+    state and state.actor_address or 0)
+  emit("actual." .. index .. ".moving", state and state.moving or false)
   emit(
     "actual." .. index .. ".materialized",
     state ~= nil and state.entity_materialized == true)
@@ -499,6 +517,392 @@ def bot_ids(values: dict[str, str]) -> list[int]:
         for index in range(1, integer(values, "actual.count") + 1)
     ]
     return sorted(value for value in result if value > 0)
+
+
+def bot_positions(
+    values: dict[str, str],
+    expected_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    positions: dict[int, dict[str, Any]] = {}
+    for index in range(1, integer(values, "actual.count") + 1):
+        participant_id = integer(values, f"actual.{index}.id")
+        x = number(values, f"actual.{index}.x")
+        y = number(values, f"actual.{index}.y")
+        if (
+            participant_id <= 0
+            or not math.isfinite(x)
+            or not math.isfinite(y)
+        ):
+            continue
+        positions[participant_id] = {
+            "x": x,
+            "y": y,
+            "actor": integer(values, f"actual.{index}.actor"),
+            "materialized":
+                values.get(f"actual.{index}.materialized") == "true",
+            "moving": values.get(f"actual.{index}.moving") == "true",
+        }
+    missing = sorted(set(expected_ids) - set(positions))
+    if missing:
+        raise VerificationFailure(
+            f"Bot transform rows are missing for {missing}: {values}"
+        )
+    return positions
+
+
+def native_blocked_anchor_probe(pipe_name: str) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            r"""
+local player = assert(
+  sd.player.get_state(),
+  "native blocked-anchor probe requires a live player")
+local result = sd.debug.test_native_movement_collision(
+  player.x,
+  player.y,
+  nil,
+  1,
+  0)
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+emit("x", player.x)
+emit("y", player.y)
+for _, key in ipairs({
+  "ok", "blocked", "native_result", "radius",
+  "circle_block_mask", "overlap_allow_mask", "mode",
+  "exception_code"
+}) do
+  emit(key, result[key])
+end
+""",
+        )
+    )
+    if (
+        values.get("ok") != "true"
+        or values.get("blocked") != "true"
+        or integer(values, "native_result") == 0
+        or number(values, "radius", 0.0) <= 0.0
+        or integer(values, "circle_block_mask") != 1
+        or integer(values, "overlap_allow_mask", -1) != 0
+        or values.get("mode") != "extended"
+        or integer(values, "exception_code", -1) != 0
+    ):
+        raise VerificationFailure(
+            "The local-player anchor did not reproduce the old native "
+            f"blocked-placement shape: {values}"
+        )
+    return values
+
+
+def native_spawn_placement_rows(
+    instance: str,
+    participant_ids: list[int],
+    scene_kind: str,
+    phase: str,
+) -> dict[int, dict[str, Any]]:
+    marker = "[bots] native spawn placement accepted."
+    rows: dict[int, dict[str, Any]] = {}
+    text = log_path(instance).read_text(
+        encoding="utf-8",
+        errors="replace",
+    )
+    for line in text.splitlines():
+        if marker not in line:
+            continue
+        fields = dict(
+            re.findall(r"([a-z_]+)=([^ ]+)", line.split(marker, 1)[1])
+        )
+        try:
+            participant_id = int(fields.get("bot_id", "0"), 10)
+        except ValueError:
+            continue
+        if (
+            participant_id not in participant_ids
+            or fields.get("scene") != scene_kind
+            or fields.get("phase") != phase
+        ):
+            continue
+        try:
+            row = {
+                "line": line,
+                "botId": participant_id,
+                "scene": fields["scene"],
+                "phase": fields["phase"],
+                "anchorX": float(fields["anchor_x"]),
+                "anchorY": float(fields["anchor_y"]),
+                "resolvedX": float(fields["resolved_x"]),
+                "resolvedY": float(fields["resolved_y"]),
+                "radius": float(fields["radius"]),
+                "primaryMask": fields["primary_mask"],
+                "reservationCount": int(
+                    fields["reservation_count"],
+                    10,
+                ),
+                "probeCount": int(fields["probe_count"], 10),
+                "searchDistance": float(fields["search_distance"]),
+                "basicResult": int(fields["basic_result"], 10),
+                "extendedResult": int(fields["extended_result"], 10),
+            }
+        except (KeyError, ValueError):
+            continue
+        if (
+            all(
+                math.isfinite(row[key])
+                for key in (
+                    "anchorX",
+                    "anchorY",
+                    "resolvedX",
+                    "resolvedY",
+                    "radius",
+                    "searchDistance",
+                )
+            )
+            and row["radius"] > 0.0
+            and row["probeCount"] > 0
+            and row["basicResult"] == 0
+            and row["extendedResult"] == 0
+        ):
+            rows[participant_id] = row
+    return rows
+
+
+def wait_for_native_spawn_placements(
+    participant_ids: list[int],
+    scene_kind: str,
+) -> dict[str, Any]:
+    rows, observed_utc = wait_for(
+        lambda: {
+            role: native_spawn_placement_rows(
+                instance,
+                participant_ids,
+                scene_kind,
+                "materialize",
+            )
+            for role, instance in (
+                ("host", HOST_INSTANCE),
+                ("client", CLIENT_INSTANCE),
+            )
+        },
+        lambda value: all(
+            set(value[role]) == set(participant_ids)
+            for role in ("host", "client")
+        ),
+        label=(
+            f"native-clear {scene_kind} materialization for every bot "
+            "on both peers"
+        ),
+        timeout=30,
+        interval=0.2,
+    )
+    return {
+        "observedUtc": observed_utc,
+        "scene": scene_kind,
+        "peers": {
+            role: {
+                str(participant_id): row
+                for participant_id, row in rows[role].items()
+            }
+            for role in ("host", "client")
+        },
+    }
+
+
+def arm_bot_move_driver(
+    participant_ids: list[int],
+    host_positions: dict[int, dict[str, Any]],
+    direction_x: float,
+    direction_y: float,
+) -> dict[str, str]:
+    target_rows = "\n".join(
+        (
+            f"targets[{participant_id}] = "
+            f"{{x={host_positions[participant_id]['x'] + direction_x * 180.0:.9f},"
+            f"y={host_positions[participant_id]['y'] + direction_y * 180.0:.9f}}}"
+        )
+        for participant_id in participant_ids
+    )
+    code = f"""
+local targets = {{}}
+{target_rows}
+local drive = {{
+  targets = targets,
+  remaining = 240,
+  ticks = 0,
+  orders = 0,
+  errors = 0,
+}}
+_G.__bcap_move_drive = drive
+if not _G.__bcap_move_driver_registered then
+  sd.events.on("runtime.tick", function()
+    local active = _G.__bcap_move_drive
+    if type(active) ~= "table" or active.remaining <= 0 then
+      return
+    end
+    active.remaining = active.remaining - 1
+    active.ticks = active.ticks + 1
+    for _, handle in ipairs(sd.bots.list() or {{}}) do
+      local participant_id = tonumber(handle:participant_id()) or 0
+      local target = active.targets[participant_id]
+      if target ~= nil then
+        local ok, accepted = pcall(
+          handle.move_to,
+          handle,
+          target.x,
+          target.y)
+        if ok and accepted == true then
+          active.orders = active.orders + 1
+        else
+          active.errors = active.errors + 1
+        end
+      end
+    end
+  end)
+  _G.__bcap_move_driver_registered = true
+end
+print("armed=" .. tostring(_G.__bcap_move_driver_registered == true))
+print("target_count=" .. tostring({len(participant_ids)}))
+"""
+    values = parse_key_values(lua(HOST_PIPE, code))
+    if (
+        values.get("armed") != "true"
+        or integer(values, "target_count") != len(participant_ids)
+    ):
+        raise VerificationFailure(
+            f"Could not arm explicit bot move-order driver: {values}"
+        )
+    return values
+
+
+def disarm_bot_move_driver() -> dict[str, str]:
+    return parse_key_values(
+        lua(
+            HOST_PIPE,
+            r"""
+local drive = _G.__bcap_move_drive or {}
+_G.__bcap_move_drive = nil
+print("disabled=true")
+print("ticks=" .. tostring(drive.ticks or 0))
+print("orders=" .. tostring(drive.orders or 0))
+print("errors=" .. tostring(drive.errors or 0))
+""",
+        )
+    )
+
+
+def verify_bot_movement(
+    participant_ids: list[int],
+    scene_label: str,
+) -> dict[str, Any]:
+    directions = (
+        (1.0, 0.0),
+        (0.0, 1.0),
+        (-1.0, 0.0),
+        (0.0, -1.0),
+        (0.70710678, 0.70710678),
+        (-0.70710678, 0.70710678),
+        (-0.70710678, -0.70710678),
+        (0.70710678, -0.70710678),
+    )
+    proofs: dict[int, dict[str, Any]] = {}
+    attempts: list[dict[str, Any]] = []
+    for direction_x, direction_y in directions:
+        start = {
+            "host": bot_positions(
+                brain_probe(HOST_PIPE),
+                participant_ids,
+            ),
+            "client": bot_positions(
+                brain_probe(CLIENT_PIPE),
+                participant_ids,
+            ),
+        }
+        arm = arm_bot_move_driver(
+            participant_ids,
+            start["host"],
+            direction_x,
+            direction_y,
+        )
+        attempt_samples: dict[int, dict[str, Any]] = {}
+        deadline = time.monotonic() + 5.0
+        try:
+            while time.monotonic() < deadline:
+                current = {
+                    "host": bot_positions(
+                        brain_probe(HOST_PIPE),
+                        participant_ids,
+                    ),
+                    "client": bot_positions(
+                        brain_probe(CLIENT_PIPE),
+                        participant_ids,
+                    ),
+                }
+                for participant_id in participant_ids:
+                    host_delta = math.hypot(
+                        current["host"][participant_id]["x"]
+                        - start["host"][participant_id]["x"],
+                        current["host"][participant_id]["y"]
+                        - start["host"][participant_id]["y"],
+                    )
+                    client_delta = math.hypot(
+                        current["client"][participant_id]["x"]
+                        - start["client"][participant_id]["x"],
+                        current["client"][participant_id]["y"]
+                        - start["client"][participant_id]["y"],
+                    )
+                    if host_delta > 3.0 and client_delta > 3.0:
+                        proof = {
+                            "start": {
+                                role: start[role][participant_id]
+                                for role in ("host", "client")
+                            },
+                            "end": {
+                                role: current[role][participant_id]
+                                for role in ("host", "client")
+                            },
+                            "hostTransformDelta": host_delta,
+                            "clientTransformDelta": client_delta,
+                            "observedUtc": utc_now(),
+                        }
+                        attempt_samples[participant_id] = proof
+                        proofs.setdefault(participant_id, proof)
+                if set(proofs) == set(participant_ids):
+                    break
+                time.sleep(0.12)
+        finally:
+            driver = disarm_bot_move_driver()
+        attempts.append(
+            {
+                "direction": [direction_x, direction_y],
+                "arm": arm,
+                "driver": driver,
+                "movedBotIds": sorted(attempt_samples),
+            }
+        )
+        if set(proofs) == set(participant_ids):
+            if (
+                integer(driver, "ticks") <= 0
+                or integer(driver, "orders") <= 0
+                or integer(driver, "errors") != 0
+            ):
+                raise VerificationFailure(
+                    f"{scene_label} move-order driver was not clean: "
+                    f"{driver}"
+                )
+            return {
+                "scene": scene_label,
+                "threshold": 3.0,
+                "bots": {
+                    str(participant_id): proofs[participant_id]
+                    for participant_id in participant_ids
+                },
+                "attempts": attempts,
+            }
+    raise VerificationFailure(
+        f"Not every {scene_label} bot moved on host and client after "
+        f"explicit move orders: proofs={proofs} attempts={attempts}"
+    )
 
 
 def reload_host_settings() -> dict[str, str]:
@@ -1155,6 +1559,7 @@ def verify(timeout_seconds: float) -> dict[str, Any]:
         "audioDisabled": True,
         "productionWebsiteTouched": False,
         "website": {"url": DIRECTORY_URL, "localOnly": True},
+        "nativeSpawnPlacement": {},
     }
     started_at = time.time()
     pair_process: subprocess.Popen[str] | None = None
@@ -1210,6 +1615,14 @@ def verify(timeout_seconds: float) -> dict[str, Any]:
         result["initialHumans"] = {
             "observedUtc": initial_utc,
             **initial,
+        }
+        blocked_anchor = native_blocked_anchor_probe(HOST_PIPE)
+        result["blockedNaiveAnchorRegression"] = {
+            "nativeProbe": blocked_anchor,
+            "oldBehavior": (
+                "The unsearched owner anchor is occupied and cannot be used "
+                "as a bot spawn position."
+            ),
         }
 
         write_settings(settings_path(HOST_INSTANCE), FULL_ROSTER)
@@ -1277,6 +1690,92 @@ def verify(timeout_seconds: float) -> dict[str, Any]:
             "clientStatus": full["clientStatus"],
             "aggregateStatus": "2 of 4 bots active — lobby full",
         }
+        hub_placement = wait_for_native_spawn_placements(
+            active_bot_ids,
+            "SharedHub",
+        )
+        host_create_rows, host_create_utc = wait_for(
+            lambda: native_spawn_placement_rows(
+                HOST_INSTANCE,
+                active_bot_ids,
+                "SharedHub",
+                "create",
+            ),
+            lambda value: set(value) == set(active_bot_ids),
+            label="synchronous native-clear host bot creation",
+            timeout=15,
+            interval=0.1,
+        )
+        result["nativeSpawnPlacement"]["hub"] = {
+            **hub_placement,
+            "hostCreateObservedUtc": host_create_utc,
+            "hostCreate": {
+                str(participant_id): row
+                for participant_id, row in host_create_rows.items()
+            },
+        }
+        first_create = host_create_rows[active_bot_ids[0]]
+        second_create = host_create_rows[active_bot_ids[1]]
+        create_separation = math.hypot(
+            second_create["resolvedX"] - first_create["resolvedX"],
+            second_create["resolvedY"] - first_create["resolvedY"],
+        )
+        required_separation = (
+            first_create["radius"] + second_create["radius"]
+        )
+        if (
+            first_create["reservationCount"] != 0
+            or second_create["reservationCount"] < 1
+            or create_separation + 0.01 < required_separation
+        ):
+            raise VerificationFailure(
+                "Synchronous bot creation did not reserve distinct "
+                "native-clear placements: "
+                f"first={first_create} second={second_create} "
+                f"separation={create_separation} "
+                f"required={required_separation}"
+            )
+        result["nativeSpawnPlacement"]["hub"][
+            "synchronousReservations"
+        ] = {
+            "firstReservationCount":
+                first_create["reservationCount"],
+            "secondReservationCount":
+                second_create["reservationCount"],
+            "resolvedSeparation": create_separation,
+            "requiredSeparation": required_separation,
+        }
+        anchor_distance = math.hypot(
+            first_create["anchorX"] - number(blocked_anchor, "x"),
+            first_create["anchorY"] - number(blocked_anchor, "y"),
+        )
+        resolved_distance = math.hypot(
+            first_create["resolvedX"] - first_create["anchorX"],
+            first_create["resolvedY"] - first_create["anchorY"],
+        )
+        if (
+            anchor_distance > 1.0
+            or first_create["probeCount"] <= 1
+            or first_create["searchDistance"] <= 0.0
+            or resolved_distance <= 0.0
+        ):
+            raise VerificationFailure(
+                "The blocked naive anchor did not exercise the framework's "
+                f"outward native placement search: probe={blocked_anchor} "
+                f"accepted={first_create}"
+            )
+        result["blockedNaiveAnchorRegression"].update(
+            {
+                "acceptedPlacement": first_create,
+                "anchorDeltaFromProbe": anchor_distance,
+                "resolvedDeltaFromBlockedAnchor": resolved_distance,
+                "searchFoundNativeClearPosition": True,
+            }
+        )
+        result["hubMovement"] = verify_bot_movement(
+            active_bot_ids,
+            "hub",
+        )
         atomic_write_json(
             flow / "host-status-full.json",
             full["hostStatus"],
@@ -1445,6 +1944,16 @@ print("count=" .. tostring(#(sd.bots.list() or {})))
             "observedUtc": run_bots_utc,
             **run_bots,
         }
+        result["nativeSpawnPlacement"]["boneyard"] = (
+            wait_for_native_spawn_placements(
+                active_bot_ids,
+                "Run",
+            )
+        )
+        result["boneyardMovement"] = verify_bot_movement(
+            active_bot_ids,
+            "boneyard",
+        )
         result["nativeEnemyTargeting"] = verify_native_targeting(
             active_bot_ids
         )

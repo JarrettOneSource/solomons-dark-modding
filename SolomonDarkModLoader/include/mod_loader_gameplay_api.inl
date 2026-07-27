@@ -79,6 +79,15 @@ bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address);
 void PinRunLifecycleFrozenManualEnemies();
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
+bool TryResolveBotSpawnPlacement(
+    std::uint64_t bot_id,
+    multiplayer::ParticipantSceneIntentKind scene_kind,
+    std::string_view phase,
+    float anchor_x,
+    float anchor_y,
+    float* resolved_x,
+    float* resolved_y,
+    std::string* error_message);
 bool RestoreLocalPlayerMana(
     float* resulting_mana,
     std::string* error_message);

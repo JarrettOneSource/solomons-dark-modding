@@ -33,10 +33,12 @@ bool TrySpawnGameplaySlotBotParticipantEntity(
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
-    if (!ResolveParticipantSpawnTransform(gameplay_address, request, true, &x, &y, &heading)) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to resolve a bot transform.";
-        }
+    if (!ResolveBotParticipantSpawnTransform(
+            request,
+            &x,
+            &y,
+            &heading,
+            error_message)) {
         return false;
     }
 

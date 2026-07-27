@@ -1,4 +1,5 @@
 #include "bot_runtime.h"
+#include "bot_spawn_placement.h"
 #include "d3d9_end_scene_hook.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
@@ -79,6 +80,7 @@ namespace {
 #include "mod_loader_gameplay/lua_spell_cast_filter.inl"
 #include "mod_loader_gameplay/standalone_materialization.inl"
 #include "mod_loader_gameplay/bot_pathfinding.inl"
+#include "mod_loader_gameplay/bot_spawn_placement.inl"
 #include "mod_loader_gameplay/bot_registry_and_movement.inl"
 #include "mod_loader_gameplay/lua_enemy_ai_runtime.inl"
 #include "mod_loader_gameplay/native_minion_runtime.inl"

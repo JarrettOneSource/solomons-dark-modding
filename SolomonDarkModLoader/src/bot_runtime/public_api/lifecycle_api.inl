@@ -100,9 +100,39 @@ bool CreateBot(
         }
     }
 
-    const auto bot_id = g_next_bot_id++;
     const auto sync_scene_intent =
         request.has_scene_intent ? request.scene_intent : ResolveDefaultBotSceneIntentFromCurrentScene();
+    const auto pending_bot_id = g_next_bot_id;
+    float resolved_position_x = 0.0f;
+    float resolved_position_y = 0.0f;
+    std::string placement_error;
+    if (!TryResolveBotSpawnPlacement(
+            pending_bot_id,
+            sync_scene_intent.kind,
+            "create",
+            sync_position_x,
+            sync_position_y,
+            &resolved_position_x,
+            &resolved_position_y,
+            &placement_error)) {
+        if (error_message != nullptr) {
+            *error_message = placement_error.empty()
+                ? "spawn placement unavailable"
+                : placement_error;
+        }
+        Log(
+            "[bots] create rejected by native spawn placement. bot_id=" +
+            std::to_string(pending_bot_id) +
+            " error=" +
+            (placement_error.empty()
+                 ? std::string("spawn placement unavailable")
+                 : placement_error));
+        return false;
+    }
+    sync_position_x = resolved_position_x;
+    sync_position_y = resolved_position_y;
+
+    const auto bot_id = g_next_bot_id++;
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* participant = UpsertRemoteParticipant(
             state,

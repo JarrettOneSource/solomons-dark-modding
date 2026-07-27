@@ -200,3 +200,74 @@ game processes; no third game process or unapproved port was introduced.
 
 No above-four run is permitted because four is the proven native safety
 ceiling.
+
+## Native-safe spawn placement
+
+Bot creation now resolves a physically valid position before it allocates a
+participant ID, registers membership, or reports success to Lua. The resolver
+uses the retail movement controller and the actor collision state copied by
+the bot materializer:
+
+- `movement_collision_test_circle_placement` at `0x00523C90` is called as
+  `(controller, x, y, radius, overlap_allow_mask)`;
+- `movement_collision_test_circle_placement_extended` at `0x005238C0` is
+  called as
+  `(controller, x, y, radius, circle_block_mask, overlap_allow_mask)`;
+- the real local player collision radius at actor `+0x30` supplies `radius`
+  (25 world units in the acceptance run);
+- the actor's primary collision mask supplies `circle_block_mask` (1 in the
+  acceptance run); and
+- `overlap_allow_mask` is zero, so neither geometry nor a player-family circle
+  is exempted.
+
+The recovered native convention is zero for clear and nonzero for blocked.
+Both native tests must return clear for every accepted candidate. This is not a
+loader reimplementation of the cell grid. The decompilations and recovered
+five-/six-argument signatures are archived as
+`investigation/native-spawn-placement-decompile.txt` in the evidence root.
+
+The intended owner/reference anchor is tested first. If it is blocked, the
+framework samples deterministic concentric rings, one collision radius apart,
+in circumference order. The bound is 12 radii: 300 world units for the
+observed radius of 25, with 498 possible probes including the anchor and an
+independent hard limit of 512. The first native-clear candidate is selected.
+Existing, not-yet-materialized Lua bot transforms in the same scene are
+reserved at two radii of clearance so two synchronous `sd.bots.spawn` calls
+cannot both claim a point before either actor enters the native collision
+collection. Reservations only reject an otherwise native-tested candidate;
+they do not replace the game's placement oracle.
+
+The same validation runs again at native materialization on each peer because
+scene geometry and player occupancy may have changed since creation. Failure
+is explicit at the Lua creation seam: an unavailable native query returns
+`nil, "spawn placement unavailable"` and exhausting the bounded search returns
+`nil, "no clear spawn position"`. No participant is registered for that
+failure. A later materialization failure reports the same reason in the
+deferred-sync diagnostic, remains queued for a bounded-delay retry, and does
+not create an intersecting actor.
+
+This placement guarantee composes with the collision-presence restoration in
+`e8eff9d` (#69), which is already in this branch's ancestry. Capacity-bounded
+bots therefore enter the native player-family collision path at positions
+that the same native collision system has accepted.
+
+The final live run reproduced the old hub failure shape: the host anchor at
+approximately `(952.5, 163.604)` returned a nonzero native extended-placement
+result. The resolver searched outward and accepted
+approximately `(1001.047, 175.569)`, 50 world units away, after 10 probes.
+The second synchronous create observed one pending reservation and selected a
+different native-clear point 82.30 world units from the first (the required
+two-radius separation was 50). Every hub and Boneyard materialization on host
+and client logged zero from both native placement calls. Explicit move orders
+then produced nonzero transform deltas for both bots on both processes in both
+scenes. The exact placement rows and deltas are in
+`flow/result.json` under `nativeSpawnPlacement`, `hubMovement`, and
+`boneyardMovement`.
+
+## Final validation battery
+
+The complete then-current source-organization, Python, static RE, Lua-only,
+Windows launcher, generated-API, native CI, Release build, and isolated
+`bcap-workspace` build/stage battery was rerun after rebasing the final change.
+Exact counts and logs are under
+`/mnt/d/codex-evidence/botcap-20260727/final-battery/`.

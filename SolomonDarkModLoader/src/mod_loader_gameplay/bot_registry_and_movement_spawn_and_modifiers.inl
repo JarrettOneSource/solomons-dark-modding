@@ -66,3 +66,40 @@ bool ResolveParticipantSpawnTransform(
     *out_heading = heading;
     return true;
 }
+
+bool ResolveBotParticipantSpawnTransform(
+    const PendingParticipantEntitySyncRequest& request,
+    float* out_x,
+    float* out_y,
+    float* out_heading,
+    std::string* error_message) {
+    if (out_x == nullptr ||
+        out_y == nullptr ||
+        out_heading == nullptr ||
+        !request.has_transform ||
+        !request.has_heading) {
+        if (error_message != nullptr) {
+            *error_message = "spawn transform unavailable";
+        }
+        return false;
+    }
+
+    float resolved_x = 0.0f;
+    float resolved_y = 0.0f;
+    if (!TryResolveBotSpawnPlacement(
+            request.bot_id,
+            request.scene_intent.kind,
+            "materialize",
+            request.x,
+            request.y,
+            &resolved_x,
+            &resolved_y,
+            error_message)) {
+        return false;
+    }
+
+    *out_x = resolved_x;
+    *out_y = resolved_y;
+    *out_heading = request.heading;
+    return true;
+}

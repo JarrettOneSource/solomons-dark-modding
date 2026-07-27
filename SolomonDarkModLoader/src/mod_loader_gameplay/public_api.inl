@@ -1,4 +1,5 @@
 #include "public_api_main_thread_pump.inl"
+#include "public_api_bot_spawn_placement.inl"
 #include "public_api_keyboard_injection.inl"
 #include "public_api_input_queueing.inl"
 #include "public_api_gameplay_action_queues.inl"

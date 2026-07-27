@@ -87,6 +87,7 @@
     <ClInclude Include="include\binary_layout.h" />
     <ClInclude Include="include\binary_layout_internal.h" />
     <ClInclude Include="include\bot_runtime.h" />
+    <ClInclude Include="include\bot_spawn_placement.h" />
     <ClInclude Include="include\d3d9_end_scene_hook.h" />
     <ClInclude Include="include\d3d9_font_atlas.h" />
     <ClInclude Include="include\debug_ui_config.h" />
@@ -330,6 +331,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\native_ranked_stat_values.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_spawn_placement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_registry.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_snapshot.inl" />
@@ -426,6 +428,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_death_presentation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_bot_spawn_placement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_lua_enemy_ai.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />

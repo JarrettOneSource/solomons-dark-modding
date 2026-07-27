@@ -1,3 +1,4 @@
+#include "bot_spawn_placement.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
 
@@ -208,6 +209,122 @@ bool ParticipantCapacityCountsHumansAndBotsTogether() {
         "supported configured capacity was ignored");
 }
 
+bool BotSpawnPlacementKeepsClearAnchor() {
+    using namespace sdmod;
+
+    BotSpawnPlacementResult result;
+    std::uint32_t probes = 0;
+    const auto clear = [&](float x, float y) {
+        ++probes;
+        return NearlyEqual(x, 12.0f) && NearlyEqual(y, -8.0f)
+            ? BotSpawnPlacementProbeResult::Clear
+            : BotSpawnPlacementProbeResult::Blocked;
+    };
+    return Require(
+               FindNearestClearBotSpawnPlacement(
+                   12.0f,
+                   -8.0f,
+                   25.0f,
+                   clear,
+                   &result),
+               "clear bot spawn anchor was rejected") &&
+        Require(
+            NearlyEqual(result.x, 12.0f) &&
+                NearlyEqual(result.y, -8.0f) &&
+                NearlyEqual(result.search_distance, 0.0f),
+            "clear bot spawn anchor moved") &&
+        Require(
+            probes == 1 && result.probe_count == 1,
+            "clear bot spawn anchor used more than one native probe");
+}
+
+bool BotSpawnPlacementSearchesPastBlockedNaiveAnchor() {
+    using namespace sdmod;
+
+    BotSpawnPlacementResult result;
+    const auto clear = [](float x, float y) {
+        const auto distance = std::sqrt(x * x + y * y);
+        return distance >= 49.0f && x > 0.0f
+            ? BotSpawnPlacementProbeResult::Clear
+            : BotSpawnPlacementProbeResult::Blocked;
+    };
+    if (!Require(
+            FindNearestClearBotSpawnPlacement(
+                0.0f,
+                0.0f,
+                25.0f,
+                clear,
+                &result),
+            "blocked naive anchor did not find a clear ring position")) {
+        return false;
+    }
+
+    return Require(
+               !NearlyEqual(result.x, 0.0f) ||
+                   !NearlyEqual(result.y, 0.0f),
+               "blocked naive anchor was returned unchanged") &&
+        Require(
+            NearlyEqual(result.search_distance, 50.0f),
+            "blocked anchor search did not choose the nearest clear ring") &&
+        Require(
+            result.probe_count > 1 &&
+                result.probe_count <= kBotSpawnPlacementMaximumProbeCount,
+            "blocked anchor search escaped its deterministic probe bound");
+}
+
+bool BotSpawnPlacementExhaustionIsBounded() {
+    using namespace sdmod;
+
+    BotSpawnPlacementResult result;
+    std::uint32_t probes = 0;
+    const auto blocked = [&](float, float) {
+        ++probes;
+        return BotSpawnPlacementProbeResult::Blocked;
+    };
+    return Require(
+               !FindNearestClearBotSpawnPlacement(
+                   100.0f,
+                   200.0f,
+                   25.0f,
+                   blocked,
+                   &result),
+               "fully blocked bot spawn unexpectedly succeeded") &&
+        Require(
+            probes == result.probe_count &&
+                probes > 1 &&
+                probes <= kBotSpawnPlacementMaximumProbeCount,
+            "fully blocked bot spawn search was not bounded") &&
+        Require(
+            NearlyEqual(
+                result.search_distance,
+                BotSpawnPlacementSearchBound(25.0f)),
+            "fully blocked bot spawn did not report its search bound");
+}
+
+bool BotSpawnPlacementStopsWhenNativeProbeIsUnavailable() {
+    using namespace sdmod;
+
+    BotSpawnPlacementResult result;
+    std::uint32_t probes = 0;
+    const auto unavailable = [&](float, float) {
+        ++probes;
+        return BotSpawnPlacementProbeResult::Unavailable;
+    };
+    return Require(
+               !FindNearestClearBotSpawnPlacement(
+                   0.0f,
+                   0.0f,
+                   25.0f,
+                   unavailable,
+                   &result),
+               "unavailable native placement probe unexpectedly succeeded") &&
+        Require(
+            result.probe_unavailable &&
+                result.probe_count == 1 &&
+                probes == 1,
+            "unavailable native placement probe did not stop immediately");
+}
+
 bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
@@ -298,6 +415,10 @@ int main() {
     if (!FixedWorldDelayDoesNotAmplifyArrivalJitter() ||
         !RemotePlayerExtrapolatesAtMostOneArrival() ||
         !ParticipantCapacityCountsHumansAndBotsTogether() ||
+        !BotSpawnPlacementKeepsClearAnchor() ||
+        !BotSpawnPlacementSearchesPastBlockedNaiveAnchor() ||
+        !BotSpawnPlacementExhaustionIsBounded() ||
+        !BotSpawnPlacementStopsWhenNativeProbeIsUnavailable() ||
         !PacketSplitsHaveBoundedVariableWireSizes()) {
         return 1;
     }
