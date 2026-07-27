@@ -264,6 +264,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "arena_player_spawn_x", kArenaPlayerSpawnXOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_player_spawn_y", kArenaPlayerSpawnYOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_player_spawn_facing", kArenaPlayerSpawnFacingOffset),
+        SDMOD_SIZE("gameplay.offsets", "arena_enemy_player_count_multiplier", kArenaEnemyPlayerCountMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_section_index", kArenaCombatSectionIndexOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_wave_index", kArenaCombatWaveIndexOffset),
         SDMOD_SIZE("gameplay.offsets", "arena_combat_wait_ticks", kArenaCombatWaitTicksOffset),

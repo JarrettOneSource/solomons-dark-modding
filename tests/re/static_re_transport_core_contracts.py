@@ -231,6 +231,9 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     organic_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_organic_player_death.py"
     )
+    continuity_verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_host_death_continuity.py"
+    )
     spectator_followup_text = read_text(
         ROOT
         / "tools/verify_multiplayer_organic_spectator_followup.py"
@@ -412,6 +415,20 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
             f"organic player-death live gate lacks: {token}"
         )
     assert "invoke_native_magic_hit_trial" not in organic_verifier_text
+    for token in (
+        "DEFAULT_OBSERVATION_SECONDS = 180.0",
+        "enable_audio=False",
+        "retarget_success_ratio",
+        "client_snapshot_cadence",
+        "catch_up_count",
+        "manual_spawn_request_count",
+        "host-post-death-terminal.png",
+        "client-post-death-terminal.png",
+        "stop_exact_game_processes(launch)",
+    ):
+        assert token in continuity_verifier_text, (
+            f"host-death continuity live gate lacks: {token}"
+        )
     for token in (
         "_materialize_native_wave_schedule",
         "pre_wave_actor_addresses",

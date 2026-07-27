@@ -11,6 +11,22 @@ enum class LuaWaveSpawnInstanceClaim {
 
 constexpr std::int32_t kMaximumCapturedWaveSpawnCount = 4096;
 constexpr std::int32_t kMaximumCapturedWaveDelayTicks = 1'000'000;
+constexpr std::int32_t kSoloEnemyPlayerCountMultiplier = 1;
+
+void PinEnemyPlayerCountMultiplierToSolo() {
+    SDModGameplayCombatState combat_state;
+    if (kArenaEnemyPlayerCountMultiplierOffset == 0 ||
+        !TryGetGameplayCombatState(&combat_state) ||
+        !combat_state.valid ||
+        combat_state.arena_address == 0) {
+        return;
+    }
+
+    (void)ProcessMemory::Instance().TryWriteField(
+        combat_state.arena_address,
+        kArenaEnemyPlayerCountMultiplierOffset,
+        kSoloEnemyPlayerCountMultiplier);
+}
 
 void LogLuaWaveSpawnFilterHookFailure(
     std::atomic<std::uint32_t>* log_count,
@@ -308,6 +324,7 @@ void __fastcall HookWaveSpawnerTick(void* self, void* unused_edx) {
                  : " vtable=unreadable"));
     }
 
+    PinEnemyPlayerCountMultiplierToSolo();
     PinFrozenManualRunEnemies();
 
     auto try_drain_manual_spawns = [&]() {

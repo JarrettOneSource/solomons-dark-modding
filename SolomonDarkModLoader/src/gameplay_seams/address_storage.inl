@@ -516,6 +516,7 @@ std::size_t kSpellBuilderResultParamBOffset = 0;
 std::size_t kArenaPlayerSpawnXOffset = 0;
 std::size_t kArenaPlayerSpawnYOffset = 0;
 std::size_t kArenaPlayerSpawnFacingOffset = 0;
+std::size_t kArenaEnemyPlayerCountMultiplierOffset = 0;
 std::size_t kArenaCombatSectionIndexOffset = 0;
 std::size_t kArenaCombatWaveIndexOffset = 0;
 std::size_t kArenaCombatWaitTicksOffset = 0;

@@ -32,9 +32,11 @@ driven, not a simple automatic `wave_index -> hp` ramp.
 - Spawned enemy current HP is additionally multiplied by the arena player-count
   scalar at `arena + 0x8FE4`, refreshed from `0x00649F40`.
 
-Recommended first implementation: scale enemy count only by rewriting or
-overlaying wave data, and leave HP alone. If HP scaling is needed later,
-`BuildEnemyConfig` finalizes through a clean `arena + 0x9008` scalar.
+The current product policy is no player-count difficulty scaling. The loader
+pins the integer at `arena + 0x8FE4` to one immediately before stock
+`WaveSpawner_Tick`, so spawned enemy HP stays at the one-player baseline.
+Wave count/composition and damage need no player-count override because the
+recovered stock count path does not modify them.
 
 ## Current Data
 
@@ -251,20 +253,18 @@ Important caveat: the stock player-count scalar multiplies current HP
 touch HP scaling directly, validate which field the healthbar and damage code
 use before deciding whether to scale current HP, max HP, or both.
 
-## Implementation Recommendation
+## Current product policy
 
-For first player-count scaling, do not scale enemy health. Scale only enemy
-count and population pacing:
+Player-count difficulty scaling is disabled:
 
-- player count `1`: retail data
-- player count `2+`: multiply `SPAWN` and `MAXENEMIES`
-- optionally lower `SPAWNDELAY` for denser pressure
-- keep enemy flags untouched
+- `arena + 0x8FE4` is an integer gameplay-slot count, not a float scalar;
+- the loader writes `1` at the native wave-spawner seam before enemy creation;
+- retail `SPAWN`, `MAXENEMIES`, group composition, flags, and independent
+  damage scalars remain unchanged.
 
-The cleanest first patch is a wave-data transformation layer because it is easy
-to inspect, easy to diff, and rides the native spawner. A runtime spawner hook is
-still a good second seam if we need dynamic scaling without rewriting staged
-wave data.
+Generate or overlay a scaled `data/wave.txt` only if a future, explicit balance
+feature intentionally changes enemy count or pacing. That is not part of the
+current multiplayer policy.
 
 ## Manual Spawn Status
 

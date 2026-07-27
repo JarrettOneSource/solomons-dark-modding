@@ -13,6 +13,8 @@ param(
     [string]$QuickStartElement = "fire",
     [string]$QuickStartDiscipline = "mind",
     [string]$ExactModIds = "",
+    [switch]$TestBlankBoneyard,
+    [string]$TestWaveOverride = "",
     [switch]$EnableAudio,
     [string]$ProcessIdOutputPath = ""
 )
@@ -57,6 +59,17 @@ $effectiveRuntimeRoot = if ([string]::IsNullOrWhiteSpace(
     $runtimeRootOverride
 }
 
+$resolvedTestWaveOverride = ""
+if (-not [string]::IsNullOrWhiteSpace($TestWaveOverride)) {
+    $resolvedWaveOverrideItem =
+        Get-Item -LiteralPath $TestWaveOverride -ErrorAction Stop
+    if ($resolvedWaveOverrideItem.PSIsContainer -or
+        $resolvedWaveOverrideItem.Extension -notmatch '^\.txt$') {
+        throw "Test wave override must be a .txt file: $TestWaveOverride"
+    }
+    $resolvedTestWaveOverride = $resolvedWaveOverrideItem.FullName
+}
+
 if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
     Set-ExactMultiplayerModState `
         -RuntimeRootPath $effectiveRuntimeRoot `
@@ -80,6 +93,8 @@ $environment = @{
         $QuickStart) { $QuickStartElement } else { "" })
     SDMOD_MULTIPLAYER_QUICK_START_DISCIPLINE = $(if (
         $QuickStart) { $QuickStartDiscipline } else { "" })
+    SDMOD_TEST_BLANK_BONEYARD = $(if ($TestBlankBoneyard) { "1" } else { "" })
+    SDMOD_TEST_WAVE_OVERRIDE = $resolvedTestWaveOverride
 }
 $arguments = @(
     "--json",
@@ -131,6 +146,8 @@ $instanceRoot = Join-Path $effectiveRuntimeRoot (
     luaPipe = $pipeName
     startupLogPath = $result.launch.startupLogPath
     audioDisabled = -not [bool]$audioEnabled
+    testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
+    testWaveOverride = $resolvedTestWaveOverride
     runtimeRoot = $effectiveRuntimeRoot
     executablePath = Join-Path $instanceRoot "stage\SolomonDark.exe"
 } | ConvertTo-Json -Depth 4 -Compress

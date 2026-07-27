@@ -564,7 +564,101 @@ def test_enemy_spawn_scaling_native_wave_seam_is_documented() -> str:
             "manual enemy spawn API was not fully removed from active code: " +
             "; ".join(regressions))
 
-    return "enemy scaling is backed by native wave-spawner evidence; manual spawn API is removed from active code"
+    _assert_player_count_difficulty_scaling_is_disabled()
+    return (
+        "enemy scaling is backed by native wave-spawner evidence, "
+        "player-count difficulty is disabled, and the manual spawn API is "
+        "removed from active code"
+    )
+
+
+def _assert_player_count_difficulty_scaling_is_disabled() -> None:
+    layout_text = read_text(BINARY_LAYOUT)
+    wave_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "wave_spawn_filter.inl"
+    )
+    storage_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    binding_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
+    doc_text = read_text(
+        ROOT / "docs/bugs/host-death-continuity-2026-07-26.md"
+    )
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_player_count_scaling_disabled.py"
+    )
+
+    required_sources = {
+        "layout": (
+            layout_text,
+            ("arena_enemy_player_count_multiplier=0x8FE4",),
+        ),
+        "storage": (
+            storage_text,
+            ("kArenaEnemyPlayerCountMultiplierOffset = 0;",),
+        ),
+        "binding": (
+            binding_text,
+            (
+                '"arena_enemy_player_count_multiplier", '
+                "kArenaEnemyPlayerCountMultiplierOffset",
+            ),
+        ),
+        "wave hook": (
+            wave_hook_text,
+            (
+                "kSoloEnemyPlayerCountMultiplier = 1",
+                "PinEnemyPlayerCountMultiplierToSolo();",
+                "kArenaEnemyPlayerCountMultiplierOffset",
+            ),
+        ),
+        "root-cause document": (
+            doc_text,
+            (
+                "`0x00649F40`",
+                "`0x00462410`",
+                "`0x00463B50`",
+                "`arena + 0x8FE4`",
+                "does not modify enemy damage",
+            ),
+        ),
+        "live verifier": (
+            verifier_text,
+            (
+                "CHALLENGE_PLAYER_COUNT_POLICY_LUA",
+                "player_count_policy_challenge_corrected",
+                "NORMALIZED_STOCK_ENEMY_HP = 5000.0",
+                "enable_audio=False",
+            ),
+        ),
+    }
+    missing = [
+        f"{surface}: {token}"
+        for surface, (text, tokens) in required_sources.items()
+        for token in tokens
+        if token not in text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "player-count difficulty-disable contract is missing token(s): "
+            + ", ".join(missing)
+        )
+
+    pin_index = wave_hook_text.find(
+        "PinEnemyPlayerCountMultiplierToSolo();"
+    )
+    original_index = wave_hook_text.find(
+        "original(self, unused_edx);",
+        pin_index,
+    )
+    if pin_index < 0 or original_index < 0 or pin_index >= original_index:
+        raise StaticReTestFailure(
+            "the solo multiplier must be pinned before the stock wave tick"
+        )
 
 
 def test_pathfinding_movement_layout_is_named_and_documented() -> str:

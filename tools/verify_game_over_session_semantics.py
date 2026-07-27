@@ -510,6 +510,10 @@ def launch_solo(
     unused_remote_port: int,
     game_directory: Path,
     launcher_path: Path | None = None,
+    test_blank_boneyard: bool = False,
+    test_wave_override: Path | None = None,
+    quick_start: bool = True,
+    fresh_install: bool = True,
 ) -> dict[str, object]:
     ledger = ROOT / "runtime" / f".game-over-solo-{os.getpid()}-{time.time_ns()}.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -532,8 +536,6 @@ def launch_solo(
         f"0x{SOLO_PARTICIPANT_ID:X}",
         "-PlayerName",
         SOLO_PLAYER_NAME,
-        "-FreshInstall",
-        "-QuickStart",
         "-GameDirectory",
         path_for_powershell(game_directory),
         "-ExactModIds",
@@ -541,6 +543,19 @@ def launch_solo(
         "-ProcessIdOutputPath",
         path_for_powershell(ledger),
     ]
+    if fresh_install:
+        args.append("-FreshInstall")
+    if quick_start:
+        args.append("-QuickStart")
+    if test_blank_boneyard:
+        args.append("-TestBlankBoneyard")
+    if test_wave_override is not None:
+        args.extend(
+            [
+                "-TestWaveOverride",
+                path_for_powershell(test_wave_override),
+            ]
+        )
     if launcher_path is not None:
         args.extend(
             [
