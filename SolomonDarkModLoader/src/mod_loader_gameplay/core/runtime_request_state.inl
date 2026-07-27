@@ -216,6 +216,13 @@ struct GameplayKeyboardInjectionState {
     X86Hook orb_pickup_hook;
     X86Hook item_drop_pickup_hook;
     X86Hook powerup_pickup_hook;
+    X86Hook good_imp_tick_hook;
+    X86Hook leviathan_tick_hook;
+    X86Hook golem_tick_hook;
+    X86Hook golem_contact_hook;
+    X86Hook golem_death_hook;
+    X86Hook native_minion_game_object_factory_hook;
+    X86Hook knockback_tick_hook;
     uintptr_t damage_context_reset_address = 0;
     uintptr_t damage_context_target_address = 0;
     uintptr_t damage_context_source_address = 0;

@@ -34,8 +34,8 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
         actor.tracked_enemy = (packet_actor.flags & WorldActorSnapshotFlagTrackedEnemy) != 0;
         actor.lifecycle_owned = (packet_actor.flags & WorldActorSnapshotFlagLifecycleOwned) != 0;
         actor.run_static = (packet_actor.flags & WorldActorSnapshotFlagRunStatic) != 0;
-        actor.player_created =
-            (packet_actor.flags & WorldActorSnapshotFlagPlayerCreated) != 0;
+        actor.native_minion =
+            (packet_actor.flags & WorldActorSnapshotFlagNativeMinion) != 0;
         actor.target_authoritative =
             (packet_actor.flags & WorldActorSnapshotFlagTargetAuthoritative) != 0;
         actor.anim_drive_state = packet_actor.anim_drive_state;
@@ -69,6 +69,45 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
             packet_actor.turn_undead_flee_heading;
         actor.turn_undead_activation_scalar =
             packet_actor.turn_undead_activation_scalar;
+        const auto& packet_minion =
+            packet_actor.native_minion;
+        auto& minion = actor.native_minion_state;
+        minion.owner_participant_id =
+            packet_minion.owner_participant_id;
+        minion.state_flags =
+            packet_minion.state_flags;
+        minion.native_age =
+            packet_minion.native_age;
+        minion.attack_timer =
+            packet_minion.attack_timer;
+        minion.attack_cooldown =
+            packet_minion.attack_cooldown;
+        minion.gait_primary =
+            packet_minion.gait_primary;
+        minion.gait_secondary =
+            packet_minion.gait_secondary;
+        minion.target_refresh_timer =
+            packet_minion.target_refresh_timer;
+        minion.locomotion_sample_counter =
+            packet_minion.locomotion_sample_counter;
+        minion.ambient_effect_timer =
+            packet_minion.ambient_effect_timer;
+        minion.iron = packet_minion.iron;
+        minion.terminal_reason =
+            static_cast<NativeMinionTerminalReason>(
+                packet_minion.terminal_reason);
+        minion.animation_phase =
+            packet_minion.animation_phase;
+        minion.steering_heading =
+            packet_minion.steering_heading;
+        minion.steering_step =
+            packet_minion.steering_step;
+        minion.damage_primary =
+            packet_minion.damage_primary;
+        minion.damage_secondary =
+            packet_minion.damage_secondary;
+        minion.reflect_ratio =
+            packet_minion.reflect_ratio;
         std::memcpy(
             actor.student_visual_state.data(),
             packet_actor.student_visual_state,

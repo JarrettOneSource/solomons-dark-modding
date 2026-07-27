@@ -80,6 +80,9 @@ std::uint8_t __fastcall HookPlayerActorSecondarySpellCast(
             stock_context_ok = InvokeWithStockDampenEffectSuppressed(
                 skill_entry_index,
                 [&] {
+                    ScopedNativeMinionSummonDispatch summon_dispatch(
+                        skill_entry_index,
+                        actor_address);
                     native_result = original(self, skill_entry_index);
                 });
         } else {

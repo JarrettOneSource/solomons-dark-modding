@@ -996,6 +996,14 @@ bool TryGetSharedHubSceneState(SDModSceneState* state) {
                state);
 }
 
+bool TryCaptureNativeMinionState(
+    uintptr_t actor_address,
+    SDModNativeMinionState* state) {
+    return TryCaptureNativeMinionStateInternal(
+        actor_address,
+        state);
+}
+
 bool TryBuildSceneActorState(
     uintptr_t actor_address,
     const SceneContextSnapshot& scene_context,

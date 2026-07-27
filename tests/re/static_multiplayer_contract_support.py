@@ -58,7 +58,9 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "drop_roll_filter.inl",
         "enemy_death_reward_level_up_hooks.inl",
         "mod_loader_hub_state.inl",
+        "mod_loader_native_minion_state.inl",
         "mod_loader_public_api.inl",
+        "multiplayer_native_minion_state.inl",
         "public_api_combat_control_queues.inl",
         "public_api_native_behavior_probes.inl",
         "dispatch_and_hooks_native_probe_pump.inl",
@@ -67,6 +69,11 @@ _SPLIT_SOURCE_FRAGMENTS = frozenset(
         "player_secondary_spell_cast_hook.inl",
         "tick_state_machine.inl",
         "presentation.inl",
+        "authority_state.inl",
+        "authority_hooks.inl",
+        "state_reconciliation.inl",
+        "lifecycle_and_materialization.inl",
+        "address_storage_native_minions.inl",
     }
 )
 

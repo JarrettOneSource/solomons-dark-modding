@@ -140,6 +140,10 @@ void CopyWorldActorPresentationState(
     target->student_book_palette_count = source.student_book_palette_count;
     target->student_book_palette = source.student_book_palette;
     target->named_hub_npc = source.named_hub_npc;
+    if (target->native_minion && source.native_minion) {
+        target->native_minion_state =
+            source.native_minion_state;
+    }
 }
 
 void CopyWorldActorTransientStatusState(
@@ -215,16 +219,21 @@ bool OverlayLatestWorldSnapshotPresentation(
             *it->second,
             sampled_snapshot->scene_intent.kind != multiplayer::ParticipantSceneIntentKind::Run);
         CopyWorldActorTransientStatusState(&actor, *it->second);
-        if (actor.player_created && it->second->player_created) {
-            // Player-created autonomous actors continue simulating locally.
-            // Interpolating an already-moving remote golem 150 ms behind the
-            // authority lets the two AI paths visibly diverge, so consume the
-            // freshest authoritative transform for this small explicit class.
+        if (actor.native_minion && it->second->native_minion) {
+            // Native minions continue advancing their stock observer-side
+            // presentation between authoritative checkpoints. Do not feed
+            // them a 150 ms-old interpolated transform or semantic state.
             actor.position_x = it->second->position_x;
             actor.position_y = it->second->position_y;
             actor.heading = it->second->heading;
             actor.hp = it->second->hp;
             actor.max_hp = it->second->max_hp;
+            actor.target_actor_slot =
+                it->second->target_actor_slot;
+            actor.target_world_slot =
+                it->second->target_world_slot;
+            actor.native_minion_state =
+                it->second->native_minion_state;
         }
         if ((actor.presentation_flags & multiplayer::WorldActorPresentationFlagAnimationDriveWord) != 0 &&
             IsReplicatedHubPhaseAdvancingActorSnapshot(actor)) {

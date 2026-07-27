@@ -269,3 +269,66 @@ void ResetRemoteParticipantSessionEpoch(
         "Multiplayer transport reset disconnected participant session epoch. "
         "participant_id=" + std::to_string(participant_id));
 }
+
+void PruneStaleLocalUdpPeers(std::uint64_t now_ms) {
+    if (g_local_transport.backend != GameplayTransportBackend::LocalUdp) {
+        return;
+    }
+
+    std::vector<LocalPeerEndpoint> stale_peers;
+    for (const auto& peer : g_local_transport.peers) {
+        if (peer.endpoint.backend != GameplayTransportBackend::LocalUdp ||
+            peer.participant_id == 0 ||
+            peer.last_packet_ms == 0 ||
+            now_ms < peer.last_packet_ms ||
+            now_ms - peer.last_packet_ms < kLocalUdpPeerTimeoutMs) {
+            continue;
+        }
+        stale_peers.push_back(peer);
+    }
+    if (stale_peers.empty()) {
+        return;
+    }
+
+    g_local_transport.peers.erase(
+        std::remove_if(
+            g_local_transport.peers.begin(),
+            g_local_transport.peers.end(),
+            [&](const LocalPeerEndpoint& peer) {
+                return std::any_of(
+                    stale_peers.begin(),
+                    stale_peers.end(),
+                    [&](const LocalPeerEndpoint& stale) {
+                        return SameEndpoint(peer.endpoint, stale.endpoint);
+                    });
+            }),
+        g_local_transport.peers.end());
+
+    for (const auto& peer : stale_peers) {
+        const bool configured_authority_disconnected =
+            !g_local_transport.is_host &&
+            g_local_transport.configured_remote_valid &&
+            SameEndpoint(
+                peer.endpoint,
+                g_local_transport.configured_remote);
+        ResetRemoteParticipantSessionEpoch(
+            peer.participant_id,
+            configured_authority_disconnected);
+        if (configured_authority_disconnected) {
+            g_local_transport_authority_participant_id.store(
+                0,
+                std::memory_order_release);
+            std::lock_guard<std::mutex> lock(
+                g_client_host_run_authorization_mutex);
+            g_client_host_run_authorization =
+                ClientHostRunAuthorization{};
+        }
+        Log(
+            "Multiplayer local UDP peer timed out. endpoint=" +
+            EndpointToString(peer.endpoint) +
+            " participant_id=" +
+            std::to_string(peer.participant_id) +
+            " silent_ms=" +
+            std::to_string(now_ms - peer.last_packet_ms));
+    }
+}

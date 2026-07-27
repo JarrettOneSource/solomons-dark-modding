@@ -504,6 +504,74 @@ enemy HP convergence, exact minion HP convergence, and synchronized terminal
 absence. Both-peer screenshots must be retained with the machine-readable
 timeline.
 
+## Phase 2 implementation and acceptance
+
+Phase 2 implements protocol 86 as a descriptor-backed native-minion authority
+lane. The registry describes Good Imp, Leviathan, and Golem without claiming a
+shared stock superclass. Golem is the first class with complete live behavior
+coverage; Good Imp and Leviathan have typed capture/apply state and lifecycle
+hooks ready for class-specific acceptance.
+
+The implementation follows the authority model above:
+
+- the host projects a minion and its durable participant owner into stock
+  gameplay slot zero only around the native minion tick/contact boundary;
+- clients keep their native copies in observer presentation mode and reject
+  Golem contact damage;
+- Raise Golem factory calls are tagged inside the exact skill-45 dispatch
+  scope, so remote-cast replay cannot misidentify a client-owned Golem as
+  host-owned while player globals are temporarily projected;
+- protocol state carries owner participant ID, native type, real Golem HP,
+  assembly age, gait/attack timers, animation phase, damage fields, and
+  lifecycle state;
+- the identity snapshot can materialize a missing observer through the native
+  factory/register path, while matching uses native type, owner, and native-age
+  proximity;
+- terminal tombstones distinguish native death, expiry, recast replacement,
+  owner death, owner disconnect, explicit retirement, and scene teardown;
+- owner death retires host-owned minions immediately at the accepted native
+  death transition, including the host-local player whose actor tick has
+  stopped; and
+- Steam disconnect events reuse participant teardown, while the development
+  local-UDP transport now detects five seconds of packet silence after draining
+  queued datagrams and runs the same teardown. The static configured endpoint
+  remains available for a later local-UDP reconnect.
+
+Final post-rebase live acceptance is recorded at:
+
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/result.json`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/acceptance-metrics.json`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/verifier.log`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/host_owned/host.png`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/host_owned/client.png`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/client_owned/host.png`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/client_owned/client.png`
+- `/mnt/d/codex-evidence/minion-sync-20260726/live18-post-final-rebase/runtime/`
+
+Both directional screenshot pairs were inspected at their native
+`1600x900` resolution. Each peer visibly renders the same assembled,
+articulated Golem at the same combat fixture. The harness used the
+presentation-local camera seam only for the capture, verified both native
+camera centers at the same world point, and released the focus before
+lifecycle testing. Machine-readable results were:
+
+| Cast owner | Stable owner ID on both peers | Maximum position error | Exact enemy HP after Golem damage | Exact Golem HP after host contact |
+| --- | ---: | ---: | ---: | ---: |
+| Host | `2305843009213698049` | `0.749943` | `4995.8481445312` / `4995.8481445312` | `92.75` / `92.75` |
+| Client | `2305843009213698050` | `0.750004` | `4994.986328125` / `4994.986328125` | `92.75` / `92.75` |
+
+The client observer contact probe left Golem HP exactly `100/100`; the same
+`7.25` contact on the host authority converged to `92.75/92.75`. The harness
+also removed an observer copy and proved authoritative rematerialization,
+replaced a Golem with terminal reason `3`, delivered a terminal through a
+`2400` ms exact-process suspension and explicit-retirement reason `6`, killed
+a Golem through its native contact/death path with reason `1`, retired a
+host-local owner's Golem on native player death with reason `4` on both peers,
+and retired a client-owned Golem after exact client-process termination with
+reason `5`. The local-UDP log records `silent_ms=5000` before disconnect
+teardown. Both launches reported `audioDisabled=true`; the final staged crash
+logs for both peers were empty.
+
 ## Cross-agent note for issue #54
 
 The clean loopback trace provides no evidence that an unreplicated Golem

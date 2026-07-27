@@ -119,6 +119,7 @@ void __cdecl HookRunEnded() {
     const auto original = GetX86HookTrampoline<RunEndedFn>(g_state.hooks[kHookRunEnded]);
     if (original == nullptr) return;
     if (multiplayer::BeginLocalDeathSpectatorPresentation()) {
+        RetireAuthoritativeNativeMinionsForLocalOwnerDeath();
         return;
     }
     g_state.run_active.store(false, std::memory_order_release);

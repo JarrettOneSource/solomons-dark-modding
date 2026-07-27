@@ -114,6 +114,10 @@ bool TryGetSceneState(SDModSceneState* state);
 bool TryGetSharedHubSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors);
+bool TryCaptureNativeMinionState(
+    uintptr_t actor_address,
+    SDModNativeMinionState* state);
+void RetireAuthoritativeNativeMinionsForLocalOwnerDeath();
 bool TryListNativeActorModifiers(
     uintptr_t actor_address,
     std::vector<SDModNativeModifierState>* modifiers);

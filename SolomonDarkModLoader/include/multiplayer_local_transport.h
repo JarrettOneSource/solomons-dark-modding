@@ -285,6 +285,9 @@ void RecordReplicatedAirChainTargetOverride(
 bool TrySetRunEnemyHealth(uintptr_t actor_address, float hp, float max_hp);
 void NotifyLocalRunEnemyDeath(uintptr_t actor_address);
 void NotifyLocalWorldActorUnregistered(uintptr_t actor_address);
+void NotifyLocalNativeMinionTerminal(
+    uintptr_t actor_address,
+    NativeMinionTerminalReason reason);
 struct LootPickupRequestCapture {
     bool valid = false;
     float requester_position_x = 0.0f;

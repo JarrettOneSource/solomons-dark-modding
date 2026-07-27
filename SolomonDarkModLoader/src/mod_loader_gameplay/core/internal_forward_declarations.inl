@@ -235,4 +235,5 @@ bool DestroyLoaderOwnedWizardActor(
     uintptr_t world_address,
     bool raw_allocation,
     std::string* error_message);
+void ResetActiveDamageContext();
 void DestroyParticipantEntityNow(std::uint64_t participant_id);

@@ -410,6 +410,8 @@ struct NamedHubNpcPresentationState {
     std::int32_t pose = 0;
 };
 
+#include "multiplayer_native_minion_state.inl"
+
 struct WorldActorSnapshot {
     std::uint64_t network_actor_id = 0;
     std::uint32_t native_type_id = 0;
@@ -425,7 +427,7 @@ struct WorldActorSnapshot {
     bool tracked_enemy = false;
     bool lifecycle_owned = false;
     bool run_static = false;
-    bool player_created = false;
+    bool native_minion = false;
     bool target_authoritative = false;
     std::uint8_t anim_drive_state = 0;
     std::uint16_t presentation_flags = 0;
@@ -458,6 +460,7 @@ struct WorldActorSnapshot {
     std::array<StudentBookPaletteEntryState, kWorldActorStudentBookPaletteMaxEntries>
         student_book_palette = {};
     NamedHubNpcPresentationState named_hub_npc;
+    NativeMinionState native_minion_state;
 };
 
 struct WorldSnapshotActorBindingRuntimeInfo {

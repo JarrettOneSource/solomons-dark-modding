@@ -1010,6 +1010,11 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         return false;
     }
 
+    if (!InitializeNativeMinionHooks(error_message)) {
+        ShutdownGameplayKeyboardInjection();
+        return false;
+    }
+
     g_gameplay_keyboard_injection.initialized = true;
     g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.mouse_left_edge_serial.store(0, std::memory_order_release);
@@ -1146,6 +1151,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
 
 void ShutdownGameplayKeyboardInjection() {
     ClearReplicatedSpellEffectBindings();
+    ShutdownNativeMinionHooks();
     RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.edge_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_tick_hook);

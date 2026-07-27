@@ -4,11 +4,30 @@ void NotifyLocalWorldActorUnregistered(uintptr_t actor_address) {
         return;
     }
 
+    (void)BuildNativeMinionTerminalTombstone(
+        actor_address,
+        NativeMinionTerminalReasonNativeDeath,
+        static_cast<std::uint64_t>(GetTickCount64()));
     g_local_transport.hub_world_actor_ids_by_address.erase(actor_address);
     g_local_transport.run_host_local_world_actor_ids_by_address.erase(
         actor_address);
     ForgetRetainedRunEnemySnapshotForActor(actor_address);
+    ForgetNativeMinionSnapshotForActor(actor_address);
     g_local_transport.run_loot_drop_ids_by_address.erase(actor_address);
+}
+
+void NotifyLocalNativeMinionTerminal(
+    uintptr_t actor_address,
+    NativeMinionTerminalReason reason) {
+    if (!g_local_transport.initialized ||
+        !g_local_transport.is_host ||
+        actor_address == 0) {
+        return;
+    }
+    (void)BuildNativeMinionTerminalTombstone(
+        actor_address,
+        reason,
+        static_cast<std::uint64_t>(GetTickCount64()));
 }
 
 void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
@@ -208,6 +227,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
     ReceivePackets(now_ms);
+    PruneStaleLocalUdpPeers(now_ms);
     ServiceRunLoadingBarrier(now_ms);
     TickLocalDeathSpectator(now_ms);
     RefreshHostRunGameOverCommand();

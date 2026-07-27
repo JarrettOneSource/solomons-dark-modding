@@ -79,7 +79,7 @@ bool ShouldReplicateWorldActor(
                 actor.max_hp > 0.0f &&
                 (actor.dead || actor.hp > kEnemyDamageClaimHpEpsilon)) ||
                IsRunStaticLayoutActor(actor) ||
-               IsReplicatedRunPlayerCreatedActorType(actor.object_type_id);
+               IsNativeMinionType(actor.object_type_id);
     }
 
     // TryListSceneActors also exposes non-actor scene/runtime records. In the
@@ -143,6 +143,12 @@ void ClearRunHostLocalWorldActorNetworkIds() {
     g_local_transport.run_host_local_world_actor_ids_by_address.clear();
     g_local_transport.recent_run_enemy_deaths_by_network_id.clear();
     g_local_transport.retained_run_enemy_snapshots_by_network_id.clear();
+    g_local_transport
+        .retained_native_minion_snapshots_by_network_id
+        .clear();
+    g_local_transport
+        .native_minion_terminal_tombstones_by_network_id
+        .clear();
     g_local_transport.last_synced_enemy_hp_by_network_id.clear();
     g_local_transport.last_enemy_claimed_hp_by_network_id.clear();
     g_local_transport.observed_enemy_damage_by_network_id.clear();
@@ -277,7 +283,11 @@ void PruneRunHostLocalWorldActorNetworkIds(
     for (auto iterator = g_local_transport.run_host_local_world_actor_ids_by_address.begin();
          iterator != g_local_transport.run_host_local_world_actor_ids_by_address.end();) {
         if (live_actor_addresses.find(iterator->first) == live_actor_addresses.end() &&
-            !HasRetainedRunEnemySnapshotForActor(iterator->first)) {
+            !HasRetainedRunEnemySnapshotForActor(iterator->first) &&
+            !HasRetainedNativeMinionSnapshotForActor(
+                iterator->first) &&
+            !HasNativeMinionTerminalForNetworkActor(
+                iterator->second)) {
             iterator = g_local_transport.run_host_local_world_actor_ids_by_address.erase(iterator);
         } else {
             ++iterator;

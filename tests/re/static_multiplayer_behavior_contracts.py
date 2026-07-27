@@ -158,7 +158,7 @@ def test_cursor_placed_secondaries_replay_owner_world_position() -> str:
     )
     layout = _read("config/binary-layout.ini")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 85;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 86;" in protocol
     assert "CastInputFlagCursorWorldPlacement" in protocol
     assert "float cursor_world_x;" in protocol
     assert "float cursor_world_y;" in protocol
@@ -564,7 +564,7 @@ def test_remote_webbed_escape_consumes_owner_movement_intent() -> str:
     live_harness = _read("tools/multiplayer_webbed_status_harness.py")
     live_verifier = _read("tools/verify_multiplayer_webbed_status_sync.py")
 
-    assert "constexpr std::uint16_t kProtocolVersion = 85;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 86;" in protocol
     for source_name, source in (
         ("protocol", protocol),
         ("runtime state", runtime_state),
@@ -1321,7 +1321,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
     for token in (
         "ParticipantTransientStatusFlagPlanewalker = 1 << 2",
         "ParticipantTransientStatusFlagStoneskin = 1 << 3",
-        "constexpr std::uint16_t kProtocolVersion = 85;",
+        "constexpr std::uint16_t kProtocolVersion = 86;",
     ):
         assert token in protocol, f"native transient status protocol lacks: {token}"
     for token in (
@@ -1421,12 +1421,65 @@ def test_secondary_matrix_drives_targeted_stock_cursor_geometry() -> str:
 def test_secondary_matrix_isolates_prior_native_effect_lifetimes() -> str:
     runner = _read("tools/verify_steam_friend_active_pair_secondary_behavior.py")
     harness = _read("tools/multiplayer_secondary_behavior_harness.py")
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    runtime_state = read_source_unit(
+        "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
+    )
+    minion_runtime = read_source_unit(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "native_minion_runtime.inl"
+    )
+    player_cast_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "gameplay_hooks/player_cast_hooks.inl"
+    )
+    player_secondary_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "gameplay_hooks/player_secondary_spell_cast_hook.inl"
+    )
+    minion_transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "native_minion_snapshot_sync.inl"
+    )
+    world_capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_snapshot_packet_builders.inl"
+    )
+    world_apply = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/apply_snapshot.inl"
+    )
+    world_binding = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/"
+        "run_lifecycle_and_materialization.inl"
+    )
+    participant_destroy = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "execute_requests/participant_entity_sync.inl"
+    )
+    run_transition_hooks = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "run_transition_hooks.inl"
+    )
+    minion_public_api = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_native_minions.inl"
+    )
+    transport_public = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    verifier = _read("tools/verify_multiplayer_native_minion_sync.py")
     gameplay_api = _read("SolomonDarkModLoader/include/mod_loader_gameplay_api.inl")
     gameplay_public = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "public_api_debug_and_spawn.inl"
     )
     lua_bindings = _read("SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp")
+    binary_layout = _read("config/binary-layout.ini")
 
     for token in (
         'output["post_behavior_retirements"] = {}',
@@ -1470,8 +1523,10 @@ def test_secondary_matrix_isolates_prior_native_effect_lifetimes() -> str:
     for token in (
         "bool RetireTestRunPlayerCreatedActors(",
         "IsRunLifecycleManualEnemySpawnerTestModeEnabled()",
-        "multiplayer::IsReplicatedRunPlayerCreatedActorType(native_type_id)",
+        "multiplayer::IsNativeMinionType(native_type_id)",
         'scene.kind != "arena"',
+        "NotifyLocalNativeMinionTerminal(",
+        "NativeMinionTerminalReasonExplicitRetirement",
         "CallActorRequestRetirementSafe(",
         "kActorPendingRemoveOffset",
     ):
@@ -1483,9 +1538,177 @@ def test_secondary_matrix_isolates_prior_native_effect_lifetimes() -> str:
     ):
         assert token in lua_bindings, f"Lua test actor retirement lacks {token}"
 
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 86;",
+        "WorldActorSnapshotFlagNativeMinion",
+        "struct NativeMinionPacketState",
+        "std::uint64_t owner_participant_id;",
+        "NativeMinionStateFlagActive",
+        "NativeMinionStateFlagTerminal",
+        "NativeMinionTerminalReasonOwnerDeath",
+        "NativeMinionTerminalReasonOwnerDisconnected",
+        "NativeMinionTerminalReasonExplicitRetirement",
+        "float animation_phase;",
+        "std::int16_t target_refresh_timer;",
+        "std::uint16_t locomotion_sample_counter;",
+        "static_assert(sizeof(NativeMinionPacketState) == 56",
+        "static_assert(sizeof(WorldActorSnapshotPacketState) == 384",
+        "static_assert(sizeof(WorldSnapshotPacket) == 1200",
+    ):
+        assert token in protocol, f"native-minion wire contract lacks {token}"
+
+    for token in (
+        "bool native_minion = false;",
+        "NativeMinionState native_minion_state;",
+        "float animation_phase = 0.0f;",
+        "std::int32_t target_refresh_timer = 0;",
+        "std::uint32_t locomotion_sample_counter = 0;",
+    ):
+        assert token in runtime_state, f"native-minion runtime state lacks {token}"
+
+    for token in (
+        "golem_target_refresh_timer=0x178",
+        "golem_locomotion_sample_counter=0x17C",
+        "golem_ambient_effect_timer=0x218",
+        "golem_animation_phase=0x21C",
+    ):
+        assert token in binary_layout, (
+            f"native-minion binary field contract lacks {token}"
+        )
+
+    for token in (
+        "struct NativeMinionDescriptor",
+        "kGoodImpNativeTypeId = 0x03ED",
+        "kLeviathanNativeTypeId = 0x07F2",
+        "kGolemNativeTypeId = 0x07F4",
+        "HookGoodImpTick",
+        "HookLeviathanTick",
+        "HookGolemTick",
+        "HookGolemContact",
+        "HookGolemDeath",
+        "HookKnockbackTick",
+        "HookGameObjectFactoryForNativeMinions",
+        "ScopedGameplayPlayerActorSlotContext",
+        "ScopedActorSlotZeroContext",
+        "multiplayer::IsLocalTransportClient()",
+        "multiplayer::IsLocalTransportHost()",
+        "TryCaptureNativeMinionState",
+        "TryMaterializeReplicatedNativeMinion",
+        "ApplyReplicatedNativeMinionState",
+        "ApplyReplicatedNativeMinionTerminal",
+        "RetireAuthoritativeNativeMinionsForOwner",
+        "NativeMinionTerminalReason::OwnerDeath",
+        "NativeMinionTerminalReason::OwnerDisconnected",
+        "NativeMinionTerminalReasonExplicitRetirement",
+        "std::array<std::pair<std::size_t, float>, 6>",
+        "kNativeMinionObserverBindingGraceMs",
+        "ShouldRetireUnboundNativeMinionObserver",
+        "g_native_minion_first_observed_ms_by_actor",
+        "ScopedNativeMinionSummonDispatch",
+        "ResolveNativeMinionCreationOwnerForCaster",
+        "g_native_minion_creation_owner_participant_id",
+        "g_native_minion_replacement_dispatch_depth",
+        "CurrentGolemTerminalReason",
+    ):
+        assert token in minion_runtime, f"native-minion authority module lacks {token}"
+    _require_in_order(
+        minion_runtime,
+        "FindParticipantEntityForActor(caster_actor_address)",
+        "TryGetPlayerState(&local_player)",
+    )
+    for dispatch_path in (
+        player_cast_hooks,
+        player_secondary_hook,
+    ):
+        _require_in_order(
+            dispatch_path,
+            "ScopedNativeMinionSummonDispatch",
+            "native_result = original",
+        )
+
+    for token in (
+        "PopulateNativeMinionSnapshot",
+        "ValidateNativeMinionPacketState",
+        "RetainActiveNativeMinionSnapshot",
+        "BuildNativeMinionTerminalTombstone",
+        "kNativeMinionTombstoneHoldMs",
+        "ForgetNativeMinionSnapshotForActor",
+        "HasNativeMinionTerminalForNetworkActor",
+    ):
+        assert token in minion_transport, f"native-minion transport seam lacks {token}"
+    _require_in_order(
+        transport_public,
+        "BuildNativeMinionTerminalTombstone(",
+        "run_host_local_world_actor_ids_by_address.erase(",
+    )
+
+    for token in (
+        "PopulateNativeMinionSnapshot(",
+        "AppendRetainedNativeMinionSnapshots(",
+    ):
+        assert token in world_capture, f"world snapshot capture lacks {token}"
+    for token in (
+        "TryMaterializeReplicatedNativeMinion(",
+        "ApplyReplicatedNativeMinionState(",
+        "ApplyReplicatedNativeMinionTerminal(",
+        "ShouldRetireUnboundNativeMinionObserver(",
+    ):
+        assert token in world_apply, f"world snapshot reconciliation lacks {token}"
+    for token in (
+        "best_native_age_delta",
+        "local_minion.owner_participant_id",
+        "authoritative_actor.native_minion_state",
+    ):
+        assert token in world_binding, (
+            f"native-minion identity matching lacks {token}"
+        )
+    assert (
+        "RetireAuthoritativeNativeMinionsForOwner("
+        in participant_destroy
+    ), "disconnect teardown must retire every minion owned by the participant"
+    for token in (
+        "RetireAuthoritativeNativeMinionsForOwner(",
+        "multiplayer::GetLocalTransportParticipantId()",
+        "NativeMinionTerminalReason::OwnerDeath",
+    ):
+        assert token in minion_public_api, (
+            f"local-owner death teardown lacks {token}"
+        )
+    _require_in_order(
+        run_transition_hooks,
+        "multiplayer::BeginLocalDeathSpectatorPresentation()",
+        "RetireAuthoritativeNativeMinionsForLocalOwnerDeath()",
+        "return;",
+    )
+
+    for token in (
+        "HOST_PORT = 48511",
+        "CLIENT_PORT = 48512",
+        'INSTANCE_PREFIX = "mini"',
+        "SDMOD_DISABLE_AUDIO",
+        "host_summon",
+        "client_summon",
+        "assert_exact_damage_convergence",
+        "assert_incoming_damage_convergence",
+        "call_thiscall_ret_u32",
+        "assert_missing_native_minion_recovery",
+        "created_actor_total_count",
+        "assert_recast_replacement",
+        "assert_native_minion_death_convergence",
+        "assert_native_minion_despawn_convergence",
+        "suspend_exact_owned_process",
+        "LATE_TOMBSTONE_CLIENT_SUSPEND_MS",
+        "assert_owner_death_convergence",
+        "defense.invoke_native_magic_hit_trial",
+        "assert_owner_disconnect_convergence",
+        "capture_both_peer_screenshots",
+        "cleanup_exact_owned_processes",
+    ):
+        assert token in verifier, f"native-minion live regression lacks {token}"
+
     return (
-        "each secondary behavior retires explicit long-lived test actors and "
-        "waits for every observed native effect to leave both peers"
+        "native minions are a descriptor-backed host-authoritative class with "
+        "owner, state, damage, materialization, terminal, and two-owner live coverage"
     )
 
 
@@ -2067,7 +2290,7 @@ def test_shared_menu_pause_is_host_authoritative_and_time_bounded() -> str:
     verifier = _read("tools/verify_multiplayer_shared_menu_pause.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 85",
+        "constexpr std::uint16_t kProtocolVersion = 86",
         "local_menu_pause_request_epoch",
         "local_menu_pause_requested",
         "shared_gameplay_pause_active",

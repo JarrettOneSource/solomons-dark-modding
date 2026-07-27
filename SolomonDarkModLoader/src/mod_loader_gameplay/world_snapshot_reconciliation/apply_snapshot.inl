@@ -1,4 +1,5 @@
 void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::uint64_t now_ms) {
+    PumpAuthoritativeNativeMinionOwnerLifecycle();
     MaybeQueueRunLifecycleForRemoteAuthority(now_ms);
 
     const auto runtime_state = multiplayer::SnapshotRuntimeState();
@@ -192,6 +193,52 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                     &binding_index)) {
                 local_by_network_id.emplace(authoritative_actor.network_actor_id, binding_index);
                 local_it = local_by_network_id.find(authoritative_actor.network_actor_id);
+            } else if (
+                authoritative_actor.native_minion &&
+                (authoritative_actor
+                     .native_minion_state.state_flags &
+                 multiplayer::NativeMinionStateFlagActive) !=
+                    0 &&
+                (authoritative_actor
+                     .native_minion_state.state_flags &
+                 multiplayer::NativeMinionStateFlagTerminal) ==
+                    0) {
+                uintptr_t created_actor_address = 0;
+                if (TryMaterializeReplicatedNativeMinion(
+                        scene_state.world_address,
+                        authoritative_actor,
+                        &created_actor_address)) {
+                    BindReplicatedRunActor(
+                        authoritative_actor
+                            .network_actor_id,
+                        created_actor_address);
+                    counts.matched_actor_count += 1;
+                    counts.created_actor_count += 1;
+                    (void)ApplyReplicatedNativeMinionState(
+                        created_actor_address,
+                        authoritative_actor);
+                    if (ApplyReplicatedWorldActorTransform(
+                            created_actor_address,
+                            authoritative_actor
+                                .native_type_id,
+                            authoritative_actor,
+                            true)) {
+                        counts.transform_write_count += 1;
+                    }
+                    if (ApplyReplicatedWorldActorPresentation(
+                            created_actor_address,
+                            authoritative_actor
+                                .native_type_id,
+                            authoritative_actor)) {
+                        counts.presentation_write_count += 1;
+                    }
+                    RecordWorldSnapshotBinding(
+                        &counts,
+                        authoritative_actor,
+                        created_actor_address,
+                        true,
+                        false);
+                }
             } else {
                 (void)QueueReplicatedManualRunEnemyMaterialization(authoritative_actor, now_ms);
             }
@@ -262,6 +309,38 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         auto& binding = local_bindings[local_it->second];
         binding.matched = true;
         counts.matched_actor_count += 1;
+        if (authoritative_actor.native_minion &&
+            (authoritative_actor
+                 .native_minion_state.state_flags &
+             multiplayer::NativeMinionStateFlagTerminal) !=
+                0) {
+            if (ApplyReplicatedNativeMinionTerminal(
+                    binding.actor.actor_address,
+                    authoritative_actor)) {
+                counts.removed_actor_count += 1;
+                RecordWorldSnapshotBinding(
+                    &counts,
+                    authoritative_actor,
+                    binding.actor.actor_address,
+                    true,
+                    false,
+                    true);
+                UnbindReplicatedRunActor(
+                    authoritative_actor
+                        .network_actor_id,
+                    binding.actor.actor_address);
+                binding.network_actor_id = 0;
+            } else {
+                counts.failed_remove_actor_count += 1;
+                RecordWorldSnapshotBinding(
+                    &counts,
+                    authoritative_actor,
+                    binding.actor.actor_address,
+                    true,
+                    false);
+            }
+            continue;
+        }
         if (authoritative_actor.dead) {
             counts.dead_actor_count += 1;
         }
@@ -273,6 +352,14 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             authoritative_actor.tracked_enemy &&
             ApplyReplicatedRunEnemyHealth(binding.actor.actor_address, authoritative_actor, now_ms)) {
             counts.health_write_count += 1;
+        }
+        if (snapshot.scene_intent.kind ==
+                multiplayer::ParticipantSceneIntentKind::Run &&
+            authoritative_actor.native_minion &&
+            ApplyReplicatedNativeMinionState(
+                binding.actor.actor_address,
+                authoritative_actor)) {
+            counts.presentation_write_count += 1;
         }
         if (ApplyReplicatedWorldActorTransform(
                 binding.actor.actor_address,
@@ -328,23 +415,70 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
             }
             if (snapshot.scene_intent.kind == multiplayer::ParticipantSceneIntentKind::Run) {
                 const auto removed_network_actor_id = binding.network_actor_id;
-                if (multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                if (multiplayer::IsNativeMinionType(
                         binding.actor.object_type_id)) {
-                    // Summons are owned by the stock spell implementation on
-                    // every machine. Reconciliation may align and bind them,
-                    // but must never unregister one: doing so bypasses the
-                    // summon's native teardown and can leave its AI/effect
-                    // owners with a dangling actor pointer. Once authority no
-                    // longer publishes the summon, release only our network
-                    // identity and let the matching stock lifetime finish.
-                    if (removed_network_actor_id != 0 &&
-                        authoritative_ids.find(removed_network_actor_id) == authoritative_ids.end()) {
-                        UnbindReplicatedRunActor(
-                            removed_network_actor_id,
-                            binding.actor.actor_address);
-                        binding.network_actor_id = 0;
+                    const bool stale_bound_actor =
+                        removed_network_actor_id != 0 &&
+                        authoritative_ids.find(
+                            removed_network_actor_id) ==
+                            authoritative_ids.end();
+                    const bool duplicate_unbound_actor =
+                        removed_network_actor_id == 0 &&
+                        ShouldRetireUnboundNativeMinionObserver(
+                            binding.actor.actor_address,
+                            binding.actor.object_type_id,
+                            snapshot,
+                            now_ms);
+                    if (stale_bound_actor ||
+                        duplicate_unbound_actor) {
+                        DWORD exception_code = 0;
+                        const auto actor_address =
+                            binding.actor.actor_address;
+                        if (CallActorRequestRetirementSafe(
+                                actor_address,
+                                &exception_code)) {
+                            counts.removed_actor_count += 1;
+                            RecordWorldSnapshotBinding(
+                                &counts,
+                                binding,
+                                false,
+                                false,
+                                true);
+                            if (removed_network_actor_id !=
+                                0) {
+                                UnbindReplicatedRunActor(
+                                    removed_network_actor_id,
+                                    actor_address);
+                            }
+                            binding.network_actor_id = 0;
+                            if (duplicate_unbound_actor) {
+                                Log(
+                                    "world_snapshot: retired duplicate unbound native minion observer. actor=" +
+                                    HexString(actor_address) +
+                                    " type=" +
+                                    HexString(
+                                        static_cast<uintptr_t>(
+                                            binding.actor
+                                                .object_type_id)));
+                            }
+                        } else {
+                            counts.failed_remove_actor_count +=
+                                1;
+                            RecordWorldSnapshotBinding(
+                                &counts,
+                                binding,
+                                false,
+                                false,
+                                false);
+                        }
+                    } else {
+                        RecordWorldSnapshotBinding(
+                            &counts,
+                            binding,
+                            false,
+                            false,
+                            false);
                     }
-                    RecordWorldSnapshotBinding(&counts, binding, false, false, false);
                     continue;
                 }
                 if (removed_network_actor_id != 0 &&

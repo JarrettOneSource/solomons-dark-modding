@@ -316,6 +316,8 @@ struct SDModSceneActorState {
     int enemy_type = -1;
 };
 
+#include "mod_loader_native_minion_state.inl"
+
 struct SDModNativeSpellEffectActorState {
     bool valid = false;
     uintptr_t actor_address = 0;

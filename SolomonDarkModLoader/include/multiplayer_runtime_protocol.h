@@ -5,7 +5,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 85;
+constexpr std::uint16_t kProtocolVersion = 86;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -196,19 +196,40 @@ enum WorldActorSnapshotFlags : std::uint8_t {
     WorldActorSnapshotFlagLifecycleOwned = 1 << 2,
     WorldActorSnapshotFlagRunStatic = 1 << 3,
     WorldActorSnapshotFlagTargetAuthoritative = 1 << 4,
-    WorldActorSnapshotFlagPlayerCreated = 1 << 5,
+    WorldActorSnapshotFlagNativeMinion = 1 << 5,
 };
 
-constexpr std::uint32_t kRaiseGolemNativeTypeId = 0x07F4;
+constexpr std::uint32_t kGoodImpNativeTypeId = 0x03ED;
+constexpr std::uint32_t kLeviathanNativeTypeId = 0x07F2;
+constexpr std::uint32_t kGolemNativeTypeId = 0x07F4;
 
-inline bool IsReplicatedRunPlayerCreatedActorType(std::uint32_t native_type_id) {
+inline bool IsNativeMinionType(std::uint32_t native_type_id) {
     switch (native_type_id) {
-    case kRaiseGolemNativeTypeId:
+    case kGoodImpNativeTypeId:
+    case kLeviathanNativeTypeId:
+    case kGolemNativeTypeId:
         return true;
     default:
         return false;
     }
 }
+
+enum NativeMinionStateFlags : std::uint32_t {
+    NativeMinionStateFlagActive = 1 << 0,
+    NativeMinionStateFlagDamageable = 1 << 1,
+    NativeMinionStateFlagTerminal = 1 << 2,
+};
+
+enum NativeMinionTerminalReason : std::uint8_t {
+    NativeMinionTerminalReasonNone = 0,
+    NativeMinionTerminalReasonNativeDeath = 1,
+    NativeMinionTerminalReasonExpired = 2,
+    NativeMinionTerminalReasonReplaced = 3,
+    NativeMinionTerminalReasonOwnerDeath = 4,
+    NativeMinionTerminalReasonOwnerDisconnected = 5,
+    NativeMinionTerminalReasonExplicitRetirement = 6,
+    NativeMinionTerminalReasonSceneTeardown = 7,
+};
 
 enum WorldActorPresentationFlags : std::uint16_t {
     WorldActorPresentationFlagAnimationDriveWord = 1 << 0,
@@ -1124,6 +1145,27 @@ struct NamedHubNpcPresentationPacketState {
     std::int32_t pose;
 };
 
+struct NativeMinionPacketState {
+    std::uint64_t owner_participant_id;
+    std::uint32_t state_flags;
+    std::uint32_t native_age;
+    std::int16_t attack_timer;
+    std::int16_t attack_cooldown;
+    std::uint16_t gait_primary;
+    std::uint16_t gait_secondary;
+    std::int16_t target_refresh_timer;
+    std::uint16_t ambient_effect_timer;
+    std::uint16_t locomotion_sample_counter;
+    std::uint8_t iron;
+    std::uint8_t terminal_reason;
+    float animation_phase;
+    float steering_heading;
+    float steering_step;
+    float damage_primary;
+    float damage_secondary;
+    float reflect_ratio;
+};
+
 struct WorldActorSnapshotPacketState {
     std::uint64_t network_actor_id;
     std::uint32_t native_type_id;
@@ -1168,6 +1210,7 @@ struct WorldActorSnapshotPacketState {
     StudentBookPaletteEntryPacketState
         student_book_palette[kWorldActorStudentBookPaletteMaxEntries];
     NamedHubNpcPresentationPacketState named_hub_npc;
+    NativeMinionPacketState native_minion;
 };
 
 struct WorldSnapshotPacket {
@@ -1215,6 +1258,13 @@ struct WorldActorMotionPacketState {
     std::int32_t turn_undead_duration_ticks;
     float turn_undead_flee_heading;
     float turn_undead_activation_scalar;
+    std::uint32_t native_minion_age;
+    std::int16_t native_minion_attack_timer;
+    std::int16_t native_minion_attack_cooldown;
+    std::uint8_t native_minion_gait_primary;
+    std::uint8_t native_minion_gait_secondary;
+    std::int16_t native_minion_target_refresh_timer;
+    float native_minion_animation_phase;
 };
 
 struct WorldMotionSnapshotPacket {
@@ -1724,11 +1774,13 @@ static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24,
               "Unexpected Student book palette entry size");
 static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 328, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 1032, "Unexpected world snapshot packet size");
-static_assert(sizeof(WorldActorMotionPacketState) == 92,
+static_assert(sizeof(NativeMinionPacketState) == 56,
+              "Unexpected native minion packet state size");
+static_assert(sizeof(WorldActorSnapshotPacketState) == 384, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 1200, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorMotionPacketState) == 108,
               "Unexpected world actor motion size");
-static_assert(sizeof(WorldMotionSnapshotPacket) == 968,
+static_assert(sizeof(WorldMotionSnapshotPacket) == 1128,
               "Unexpected world motion snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 120, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7712, "Unexpected loot snapshot packet size");

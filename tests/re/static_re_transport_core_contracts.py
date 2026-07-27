@@ -755,7 +755,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
     )
     binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
 
-    assert "kProtocolVersion = 85" in protocol_text
+    assert "kProtocolVersion = 86" in protocol_text
     for field in (
         "game_over_command_epoch",
         "game_over_ack_epoch",
@@ -1010,7 +1010,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 85" in protocol_text
+    assert "kProtocolVersion = 86" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -1549,7 +1549,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 85;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 86;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -1667,8 +1667,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "static_assert(sizeof(StatePacket) == 652"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
-        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 328"),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1032"),
+        (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 384"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1200"),
         (protocol_text, "static_assert(sizeof(LootDropSnapshotPacketState) == 120"),
         (protocol_text, "static_assert(sizeof(LootSnapshotPacket) == 7712"),
         (protocol_text, "static_assert(sizeof(LootPickupRequestPacket) == 56"),
@@ -2220,7 +2220,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
             world_snapshot_reconciliation_text,
             "queued replicated manual run enemy materialization",
         ),
-        (world_snapshot_reconciliation_text, "authoritative_actor.player_created"),
+        (world_snapshot_reconciliation_text, "authoritative_actor.native_minion"),
         (world_snapshot_reconciliation_text, "BindReplicatedRunActor"),
         (world_snapshot_reconciliation_text, "RecordWorldSnapshotBinding"),
         (world_snapshot_reconciliation_text, "ApplyReplicatedRunEnemyHealth"),

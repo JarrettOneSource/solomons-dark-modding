@@ -109,6 +109,7 @@
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
     <ClInclude Include="include\mod_loader_hub_state.inl" />
+    <ClInclude Include="include\mod_loader_native_minion_state.inl" />
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
@@ -120,6 +121,7 @@
     <ClInclude Include="include\multiplayer_local_transport.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
+    <ClInclude Include="include\multiplayer_native_minion_state.inl" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
@@ -153,6 +155,7 @@
     <ClInclude Include="include\x86_hook.h" />
     <ClInclude Include="src\gameplay_seams.h" />
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
+    <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl" />
     <ClInclude Include="src\gameplay_seams\public_api.inl" />
     <ClInclude Include="src\gameplay_seams\progression_and_actor_offsets.inl" />
@@ -375,6 +378,11 @@
     <ClInclude Include="src\mod_loader_gameplay\hostile_target_acquisition.inl" />
     <ClInclude Include="src\mod_loader_gameplay\hostile_target_invalidation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\lua_enemy_ai_runtime.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\authority_hooks.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\authority_state.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\lifecycle_and_materialization.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\state_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\powerup_pickup_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_mana_hooks.inl" />
@@ -412,6 +420,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_enemy_death_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_behavior_probes.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_experience_gain_probe.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_minions.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
@@ -490,6 +499,7 @@
     <ClInclude Include="src\multiplayer_local_transport\lua_registered_spell_effect_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl" />
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\native_minion_snapshot_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\native_progression_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\native_progression_derived_stats.inl" />
     <ClInclude Include="src\multiplayer_local_transport\outgoing_cast_packet_sync.inl" />

@@ -124,6 +124,7 @@ uintptr_t kSpawnExactEnemyGroup = 0;
 uintptr_t kObjectAllocate = 0;
 uintptr_t kObjectFree = 0;
 uintptr_t kGameObjectFactory = 0;
+#include "address_storage_native_minions.inl"
 uintptr_t kGameFree = 0;
 uintptr_t kGameOperatorNew = 0;
 uintptr_t kNativeIntArrayClear = 0;

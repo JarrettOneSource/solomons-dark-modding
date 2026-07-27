@@ -148,7 +148,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 57);
+    lua_createtable(state, 0, 69);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -197,6 +197,88 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "lifecycle_owned");
     lua_pushboolean(state, actor.run_static ? 1 : 0);
     lua_setfield(state, -2, "run_static");
+    lua_pushboolean(state, actor.native_minion ? 1 : 0);
+    lua_setfield(state, -2, "native_minion");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state
+                .owner_participant_id));
+    lua_setfield(
+        state,
+        -2,
+        "native_minion_owner_participant_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.state_flags));
+    lua_setfield(state, -2, "native_minion_state_flags");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.native_age));
+    lua_setfield(state, -2, "native_minion_age");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.attack_timer));
+    lua_setfield(state, -2, "native_minion_attack_timer");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.attack_cooldown));
+    lua_setfield(state, -2, "native_minion_attack_cooldown");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.gait_primary));
+    lua_setfield(state, -2, "native_minion_gait_primary");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.gait_secondary));
+    lua_setfield(state, -2, "native_minion_gait_secondary");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.native_minion_state.animation_phase));
+    lua_setfield(state, -2, "native_minion_animation_phase");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.target_refresh_timer));
+    lua_setfield(
+        state,
+        -2,
+        "native_minion_target_refresh_timer");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state
+                .locomotion_sample_counter));
+    lua_setfield(
+        state,
+        -2,
+        "native_minion_locomotion_sample_counter");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state
+                .ambient_effect_timer));
+    lua_setfield(
+        state,
+        -2,
+        "native_minion_ambient_effect_timer");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.iron));
+    lua_setfield(state, -2, "native_minion_iron");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.native_minion_state.terminal_reason));
+    lua_setfield(state, -2, "native_minion_terminal_reason");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.anim_drive_state));
     lua_setfield(state, -2, "anim_drive_state");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.presentation_flags));

@@ -464,6 +464,9 @@ bool InvokeOriginalPlayerActorSecondarySpellCast(
         InvokeWithStockDampenEffectSuppressed(
             skill_entry_index,
             [&] {
+                ScopedNativeMinionSummonDispatch summon_dispatch(
+                    skill_entry_index,
+                    actor_address);
                 native_result = original(
                     reinterpret_cast<void*>(actor_address),
                     skill_entry_index);

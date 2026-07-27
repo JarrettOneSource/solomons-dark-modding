@@ -197,6 +197,9 @@
     <ClInclude Include="include\mod_loader_hub_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\mod_loader_native_minion_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -252,6 +255,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_state.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\multiplayer_native_minion_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_effect_state.inl">
@@ -330,6 +336,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\gameplay_seams\address_storage.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl">
@@ -989,6 +998,21 @@
     <ClInclude Include="src\mod_loader_gameplay\lua_enemy_ai_runtime.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\authority_hooks.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\authority_state.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\lifecycle_and_materialization.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\native_minion_runtime\state_reconciliation.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\orb_pickup_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
@@ -1071,6 +1095,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_experience_gain_probe.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_native_minions.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl">
@@ -1329,6 +1356,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\native_minion_snapshot_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl">

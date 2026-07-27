@@ -127,7 +127,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 85,
+               kProtocolVersion == 86,
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             std::string(

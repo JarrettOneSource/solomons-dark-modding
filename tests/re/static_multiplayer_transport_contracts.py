@@ -100,6 +100,10 @@ def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
     lifecycle = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/remote_peer_lifecycle.inl"
     )
+    transport_tick = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
     local_state = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl"
     )
@@ -142,6 +146,29 @@ def test_unreliable_snapshot_ordering_is_wrap_safe() -> str:
         "!IsPacketSequenceNewer(",
         "RelayParticipantPacketToPeers(packet, from);",
         "UpdateRuntimeState([&](RuntimeState& state)",
+    )
+    for token in (
+        "constexpr std::uint64_t kLocalUdpPeerTimeoutMs = 5000;",
+        "void PruneStaleLocalUdpPeers(std::uint64_t now_ms)",
+        "now_ms - peer.last_packet_ms < kLocalUdpPeerTimeoutMs",
+        "!g_local_transport.is_host",
+        "QueueParticipantDestroy(participant_id",
+    ):
+        assert token in transport + lifecycle, (
+            f"local UDP disconnect detection lacks: {token}"
+        )
+    _require_in_order(
+        lifecycle,
+        "void PruneStaleLocalUdpPeers(std::uint64_t now_ms)",
+        "g_local_transport.peers.erase(",
+        "ResetRemoteParticipantSessionEpoch(",
+        "Multiplayer local UDP peer timed out.",
+    )
+    _require_in_order(
+        transport_tick,
+        "ReceivePackets(now_ms);",
+        "PruneStaleLocalUdpPeers(now_ms);",
+        "ServiceRunLoadingBarrier(now_ms);",
     )
 
     assert "bool AppendLootSnapshot(" in runtime_header
@@ -222,7 +249,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 85;",
+        "constexpr std::uint16_t kProtocolVersion = 86;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
         "static_assert(sizeof(ParticipantFramePacket) == 370",
@@ -240,8 +267,8 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "kWorldMotionSnapshotActorsPerFragment = 10",
         "struct WorldActorMotionPacketState",
         "struct WorldMotionSnapshotPacket",
-        "static_assert(sizeof(WorldActorMotionPacketState) == 92",
-        "static_assert(sizeof(WorldMotionSnapshotPacket) == 968",
+        "static_assert(sizeof(WorldActorMotionPacketState) == 108",
+        "static_assert(sizeof(WorldMotionSnapshotPacket) == 1128",
     ):
         assert token in protocol, f"run-world motion protocol lacks: {token}"
 

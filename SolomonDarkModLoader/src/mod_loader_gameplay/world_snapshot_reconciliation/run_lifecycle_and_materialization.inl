@@ -33,6 +33,12 @@ std::vector<ReplicatedWorldActorLocalBinding> BuildLocalReplicatedWorldActorBind
     for (const auto& actor : scene_actors) {
         if (!ShouldReconcileLocalWorldActor(actor, scene_kind) ||
             (scene_kind ==
+                 multiplayer::ParticipantSceneIntentKind::Run &&
+             multiplayer::IsNativeMinionType(
+                 actor.object_type_id) &&
+             IsActorRetirementPending(
+                 actor.actor_address)) ||
+            (scene_kind ==
                  multiplayer::ParticipantSceneIntentKind::SharedHub &&
              IsActorRetirementPending(actor.actor_address))) {
             continue;
@@ -313,6 +319,8 @@ bool TryBindAuthoritativeRunActorToLocalPool(
 
     auto choose_binding = [&](bool require_enemy_type, bool prefer_nearest) -> bool {
         float best_distance_sq = (std::numeric_limits<float>::max)();
+        std::uint64_t best_native_age_delta =
+            (std::numeric_limits<std::uint64_t>::max)();
         std::size_t best_index = 0;
         bool found = false;
         for (std::size_t index = 0; index < local_bindings->size(); ++index) {
@@ -345,15 +353,47 @@ bool TryBindAuthoritativeRunActorToLocalPool(
                 binding.actor.enemy_type != authoritative_actor.enemy_type) {
                 continue;
             }
+            std::uint64_t native_age_delta = 0;
+            if (authoritative_actor.native_minion) {
+                SDModNativeMinionState local_minion;
+                if (!TryCaptureNativeMinionState(
+                        binding.actor.actor_address,
+                        &local_minion) ||
+                    !local_minion.valid ||
+                    local_minion.owner_participant_id !=
+                        authoritative_actor
+                            .native_minion_state
+                            .owner_participant_id) {
+                    continue;
+                }
+                const auto authoritative_age =
+                    authoritative_actor.native_minion_state
+                        .native_age;
+                native_age_delta =
+                    local_minion.native_age >= authoritative_age
+                    ? static_cast<std::uint64_t>(
+                          local_minion.native_age -
+                          authoritative_age)
+                    : static_cast<std::uint64_t>(
+                          authoritative_age -
+                          local_minion.native_age);
+            }
 
             if (prefer_nearest) {
                 const float dx = authoritative_actor.position_x - binding.actor.x;
                 const float dy = authoritative_actor.position_y - binding.actor.y;
                 const float distance_sq = dx * dx + dy * dy;
-                if (!found || distance_sq < best_distance_sq) {
+                if (!found ||
+                    native_age_delta <
+                        best_native_age_delta ||
+                    (native_age_delta ==
+                         best_native_age_delta &&
+                     distance_sq < best_distance_sq)) {
                     found = true;
                     best_index = index;
                     best_distance_sq = distance_sq;
+                    best_native_age_delta =
+                        native_age_delta;
                 }
                 continue;
             }
@@ -383,7 +423,7 @@ bool TryBindAuthoritativeRunActorToLocalPool(
     const bool prefer_nearest =
         authoritative_actor.run_static ||
         authoritative_actor.tracked_enemy ||
-        authoritative_actor.player_created;
+        authoritative_actor.native_minion;
     return choose_binding(true, prefer_nearest) || choose_binding(false, prefer_nearest);
 }
 

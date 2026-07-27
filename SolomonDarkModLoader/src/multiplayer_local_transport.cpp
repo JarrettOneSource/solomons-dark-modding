@@ -139,6 +139,7 @@ constexpr std::size_t kBeltButtonTypeOffset = 0xB4;
 constexpr std::size_t kBeltButtonSkillEntryIndexOffset = 0xB8;
 constexpr std::uint32_t kBeltButtonSkillTypeId = 0x1B67;
 constexpr std::uint64_t kRecentRunEnemyDeathSnapshotHoldMs = 2500;
+constexpr std::uint64_t kNativeMinionTombstoneHoldMs = 4000;
 constexpr std::size_t kLuaItemGrantMaximumQueuedRequests = 256;
 constexpr std::size_t kLuaItemGrantMaximumRememberedRequests = 512;
 constexpr std::size_t kLuaConsumableUseMaximumQueuedRequests = 256;
@@ -191,6 +192,7 @@ constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
 constexpr float kLootPickupResourceEpsilon = 0.001f;
 constexpr float kLootPickupMaxResourceDelta = 10000.0f;
 constexpr std::uint64_t kLocalLootPickupRequestRetryMs = 3000;
+constexpr std::uint64_t kLocalUdpPeerTimeoutMs = 5000;
 constexpr std::uint64_t kPowerupPreparationMaterializationTimeoutMs = 60000;
 constexpr std::uint32_t kOrbRewardNativeTypeId = 0x07DB;
 constexpr std::uint32_t kGoldRewardNativeTypeId = 0x07DC;
@@ -359,6 +361,17 @@ struct RecentRunEnemyDeathSnapshot {
 struct RetainedRunEnemySnapshot {
     uintptr_t actor_address = 0;
     WorldActorSnapshotPacketState packet{};
+};
+
+struct RetainedNativeMinionSnapshot {
+    uintptr_t actor_address = 0;
+    WorldActorSnapshotPacketState packet{};
+};
+
+struct NativeMinionTerminalTombstone {
+    uintptr_t actor_address = 0;
+    WorldActorSnapshotPacketState packet{};
+    std::uint64_t expires_ms = 0;
 };
 
 enum class LootOrbResourceKind : std::uint8_t {
@@ -971,6 +984,14 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, RecentRunEnemyDeathSnapshot> recent_run_enemy_deaths_by_network_id;
     std::unordered_map<std::uint64_t, RetainedRunEnemySnapshot>
         retained_run_enemy_snapshots_by_network_id;
+    std::unordered_map<
+        std::uint64_t,
+        RetainedNativeMinionSnapshot>
+        retained_native_minion_snapshots_by_network_id;
+    std::unordered_map<
+        std::uint64_t,
+        NativeMinionTerminalTombstone>
+        native_minion_terminal_tombstones_by_network_id;
     std::vector<ParticipantProgressionSendCheckpoint>
         participant_progression_send_checkpoints;
     bool have_last_sent_wave_summary = false;
@@ -1451,6 +1472,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/skill_config_and_packet_helpers.inl"
 #include "multiplayer_local_transport/hagatha_perk_state.inl"
 #include "multiplayer_local_transport/run_exit_sync.inl"
+#include "multiplayer_local_transport/native_minion_snapshot_sync.inl"
 #include "multiplayer_local_transport/world_snapshot_capture.inl"
 #include "multiplayer_local_transport/loot_snapshot_capture.inl"
 #include "multiplayer_local_transport/death_spectator_sync.inl"

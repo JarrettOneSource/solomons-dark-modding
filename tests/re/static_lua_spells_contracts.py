@@ -151,7 +151,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "copied into the loader's bounded Lua value representation",
         "no Lua registry index",
         "Owner-routed casting",
-        "Protocol 85",
+        "Protocol 86",
         "once for that actor",
         "generic content-ID-based effect snapshot channel",
         "four effects per fragment",
@@ -263,7 +263,7 @@ def test_lua_spells_register_stable_metadata_and_owned_callbacks() -> str:
         "RelayPacketBufferToPeers",
     )
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 85;",
+        "constexpr std::uint16_t kProtocolVersion = 86;",
         "LuaRegisteredSpellCast = 23",
         "struct LuaRegisteredSpellCastPacket",
         "static_assert(sizeof(LuaRegisteredSpellCastPacket) == 76",

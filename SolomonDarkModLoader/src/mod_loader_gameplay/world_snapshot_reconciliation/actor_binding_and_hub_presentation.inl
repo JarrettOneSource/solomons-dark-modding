@@ -21,7 +21,7 @@ bool ShouldReconcileLocalWorldActor(
                (!actor.tracked_enemy &&
                 (actor.object_type_id == kSolomonDigNativeTypeId ||
                  actor.object_type_id == kSolomonRunStaticNativeTypeId ||
-                 multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                 multiplayer::IsNativeMinionType(
                      actor.object_type_id)));
     }
 
@@ -47,8 +47,8 @@ bool ShouldUseAuthoritativeWorldActorForScene(
                 (actor.run_static &&
                  (actor.native_type_id == kSolomonDigNativeTypeId ||
                   actor.native_type_id == kSolomonRunStaticNativeTypeId)) ||
-                (actor.player_created &&
-                 multiplayer::IsReplicatedRunPlayerCreatedActorType(
+                (actor.native_minion &&
+                 multiplayer::IsNativeMinionType(
                      actor.native_type_id)));
     }
 
@@ -305,7 +305,13 @@ void PruneReplicatedRunActorBindings(const std::vector<SDModSceneActorState>& sc
     std::unordered_set<uintptr_t> active_run_actors;
     active_run_actors.reserve(scene_actors.size());
     for (const auto& actor : scene_actors) {
-        if (ShouldReconcileLocalWorldActor(actor, multiplayer::ParticipantSceneIntentKind::Run)) {
+        if (ShouldReconcileLocalWorldActor(
+                actor,
+                multiplayer::ParticipantSceneIntentKind::Run) &&
+            (!multiplayer::IsNativeMinionType(
+                 actor.object_type_id) ||
+             !IsActorRetirementPending(
+                 actor.actor_address))) {
             active_run_actors.insert(actor.actor_address);
         }
     }

@@ -94,7 +94,12 @@ bool BuildLocalWorldSnapshot(
         if (network_actor_id == 0) {
             continue;
         }
-        included_actor_ids.insert(network_actor_id);
+        if (run_scene &&
+            IsNativeMinionType(actor.object_type_id) &&
+            HasNativeMinionTerminalForNetworkActor(
+                network_actor_id)) {
+            continue;
+        }
         if (built.actors.size() >=
             kWorldSnapshotMaxLogicalActors) {
             Log(
@@ -127,6 +132,13 @@ bool BuildLocalWorldSnapshot(
         snapshot.heading = ReadActorHeadingOrZero(actor.actor_address);
         snapshot.hp = std::isfinite(actor.hp) ? actor.hp : 0.0f;
         snapshot.max_hp = std::isfinite(actor.max_hp) ? actor.max_hp : 0.0f;
+        if (run_scene &&
+            IsNativeMinionType(actor.object_type_id) &&
+            !PopulateNativeMinionSnapshot(
+                actor,
+                &snapshot)) {
+            continue;
+        }
         SDModLuaEnemySpawnConfig lua_enemy_config;
         if (run_scene &&
             actor.tracked_enemy &&
@@ -172,14 +184,17 @@ bool BuildLocalWorldSnapshot(
         if (run_scene && IsRunStaticLayoutActor(actor)) {
             snapshot.flags |= WorldActorSnapshotFlagRunStatic;
         }
-        if (run_scene &&
-            IsReplicatedRunPlayerCreatedActorType(actor.object_type_id)) {
-            snapshot.flags |= WorldActorSnapshotFlagPlayerCreated;
-        }
         if (run_scene) {
             snapshot.flags |= WorldActorSnapshotFlagLifecycleOwned;
         }
         built.actors.push_back(snapshot);
+        included_actor_ids.insert(network_actor_id);
+        if (run_scene &&
+            IsNativeMinionType(actor.object_type_id)) {
+            RetainActiveNativeMinionSnapshot(
+                actor.actor_address,
+                snapshot);
+        }
         if (run_scene && actor.tracked_enemy) {
             RetainedRunEnemySnapshot retained;
             retained.actor_address = actor.actor_address;
@@ -219,6 +234,10 @@ bool BuildLocalWorldSnapshot(
             built.actors.push_back(retained.packet);
             included_actor_ids.insert(network_actor_id);
         }
+        AppendRetainedNativeMinionSnapshots(
+            now_ms,
+            &built,
+            &included_actor_ids);
         for (const auto& [network_actor_id, death_snapshot] :
              g_local_transport.recent_run_enemy_deaths_by_network_id) {
             if (network_actor_id == 0 ||

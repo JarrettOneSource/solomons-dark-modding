@@ -90,5 +90,8 @@ bool ExecuteParticipantEntitySyncNow(
 void DestroyParticipantEntityNow(std::uint64_t bot_id) {
     RemovePendingParticipantSyncRequest(bot_id);
     RemovePendingParticipantDestroyRequest(bot_id);
+    RetireAuthoritativeNativeMinionsForOwner(
+        bot_id,
+        NativeMinionTerminalReason::OwnerDisconnected);
     DematerializeParticipantEntityNow(bot_id, true, "destroy");
 }

@@ -531,7 +531,7 @@ bool RetireTestRunPlayerCreatedActors(
         }
         return false;
     }
-    if (!multiplayer::IsReplicatedRunPlayerCreatedActorType(native_type_id)) {
+    if (!multiplayer::IsNativeMinionType(native_type_id)) {
         if (error_message != nullptr) {
             *error_message =
                 "native actor type is not a replicated player-created run actor.";
@@ -584,6 +584,10 @@ bool RetireTestRunPlayerCreatedActors(
             continue;
         }
 
+        multiplayer::NotifyLocalNativeMinionTerminal(
+            actor.actor_address,
+            multiplayer::
+                NativeMinionTerminalReasonExplicitRetirement);
         DWORD exception_code = 0;
         if (!CallActorRequestRetirementSafe(
                 actor.actor_address,

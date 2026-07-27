@@ -542,6 +542,9 @@ void __fastcall HookActorWorldUnregister(
         ForgetRunLifecycleEnemyTracking(actor_address);
     }
     original(self, actor, remove_from_container);
+    if (actor_address != 0 && remove_from_container == 1) {
+        ForgetNativeMinionActor(actor_address);
+    }
     for (const auto hostile_actor_address :
          hostiles_targeting_removed_actor) {
         (void)ReacquireHostileTargetAfterInvalidation(

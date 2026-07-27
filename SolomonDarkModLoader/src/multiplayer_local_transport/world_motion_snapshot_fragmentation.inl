@@ -68,6 +68,22 @@ WorldActorMotionPacketState BuildWorldActorMotionPacketState(
         actor.turn_undead_flee_heading;
     motion.turn_undead_activation_scalar =
         actor.turn_undead_activation_scalar;
+    motion.native_minion_age =
+        actor.native_minion.native_age;
+    motion.native_minion_attack_timer =
+        actor.native_minion.attack_timer;
+    motion.native_minion_attack_cooldown =
+        actor.native_minion.attack_cooldown;
+    motion.native_minion_gait_primary =
+        static_cast<std::uint8_t>(
+            actor.native_minion.gait_primary);
+    motion.native_minion_gait_secondary =
+        static_cast<std::uint8_t>(
+            actor.native_minion.gait_secondary);
+    motion.native_minion_target_refresh_timer =
+        actor.native_minion.target_refresh_timer;
+    motion.native_minion_animation_phase =
+        actor.native_minion.animation_phase;
     return motion;
 }
 
@@ -101,6 +117,15 @@ bool IsValidWorldActorMotionPacketState(
         !std::isfinite(actor.max_hp) ||
         !std::isfinite(actor.walk_cycle_primary) ||
         !std::isfinite(actor.walk_cycle_secondary) ||
+        actor.native_minion_attack_timer < -1 ||
+        actor.native_minion_attack_cooldown < -1 ||
+        actor.native_minion_gait_primary > 16 ||
+        actor.native_minion_gait_secondary > 16 ||
+        actor.native_minion_target_refresh_timer < -1 ||
+        !std::isfinite(
+            actor.native_minion_animation_phase) ||
+        std::abs(actor.native_minion_animation_phase) >
+            1'000'000.0f ||
         (actor.status_flags & ~kWorldActorStatusKnownFlags) != 0) {
         return false;
     }
@@ -281,6 +306,20 @@ void ApplyWorldActorMotionPacketState(
         motion.turn_undead_flee_heading;
     actor->turn_undead_activation_scalar =
         motion.turn_undead_activation_scalar;
+    actor->native_minion.native_age =
+        motion.native_minion_age;
+    actor->native_minion.attack_timer =
+        motion.native_minion_attack_timer;
+    actor->native_minion.attack_cooldown =
+        motion.native_minion_attack_cooldown;
+    actor->native_minion.gait_primary =
+        motion.native_minion_gait_primary;
+    actor->native_minion.gait_secondary =
+        motion.native_minion_gait_secondary;
+    actor->native_minion.target_refresh_timer =
+        motion.native_minion_target_refresh_timer;
+    actor->native_minion.animation_phase =
+        motion.native_minion_animation_phase;
 }
 
 bool WorldMotionSnapshotMetadataMatchesIdentity(
@@ -486,7 +525,7 @@ bool SameWorldActorIdentity(
         WorldActorSnapshotFlagTrackedEnemy |
         WorldActorSnapshotFlagLifecycleOwned |
         WorldActorSnapshotFlagRunStatic |
-        WorldActorSnapshotFlagPlayerCreated;
+        WorldActorSnapshotFlagNativeMinion;
     return left.network_actor_id == right.network_actor_id &&
         left.native_type_id == right.native_type_id &&
         left.enemy_type == right.enemy_type &&
@@ -502,7 +541,13 @@ bool SameWorldActorIdentity(
             right.lua_spawn_chase_speed &&
         left.lua_spawn_attack_speed ==
             right.lua_spawn_attack_speed &&
-        left.lua_spawn_scale == right.lua_spawn_scale;
+        left.lua_spawn_scale == right.lua_spawn_scale &&
+        left.native_minion.owner_participant_id ==
+            right.native_minion.owner_participant_id &&
+        left.native_minion.state_flags ==
+            right.native_minion.state_flags &&
+        left.native_minion.terminal_reason ==
+            right.native_minion.terminal_reason;
 }
 
 bool SameWorldSnapshotIdentity(

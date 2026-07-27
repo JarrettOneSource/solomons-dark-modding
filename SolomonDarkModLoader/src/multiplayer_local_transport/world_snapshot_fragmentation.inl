@@ -1,5 +1,94 @@
 // Complete logical world snapshots and bounded transport fragmentation.
 
+constexpr std::uint32_t kNativeMinionStateKnownFlags =
+    NativeMinionStateFlagActive |
+    NativeMinionStateFlagDamageable |
+    NativeMinionStateFlagTerminal;
+
+bool IsKnownNativeMinionTerminalReason(
+    std::uint8_t reason) {
+    return reason >= NativeMinionTerminalReasonNativeDeath &&
+        reason <= NativeMinionTerminalReasonSceneTeardown;
+}
+
+bool ValidateNativeMinionPacketState(
+    const WorldActorSnapshotPacketState& actor) {
+    const bool native_minion =
+        (actor.flags &
+         WorldActorSnapshotFlagNativeMinion) != 0;
+    const auto& state = actor.native_minion;
+    if (!native_minion) {
+        return state.owner_participant_id == 0 &&
+            state.state_flags == 0 &&
+            state.terminal_reason ==
+                NativeMinionTerminalReasonNone;
+    }
+    if (!IsNativeMinionType(actor.native_type_id) ||
+        (actor.flags &
+         WorldActorSnapshotFlagLifecycleOwned) == 0 ||
+        state.owner_participant_id == 0 ||
+        (state.state_flags &
+         ~kNativeMinionStateKnownFlags) != 0) {
+        return false;
+    }
+
+    const bool active =
+        (state.state_flags &
+         NativeMinionStateFlagActive) != 0;
+    const bool terminal =
+        (state.state_flags &
+         NativeMinionStateFlagTerminal) != 0;
+    if (active == terminal ||
+        (terminal &&
+         !IsKnownNativeMinionTerminalReason(
+             state.terminal_reason)) ||
+        (active &&
+         state.terminal_reason !=
+             NativeMinionTerminalReasonNone)) {
+        return false;
+    }
+
+    const float values[] = {
+        state.animation_phase,
+        state.steering_heading,
+        state.steering_step,
+        state.damage_primary,
+        state.damage_secondary,
+        state.reflect_ratio,
+    };
+    if (!std::all_of(
+            std::begin(values),
+            std::end(values),
+            [](float value) {
+                return std::isfinite(value) &&
+                    std::abs(value) <= 1'000'000.0f;
+            }) ||
+        state.attack_timer < -1 ||
+        state.attack_cooldown < -1 ||
+        state.gait_primary > 1024 ||
+        state.gait_secondary > 1024 ||
+        state.target_refresh_timer < -1 ||
+        state.ambient_effect_timer > 65535 ||
+        state.locomotion_sample_counter >= 100 ||
+        state.iron > 1) {
+        return false;
+    }
+
+    const bool damageable =
+        (state.state_flags &
+         NativeMinionStateFlagDamageable) != 0;
+    if (actor.native_type_id == kGolemNativeTypeId) {
+        return damageable &&
+            std::isfinite(actor.hp) &&
+            std::isfinite(actor.max_hp) &&
+            actor.max_hp > 0.0f &&
+            actor.max_hp <= 1'000'000.0f &&
+            actor.hp >= -1'000'000.0f &&
+            actor.hp <= actor.max_hp + 0.05f;
+    }
+    return !damageable;
+}
+
 struct CompleteWorldSnapshotPacketState {
     std::uint64_t authority_participant_id = 0;
     std::uint32_t scene_epoch = 0;
@@ -58,6 +147,9 @@ bool IsValidWorldSnapshotActorPacketState(
         (actor.status_flags & ~kWorldActorStatusKnownFlags) != 0 ||
         (actor.lua_enemy_spawn_flags &
          ~kLuaEnemySpawnSnapshotKnownFlags) != 0) {
+        return false;
+    }
+    if (!ValidateNativeMinionPacketState(actor)) {
         return false;
     }
 
