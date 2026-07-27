@@ -66,6 +66,10 @@ def test_stock_audio_bootstrap_and_settings_are_layout_backed() -> str:
     documentation_text = read_text(
         ROOT / "docs/reverse-engineering/native-audio-system.md"
     )
+    engine_documentation_text = read_text(
+        ROOT
+        / "docs/reverse-engineering/native-audio-engine-2026-07-26.md"
+    )
     required_layout_tokens = (
         "[audio.hooks]",
         "startup_coordinator=0x00407080",
@@ -78,6 +82,70 @@ def test_stock_audio_bootstrap_and_settings_are_layout_backed() -> str:
         "[audio.globals]",
         "manager=0x00B401A0",
         "engine_enabled=0x00B40239",
+        "compiled_registry=0x008199D8",
+        "[audio.vtables]",
+        "manager=0x007DB6CC",
+        "sound=0x007DB784",
+        "sound_loop=0x007DB78C",
+        "sound_echo=0x007DB7AC",
+        "sound_delayed=0x007DB7CC",
+        "music=0x007DB7F0",
+        "sound_stream=0x007DB810",
+        "ambient_sound=0x007DB818",
+        "[audio.lifecycle]",
+        "manager_constructor=0x00406DE0",
+        "manager_destructor=0x00406F90",
+        "manager_pause=0x00407400",
+        "manager_tick_thunk=0x00407460",
+        "manager_stop_all=0x00407470",
+        "sound_constructor=0x00407530",
+        "sound_destructor=0x004075F0",
+        "sound_load=0x004076D0",
+        "sound_acquire_channel=0x00407A20",
+        "sound_play=0x00407B70",
+        "sound_play_with_pitch=0x00407CD0",
+        "sound_stop=0x00407F90",
+        "sound_loop_constructor=0x00408040",
+        "sound_loop_destructor=0x00408160",
+        "sound_loop_load=0x00408220",
+        "sound_loop_start=0x00408320",
+        "sound_loop_stop=0x00408350",
+        "sound_loop_tick=0x00408390",
+        "sound_echo_constructor=0x004084A0",
+        "sound_echo_tick=0x00408550",
+        "sound_delayed_constructor=0x004085C0",
+        "sound_delayed_tick=0x00408690",
+        "music_constructor=0x004086E0",
+        "music_destructor=0x00408790",
+        "music_load=0x004088A0",
+        "music_tick=0x00409610",
+        "music_stop=0x0040A3F0",
+        "sound_stream_constructor=0x0040AC60",
+        "sound_stream_destructor=0x0040AC70",
+        "sound_stream_deleting_destructor=0x0040ACC0",
+        "sound_stream_load=0x0040ACF0",
+        "sound_stream_play=0x0040AF70",
+        "sound_stream_pause=0x0040AFB0",
+        "sound_stream_set_volume=0x0040AFD0",
+        "sound_stream_is_active=0x0040B000",
+        "sound_stream_get_level=0x0040B020",
+        "ambient_sound_constructor=0x0040B060",
+        "ambient_sound_destructor=0x0040B080",
+        "ambient_sound_tick=0x0040B120",
+        "application_audio_shutdown=0x0040C690",
+        "[audio.registry]",
+        "constructor=0x005A8DD0",
+        "load_compiled_assets=0x004EE010",
+        "entry_count=233",
+        "sound_loop_first_index=151",
+        "sound_loop_count=22",
+        "sound_loop_first_offset=0x146C",
+        "sound_loop_stride=0x60",
+        "frost_loop_index=161",
+        "frost_loop_offset=0x182C",
+        "[audio.spell_calls]",
+        "frost_loop_start=0x00549BB2",
+        "frost_loop_stop=0x00549725",
     )
     missing_layout = [
         token for token in required_layout_tokens if token not in layout_text
@@ -106,6 +174,27 @@ def test_stock_audio_bootstrap_and_settings_are_layout_backed() -> str:
         raise StaticReTestFailure(
             "native audio documentation is missing: "
             + ", ".join(missing_documentation)
+        )
+    required_engine_documentation_tokens = (
+        "`BASS_ChannelFlags(handle, 4, 4)`",
+        "`SoundLoop_Start` at `0x00408320`",
+        "`SoundLoop_Stop` at `0x00408350`",
+        "`BASS_ChannelPause`",
+        "`sounds\\iceloop__loop`",
+        "`+0x182C`",
+        "`0x00549BB2`",
+        "`0x00549725`",
+        "missing native release edge after an on-time snapshot",
+    )
+    missing_engine_documentation = [
+        token
+        for token in required_engine_documentation_tokens
+        if token not in engine_documentation_text
+    ]
+    if missing_engine_documentation:
+        raise StaticReTestFailure(
+            "native audio engine lifecycle documentation is missing: "
+            + ", ".join(missing_engine_documentation)
         )
 
     instruction_contracts = (
@@ -163,6 +252,286 @@ def test_stock_audio_bootstrap_and_settings_are_layout_backed() -> str:
             0x005D910F,
             bytes.fromhex("E82CE2E2FF"),
             "settings music-volume setter call",
+        ),
+        (
+            0x00406DE0,
+            bytes.fromhex("558BEC6AFF68CAF5"),
+            "Audio constructor",
+        ),
+        (
+            0x00406F90,
+            bytes.fromhex("558BEC6AFF6872F5"),
+            "Audio destructor",
+        ),
+        (
+            0x00407400,
+            bytes.fromhex("558BEC8A550884D2"),
+            "Audio pause reference-count path",
+        ),
+        (
+            0x00407460,
+            bytes.fromhex("81C1BC000000E935"),
+            "Audio tick vtable this-adjustor",
+        ),
+        (
+            0x00407470,
+            bytes.fromhex("56578BF133FF39BE"),
+            "Audio stop-all path",
+        ),
+        (
+            0x00407530,
+            bytes.fromhex("558BEC6AFF683BE9"),
+            "Sound constructor",
+        ),
+        (
+            0x004075F0,
+            bytes.fromhex("558BEC6AFF68CBEE"),
+            "Sound destructor",
+        ),
+        (
+            0x004076D0,
+            bytes.fromhex("558BEC6AFF6820FF"),
+            "Sound sample loader",
+        ),
+        (
+            0x00407A20,
+            bytes.fromhex("558BEC83EC285657"),
+            "Sound channel acquisition",
+        ),
+        (
+            0x00407B70,
+            bytes.fromhex("558BEC6AFF689BEE"),
+            "Sound gain-only play wrapper",
+        ),
+        (
+            0x00407CD0,
+            bytes.fromhex("558BEC6AFF689BEE"),
+            "Sound pitch-and-gain play wrapper",
+        ),
+        (
+            0x00407F90,
+            bytes.fromhex("56578BF933F63977"),
+            "Sound stop path",
+        ),
+        (
+            0x00408040,
+            bytes.fromhex("558BEC6AFF6813F5"),
+            "SoundLoop constructor",
+        ),
+        (
+            0x00408160,
+            bytes.fromhex("558BEC6AFF68E3F4"),
+            "SoundLoop destructor",
+        ),
+        (
+            0x00408220,
+            bytes.fromhex("558BEC6AFF68581B"),
+            "SoundLoop loader",
+        ),
+        (
+            0x00408320,
+            bytes.fromhex("568BF1837E4C0075"),
+            "SoundLoop start",
+        ),
+        (
+            0x00408350,
+            bytes.fromhex("568BF1FF4E4C8B46"),
+            "SoundLoop stop",
+        ),
+        (
+            0x00408390,
+            bytes.fromhex("558BEC51568BF18B"),
+            "SoundLoop fade tick",
+        ),
+        (
+            0x004084A0,
+            bytes.fromhex("558BEC6AFF6838EE"),
+            "SoundEcho constructor",
+        ),
+        (
+            0x00408550,
+            bytes.fromhex("558BEC51568BF1D9"),
+            "SoundEcho tick",
+        ),
+        (
+            0x004085C0,
+            bytes.fromhex("558BEC6AFF6838EE"),
+            "SoundDelayed constructor",
+        ),
+        (
+            0x00408690,
+            bytes.fromhex("FF4920837920007F"),
+            "SoundDelayed tick",
+        ),
+        (
+            0x004086E0,
+            bytes.fromhex("8B159801B400D9E8"),
+            "Music constructor",
+        ),
+        (
+            0x00408790,
+            bytes.fromhex("558BEC6AFF68AEF4"),
+            "Music destructor",
+        ),
+        (
+            0x004088A0,
+            bytes.fromhex("558BEC6AFF68B90D"),
+            "Music loader",
+        ),
+        (
+            0x00409610,
+            bytes.fromhex("558BEC83EC14568B"),
+            "Music crossfade tick",
+        ),
+        (
+            0x0040A3F0,
+            bytes.fromhex("5356578BF98D7718"),
+            "Music stop",
+        ),
+        (
+            0x0040AC60,
+            bytes.fromhex("8BC1C70010B87D00"),
+            "SoundStream constructor",
+        ),
+        (
+            0x0040AC70,
+            bytes.fromhex("558BEC803D3902B4"),
+            "SoundStream destructor",
+        ),
+        (
+            0x0040ACC0,
+            bytes.fromhex("803D3902B4000056"),
+            "SoundStream deleting destructor",
+        ),
+        (
+            0x0040ACF0,
+            bytes.fromhex("558BEC6AFF6820FF"),
+            "SoundStream loader",
+        ),
+        (
+            0x0040AF70,
+            bytes.fromhex("558BEC803D3902B4"),
+            "SoundStream play",
+        ),
+        (
+            0x0040AFB0,
+            bytes.fromhex("803D3902B4000074"),
+            "SoundStream pause",
+        ),
+        (
+            0x0040AFD0,
+            bytes.fromhex("558BEC803D3902B4"),
+            "SoundStream volume writer",
+        ),
+        (
+            0x0040B000,
+            bytes.fromhex("803D3902B400008B"),
+            "SoundStream active query",
+        ),
+        (
+            0x0040B020,
+            bytes.fromhex("558BEC51803D3902"),
+            "SoundStream level query",
+        ),
+        (
+            0x0040B060,
+            bytes.fromhex("D9EE8BC1D95004C7"),
+            "AmbientSound constructor",
+        ),
+        (
+            0x0040B080,
+            bytes.fromhex("558BEC56578BF98B"),
+            "AmbientSound destructor",
+        ),
+        (
+            0x0040B120,
+            bytes.fromhex("558BEC51568BF18B"),
+            "AmbientSound zero-crossing tick",
+        ),
+        (
+            0x0040C690,
+            bytes.fromhex("558BEC83E4F86AFF"),
+            "application audio shutdown owner",
+        ),
+        (
+            0x004EE010,
+            bytes.fromhex("515356576A0A83EC"),
+            "compiled audio registry loader",
+        ),
+        (
+            0x005A8DD0,
+            bytes.fromhex("6AFF688D1C770064"),
+            "compiled audio registry constructor",
+        ),
+        (
+            0x007DB6CC,
+            bytes.fromhex("606F400000C35500"),
+            "Audio vtable",
+        ),
+        (
+            0x007DB784,
+            bytes.fromhex("C075400054937E00"),
+            "Sound vtable",
+        ),
+        (
+            0x007DB78C,
+            bytes.fromhex("3081400000C35500"),
+            "SoundLoop vtable",
+        ),
+        (
+            0x007DB7AC,
+            bytes.fromhex("6086400000C35500"),
+            "SoundEcho vtable",
+        ),
+        (
+            0x007DB7CC,
+            bytes.fromhex("6086400000C35500"),
+            "SoundDelayed vtable",
+        ),
+        (
+            0x007DB7F0,
+            bytes.fromhex("6087400000C35500"),
+            "Music vtable",
+        ),
+        (
+            0x007DB810,
+            bytes.fromhex("70AC400098917E00"),
+            "SoundStream vtable",
+        ),
+        (
+            0x007DB818,
+            bytes.fromhex("80B0400077696E33"),
+            "AmbientSound vtable",
+        ),
+        (
+            0x004082BD,
+            bytes.fromhex("6A046A0450E8EF7E2A00"),
+            "SoundLoop BASS loop-flag application",
+        ),
+        (
+            0x00408343,
+            bytes.fromhex("D9E8FF464CD95E5C"),
+            "SoundLoop start reference increment",
+        ),
+        (
+            0x00408353,
+            bytes.fromhex("FF4E4C8B464C85C07F24"),
+            "SoundLoop stop reference decrement",
+        ),
+        (
+            0x0040836D,
+            bytes.fromhex("8B0050E8357E2A00D9EEC7464C00000000"),
+            "SoundLoop pause and zero clamp",
+        ),
+        (
+            0x00549BAC,
+            bytes.fromhex("81C12C180000E869E7EBFF"),
+            "Frost loop registry offset and start call",
+        ),
+        (
+            0x0054971F,
+            bytes.fromhex("81C12C180000E826ECEBFF"),
+            "Frost loop registry offset and stop call",
         ),
     )
     mismatches: list[str] = []
