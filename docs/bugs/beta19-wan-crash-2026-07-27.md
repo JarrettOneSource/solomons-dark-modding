@@ -1,9 +1,9 @@
 # Beta.19 WAN disconnect and native crashes (2026-07-27)
 
-Status: investigation in progress. This checkpoint records the completed
-artifact inventory, peer-correlated timeline, dump forensics, and static
-reverse engineering of both native faults. Transport root-cause proof and any
-fix are deliberately pending.
+Status: root causes proven; implementation pending. This checkpoint records
+the completed artifact inventory, peer-correlated timeline, dump forensics,
+static reverse engineering, and transport failure chain. No source fix was
+started before these findings were committed.
 
 ## Scope and names
 
@@ -106,9 +106,11 @@ at once:
 
 1. Client B's last accepted host world state is sequence 2839. At
    10:43:07.892 it is already holding that last state during a snapshot stall.
-2. The owner reports persistent Steam gameplay send rejection with numeric
-   result 25 beginning at 10:43:14.684. The cumulative rejection count climbs
-   from 80 to 5,466 by 10:44:09.823.
+2. The owner first reports Steam gameplay send rejection with numeric result
+   25 at 10:42:07.596. That transient burst reaches 78 failures at
+   10:42:10.618 and then recovers. A second burst is visible at
+   10:43:14.684 with the cumulative count at 80; it never recovers and reaches
+   5,466 by 10:44:09.823.
 3. Client B continues to originate primary casts and damage claims. The owner
    receives and processes those client-to-host packets, including cast
    sequence 19 through 10:43:36 and a later replayed backlog.
@@ -154,10 +156,9 @@ loader suppresses `WM_ACTIVATEAPP` deactivation. Dump stacks and static caller
 graphs must decide that question.
 
 The timeline also disproves the initial minion-trigger lead for this field
-capture: no minion or summon existed. It does not yet prove whether held-cast,
-world-snapshot load, participant death, focus loss, or a stock path exposed by
-those conditions owns either null. No code change is justified at this
-checkpoint.
+capture: no minion or summon existed. Dump and static analysis below resolve
+the two nulls as stock D3D shutdown faults. The transport analysis resolves the
+earlier disconnect separately.
 
 ## Dump forensics
 
@@ -423,6 +424,126 @@ Neither saved fault stack includes the loader, and none of the beta.18-to-.19
 minion, projectile catch-up, damage-observer, or synthetic-participant paths
 can reach either native chain. The crashes are real native defects, but they
 occur while the processes are closing and do not explain why the owner's
-host-to-client Steam stream failed roughly one minute earlier. The transport
-failure remains a separate root-cause question; no fix is justified until
-that one-way rejection is explained too.
+host-to-client Steam stream failed roughly one minute earlier.
+
+## Transport root cause
+
+### What result 25 means
+
+Steam defines EResult 25 as `k_EResultLimitExceeded`. The
+[`ISteamNetworkingMessages`](https://partner.steamgames.com/doc/api/ISteamnetworkingMessages?language=english)
+API used by the loader runs over `ISteamNetworkingSockets`; the underlying
+[`SendMessageToConnection`](https://partner.steamgames.com/doc/api/ISteamNetworkingSockets?language=english#SendMessageToConnection)
+contract documents `k_EResultLimitExceeded` when too much data is already
+queued in the send buffer. This is a capacity/backpressure result, not a
+remote process-crash indication.
+
+The peer-correlated route changes and the two rejection bursts are:
+
+| Transition | Owner | Client B | Result |
+|---|---:|---:|---|
+| initial direct or pending route | 10:41:46.563 | 10:41:46.571 | healthy |
+| direct/pending to SDR | 10:42:10.585 | 10:42:10.967 | the 78-rejection burst stops |
+| SDR to direct/pending | 10:42:18.578 | 10:42:18.977 | healthy |
+| direct/pending to SDR | 10:42:45.605 | 10:42:46.011 | healthy |
+| SDR to direct/pending | 10:43:07.604 | 10:43:07.021 | client receives its last host generation; permanent rejection follows |
+
+The mirrored observations prove that these are real Steam route-state
+transitions rather than one machine's logging error. They do not prove why
+Steam changed routes. They do prove that a temporarily constrained route is a
+reproducible field trigger for the loader's missing backpressure handling:
+the first constrained period recovered on SDR, while the second did not
+recover before the peer timeout.
+
+### Why beta.19 fills the queue
+
+The host's protocol-86 producer is both large and bursty:
+
+- Beta.19 added a 56-byte native-minion state to every full actor and 16 bytes
+  to every motion actor, including ordinary enemies whose minion state is all
+  zero. `WorldSnapshotPacket` grew from 1,032 to 1,200 bytes and
+  `WorldMotionSnapshotPacket` from 968 to 1,128 bytes.
+- At the last 36-actor generation received by client B, each motion generation
+  is four packets, or 4,512 bytes. At the 67 ms floor that is about
+  67.3 kB/s before participant frames, state, loot, spell, cast, damage, and
+  session traffic.
+- By the host's later 47 actors, a motion generation is five packets, or
+  5,640 bytes, which is about 84.2 kB/s at that floor.
+- Full identity generations are reliable. A 36-actor generation is 12 packets
+  or 14,400 bytes; a 47-actor generation is 16 packets or 19,200 bytes.
+- The nominal reliable-identity interval is one second, but
+  `identity_changed` bypasses that interval. Enemy creation, retirement, or
+  actor-vector identity changes can therefore enqueue another complete
+  reliable generation on the next 67 ms producer tick.
+- Participant frames add a fixed 370-byte packet every 50 ms per participant.
+
+The native-minion feature is not a semantic trigger in this run; no minion
+existed. Its protocol-wide fixed-size expansion increased the baseline load
+of every enemy generation. The unpaced identity-change path supplies the
+bursts seen during rapid enemy creation and death.
+
+### The ownership failure
+
+`multiplayer_steam_gameplay_queue.cpp` owns the boundary between the game
+producer and Steam's finite send buffer, but beta.19 does not implement that
+ownership:
+
+1. The game thread can queue 1,024 packets and the service thread removes up
+   to 256 each 16 ms tick.
+2. The service thread hands each removed packet to `SendMessageToUser`.
+3. On every Steam rejection, it increments a counter and permanently discards
+   the packet. It does not stop draining, retain reliable traffic, coalesce
+   disposable snapshots, back off, inspect pending bytes, or reset a saturated
+   peer route.
+4. The producer therefore keeps submitting roughly a hundred packets per
+   second into an already-full Steam buffer. The observed persistent rejection
+   slope is approximately that rate.
+5. Session keepalives bypass this gameplay queue. Client B's successful
+   outbound keepalives and the owner's continued receipt of client traffic
+   therefore do not contradict a saturated owner-to-client gameplay path.
+
+`PumpNetworkMessages` refreshes the authenticated peer timer for any valid
+received packet before gameplay application. Client B's exact 30-second
+expiry proves it received no valid host packet, not merely that a world
+fragment was rejected later by gameplay code.
+
+### Disconnect chain
+
+The complete field chain is:
+
+```text
+high-rate protocol-86 host snapshots
+    + temporary Steam route capacity loss
+    + unpaced reliable identity generations
+→ Steam's owner-to-client send buffer reaches its limit
+→ SendMessageToUser returns k_EResultLimitExceeded (25)
+→ beta.19 discards every rejected gameplay packet and continues hammering
+→ client B receives no host packet for 30 seconds
+→ client B times out the owner and reports "network connection failed"
+```
+
+The foundational boundary is therefore the transport queue, not an actor
+materialization hook. It must bound production during congestion, preserve
+reliable delivery semantics, discard/coalesce only disposable state, and
+restart a peer session when sustained saturation cannot clear before the
+authentication timeout. Snapshot pacing must also apply to identity changes;
+otherwise route recovery merely reopens the same flood.
+
+## Relationship between the disconnect and crashes
+
+Issue #65 contains two defect classes and two launch attempts:
+
+1. Client B's 09:00 standalone launch closes while its asset worker is still
+   uploading the BadGuys atlas. Native run-loop teardown releases and clears
+   the D3D device; the worker dereferences that null in `CreateTexture` at
+   `0x00441221`.
+2. In the later WAN attempt, the independent transport chain above disconnects
+   client B at 10:43:37.590. The owner process subsequently enters close
+   teardown. The run loop again releases and clears the D3D device; CRT
+   destruction dereferences that null in `SetTexture` at `0x004207E5`.
+
+The owner dump proves close state but not which user or window action requested
+close. Accordingly, the defensible combined chain is **disconnect, then
+close, then stock D3D crash**. It is not crash, then peer disconnect. The
+common native crash class still requires a single ownership fix because it
+can fault both a concurrent asset worker and later global destructors.
