@@ -1,10 +1,10 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.20
+# Solomon Dark Multiplayer Beta v0.1.0-beta.21
 
-- FIXED — WAN sessions no longer drop from transport overload: peer-to-peer sends are now paced, coalesced, and backpressured with route recovery, eliminating the beta.19 "connection failed" disconnect under real internet play.
-- FIXED — Crash on session close: a game engine Direct3D device-lifetime race (present in the stock game) could crash on teardown or at the menu; the loader now owns the device for the life of the process.
-- NEW — Bot roster: Bot Brain now fields up to three bots. Name each one, pick its element (fire, water, earth, air, ether) and discipline (Skirmisher kites and casts; Guardian bodyguards a human player; Striker fights close and flees late). Host controls the roster, changes apply live, and it syncs to every player in the session.
-- NEW — Structured mod settings: mods can declare list settings (rosters, tables, schedules); the launcher renders them as add/remove/reorder cards with the same live-apply and host-sync behavior as all settings.
-- INTERNAL — Shared list-validation vectors across loader and launcher; transport queue policy + D3D lifetime regression suites.
+- NEW — One reliable way out of a multiplayer session: Leave Lobby, launcher close, normal game exit, peer departure, and authority loss now share the same teardown path. Hosts send a goodbye and promptly remove public listings; clients can leave and rejoin while the host keeps playing. The loader also suppresses the stock game's close-URL action in memory without modifying the retail executable.
+- NEW — Website mod links can install or update a specific mod through `solomondarkrevived://install-mod/{slug}`. The launcher validates the exact link shape, shows consent before downloading, and installs atomically.
+- FIXED — Remote players and Lua bots now use the native player locomotion path, restoring collision presence, movement stepping, spatial rebinding, and footsteps.
+- NEW — The game now presents a D3D9 loading screen with owner art, real monotonic stage labels, and a short reveal gate while entering matches, Boneyards, single-player runs, and every multiplayer join stage including Connecting to match. The desktop launcher deliberately stays plain during join preview, consent, and mod sync.
+- NEW — Lua bots are full lobby members and share the native four-seat capacity with humans. Both peers see BOT roster chips and `isBot` membership data; bot spawns use native circle-placement validation with bounded outward search and pending-position reservation.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
