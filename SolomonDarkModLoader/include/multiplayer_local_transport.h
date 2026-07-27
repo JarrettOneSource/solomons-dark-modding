@@ -40,6 +40,19 @@ void NotifyNativeGameOverDispatched();
 bool TryAuthorizeLocalClientRunSwitch(std::string* error_message);
 std::uint64_t GetLocalTransportParticipantId();
 std::uint64_t GetLocalTransportAuthorityParticipantId();
+bool RegisterSyntheticParticipantTransport(
+    std::uint64_t participant_id,
+    std::string* error_message);
+bool RetireSyntheticParticipantTransport(
+    std::uint64_t participant_id,
+    std::string* error_message);
+bool QueueSyntheticParticipantCast(
+    std::uint64_t participant_id,
+    std::int32_t skill_slot,
+    float target_x,
+    float target_y,
+    std::uint32_t hold_ms,
+    std::string* error_message);
 
 class ScopedLocalNativeSpellDamageDispatch final {
 public:

@@ -9,7 +9,8 @@ void FinishBotCastNativeLifecycle(
     auto& memory = *context.memory;
     const auto actor_address = context.actor_address;
     const auto cleanup_address = context.cleanup_address;
-    const bool native_remote_participant = IsNativeRemoteParticipantBinding(binding);
+    const bool native_remote_participant =
+        state.remote_input_controlled;
 
     const auto release_object_state =
         known_release_object_state != nullptr

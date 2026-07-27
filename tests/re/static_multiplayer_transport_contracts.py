@@ -389,11 +389,11 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
 
     _require_in_order(
         local_state,
-        "void PopulateLocalParticipantFrameFields(",
+        "void PopulateParticipantFrameFields(",
         "ParticipantFramePacket BuildLocalParticipantFramePacket()",
-        "PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);",
+        "PopulateParticipantFrameFields(*local, runtime_state, true, &packet);",
         "StatePacket BuildLocalStatePacket()",
-        "PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);",
+        "PopulateParticipantFrameFields(*local, runtime_state, true, &packet);",
     )
     _require_in_order(
         outgoing,

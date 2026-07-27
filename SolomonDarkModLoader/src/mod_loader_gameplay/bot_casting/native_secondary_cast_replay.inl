@@ -111,7 +111,7 @@ bool ReconcileNativeRemoteParticipantPersistentStatuses(
     if (binding == nullptr ||
         binding->actor_address == 0 ||
         binding->bot_id == 0 ||
-        !IsNativeRemoteParticipantBinding(binding) ||
+        !IsPacketDrivenRemoteParticipantBinding(binding) ||
         binding->ongoing_cast.active) {
         return false;
     }
@@ -221,7 +221,6 @@ bool ReplayPendingNativeSecondaryCast(
         binding->bot_id == 0 ||
         request.kind != multiplayer::BotCastKind::Secondary ||
         !request.remote_input_controlled ||
-        !IsNativeRemoteParticipantBinding(binding) ||
         request.secondary_slot < 0 ||
         request.secondary_slot >=
             static_cast<std::int32_t>(

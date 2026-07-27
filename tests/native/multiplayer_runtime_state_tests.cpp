@@ -175,7 +175,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationRenderTick(298) == 159,
             "death presentation render projection does not reach and hold the corpse frame") &&
         Require(
-            sizeof(StatePacket) == 652,
+            sizeof(StatePacket) == 653,
             "StatePacket regained checkpoint-array payload") &&
         Require(
             sizeof(ParticipantFramePacket) == 370,

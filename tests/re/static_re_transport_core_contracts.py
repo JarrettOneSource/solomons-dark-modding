@@ -764,7 +764,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         assert protocol_text.count(field) == 2, (
             f"{field} must exist in state and frame packets"
         )
-    assert "sizeof(StatePacket) == 652" in protocol_text
+    assert "sizeof(StatePacket) == 653" in protocol_text
     assert "sizeof(ParticipantFramePacket) == 370" in protocol_text
 
     for token in (
@@ -1664,7 +1664,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "sizeof(ParticipantProgressionBookSnapshotPacket) == 2604"),
         (protocol_text, "static_assert(sizeof(LevelUpBarrierPacket) == 8052"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 652"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 653"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 384"),
@@ -1786,7 +1786,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "RelayParticipantPacketToPeers"),
         (transport_text, "NormalizeMagicShieldState"),
         (transport_text, "kMagicShieldAbsorbEpsilon"),
-        (transport_text, "packet->anim_drive_state_word = local.runtime.anim_drive_state_word"),
+        (transport_text, "packet->anim_drive_state_word = participant.runtime.anim_drive_state_word"),
         (transport_text, "packet->magic_shield_absorb_remaining ="),
         (transport_text, "packet->magic_shield_absorb_capacity ="),
         (transport_text, "packet->magic_shield_explosion_fraction ="),
@@ -2247,7 +2247,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "state.loot_snapshot"),
         (transport_text, "TryGetPlayerState"),
         (transport_text, "local->runtime.life_current = player_state.hp"),
-        (transport_text, "packet.owned_gold = local->owned_progression.gold"),
+        (transport_text, "packet->owned_gold = participant.owned_progression.gold"),
         (transport_text, "participant->owned_progression.gold = packet.owned_gold"),
         (transport_text, "packet.gold_revision >= participant->owned_progression.gold_revision"),
         (transport_text, "local->owned_progression.gold_revision += 1"),
@@ -2284,7 +2284,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (lua_gameplay_text, "request_loot_pickup"),
         (lua_gameplay_text, "last_pickup_result"),
         (transport_text, "TryGetWorldState"),
-        (transport_text, "packet->wave = local.runtime.wave"),
+        (transport_text, "packet->wave = participant.runtime.wave"),
         (lua_input_text, "host-only while connected to a multiplayer session"),
         (lua_input_text, "QueueGameplayMouseLeftClick(&gameplay_click_error)"),
         (read_text(ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_actor_lifecycle_hooks.inl"), "Blocked client run switch_region while connected to multiplayer"),
@@ -2327,7 +2327,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (native_remote_playback_text, "participant->runtime.life_current"),
         (native_remote_playback_text, "kProgressionHpOffset"),
         (native_remote_playback_text, "kProgressionMpOffset"),
-        (participant_snapshot_text, "if (multiplayer::IsNativeControlledParticipant(*participant))"),
+        (participant_snapshot_text, "if (IsPacketDrivenRemoteParticipant(*participant))"),
         (participant_snapshot_text, "participant->runtime.life_current = snapshot.hp"),
         (native_remote_playback_text, "replicated_transform_playback_ms"),
         (native_remote_playback_text, "kRemoteTransformInterpolationDelayMs"),
@@ -2577,15 +2577,15 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
                 "snapshot HP sampling still competes with exact native damage: "
                 + token
             )
-    native_remote_vital_guard = participant_snapshot_text.find(
-        "if (multiplayer::IsNativeControlledParticipant(*participant))"
+    packet_driven_vital_guard = participant_snapshot_text.find(
+        "if (IsPacketDrivenRemoteParticipant(*participant))"
     )
     gameplay_snapshot_vital_feedback = participant_snapshot_text.find(
         "participant->runtime.life_current = snapshot.hp"
     )
-    if not (0 <= native_remote_vital_guard < gameplay_snapshot_vital_feedback):
+    if not (0 <= packet_driven_vital_guard < gameplay_snapshot_vital_feedback):
         missing.append(
-            "native remote participant snapshot guard before gameplay vitals write"
+            "packet-driven participant snapshot guard before gameplay vitals write"
         )
     if "built.flags = active != 0 ? LootDropSnapshotFlagActive : 0" in transport_text:
         missing.append("gold loot availability must not use the +0x148 state byte")

@@ -301,7 +301,7 @@ def test_remote_per_cast_primary_settles_without_waiting_for_release() -> str:
         "ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);",
         "ClearIdleNativeRemoteCastReplayState(actor_address);",
         "IsIdleNativeRemoteParticipantActor(actor_address, nullptr)",
-        "IsNativeRemoteParticipantBinding(binding) &&",
+        "IsRemoteInputControlledParticipantBinding(binding) &&",
         "!binding->ongoing_cast.active",
         "kActorPrimaryActionLatchE4Offset",
         "kActorPrimaryActionLatchE8Offset",

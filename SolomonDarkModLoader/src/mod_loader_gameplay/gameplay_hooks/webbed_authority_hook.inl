@@ -25,7 +25,8 @@ void __fastcall HookWebbedModifierTick(
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         const auto* binding = FindParticipantEntityForActor(actor_address);
-        if (binding != nullptr && IsNativeRemoteParticipantBinding(binding)) {
+        if (binding != nullptr &&
+            IsPacketDrivenRemoteParticipantBinding(binding)) {
             remote_participant_id = binding->bot_id;
             movement_x = binding->replicated_movement_intent_x;
             movement_y = binding->replicated_movement_intent_y;

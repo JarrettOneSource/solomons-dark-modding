@@ -92,6 +92,8 @@ constexpr std::uint64_t kRunLootDropNetworkIdBase = 0x1002000000000ull;
 constexpr std::uint64_t kLocalTransportParticipantFrameIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportWaveSummaryCheckpointIntervalMs = 400;
 constexpr std::uint64_t kLocalTransportStateCheckpointIntervalMs = 1000;
+constexpr std::uint64_t kSyntheticParticipantRetirementResendIntervalMs = 250;
+constexpr std::uint64_t kSyntheticParticipantRetirementHoldMs = 5000;
 constexpr std::uint64_t kLocalTransportWorldSnapshotIntervalMs = 200;
 constexpr std::uint64_t kLocalTransportRunWorldMotionIntervalMs = 67;
 constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs = 1000;
@@ -510,6 +512,23 @@ struct ParticipantProgressionSendCheckpoint {
     std::uint32_t statbook_revision = 0;
     std::uint64_t inventory_sent_ms = 0;
     std::uint64_t progression_book_sent_ms = 0;
+};
+
+struct SyntheticParticipantTransportState {
+    std::uint64_t session_nonce = 0;
+    std::uint64_t last_state_send_ms = 0;
+    std::uint64_t last_frame_send_ms = 0;
+    std::uint32_t next_cast_sequence = 1;
+    bool primary_cast_active = false;
+    CastPacket active_primary_cast{};
+    std::uint64_t next_primary_held_send_ms = 0;
+    std::uint64_t primary_release_ms = 0;
+};
+
+struct SyntheticParticipantRetirementState {
+    StatePacket packet{};
+    std::uint64_t created_ms = 0;
+    std::uint64_t last_send_ms = 0;
 };
 
 struct QueuedLocalCastEvent {
@@ -1020,6 +1039,10 @@ struct LocalTransportState {
         last_wave_summary_sequence_by_authority;
     std::unordered_map<std::uint64_t, std::uint64_t>
         session_nonce_by_participant;
+    std::unordered_map<std::uint64_t, SyntheticParticipantTransportState>
+        synthetic_participants;
+    std::unordered_map<std::uint64_t, SyntheticParticipantRetirementState>
+        retired_synthetic_participants;
     std::unordered_map<std::uint64_t, std::uint64_t>
         last_lua_ui_action_request_by_participant;
     std::unordered_map<std::uint64_t, std::unordered_set<std::uint64_t>>
@@ -1324,6 +1347,17 @@ std::uint64_t ReadParticipantId(std::uint16_t local_port) {
     return kLocalDevParticipantIdBase | static_cast<std::uint64_t>(local_port);
 }
 
+std::uint64_t GenerateTransportSessionNonce(std::uint64_t salt = 0) {
+    std::random_device random;
+    auto nonce =
+        (static_cast<std::uint64_t>(random()) << 32) ^
+        static_cast<std::uint64_t>(random()) ^
+        static_cast<std::uint64_t>(GetTickCount64()) ^
+        (static_cast<std::uint64_t>(GetCurrentProcessId()) << 16) ^
+        salt;
+    return nonce != 0 ? nonce : 1;
+}
+
 bool SameEndpoint(const TransportPeerEndpoint& left, const TransportPeerEndpoint& right) {
     if (left.backend != right.backend) {
         return false;
@@ -1499,6 +1533,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/shared_gameplay_pause_sync.inl"
 #include "multiplayer_local_transport/lua_time_control_sync.inl"
 #include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
+#include "multiplayer_local_transport/synthetic_participant_cast_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_dispatch.inl"
 #include "multiplayer_local_transport/native_progression_sync.inl"
@@ -1581,6 +1616,38 @@ void PublishLocalTransportRuntimeState() {
 
 #include "multiplayer_local_transport/death_spectator_public.inl"
 #include "multiplayer_local_transport/run_game_over_public.inl"
+
+bool RegisterSyntheticParticipantTransport(
+    std::uint64_t participant_id,
+    std::string* error_message) {
+    return RegisterSyntheticParticipantTransportInternal(
+        participant_id,
+        error_message);
+}
+
+bool RetireSyntheticParticipantTransport(
+    std::uint64_t participant_id,
+    std::string* error_message) {
+    return RetireSyntheticParticipantTransportInternal(
+        participant_id,
+        error_message);
+}
+
+bool QueueSyntheticParticipantCast(
+    std::uint64_t participant_id,
+    std::int32_t skill_slot,
+    float target_x,
+    float target_y,
+    std::uint32_t hold_ms,
+    std::string* error_message) {
+    return QueueSyntheticParticipantCastInternal(
+        participant_id,
+        skill_slot,
+        target_x,
+        target_y,
+        hold_ms,
+        error_message);
+}
 
 void ConfirmLocalParticipantVitalsCorrection(
     std::uint32_t correction_sequence) {

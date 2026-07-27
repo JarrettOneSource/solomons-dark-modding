@@ -197,9 +197,12 @@ internal static class LauncherJsonConsole
                                 new LauncherJsonLobbyMember
                                 {
                                     SteamId = member.SteamId,
+                                    ParticipantId = member.ParticipantId,
                                     Name = member.Name,
+                                    GameplaySlot = member.GameplaySlot,
                                     IsHost = member.IsHost,
-                                    IsLocal = member.IsLocal
+                                    IsLocal = member.IsLocal,
+                                    IsSynthetic = member.IsSynthetic
                                 }).ToArray(),
                             StatusText = session.StatusText,
                             ErrorText = session.ErrorText
@@ -452,9 +455,12 @@ internal static class LauncherJsonConsole
     private sealed class LauncherJsonLobbyMember
     {
         public required ulong SteamId { get; init; }
+        public required ulong ParticipantId { get; init; }
         public required string Name { get; init; }
+        public required int GameplaySlot { get; init; }
         public required bool IsHost { get; init; }
         public required bool IsLocal { get; init; }
+        public required bool IsSynthetic { get; init; }
     }
 
     private sealed class LauncherJsonModStateChange

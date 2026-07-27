@@ -15,11 +15,6 @@ struct NativeRemoteVitalSyncResult {
     bool dead = false;
 };
 
-bool IsNativeRemoteParticipantBinding(const ParticipantEntityBinding* binding) {
-    return binding != nullptr &&
-           binding->controller_kind == multiplayer::ParticipantControllerKind::Native;
-}
-
 float ShortestHeadingDeltaDegrees(float from_degrees, float to_degrees) {
     const float from = NormalizeWizardActorHeadingForWrite(from_degrees);
     const float to = NormalizeWizardActorHeadingForWrite(to_degrees);
@@ -52,7 +47,7 @@ bool RefreshNativeRemoteParticipantTransformTarget(
     }
 
     binding->controller_kind = participant->controller_kind;
-    if (!multiplayer::IsNativeControlledParticipant(*participant) ||
+    if (!IsPacketDrivenRemoteParticipant(*participant) ||
         !participant->runtime.transform_valid) {
         binding->replicated_transform_valid = false;
         binding->replicated_presentation_valid = false;
@@ -150,7 +145,7 @@ bool RefreshNativeRemoteParticipantTransformTarget(
 bool ApplyNativeRemoteParticipantStaffVisualState(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         (binding->replicated_presentation_flags &
          multiplayer::ParticipantPresentationFlagStaffVisualState) == 0) {
@@ -412,7 +407,7 @@ bool ApplyNativeRemoteParticipantEquipmentState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address,
     bool reconcile_attachment) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         (binding->replicated_presentation_flags &
          multiplayer::ParticipantPresentationFlagEquipmentState) == 0) {
@@ -533,7 +528,8 @@ bool ApplyNativeRemoteParticipantEquipmentState(
 bool ApplyNativeRemoteParticipantProfileRenderSelectors(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) || actor_address == 0) {
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
+        actor_address == 0) {
         return false;
     }
 
@@ -568,7 +564,7 @@ bool ApplyNativeRemoteParticipantProfileRenderSelectors(
 bool ApplyNativeRemoteParticipantCorpsePresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0) {
         return false;
     }
@@ -589,7 +585,7 @@ bool ApplyNativeRemoteParticipantCorpsePresentationState(
 bool ApplyNativeRemoteParticipantPresentationState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         !binding->replicated_presentation_valid) {
         return false;

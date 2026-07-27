@@ -298,7 +298,7 @@ def test_webbed_status_replicates_stock_state_to_remote_presentation() -> str:
     )
     assert (
         "packet->transient_status_flags = "
-        "local.runtime.transient_status_flags" in packet_writer
+        "participant.runtime.transient_status_flags" in packet_writer
     )
     assert "kParticipantTransientStatusValueMask" in packet_reader
     _require_in_order(
@@ -588,8 +588,8 @@ def test_remote_webbed_escape_consumes_owner_movement_intent() -> str:
     for token in (
         "local->runtime.movement_intent_x = player_state.movement_intent_x",
         "local->runtime.movement_intent_y = player_state.movement_intent_y",
-        "packet->movement_intent_x = local.runtime.movement_intent_x",
-        "packet->movement_intent_y = local.runtime.movement_intent_y",
+        "packet->movement_intent_x = participant.runtime.movement_intent_x",
+        "packet->movement_intent_y = participant.runtime.movement_intent_y",
     ):
         assert token in packet_writer, f"movement intent transmit path lacks: {token}"
     for token in (
@@ -645,7 +645,7 @@ def test_remote_webbed_escape_consumes_owner_movement_intent() -> str:
     for token in (
         "HookWebbedModifierTick",
         "kDamageContextTargetGlobal",
-        "IsNativeRemoteParticipantBinding(binding)",
+        "IsPacketDrivenRemoteParticipantBinding(binding)",
         "binding->replicated_movement_intent_x",
         "binding->replicated_movement_intent_y",
         "kActorAnimationConfigBlockOffset",

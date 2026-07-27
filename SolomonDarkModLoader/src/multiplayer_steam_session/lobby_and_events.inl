@@ -215,12 +215,14 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
 
     std::vector<MultiplayerSessionMemberSnapshot> members;
     if (g_session.lobby_id != 0 && !g_session.lobby_members.empty()) {
-        members.reserve(g_session.lobby_members.size());
+        members.reserve(g_session.lobby_members.size() + 3);
         for (const auto member_steam_id : g_session.lobby_members) {
             MultiplayerSessionMemberSnapshot member;
             member.steam_id = member_steam_id;
+            member.participant_id = member_steam_id;
             member.is_host = member_steam_id == g_session.host_steam_id;
             member.is_local = member_steam_id == g_session.local_steam_id;
+            member.gameplay_slot = member.is_local ? 0 : -1;
             if (member.is_local) {
                 member.name = steam_snapshot.persona_name;
             } else if (const auto peer = g_session.peers.find(member_steam_id);
@@ -232,20 +234,39 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             }
             members.push_back(std::move(member));
         }
-        std::sort(
-            members.begin(),
-            members.end(),
-            [](const MultiplayerSessionMemberSnapshot& left,
-               const MultiplayerSessionMemberSnapshot& right) {
-                if (left.is_host != right.is_host) {
-                    return left.is_host;
-                }
-                if (left.is_local != right.is_local) {
-                    return left.is_local;
-                }
-                return left.steam_id < right.steam_id;
-            });
     }
+    const auto participant_snapshot = SnapshotRuntimeState();
+    for (const auto& participant : participant_snapshot.participants) {
+        if (!IsLuaControlledParticipant(participant)) {
+            continue;
+        }
+
+        MultiplayerSessionMemberSnapshot member;
+        member.participant_id = participant.participant_id;
+        member.name = participant.name;
+        member.is_synthetic = true;
+        BotSnapshot bot_snapshot;
+        if (ReadParticipantSnapshot(participant.participant_id, &bot_snapshot)) {
+            member.gameplay_slot = bot_snapshot.gameplay_slot;
+        }
+        members.push_back(std::move(member));
+    }
+    std::sort(
+        members.begin(),
+        members.end(),
+        [](const MultiplayerSessionMemberSnapshot& left,
+           const MultiplayerSessionMemberSnapshot& right) {
+            if (left.is_host != right.is_host) {
+                return left.is_host;
+            }
+            if (left.is_local != right.is_local) {
+                return left.is_local;
+            }
+            if (left.is_synthetic != right.is_synthetic) {
+                return !left.is_synthetic;
+            }
+            return left.participant_id < right.participant_id;
+        });
 
     std::ostringstream status;
     switch (g_session.phase) {
@@ -384,8 +405,10 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         signature << "|f:" << friend_steam_id;
     }
     for (const auto& member : members) {
-        signature << '|' << member.steam_id << ':'
-                  << (member.is_host ? 'h' : '-') << ':' << member.name;
+        signature << '|' << member.participant_id << ':'
+                  << (member.is_host ? 'h' : '-') << ':'
+                  << (member.is_synthetic ? 's' : '-') << ':'
+                  << member.gameplay_slot << ':' << member.name;
     }
     const auto status_signature = signature.str();
     if (status_signature != g_session.last_status_signature ||

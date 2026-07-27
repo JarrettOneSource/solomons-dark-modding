@@ -30,7 +30,7 @@ bool ReconcileNativeRemoteParticipantTransientStatuses(
     if (binding == nullptr ||
         binding->actor_address == 0 ||
         binding->bot_id == 0 ||
-        !IsNativeRemoteParticipantBinding(binding)) {
+        !IsPacketDrivenRemoteParticipantBinding(binding)) {
         return false;
     }
 

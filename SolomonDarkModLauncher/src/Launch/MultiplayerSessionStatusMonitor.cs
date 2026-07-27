@@ -32,9 +32,12 @@ internal sealed record MultiplayerSessionStatus(
 
 internal sealed record MultiplayerSessionMember(
     ulong SteamId,
+    ulong ParticipantId,
     string Name,
+    int GameplaySlot,
     bool IsHost,
-    bool IsLocal);
+    bool IsLocal,
+    bool IsSynthetic);
 
 internal static class MultiplayerSessionStatusMonitor
 {

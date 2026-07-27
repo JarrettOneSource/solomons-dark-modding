@@ -198,7 +198,7 @@ def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
             "std::uint32_t hagatha_perk_revision;",
             "ParticipantHagathaPerkPacketState hagatha_perks;",
             "static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20",
-            "static_assert(sizeof(StatePacket) == 652",
+            "static_assert(sizeof(StatePacket) == 653",
         ),
         failures,
     )
@@ -288,8 +288,8 @@ def test_hagatha_perks_replicate_as_participant_owned_native_state() -> str:
         (
             "RefreshOwnedHagathaPerks",
             "BuildHagathaPerkPacketState",
-            "packet.hagatha_perk_revision",
-            "packet.hagatha_perks",
+            "&packet->hagatha_perk_revision",
+            "&packet->hagatha_perks",
         ),
         failures,
     )

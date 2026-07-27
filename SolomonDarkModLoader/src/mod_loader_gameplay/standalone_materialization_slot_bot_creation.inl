@@ -151,7 +151,7 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         multiplayer::kParticipantVisualLinkColorBlockBytes ==
         kActorHubVisualDescriptorBlockSize);
     std::string stage_error;
-    if (multiplayer::IsNativeControlledParticipant(*participant)) {
+    if (IsPacketDrivenRemoteParticipant(*participant)) {
         const bool have_visual_payload =
             (participant->runtime.presentation_flags &
              multiplayer::ParticipantPresentationFlagVisualLinkColorBlocks) != 0 &&
@@ -175,28 +175,19 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
                 character_profile.element_id));
         built_snapshot.variant_tertiary = 0;
     } else if (multiplayer::IsLuaControlledParticipant(*participant)) {
-        uintptr_t source_actor_address = 0;
-        if (!CreateWizardCloneSourceActor(
-                world_address,
-                native_visual_actor_address,
-                character_profile,
-                x,
-                y,
-                heading,
-                &source_actor_address,
-                &stage_error)) {
-            if (error_message != nullptr) {
-                *error_message = stage_error;
-            }
-            return false;
-        }
-        built_snapshot = CaptureActorRenderBuildSnapshot(source_actor_address);
-        if (!DestroyWizardCloneSourceActor(source_actor_address, &stage_error)) {
-            if (error_message != nullptr) {
-                *error_message = stage_error;
-            }
-            return false;
-        }
+        // A host-owned synthetic participant starts from the already-live
+        // stock player descriptor. This source is read-only: the bot keeps its
+        // own slot, actor, progression, and participant identity. Once the
+        // slot actor is materialized, its visual payload is captured into the
+        // participant stream and clients take the packet-backed branch above.
+        built_snapshot =
+            CaptureActorRenderBuildSnapshot(
+                native_visual_actor_address);
+        built_snapshot.render_selection =
+            static_cast<std::uint8_t>(
+                ResolveStandaloneWizardRenderSelectionIndex(
+                    character_profile.element_id));
+        built_snapshot.weapon_type = 0;
     } else {
         if (error_message != nullptr) {
             *error_message = "Unsupported gameplay-slot participant controller.";

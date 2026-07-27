@@ -1067,7 +1067,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 652",
+        "static_assert(sizeof(StatePacket) == 653",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 120",
         "static_assert(sizeof(LootSnapshotPacket) == 7712",
         "static_assert(sizeof(LootPickupResultPacket) == 172",
@@ -1239,7 +1239,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 652",
+        "static_assert(sizeof(StatePacket) == 653",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 
@@ -1326,9 +1326,10 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         assert token in runtime_state, f"owned equipment state lacks: {token}"
     for token in (
         "RefreshOwnedEquipmentFromSnapshot(inventory_state",
-        "packet.equipment_revision = local->owned_progression.equipment_revision;",
-        "packet.equipped_rings[index]",
-        "packet.equipped_amulet",
+        "packet->equipment_revision =",
+        "participant.owned_progression.equipment_revision;",
+        "&packet->equipped_rings[index]",
+        "&packet->equipped_amulet",
     ):
         assert token in local_state, f"owner equipment packet authoring lacks: {token}"
     for token in (

@@ -23,7 +23,7 @@ bool SuppressNativeRemoteParticipantTerminalDispatch(
     std::lock_guard<std::recursive_mutex> lock(
         g_participant_entities_mutex);
     const auto* binding = FindParticipantEntityForActor(actor_address);
-    if (!IsNativeRemoteParticipantBinding(binding)) {
+    if (!IsPacketDrivenRemoteParticipantBinding(binding)) {
         return false;
     }
 

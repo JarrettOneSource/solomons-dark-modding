@@ -398,7 +398,7 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         assert protocol.count(field) == 2, (
             f"{field} must exist in both reliable state and participant frame"
         )
-    assert "sizeof(StatePacket) == 652" in protocol
+    assert "sizeof(StatePacket) == 653" in protocol
     assert "sizeof(ParticipantFramePacket) == 370" in protocol
 
     _require_tokens(

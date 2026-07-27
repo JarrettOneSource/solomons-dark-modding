@@ -1,5 +1,6 @@
 #include "multiplayer_steam_session.h"
 
+#include "bot_runtime.h"
 #include "logger.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"

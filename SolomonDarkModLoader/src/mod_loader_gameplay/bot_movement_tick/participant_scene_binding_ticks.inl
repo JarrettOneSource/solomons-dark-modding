@@ -114,7 +114,7 @@ void TickParticipantSceneBindings(uintptr_t gameplay_address, std::uint64_t now_
                 continue;
             }
 
-            if (IsNativeRemoteParticipantBinding(&binding)) {
+            if (IsPacketDrivenRemoteParticipantBinding(&binding)) {
                 // Distant actors can be culled from the stock actor-tick loop.
                 // Reconcile from the local player's scene tick as well so a
                 // large network correction cannot leave a remote wizard parked

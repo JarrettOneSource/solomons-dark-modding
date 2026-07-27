@@ -73,7 +73,7 @@ void ResolveWizardParticipantActorCollisions() {
 
     for (auto& binding : g_participant_entities) {
         const bool binding_dead =
-            IsNativeRemoteParticipantBinding(&binding)
+            IsPacketDrivenRemoteParticipantBinding(&binding)
                 ? binding.native_remote_death_epoch_active
                 : IsActorRuntimeDead(binding.actor_address);
         if (!IsWizardParticipantKind(binding.kind) ||
@@ -93,7 +93,8 @@ void ResolveWizardParticipantActorCollisions() {
         }
 
         binding.materialized_world_address = subject.world_address;
-        subject.native_remote = IsNativeRemoteParticipantBinding(&binding);
+        subject.native_remote =
+            IsPacketDrivenRemoteParticipantBinding(&binding);
         subjects.push_back(subject);
     }
 

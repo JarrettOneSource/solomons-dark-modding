@@ -170,8 +170,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         return false;
     }
     if (request.kind == multiplayer::BotCastKind::Secondary &&
-        request.remote_input_controlled &&
-        IsNativeRemoteParticipantBinding(binding)) {
+        request.remote_input_controlled) {
         return ReplayPendingNativeSecondaryCast(
             binding,
             request,
@@ -331,7 +330,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
         }
     }
 
-    if (!IsNativeRemoteParticipantBinding(binding) &&
+    if (!request.remote_input_controlled &&
         HasLuaSpellCastFilterHandlers()) {
         auto filter_context = CaptureLuaSpellCastFilterContext(
             actor_address,
@@ -552,7 +551,7 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
     ongoing.mana_cost = cast_mana.cost;
     ongoing.mana_progression_level = cast_mana.progression_level;
     const bool remote_native_input_controlled =
-        ongoing.remote_input_controlled && IsNativeRemoteParticipantBinding(binding);
+        ongoing.remote_input_controlled;
     if (ongoing.remote_input_controlled &&
         ongoing.lane == ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
         ongoing.mana_charge_kind == multiplayer::BotManaChargeKind::PerCast) {

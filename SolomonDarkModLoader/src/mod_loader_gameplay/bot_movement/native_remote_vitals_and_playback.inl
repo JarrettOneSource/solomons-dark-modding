@@ -1,7 +1,7 @@
 bool NativeRemoteParticipantPlaybackTargetIsMoving(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         !binding->replicated_transform_valid) {
         return false;
@@ -28,7 +28,7 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
 bool SubmitNativeRemoteParticipantCorpseLight(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         !binding->native_remote_death_epoch_active ||
         actor_address == 0) {
         return false;
@@ -72,10 +72,10 @@ bool ApplyNativeRemoteParticipantDeathPresentationState(
     uintptr_t actor_address,
     const multiplayer::ParticipantInfo& participant,
     std::uint64_t now_ms) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         !multiplayer::IsRemoteParticipant(participant) ||
-        !multiplayer::IsNativeControlledParticipant(participant) ||
+        !IsPacketDrivenRemoteParticipant(participant) ||
         !participant.runtime.valid ||
         kActorTerminalDispatchPendingOffset == 0 ||
         kActorTerminalDispatchCountdownOffset == 0 ||
@@ -232,7 +232,7 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
     NativeRemoteVitalSyncResult result;
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         binding->bot_id == 0) {
         return result;
@@ -242,7 +242,7 @@ NativeRemoteVitalSyncResult ApplyNativeRemoteParticipantVitalState(
     const auto* participant = multiplayer::FindParticipant(runtime_state, binding->bot_id);
     if (participant == nullptr ||
         !multiplayer::IsRemoteParticipant(*participant) ||
-        !multiplayer::IsNativeControlledParticipant(*participant) ||
+        !IsPacketDrivenRemoteParticipant(*participant) ||
         !participant->runtime.valid) {
         return result;
     }
@@ -450,7 +450,7 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
     uintptr_t actor_address,
     std::uint64_t now_ms) {
     NativeRemotePlaybackResult result;
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0 ||
         !binding->replicated_transform_valid) {
         return result;

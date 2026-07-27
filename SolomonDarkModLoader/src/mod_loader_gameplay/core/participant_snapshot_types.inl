@@ -15,6 +15,8 @@ struct ParticipantRematerializationRequest {
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
+    float movement_intent_x = 0.0f;
+    float movement_intent_y = 0.0f;
     uintptr_t previous_scene_address = 0;
     uintptr_t previous_world_address = 0;
     int previous_region_index = -1;
@@ -77,6 +79,8 @@ struct ParticipantGameplaySnapshot {
     float x = 0.0f;
     float y = 0.0f;
     float heading = 0.0f;
+    float movement_intent_x = 0.0f;
+    float movement_intent_y = 0.0f;
     float hp = 0.0f;
     float max_hp = 0.0f;
     float mp = 0.0f;
@@ -93,6 +97,8 @@ struct ParticipantGameplaySnapshot {
     float render_drive_overlay_alpha = 0.0f;
     float render_drive_move_blend = 0.0f;
     bool gameplay_attach_applied = false;
+    bool death_transition_stock_tick_seen = false;
+    std::uint64_t local_death_presentation_started_ms = 0;
     SDModEquipVisualLaneState primary_visual_lane;
     SDModEquipVisualLaneState secondary_visual_lane;
     SDModEquipVisualLaneState attachment_visual_lane;

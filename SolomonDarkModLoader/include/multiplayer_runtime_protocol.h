@@ -77,6 +77,11 @@ enum class PacketKind : std::uint16_t {
     WaveSummary = 32,
 };
 
+enum ParticipantStateFlag : std::uint8_t {
+    ParticipantStateFlagNone = 0,
+    ParticipantStateFlagRetired = 1u << 0,
+};
+
 enum class LuaModStreamMessageKind : std::uint8_t {
     StateCheckpoint = 1,
     StateSet = 2,
@@ -503,6 +508,7 @@ struct StatePacket {
     std::uint8_t in_run;
     std::uint8_t transform_valid;
     std::uint8_t controller_kind;
+    std::uint8_t participant_state_flags;
     std::uint32_t run_nonce;
     std::uint32_t game_over_command_epoch;
     std::uint32_t game_over_ack_epoch;
@@ -1699,7 +1705,7 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 652, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 653, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
 static_assert(sizeof(WaveSummaryPacket) == 296,

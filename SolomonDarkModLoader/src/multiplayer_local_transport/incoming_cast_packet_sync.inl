@@ -1,9 +1,10 @@
 // Inbound replicated cast lifecycle and native playback.
 
-void ApplyRemoteCastPacket(
+bool ApplyParticipantCastPacket(
     const CastPacket& packet,
     const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
+    std::uint64_t now_ms,
+    bool host_synthetic_ingress) {
     const auto cast_kind = static_cast<CastKind>(packet.cast_kind);
     const auto input_phase = static_cast<CastInputPhase>(packet.input_phase);
     const bool has_cursor_world_placement =
@@ -43,42 +44,73 @@ void ApplyRemoteCastPacket(
           !std::isfinite(packet.cursor_world_x) ||
           !std::isfinite(packet.cursor_world_y)))) {
         log_cast_drop("invalid_packet");
-        return;
+        return false;
     }
-
-    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
 
     const auto runtime_state = SnapshotRuntimeState();
     const auto* participant = FindParticipant(runtime_state, packet.participant_id);
     if (participant == nullptr) {
         log_cast_drop("participant_missing");
-        return;
+        return false;
     }
     if (!IsRemoteParticipant(*participant)) {
         log_cast_drop(
             "participant_not_remote kind=" +
             std::to_string(static_cast<int>(participant->kind)));
-        return;
+        return false;
     }
-    if (!IsNativeControlledParticipant(*participant)) {
+    const bool locally_owned_synthetic =
+        host_synthetic_ingress &&
+        (!g_local_transport.initialized ||
+         g_local_transport.is_host) &&
+        IsLuaControlledParticipant(*participant) &&
+        g_local_transport.synthetic_participants.find(
+            packet.participant_id) !=
+            g_local_transport.synthetic_participants.end();
+    const auto authority_participant_id =
+        g_local_transport_authority_participant_id.load(
+            std::memory_order_acquire);
+    const bool authenticated_host_synthetic =
+        !host_synthetic_ingress &&
+        IsLuaControlledParticipant(*participant) &&
+        IsLocalTransportClient() &&
+        IsConfiguredRemoteAuthorityEndpoint(from) &&
+        authority_participant_id != 0 &&
+        g_local_transport.session_nonce_by_participant.find(
+            packet.participant_id) !=
+            g_local_transport.session_nonce_by_participant.end();
+    const bool authenticated_native_remote =
+        !host_synthetic_ingress &&
+        IsNativeControlledParticipant(*participant);
+    if (!locally_owned_synthetic &&
+        !authenticated_host_synthetic &&
+        !authenticated_native_remote) {
         log_cast_drop(
-            "participant_not_native_controlled controller=" +
+            "participant_cast_source_not_authorized controller=" +
             std::to_string(static_cast<int>(participant->controller_kind)));
-        return;
+        return false;
+    }
+    if (!host_synthetic_ingress) {
+        UpsertPeerEndpoint(
+            from,
+            authenticated_host_synthetic
+                ? authority_participant_id
+                : packet.participant_id,
+            now_ms);
     }
     if (!participant->runtime.valid) {
         log_cast_drop("participant_runtime_invalid");
-        return;
+        return false;
     }
     if (!participant->runtime.in_run) {
         log_cast_drop("participant_not_in_run");
-        return;
+        return false;
     }
     if (participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {
         log_cast_drop(
             "participant_scene_not_run scene_intent=" +
             std::to_string(static_cast<int>(participant->runtime.scene_intent.kind)));
-        return;
+        return false;
     }
     if (participant->runtime.run_nonce != 0 &&
         packet.run_nonce != 0 &&
@@ -86,11 +118,11 @@ void ApplyRemoteCastPacket(
         log_cast_drop(
             "run_nonce_mismatch participant_run_nonce=" +
             std::to_string(participant->runtime.run_nonce));
-        return;
+        return false;
     }
     if (IsParticipantGameplayInertForDeath(*participant)) {
         log_cast_drop("participant_dead");
-        return;
+        return false;
     }
     if (cast_kind == CastKind::Secondary) {
         const auto secondary_slot = static_cast<std::size_t>(packet.secondary_slot);
@@ -102,7 +134,7 @@ void ApplyRemoteCastPacket(
             owned_entry == nullptr ||
             owned_entry->active == 0) {
             log_cast_drop("secondary_skill_not_owned_by_packet_and_progression");
-            return;
+            return false;
         }
     }
 
@@ -115,7 +147,7 @@ void ApplyRemoteCastPacket(
             HexString(gameplay_state.actor_address) +
             " entity_materialized=" +
             std::to_string(gameplay_state.entity_materialized ? 1 : 0));
-        return;
+        return false;
     }
 
     const auto last_sequence_it =
@@ -130,7 +162,7 @@ void ApplyRemoteCastPacket(
         log_cast_drop(
             "stale_cast_sequence last_cast_sequence=" +
             std::to_string(last_sequence_it->second));
-        return;
+        return false;
     }
     auto& input_tracker =
         g_local_transport.remote_cast_inputs_by_participant[
@@ -147,7 +179,7 @@ void ApplyRemoteCastPacket(
         log_cast_drop(
             "stale_packet_sequence last_packet_sequence=" +
             std::to_string(input_tracker.last_packet_sequence));
-        return;
+        return false;
     }
     input_tracker.last_packet_sequence = packet.header.sequence;
     input_tracker.last_packet_ms = now_ms;
@@ -195,7 +227,7 @@ void ApplyRemoteCastPacket(
                 packet.position_y,
                 &dampen_error)) {
             log_cast_drop("dampen_behavior_queue_failed error=" + dampen_error);
-            return;
+            return false;
         }
     }
 
@@ -255,9 +287,10 @@ void ApplyRemoteCastPacket(
                     " target_actor=" + HexString(request.target_actor_address));
             } else {
                 log_cast_drop("queue_secondary_bot_cast_failed");
+                return false;
             }
         }
-        return;
+        return true;
     }
 
     BotCastInputState cast_input_state{};
@@ -272,7 +305,10 @@ void ApplyRemoteCastPacket(
     cast_input_state.has_aim_angle = true;
     cast_input_state.aim_angle = packet.heading;
     cast_input_state.target_actor_address = resolved_target_actor_address;
-    (void)UpdateBotCastInput(cast_input_state);
+    if (!UpdateBotCastInput(cast_input_state)) {
+        log_cast_drop("update_bot_cast_input_failed");
+        return false;
+    }
 
     if (release_phase) {
         input_tracker.release_seen = true;
@@ -281,7 +317,7 @@ void ApplyRemoteCastPacket(
             std::to_string(packet.participant_id) +
             " cast_sequence=" + std::to_string(packet.cast_sequence) +
             " skill_id=" + std::to_string(packet.skill_id));
-        return;
+        return true;
     }
 
     if (!input_tracker.start_queued) {
@@ -301,6 +337,19 @@ void ApplyRemoteCastPacket(
                         : (packet.target_network_actor_id != 0 ? "invalid_network_id" : "none")));
         } else {
             log_cast_drop("queue_bot_cast_failed");
+            return false;
         }
     }
+    return true;
+}
+
+void ApplyRemoteCastPacket(
+    const CastPacket& packet,
+    const TransportPeerEndpoint& from,
+    std::uint64_t now_ms) {
+    (void)ApplyParticipantCastPacket(
+        packet,
+        from,
+        now_ms,
+        false);
 }

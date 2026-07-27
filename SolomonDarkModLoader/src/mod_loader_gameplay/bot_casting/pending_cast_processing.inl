@@ -492,9 +492,8 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
         const bool native_primary_action_active =
             OngoingCastNeedsNativeTargetActor(ongoing) &&
             (actor_e4 != 0 || actor_e8 != 0);
-        const bool native_remote_participant = IsNativeRemoteParticipantBinding(binding);
         const bool remote_input_driven_cast =
-            native_remote_participant && ongoing.remote_input_controlled;
+            ongoing.remote_input_controlled;
         if (remote_input_driven_cast) {
             multiplayer::BotCastInputState remote_input_state{};
             const bool have_remote_input =

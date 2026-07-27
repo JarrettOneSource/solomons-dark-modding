@@ -291,7 +291,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     binding->ongoing_cast.remote_input_cast_sequence;
             }
             (void)RefreshNativeRemoteParticipantTransformTarget(binding, native_tick_now_ms);
-            tracked_actor_native_remote = IsNativeRemoteParticipantBinding(binding);
+            tracked_actor_native_remote =
+                IsPacketDrivenRemoteParticipantBinding(binding);
             if (tracked_actor_native_remote) {
                 (void)EnsureActorProgressionRuntimeFieldFromHandle(
                     actor_address,
@@ -310,6 +311,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 (void)ClearHostileTargetsForDeadWizardActor(actor_address);
             } else {
                 binding->death_transition_stock_tick_seen = false;
+                if (!tracked_actor_native_remote) {
+                    binding->local_death_presentation_started_ms = 0;
+                }
                 if (!tracked_actor_native_remote) {
                     SyncWizardBotMovementIntent(binding);
                     if (!UpdateWizardBotPathMotion(binding, native_tick_now_ms, &tracked_path_error_message) &&
@@ -414,9 +418,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // native MoveStep path. Leaving +0x158/+0x15C populated here lets stock
         // consume the previous frame's vector and then our movement step
         // consumes the new vector again.
-        const bool native_remote_binding = IsNativeRemoteParticipantBinding(binding);
-        const bool idle_native_remote_binding =
-            native_remote_binding && !binding->ongoing_cast.active;
+        const bool native_remote_binding =
+            IsPacketDrivenRemoteParticipantBinding(binding);
+        const bool idle_remote_input_controlled_binding =
+            IsRemoteInputControlledParticipantBinding(binding) &&
+            !binding->ongoing_cast.active;
         const bool loader_owned_movement_vector_present =
             binding->movement_active || binding->last_movement_displacement > 0.0001f;
         const bool stock_tick_may_consume_stale_loader_vector =
@@ -424,7 +430,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         if (stock_tick_may_consume_stale_loader_vector) {
             ClearWizardBotMovementVectorInputs(actor_address);
         }
-        if (idle_native_remote_binding) {
+        if (idle_remote_input_controlled_binding) {
             ClearIdleNativeRemoteCastReplayState(actor_address);
         }
         if (binding->ongoing_cast.active && !native_remote_binding) {
@@ -497,7 +503,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // local press cannot start and immediately cancel the remote spell on
         // every frame. Active remote casts still receive their authored input.
         if ((drive_stock_cast_input ||
-             idle_native_remote_binding ||
+             idle_remote_input_controlled_binding ||
              remote_held_release_observed_before_stock_tick) &&
             TryResolveCurrentGameplayScene(&gameplay_address) &&
             gameplay_address != 0) {
@@ -723,6 +729,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     run_stock_death_transition = !tracked_actor_native_remote &&
                         !binding->death_transition_stock_tick_seen;
                     binding->death_transition_stock_tick_seen = true;
+                    if (!tracked_actor_native_remote &&
+                        binding->local_death_presentation_started_ms == 0) {
+                        binding->local_death_presentation_started_ms =
+                            native_tick_now_ms;
+                    }
                     PublishParticipantGameplaySnapshot(*binding);
                 }
             }
@@ -747,7 +758,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
             if (auto* binding = FindParticipantEntityForActor(actor_address);
                 binding != nullptr && IsStandaloneWizardKind(binding->kind)) {
-                const bool native_remote = IsNativeRemoteParticipantBinding(binding);
+                const bool native_remote =
+                    IsPacketDrivenRemoteParticipantBinding(binding);
                 if (!native_remote) {
                     ApplyStandaloneWizardAnimationDriveProfile(
                         binding,
@@ -805,7 +817,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     PublishParticipantGameplaySnapshot(*binding);
                     return;
                 }
-                if (IsNativeRemoteParticipantBinding(binding)) {
+                if (IsPacketDrivenRemoteParticipantBinding(binding)) {
                     std::string cast_error_message;
                     const auto playback =
                         ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms);
@@ -911,6 +923,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     (void)ClearHostileTargetsForDeadWizardActor(actor_address);
                     (void)ProcessPendingBotCast(binding, &cast_error_message);
                     binding->death_transition_stock_tick_seen = true;
+                    if (!tracked_actor_native_remote &&
+                        binding->local_death_presentation_started_ms == 0) {
+                        binding->local_death_presentation_started_ms =
+                            native_tick_now_ms;
+                    }
                     if (run_stock_death_transition) {
                         RunStockTick(binding);
                         StopDeadWizardBotActorMotion(actor_address);
@@ -925,7 +942,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     PublishParticipantGameplaySnapshot(*binding);
                     return;
                 }
-                if (IsNativeRemoteParticipantBinding(binding)) {
+                if (IsPacketDrivenRemoteParticipantBinding(binding)) {
                     std::string native_remote_cast_error;
                     const bool cast_active_before = binding->ongoing_cast.active;
                     bool prepared_cast = false;

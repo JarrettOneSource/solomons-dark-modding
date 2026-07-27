@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 #include "native_spell_stats.h"
 
 #include <Windows.h>

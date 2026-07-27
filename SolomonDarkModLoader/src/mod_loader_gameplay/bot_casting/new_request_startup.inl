@@ -126,7 +126,7 @@ bool StartPendingBotCastRequest(
         }
     }
 
-    if (!IsNativeRemoteParticipantBinding(binding) &&
+    if (!request.remote_input_controlled &&
         HasLuaSpellCastFilterHandlers()) {
         auto filter_context = CaptureLuaSpellCastFilterContext(
             actor_address,

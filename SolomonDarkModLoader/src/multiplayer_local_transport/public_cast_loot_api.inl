@@ -46,15 +46,7 @@ bool InitializeLocalTransport() {
         std::memory_order_release);
     ResetSteamGameplayQueues();
 
-    std::random_device random;
-    g_local_transport.local_session_nonce =
-        (static_cast<std::uint64_t>(random()) << 32) ^
-        static_cast<std::uint64_t>(random()) ^
-        GetTickCount64() ^
-        (static_cast<std::uint64_t>(GetCurrentProcessId()) << 16);
-    if (g_local_transport.local_session_nonce == 0) {
-        g_local_transport.local_session_nonce = 1;
-    }
+    g_local_transport.local_session_nonce = GenerateTransportSessionNonce();
 
     if (g_local_transport.backend == GameplayTransportBackend::Steam) {
         if (g_local_transport.local_peer_id == 0) {
@@ -218,11 +210,13 @@ void ShutdownLocalTransport() {
 
 void TickLocalTransport(std::uint64_t now_ms) {
     if (!g_local_transport.initialized) {
+        ServiceSyntheticParticipantCastInputs(now_ms);
         return;
     }
 
     ApplyQueuedSteamGameplayEvents(now_ms);
     RefreshLocalParticipantFromGameState();
+    RefreshHostSyntheticParticipantSceneIntent();
     RefreshHostWaveRespawnCommand(now_ms);
     RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
@@ -243,6 +237,8 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendLuaTimeControlUpdate();
     SendLocalState(now_ms);
     SendLocalParticipantFrame(now_ms);
+    SendSyntheticParticipantState(now_ms);
+    ServiceSyntheticParticipantCastInputs(now_ms);
     SendLocalWaveSummary(now_ms);
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
@@ -365,6 +361,12 @@ bool ApplySteamGameplayPeerConnected(
     UpsertPeerEndpoint(endpoint, steam_id, GetTickCount64());
     if (!peer_known) {
         g_local_transport.last_state_checkpoint_send_ms = 0;
+        for (auto& [participant_id, synthetic] :
+             g_local_transport.synthetic_participants) {
+            (void)participant_id;
+            synthetic.last_state_send_ms = 0;
+            synthetic.last_frame_send_ms = 0;
+        }
     }
     if (!g_local_transport.is_host && authoritative_host) {
         g_local_transport.configured_remote = endpoint;

@@ -113,7 +113,7 @@ def test_lua_spell_filter_is_owner_side_precast_and_once_per_attempt() -> str:
     for source in (bot_prepare, bot_start):
         _require_in_order(
             source,
-            "!IsNativeRemoteParticipantBinding(binding)",
+            "!request.remote_input_controlled",
             "ApplyLuaSpellCastFilters(filter_context)",
             "RetireCanceledOwnerBotSpellCast(binding)",
             "kActorPrimarySkillIdOffset",

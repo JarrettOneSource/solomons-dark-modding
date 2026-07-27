@@ -238,7 +238,7 @@ bool SpawnNativeRemoteParticipantDeathDrop(
 bool TrySpawnNativeRemoteParticipantDeathDrop(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
-    if (!IsNativeRemoteParticipantBinding(binding) ||
+    if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
         actor_address == 0) {
         return false;
     }

@@ -504,7 +504,7 @@ bool IsIdleNativeRemoteParticipantActor(uintptr_t actor_address, std::uint64_t* 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     const auto* binding = FindParticipantEntityForActor(actor_address);
     if (binding == nullptr ||
-        !IsNativeRemoteParticipantBinding(binding) ||
+        !IsRemoteInputControlledParticipantBinding(binding) ||
         binding->ongoing_cast.active) {
         return false;
     }
@@ -527,7 +527,7 @@ bool HasNativeRemotePerCastProjectileEmission(
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     const auto* binding = FindParticipantEntityForActor(actor_address);
     if (binding == nullptr ||
-        !IsNativeRemoteParticipantBinding(binding) ||
+        !binding->ongoing_cast.remote_input_controlled ||
         !binding->ongoing_cast.active ||
         binding->ongoing_cast.lane !=
             ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary ||
@@ -574,7 +574,7 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
         auto* binding = FindParticipantEntityForActor(actor_address);
         if (binding != nullptr &&
-            IsNativeRemoteParticipantBinding(binding) &&
+            binding->ongoing_cast.remote_input_controlled &&
             binding->ongoing_cast.active &&
             binding->ongoing_cast.lane ==
                 ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary &&
@@ -622,7 +622,7 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
     auto* binding = FindParticipantEntityForActor(actor_address);
     if (binding == nullptr ||
         binding->bot_id != bot_id ||
-        !IsNativeRemoteParticipantBinding(binding) ||
+        !binding->ongoing_cast.remote_input_controlled ||
         !binding->ongoing_cast.active ||
         binding->ongoing_cast.remote_input_cast_sequence != cast_sequence ||
         binding->ongoing_cast.lane !=

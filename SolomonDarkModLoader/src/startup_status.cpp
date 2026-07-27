@@ -193,9 +193,13 @@ void WriteMultiplayerSessionStatus(
         const auto& member = snapshot.members[index];
         stream << (index == 0 ? "\n" : ",\n")
                << "    {\"steamId\": " << member.steam_id
+               << ", \"participantId\": " << member.participant_id
                << ", \"name\": \"" << EscapeJsonString(member.name)
-               << "\", \"isHost\": " << (member.is_host ? "true" : "false")
+               << "\", \"gameplaySlot\": " << member.gameplay_slot
+               << ", \"isHost\": " << (member.is_host ? "true" : "false")
                << ", \"isLocal\": " << (member.is_local ? "true" : "false")
+               << ", \"isSynthetic\": "
+               << (member.is_synthetic ? "true" : "false")
                << "}";
     }
     stream << (snapshot.members.empty() ? "],\n" : "\n  ],\n");

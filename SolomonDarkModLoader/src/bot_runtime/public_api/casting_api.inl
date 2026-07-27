@@ -60,23 +60,28 @@ bool QueueBotCast(const BotCastRequest& request) {
             (request.remote_input_controlled ? std::string("1") : std::string("0")));
         return false;
     }
-    const bool remote_native_participant =
-        IsRemoteParticipant(*participant) && IsNativeControlledParticipant(*participant);
-    const bool remote_native_input_controlled =
-        remote_native_participant && request.remote_input_controlled;
+    const bool packet_driven_remote_participant =
+        IsRemoteParticipant(*participant) &&
+        (IsNativeControlledParticipant(*participant) ||
+         (IsLuaControlledParticipant(*participant) &&
+          IsLocalTransportClient()));
+    const bool packet_driven_remote_input =
+        packet_driven_remote_participant &&
+        request.remote_input_controlled;
 
     SDModParticipantGameplayState refreshed_gameplay_state{};
     (void)TryRefreshParticipantGameplayState(request.bot_id, &refreshed_gameplay_state);
     BotSnapshot live_snapshot{};
     FillBotSnapshot(*participant, &live_snapshot);
     ApplyGameplayStateToSnapshot(request.bot_id, &live_snapshot);
-    if (remote_native_participant) {
+    if (packet_driven_remote_participant) {
         RemoveBotManaReserveState(request.bot_id);
         live_snapshot.mana_reserve_active = false;
     } else {
         ApplyManaReserveStateToSnapshot(&live_snapshot);
     }
-    if (live_snapshot.native_action_cooldown_ticks > 0 && !remote_native_participant) {
+    if (live_snapshot.native_action_cooldown_ticks > 0 &&
+        !packet_driven_remote_participant) {
         Log(
             "[bots] cast rejected for native action cooldown. bot_id=" +
             std::to_string(request.bot_id) +
@@ -117,7 +122,7 @@ bool QueueBotCast(const BotCastRequest& request) {
     if (live_snapshot.entity_materialized &&
         (live_snapshot.max_mp > 0.0f || live_progression_available) &&
         live_snapshot.mana_reserve_active &&
-        !remote_native_input_controlled) {
+        !packet_driven_remote_input) {
         Log(
             "[bots] cast rejected for mana reserve. bot_id=" + std::to_string(request.bot_id) +
             " skill_id=" + std::to_string(resolve_rejected_skill_id()) +
@@ -132,7 +137,7 @@ bool QueueBotCast(const BotCastRequest& request) {
     if (live_snapshot.entity_materialized &&
         (live_snapshot.max_mp > 0.0f || live_progression_available) &&
         live_snapshot.mp <= kBotManaReadinessEpsilon &&
-        !remote_native_input_controlled) {
+        !packet_driven_remote_input) {
         Log(
             "[bots] cast rejected for mana. bot_id=" + std::to_string(request.bot_id) +
             " skill_id=" + std::to_string(resolve_rejected_skill_id()) +

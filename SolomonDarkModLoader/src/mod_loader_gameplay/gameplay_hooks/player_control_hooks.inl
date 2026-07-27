@@ -330,7 +330,7 @@ void __fastcall HookPlayerControlBrainUpdate(
             bot_id = binding->bot_id;
             startup = binding->ongoing_cast.startup_in_progress;
             sanitize_native_remote_idle_control_brain =
-                IsNativeRemoteParticipantBinding(binding) &&
+                IsRemoteInputControlledParticipantBinding(binding) &&
                 !binding->ongoing_cast.active;
             native_target_control_active =
                 binding->ongoing_cast.active &&

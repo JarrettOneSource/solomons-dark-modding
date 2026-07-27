@@ -30,9 +30,12 @@ struct StartupStatusSnapshot {
 
 struct MultiplayerSessionMemberSnapshot {
     std::uint64_t steam_id = 0;
+    std::uint64_t participant_id = 0;
     std::string name;
+    std::int32_t gameplay_slot = -1;
     bool is_host = false;
     bool is_local = false;
+    bool is_synthetic = false;
 };
 
 struct MultiplayerSessionStatusSnapshot {

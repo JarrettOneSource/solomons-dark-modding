@@ -489,102 +489,110 @@ void RefreshLocalParticipantFromGameState() {
 }
 
 template <typename Packet>
-void PopulateLocalParticipantFrameFields(
-    const ParticipantInfo& local,
+void PopulateParticipantFrameFields(
+    const ParticipantInfo& participant,
     const RuntimeState& runtime_state,
+    bool include_local_authority_state,
     Packet* packet) {
     if (packet == nullptr) {
         return;
     }
 
-    packet->ready = local.ready ? 1 : 0;
-    packet->in_run = local.runtime.in_run ? 1 : 0;
-    packet->transform_valid = local.runtime.transform_valid ? 1 : 0;
+    packet->ready = participant.ready ? 1 : 0;
+    packet->in_run = participant.runtime.in_run ? 1 : 0;
+    packet->transform_valid = participant.runtime.transform_valid ? 1 : 0;
     packet->controller_kind =
-        static_cast<std::uint8_t>(ParticipantControllerKind::Native);
-    packet->run_nonce = local.runtime.run_nonce;
-    PopulateRunGameOverPacketFields(packet);
-    PopulateRunLoadingBarrierPacketFields(packet);
-    PopulateSharedGameplayPausePacketFields(runtime_state, packet);
-    PopulateLuaTimeControlPacketFields(packet);
-    packet->participant_vitals_correction_ack_sequence =
-        g_local_transport.last_applied_participant_vitals_correction_sequence;
-    packet->level = local.runtime.level;
-    packet->wave = local.runtime.wave;
-    packet->life_current = local.runtime.life_current;
-    packet->life_max = local.runtime.life_max;
-    packet->mana_current = local.runtime.mana_current;
-    packet->mana_max = local.runtime.mana_max;
-    packet->move_speed = local.runtime.move_speed;
-    packet->persistent_status_flags = local.runtime.persistent_status_flags;
-    packet->transient_status_flags = local.runtime.transient_status_flags;
-    packet->poison_remaining_ticks = local.runtime.poison_remaining_ticks;
+        static_cast<std::uint8_t>(participant.controller_kind);
+    packet->run_nonce = participant.runtime.run_nonce;
+    if (include_local_authority_state) {
+        PopulateRunGameOverPacketFields(packet);
+        PopulateRunLoadingBarrierPacketFields(packet);
+        PopulateSharedGameplayPausePacketFields(runtime_state, packet);
+        PopulateLuaTimeControlPacketFields(packet);
+        packet->participant_vitals_correction_ack_sequence =
+            g_local_transport.last_applied_participant_vitals_correction_sequence;
+    }
+    packet->level = participant.runtime.level;
+    packet->wave = participant.runtime.wave;
+    packet->life_current = participant.runtime.life_current;
+    packet->life_max = participant.runtime.life_max;
+    packet->mana_current = participant.runtime.mana_current;
+    packet->mana_max = participant.runtime.mana_max;
+    packet->move_speed = participant.runtime.move_speed;
+    packet->persistent_status_flags = participant.runtime.persistent_status_flags;
+    packet->transient_status_flags = participant.runtime.transient_status_flags;
+    packet->poison_remaining_ticks = participant.runtime.poison_remaining_ticks;
     packet->damage_x4_remaining_ticks =
-        local.runtime.damage_x4_remaining_ticks;
-    packet->experience_current = local.runtime.experience_current;
-    packet->experience_next = local.runtime.experience_next;
-    packet->position_x = local.runtime.position_x;
-    packet->position_y = local.runtime.position_y;
-    packet->heading = local.runtime.heading;
-    packet->movement_intent_x = local.runtime.movement_intent_x;
-    packet->movement_intent_y = local.runtime.movement_intent_y;
-    packet->anim_drive_state = local.runtime.anim_drive_state;
-    packet->presentation_flags = local.runtime.presentation_flags;
+        participant.runtime.damage_x4_remaining_ticks;
+    packet->experience_current = participant.runtime.experience_current;
+    packet->experience_next = participant.runtime.experience_next;
+    packet->position_x = participant.runtime.position_x;
+    packet->position_y = participant.runtime.position_y;
+    packet->heading = participant.runtime.heading;
+    packet->movement_intent_x = participant.runtime.movement_intent_x;
+    packet->movement_intent_y = participant.runtime.movement_intent_y;
+    packet->anim_drive_state = participant.runtime.anim_drive_state;
+    packet->presentation_flags = participant.runtime.presentation_flags;
     packet->death_presentation_tick =
-        CurrentLocalDeathPresentationTick(
-            static_cast<std::uint64_t>(::GetTickCount64()));
-    if (g_local_death_spectator.phase ==
-        DeathSpectatorPhase::DeathPresentation) {
-        packet->presentation_flags |=
-            ParticipantPresentationFlagDeathPresentation;
-    } else {
-        packet->presentation_flags &=
-            ~ParticipantPresentationFlagDeathPresentation;
+        participant.runtime.death_presentation_tick;
+    if (include_local_authority_state) {
+        packet->death_presentation_tick =
+            CurrentLocalDeathPresentationTick(
+                static_cast<std::uint64_t>(::GetTickCount64()));
+        if (g_local_death_spectator.phase ==
+            DeathSpectatorPhase::DeathPresentation) {
+            packet->presentation_flags |=
+                ParticipantPresentationFlagDeathPresentation;
+        } else {
+            packet->presentation_flags &=
+                ~ParticipantPresentationFlagDeathPresentation;
+        }
     }
     packet->attachment_staff_visual_state =
-        local.runtime.attachment_staff_visual_state;
-    packet->render_variant_primary = local.runtime.render_variant_primary;
-    packet->render_variant_secondary = local.runtime.render_variant_secondary;
-    packet->render_weapon_type = local.runtime.render_weapon_type;
-    packet->render_selection_byte = local.runtime.render_selection_byte;
-    packet->render_variant_tertiary = local.runtime.render_variant_tertiary;
+        participant.runtime.attachment_staff_visual_state;
+    packet->render_variant_primary = participant.runtime.render_variant_primary;
+    packet->render_variant_secondary = participant.runtime.render_variant_secondary;
+    packet->render_weapon_type = participant.runtime.render_weapon_type;
+    packet->render_selection_byte = participant.runtime.render_selection_byte;
+    packet->render_variant_tertiary = participant.runtime.render_variant_tertiary;
     packet->primary_visual_link_type_id =
-        local.runtime.primary_visual_link_type_id;
+        participant.runtime.primary_visual_link_type_id;
     packet->secondary_visual_link_type_id =
-        local.runtime.secondary_visual_link_type_id;
+        participant.runtime.secondary_visual_link_type_id;
     packet->primary_visual_link_recipe_uid =
-        local.runtime.primary_visual_link_recipe_uid;
+        participant.runtime.primary_visual_link_recipe_uid;
     packet->secondary_visual_link_recipe_uid =
-        local.runtime.secondary_visual_link_recipe_uid;
+        participant.runtime.secondary_visual_link_recipe_uid;
     packet->attachment_visual_link_type_id =
-        local.runtime.attachment_visual_link_type_id;
+        participant.runtime.attachment_visual_link_type_id;
     packet->attachment_visual_link_recipe_uid =
-        local.runtime.attachment_visual_link_recipe_uid;
+        participant.runtime.attachment_visual_link_recipe_uid;
     std::memcpy(
         packet->primary_visual_link_color_block,
-        local.runtime.primary_visual_link_color_block.data(),
-        local.runtime.primary_visual_link_color_block.size());
+        participant.runtime.primary_visual_link_color_block.data(),
+        participant.runtime.primary_visual_link_color_block.size());
     std::memcpy(
         packet->secondary_visual_link_color_block,
-        local.runtime.secondary_visual_link_color_block.data(),
-        local.runtime.secondary_visual_link_color_block.size());
-    packet->anim_drive_state_word = local.runtime.anim_drive_state_word;
-    packet->walk_cycle_primary = local.runtime.walk_cycle_primary;
-    packet->walk_cycle_secondary = local.runtime.walk_cycle_secondary;
-    packet->render_drive_stride = local.runtime.render_drive_stride;
-    packet->render_advance_rate = local.runtime.render_advance_rate;
-    packet->render_advance_phase = local.runtime.render_advance_phase;
+        participant.runtime.secondary_visual_link_color_block.data(),
+        participant.runtime.secondary_visual_link_color_block.size());
+    packet->anim_drive_state_word = participant.runtime.anim_drive_state_word;
+    packet->walk_cycle_primary = participant.runtime.walk_cycle_primary;
+    packet->walk_cycle_secondary = participant.runtime.walk_cycle_secondary;
+    packet->render_drive_stride = participant.runtime.render_drive_stride;
+    packet->render_advance_rate = participant.runtime.render_advance_rate;
+    packet->render_advance_phase = participant.runtime.render_advance_phase;
     packet->magic_shield_absorb_remaining =
-        local.runtime.magic_shield_absorb_remaining;
+        participant.runtime.magic_shield_absorb_remaining;
     packet->magic_shield_absorb_capacity =
-        local.runtime.magic_shield_absorb_capacity;
+        participant.runtime.magic_shield_absorb_capacity;
     packet->magic_shield_explosion_fraction =
-        local.runtime.magic_shield_explosion_fraction;
+        participant.runtime.magic_shield_explosion_fraction;
     packet->magic_shield_hit_flash =
-        local.runtime.magic_shield_hit_flash;
+        participant.runtime.magic_shield_hit_flash;
     packet->render_drive_overlay_alpha =
-        local.runtime.render_drive_overlay_alpha;
-    packet->render_drive_move_blend = local.runtime.render_drive_move_blend;
+        participant.runtime.render_drive_overlay_alpha;
+    packet->render_drive_move_blend =
+        participant.runtime.render_drive_move_blend;
 }
 
 template <typename Packet>
@@ -618,7 +626,7 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
         return packet;
     }
 
-    PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);
+    PopulateParticipantFrameFields(*local, runtime_state, true, &packet);
     packet.scene_kind = static_cast<std::uint8_t>(
         WorldSceneKindFromSceneIntent(local->runtime.scene_intent));
     packet.region_index = local->runtime.scene_intent.region_index;
@@ -626,6 +634,92 @@ ParticipantFramePacket BuildLocalParticipantFramePacket() {
     PopulateAuthorityWaveRespawn(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
+}
+
+void PopulateParticipantStateFields(
+    const ParticipantInfo& participant,
+    StatePacket* packet) {
+    if (packet == nullptr) {
+        return;
+    }
+
+    CopyPacketDisplayName(participant.name, packet);
+    packet->element_id = participant.character_profile.element_id;
+    packet->discipline_id =
+        static_cast<std::int32_t>(
+            participant.character_profile.discipline_id);
+    for (std::size_t index = 0;
+         index < participant.character_profile.appearance.choice_ids.size();
+         ++index) {
+        packet->appearance_choice_ids[index] =
+            participant.character_profile.appearance.choice_ids[index];
+    }
+    packet->owned_gold = participant.owned_progression.gold;
+    packet->gold_revision = participant.owned_progression.gold_revision;
+    packet->inventory_revision =
+        participant.owned_progression.inventory_revision;
+    packet->equipment_revision =
+        participant.owned_progression.equipment_revision;
+    packet->equipment_valid =
+        participant.owned_progression.equipment.valid ? 1 : 0;
+    const auto copy_equipped_item = [](
+        const ParticipantEquippedItemState& source,
+        ParticipantEquippedItemPacketState* destination) {
+        destination->type_id = source.type_id;
+        destination->recipe_uid = source.recipe_uid;
+    };
+    copy_equipped_item(
+        participant.owned_progression.equipment.hat,
+        &packet->equipped_hat);
+    copy_equipped_item(
+        participant.owned_progression.equipment.robe,
+        &packet->equipped_robe);
+    copy_equipped_item(
+        participant.owned_progression.equipment.weapon,
+        &packet->equipped_weapon);
+    for (std::size_t index = 0;
+         index < participant.owned_progression.equipment.rings.size();
+         ++index) {
+        copy_equipped_item(
+            participant.owned_progression.equipment.rings[index],
+            &packet->equipped_rings[index]);
+    }
+    copy_equipped_item(
+        participant.owned_progression.equipment.amulet,
+        &packet->equipped_amulet);
+    packet->spellbook_revision =
+        participant.owned_progression.spellbook_revision;
+    packet->statbook_revision =
+        participant.owned_progression.statbook_revision;
+    packet->loadout_revision =
+        participant.owned_progression.loadout_revision;
+    packet->concentration_revision =
+        participant.owned_progression.concentration_revision;
+    packet->concentration_selection_valid =
+        participant.owned_progression.concentration_selection_valid ? 1 : 0;
+    packet->concentration_entry_a =
+        participant.owned_progression.concentration_entry_a;
+    packet->concentration_entry_b =
+        participant.owned_progression.concentration_entry_b;
+    BuildDerivedStatPacketState(
+        participant.owned_progression,
+        &packet->derived_stat_revision,
+        &packet->derived_stats);
+    BuildHagathaPerkPacketState(
+        participant.owned_progression,
+        &packet->hagatha_perk_revision,
+        &packet->hagatha_perks);
+    packet->primary_entry_index =
+        participant.character_profile.loadout.primary_entry_index;
+    packet->primary_combo_entry_index =
+        participant.character_profile.loadout.primary_combo_entry_index;
+    for (std::size_t index = 0;
+         index <
+             participant.character_profile.loadout.secondary_entry_indices.size();
+         ++index) {
+        packet->queued_secondary_entry_indices[index] =
+            participant.character_profile.loadout.secondary_entry_indices[index];
+    }
 }
 
 StatePacket BuildLocalStatePacket() {
@@ -642,56 +736,308 @@ StatePacket BuildLocalStatePacket() {
         return packet;
     }
 
-    CopyPacketDisplayName(local->name, &packet);
-    PopulateLocalParticipantFrameFields(*local, runtime_state, &packet);
-    packet.element_id = local->character_profile.element_id;
-    packet.discipline_id = static_cast<std::int32_t>(local->character_profile.discipline_id);
-    for (std::size_t index = 0; index < local->character_profile.appearance.choice_ids.size(); ++index) {
-        packet.appearance_choice_ids[index] = local->character_profile.appearance.choice_ids[index];
-    }
-    packet.owned_gold = local->owned_progression.gold;
-    packet.gold_revision = local->owned_progression.gold_revision;
-    packet.inventory_revision = local->owned_progression.inventory_revision;
-    packet.equipment_revision = local->owned_progression.equipment_revision;
-    packet.equipment_valid = local->owned_progression.equipment.valid ? 1 : 0;
-    const auto copy_equipped_item = [](
-        const ParticipantEquippedItemState& source,
-        ParticipantEquippedItemPacketState* destination) {
-        destination->type_id = source.type_id;
-        destination->recipe_uid = source.recipe_uid;
-    };
-    copy_equipped_item(local->owned_progression.equipment.hat, &packet.equipped_hat);
-    copy_equipped_item(local->owned_progression.equipment.robe, &packet.equipped_robe);
-    copy_equipped_item(local->owned_progression.equipment.weapon, &packet.equipped_weapon);
-    for (std::size_t index = 0; index < local->owned_progression.equipment.rings.size(); ++index) {
-        copy_equipped_item(
-            local->owned_progression.equipment.rings[index],
-            &packet.equipped_rings[index]);
-    }
-    copy_equipped_item(local->owned_progression.equipment.amulet, &packet.equipped_amulet);
-    packet.spellbook_revision = local->owned_progression.spellbook_revision;
-    packet.statbook_revision = local->owned_progression.statbook_revision;
-    packet.loadout_revision = local->owned_progression.loadout_revision;
-    packet.concentration_revision = local->owned_progression.concentration_revision;
-    packet.concentration_selection_valid =
-        local->owned_progression.concentration_selection_valid ? 1 : 0;
-    packet.concentration_entry_a = local->owned_progression.concentration_entry_a;
-    packet.concentration_entry_b = local->owned_progression.concentration_entry_b;
-    BuildDerivedStatPacketState(
-        local->owned_progression,
-        &packet.derived_stat_revision,
-        &packet.derived_stats);
-    BuildHagathaPerkPacketState(
-        local->owned_progression,
-        &packet.hagatha_perk_revision,
-        &packet.hagatha_perks);
-    packet.primary_entry_index = local->character_profile.loadout.primary_entry_index;
-    packet.primary_combo_entry_index = local->character_profile.loadout.primary_combo_entry_index;
-    for (std::size_t index = 0; index < local->character_profile.loadout.secondary_entry_indices.size(); ++index) {
-        packet.queued_secondary_entry_indices[index] =
-            local->character_profile.loadout.secondary_entry_indices[index];
-    }
+    PopulateParticipantFrameFields(*local, runtime_state, true, &packet);
+    PopulateParticipantStateFields(*local, &packet);
     PopulateAuthorityWaveRespawn(&packet);
     ApplyLocalRunExitLatch(&packet);
     return packet;
+}
+
+bool BuildSyntheticParticipantFramePacket(
+    const RuntimeState& runtime_state,
+    const ParticipantInfo& participant,
+    std::uint64_t session_nonce,
+    ParticipantFramePacket* packet) {
+    if (packet == nullptr ||
+        session_nonce == 0 ||
+        !IsRemoteParticipant(participant) ||
+        !IsLuaControlledParticipant(participant)) {
+        return false;
+    }
+
+    *packet = ParticipantFramePacket{};
+    packet->header = MakePacketHeader(
+        PacketKind::ParticipantFrame,
+        g_local_transport.next_sequence++);
+    packet->participant_id = participant.participant_id;
+    packet->participant_session_nonce = session_nonce;
+    packet->authority_participant_id = g_local_transport.local_peer_id;
+    PopulateParticipantFrameFields(
+        participant,
+        runtime_state,
+        false,
+        packet);
+    packet->scene_kind = static_cast<std::uint8_t>(
+        WorldSceneKindFromSceneIntent(
+            participant.runtime.scene_intent));
+    packet->region_index = participant.runtime.scene_intent.region_index;
+    packet->region_type_id = participant.runtime.scene_intent.region_type_id;
+    return true;
+}
+
+bool BuildSyntheticParticipantStatePacket(
+    const RuntimeState& runtime_state,
+    const ParticipantInfo& participant,
+    std::uint64_t session_nonce,
+    std::uint8_t state_flags,
+    StatePacket* packet) {
+    if (packet == nullptr ||
+        session_nonce == 0 ||
+        !IsRemoteParticipant(participant) ||
+        !IsLuaControlledParticipant(participant) ||
+        (state_flags & ~ParticipantStateFlagRetired) != 0) {
+        return false;
+    }
+
+    *packet = StatePacket{};
+    packet->header = MakePacketHeader(
+        PacketKind::State,
+        g_local_transport.next_sequence++);
+    packet->participant_id = participant.participant_id;
+    packet->participant_session_nonce = session_nonce;
+    packet->authority_participant_id = g_local_transport.local_peer_id;
+    packet->participant_state_flags = state_flags;
+    PopulateParticipantFrameFields(
+        participant,
+        runtime_state,
+        false,
+        packet);
+    PopulateParticipantStateFields(participant, packet);
+    return true;
+}
+
+SyntheticParticipantTransportState*
+EnsureSyntheticParticipantTransportState(
+    std::uint64_t participant_id) {
+    if ((g_local_transport.initialized &&
+         !g_local_transport.is_host) ||
+        participant_id == 0) {
+        return nullptr;
+    }
+
+    auto [it, inserted] =
+        g_local_transport.synthetic_participants.try_emplace(
+            participant_id);
+    if (inserted || it->second.session_nonce == 0) {
+        it->second.session_nonce =
+            GenerateTransportSessionNonce(participant_id);
+        it->second.next_cast_sequence = 1;
+        Log(
+            "Multiplayer synthetic participant transport epoch registered. "
+            "participant_id=" +
+            std::to_string(participant_id) +
+            " session_nonce=" +
+            std::to_string(it->second.session_nonce) +
+            " authority_participant_id=" +
+            std::to_string(g_local_transport.local_peer_id));
+    }
+    return &it->second;
+}
+
+bool RegisterSyntheticParticipantTransportInternal(
+    std::uint64_t participant_id,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (g_local_transport.initialized &&
+        !g_local_transport.is_host) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Synthetic participants can only be registered by the transport host.";
+        }
+        return false;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* participant =
+        FindParticipant(runtime_state, participant_id);
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        !IsLuaControlledParticipant(*participant)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The participant is not an active host-owned Lua participant.";
+        }
+        return false;
+    }
+
+    g_local_transport.retired_synthetic_participants.erase(
+        participant_id);
+    auto* transport_state =
+        EnsureSyntheticParticipantTransportState(participant_id);
+    if (transport_state == nullptr) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The synthetic participant transport epoch could not be allocated.";
+        }
+        return false;
+    }
+    transport_state->last_state_send_ms = 0;
+    transport_state->last_frame_send_ms = 0;
+    return true;
+}
+
+bool RetireSyntheticParticipantTransportInternal(
+    std::uint64_t participant_id,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (g_local_transport.initialized &&
+        !g_local_transport.is_host) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Synthetic participants can only be retired by the transport host.";
+        }
+        return false;
+    }
+
+    const auto transport_it =
+        g_local_transport.synthetic_participants.find(
+            participant_id);
+    if (transport_it ==
+        g_local_transport.synthetic_participants.end()) {
+        return true;
+    }
+    if (!g_local_transport.initialized) {
+        g_local_transport.synthetic_participants.erase(
+            transport_it);
+        g_local_transport.remote_cast_inputs_by_participant.erase(
+            participant_id);
+        g_local_transport.last_cast_sequence_by_participant.erase(
+            participant_id);
+        return true;
+    }
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* participant =
+        FindParticipant(runtime_state, participant_id);
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        !IsLuaControlledParticipant(*participant)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The synthetic participant disappeared before retirement could be serialized.";
+        }
+        return false;
+    }
+
+    StatePacket packet{};
+    if (!BuildSyntheticParticipantStatePacket(
+            runtime_state,
+            *participant,
+            transport_it->second.session_nonce,
+            ParticipantStateFlagRetired,
+            &packet)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The synthetic participant retirement packet could not be built.";
+        }
+        return false;
+    }
+
+    SyntheticParticipantRetirementState retirement;
+    retirement.packet = packet;
+    retirement.created_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
+    g_local_transport.retired_synthetic_participants[
+        participant_id] = retirement;
+    g_local_transport.synthetic_participants.erase(transport_it);
+    Log(
+        "Multiplayer synthetic participant transport epoch retired. "
+        "participant_id=" +
+        std::to_string(participant_id) +
+        " session_nonce=" +
+        std::to_string(packet.participant_session_nonce));
+    return true;
+}
+
+struct SyntheticParticipantSceneSyncRequest {
+    std::uint64_t participant_id = 0;
+    MultiplayerCharacterProfile profile;
+    ParticipantSceneIntent scene_intent;
+    bool transform_valid = false;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float heading = 0.0f;
+};
+
+void RefreshHostSyntheticParticipantSceneIntent() {
+    if (!g_local_transport.is_host) {
+        return;
+    }
+
+    const auto snapshot = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(snapshot);
+    if (local == nullptr || !local->runtime.valid) {
+        return;
+    }
+
+    auto host_scene_intent = local->runtime.scene_intent;
+    if (host_scene_intent.kind == ParticipantSceneIntentKind::PrivateRegion) {
+        host_scene_intent = DefaultParticipantSceneIntent();
+    }
+    std::vector<SyntheticParticipantSceneSyncRequest> sync_requests;
+    UpdateRuntimeState([&](RuntimeState& state) {
+        for (auto& participant : state.participants) {
+            if (!IsRemoteParticipant(participant) ||
+                !IsLuaControlledParticipant(participant)) {
+                continue;
+            }
+
+            const bool scene_changed =
+                participant.runtime.scene_intent.kind !=
+                    host_scene_intent.kind ||
+                participant.runtime.scene_intent.region_index !=
+                    host_scene_intent.region_index ||
+                participant.runtime.scene_intent.region_type_id !=
+                    host_scene_intent.region_type_id;
+            participant.runtime.scene_intent = host_scene_intent;
+            participant.runtime.in_run =
+                host_scene_intent.kind ==
+                ParticipantSceneIntentKind::Run;
+            participant.runtime.run_nonce =
+                participant.runtime.in_run
+                    ? local->runtime.run_nonce
+                    : 0;
+            participant.runtime.wave = local->runtime.wave;
+            if (!scene_changed) {
+                continue;
+            }
+
+            SyntheticParticipantSceneSyncRequest request;
+            request.participant_id = participant.participant_id;
+            request.profile = participant.character_profile;
+            request.scene_intent = participant.runtime.scene_intent;
+            request.transform_valid =
+                participant.runtime.transform_valid;
+            request.position_x = participant.runtime.position_x;
+            request.position_y = participant.runtime.position_y;
+            request.heading = participant.runtime.heading;
+            sync_requests.push_back(std::move(request));
+        }
+    });
+
+    for (const auto& request : sync_requests) {
+        std::string error_message;
+        if (!QueueParticipantEntitySync(
+                request.participant_id,
+                request.profile,
+                request.scene_intent,
+                request.transform_valid,
+                request.transform_valid,
+                request.position_x,
+                request.position_y,
+                request.heading,
+                &error_message)) {
+            Log(
+                "Multiplayer synthetic participant scene sync could not be queued. "
+                "participant_id=" +
+                std::to_string(request.participant_id) +
+                " scene=" +
+                std::to_string(
+                    static_cast<int>(request.scene_intent.kind)) +
+                " error=" + error_message);
+        }
+    }
 }

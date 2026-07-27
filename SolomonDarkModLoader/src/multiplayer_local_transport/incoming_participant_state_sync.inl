@@ -1,3 +1,41 @@
+bool IsValidParticipantControllerKind(std::uint8_t controller_kind) {
+    return controller_kind ==
+               static_cast<std::uint8_t>(
+                   ParticipantControllerKind::Native) ||
+           controller_kind ==
+               static_cast<std::uint8_t>(
+                   ParticipantControllerKind::LuaBrain);
+}
+
+template <typename Packet>
+bool IsAuthenticatedHostSyntheticParticipantPacket(
+    const Packet& packet,
+    const TransportPeerEndpoint& from) {
+    if (!IsLocalTransportClient() ||
+        !IsConfiguredRemoteAuthorityEndpoint(from) ||
+        packet.controller_kind !=
+            static_cast<std::uint8_t>(
+                ParticipantControllerKind::LuaBrain) ||
+        packet.authority_participant_id == 0 ||
+        packet.authority_participant_id == packet.participant_id) {
+        return false;
+    }
+
+    const auto known_authority =
+        g_local_transport_authority_participant_id.load(
+            std::memory_order_acquire);
+    if (known_authority != 0 &&
+        packet.authority_participant_id != known_authority) {
+        return false;
+    }
+    if (known_authority == 0) {
+        g_local_transport_authority_participant_id.store(
+            packet.authority_participant_id,
+            std::memory_order_release);
+    }
+    return true;
+}
+
 void ApplyRemoteStatePacket(
     const StatePacket& packet,
     const TransportPeerEndpoint& from,
@@ -5,26 +43,45 @@ void ApplyRemoteStatePacket(
     if (packet.participant_id == 0 ||
         packet.participant_session_nonce == 0 ||
         packet.participant_id == kLocalParticipantId ||
-        packet.participant_id == g_local_transport.local_peer_id) {
+        packet.participant_id == g_local_transport.local_peer_id ||
+        !IsValidParticipantControllerKind(packet.controller_kind) ||
+        (packet.participant_state_flags &
+         ~ParticipantStateFlagRetired) != 0) {
         return;
     }
 
-    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    const auto controller_kind =
+        static_cast<ParticipantControllerKind>(
+            packet.controller_kind);
+    const bool synthetic_participant =
+        controller_kind == ParticipantControllerKind::LuaBrain;
+    if (synthetic_participant &&
+        !IsAuthenticatedHostSyntheticParticipantPacket(
+            packet,
+            from)) {
+        return;
+    }
+    if (synthetic_participant) {
+        UpsertPeerEndpoint(
+            from,
+            packet.authority_participant_id,
+            now_ms);
+    } else {
+        UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    }
+    if ((packet.participant_state_flags &
+         ParticipantStateFlagRetired) != 0 &&
+        !synthetic_participant) {
+        return;
+    }
 
-    MultiplayerCharacterProfile profile;
-    profile.element_id = packet.element_id;
-    profile.discipline_id = static_cast<CharacterDisciplineId>(packet.discipline_id);
-    for (std::size_t index = 0; index < profile.appearance.choice_ids.size(); ++index) {
-        profile.appearance.choice_ids[index] = packet.appearance_choice_ids[index];
-    }
-    profile.loadout.primary_entry_index = packet.primary_entry_index;
-    profile.loadout.primary_combo_entry_index = packet.primary_combo_entry_index;
-    for (std::size_t index = 0; index < profile.loadout.secondary_entry_indices.size(); ++index) {
-        profile.loadout.secondary_entry_indices[index] = packet.queued_secondary_entry_indices[index];
-    }
-    profile.level = packet.level;
-    profile.experience = packet.experience_current;
-    if (!IsValidCharacterProfile(profile)) {
+    const auto retired_it =
+        g_local_transport.retired_session_nonces_by_participant.find(
+            packet.participant_id);
+    if (retired_it !=
+            g_local_transport.retired_session_nonces_by_participant.end() &&
+        retired_it->second.find(packet.participant_session_nonce) !=
+            retired_it->second.end()) {
         return;
     }
 
@@ -35,13 +92,13 @@ void ApplyRemoteStatePacket(
             packet.participant_id,
             packet.participant_session_nonce);
     } else if (session_it->second != packet.participant_session_nonce) {
-        const auto retired_it =
+        const auto retired_nonce_it =
             g_local_transport.retired_session_nonces_by_participant.find(
                 packet.participant_id);
-        if (retired_it !=
+        if (retired_nonce_it !=
                 g_local_transport.retired_session_nonces_by_participant.end() &&
-            retired_it->second.find(packet.participant_session_nonce) !=
-                retired_it->second.end()) {
+            retired_nonce_it->second.find(packet.participant_session_nonce) !=
+                retired_nonce_it->second.end()) {
             return;
         }
         const auto previous_nonce = session_it->second;
@@ -73,6 +130,55 @@ void ApplyRemoteStatePacket(
     }
     g_local_transport.last_state_packet_sequence_by_participant[
         packet.participant_id] = packet.header.sequence;
+
+    if ((packet.participant_state_flags &
+         ParticipantStateFlagRetired) != 0) {
+        ResetRemoteParticipantSessionEpoch(
+            packet.participant_id,
+            false,
+            true);
+        g_local_transport.session_nonce_by_participant.erase(
+            packet.participant_id);
+        g_local_transport.retired_session_nonces_by_participant[
+            packet.participant_id].insert(
+                packet.participant_session_nonce);
+        Log(
+            "Multiplayer synthetic participant retired. participant_id=" +
+            std::to_string(packet.participant_id) +
+            " session_nonce=" +
+            std::to_string(packet.participant_session_nonce) +
+            " authority_participant_id=" +
+            std::to_string(packet.authority_participant_id));
+        return;
+    }
+
+    MultiplayerCharacterProfile profile;
+    profile.element_id = packet.element_id;
+    profile.discipline_id =
+        static_cast<CharacterDisciplineId>(
+            packet.discipline_id);
+    for (std::size_t index = 0;
+         index < profile.appearance.choice_ids.size();
+         ++index) {
+        profile.appearance.choice_ids[index] =
+            packet.appearance_choice_ids[index];
+    }
+    profile.loadout.primary_entry_index =
+        packet.primary_entry_index;
+    profile.loadout.primary_combo_entry_index =
+        packet.primary_combo_entry_index;
+    for (std::size_t index = 0;
+         index < profile.loadout.secondary_entry_indices.size();
+         ++index) {
+        profile.loadout.secondary_entry_indices[index] =
+            packet.queued_secondary_entry_indices[index];
+    }
+    profile.level = packet.level;
+    profile.experience = packet.experience_current;
+    if (!IsValidCharacterProfile(profile)) {
+        return;
+    }
+
     RelayParticipantPacketToPeers(packet, from);
 
     const auto scene_intent = SceneIntentFromPacket(packet);
@@ -121,7 +227,7 @@ void ApplyRemoteStatePacket(
         auto* participant = UpsertRemoteParticipant(
             state,
             packet.participant_id,
-            ParticipantControllerKind::Native);
+            controller_kind);
         if (participant == nullptr) {
             return;
         }
@@ -262,7 +368,20 @@ void ApplyRemoteParticipantFramePacket(
     if (packet.participant_id == 0 ||
         packet.participant_session_nonce == 0 ||
         packet.participant_id == kLocalParticipantId ||
-        packet.participant_id == g_local_transport.local_peer_id) {
+        packet.participant_id == g_local_transport.local_peer_id ||
+        !IsValidParticipantControllerKind(packet.controller_kind)) {
+        return;
+    }
+
+    const auto controller_kind =
+        static_cast<ParticipantControllerKind>(
+            packet.controller_kind);
+    const bool synthetic_participant =
+        controller_kind == ParticipantControllerKind::LuaBrain;
+    if (synthetic_participant &&
+        !IsAuthenticatedHostSyntheticParticipantPacket(
+            packet,
+            from)) {
         return;
     }
 
@@ -272,6 +391,15 @@ void ApplyRemoteParticipantFramePacket(
     if (session_it ==
             g_local_transport.session_nonce_by_participant.end() ||
         session_it->second != packet.participant_session_nonce) {
+        return;
+    }
+
+    const auto existing_runtime = SnapshotRuntimeState();
+    const auto* existing_participant =
+        FindParticipant(existing_runtime, packet.participant_id);
+    if (existing_participant == nullptr ||
+        !IsRemoteParticipant(*existing_participant) ||
+        existing_participant->controller_kind != controller_kind) {
         return;
     }
 
@@ -287,7 +415,12 @@ void ApplyRemoteParticipantFramePacket(
     }
     g_local_transport.last_participant_frame_sequence_by_participant[
         packet.participant_id] = packet.header.sequence;
-    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    UpsertPeerEndpoint(
+        from,
+        synthetic_participant
+            ? packet.authority_participant_id
+            : packet.participant_id,
+        now_ms);
     RelayParticipantPacketToPeers(packet, from);
 
     const auto scene_intent = SceneIntentFromPacket(packet);

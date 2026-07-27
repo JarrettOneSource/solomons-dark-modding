@@ -949,15 +949,30 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     ):
         raise StaticReTestFailure(
             "gameplay-slot bot materialization still stages a source descriptor over the live target actor")
-    if not re.search(
-        r"IsLuaControlledParticipant[\s\S]*CreateWizardCloneSourceActor\(\s*"
-        r"world_address,[\s\S]*&source_actor_address,[\s\S]*"
-        r"CaptureActorRenderBuildSnapshot\(source_actor_address\)[\s\S]*"
-        r"DestroyWizardCloneSourceActor\(source_actor_address,",
+    lua_visual_branch = re.search(
+        r"else if \(multiplayer::IsLuaControlledParticipant\(\*participant\)\)"
+        r"\s*\{(?P<body>[\s\S]*?)\n\s*\} else \{",
         slot_creation_text,
+    )
+    if (
+        lua_visual_branch is None or
+        "CaptureActorRenderBuildSnapshot(" not in lua_visual_branch.group("body") or
+        "native_visual_actor_address" not in lua_visual_branch.group("body") or
+        "ResolveStandaloneWizardRenderSelectionIndex(" not in
+            lua_visual_branch.group("body")
     ):
         raise StaticReTestFailure(
-            "Lua gameplay-slot visuals do not build on a disposable source actor before helper publication")
+            "Lua gameplay-slot visuals do not seed from the already-live stock "
+            "player descriptor before helper publication")
+    for forbidden in (
+        "CreateWizardCloneSourceActor(",
+        "DestroyWizardCloneSourceActor(",
+        "source_actor_address",
+    ):
+        if forbidden in lua_visual_branch.group("body"):
+            raise StaticReTestFailure(
+                "Lua gameplay-slot visuals resurrect disposable standalone "
+                f"materialization: {forbidden}")
     if "ApplyNativeRemoteParticipantRenderSelectorBytes" in native_remote_playback_text:
         raise StaticReTestFailure(
             "remote playback still overwrites profile-built clone render selector bytes")

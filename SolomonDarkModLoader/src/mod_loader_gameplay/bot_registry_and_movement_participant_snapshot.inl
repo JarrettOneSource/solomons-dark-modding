@@ -63,6 +63,10 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     ParticipantGameplaySnapshot snapshot;
     snapshot.bot_id = binding.bot_id;
     snapshot.moving = binding.movement_active;
+    snapshot.movement_intent_x =
+        binding.movement_active ? binding.direction_x : 0.0f;
+    snapshot.movement_intent_y =
+        binding.movement_active ? binding.direction_y : 0.0f;
     snapshot.entity_kind = static_cast<int>(binding.kind);
     snapshot.movement_intent_revision = binding.movement_intent_revision;
     snapshot.character_profile = binding.character_profile;
@@ -72,6 +76,10 @@ ParticipantGameplaySnapshot BuildParticipantGameplaySnapshot(const ParticipantEn
     snapshot.hub_visual_proxy_address = 0;
     snapshot.gameplay_slot = binding.gameplay_slot;
     snapshot.gameplay_attach_applied = binding.gameplay_attach_applied;
+    snapshot.death_transition_stock_tick_seen =
+        binding.death_transition_stock_tick_seen;
+    snapshot.local_death_presentation_started_ms =
+        binding.local_death_presentation_started_ms;
 
     if (binding.actor_address == 0 ||
         !IsParticipantMaterializationOwnedByCurrentScene(
@@ -232,9 +240,11 @@ void SyncParticipantRuntimeFromGameplaySnapshot(const ParticipantGameplaySnapsho
             return;
         }
 
-        // Native remote participants are packet-owned; feeding the mirrored
-        // actor's local HP back into runtime can pin remote deaths at zero.
-        if (multiplayer::IsNativeControlledParticipant(*participant)) {
+        // Packet-driven remote participants are transport-owned; feeding the
+        // mirrored actor's local HP back into runtime can pin remote deaths at
+        // zero. Host-owned Lua participants are the inverse: their stock slot
+        // actor is the authoritative source published to peers.
+        if (IsPacketDrivenRemoteParticipant(*participant)) {
             return;
         }
 
@@ -247,6 +257,101 @@ void SyncParticipantRuntimeFromGameplaySnapshot(const ParticipantGameplaySnapsho
         participant->runtime.position_x = snapshot.x;
         participant->runtime.position_y = snapshot.y;
         participant->runtime.heading = snapshot.heading;
+        participant->runtime.movement_intent_x =
+            snapshot.movement_intent_x;
+        participant->runtime.movement_intent_y =
+            snapshot.movement_intent_y;
+        participant->runtime.anim_drive_state =
+            snapshot.anim_drive_state;
+        participant->runtime.anim_drive_state_word =
+            snapshot.anim_drive_state;
+        participant->runtime.walk_cycle_primary =
+            snapshot.walk_cycle_primary;
+        participant->runtime.walk_cycle_secondary =
+            snapshot.walk_cycle_secondary;
+        participant->runtime.render_drive_stride =
+            snapshot.render_drive_stride;
+        participant->runtime.render_advance_rate =
+            snapshot.render_advance_rate;
+        participant->runtime.render_advance_phase =
+            snapshot.render_advance_phase;
+        participant->runtime.render_drive_overlay_alpha =
+            snapshot.render_drive_overlay_alpha;
+        participant->runtime.render_drive_move_blend =
+            snapshot.render_drive_move_blend;
+        participant->runtime.render_variant_primary =
+            snapshot.render_variant_primary;
+        participant->runtime.render_variant_secondary =
+            snapshot.render_variant_secondary;
+        participant->runtime.render_weapon_type =
+            snapshot.render_weapon_type;
+        participant->runtime.render_selection_byte =
+            snapshot.render_selection_byte;
+        participant->runtime.render_variant_tertiary =
+            snapshot.render_variant_tertiary;
+        participant->runtime.magic_shield_absorb_remaining =
+            snapshot.magic_shield_absorb_remaining;
+        participant->runtime.magic_shield_absorb_capacity =
+            snapshot.magic_shield_absorb_capacity;
+        participant->runtime.magic_shield_explosion_fraction =
+            snapshot.magic_shield_explosion_fraction;
+        participant->runtime.magic_shield_hit_flash =
+            snapshot.magic_shield_hit_flash;
+
+        participant->runtime.presentation_flags =
+            multiplayer::ParticipantPresentationFlagAnimationDriveWord |
+            multiplayer::ParticipantPresentationFlagRenderDriveFloats;
+        const bool visual_payload_valid =
+            snapshot.primary_visual_lane.current_object_color_state_valid &&
+            snapshot.secondary_visual_lane.current_object_color_state_valid;
+        if (visual_payload_valid) {
+            participant->runtime.presentation_flags |=
+                multiplayer::ParticipantPresentationFlagVisualLinkColorBlocks |
+                multiplayer::ParticipantPresentationFlagEquipmentState;
+            participant->runtime.primary_visual_link_type_id =
+                snapshot.primary_visual_lane.current_object_type_id;
+            participant->runtime.secondary_visual_link_type_id =
+                snapshot.secondary_visual_lane.current_object_type_id;
+            participant->runtime.primary_visual_link_recipe_uid =
+                snapshot.primary_visual_lane.current_object_recipe_uid;
+            participant->runtime.secondary_visual_link_recipe_uid =
+                snapshot.secondary_visual_lane.current_object_recipe_uid;
+            participant->runtime.attachment_visual_link_type_id =
+                snapshot.attachment_visual_lane.current_object_type_id;
+            participant->runtime.attachment_visual_link_recipe_uid =
+                snapshot.attachment_visual_lane.current_object_recipe_uid;
+            participant->runtime.primary_visual_link_color_block =
+                snapshot.primary_visual_lane.current_object_color_state;
+            participant->runtime.secondary_visual_link_color_block =
+                snapshot.secondary_visual_lane.current_object_color_state;
+        }
+
+        const auto now_ms =
+            static_cast<std::uint64_t>(::GetTickCount64());
+        if (snapshot.death_transition_stock_tick_seen &&
+            snapshot.local_death_presentation_started_ms != 0 &&
+            now_ms >=
+                snapshot.local_death_presentation_started_ms) {
+            const auto elapsed_ms =
+                now_ms -
+                snapshot.local_death_presentation_started_ms;
+            if (elapsed_ms <=
+                multiplayer::kParticipantDeathPresentationDurationMs) {
+                participant->runtime.presentation_flags |=
+                    multiplayer::
+                        ParticipantPresentationFlagDeathPresentation;
+                participant->runtime.death_presentation_tick =
+                    multiplayer::
+                        ResolveParticipantDeathPresentationTick(
+                            elapsed_ms);
+            } else {
+                participant->runtime.death_presentation_tick =
+                    multiplayer::
+                        kNativeDeathPresentationTerminalCorpseTick;
+            }
+        } else {
+            participant->runtime.death_presentation_tick = 0;
+        }
     });
 }
 

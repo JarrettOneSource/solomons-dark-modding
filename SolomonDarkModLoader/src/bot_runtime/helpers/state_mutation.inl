@@ -63,6 +63,16 @@ void ResetPendingState() {
 }
 
 void DestroyAllBotsLocked() {
+    const auto runtime = SnapshotRuntimeState();
+    for (const auto& participant : runtime.participants) {
+        if (!IsLuaControlledParticipant(participant)) {
+            continue;
+        }
+        std::string transport_error;
+        (void)RetireSyntheticParticipantTransport(
+            participant.participant_id,
+            &transport_error);
+    }
     UpdateRuntimeState([](RuntimeState& state) {
         state.participants.erase(
             std::remove_if(state.participants.begin(), state.participants.end(), [](const ParticipantInfo& participant) {
