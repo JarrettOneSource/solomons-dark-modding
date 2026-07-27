@@ -28,7 +28,10 @@ void ProcessLuaExecQueueOnMainThread() {
         }
         completed.emplace_back(
             request,
-            ExecuteLuaCodeOnLockedState(shared_state, request->code));
+            ExecuteLuaCodeOnLockedState(
+                shared_state,
+                request->code,
+                request->privileged));
     }
 
     lock.unlock();
@@ -52,6 +55,7 @@ void PumpLuaExecQueueOnMainThread() {
         detail::PollLuaHotReloadsOnLockedThread(
             multiplayer_configured,
             static_cast<std::uint64_t>(GetTickCount64()));
+        detail::PollLuaSettingsReplicationChanges();
     }
 }
 
@@ -67,6 +71,7 @@ void PumpLuaWorkOnMainThread(const RuntimeTickContext& context) {
         multiplayer_configured,
         static_cast<std::uint64_t>(GetTickCount64()));
     detail::DispatchPendingLuaNetMessages();
+    detail::PollLuaSettingsReplicationChanges();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);
@@ -90,6 +95,7 @@ void PumpLuaWorkOnGameplayThread(const RuntimeTickContext& context) {
         multiplayer_configured,
         static_cast<std::uint64_t>(GetTickCount64()));
     detail::DispatchPendingLuaNetMessages();
+    detail::PollLuaSettingsReplicationChanges();
     detail::DispatchPendingLuaUiActions();
     detail::DispatchPendingLuaRegisteredSpellCasts(context);
     detail::TickLuaRegisteredSpellEffects(context);

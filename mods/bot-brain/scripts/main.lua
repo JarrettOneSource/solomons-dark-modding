@@ -70,7 +70,18 @@ local CONFIG = {
   flee_lookahead = 220.0,
   flee_threshold = 0.35,
   flee_recovery_threshold = 0.45,
+  offense_enabled = true,
+  think_profile = "standard",
+  focus_bot_key = "NONE",
 }
+
+CONFIG.threat_radius = sd.settings.get("kite_radius")
+CONFIG.offense_enabled = sd.settings.get("offense_enabled")
+CONFIG.bot_name = sd.settings.get("persona_name")
+CONFIG.think_profile = sd.settings.get("think_profile")
+CONFIG.think_interval_ms =
+  CONFIG.think_profile == "relaxed" and 400 or 250
+CONFIG.focus_bot_key = sd.settings.get("focus_bot_key")
 
 local state = {
   bot = nil,
@@ -87,6 +98,8 @@ local state = {
   arena = nil,
   attack_window = nil,
   fleeing = false,
+  focus_key_down = false,
+  focus_active = false,
   death_latched = false,
   last_wave = -1,
   debug = {
@@ -109,7 +122,17 @@ local state = {
     cast_accepted = 0,
     skill_choices_accepted = 0,
     kite_path_distance = 0.0,
+    nearest_enemy_distance = 0.0,
     arena_grid_backed = false,
+    kite_radius = CONFIG.threat_radius,
+    offense_enabled = CONFIG.offense_enabled,
+    think_profile = CONFIG.think_profile,
+    persona_name = CONFIG.bot_name,
+    focus_bot_key = CONFIG.focus_bot_key,
+    focus_active = false,
+    settings_change_count = 0,
+    last_settings_change_key = "",
+    respawn_action_count = 0,
     last_error = "",
   },
 }
@@ -148,6 +171,36 @@ local function find_owned_bot()
     end
   end
   return nil, 0
+end
+
+local function update_focus_key()
+  local key_down = sd.settings.is_keybind_down("focus_bot_key")
+  if key_down == true then
+    local bot = state.bot
+    if bot == nil then
+      local participant_id
+      bot, participant_id = find_owned_bot()
+      if bot ~= nil then
+        state.bot = bot
+        state.participant_id = participant_id
+        state.debug.participant_id = participant_id
+      end
+    end
+    if bot ~= nil then
+      local ok, x, y = pcall(function()
+        return bot:position()
+      end)
+      if ok and tonumber(x) ~= nil and tonumber(y) ~= nil then
+        sd.camera.set_focus(x, y)
+        state.focus_active = true
+      end
+    end
+  elseif state.focus_key_down or state.focus_active then
+    sd.camera.clear_focus()
+    state.focus_active = false
+  end
+  state.focus_key_down = key_down == true
+  state.debug.focus_active = state.focus_active
 end
 
 local function ensure_bot(now_ms)
@@ -352,7 +405,7 @@ local function issue_movement(
 end
 
 local function issue_primary_cast(bot, now_ms, target)
-  if state.fleeing or target == nil or
+  if not CONFIG.offense_enabled or state.fleeing or target == nil or
       now_ms - state.last_cast_attempt_ms < CONFIG.cast_interval_ms then
     return
   end
@@ -498,6 +551,8 @@ local function think(now_ms)
   end
   local nearest_enemy, nearest_enemy_distance =
     steering.nearest_enemy(bot_x, bot_y, enemies)
+  state.debug.nearest_enemy_distance =
+    nearest_enemy_distance < math.huge and nearest_enemy_distance or 0.0
   local movement_lookahead = nil
   local move_interval = state.fleeing and
     CONFIG.flee_move_interval_ms or
@@ -546,6 +601,53 @@ local function think(now_ms)
   issue_primary_cast(bot, now_ms, target)
 end
 
+sd.settings.on_changed(function(key, new_value)
+  if key == "kite_radius" then
+    CONFIG.threat_radius = new_value
+    state.debug.kite_radius = new_value
+  elseif key == "offense_enabled" then
+    CONFIG.offense_enabled = new_value
+    state.debug.offense_enabled = new_value
+  elseif key == "think_profile" then
+    CONFIG.think_profile = new_value
+    CONFIG.think_interval_ms =
+      new_value == "relaxed" and 400 or 250
+    state.debug.think_profile = new_value
+  elseif key == "focus_bot_key" then
+    CONFIG.focus_bot_key = new_value
+    state.debug.focus_bot_key = new_value
+  end
+  state.debug.settings_change_count =
+    state.debug.settings_change_count + 1
+  state.debug.last_settings_change_key = key
+end)
+
+sd.settings.on_action("respawn_bot", function()
+  if state.focus_active then
+    sd.camera.clear_focus()
+    state.focus_active = false
+    state.focus_key_down = false
+  end
+  if state.bot ~= nil then
+    local ok, removed, error_message = pcall(function()
+      return state.bot:despawn()
+    end)
+    if not ok or removed ~= true then
+      error(tostring(error_message or removed or "despawn rejected"))
+    end
+  end
+  state.bot = nil
+  state.participant_id = 0
+  state.last_spawn_attempt_ms = -CONFIG.spawn_retry_ms
+  state.last_position_x = nil
+  state.last_position_y = nil
+  state.debug.participant_id = 0
+  state.debug.respawn_action_count =
+    state.debug.respawn_action_count + 1
+  state.debug.focus_active = false
+  log("respawn requested")
+end)
+
 sd.events.on("run.started", function()
   state.death_latched = false
   state.last_position_x = nil
@@ -568,6 +670,7 @@ sd.events.on("runtime.tick", function(event)
   if type(event) ~= "table" then
     return
   end
+  update_focus_key()
   local now_ms = tonumber(event.monotonic_milliseconds)
   if now_ms == nil or
       now_ms - state.last_tick_ms < CONFIG.think_interval_ms then

@@ -49,6 +49,7 @@ void RegisterLuaBotBindings(lua_State* state);
 void RegisterLuaUiBindings(lua_State* state);
 void RegisterLuaUiAuthoringBindings(lua_State* state);
 void RegisterLuaInputBindings(lua_State* state);
+void RegisterLuaSettingsBindings(lua_State* state);
 void RegisterLuaGameplayBindings(lua_State* state);
 void RegisterLuaHubBindings(lua_State* state);
 void RegisterLuaDebugBindings(lua_State* state);

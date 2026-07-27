@@ -53,6 +53,7 @@ enum class LuaExecRequestState {
 
 struct PendingLuaExecRequest {
     std::string code;
+    bool privileged = false;
     std::promise<LuaExecResult> promise;
     LuaExecCompletion completion;
     std::atomic<LuaExecRequestState> state{LuaExecRequestState::Pending};
@@ -80,10 +81,12 @@ std::atomic<std::uint64_t>& LuaExecPumpGeneration() {
 
 QueuedLuaExecRequest EnqueueLuaExecRequest(
     std::string code,
-    LuaExecCompletion completion = {}) {
+    LuaExecCompletion completion = {},
+    bool privileged = false) {
     auto request = std::make_shared<PendingLuaExecRequest>();
     request->code = std::move(code);
     request->completion = std::move(completion);
+    request->privileged = privileged;
     auto future = request->promise.get_future();
     {
         std::lock_guard<std::mutex> lock(LuaExecQueueMutex());
@@ -207,7 +210,34 @@ bool EnsureSdGlobal(lua_State* state) {
     return has_registry_sd;
 }
 
-LuaExecResult ExecuteLuaCodeOnLockedState(lua_State* state, const std::string& code) {
+class ScopedSettingsPrivilegedBindings final {
+public:
+    ScopedSettingsPrivilegedBindings(
+        lua_State* state,
+        bool active)
+        : state_(state), active_(active) {
+        if (active_) {
+            SetLuaSettingsPrivilegedExecState(state_);
+            InstallLuaSettingsPrivilegedBindings(state_);
+        }
+    }
+
+    ~ScopedSettingsPrivilegedBindings() {
+        if (active_) {
+            RemoveLuaSettingsPrivilegedBindings(state_);
+            SetLuaSettingsPrivilegedExecState(nullptr);
+        }
+    }
+
+private:
+    lua_State* state_ = nullptr;
+    bool active_ = false;
+};
+
+LuaExecResult ExecuteLuaCodeOnLockedState(
+    lua_State* state,
+    const std::string& code,
+    bool privileged) {
     LuaExecResult response;
     if (state == nullptr) {
         response.error = "No loaded Lua mod state is available.";
@@ -224,6 +254,9 @@ LuaExecResult ExecuteLuaCodeOnLockedState(lua_State* state, const std::string& c
         lua_settop(state, stack_top_before);
         return response;
     }
+    ScopedSettingsPrivilegedBindings privileged_bindings(
+        state,
+        privileged);
 
     // g_lua_print_capture_sink is thread_local in lua_engine_bindings.cpp,
     // so the swap must happen on the gameplay thread (where we're
@@ -327,6 +360,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "draw.world_projection",
         "sprites.local.register", "sprites.local.read",
         "runtime.mod.info",
+        "settings.self",
         "storage.profile.local",
         "timer.local.scheduler",
         "bus.local.contracts",
@@ -412,6 +446,9 @@ bool CreateLuaStateForMod(
     if (mod == nullptr || error_message == nullptr) {
         return false;
     }
+    if (!InitializeLuaSettingsForMod(mod, error_message)) {
+        return false;
+    }
     mod->state = luaL_newstate();
     if (mod->state == nullptr) {
         *error_message = "luaL_newstate failed.";
@@ -453,6 +490,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
     ClearLuaUiBindingsForMod(mod);
+    ClearLuaSettingsCallbacks(mod);
     ClearLuaItemRuntimeForMod(mod->descriptor.id);
     UnregisterLuaContentIdentitiesForMod(mod->descriptor.id);
     if (mod->state != nullptr) {

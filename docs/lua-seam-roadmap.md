@@ -29,7 +29,7 @@ never see them.
 |---|---|---|
 | **Simulation** (mutates shared game state) | `sd.enemies.spawn`, `sd.items.grant`, `sd.time.set_scale`, `sd.world.spawn_reward`, filter outcomes | Executes where the affected entity is simulated (authority for run entities; owning peer for that peer's wizard, per the participant ownership rules). Owner-routed seams transparently request the owner; authority command seams such as item grants reject client authorship and route the accepted command to the target owner. Results replicate through the existing snapshot channels. |
 | **Presentation** (local output) | `sd.hud.*`, `sd.audio.*`, `sd.camera.*`, `sd.ui` authoring | Always local, never replicated. Inherently MP-safe. |
-| **Meta** (mod runtime) | `sd.storage.*`, `sd.timer.*`, `sd.bus.*`, `sd.net.*`, `sd.runtime.*` | Local operations with explicit sync points; `sd.net` is the low-level authenticated participant transport escape hatch. |
+| **Meta** (mod runtime) | `sd.storage.*`, `sd.settings.*`, `sd.timer.*`, `sd.bus.*`, `sd.net.*`, `sd.runtime.*` | Local operations with explicit sync points; declared host-scope settings use framework-owned session replication, while `sd.net` is the low-level authenticated participant transport escape hatch. |
 
 ### Rules that make "no shenanigans" true
 
@@ -75,6 +75,10 @@ shared state; simulation calls auto-route to the owner).
   checkpoint.
 - **`sd.storage`** — per-mod local profile `get/set/delete/clear/snapshot` with bounded,
   transactional persistence under the launcher's isolated mod data root.
+- **`sd.settings`** — per-mod read-only manifest settings with typed
+  `get/get_all`, live `on_changed`, action handlers, passive foreground keybind
+  reads, launcher-owned atomic persistence, and framework-owned host scope over
+  the reliable session-state stream. See `lua-settings.md`.
 - **`sd.timer`** — bounded per-mod `after/every/sequence/cancel/clear` scheduling on the
   monotonic runtime tick; callbacks and handles are released when the mod unloads.
 - **`sd.bus`** — bounded synchronous local publish/subscribe with manifest-declared

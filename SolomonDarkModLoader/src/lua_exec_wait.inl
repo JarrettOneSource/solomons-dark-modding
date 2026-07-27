@@ -24,7 +24,10 @@ LuaExecResult QueueLuaExecRequestAndWait(
             result.error = "Lua engine is not initialized.";
             return result;
         }
-        queued = detail::EnqueueLuaExecRequest(code);
+        queued = detail::EnqueueLuaExecRequest(
+            code,
+            {},
+            true);
     }
     const auto pump_generation_at_enqueue =
         detail::LuaExecPumpGeneration().load(std::memory_order_acquire);

@@ -6,12 +6,14 @@
 #include "lua_item_runtime.h"
 #include "lua_mod_runtime.h"
 #include "lua_ui_runtime.h"
+#include "mod_settings.h"
 #include "runtime_bootstrap.h"
 #include "runtime_tick_service.h"
 
 #include <array>
-#include <filesystem>
 #include <cstdint>
+#include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -253,7 +255,20 @@ struct LoadedLuaMod {
     std::vector<LuaAudioPlayback> audio_playbacks;
     std::uint64_t next_audio_playback_id = 1;
     std::vector<LuaUiActionRegistration> ui_actions;
+    bool settings_available = false;
+    bool settings_validation_logged = false;
+    ModSettingsDeclaration settings_declaration;
+    ModSettingValues local_settings_values;
+    ModSettingValues effective_settings_values;
+    std::vector<int> settings_changed_callbacks;
+    std::map<std::string, int, std::less<>> settings_action_callbacks;
     LuaHotReloadState hot_reload;
+};
+
+struct LuaSettingsOperationResult {
+    bool ok = false;
+    std::vector<std::string> changed;
+    std::string error;
 };
 
 std::mutex& LuaEngineMutex();
@@ -289,6 +304,19 @@ void PollLuaHotReloadsOnLockedThread(
     std::uint64_t now_ms);
 void ClearLuaUiBindingsForMod(LoadedLuaMod* mod);
 void DispatchPendingLuaUiActions();
+bool InitializeLuaSettingsForMod(
+    LoadedLuaMod* mod,
+    std::string* error_message);
+void ClearLuaSettingsCallbacks(LoadedLuaMod* mod);
+void PollLuaSettingsReplicationChanges();
+void InstallLuaSettingsPrivilegedBindings(lua_State* state);
+void RemoveLuaSettingsPrivilegedBindings(lua_State* state);
+void SetLuaSettingsPrivilegedExecState(lua_State* state);
+lua_State* GetLuaSettingsPrivilegedExecState();
+LuaSettingsOperationResult ReloadLuaSettings(std::string_view mod_id);
+LuaSettingsOperationResult InvokeLuaSettingsAction(
+    std::string_view mod_id,
+    std::string_view key);
 
 bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message);
 void PushWaveStartedPayload(lua_State* state, const WaveSummary& summary);

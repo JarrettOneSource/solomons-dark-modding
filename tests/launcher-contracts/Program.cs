@@ -3,11 +3,13 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.IO.Pipes;
 using SolomonDarkModding.Versioning;
 using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.App;
 using SolomonDarkModLauncher.Commands;
 using SolomonDarkModLauncher.Launch;
+using SolomonDarkModLauncher.ModSettings;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Staging;
 using SolomonDarkModLauncher.Steam;
@@ -53,7 +55,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
-    ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync)
+    ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync),
+    ("shared mod settings validation vectors", TestModSettingsValidationVectorsAsync),
+    ("mod settings backend services", TestModSettingsBackendServicesAsync),
+    ("mod settings view-facing coordinator", TestModSettingsCoordinatorAsync)
 };
 
 var failures = 0;
@@ -72,6 +77,433 @@ foreach (var test in tests)
 }
 
 return failures == 0 ? 0 : 1;
+
+static Task TestModSettingsValidationVectorsAsync()
+{
+    var fixturePath = Path.Combine(
+        AppContext.BaseDirectory,
+        "fixtures",
+        "mod-settings-validation-vectors.json");
+    using var fixture = JsonDocument.Parse(File.ReadAllText(fixturePath));
+    var root = fixture.RootElement;
+    Require(
+        root.GetProperty("schemaVersion").GetInt32() == 1,
+        "mod-settings vectors use an unsupported schema");
+
+    var required = root.GetProperty("requiredRules")
+        .EnumerateArray()
+        .Select(rule => rule.GetString() ?? string.Empty)
+        .ToHashSet(StringComparer.Ordinal);
+    var accepts = new HashSet<string>(StringComparer.Ordinal);
+    var rejects = new HashSet<string>(StringComparer.Ordinal);
+    var service = new ModSettingsManifestService();
+    var count = 0;
+    foreach (var vector in root.GetProperty("vectors").EnumerateArray())
+    {
+        var name = vector.GetProperty("name").GetString() ?? string.Empty;
+        var expected = vector.GetProperty("valid").GetBoolean();
+        var validation = service.ValidateJson(
+            vector.GetProperty("manifest").GetRawText());
+        var actual =
+            validation.Status == ModSettingsManifestStatus.Valid;
+        Require(
+            actual == expected,
+            $"{name}: expected valid={expected}, actual status={validation.Status}, error={validation.Error}");
+        foreach (var ruleElement in vector.GetProperty("rules").EnumerateArray())
+        {
+            var rule = ruleElement.GetString() ?? string.Empty;
+            Require(
+                required.Contains(rule),
+                $"{name}: vector names unknown rule '{rule}'");
+            (expected ? accepts : rejects).Add(rule);
+        }
+        count++;
+    }
+
+    foreach (var rule in required)
+    {
+        Require(
+            accepts.Contains(rule) && rejects.Contains(rule),
+            $"{rule}: C# suite requires one accept and reject vector");
+    }
+    Require(count >= 30, "shared validation vector coverage regressed");
+    var expectedKeybinds = Enumerable.Range('A', 26)
+        .Select(value => ((char)value).ToString())
+        .Concat(Enumerable.Range(0, 10).Select(value => value.ToString()))
+        .Concat(Enumerable.Range(1, 24).Select(value => $"F{value}"))
+        .Concat(
+        [
+            "SPACE", "TAB", "ENTER", "SHIFT", "CTRL", "ALT",
+            "UP", "DOWN", "LEFT", "RIGHT",
+            "MOUSE3", "MOUSE4", "MOUSE5", "NONE"
+        ])
+        .ToArray();
+    Require(
+        service.CanonicalKeybindNames.SequenceEqual(expectedKeybinds),
+        "canonical keybind namespace is incomplete or reordered");
+    return Task.CompletedTask;
+}
+
+static async Task TestModSettingsBackendServicesAsync()
+{
+    var fixturePath = Path.Combine(
+        AppContext.BaseDirectory,
+        "fixtures",
+        "mod-settings-validation-vectors.json");
+    using var fixture = JsonDocument.Parse(File.ReadAllText(fixturePath));
+    var manifestJson = fixture.RootElement
+        .GetProperty("vectors")[0]
+        .GetProperty("manifest")
+        .GetRawText();
+    var manifestService = new ModSettingsManifestService();
+    var validation = manifestService.ValidateJson(manifestJson);
+    Require(
+        validation.Status == ModSettingsManifestStatus.Valid &&
+        validation.Definition is not null,
+        $"settings service rejected shared valid manifest: {validation.Error}");
+    var definition = validation.Definition!;
+    var textEntry = definition.Find("text_1") ??
+        throw new InvalidOperationException(
+            "shared valid vector has no text entry");
+    Require(
+        !manifestService.TryValidateValue(
+            textEntry,
+            ModSettingValue.String("\uD800"),
+            out var invalidUtf8Error) &&
+        invalidUtf8Error.Contains(
+            "valid UTF-8",
+            StringComparison.Ordinal),
+        "settings validator accepted an unpaired UTF-16 surrogate");
+    var invalidManifestUnicode = manifestService.ValidateJson(
+        """
+        {
+          "settings": {
+            "version": 1,
+            "entries": [
+              {
+                "key": "name",
+                "type": "text",
+                "label": "\uD800",
+                "default": ""
+              }
+            ]
+          }
+        }
+        """);
+    Require(
+        invalidManifestUnicode.Status == ModSettingsManifestStatus.Invalid &&
+        invalidManifestUnicode.Error.Contains(
+            "valid UTF-8",
+            StringComparison.Ordinal),
+        "settings manifest accepted an unpaired Unicode surrogate");
+
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var store = new ModSettingsStore(manifestService);
+        var values = definition.Entries
+            .Where(entry =>
+                entry.Type != ModSettingType.Action &&
+                entry.DefaultValue is not null)
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.DefaultValue!,
+                StringComparer.Ordinal);
+        values["number_1"] = ModSettingValue.Number(8);
+        values["text_1"] = ModSettingValue.String("é");
+        store.Save(root, "vector.valid", definition, values);
+        var path = store.GetSettingsPath(root, "vector.valid");
+        Require(File.Exists(path), "settings store did not write canonical path");
+        Require(
+            !Directory.EnumerateFiles(
+                    Path.GetDirectoryName(path)!,
+                    "*.tmp")
+                .Any(),
+            "settings store left an atomic-write temporary file");
+        using (var written = JsonDocument.Parse(File.ReadAllText(path)))
+        {
+            var writtenRoot = written.RootElement;
+            Require(
+                writtenRoot.GetProperty("schemaVersion").GetInt32() == 1,
+                "settings store wrote the wrong schemaVersion");
+            var writtenValues = writtenRoot.GetProperty("values");
+            Require(
+                writtenValues.GetProperty("number_1").GetDouble() == 8 &&
+                !writtenValues.TryGetProperty("action_1", out _),
+                "settings store did not preserve values or persisted an action");
+        }
+
+        var loaded = store.Load(root, "vector.valid", definition);
+        Require(
+            loaded.Values["number_1"].NumberValue == 8 &&
+            loaded.Values["text_1"].StringValue == "é" &&
+            loaded.Warnings.Count == 0,
+            "settings store did not round-trip typed values");
+
+        File.WriteAllText(
+            path,
+            """
+            {
+              "schemaVersion": 1,
+              "values": {
+                "number_1": 999,
+                "unknown": true,
+                "action_1": false
+              }
+            }
+            """);
+        var pruned = store.Load(root, "vector.valid", definition);
+        Require(
+            pruned.Values["number_1"].NumberValue == 4 &&
+            !pruned.Values.ContainsKey("unknown") &&
+            !pruned.Values.ContainsKey("action_1") &&
+            pruned.Warnings.Count == 3,
+            "settings store did not ignore invalid, unknown, and action values");
+
+        var modsRoot = Path.Combine(root, "mods");
+        var validRoot = Path.Combine(modsRoot, "valid");
+        var invalidRoot = Path.Combine(modsRoot, "invalid");
+        var noneRoot = Path.Combine(modsRoot, "none");
+        Directory.CreateDirectory(validRoot);
+        Directory.CreateDirectory(invalidRoot);
+        Directory.CreateDirectory(noneRoot);
+        File.WriteAllText(
+            Path.Combine(validRoot, "manifest.json"),
+            manifestJson);
+        File.WriteAllText(
+            Path.Combine(invalidRoot, "manifest.json"),
+            """
+            {
+              "id": "invalid.settings",
+              "name": "Invalid",
+              "version": "1.0.0",
+              "settings": { "version": 2, "entries": [] }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(noneRoot, "manifest.json"),
+            """
+            {
+              "id": "no.settings",
+              "name": "None",
+              "version": "1.0.0"
+            }
+            """);
+        var discovered = new ModSettingsDiscoveryService(manifestService)
+            .Discover(modsRoot);
+        Require(
+            discovered.Count == 2 &&
+            discovered.Any(item =>
+                item.Validation.Status ==
+                ModSettingsManifestStatus.Valid) &&
+            discovered.Any(item =>
+                item.Validation.Status ==
+                ModSettingsManifestStatus.Invalid),
+            "settings discovery did not return valid and warning records only");
+
+        var runtimeClient = new ModSettingsRuntimeClient();
+        var reloadPipe =
+            $"sdmod-settings-contract-{Guid.NewGuid():N}";
+        var reloadServer = ServeLuaExecResponseAsync(
+            reloadPipe,
+            "__settings_reload",
+            """
+            {"ok":true,"print_output":"","results":["1","kite_radius\u001fthink_profile",""],"error":""}
+            """);
+        var reload = await runtimeClient.ReloadAsync(
+            reloadPipe,
+            "bot.brain");
+        await reloadServer;
+        Require(
+            reload.Ok &&
+            reload.Changed.SequenceEqual(
+                new[] { "kite_radius", "think_profile" }) &&
+            reload.Error.Length == 0,
+            "runtime client did not decode privileged reload result");
+
+        var actionPipe =
+            $"sdmod-settings-contract-{Guid.NewGuid():N}";
+        var actionServer = ServeLuaExecResponseAsync(
+            actionPipe,
+            "__settings_invoke_action",
+            """
+            {"ok":true,"print_output":"","results":["1",""],"error":""}
+            """);
+        var action = await runtimeClient.InvokeActionAsync(
+            actionPipe,
+            "bot.brain",
+            "respawn_bot");
+        await actionServer;
+        Require(
+            action.Ok && action.Error.Length == 0,
+            "runtime client did not decode privileged action result");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task TestModSettingsCoordinatorAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modsRoot = Path.Combine(root, "mods");
+        var stageRoot = Path.Combine(root, "runtime", "stage");
+        var modRoot = Path.Combine(modsRoot, "bot-brain");
+        Directory.CreateDirectory(modRoot);
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "bot.brain",
+              "name": "Bot Brain",
+              "version": "0.1.0",
+              "settings": {
+                "version": 1,
+                "entries": [
+                  {
+                    "key": "kite_radius",
+                    "type": "number",
+                    "label": "Kite radius",
+                    "default": 340,
+                    "min": 100,
+                    "max": 900,
+                    "step": 10,
+                    "integer": true,
+                    "scope": "host"
+                  },
+                  {
+                    "key": "respawn_bot",
+                    "type": "action",
+                    "label": "Respawn bot",
+                    "scope": "host",
+                    "confirm": true
+                  }
+                ]
+              }
+            }
+            """);
+
+        var validator = new ModSettingsManifestService();
+        var context = new ModSettingsInstanceContext();
+        var runtime = new RecordingModSettingsRuntimeClient();
+        var service = new ModSettingsService(
+            modsRoot,
+            stageRoot,
+            new ModSettingsDiscoveryService(validator),
+            new ModSettingsStore(validator),
+            runtime,
+            context);
+
+        var stateEvents = 0;
+        service.InstanceStateChanged += (_, _) => stateEvents++;
+        var schema = service.GetSchema("bot.brain");
+        Require(
+            schema.Name == "Bot Brain" &&
+            schema.Validation.Definition?.Entries.Count == 2,
+            "coordinator did not expose the staged settings schema");
+
+        var savedValues = new Dictionary<string, ModSettingValue>
+        {
+            ["kite_radius"] = ModSettingValue.Number(500)
+        };
+        var offlineSave = await service.SaveAsync(
+            "bot.brain",
+            savedValues);
+        Require(
+            offlineSave.Ok && runtime.ReloadCalls == 0,
+            "offline settings save attempted live apply");
+        var persisted = service.GetPersistedValues("bot.brain");
+        Require(
+            persisted.Values["kite_radius"].NumberValue == 500,
+            "coordinator did not read its atomic persisted save");
+
+        context.Update(new OwnedModSettingsInstance
+        {
+            State = ModSettingsGameInstanceState.RunningHost,
+            PipeName = "SolomonDarkModLoader_LuaExec_contract"
+        });
+        var liveSave = await service.SaveAsync("bot.brain", savedValues);
+        Require(
+            liveSave.Ok &&
+            runtime.ReloadCalls == 1 &&
+            runtime.LastPipeName ==
+                "SolomonDarkModLoader_LuaExec_contract" &&
+            stateEvents == 1 &&
+            service.InstanceState ==
+                ModSettingsGameInstanceState.RunningHost,
+            "coordinator did not route live save through the owned instance");
+
+        context.Update(new OwnedModSettingsInstance
+        {
+            State =
+                ModSettingsGameInstanceState.RunningClientInSession,
+            PipeName = "SolomonDarkModLoader_LuaExec_contract"
+        });
+        var rejected = await service.InvokeActionAsync(
+            "bot.brain",
+            "respawn_bot");
+        Require(
+            !rejected.Ok &&
+            rejected.Error.Contains(
+                "session authority",
+                StringComparison.OrdinalIgnoreCase) &&
+            runtime.ActionCalls == 0,
+            "coordinator allowed a client host-scope action");
+
+        context.Update(new OwnedModSettingsInstance
+        {
+            State = ModSettingsGameInstanceState.RunningHost,
+            PipeName = "SolomonDarkModLoader_LuaExec_contract"
+        });
+        var invoked = await service.InvokeActionAsync(
+            "bot.brain",
+            "respawn_bot");
+        Require(
+            invoked.Ok &&
+            runtime.ActionCalls == 1 &&
+            runtime.LastModId == "bot.brain" &&
+            runtime.LastEntryKey == "respawn_bot",
+            "coordinator did not route the host action to the runtime client");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static async Task ServeLuaExecResponseAsync(
+    string pipeName,
+    string requiredRequestToken,
+    string response)
+{
+    await using var pipe = new NamedPipeServerStream(
+        pipeName,
+        PipeDirection.InOut,
+        1,
+        PipeTransmissionMode.Message,
+        PipeOptions.Asynchronous);
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await pipe.WaitForConnectionAsync(timeout.Token);
+    using var request = new MemoryStream();
+    var buffer = new byte[4096];
+    do
+    {
+        var count = await pipe.ReadAsync(buffer, timeout.Token);
+        Require(count > 0, "runtime client sent an empty Lua request");
+        request.Write(buffer, 0, count);
+    }
+    while (!pipe.IsMessageComplete);
+    var code = Encoding.UTF8.GetString(request.ToArray());
+    Require(
+        code.Contains(requiredRequestToken, StringComparison.Ordinal),
+        $"runtime client omitted {requiredRequestToken}");
+    var payload = Encoding.UTF8.GetBytes(response);
+    await pipe.WriteAsync(payload, timeout.Token);
+    await pipe.FlushAsync(timeout.Token);
+}
 
 static Task TestNoDesktopShellDependencyAsync()
 {
@@ -3117,4 +3549,42 @@ file sealed class ModUpdateHandler(
         {
             Content = new StringContent(value, Encoding.UTF8, "application/json")
         };
+}
+
+file sealed class RecordingModSettingsRuntimeClient :
+    IModSettingsRuntimeClient
+{
+    public int ReloadCalls { get; private set; }
+    public int ActionCalls { get; private set; }
+    public string LastPipeName { get; private set; } = string.Empty;
+    public string LastModId { get; private set; } = string.Empty;
+    public string LastEntryKey { get; private set; } = string.Empty;
+
+    public Task<ModSettingsRuntimeResult> ReloadAsync(
+        string pipeName,
+        string modId,
+        CancellationToken cancellationToken = default)
+    {
+        ReloadCalls++;
+        LastPipeName = pipeName;
+        LastModId = modId;
+        return Task.FromResult(new ModSettingsRuntimeResult
+        {
+            Ok = true,
+            Changed = ["kite_radius"]
+        });
+    }
+
+    public Task<ModSettingsRuntimeResult> InvokeActionAsync(
+        string pipeName,
+        string modId,
+        string entryKey,
+        CancellationToken cancellationToken = default)
+    {
+        ActionCalls++;
+        LastPipeName = pipeName;
+        LastModId = modId;
+        LastEntryKey = entryKey;
+        return Task.FromResult(new ModSettingsRuntimeResult { Ok = true });
+    }
 }

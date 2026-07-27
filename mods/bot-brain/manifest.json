@@ -9,15 +9,82 @@
     "requiredCapabilities": [
       "events.runtime.tick",
       "runtime.mod.info",
+      "settings.self",
       "state.replicated.read",
       "nav.read",
       "waves.read",
+      "camera.local.focus",
       "bots.runtime",
       "bots.state.read",
       "bots.create",
       "bots.move",
       "bots.stop",
       "bots.cast"
+    ]
+  },
+  "settings": {
+    "version": 1,
+    "entries": [
+      {
+        "key": "kite_radius",
+        "type": "number",
+        "label": "Kite radius",
+        "description": "Threat sampling distance in world units.",
+        "default": 340,
+        "min": 100,
+        "max": 900,
+        "step": 10,
+        "integer": true,
+        "scope": "host",
+        "group": "Combat"
+      },
+      {
+        "key": "offense_enabled",
+        "type": "toggle",
+        "label": "Cast at enemies",
+        "default": true,
+        "scope": "host",
+        "group": "Combat"
+      },
+      {
+        "key": "persona_name",
+        "type": "text",
+        "label": "Bot name",
+        "default": "Ember",
+        "max_length": 31,
+        "scope": "host",
+        "requires_restart": true
+      },
+      {
+        "key": "think_profile",
+        "type": "choice",
+        "label": "Think cadence",
+        "default": "standard",
+        "choices": [
+          {
+            "value": "standard",
+            "label": "Standard (250 ms)"
+          },
+          {
+            "value": "relaxed",
+            "label": "Relaxed (400 ms)"
+          }
+        ]
+      },
+      {
+        "key": "focus_bot_key",
+        "type": "keybind",
+        "label": "Focus camera on bot",
+        "default": "NONE",
+        "scope": "local"
+      },
+      {
+        "key": "respawn_bot",
+        "type": "action",
+        "label": "Respawn bot",
+        "confirm": true,
+        "scope": "host"
+      }
     ]
   }
 }

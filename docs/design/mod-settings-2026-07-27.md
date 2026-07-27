@@ -122,6 +122,16 @@ in v1. Values from Lua are read-only in v1 (the UI is the single writer).
 - `sd.settings.on_action(key, fn())` — registers the handler an action button
   invokes. Invoking an unregistered action is a logged no-op that reports an
   error back to the launcher (§5).
+- `sd.settings.is_keybind_down(entry_key)` → bool. The argument is the calling
+  mod's declared `keybind` entry key, not a canonical key name. Unknown or
+  non-keybind entries return nil + error string, matching `get`. `NONE` always
+  returns false. The loader passively reads the mapped Win32 virtual-key state
+  (including `MOUSE3`–`MOUSE5`) and returns true only while the game process owns
+  the foreground window. It never consumes, injects, or changes the game's input
+  queue. This remains under `settings.self`; per-mod entry lookup is the privacy
+  boundary. Mods own rising/falling edge detection. Harness keyboard injection
+  continues to coexist with this read path when it targets and foregrounds the
+  game window.
 
 ## 4. Multiplayer scope (framework-owned, per the multiplayer-native mandate)
 
@@ -196,3 +206,35 @@ acceptance = screenshots of the dialog rendering the bot-brain dogfood block
 In-game settings overlay; modifier-chord keybinds; multiline/rich text; color
 type; cross-mod settings reads; Lua-side writes; per-profile setting sets;
 website surface. Each is additive later without contract breaks.
+
+## 9. Implementation notes
+
+- Native declaration, value, and persistence validation lives in
+  `SolomonDarkModLoader/src/mod_settings*.cpp`; Lua/runtime behavior lives in
+  `lua_settings_runtime.cpp` and `lua_engine_bindings_settings.cpp`.
+  `settings.self` is grantable, but the two `sd.__settings_*` functions are
+  installed only for a currently executing named-pipe request and are never
+  capability-grantable.
+- Host values use the existing reliable Lua mod-state stream:
+  `SetLuaModStateValue` plus `PublishAuthoritativeLuaModStateSet`, including its
+  ordered revisions and periodic/late-join checkpoints. Framework settings use
+  the reserved, manifest-impossible state identifier `SDMOD:settings`, with each
+  key prefixed by the owning mod's staged storage hash. A client considers the
+  session live only after it has a nonzero authority participant ID; it then
+  reads host values from this stream and reverts to its launch-effective local
+  values when that ID clears. `requires_restart` host values can change the
+  read-only effective view on session join/end without a callback, but a Save
+  never replaces or republishes the launch-effective value.
+- Launcher backend files are under
+  `SolomonDarkModLauncher/src/ModSettings/`. Discovery reads the launcher's
+  managed installed-mods root (`WorkspacePaths.ModsRootPath`); persistence
+  reads/writes the selected instance stage's `.sdmod/mod-settings/`.
+  `ModSettingsService` keeps those roots explicit and composes discovery,
+  storage, owned-instance state, reload, and action calls behind the interface
+  consumed by a thin WPF adapter. Shared vectors are
+  `tests/fixtures/mod-settings-validation-vectors.json`.
+- `mods/bot-brain/` exercises every v1 type. End-to-end acceptance is
+  `tools/verify_mod_settings_lifecycle.py`, fixed to the isolated `mset` pair.
+  No new Solomon Dark native address or layout offset was added. Keybind reads
+  use only the operating-system `GetForegroundWindow`,
+  `GetWindowThreadProcessId`, and `GetAsyncKeyState` APIs.

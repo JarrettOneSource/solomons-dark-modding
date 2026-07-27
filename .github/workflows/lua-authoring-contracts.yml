@@ -43,6 +43,21 @@ jobs:
           tests/native/lua_content_registry_tests.cpp
           -o /tmp/lua-content-registry-tests
           && /tmp/lua-content-registry-tests
+      - name: Test shared mod-settings validation vectors
+        run: >-
+          g++ -std=c++17 -Wall -Wextra -Werror
+          -ISolomonDarkModLoader/include
+          -ISolomonDarkModLoader/src
+          SolomonDarkModLoader/src/mod_settings_json.cpp
+          SolomonDarkModLoader/src/mod_settings.cpp
+          SolomonDarkModLoader/src/mod_settings_values.cpp
+          SolomonDarkModLoader/src/mod_settings_persistence.cpp
+          tests/native/mod_settings_validation_vectors_tests.cpp
+          -o /tmp/mod-settings-validation-tests
+          && /tmp/mod-settings-validation-tests
+          tests/fixtures/mod-settings-validation-vectors.json
+      - name: Test mod-settings lifecycle verifier
+        run: python -m unittest tests.test_mod_settings_lifecycle_verifier
       - name: Test multiplayer interpolation and packet sizing
         run: >-
           g++ -std=c++17 -pthread

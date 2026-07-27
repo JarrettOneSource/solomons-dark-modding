@@ -45,5 +45,8 @@
     <None Include="..\fixtures\boneyards\flat_multiplayer_test.boneyard"
           Link="fixtures\flat_multiplayer_test.boneyard"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\fixtures\mod-settings-validation-vectors.json"
+          Link="fixtures\mod-settings-validation-vectors.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

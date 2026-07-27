@@ -13,6 +13,10 @@ completion. Generated signatures deliberately accept and return `any`; the
 feature documents remain the source of truth for argument, result, authority,
 and lifecycle contracts.
 
+Manifest-driven launcher settings are documented in `lua-settings.md`. They are
+read-only from Lua under `settings.self`; the launcher persists and live-applies
+them through the owned instance's named pipe.
+
 Regenerate after adding, removing, or renaming a binding:
 
 ```bash

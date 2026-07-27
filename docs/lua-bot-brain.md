@@ -6,6 +6,14 @@ participant. It creates one fire-class player named `Ember` through
 disabled by default so starting an ordinary game does not add an unsolicited
 session member; select `bot.brain` to run it.
 
+Its manifest dogfoods every v1 launcher setting type. With no persisted settings
+file, the effective values remain the original behavior exactly: `Ember`, a
+250 ms think cadence, a 340-unit kite radius, offense enabled, and no camera
+keybind. The launcher can change the host-scoped kite radius and offense toggle,
+choose a local 250/400 ms think profile, bind a local focus key, or invoke the
+confirmed host-only respawn action. Persona changes are persisted with
+`requires_restart` and are not applied to the live participant.
+
 The brain never creates a standalone actor, writes an actor transform, or
 drives a second native AI loop. Its callback runs every 250 ms on the existing
 `runtime.tick` service, and `sd.state.is_authority()` keeps decisions on the
@@ -78,3 +86,18 @@ or later immediately after an accepted cast while live enemies and a target
 are present. For that evidence frame only, the verifier uses the
 presentation-local camera focus seam on each peer to center the bot, then
 releases both focus requests. Three consecutive successful runs are required.
+
+The settings-specific loopback gate is separate:
+
+```bash
+python3 tools/verify_mod_settings_lifecycle.py
+```
+
+It launches only `mset-host` and `mset-client` on ports 49011/49012 with audio
+disabled. It proves persisted startup values, a 100-to-900 kite-radius live
+delta in the brain's threat telemetry, host-to-client value and callback
+replication, client action rejection, host respawn success, and
+`requires_restart` persistence without live application. It stops only the
+launcher-returned PIDs after their executable paths resolve inside those exact
+stages and writes results and logs to
+`/mnt/d/codex-evidence/mod-settings-20260727/`.

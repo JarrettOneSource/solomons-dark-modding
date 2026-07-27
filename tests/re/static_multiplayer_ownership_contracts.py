@@ -111,7 +111,9 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         engine,
         "void ProcessLuaExecQueueOnMainThread()",
         "if (!TryClaimLuaExecRequest(request))",
-        "ExecuteLuaCodeOnLockedState(shared_state, request->code)",
+        "ExecuteLuaCodeOnLockedState(",
+        "request->code",
+        "request->privileged",
     )
 
     for unsafe_global in (
@@ -150,7 +152,7 @@ def test_lua_exec_timeout_cancels_pending_work() -> str:
         "RegisterLuaDrawBindings",
     ):
         assert registration in bindings
-    assert "lua_createtable(mod->state, 0, 30);" in bindings
+    assert "lua_createtable(mod->state, 0, 31);" in bindings
     assert "lua_pcall" in events, "Lua event handlers must be fault isolated"
 
     for token in (

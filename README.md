@@ -257,6 +257,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/participant-entrance-follow.md` — hub/private/run follow semantics for participant bots.
 - `docs/lua-memory-tooling.md` — live Lua memory and reverse-engineering helpers.
 - `docs/lua-state-and-events.md` — authority-owned replicated state, ordered custom events, limits, and live acceptance.
+- `docs/lua-settings.md` — manifest settings, launcher persistence/live apply, keybind reads, and host scope.
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
 - `docs/lua-sprites.md` — mod-owned runtime atlases, bundle authoring, sandboxing, and limits.
 - `docs/lua-authoring.md` — generated LuaLS/EmmyLua stubs, opt-in entry-script hot reload, and the in-game exec console.

@@ -19,6 +19,9 @@ from static_re_boneyard_lighting_contracts import (
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
 )
+from static_re_mod_settings_contracts import (
+    test_mod_settings_are_scoped_atomic_privileged_and_replicated,
+)
 from static_lua_bot_players_contracts import (
     test_lua_bots_are_synthetic_remote_participants,
 )
@@ -515,6 +518,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua mod state and events are authority-replicated",
         test_lua_mod_state_and_events_are_authority_replicated,
+    ),
+    (
+        "Lua mod settings are scoped, atomic, privileged, and replicated",
+        test_mod_settings_are_scoped_atomic_privileged_and_replicated,
     ),
     (
         "Lua bots are synthetic remote participants",
