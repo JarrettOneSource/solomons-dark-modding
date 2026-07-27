@@ -1,0 +1,198 @@
+# Lua mod settings — declaration, persistence, live-apply, and launcher UI (2026-07-27)
+
+Owner-requested system: the launcher's Mods tab lists installed mods; every mod
+that declares settings gets a Settings button on its row; the settings form is
+rendered dynamically from the mod's declaration. This document is the NORMATIVE
+CONTRACT between the backend (loader parsing/validation/persistence/runtime API/
+replication/IPC — codex) and the frontend (launcher WPF views — Claude/ATC).
+Neither side may deviate without updating this document in the same commit.
+
+Owner-locked decisions: surface = launcher Mods tab (not in-game); datatypes =
+toggle, number, text, choice, keybind, action. Settings still live-apply into a
+running game through the existing Lua exec pipe; action buttons invoke through
+the same pipe and are disabled when no owned game instance is running.
+
+## 1. Declaration — `settings` block in `manifest.json`
+
+A sibling of `runtime`, statically readable without executing Lua:
+
+```json
+{
+  "id": "bot.brain",
+  "name": "Bot Brain",
+  "settings": {
+    "version": 1,
+    "entries": [
+      { "key": "kite_radius", "type": "number", "label": "Kite radius",
+        "description": "Threat sampling distance in world units.",
+        "default": 340, "min": 100, "max": 900, "step": 10, "integer": true,
+        "scope": "host", "group": "Combat" },
+      { "key": "offense_enabled", "type": "toggle", "label": "Cast at enemies",
+        "default": true, "scope": "host", "group": "Combat" },
+      { "key": "persona_name", "type": "text", "label": "Bot name",
+        "default": "Ember", "max_length": 31, "scope": "host",
+        "requires_restart": true },
+      { "key": "think_profile", "type": "choice", "label": "Think cadence",
+        "default": "standard",
+        "choices": [ { "value": "standard", "label": "Standard (250 ms)" },
+                     { "value": "relaxed",  "label": "Relaxed (400 ms)" } ] },
+      { "key": "focus_bot_key", "type": "keybind", "label": "Focus camera on bot",
+        "default": "NONE", "scope": "local" },
+      { "key": "respawn_bot", "type": "action", "label": "Respawn bot",
+        "confirm": true, "scope": "host" }
+    ]
+  }
+}
+```
+
+### Common entry fields
+
+| Field | Rule |
+| --- | --- |
+| `key` | required, `^[a-z0-9_]{1,48}$`, unique within the mod |
+| `type` | required: `toggle` \| `number` \| `text` \| `choice` \| `keybind` \| `action` |
+| `label` | required, 1–64 chars |
+| `description` | optional, ≤256 chars, rendered as help text |
+| `group` | optional, ≤32 chars; entries render grouped under section headers in declaration order |
+| `scope` | optional, `local` (default) \| `host` — see §4 |
+| `requires_restart` | optional bool, default false; persisted but never live-applied; UI badges "applies next launch" |
+| `default` | required for every type except `action`; must itself validate |
+
+### Per-type fields
+
+- **toggle** — `default`: bool. UI: checkbox/switch.
+- **number** — `min` and `max` required (min < max), `step` optional (>0,
+  default 1), `integer` optional (default false; when true min/max/step/default
+  must be integral). `default` within [min, max]. UI: slider + numeric box;
+  values clamp to [min, max] and snap to step.
+- **text** — `max_length` optional (1–1024, default 256), `placeholder`
+  optional. Single line, UTF-8; the loader rejects values exceeding
+  `max_length` bytes.
+- **choice** — `choices` required: 2–32 objects `{ "value", "label" }`, values
+  unique non-empty strings ≤64 chars; `default` ∈ values. UI: dropdown.
+- **keybind** — `default` from the canonical key-name set below. UI: click,
+  then press-to-capture; Esc cancels; Delete/Backspace clears to `NONE`.
+- **action** — no `default`, never persisted. Optional `confirm`: bool (UI asks
+  before invoking). UI: button; enabled only while an owned game instance is
+  running (and, for `scope: "host"`, only when that instance is the session
+  host).
+
+Canonical keybind names (the single shared namespace; launcher captures WPF
+keys into it, the loader maps it to Win32 VKs): `A`–`Z`, `0`–`9`, `F1`–`F24`,
+`SPACE`, `TAB`, `ENTER`, `SHIFT`, `CTRL`, `ALT`, `UP`, `DOWN`, `LEFT`,
+`RIGHT`, `MOUSE3`, `MOUSE4`, `MOUSE5`, `NONE` (unbound). v1 is a single key —
+no modifier chords.
+
+### Validation failure is fail-safe
+
+An invalid `settings` block (bad schema, duplicate keys, invalid defaults)
+never blocks the mod: the loader logs one structured error, treats the mod as
+having no settings, and the launcher shows a warning icon in place of the
+Settings button with the validation message as tooltip. Both sides implement
+identical validation from this section; the shared rules live in one C# service
+class (launcher) and one C++ validator (loader) with a common test vector file
+`tests/fixtures/mod-settings-validation-vectors.json` exercised by both suites.
+
+## 2. Persistence
+
+Per mod, per install stage: `.sdmod/mod-settings/<mod_id>.json`
+
+```json
+{ "schemaVersion": 1, "values": { "kite_radius": 400, "focus_bot_key": "F6" } }
+```
+
+- Writer: the launcher (and only the launcher) on Save.
+- Reader: the loader at mod start and on live reload; the launcher on dialog open.
+- Precedence: valid persisted value → else manifest default. Invalid or unknown
+  persisted entries are ignored (logged), then pruned on the launcher's next
+  write. `action` entries never appear.
+- Atomic write (temp file + rename) so a mid-write game read never sees a torn file.
+
+## 3. Runtime Lua API — capability `settings.self`
+
+Mods that declare a `settings` block must list capability `settings.self` to
+read them. All access is to the mod's OWN settings; there is no cross-mod read
+in v1. Values from Lua are read-only in v1 (the UI is the single writer).
+
+- `sd.settings.get(key)` → typed value (boolean | number | string). Unknown key → nil + error string.
+- `sd.settings.get_all()` → table of key → value.
+- `sd.settings.on_changed(fn(key, new_value, old_value))` — fires for each
+  changed key on live-apply and on host-scope replication updates. Never fires
+  for `requires_restart` entries mid-session.
+- `sd.settings.on_action(key, fn())` — registers the handler an action button
+  invokes. Invoking an unregistered action is a logged no-op that reports an
+  error back to the launcher (§5).
+
+## 4. Multiplayer scope (framework-owned, per the multiplayer-native mandate)
+
+- `local` — per machine, no replication.
+- `host` — host-authoritative session state. While a multiplayer session is
+  live, the host's effective values replicate to every client on the existing
+  reliable session-state seam (backend chooses the concrete channel and
+  documents it); client-side `sd.settings.get` returns the replicated value and
+  `on_changed` fires on updates. Client launcher UI renders host-scope entries
+  read-only with a "(host)" badge while the client is in a session. On session
+  end clients revert to their local persisted/default values. Host-scope
+  `action` invokes are host-only; the loader rejects them elsewhere.
+
+## 5. Live-apply IPC (launcher → running game)
+
+Transport: the existing per-instance Lua exec pipe
+(`SolomonDarkModLoader_LuaExec_<instance>`), which the launcher already owns
+for the instances it launches. Two privileged internal bindings (NOT exposed to
+mod capability grants; exec-pipe callers only):
+
+- `sd.__settings_reload("<mod_id>")` — loader re-reads the persisted file,
+  validates, diffs against effective values, applies, fires `on_changed` per
+  changed key, and returns a result table `{ ok, changed = {...}, error }`
+  serialized back over the pipe.
+- `sd.__settings_invoke_action("<mod_id>", "<key>")` — runs the registered
+  handler; returns `{ ok, error }` (unregistered handler or scope violation is
+  `ok = false`).
+
+Launcher flow on Save: persist file (§2) → if an owned instance is running,
+send `__settings_reload` for that mod → surface the returned per-key result
+(silent on success; inline error banner on failure). `requires_restart` keys
+persist but are excluded from the live diff by the loader.
+
+## 6. Launcher UI (frontend contract)
+
+Mods tab: one row per installed mod (discovered from the managed stage's
+`mods/` directory manifests): name, version, enabled state, and a Settings
+(gear) button iff the manifest declares ≥1 valid settings entry (warning icon
+on invalid block, §1). Settings dialog: mod name + version header; entries in
+declaration order under group headers; per-type controls per §1; inline
+validation (Save disabled while invalid); Reset to defaults (per-dialog,
+confirm); "Live" indicator when an owned instance is running (else values save
+for next launch); host-scope entries read-only "(host)" when this machine is an
+in-session client; action buttons per §1. Keyboard navigable; keybind capture
+per §1.
+
+## 7. Division of labor and acceptance
+
+Backend (codex agent `mod-settings`): C++ manifest settings parse+validation +
+fail-safe, persistence reader, `settings.self` capability + `sd.settings.*`,
+privileged reload/invoke bindings over the exec pipe, host-scope replication on
+the session seam, C# service layer in the launcher solution (manifest settings
+model + shared validator, settings store read/write, pipe client calls) exposed
+behind interfaces the UI consumes, the shared validation vector file + tests on
+both sides, static contracts for any new native address, dogfood settings block
+in `mods/bot-brain` wired to real brain constants (kite radius, offense toggle,
+think profile, persona name w/ restart, focus keybind, respawn action), and a
+loopback verifier proving: persisted values reach `sd.settings.get`; live
+reload fires `on_changed` and measurably changes brain behavior (kite radius);
+host-scope replication reaches a client mod; action invoke round-trips; restart
+gating holds. Full battery green before push.
+
+Frontend (Claude/ATC, personally): the WPF Mods tab row affordance + settings
+dialog per §6, the dynamic form renderer over the C# service interfaces, the
+keybind capture control, validation UX, live/host badges, and visual polish.
+Frontend lands after the backend's service interfaces exist on main; visual
+acceptance = screenshots of the dialog rendering the bot-brain dogfood block
+(all six types) in idle, live, and in-session-client states.
+
+## 8. Out of scope v1 (explicit)
+
+In-game settings overlay; modifier-chord keybinds; multiline/rich text; color
+type; cross-mod settings reads; Lua-side writes; per-profile setting sets;
+website surface. Each is additive later without contract breaks.
