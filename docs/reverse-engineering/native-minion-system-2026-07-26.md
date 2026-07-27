@@ -164,12 +164,22 @@ lifecycle.
 - factory/native type: `0x03ED`
 - constructor: `0x00529FE0`
 - initialization: `0x0052A050`
+- tick: `0x0052C1A0`
 - conversion path: Ember tick `0x0060D7E0`
 
 Good Imp retains an Imp/`Badguy` inheritance shape and is converted into a
 temporary ally by Ember. Creation is itself group-zero gated. Treating all
 minions as `GoodGuy`, or treating them all as non-enemy actors, would therefore
 be incorrect.
+
+The constructor seeds a 300-tick lifetime at `+0x23C`. The tick resolves its
+target from the durable actor-world group/slot pair at `+0x240/+0x242`, runs
+the inherited Imp behavior at `0x00485DC0`, decrements the lifetime (twice
+while its target is absent), and requests native retirement through virtual
+slot `+0x18` when it expires. Its terminal group-zero branch creates the
+native `0x07E3` effect. Good Imp therefore needs the same host-only native-tick
+policy and explicit terminal replication as the other minion descriptors,
+despite having a different inheritance family and lifetime model.
 
 ### Wizard clones and registered NPCs
 
