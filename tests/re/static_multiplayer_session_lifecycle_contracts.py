@@ -361,6 +361,9 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
     barrier = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "run_loading_barrier_sync.inl"
+    ) + _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "run_loading_visibility.inl"
     )
     transport_tick = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"

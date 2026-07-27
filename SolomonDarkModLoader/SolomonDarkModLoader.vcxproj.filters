@@ -1340,6 +1340,9 @@
     <ClInclude Include="src\multiplayer_local_transport\run_loading_barrier_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\run_loading_visibility.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

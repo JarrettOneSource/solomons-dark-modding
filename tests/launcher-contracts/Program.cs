@@ -59,6 +59,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("normal runtime hides diagnostic UI", TestNormalRuntimeHidesDiagnosticUiAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
+    ("match loading progress", TestMatchLoadingProgressAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("bot member status compatibility", TestBotMemberStatusCompatibilityAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
@@ -1685,6 +1686,88 @@ static Task TestManualLobbyLaunchStateAsync()
         state.PrimaryAction == LobbyPrimaryAction.JoinLobby,
         "disconnect did not restore the join action");
 
+    return Task.CompletedTask;
+}
+
+static Task TestMatchLoadingProgressAsync()
+{
+    var progress = new MatchLoadingProgress();
+    progress.Begin(MatchLoadingStage.InspectingHostMods);
+    Require(
+        progress.Active &&
+        progress.Value == 5 &&
+        progress.Label.Contains("host", StringComparison.OrdinalIgnoreCase),
+        "join loading did not begin at the real host-mod inspection stage");
+
+    progress.Advance(MatchLoadingStage.AwaitingModConsent);
+    Require(
+        progress.Value == 10,
+        "mod-consent wait did not advance to its fixed milestone");
+    progress.Advance(MatchLoadingStage.SynchronizingHostMods);
+    progress.ObserveModSync(new UpdateProgress(
+        UpdateProgressPhase.Completed,
+        "Unrelated automatic update completed.",
+        1,
+        1,
+        UpdateProgressUnit.Items));
+    Require(
+        progress.Value == 14 &&
+        progress.Label.Contains("host", StringComparison.OrdinalIgnoreCase),
+        "general update progress leaked into match loading");
+    progress.ObserveModSync(new UpdateProgress(
+        UpdateProgressPhase.Downloading,
+        "Downloading sample.mod v1.0.0…",
+        512,
+        1024,
+        UpdateProgressUnit.Bytes,
+        UpdateProgressScope.LobbyModSync));
+    Require(
+        progress.Value == 18.5 &&
+        progress.Label.StartsWith("Downloading", StringComparison.Ordinal) &&
+        progress.Detail.Contains("512 bytes of 1 KB", StringComparison.Ordinal),
+        "mod sync did not derive its bar position from the real byte fraction");
+
+    progress.ObserveModSync(new UpdateProgress(
+        UpdateProgressPhase.Downloading,
+        "Downloading sample.mod v1.0.0…",
+        512,
+        1024,
+        UpdateProgressUnit.Bytes,
+        UpdateProgressScope.LobbyModSync));
+    Require(
+        progress.Value == 18.5,
+        "a stalled mod download advanced without a real milestone");
+    progress.Advance(MatchLoadingStage.AwaitingModConsent);
+    Require(
+        progress.Value == 18.5,
+        "match loading progress regressed to an earlier stage");
+
+    progress.Advance(MatchLoadingStage.PreparingSession);
+    progress.ObserveModSync(new UpdateProgress(
+        UpdateProgressPhase.Completed,
+        "Downloaded and verified 1 host mod.",
+        1,
+        1,
+        UpdateProgressUnit.Items,
+        UpdateProgressScope.LobbyModSync));
+    Require(
+        progress.Value == 28 &&
+        progress.Label.Contains(
+            "session",
+            StringComparison.OrdinalIgnoreCase),
+        "late mod progress replaced a later match stage");
+    progress.Advance(MatchLoadingStage.JoiningSteamLobby);
+    progress.Advance(MatchLoadingStage.LobbyReady);
+    progress.Advance(MatchLoadingStage.LaunchingGame);
+    Require(
+        progress.Value == 44 &&
+        progress.PercentText == "44%",
+        "launcher-to-game handoff did not retain monotonic real milestones");
+
+    progress.End();
+    Require(
+        !progress.Active,
+        "completed launcher match loading remained active");
     return Task.CompletedTask;
 }
 

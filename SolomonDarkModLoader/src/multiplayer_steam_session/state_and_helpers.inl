@@ -32,6 +32,7 @@ constexpr std::uint64_t kClientLobbyRecoveryRetryMs = 3000;
 constexpr std::uint64_t kClientLobbyRecoveryTimeoutMs = 120000;
 constexpr std::uint64_t kSteamTeardownGoodbyeGraceMs = 150;
 constexpr std::int32_t kReceiveBatchSize = 64;
+constexpr std::int32_t kSteamNetworkConnectionStateConnected = 3;
 
 enum class SteamSessionPhase {
     Disabled,

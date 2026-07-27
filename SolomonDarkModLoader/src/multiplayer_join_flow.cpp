@@ -31,6 +31,7 @@ constexpr std::uint64_t kMainMenuDialogWindowMs = 1000;
 constexpr std::uint64_t kActionRetryDelayMs = 100;
 constexpr std::uint64_t kCreateSurfaceExitStabilityMs = 100;
 constexpr std::uint64_t kTransitionPresentationMinimumMs = 750;
+constexpr std::uint64_t kReadyStagePresentationMinimumMs = 150;
 constexpr std::uint64_t kQuickStartRunMaterializedDelayMs = 12000;
 constexpr std::uint64_t kPostRunInputRetryDelayMs = 1000;
 constexpr std::size_t kCreateElementEnabledOffset = 0x18C;
@@ -57,6 +58,7 @@ struct JoinFlowState {
     bool enabled = false;
     JoinFlowPhase phase = JoinFlowPhase::Disabled;
     std::uint64_t phase_entered_ms = 0;
+    std::uint64_t connection_ready_since_ms = 0;
     std::uint64_t main_menu_first_seen_ms = 0;
     std::uint64_t action_retry_not_before_ms = 0;
     std::uint64_t pending_action_request_id = 0;
@@ -91,6 +93,8 @@ JoinFlowState g_join_flow;
 
 void ClearPendingActionUnlocked();
 void SetPhaseUnlocked(JoinFlowPhase phase);
+bool IsHostCharacterReady(
+    const multiplayer::RuntimeState& runtime);
 
 const char* PhaseLabel(JoinFlowPhase phase) {
     switch (phase) {
@@ -208,6 +212,7 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->enabled = false;
     state->phase = JoinFlowPhase::Disabled;
     state->phase_entered_ms = 0;
+    state->connection_ready_since_ms = 0;
     state->main_menu_first_seen_ms = 0;
     state->action_retry_not_before_ms = 0;
     state->pending_action_request_id = 0;
@@ -250,6 +255,7 @@ void SetPhaseUnlocked(JoinFlowPhase phase) {
     g_join_flow.phase = phase;
     g_join_flow.phase_entered_ms =
         static_cast<std::uint64_t>(GetTickCount64());
+    g_join_flow.connection_ready_since_ms = 0;
     UpdateLoadingScreenForPhase(phase);
     if (phase == JoinFlowPhase::PostRun) {
         g_join_flow.post_run_menu_retry_not_before_ms = 0;

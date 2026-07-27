@@ -255,6 +255,25 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
         "SolomonDarkModLauncher/src/Staging/"
         "LoadingScreenAssetMaterializer.cs"
     )
+    launcher_ui = _read(
+        "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
+    )
+    launcher_ui_progress = _read(
+        "SolomonDarkModLauncher.UI/src/ViewModels/"
+        "MatchLoadingProgress.cs"
+    )
+    launcher_ui_view_model = _read(
+        "SolomonDarkModLauncher.UI/src/ViewModels/"
+        "MainWindowViewModel.cs"
+    )
+    launcher_ui_theme = _read(
+        "SolomonDarkModLauncher.UI/src/Themes/"
+        "LauncherTheme.xaml"
+    )
+    launcher_executor = _read(
+        "SolomonDarkModLauncher/src/App/"
+        "LauncherCommandExecutor.cs"
+    )
     package = _read("scripts/New-BetaReleasePackage.ps1")
     verifier = _read("tools/verify_loading_screen.py")
 
@@ -336,7 +355,14 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
 
     required_multiplayer = (
         "LoadingScreenStage::ConnectingTransport",
+        "LoadingScreenStage::JoiningLobby",
+        "LoadingScreenStage::AuthenticatingSession",
+        "LoadingScreenStage::EstablishingRoute",
+        "LoadingScreenStage::SynchronizingHostSettings",
+        "LoadingScreenStage::ReceivingHostCheckpoint",
         "LoadingScreenStage::ReceivingRunPlan",
+        "LoadingScreenStage::ReceivingWorldCheckpoint",
+        "LoadingScreenStage::ReceivingWaveCheckpoint",
     )
     if (
         "loading_screen_progress.inl" not in join_flow
@@ -346,10 +372,10 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
             "multiplayer join phase changes do not start real loading stages"
         )
     for token in (
-        "runtime.transport_ready",
-        "LoadingScreenStage::EstablishingSession",
-        "runtime.run_loading_barrier.active",
-        "LoadingScreenStage::WaitingForParticipants",
+        "runtime.transport_route_ready",
+        "runtime.host_settings_checkpoint_received",
+        "runtime.world_snapshot.valid",
+        "runtime.host_wave_checkpoint_run_nonce",
     ):
         if token not in join_tick:
             raise StaticReTestFailure(
@@ -357,6 +383,11 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
             )
     for token in (
         "BeginRunLoadingBarrier(",
+        'if (reason != "new_run")',
+        "runtime_state.world_snapshot.valid",
+        "runtime_state.host_wave_checkpoint_run_nonce",
+        "!visible_participant_ids.empty()",
+        "LoadingScreenStage::WaitingForParticipants",
         "LoadingScreenStage::ConfirmingParticipants",
         "ReleaseRunLoadingBarrier(",
         "CompleteLoadingScreen();",
@@ -382,6 +413,37 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
         raise StaticReTestFailure(
             "loading screen asset is not staged and packaged with the loader"
         )
+    for token, source in (
+        ('Source="/Assets/Wizards_dire_BG.png"', launcher_ui),
+        ('Stretch="UniformToFill"', launcher_ui),
+        ('Height="18*"', launcher_ui),
+        ('Color="#B3000000"', launcher_ui),
+        ('Width="60*"', launcher_ui),
+        ('Height="9"', launcher_ui),
+        (
+            "MatchLoadingPresentationDelayMilliseconds = 150",
+            launcher_ui_view_model,
+        ),
+        (
+            "Value = Math.Max(Value, nextValue)",
+            launcher_ui_progress,
+        ),
+        (
+            'Style="{StaticResource MatchLoadingProgressBarStyle}"',
+            launcher_ui,
+        ),
+        ('x:Key="MatchLoadingProgressBarStyle"', launcher_ui_theme),
+        ("UpdateProgressScope.LobbyModSync", launcher_executor),
+        ("completed / (double)total", launcher_ui_progress),
+    ):
+        if token not in source:
+            raise StaticReTestFailure(
+                f"pre-game loading-screen contract is missing: {token}"
+            )
+    if "Task.Delay" in launcher_ui_progress:
+        raise StaticReTestFailure(
+            "pre-game match progress advances from a timer"
+        )
     for token in (
         'INSTANCE_PREFIX = "ffix"',
         "HOST_PORT = 49711",
@@ -397,9 +459,10 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
             )
 
     return (
-        "loading progress is monotonic and sourced from native Boneyard, "
-        "multiplayer join, and run-barrier milestones; rendering uses the "
-        "shared D3D9 lifetime seam and canonical packaged art"
+        "loading progress is monotonic and sourced from launcher mod sync, "
+        "Steam route/authentication, host/world/wave checkpoints, native "
+        "Boneyard work, and run-barrier milestones; rendering uses the shared "
+        "D3D9 lifetime seam and canonical packaged art"
     )
 
 

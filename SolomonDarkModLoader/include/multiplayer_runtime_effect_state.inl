@@ -151,7 +151,10 @@ struct RuntimeState {
     bool steam_available = false;
     bool steam_transport_ready = false;
     bool transport_ready = false;
+    bool transport_route_ready = false;
     bool session_is_host = false;
+    bool host_settings_checkpoint_received = false;
+    std::uint32_t host_wave_checkpoint_run_nonce = 0;
     bool steam_route_relayed = false;
     std::uint32_t steam_app_id = 0;
     std::uint64_t steam_lobby_id = 0;

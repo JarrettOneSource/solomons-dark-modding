@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\**\*.png" />
+    <Resource Include="..\assets\loading\Wizards_dire_BG.png"
+              Link="Assets\Wizards_dire_BG.png" />
   </ItemGroup>
 
   <ItemGroup>

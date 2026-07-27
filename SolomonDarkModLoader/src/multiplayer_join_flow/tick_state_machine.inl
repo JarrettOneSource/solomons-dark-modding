@@ -261,12 +261,23 @@ void TickMultiplayerJoinFlow() {
                 IsRunLoadingBarrierReleased(runtime)
                     ? JoinFlowPhase::Run
                     : JoinFlowPhase::LoadingBoneyard);
-        } else if (
-            hub_ready &&
-            runtime.transport_ready &&
-            runtime.session_status ==
-                multiplayer::SessionStatus::Ready &&
-            IsHostCharacterReady(runtime)) {
+            return;
+        }
+        if (!hub_ready ||
+            !runtime.transport_ready ||
+            runtime.session_status !=
+                multiplayer::SessionStatus::Ready ||
+            !IsHostCharacterReady(runtime)) {
+            g_join_flow.connection_ready_since_ms = 0;
+            return;
+        }
+        if (g_join_flow.connection_ready_since_ms == 0) {
+            g_join_flow.connection_ready_since_ms = now_ms;
+            return;
+        }
+        if (now_ms >=
+            g_join_flow.connection_ready_since_ms +
+                kReadyStagePresentationMinimumMs) {
             SetPhaseUnlocked(JoinFlowPhase::Hub);
         }
         return;

@@ -295,6 +295,7 @@ void ApplyCompletedLuaModStateCheckpoint(
     }
     g_local_transport.last_lua_mod_stream_applied_sequence =
         message.stream_sequence;
+    g_local_transport.host_settings_checkpoint_received = true;
     auto completed =
         g_local_transport.completed_lua_mod_stream_messages.begin();
     while (completed !=

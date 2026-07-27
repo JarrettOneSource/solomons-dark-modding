@@ -18,9 +18,16 @@ internal enum UpdateProgressUnit
     Items
 }
 
+internal enum UpdateProgressScope
+{
+    General,
+    LobbyModSync
+}
+
 internal sealed record UpdateProgress(
     UpdateProgressPhase Phase,
     string StatusText,
     long? Completed = null,
     long? Total = null,
-    UpdateProgressUnit Unit = UpdateProgressUnit.None);
+    UpdateProgressUnit Unit = UpdateProgressUnit.None,
+    UpdateProgressScope Scope = UpdateProgressScope.General);

@@ -40,6 +40,8 @@ void ResetRemoteParticipantSessionEpoch(
         configured_authority_disconnected);
     if (configured_authority_disconnected) {
         ResetReplicatedLuaTimeControl(participant_id);
+        g_local_transport.host_settings_checkpoint_received = false;
+        g_local_transport.host_wave_checkpoint_run_nonce = 0;
     }
     if (!preserve_session_nonce_history) {
         g_local_transport.session_nonce_by_participant.erase(participant_id);

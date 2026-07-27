@@ -36,7 +36,7 @@ class LoadingScreenContractTests(unittest.TestCase):
             )
         ]
 
-        self.assertEqual(len(progress_values), 13)
+        self.assertEqual(len(progress_values), 20)
         self.assertEqual(progress_values, sorted(progress_values))
         self.assertEqual(progress_values[-1], 1.0)
         self.assertIn("definition.progress > current.progress", source)
@@ -102,8 +102,41 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn("loading_screen_progress.inl", join)
         self.assertIn("UpdateLoadingScreenForRuntime", tick)
         self.assertIn("LoadingScreenStage::ConnectingTransport", progress)
-        self.assertIn("runtime.transport_ready", progress)
-        self.assertIn("runtime.run_loading_barrier.active", progress)
+        for token in (
+            "LoadingScreenStage::JoiningLobby",
+            "LoadingScreenStage::AuthenticatingSession",
+            "runtime.transport_route_ready",
+            "runtime.host_settings_checkpoint_received",
+            "LoadingScreenStage::ReceivingHostCheckpoint",
+            "runtime.world_snapshot.valid",
+            "runtime.host_wave_checkpoint_run_nonce",
+            "LoadingScreenStage::MaterializingParticipants",
+        ):
+            self.assertIn(token, progress)
+        self.assertNotIn(
+            "LoadingScreenStage::WaitingForParticipants",
+            progress,
+        )
+        self.assertIn(
+            'if (reason != "new_run")',
+            barrier,
+        )
+        self.assertIn(
+            "LoadingScreenStage::ReceivingRunPlan",
+            barrier,
+        )
+        self.assertIn(
+            "runtime_state.world_snapshot.valid",
+            barrier,
+        )
+        self.assertIn(
+            "runtime_state.host_wave_checkpoint_run_nonce",
+            barrier,
+        )
+        self.assertIn(
+            "!visible_participant_ids.empty()",
+            barrier,
+        )
         self.assertIn("LoadingScreenStage::WaitingForParticipants", barrier)
         self.assertIn("LoadingScreenStage::ConfirmingParticipants", barrier)
         self.assertIn("CompleteLoadingScreen();", barrier)
@@ -126,6 +159,74 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn('Copy-Item (Join-Path $root "assets")', package)
         self.assertIn('"Wizards_dire_BG.png"', loader)
 
+        ui_project = (
+            ROOT
+            / "SolomonDarkModLauncher.UI/"
+            "SolomonDarkModLauncher.UI.csproj"
+        ).read_text(encoding="utf-8")
+        ui_view = (
+            ROOT
+            / "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml"
+        ).read_text(encoding="utf-8")
+        ui_progress = (
+            ROOT
+            / "SolomonDarkModLauncher.UI/src/ViewModels/"
+            "MatchLoadingProgress.cs"
+        ).read_text(encoding="utf-8")
+        ui_view_model = (
+            ROOT
+            / "SolomonDarkModLauncher.UI/src/ViewModels/"
+            "MainWindowViewModel.cs"
+        ).read_text(encoding="utf-8")
+        ui_theme = (
+            ROOT
+            / "SolomonDarkModLauncher.UI/src/Themes/"
+            "LauncherTheme.xaml"
+        ).read_text(encoding="utf-8")
+        command_executor = (
+            ROOT
+            / "SolomonDarkModLauncher/src/App/"
+            "LauncherCommandExecutor.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'Link="Assets\\Wizards_dire_BG.png"',
+            ui_project,
+        )
+        self.assertIn('Stretch="UniformToFill"', ui_view)
+        self.assertIn('Height="18*"', ui_view)
+        self.assertIn('Color="#B3000000"', ui_view)
+        self.assertIn('Width="60*"', ui_view)
+        self.assertIn('Height="9"', ui_view)
+        self.assertIn(
+            'Style="{StaticResource MatchLoadingProgressBarStyle}"',
+            ui_view,
+        )
+        self.assertIn(
+            'x:Key="MatchLoadingProgressBarStyle"',
+            ui_theme,
+        )
+        self.assertIn(
+            "MatchLoadingPresentationDelayMilliseconds = 150",
+            ui_view_model,
+        )
+        self.assertIn(
+            "MatchLoadingStage.SynchronizingHostMods",
+            ui_progress,
+        )
+        self.assertIn(
+            "completed / (double)total",
+            ui_progress,
+        )
+        self.assertIn(
+            "Value = Math.Max(Value, nextValue)",
+            ui_progress,
+        )
+        self.assertIn(
+            "UpdateProgressScope.LobbyModSync",
+            command_executor,
+        )
+        self.assertNotIn("Task.Delay", ui_progress)
+
     def test_live_verifier_uses_only_the_fieldfix_instances_and_ports(self) -> None:
         verifier = (
             ROOT / "tools/verify_loading_screen.py"
@@ -136,8 +237,22 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn("CLIENT_PORT = 49712", verifier)
         self.assertIn("enable_audio=False", verifier)
         self.assertIn("disable_multiplayer_transport=(", verifier)
+        self.assertIn("quick_start=multiplayer_enabled", verifier)
         self.assertIn("stop_exact_game_processes(launch)", verifier)
         self.assertNotIn("kill_existing=True", verifier)
+
+        launcher_verifier = (
+            ROOT / "tools/verify_match_loading_screen.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('INSTANCE_NAME = "ffix-loading"', launcher_verifier)
+        self.assertIn("PORT = 49712", launcher_verifier)
+        self.assertIn('"disableAudio": True', launcher_verifier)
+        self.assertIn('"gameLaunched": False', launcher_verifier)
+        self.assertIn(
+            "visibleStateUnchanged",
+            launcher_verifier,
+        )
+        self.assertNotIn("Start-Process SolomonDark.exe", launcher_verifier)
 
 
 if __name__ == "__main__":

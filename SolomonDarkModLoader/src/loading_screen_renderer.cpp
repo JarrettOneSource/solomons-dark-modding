@@ -581,6 +581,7 @@ void RenderLoadingScreen(IDirect3DDevice9* device) {
         return;
     }
     g_renderer.render_failure_logged = false;
+    CaptureLoadingScreenEvidenceFrame(snapshot);
 
     if (g_renderer.rendered_sequence != snapshot.sequence ||
         g_renderer.rendered_stage != snapshot.stage) {

@@ -61,7 +61,7 @@ std::wstring SafeFileToken(std::wstring value) {
     return value;
 }
 
-void CaptureEvidenceFrame(
+void CaptureLoadingScreenEvidenceFrameInternal(
     const LoadingScreenSnapshot& snapshot) {
     const auto directory_text =
         ReadEnvironmentVariable(
@@ -138,6 +138,11 @@ void LogPresentationFailure(
 
 }  // namespace
 
+void CaptureLoadingScreenEvidenceFrame(
+    const LoadingScreenSnapshot& snapshot) {
+    CaptureLoadingScreenEvidenceFrameInternal(snapshot);
+}
+
 void PresentLoadingScreenFrame() {
     const auto snapshot = GetLoadingScreenSnapshot();
     const auto now_ms =
@@ -170,7 +175,7 @@ void PresentLoadingScreenFrame() {
         return;
     }
 
-    CaptureEvidenceFrame(snapshot);
+    CaptureLoadingScreenEvidenceFrame(snapshot);
     const HRESULT present_result =
         device->Present(nullptr, nullptr, nullptr, nullptr);
     g_presenting_loading_frame = false;

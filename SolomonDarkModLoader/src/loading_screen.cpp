@@ -27,31 +27,45 @@ struct StageDefinition {
     float progress;
 };
 
-constexpr std::array<StageDefinition, 13> kStageDefinitions = {{
+constexpr std::array<StageDefinition, 20> kStageDefinitions = {{
     {LoadingScreenStage::ConnectingTransport,
-     "connecting_transport", "Opening the way...", 0.08f},
-    {LoadingScreenStage::EstablishingSession,
-     "establishing_session", "Joining the circle...", 0.14f},
-    {LoadingScreenStage::WaitingForHost,
-     "waiting_for_host", "Syncing with the host...", 0.20f},
+     "connecting_transport", "Waking the multiplayer transport...", 0.44f},
+    {LoadingScreenStage::CreatingLobby,
+     "creating_lobby", "Opening the coven...", 0.48f},
+    {LoadingScreenStage::JoiningLobby,
+     "joining_lobby", "Entering the Steam lobby...", 0.48f},
+    {LoadingScreenStage::AuthenticatingSession,
+     "authenticating_session", "Proving your sigil to the host...", 0.52f},
+    {LoadingScreenStage::EstablishingRoute,
+     "establishing_route", "Opening the route...", 0.56f},
+    {LoadingScreenStage::SynchronizingHostSettings,
+     "synchronizing_host_settings", "Receiving the host's settings...", 0.60f},
+    {LoadingScreenStage::ReceivingHostCheckpoint,
+     "receiving_host_checkpoint", "Receiving the host's checkpoint...", 0.66f},
+    {LoadingScreenStage::PreparingHost,
+     "preparing_host", "Preparing the host...", 0.66f},
     {LoadingScreenStage::ReceivingRunPlan,
-     "receiving_run_plan", "Receiving the host's boneyard...", 0.26f},
+     "receiving_run_plan", "Receiving the host's boneyard...", 0.70f},
     {LoadingScreenStage::PreparingBoneyard,
-     "preparing_boneyard", "Preparing the boneyard...", 0.30f},
+     "preparing_boneyard", "Preparing the boneyard...", 0.73f},
     {LoadingScreenStage::GeneratingBoneyard,
-     "generating_boneyard", "Raising the boneyard...", 0.42f},
+     "generating_boneyard", "Raising the boneyard...", 0.77f},
     {LoadingScreenStage::SerializingBoneyard,
-     "serializing_boneyard", "Sealing the boneyard...", 0.55f},
+     "serializing_boneyard", "Sealing the boneyard...", 0.80f},
     {LoadingScreenStage::ReadingBoneyard,
-     "reading_boneyard", "Loading the boneyard...", 0.68f},
+     "reading_boneyard", "Loading the boneyard...", 0.83f},
     {LoadingScreenStage::MaterializingWorld,
-     "materializing_world", "Awakening the world...", 0.82f},
+     "materializing_world", "Awakening the world...", 0.87f},
+    {LoadingScreenStage::ReceivingWorldCheckpoint,
+     "receiving_world_checkpoint", "Receiving the living world...", 0.90f},
+    {LoadingScreenStage::ReceivingWaveCheckpoint,
+     "receiving_wave_checkpoint", "Aligning the host's wave...", 0.91f},
     {LoadingScreenStage::MaterializingParticipants,
-     "materializing_participants", "Gathering the coven...", 0.90f},
+     "materializing_participants", "Gathering the coven...", 0.92f},
     {LoadingScreenStage::WaitingForParticipants,
-     "waiting_for_participants", "Waiting for the coven...", 0.94f},
+     "waiting_for_participants", "Waiting for the coven...", 0.95f},
     {LoadingScreenStage::ConfirmingParticipants,
-     "confirming_participants", "Binding the coven...", 0.97f},
+     "confirming_participants", "Binding the coven...", 0.98f},
     {LoadingScreenStage::GameplayReady,
      "gameplay_ready", "Entering the boneyard...", 1.0f},
 }};
@@ -268,9 +282,11 @@ void __fastcall HookBoneyardMaterialize(
     AdvanceLoadingScreen(LoadingScreenStage::MaterializingWorld);
     detail::PresentLoadingScreenFrame();
     original(region_layout);
-    AdvanceLoadingScreen(
-        LoadingScreenStage::MaterializingParticipants);
-    detail::PresentLoadingScreenFrame();
+    if (!multiplayer::IsLocalTransportClient()) {
+        AdvanceLoadingScreen(
+            LoadingScreenStage::MaterializingParticipants);
+        detail::PresentLoadingScreenFrame();
+    }
 }
 
 bool ResolveLayoutAddress(
@@ -471,8 +487,10 @@ void AdvanceLoadingScreen(LoadingScreenStage stage) {
 }
 
 void NotifyBoneyardGameplayStarted() {
-    AdvanceLoadingScreen(
-        LoadingScreenStage::MaterializingParticipants);
+    if (!multiplayer::IsLocalTransportClient()) {
+        AdvanceLoadingScreen(
+            LoadingScreenStage::MaterializingParticipants);
+    }
     if (!multiplayer::IsLocalTransportHost() &&
         !multiplayer::IsLocalTransportClient()) {
         CompleteLoadingScreen();

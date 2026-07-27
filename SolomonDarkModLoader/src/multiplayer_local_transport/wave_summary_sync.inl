@@ -201,6 +201,8 @@ void ApplyAuthorityWaveSummaryPacket(
         rows_killed != summary.killed) {
         return;
     }
+    g_local_transport.host_wave_checkpoint_run_nonce =
+        packet.run_nonce;
 
     UpsertPeerEndpoint(
         from,

@@ -44,19 +44,37 @@ ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
 CAPTURE_ENVIRONMENT = "SDMOD_LOADING_SCREEN_CAPTURE_DIRECTORY"
 
 STAGE_PROGRESS = {
-    "connecting_transport": 0.08,
-    "establishing_session": 0.14,
-    "waiting_for_host": 0.20,
-    "receiving_run_plan": 0.26,
-    "preparing_boneyard": 0.30,
-    "generating_boneyard": 0.42,
-    "serializing_boneyard": 0.55,
-    "reading_boneyard": 0.68,
-    "materializing_world": 0.82,
-    "materializing_participants": 0.90,
-    "waiting_for_participants": 0.94,
-    "confirming_participants": 0.97,
+    "connecting_transport": 0.44,
+    "creating_lobby": 0.48,
+    "joining_lobby": 0.48,
+    "authenticating_session": 0.52,
+    "establishing_route": 0.56,
+    "synchronizing_host_settings": 0.60,
+    "receiving_host_checkpoint": 0.66,
+    "preparing_host": 0.66,
+    "receiving_run_plan": 0.70,
+    "preparing_boneyard": 0.73,
+    "generating_boneyard": 0.77,
+    "serializing_boneyard": 0.80,
+    "reading_boneyard": 0.83,
+    "materializing_world": 0.87,
+    "receiving_world_checkpoint": 0.90,
+    "receiving_wave_checkpoint": 0.91,
+    "materializing_participants": 0.92,
+    "waiting_for_participants": 0.95,
+    "confirming_participants": 0.98,
     "gameplay_ready": 1.00,
+}
+CONNECTION_STAGES = {
+    "connecting_transport",
+    "creating_lobby",
+    "joining_lobby",
+    "authenticating_session",
+    "establishing_route",
+    "synchronizing_host_settings",
+    "receiving_host_checkpoint",
+    "preparing_host",
+    "materializing_participants",
 }
 NATIVE_STAGES = (
     "preparing_boneyard",
@@ -185,6 +203,17 @@ def _wait_for_log(
     )
 
 
+def _completed_after_stage(text: str, stage: str) -> bool:
+    stage_position = text.rfind(f"stage={stage}")
+    return (
+        stage_position >= 0
+        and text.find(
+            "Loading screen completed.",
+            stage_position,
+        ) >= 0
+    )
+
+
 def _start_testrun() -> None:
     last_error = ""
     for _ in range(80):
@@ -250,13 +279,20 @@ def _parse_completed_sequence(
     *,
     expected_flow: str,
     required_stages: tuple[str, ...],
+    completion_index: int = -1,
 ) -> dict[str, Any]:
     completions = list(COMPLETE_PATTERN.finditer(text))
     if not completions:
         raise LoadingScreenFailure(
             f"loading flow {expected_flow} never completed"
         )
-    completion = completions[-1]
+    try:
+        completion = completions[completion_index]
+    except IndexError as exc:
+        raise LoadingScreenFailure(
+            f"loading flow {expected_flow} has no completed sequence "
+            f"at index {completion_index}"
+        ) from exc
     sequence = int(completion.group("sequence"))
 
     starts = [
@@ -365,6 +401,70 @@ def _parse_completed_sequence(
         "elapsedMs": elapsed_ms,
         "completed": completion.group("timestamp"),
     }
+
+
+def _completion_index_containing_stage(
+    text: str,
+    stage: str,
+    *,
+    last: bool = False,
+) -> int:
+    completions = list(COMPLETE_PATTERN.finditer(text))
+    matching_indices: list[int] = []
+    for index, completion in enumerate(completions):
+        sequence = int(completion.group("sequence"))
+        if any(
+            match.group("stage") == stage
+            and int(match.group("sequence")) == sequence
+            for match in STAGE_PATTERN.finditer(text)
+        ):
+            matching_indices.append(index)
+    if not matching_indices:
+        raise LoadingScreenFailure(
+            f"no completed loading sequence contains {stage}"
+        )
+    return matching_indices[-1 if last else 0]
+
+
+def _validate_connection_sequence(
+    timeline: dict[str, Any],
+    *,
+    minimum_rendered_milestones: int = 2,
+) -> tuple[str, ...]:
+    stages = [
+        event["stage"]
+        for event in timeline["stages"]
+        if event["stage"] in CONNECTION_STAGES
+    ]
+    distinct_progress = {
+        STAGE_PROGRESS[stage]
+        for stage in stages
+    }
+    if len(distinct_progress) < 2:
+        raise LoadingScreenFailure(
+            "connecting-to-match did not expose two real progress "
+            f"milestones: {stages}"
+        )
+
+    rendered_stages = [
+        event["stage"]
+        for event in timeline["renders"]
+        if event["stage"] in CONNECTION_STAGES
+    ]
+    distinct_rendered_progress = {
+        STAGE_PROGRESS[stage]
+        for stage in rendered_stages
+    }
+    if (
+        len(distinct_rendered_progress) <
+        minimum_rendered_milestones
+    ):
+        raise LoadingScreenFailure(
+            "connecting-to-match did not render the required real "
+            f"milestones ({minimum_rendered_milestones}): "
+            f"{rendered_stages}"
+        )
+    return tuple(dict.fromkeys(rendered_stages))
 
 
 def _measure_screenshot(
@@ -532,7 +632,8 @@ def _run_flow(
                 exact_mod_id=ACCEPTANCE_MOD_ID,
                 test_survival_boneyard_override=FLAT_BONEYARD,
                 test_blank_boneyard=True,
-                use_sandbox_preset_flow=True,
+                use_sandbox_preset_flow=not multiplayer_enabled,
+                quick_start=multiplayer_enabled,
                 tile_windows=False,
                 game_directory=game_directory,
                 enable_audio=False,
@@ -571,6 +672,13 @@ def _run_flow(
             lambda text: (
                 "Loading screen completed." in text
                 and f"flow={expected_flow}" in text
+                and (
+                    not multiplayer_enabled
+                    or _completed_after_stage(
+                        text,
+                        "generating_boneyard",
+                    )
+                )
             ),
             timeout=15.0,
             label=f"{flow_name} host loading completion",
@@ -593,14 +701,59 @@ def _run_flow(
             required_stages=required_host_stages,
         )
         if multiplayer_enabled:
+            result["hostConnectionTimeline"] = (
+                _parse_completed_sequence(
+                    host_text,
+                    expected_flow="multiplayer_host",
+                    required_stages=(
+                        "connecting_transport",
+                    ),
+                    completion_index=(
+                        _completion_index_containing_stage(
+                            host_text,
+                            "connecting_transport",
+                        )
+                    ),
+                )
+            )
+            host_connection_capture_stages = (
+                _validate_connection_sequence(
+                    result["hostConnectionTimeline"],
+                    minimum_rendered_milestones=1,
+                )
+            )
             client_text = _wait_for_log(
                 client_log,
                 lambda text: (
                     "Loading screen completed." in text
                     and "flow=multiplayer_join" in text
+                    and _completed_after_stage(
+                        text,
+                        "confirming_participants",
+                    )
                 ),
                 timeout=15.0,
                 label="multiplayer client loading completion",
+            )
+            result["clientConnectionTimeline"] = (
+                _parse_completed_sequence(
+                    client_text,
+                    expected_flow="multiplayer_join",
+                    required_stages=(
+                        "connecting_transport",
+                    ),
+                    completion_index=(
+                        _completion_index_containing_stage(
+                            client_text,
+                            "connecting_transport",
+                        )
+                    ),
+                )
+            )
+            connection_capture_stages = (
+                _validate_connection_sequence(
+                    result["clientConnectionTimeline"]
+                )
             )
             result["clientTimeline"] = (
                 _parse_completed_sequence(
@@ -610,6 +763,13 @@ def _run_flow(
                         "waiting_for_participants",
                         "confirming_participants",
                         "gameplay_ready",
+                    ),
+                    completion_index=(
+                        _completion_index_containing_stage(
+                            client_text,
+                            "confirming_participants",
+                            last=True,
+                        )
                     ),
                 )
             )
@@ -691,6 +851,60 @@ def _run_flow(
             raise LoadingScreenFailure(
                 "no mid-multiplayer-join client frame was captured"
             )
+        if multiplayer_enabled:
+            connection_sequence = result[
+                "clientConnectionTimeline"
+            ]["sequence"]
+            connection_captures = [
+                capture
+                for capture in captures
+                if (
+                    "ffix-client" in
+                    Path(capture["sourceBmp"]).name
+                    and f"-sequence-{connection_sequence}-" in
+                    Path(capture["sourceBmp"]).name
+                    and capture["stage"] in
+                    connection_capture_stages
+                )
+            ]
+            if len(
+                {
+                    capture["progress"]
+                    for capture in connection_captures
+                }
+            ) < 2:
+                raise LoadingScreenFailure(
+                    "client join evidence did not capture two "
+                    "different connecting-to-match labels and bar "
+                    f"positions: {connection_captures}"
+                )
+            result["clientConnectionCaptures"] = (
+                connection_captures
+            )
+            host_connection_sequence = result[
+                "hostConnectionTimeline"
+            ]["sequence"]
+            host_connection_captures = [
+                capture
+                for capture in captures
+                if (
+                    "ffix-host" in
+                    Path(capture["sourceBmp"]).name
+                    and f"-sequence-{host_connection_sequence}-" in
+                    Path(capture["sourceBmp"]).name
+                    and capture["stage"] in
+                    host_connection_capture_stages
+                )
+            ]
+            if not host_connection_captures:
+                raise LoadingScreenFailure(
+                    "host session-formation evidence did not capture "
+                    "a real label and bar position: "
+                    f"{host_connection_captures}"
+                )
+            result["hostConnectionCaptures"] = (
+                host_connection_captures
+            )
         result["captures"] = captures
         result["nonemptyCrashArtifacts"] = (
             _nonempty_crash_artifacts(launch)
@@ -745,8 +959,8 @@ def verify(
         },
         "audioExpectedDisabled": True,
         "captureMethod": (
-            "D3D9 backbuffer immediately after the real stage "
-            "EndScene and before Present"
+            "D3D9 backbuffer after the loading draw at the shared "
+            "EndScene or native-stage presentation boundary"
         ),
     }
     failure: BaseException | None = None

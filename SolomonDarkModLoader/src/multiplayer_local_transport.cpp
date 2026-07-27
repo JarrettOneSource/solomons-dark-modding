@@ -989,6 +989,8 @@ struct LocalTransportState {
     std::uint64_t last_lua_registered_spell_effect_snapshot_send_ms = 0;
     std::uint64_t last_lua_mod_stream_sent_sequence = 0;
     std::uint64_t last_lua_mod_stream_applied_sequence = 0;
+    bool host_settings_checkpoint_received = false;
+    std::uint32_t host_wave_checkpoint_run_nonce = 0;
     std::uint32_t next_lua_mod_message_id = 1;
     std::uint64_t last_client_host_run_request_ms = 0;
     ClientHostRunExitFollow client_host_run_exit_follow;
@@ -1622,6 +1624,8 @@ void PublishLocalTransportRuntimeState() {
             g_local_transport.last_steam_send_failure_result;
         if (g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
             state.transport_ready = true;
+            state.transport_route_ready =
+                !g_local_transport.peers.empty();
             state.session_is_host = g_local_transport.is_host;
             state.session_status = SessionStatus::Ready;
             state.session_transport = SessionTransportKind::LocalUdp;
@@ -1648,6 +1652,13 @@ void PublishLocalTransportRuntimeState() {
                    << " received=" << g_local_transport.packets_received;
             state.status_text = status.str();
         }
+        state.host_settings_checkpoint_received =
+            g_local_transport.is_host ||
+            g_local_transport.host_settings_checkpoint_received;
+        state.host_wave_checkpoint_run_nonce =
+            g_local_transport.is_host
+            ? 0
+            : g_local_transport.host_wave_checkpoint_run_nonce;
         state.local_air_chain_capture = std::move(local_air_chain_capture);
         state.local_air_chain_history = std::move(local_air_chain_history);
         state.air_chain_snapshots = std::move(air_chain_snapshots);

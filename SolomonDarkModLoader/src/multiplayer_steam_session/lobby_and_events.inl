@@ -157,6 +157,7 @@ void ReconcileLobbyMembers(std::uint64_t now_ms) {
 
 void PublishSessionRuntime(std::uint64_t now_ms) {
     bool any_relayed = false;
+    bool any_authenticated_route_ready = false;
     std::int32_t maximum_ping = 0;
     std::uint32_t authenticated_count = 0;
     for (const auto& [steam_id, peer] : g_session.peers) {
@@ -166,6 +167,10 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         }
         authenticated_count += 1;
         any_relayed = any_relayed || peer.network_status.using_relay;
+        any_authenticated_route_ready =
+            any_authenticated_route_ready ||
+            peer.network_status.connection_state ==
+                kSteamNetworkConnectionStateConnected;
         maximum_ping = (std::max)(maximum_ping, peer.network_status.ping_ms);
     }
 
@@ -335,6 +340,8 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
                 1,
                 g_session.lobby_members.size()));
         state.authenticated_peer_count = authenticated_count;
+        state.transport_route_ready =
+            any_authenticated_route_ready;
         state.steam_route_relayed = any_relayed;
         state.steam_route_ping_ms = maximum_ping;
         state.multiplayer_manifest_sha256 = g_session.manifest_sha256_text;

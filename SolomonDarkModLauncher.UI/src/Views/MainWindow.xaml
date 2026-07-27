@@ -544,6 +544,7 @@
                                  Width="150"
                                  Margin="10,0,8,0"
                                  VerticalContentAlignment="Center"
+                                 AutomationProperties.Name="Instance"
                                  Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource DarkTextBoxStyle}" />
                         <Button DockPanel.Dock="Left"
@@ -703,6 +704,99 @@
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </Border>
+
+        <!-- Pre-game match preparation. The in-game D3D9 renderer takes over
+             after Launch Game starts the staged process. -->
+        <Grid Grid.RowSpan="4"
+              Panel.ZIndex="50"
+              IsHitTestVisible="True">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsMatchLoadingVisible}"
+                                     Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Image Source="/Assets/Wizards_dire_BG.png"
+                   Stretch="UniformToFill"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="82*" />
+                    <RowDefinition Height="18*" />
+                </Grid.RowDefinitions>
+
+                <Rectangle Grid.Row="1">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0"
+                                             EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0" />
+                            <GradientStop Color="#B3000000" Offset="1" />
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+
+                <Grid Grid.Row="1"
+                      Margin="0,4,0,16"
+                      VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20*" />
+                        <ColumnDefinition Width="60*" />
+                        <ColumnDefinition Width="20*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   HorizontalAlignment="Center"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Text="{Binding MatchLoadingStatusText}"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,3,0,8"
+                                   HorizontalAlignment="Center"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="{Binding MatchLoadingDetailText}"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ProgressBar Grid.Column="0"
+                                         Height="9"
+                                         VerticalAlignment="Center"
+                                         AutomationProperties.Name="Match loading progress"
+                                         Style="{StaticResource MatchLoadingProgressBarStyle}"
+                                         Value="{Binding MatchLoadingProgressValue, Mode=OneWay}" />
+                            <TextBlock Grid.Column="1"
+                                       Width="38"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="{StaticResource GoldOutlineTextBrush}"
+                                       Text="{Binding MatchLoadingPercentText}"
+                                       TextAlignment="Right" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Grid>
 
         <!-- Host setup -->
         <Grid Grid.RowSpan="4" Panel.ZIndex="60">
