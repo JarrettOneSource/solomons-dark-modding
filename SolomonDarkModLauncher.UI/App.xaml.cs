@@ -64,6 +64,17 @@ public partial class App : Application
                 var previewViewModel = new ViewModels.ModSettings.ModSettingsDialogViewModel(
                     source,
                     "bot.brain");
+                if (Environment.GetEnvironmentVariable("SDMOD_UI_SETTINGS_PREVIEW_EXPAND") == "1")
+                {
+                    var firstRow = previewViewModel.AllEntries
+                        .OfType<ViewModels.ModSettings.ListSettingViewModel>()
+                        .FirstOrDefault()?.Items.FirstOrDefault();
+                    if (firstRow is not null)
+                    {
+                        firstRow.IsExpanded = true;
+                    }
+                }
+
                 var previewWindow = new ModSettingsWindow(previewViewModel);
                 previewWindow.Loaded += (_, _) => Log("preview window loaded");
                 previewWindow.ContentRendered += (_, _) =>

@@ -144,6 +144,7 @@ internal sealed class ModSettingsDialogViewModel : ViewModelBase
         ModSettingType.Text => new TextSettingViewModel(entry),
         ModSettingType.Choice => new ChoiceSettingViewModel(entry),
         ModSettingType.Keybind => new KeybindSettingViewModel(entry),
+        ModSettingType.List => new ListSettingViewModel(entry),
         ModSettingType.Action => new ActionSettingViewModel(
             entry,
             key => source_.InvokeActionAsync(modId_, key),

@@ -37,7 +37,7 @@ internal abstract class SettingEntryViewModel : ViewModelBase
     public bool HasValidationError => validationError_ is not null;
 
     /// <summary>Host-scope entries lock while this machine is an in-session client.</summary>
-    public bool IsReadOnly
+    public virtual bool IsReadOnly
     {
         get => isReadOnly_;
         set => SetProperty(ref isReadOnly_, value);

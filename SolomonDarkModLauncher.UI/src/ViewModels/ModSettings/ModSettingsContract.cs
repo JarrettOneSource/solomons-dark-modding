@@ -12,7 +12,8 @@ internal enum ModSettingType
     Text,
     Choice,
     Keybind,
-    Action
+    Action,
+    List
 }
 
 internal enum ModSettingScope
@@ -39,7 +40,13 @@ internal sealed record ModSettingEntry(
     int MaxLength = 256,
     string? Placeholder = null,
     IReadOnlyList<ModSettingChoice>? Choices = null,
-    bool Confirm = false);
+    bool Confirm = false,
+    int MinItems = 0,
+    int MaxItems = 0,
+    string? ItemLabel = null,
+    IReadOnlyList<ModSettingEntry>? ItemFields = null);
+// For Type == List: Default and values are IReadOnlyList<IReadOnlyDictionary<string, object>>;
+// ItemFields hold scalar entries only (toggle/number/text/choice), per contract §10.
 
 internal enum ModSettingsBlockState
 {

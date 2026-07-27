@@ -50,6 +50,49 @@ internal sealed class StubModSettingsSource : IModSettingsSource
             null,
             [
             new ModSettingEntry(
+                "roster", ModSettingType.List, "Bot roster",
+                "Bots spawn in list order as slots allow.", "Bots",
+                ModSettingScope.Host, false,
+                Default: (IReadOnlyList<IReadOnlyDictionary<string, object>>)
+                [
+                    new Dictionary<string, object>
+                    {
+                        ["name"] = "Ember", ["element"] = "fire", ["discipline"] = "skirmisher"
+                    },
+                    new Dictionary<string, object>
+                    {
+                        ["name"] = "Brook", ["element"] = "water", ["discipline"] = "guardian"
+                    }
+                ],
+                MinItems: 0, MaxItems: 3,
+                ItemLabel: "{name} · {element} {discipline}",
+                ItemFields:
+                [
+                    new ModSettingEntry(
+                        "name", ModSettingType.Text, "Name", null, null,
+                        ModSettingScope.Host, false, "Ember", MaxLength: 31),
+                    new ModSettingEntry(
+                        "element", ModSettingType.Choice, "Element", null, null,
+                        ModSettingScope.Host, false, "fire",
+                        Choices:
+                        [
+                            new ModSettingChoice("fire", "Fire"),
+                            new ModSettingChoice("water", "Water"),
+                            new ModSettingChoice("earth", "Earth"),
+                            new ModSettingChoice("air", "Air"),
+                            new ModSettingChoice("ether", "Ether")
+                        ]),
+                    new ModSettingEntry(
+                        "discipline", ModSettingType.Choice, "Discipline", null, null,
+                        ModSettingScope.Host, false, "skirmisher",
+                        Choices:
+                        [
+                            new ModSettingChoice("skirmisher", "Skirmisher — kite and cast"),
+                            new ModSettingChoice("guardian", "Guardian — protect a player"),
+                            new ModSettingChoice("striker", "Striker — aggressive pressure")
+                        ])
+                ]),
+            new ModSettingEntry(
                 "kite_radius", ModSettingType.Number, "Kite radius",
                 "Threat sampling distance in world units.", "Combat",
                 ModSettingScope.Host, false, 340.0, Min: 100, Max: 900, Step: 10, Integer: true),
