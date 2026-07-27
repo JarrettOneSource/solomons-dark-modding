@@ -91,6 +91,11 @@ internal sealed class ModSettingsSourceAdapter : IModSettingsSource
     {
         ModSettingValueType.Boolean => value.BooleanValue,
         ModSettingValueType.Number => value.NumberValue,
+        ModSettingValueType.List => (IReadOnlyList<IReadOnlyDictionary<string, object>>)
+            value.ListValue
+                .Select(row => (IReadOnlyDictionary<string, object>)
+                    row.ToDictionary(field => field.Key, field => ToClr(field.Value)))
+                .ToArray(),
         _ => value.StringValue
     };
 
@@ -100,6 +105,9 @@ internal sealed class ModSettingsSourceAdapter : IModSettingsSource
         double d => ModSettingValue.Number(d),
         int i => ModSettingValue.Number(i),
         string s => ModSettingValue.String(s),
+        IReadOnlyList<IReadOnlyDictionary<string, object>> rows => ModSettingValue.List(
+            rows.Select(row => (IReadOnlyDictionary<string, ModSettingValue>)
+                row.ToDictionary(field => field.Key, field => FromClr(field.Value)))),
         _ => throw new NotSupportedException(
             $"Unsupported setting value type {value.GetType().Name}")
     };
@@ -127,5 +135,11 @@ internal sealed class ModSettingsSourceAdapter : IModSettingsSource
                 : definition.Choices
                     .Select(choice => new ModSettingChoice(choice.Value, choice.Label))
                     .ToArray(),
-            Confirm: definition.Confirm);
+            Confirm: definition.Confirm,
+            MinItems: definition.MinItems,
+            MaxItems: definition.MaxItems,
+            ItemLabel: definition.ItemLabel.Length == 0 ? null : definition.ItemLabel,
+            ItemFields: definition.ItemFields.Count == 0
+                ? null
+                : definition.ItemFields.Select(Convert).ToArray());
 }
