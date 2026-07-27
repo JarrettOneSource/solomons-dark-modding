@@ -212,6 +212,9 @@
     <ClInclude Include="include\launch_audio_disable.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_audio_observability.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_foundation.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -453,6 +456,9 @@
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_combat_observations.inl">
+      <Filter>Header Files\Lua Debug Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_audio.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl">
@@ -1722,6 +1728,9 @@
     </ClCompile>
     <ClCompile Include="src\launch_audio_disable.cpp">
       <Filter>Source Files\Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\native_audio_observability.cpp">
+      <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\mod_loader.cpp">
       <Filter>Source Files\Loader</Filter>

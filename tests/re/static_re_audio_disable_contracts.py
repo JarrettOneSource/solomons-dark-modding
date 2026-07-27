@@ -561,6 +561,30 @@ def test_launch_audio_disable_is_engine_level_and_player_opt_in() -> str:
     native_source = read_text(
         ROOT / "SolomonDarkModLoader/src/launch_audio_disable.cpp"
     )
+    observability_header = read_text(
+        ROOT
+        / "SolomonDarkModLoader/include/native_audio_observability.h"
+    )
+    observability_source = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/native_audio_observability.cpp"
+    )
+    observability_lua = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/lua_engine_bindings_debug/"
+        "functions_native_audio.inl"
+    )
+    frost_lifecycle_verifier = read_text(
+        ROOT / "tools/verify_multiplayer_frost_loop_lifecycle.py"
+    )
+    debug_bindings = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_debug.cpp"
+    )
+    player_tick = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/player_actor_tick_hook.inl"
+    )
     loader_source = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
     )
@@ -646,6 +670,154 @@ def test_launch_audio_disable_is_engine_level_and_player_opt_in() -> str:
         (native_filters, r'include\launch_audio_disable.h'),
         (native_filters, r'src\launch_audio_disable.cpp'),
         (
+            observability_header,
+            "struct NativeAudioChannelSnapshot",
+        ),
+        (
+            observability_header,
+            "class ScopedNativeAudioAttribution final",
+        ),
+        (
+            observability_header,
+            "SnapshotNativeAudioChannels(",
+        ),
+        (
+            observability_source,
+            '"audio.lifecycle"',
+        ),
+        (
+            observability_source,
+            '"sound_loop_start"',
+        ),
+        (
+            observability_source,
+            '"sound_loop_stop"',
+        ),
+        (
+            observability_source,
+            '"compiled_registry"',
+        ),
+        (
+            observability_source,
+            "InstallSafeX86Hook(",
+        ),
+        (
+            observability_source,
+            "kSoundLoopReferenceCountOffset = 0x4C",
+        ),
+        (
+            observability_source,
+            '"sounds\\\\iceloop__loop"',
+        ),
+        (
+            observability_source,
+            '"spell.frost_jet"',
+        ),
+        (
+            observability_source,
+            '"[native-audio] event=start monotonic_ms="',
+        ),
+        (
+            observability_source,
+            '"[native-audio] event=stop monotonic_ms="',
+        ),
+        (
+            observability_source,
+            "ClearInactiveNativeAudioChannelHistory()",
+        ),
+        (
+            observability_lua,
+            "SnapshotNativeAudioChannels(include_inactive)",
+        ),
+        (
+            observability_lua,
+            '"native_reference_count"',
+        ),
+        (
+            observability_lua,
+            '"participant_id_text"',
+        ),
+        (
+            debug_bindings,
+            '"get_native_audio_channels"',
+        ),
+        (
+            debug_bindings,
+            '"dump_native_audio_channels"',
+        ),
+        (
+            debug_bindings,
+            '"clear_native_audio_channel_history"',
+        ),
+        (
+            player_tick,
+            "ScopedNativeAudioAttribution native_audio_attribution(",
+        ),
+        (
+            player_tick,
+            "native_audio_attribution.SetParticipantCast(",
+        ),
+        (
+            loader_source,
+            "InitializeNativeAudioObservability(",
+        ),
+        (
+            loader_source,
+            "&ShutdownNativeAudioObservability",
+        ),
+        (
+            native_project,
+            r'include\native_audio_observability.h',
+        ),
+        (
+            native_project,
+            r'src\native_audio_observability.cpp',
+        ),
+        (
+            native_project,
+            r'functions_native_audio.inl',
+        ),
+        (
+            native_filters,
+            r'include\native_audio_observability.h',
+        ),
+        (
+            native_filters,
+            r'src\native_audio_observability.cpp',
+        ),
+        (
+            native_filters,
+            r'functions_native_audio.inl',
+        ),
+        (
+            frost_lifecycle_verifier,
+            'INSTANCE_PREFIX = "sfx"',
+        ),
+        (
+            frost_lifecycle_verifier,
+            "HOST_PORT = 48611",
+        ),
+        (
+            frost_lifecycle_verifier,
+            "CLIENT_PORT = 48612",
+        ),
+        (
+            frost_lifecycle_verifier,
+            "enable_audio=False",
+        ),
+        (
+            frost_lifecycle_verifier,
+            "sd.debug.get_native_audio_channels(false)",
+        ),
+        (
+            frost_lifecycle_verifier,
+            "no_outliving_owned_loop",
+        ),
+        (
+            frost_lifecycle_verifier,
+            "audio.stop_owned_processes(",
+        ),
+        (
             launch_policy,
             'public const string DisableAudioVariable = "SDMOD_DISABLE_AUDIO";',
         ),
@@ -688,6 +860,21 @@ def test_launch_audio_disable_is_engine_level_and_player_opt_in() -> str:
         raise StaticReTestFailure(
             "launch audio disable contract is missing: "
             + ", ".join(missing)
+        )
+    forbidden_frost_tokens = (
+        "trace_function",
+        "enable_audio=True",
+        "stop_games(",
+    )
+    leaked_frost_tokens = [
+        token
+        for token in forbidden_frost_tokens
+        if token in frost_lifecycle_verifier
+    ]
+    if leaked_frost_tokens:
+        raise StaticReTestFailure(
+            "Frost loop verifier bypassed registry or process/audio "
+            "guardrails: " + ", ".join(leaked_frost_tokens)
         )
 
     opt_in_guard = native_source.find("if (!IsAudioDisableRequested()")

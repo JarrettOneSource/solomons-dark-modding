@@ -5,6 +5,7 @@
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
+#include "native_audio_observability.h"
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
 #include "runtime_debug.h"
@@ -45,7 +46,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 73);
+    lua_createtable(state, 0, 76);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -167,6 +168,18 @@ void RegisterLuaDebugBindings(lua_State* state) {
         &LuaDebugGetLocalCastObservation,
         "get_local_cast_observation");
     RegisterFunction(state, &LuaDebugGetActorModifiers, "get_actor_modifiers");
+    RegisterFunction(
+        state,
+        &LuaDebugGetNativeAudioChannels,
+        "get_native_audio_channels");
+    RegisterFunction(
+        state,
+        &LuaDebugDumpNativeAudioChannels,
+        "dump_native_audio_channels");
+    RegisterFunction(
+        state,
+        &LuaDebugClearNativeAudioChannelHistory,
+        "clear_native_audio_channel_history");
     lua_setfield(state, -2, "debug");
 }
 

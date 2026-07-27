@@ -196,6 +196,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     }
 
     const auto actor_address = reinterpret_cast<uintptr_t>(self);
+    ScopedNativeAudioAttribution native_audio_attribution(
+        actor_address);
     uintptr_t gameplay_address_for_pump = 0;
     uintptr_t local_actor_address = 0;
     if (TryResolveCurrentGameplayScene(&gameplay_address_for_pump) &&
@@ -270,6 +272,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
     uintptr_t tracked_actor_selection_state = 0;
     bool tracked_actor_runtime_invalid = false;
     bool tracked_actor_dead = false;
+    std::uint64_t tracked_participant_id = 0;
+    std::int32_t tracked_cast_skill_id = 0;
+    std::uint32_t tracked_cast_sequence = 0;
     std::string tracked_path_error_message;
     std::string tracked_move_error_message;
     {
@@ -278,6 +283,13 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
             binding != nullptr && IsWizardParticipantKind(binding->kind)) {
             standalone_puppet_actor = IsStandaloneWizardKind(binding->kind);
             gameplay_slot_wizard_actor = IsGameplaySlotWizardKind(binding->kind);
+            tracked_participant_id = binding->bot_id;
+            if (binding->ongoing_cast.active) {
+                tracked_cast_skill_id =
+                    binding->ongoing_cast.skill_id;
+                tracked_cast_sequence =
+                    binding->ongoing_cast.remote_input_cast_sequence;
+            }
             (void)RefreshNativeRemoteParticipantTransformTarget(binding, native_tick_now_ms);
             tracked_actor_native_remote = IsNativeRemoteParticipantBinding(binding);
             if (tracked_actor_native_remote) {
@@ -352,6 +364,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                   tracked_actor_selection_state == 0));
         }
     }
+    native_audio_attribution.SetParticipantCast(
+        tracked_participant_id,
+        tracked_actor_native_remote,
+        tracked_cast_skill_id,
+        tracked_cast_sequence);
 
     if ((standalone_puppet_actor || gameplay_slot_wizard_actor) && tracked_actor_runtime_invalid) {
         Log(

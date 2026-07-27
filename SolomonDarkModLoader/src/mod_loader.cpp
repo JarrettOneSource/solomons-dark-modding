@@ -19,6 +19,7 @@
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
 #include "multiplayer_join_flow.h"
+#include "native_audio_observability.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
 #include "runtime_flags.h"
@@ -149,6 +150,7 @@ void ShutdownPartialRuntime() {
     ShutdownBackgroundFocusBypass();
     ShutdownLuaItemNativeHooks();
     ShutdownGameplayKeyboardInjection();
+    ShutdownNativeAudioObservability();
     ShutdownRunLifecycleHooks();
     StopRuntimeTickService();
     RuntimeDebug_Shutdown();
@@ -287,6 +289,16 @@ void Initialize(HMODULE module_handle) {
                 ShutdownPartialRuntime();
                 write_failed_status("audio-disable-failed", message);
                 return;
+            }
+        }
+
+        {
+            std::string native_audio_observability_error;
+            if (!InitializeNativeAudioObservability(
+                    &native_audio_observability_error)) {
+                Log(
+                    "Native audio observability unavailable. " +
+                    native_audio_observability_error);
             }
         }
 
@@ -536,6 +548,9 @@ void Shutdown() {
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("lua item native hooks", &ShutdownLuaItemNativeHooks);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
+    RunShutdownStep(
+        "native audio observability",
+        &ShutdownNativeAudioObservability);
     RunShutdownStep("run lifecycle hooks", &ShutdownRunLifecycleHooks);
     RunShutdownStep("runtime tick service", &StopRuntimeTickService);
     RunShutdownStep("runtime debug", &RuntimeDebug_Shutdown);

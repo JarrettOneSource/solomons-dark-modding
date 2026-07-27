@@ -114,6 +114,7 @@
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
     <ClInclude Include="include\launch_audio_disable.h" />
+    <ClInclude Include="include\native_audio_observability.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
@@ -262,6 +263,7 @@
     <ClInclude Include="src\bot_runtime\public_api\update_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_combat_observations.inl" />
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_audio.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_field_accessors.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_frame_capture.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl" />
@@ -621,6 +623,7 @@
     <ClCompile Include="src\memory_access_regions.cpp" />
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
     <ClCompile Include="src\launch_audio_disable.cpp" />
+    <ClCompile Include="src\native_audio_observability.cpp" />
     <ClCompile Include="src\mod_loader.cpp" />
     <ClCompile Include="src\mod_loader_gameplay.cpp" />
     <ClCompile Include="src\mod_loader_run_lifecycle.cpp" />

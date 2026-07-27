@@ -153,6 +153,9 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
 
     def test_live_gate_is_audio_enabled_and_process_scoped(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
+        frost_source = (
+            TOOLS / "verify_multiplayer_frost_loop_lifecycle.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("enable_audio=True", source)
         self.assertIn('"-EnableAudio"', source)
         self.assertIn("validate_owned_processes", source)
@@ -162,6 +165,20 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
         self.assertIn("run_lightning_damage_parity", source)
         self.assertIn("COLLECT_LIGHTNING_DAMAGE_MONITOR_LUA", source)
         self.assertNotIn("stop_games(", source)
+        self.assertIn('INSTANCE_PREFIX = "sfx"', frost_source)
+        self.assertIn("HOST_PORT = 48611", frost_source)
+        self.assertIn("CLIENT_PORT = 48612", frost_source)
+        self.assertIn("enable_audio=False", frost_source)
+        self.assertIn(
+            "sd.debug.get_native_audio_channels(false)",
+            frost_source,
+        )
+        self.assertIn("remote_stop_latency_ms", frost_source)
+        self.assertIn("no_outliving_owned_loop", frost_source)
+        self.assertIn("audio.stop_owned_processes(", frost_source)
+        self.assertNotIn("trace_function", frost_source)
+        self.assertNotIn("enable_audio=True", frost_source)
+        self.assertNotIn("stop_games(", frost_source)
 
     def test_owned_cleanup_revalidates_path_before_exact_pid_stop(self) -> None:
         expected = {
