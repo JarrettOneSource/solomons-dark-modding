@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:modSettings="clr-namespace:SolomonDarkModLauncher.UI.ViewModels.ModSettings"
         mc:Ignorable="d"
         Title="Solomon Dark Revived"
         Width="760"
@@ -450,6 +451,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
@@ -494,7 +496,45 @@
                                         </StackPanel>
                                     </StackPanel>
 
-                                    <CheckBox Grid.Column="1"
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <Button Margin="12,0,0,0"
+                                                Padding="6"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Cursor="Hand"
+                                                ToolTip="Mod settings"
+                                                Command="{Binding OpenSettingsCommand}"
+                                                Visibility="{Binding HasSettings, Converter={x:Static modSettings:SettingConverters.BoolToVisibility}}">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock x:Name="Glyph"
+                                                                   FontFamily="Segoe MDL2 Assets"
+                                                                   FontSize="15"
+                                                                   Text="&#xE713;"
+                                                                   Foreground="{StaticResource TextMutedBrush}" />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Glyph" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                        <TextBlock Margin="12,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="15"
+                                                   Text="&#xE7BA;"
+                                                   Foreground="{StaticResource ErrorBrush}"
+                                                   ToolTip="{Binding SettingsValidationError}"
+                                                   Visibility="{Binding HasInvalidSettings, Converter={x:Static modSettings:SettingConverters.BoolToVisibility}}" />
+                                    </StackPanel>
+
+                                    <CheckBox Grid.Column="2"
                                               Margin="16,0,0,0"
                                               VerticalAlignment="Center"
                                               IsChecked="{Binding IsEnabled}"

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using SolomonDarkModding.Updates;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.UI.ViewModels.ModSettings;
 using SolomonDarkModLauncher.UI.Views;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
@@ -2036,6 +2037,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         foreach (var mod in Mods)
         {
             mod.ToggleRequested -= OnModToggleRequested;
+            mod.SettingsRequested -= OnModSettingsRequested;
         }
 
         Mods.Clear();
@@ -2043,6 +2045,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var viewModel = new ModItemViewModel(mod);
             viewModel.ToggleRequested += OnModToggleRequested;
+            viewModel.SettingsRequested += OnModSettingsRequested;
+            ApplyModSettingsState(viewModel);
             Mods.Add(viewModel);
         }
 
@@ -2077,6 +2081,39 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 ? $"The launcher enables {mod.Name}."
                 : $"The launcher disables {mod.Name}.",
             mod.Id);
+    }
+
+    // #61 mod-settings frontend. Until the #60 service layer lands, the stub
+    // source (SDMOD_UI_SETTINGS_STUB=1) drives the dialog for visual work; the
+    // production adapter replaces settingsSource_ during integration.
+    private IModSettingsSource? settingsSource_ =
+        StubModSettingsSource.Enabled ? new StubModSettingsSource() : null;
+
+    private void ApplyModSettingsState(ModItemViewModel mod)
+    {
+        if (settingsSource_ is null)
+        {
+            return;
+        }
+
+        ModSettingsSchema schema = settingsSource_.GetSchema(mod.Id);
+        mod.SettingsState = schema.State;
+        mod.SettingsValidationError = schema.ValidationError;
+    }
+
+    private void OnModSettingsRequested(ModItemViewModel mod)
+    {
+        if (settingsSource_ is null || !mod.HasSettings)
+        {
+            return;
+        }
+
+        var viewModel = new ModSettingsDialogViewModel(settingsSource_, mod.Id);
+        var window = new ModSettingsWindow(viewModel)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        window.ShowDialog();
     }
 
     private void AppendTranscript(LauncherUiInvocationResult invocation)

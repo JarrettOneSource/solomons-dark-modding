@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using SolomonDarkModLauncher.UI.Infrastructure;
+using SolomonDarkModLauncher.UI.ViewModels.ModSettings;
 
 namespace SolomonDarkModLauncher.UI.ViewModels;
 
@@ -72,8 +73,39 @@ internal sealed class ModItemViewModel : ViewModelBase
 
     public event Action<ModItemViewModel>? ToggleRequested;
 
+    public event Action<ModItemViewModel>? SettingsRequested;
+
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand ViewManifestCommand { get; }
+    public RelayCommand OpenSettingsCommand => openSettingsCommand_ ??=
+        new RelayCommand(_ => SettingsRequested?.Invoke(this));
+
+    private RelayCommand? openSettingsCommand_;
+    private ModSettingsBlockState settingsState_ = ModSettingsBlockState.None;
+    private string? settingsValidationError_;
+
+    /// <summary>Populated from the settings service (or stub) after row construction.</summary>
+    public ModSettingsBlockState SettingsState
+    {
+        get => settingsState_;
+        set
+        {
+            if (SetProperty(ref settingsState_, value))
+            {
+                OnPropertyChanged(nameof(HasSettings));
+                OnPropertyChanged(nameof(HasInvalidSettings));
+            }
+        }
+    }
+
+    public string? SettingsValidationError
+    {
+        get => settingsValidationError_;
+        set => SetProperty(ref settingsValidationError_, value);
+    }
+
+    public bool HasSettings => settingsState_ == ModSettingsBlockState.Valid;
+    public bool HasInvalidSettings => settingsState_ == ModSettingsBlockState.Invalid;
 
     public void SetEnabledSilently(bool value)
     {

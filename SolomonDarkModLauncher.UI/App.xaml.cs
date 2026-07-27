@@ -17,6 +17,74 @@ public partial class App : Application
         base.OnStartup(e);
         LauncherShell.UseSafeCurrentDirectory();
 
+        // #61 visual-acceptance preview: SDMOD_UI_SETTINGS_PREVIEW=1 opens the
+        // mod settings dialog against the stub source and exits with it —
+        // before the activation broker, protocol registration, CLI client, or
+        // self-update ever run, so a dev build can never disturb the real
+        // launcher installation.
+        if (Environment.GetEnvironmentVariable("SDMOD_UI_SETTINGS_PREVIEW") == "1"
+            && ViewModels.ModSettings.StubModSettingsSource.Enabled)
+        {
+            string previewLog = Path.Combine(Path.GetTempPath(), "sdmod-ui-settings-preview.log");
+            void Log(string line) =>
+                File.AppendAllText(previewLog, $"{DateTime.Now:HH:mm:ss.fff} {line}{Environment.NewLine}");
+
+            DispatcherUnhandledException += (_, args) =>
+            {
+                Log($"dispatcher exception: {args.Exception}");
+                args.Handled = true;
+            };
+
+            try
+            {
+                Log("preview starting");
+                var previewViewModel = new ViewModels.ModSettings.ModSettingsDialogViewModel(
+                    new ViewModels.ModSettings.StubModSettingsSource(),
+                    "bot.brain");
+                var previewWindow = new ModSettingsWindow(previewViewModel);
+                previewWindow.Loaded += (_, _) => Log("preview window loaded");
+                previewWindow.ContentRendered += (_, _) =>
+                {
+                    Log("preview window content rendered");
+                    string? rtbPath = Environment.GetEnvironmentVariable("SDMOD_UI_SETTINGS_PREVIEW_RTB");
+                    if (string.IsNullOrEmpty(rtbPath))
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                            (int)previewWindow.ActualWidth,
+                            (int)previewWindow.ActualHeight,
+                            96,
+                            96,
+                            System.Windows.Media.PixelFormats.Pbgra32);
+                        bitmap.Render(previewWindow);
+                        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                        using FileStream stream = File.Create(rtbPath);
+                        encoder.Save(stream);
+                        Log($"rtb saved {previewWindow.ActualWidth}x{previewWindow.ActualHeight} -> {rtbPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"rtb failed: {ex}");
+                    }
+                };
+                MainWindow = previewWindow;
+                previewWindow.Show();
+                Log("preview window shown");
+            }
+            catch (Exception ex)
+            {
+                Log($"preview startup exception: {ex}");
+                throw;
+            }
+
+            return;
+        }
+
         if (e.Args.Length > 1)
         {
             MessageBox.Show(
