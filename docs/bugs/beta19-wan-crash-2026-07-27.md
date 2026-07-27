@@ -1,8 +1,9 @@
 # Beta.19 WAN disconnect and native crashes (2026-07-27)
 
 Status: investigation in progress. This checkpoint records the completed
-artifact inventory and peer-correlated timeline. Dump analysis, static reverse
-engineering, root-cause proof, and any fix are deliberately pending.
+artifact inventory, peer-correlated timeline, and native dump forensics.
+Static reverse engineering, root-cause proof, and any fix are deliberately
+pending.
 
 ## Scope and names
 
@@ -157,3 +158,123 @@ capture: no minion or summon existed. It does not yet prove whether held-cast,
 world-snapshot load, participant death, focus loss, or a stock path exposed by
 those conditions owns either null. No code change is justified at this
 checkpoint.
+
+## Dump forensics
+
+The two submitted dump files are not equally complete. The owner's 10:44 dump
+is a valid 17-stream minidump. Client B's 09:00 dump contains a valid header,
+exception record, and x86 exception context, but its 17-entry stream directory
+was never populated and its thread/module descriptor region is zero. CDB
+therefore rejects the original client B file before selecting a process.
+
+The incomplete client B dump was not edited. A generated investigation copy
+reconstructed only the directory entries whose payload locations can be
+proved from the minidump format, plus the single fault-thread descriptor
+needed by CDB. CDB then read the original exception record and register
+context. No stack, module, or memory content was invented. The source and
+generated-copy SHA-256 values are:
+
+- client B original:
+  `0518e283fa0060d2f5d0a1ef3f9f48906d058c3366d318435cd544242b7f8ae2`
+- client B recovered investigation copy:
+  `1e0a45463370b4575d47fafdcdb4bd2d3f63f378468c20bce3a43f9fb92aabac`
+- owner original:
+  `ddee4b2ac08d04c2de22c935387a2126cfa90c8f350e5edb6c85251fa8b2b7b5`
+
+The recovered copy deliberately remains outside the repository under the
+evidence snapshot's `investigation/` directory.
+
+### Client B, 09:00
+
+CDB independently recovers the exception as thread 23676, `0xC0000005`, read
+of address zero:
+
+```text
+eax=00000800 ebx=01118c80 ecx=00000000 edx=ffffffff
+esi=00000000 edi=04f80280
+eip=00d41221 esp=1096fa8c ebp=1096faa8
+```
+
+The game image was rebased to `0x00D00000`, making the instruction's retail
+static address `0x00441221`. The faulting bytes are:
+
+```asm
+mov edx, dword ptr [ecx]  ; ecx == 0
+push 0
+push 1
+push eax
+mov eax, dword ptr [ebp+8]
+push eax
+push ecx
+mov ecx, dword ptr [edx+0x5c]
+call ecx
+```
+
+Because dbgcore did not finish the stream directory, CDB cannot recover client
+B's stack memory or loaded-module list from the dump. The crash handler's
+frame-pointer walk was captured synchronously before dump writing and supplies
+the complete available native chain. Every non-system frame maps to
+`SolomonDark.exe`; converting each module offset to the retail static image
+gives:
+
+```text
+0x00441221  fault
+0x00440F88
+0x004205C2
+0x00413348
+0x004E0E73
+0x0074AB14  native thread entry
+KERNEL32!BaseThreadInitThunk
+ntdll!RtlUserThreadStart
+```
+
+The separate generic stack capture begins inside the loader's crash logger,
+then reaches the same native frames. Loader frames are crash-reporting
+machinery, not callers of `0x00441221`.
+
+### Owner, 10:44
+
+CDB opens the owner's original dump directly. `!analyze -v` classifies it as
+`INVALID_POINTER_READ_c0000005_SolomonDark.exe!Unknown`, with a read of
+address zero on thread 9684:
+
+```text
+eax=00000000 ebx=00e1f800 ecx=ffffffff edx=0134f000
+esi=00e6df00 edi=00000002
+eip=00a207e5 esp=0153f728 ebp=0153f734
+```
+
+The game image was rebased to `0x00A00000`. Its timestamp
+(`0x581A0BF3`), checksum (`0x00483B1C`), and image size (`0x007AC000`)
+identify the expected retail executable. The fault and full native chain,
+converted to retail static addresses, are:
+
+```text
+0x004207E5  mov edx, dword ptr [eax]  ; eax == 0
+0x004137D0
+0x00412FB0
+0x005A77A7
+0x0074812F
+0x007487BE  native thread entry
+KERNEL32!BaseThreadInitThunk
+ntdll!RtlUserThreadStart
+```
+
+The fault thread is the game's native thread; no loader DLL frame is on its
+exception-context call chain. The later all-thread view shows the same thread
+inside `MiniDumpWriteDump` through the loader exception filter because dump
+capture runs synchronously after the saved exception context. Steam's overlay
+appears only in that post-fault dump-writing walk. Neither the loader nor the
+overlay is a caller of the faulting instruction.
+
+### Dump verdict
+
+The dumps confirm two direct null virtual-interface dispatches in the retail
+executable, on two different native call chains. They do **not** support the
+triage suggestion that the owner crash has `esi == 0`; in the saved context,
+`esi` is nonzero and `eax` is the null dispatch receiver. Client B has both
+`ecx == 0` at the dispatch and `esi == 0`.
+
+Dump evidence alone cannot name the two stock functions or prove whether a
+loader hook caused either state. That requires resolving every native frame
+and caller edge against the retail binary before any fix is considered.
