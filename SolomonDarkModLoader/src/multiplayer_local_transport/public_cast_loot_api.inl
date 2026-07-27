@@ -244,6 +244,17 @@ void TickLocalTransport(std::uint64_t now_ms) {
     PublishLocalTransportRuntimeState();
 }
 
+void FlushActiveLocalCastRelease(std::uint64_t now_ms) {
+    const auto& active = g_local_transport.active_local_cast_input;
+    if (!g_local_transport.initialized ||
+        !active.active ||
+        IsGameplayMouseLeftDown() ||
+        now_ms < active.minimum_hold_until_ms) {
+        return;
+    }
+    SendActiveLocalCastInput(now_ms);
+}
+
 bool IsLocalTransportEnabled() {
     return g_local_transport.initialized;
 }

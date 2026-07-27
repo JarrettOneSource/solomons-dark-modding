@@ -1,5 +1,22 @@
 constexpr std::uint64_t kRemoteCastInputStallTimeoutMs = 3000;
 
+void RefreshRemoteCastInputReleaseState(
+    const multiplayer::BotCastInputState& remote_input_state,
+    std::uint64_t now_ms,
+    ParticipantEntityBinding::OngoingCastState* ongoing) {
+    if (ongoing == nullptr) {
+        return;
+    }
+    ongoing->remote_input_release_requested =
+        remote_input_state.release_requested;
+    ongoing->remote_input_timed_out =
+        !remote_input_state.release_requested &&
+        remote_input_state.last_update_ms != 0 &&
+        now_ms > remote_input_state.last_update_ms &&
+        now_ms - remote_input_state.last_update_ms >=
+            kRemoteCastInputStallTimeoutMs;
+}
+
 struct BotBoulderReleaseHoldWrites {
     bool charge = false;
     bool release_charge = false;
@@ -488,14 +505,10 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
                     ongoing.remote_input_cast_sequence;
             const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
             if (have_remote_input) {
-                ongoing.remote_input_release_requested =
-                    remote_input_state.release_requested;
-                ongoing.remote_input_timed_out =
-                    !remote_input_state.release_requested &&
-                    remote_input_state.last_update_ms != 0 &&
-                    now_ms > remote_input_state.last_update_ms &&
-                    now_ms - remote_input_state.last_update_ms >=
-                        kRemoteCastInputStallTimeoutMs;
+                RefreshRemoteCastInputReleaseState(
+                    remote_input_state,
+                    now_ms,
+                    &ongoing);
                 if (remote_input_state.has_aim_target) {
                     ongoing.have_aim_target = true;
                     ongoing.aim_target_x = remote_input_state.aim_target_x;

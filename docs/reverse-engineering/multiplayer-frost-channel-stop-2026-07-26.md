@@ -262,3 +262,29 @@ Evidence:
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/frost-loop-lifecycle-5x.json`
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/client-solomondarkmodloader.log`
 - `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/host-solomondarkmodloader.log`
+
+## Final registry acceptance
+
+After removing both scheduling passes, the registry gate passed five of five
+client-to-host casts:
+
+| Trial | caster stop ms | observer stop ms | latency ms |
+| ---: | ---: | ---: | ---: |
+| 1 | `350986671` | `350986687` | `16` |
+| 2 | `350989093` | `350989109` | `16` |
+| 3 | `350991453` | `350991484` | `31` |
+| 4 | `350993921` | `350993937` | `16` |
+| 5 | `350996296` | `350996312` | `16` |
+
+Every observer record ended with `active=false`, `refcount=0`, and no active
+loop attributed to the completed cast after one 50 ms interval. The registry
+also attributed the remote records to participant
+`2305843009213698050`, native skill `1012`, and cast sequences `1..5`.
+The launch record has `audioDisabled=true`; verification was entirely through
+the wrapper lifecycle instrumentation.
+
+Evidence:
+
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/frost-loop-lifecycle-final-5x.json`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/client-solomondarkmodloader.log`
+- `/mnt/d/codex-evidence/spell-fx-20260726/post-fix-registry/logs/host-solomondarkmodloader.log`

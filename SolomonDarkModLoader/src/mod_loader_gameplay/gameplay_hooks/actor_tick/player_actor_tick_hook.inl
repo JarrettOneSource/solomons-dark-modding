@@ -459,6 +459,29 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // pure primaries whose damage hitbox only runs while input is down.
         // Aim is refreshed before stock tick, so held input does not freeze the
         // first target sample.
+        bool remote_held_release_observed_before_stock_tick = false;
+        if (native_remote_binding &&
+            binding->ongoing_cast.active &&
+            binding->ongoing_cast.remote_input_controlled) {
+            multiplayer::BotCastInputState remote_input_state{};
+            if (multiplayer::ReadBotCastInputState(
+                    binding->bot_id,
+                    &remote_input_state) &&
+                remote_input_state.cast_sequence ==
+                    binding->ongoing_cast.remote_input_cast_sequence) {
+                RefreshRemoteCastInputReleaseState(
+                    remote_input_state,
+                    native_tick_now_ms,
+                    &binding->ongoing_cast);
+                remote_held_release_observed_before_stock_tick =
+                    binding->ongoing_cast.saw_activity &&
+                    OngoingCastRequiresHeldCastInputDuringNativeTick(
+                        binding->ongoing_cast) &&
+                    (binding->ongoing_cast
+                         .remote_input_release_requested ||
+                     binding->ongoing_cast.remote_input_timed_out);
+            }
+        }
         const bool drive_stock_cast_input =
             binding->ongoing_cast.active &&
             OngoingCastShouldDriveSyntheticCastInput(binding->ongoing_cast);
@@ -473,7 +496,9 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // Mask that local input while ticking an idle remote participant so a
         // local press cannot start and immediately cancel the remote spell on
         // every frame. Active remote casts still receive their authored input.
-        if ((drive_stock_cast_input || idle_native_remote_binding) &&
+        if ((drive_stock_cast_input ||
+             idle_native_remote_binding ||
+             remote_held_release_observed_before_stock_tick) &&
             TryResolveCurrentGameplayScene(&gameplay_address) &&
             gameplay_address != 0) {
             if (memory.TryReadField(
@@ -595,6 +620,11 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                 kActorControlBrainStateIdOffset,
                 kUnknownAnimationStateId);
         }
+        native_audio_attribution.SetParticipantCast(
+            binding->bot_id,
+            native_remote_binding,
+            binding->ongoing_cast.skill_id,
+            binding->ongoing_cast.remote_input_cast_sequence);
         InvokeWithParticipantConcentrationContext(
             binding,
             [&] {
@@ -1085,6 +1115,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         original(self);
     }
     if (local_player_actor) {
+        multiplayer::FlushGameplayCastReleaseOnAppThread(
+            static_cast<std::uint64_t>(::GetTickCount64()));
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);
         ResolveWizardParticipantActorCollisions();
         TickParticipantSceneBindingsIfActive();

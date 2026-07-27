@@ -22,6 +22,7 @@ struct DeathSpectatorRuntimeInfo;
 bool InitializeLocalTransport();
 void ShutdownLocalTransport();
 void TickLocalTransport(std::uint64_t now_ms);
+void FlushActiveLocalCastRelease(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();

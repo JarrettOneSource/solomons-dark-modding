@@ -484,6 +484,23 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
     processing_text = read_text(PENDING_CAST_PROCESSING)
     selection_rules_text = read_text(SKILL_SELECTION_RULES)
     player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
+    local_transport_header = read_text(
+        ROOT
+        / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+    )
+    service_header = read_text(
+        ROOT
+        / "SolomonDarkModLoader/include/multiplayer_service_loop.h"
+    )
+    service_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+    )
+    cast_transport_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
 
     target_lost_guard = re.search(
         r"const bool target_lost =(?P<body>.*?);",
@@ -576,15 +593,38 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
             "remote held-primary release must drop synthetic input after startup "
             "and before the generic held-input rule")
 
+    direct_release_sample_pos = player_tick_text.find(
+        "multiplayer::ReadBotCastInputState(")
     drive_input_pos = player_tick_text.find(
         "const bool drive_stock_cast_input")
     stock_tick_pos = player_tick_text.find(
         "original(self);",
         drive_input_pos,
     )
-    if not (0 <= drive_input_pos < stock_tick_pos):
+    if not (
+        0 <= direct_release_sample_pos < drive_input_pos < stock_tick_pos
+    ):
         raise StaticReTestFailure(
-            "remote held-primary release is not presented before the stock actor tick")
+            "remote held-primary release is not sampled and presented before "
+            "the stock actor tick")
+    required_direct_sample_tokens = (
+        "remote_held_release_observed_before_stock_tick",
+        "remote_input_state.cast_sequence ==",
+        "binding->ongoing_cast.remote_input_cast_sequence",
+        "RefreshRemoteCastInputReleaseState(",
+        "&binding->ongoing_cast",
+    )
+    missing_direct_sample_tokens = [
+        token for token in required_direct_sample_tokens
+        if token not in player_tick_text[
+            direct_release_sample_pos:drive_input_pos
+        ]
+    ]
+    if missing_direct_sample_tokens:
+        raise StaticReTestFailure(
+            "remote held-primary release still waits for the post-stock "
+            "pending-cast pass: " +
+            ", ".join(missing_direct_sample_tokens))
 
     remote_release_edge_pos = player_tick_text.find(
         "const bool apply_remote_held_release_edge")
@@ -654,10 +694,50 @@ def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
             "before the stock transition tick: " +
             ", ".join(missing_release_edge_body_tokens))
 
+    required_release_flush_pairs = (
+        (
+            local_transport_header,
+            "void FlushActiveLocalCastRelease(std::uint64_t now_ms);",
+        ),
+        (
+            service_header,
+            "void FlushGameplayCastReleaseOnAppThread(std::uint64_t now_ms);",
+        ),
+        (
+            cast_transport_text,
+            "void FlushActiveLocalCastRelease(std::uint64_t now_ms)",
+        ),
+        (cast_transport_text, "!active.active"),
+        (cast_transport_text, "IsGameplayMouseLeftDown()"),
+        (cast_transport_text, "now_ms < active.minimum_hold_until_ms"),
+        (cast_transport_text, "SendActiveLocalCastInput(now_ms);"),
+        (
+            service_text,
+            "void FlushGameplayCastReleaseOnAppThread(std::uint64_t now_ms)",
+        ),
+        (service_text, "g_session_transport_lifecycle_mutex"),
+        (service_text, "FlushActiveLocalCastRelease(now_ms);"),
+        (
+            player_tick_text,
+            "multiplayer::FlushGameplayCastReleaseOnAppThread(",
+        ),
+    )
+    missing_release_flush_tokens = [
+        token
+        for text, token in required_release_flush_pairs
+        if token not in text
+    ]
+    if missing_release_flush_tokens:
+        raise StaticReTestFailure(
+            "local held-primary release can still wait for the next AppMain "
+            "transport pass: " +
+            ", ".join(missing_release_flush_tokens))
+
     return (
         "remote held input casts defer cleanup to sender input and present "
-        "release through cleared native guards and an idle control brain to "
-        "the stock transition edge"
+        "release through an immediate local flush, a direct remote input "
+        "sample, cleared native guards, and an idle control brain to the "
+        "stock transition edge"
     )
 
 

@@ -254,6 +254,22 @@ void TickGameplayTransportOnAppThread(std::uint64_t now_ms) {
     TickLocalTransport(now_ms);
 }
 
+void FlushGameplayCastReleaseOnAppThread(std::uint64_t now_ms) {
+    if (!g_service_running.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    std::scoped_lock lifecycle_lock(
+        g_session_transport_lifecycle_mutex);
+    if (!g_service_running.load(std::memory_order_acquire) ||
+        g_gameplay_transport_owner_thread_id.load(
+            std::memory_order_acquire) != GetCurrentThreadId()) {
+        return;
+    }
+
+    FlushActiveLocalCastRelease(now_ms);
+}
+
 bool IsServiceLoopRunning() {
     return g_service_running.load(std::memory_order_acquire);
 }
