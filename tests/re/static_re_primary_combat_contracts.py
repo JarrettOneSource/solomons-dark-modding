@@ -221,6 +221,121 @@ def test_earth_boulder_damage_uses_native_live_spell_stats() -> str:
     return "Earth boulder damage resolver uses live Boulder release fields and named native stat seams"
 
 
+def test_earth_boulder_damage_formula_addresses_are_registered() -> str:
+    layout_text = read_text(BINARY_LAYOUT)
+    formula_doc = read_text(
+        ROOT /
+        "docs/reverse-engineering/earth-boulder-damage-formula-2026-07-27.md"
+    )
+
+    required_layout_tokens = (
+        "player_actor_tick=0x00548B00",
+        "stat_book_compute_value=0x0065FFF0",
+        "skills_wizard_build_primary_spell=0x00666020",
+        "spell_cast_028=0x00544C60",
+        "earth_child_spawn=0x005FA6D0",
+        "earth_release_finalize=0x005E5450",
+        "native_apply_damage=0x0063E7D0",
+        "badguy_damage=0x0048A290",
+        "earth_damage_skill_property_value=0x005290F0",
+        "earth_damage_progression_ctor=0x006594E0",
+        "earth_damage_progression_reset=0x0065F5B0",
+        "earth_damage_siege_mage_initialize=0x00661530",
+        "earth_damage_concentrated_skill_refresh=0x00661FD0",
+        "earth_damage_equipment_refresh=0x0067C360",
+        "earth_boulder_contact_tick=0x00620B60",
+        "damage_context_primary=0x0081C6E8",
+        "damage_context_secondary=0x0081C6EC",
+        "earth_boulder_damage_output_scale=0x007A03F0",
+        "earth_boulder_release_damage_scale=0x007DE808",
+        "earth_boulder_release_damage_floor=0x007DE8F0",
+        "earth_boulder_release_damage_cap_scale=0x00784740",
+        "earth_boulder_release_growth_stop_min_charge=0x0078567C",
+    )
+    missing_layout = [
+        token for token in required_layout_tokens if token not in layout_text
+    ]
+    if missing_layout:
+        raise StaticReTestFailure(
+            "Earth Boulder damage formula layout registration is missing: " +
+            ", ".join(missing_layout)
+        )
+
+    required_doc_addresses = (
+        "0x00548B00",
+        "0x00549F42",
+        "0x005290F0",
+        "0x00549FD6",
+        "0x0065FFF0",
+        "0x00549FEA",
+        "0x006594E0",
+        "0x0065F5B0",
+        "0x00661530",
+        "0x00661FD0",
+        "0x0067C360",
+        "0x00677607",
+        "0x00677745",
+        "0x00544C60",
+        "0x00544CFB",
+        "0x00545100",
+        "0x00545122",
+        "0x00545155",
+        "0x00545165",
+        "0x00545171",
+        "0x005FA6D0",
+        "0x005E5450",
+        "0x005E54DE",
+        "0x00620B60",
+        "0x0062125C",
+        "0x00621266",
+        "0x0062127F",
+        "0x00621285",
+        "0x0062128E",
+        "0x006212A5",
+        "0x0063E7D0",
+        "0x0048A290",
+        "0x0079E260",
+        "0x007A03F0",
+        "0x0066B0E5",
+        "0x00666020",
+        "0x007DE808",
+        "0x007DE8F0",
+        "0x00784740",
+        "0x0078567C",
+        "0x0081C6E8",
+        "0x0081C6EC",
+    )
+    missing_doc = [
+        address for address in required_doc_addresses
+        if address not in formula_doc
+    ]
+    if missing_doc:
+        raise StaticReTestFailure(
+            "Earth Boulder formula documentation lost native address anchors: " +
+            ", ".join(missing_doc)
+        )
+
+    required_formula_tokens = (
+        "early/manual: D = max(0.25, min(5  * C^2,  6.25))",
+        "maximum:      D = max(0.25, min(10 * C^2, 12.50))",
+        "HP delta = payload/2 + payload/2 = payload",
+        "The retail executable has one",
+        "primary_stat_output[0] = mDamage * 1956",
+        "accepted_hp = min(current_host_hp, clamp(client_after_hp))",
+        "No crit roll, random damage roll, or difficulty term",
+    )
+    missing_formula = [
+        token for token in required_formula_tokens if token not in formula_doc
+    ]
+    if missing_formula:
+        raise StaticReTestFailure(
+            "Earth Boulder formula documentation lost a traced invariant: " +
+            ", ".join(missing_formula)
+        )
+
+    return "Earth Boulder damage formula and every recovered native address are registered"
+
+
 def test_boulder_projection_is_read_only_native_formula() -> str:
     projection_text = read_text(BOULDER_PROJECTION)
     processing_text = read_text(

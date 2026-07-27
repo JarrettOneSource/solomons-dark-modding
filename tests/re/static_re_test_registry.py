@@ -231,6 +231,7 @@ from static_re_primary_combat_contracts import (
     test_boulder_held_charge_tracks_live_target_until_release,
     test_boulder_live_retarget_probe_is_documented,
     test_boulder_projection_is_read_only_native_formula,
+    test_earth_boulder_damage_formula_addresses_are_registered,
     test_earth_boulder_damage_uses_native_live_spell_stats,
     test_gameplay_selection_writes_do_not_corrupt_stock_run_placement_vector,
     test_held_primary_mana_uses_native_spend_scale_and_start_rate,
@@ -893,6 +894,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ),
     ("primary mana resolver uses native live spell stats", test_primary_mana_resolver_uses_native_live_spell_stats),
     ("Earth boulder damage uses native live spell stats", test_earth_boulder_damage_uses_native_live_spell_stats),
+    (
+        "Earth Boulder damage formula addresses are registered",
+        test_earth_boulder_damage_formula_addresses_are_registered,
+    ),
     ("Earth boulder projection stays read-only and drives target-lethal release", test_boulder_projection_is_read_only_native_formula),
     ("Earth boulder held charge tracks live target until release", test_boulder_held_charge_tracks_live_target_until_release),
     ("Earth boulder live retarget probe is documented", test_boulder_live_retarget_probe_is_documented),
