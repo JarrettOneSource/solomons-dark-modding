@@ -579,6 +579,9 @@ void __fastcall HookGameplaySwitchRegion(void* self, void* /*unused_edx*/, int r
         Log("Authorized client run switch_region from fresh authenticated host intent.");
     }
 
+    if (region_index == kArenaRegionIndex) {
+        BeginBoneyardLoadingScreen();
+    }
     ClearAuthoritativeTurnUndeadTargetLocks();
     const auto gameplay_address = reinterpret_cast<uintptr_t>(self);
     (void)PrepareGameplaySceneSwitchOnGameThread(

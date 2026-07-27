@@ -58,21 +58,22 @@ bool TryUpdateParticipantEntity(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.TryWriteField(binding->actor_address, kActorPositionXOffset, x) ||
-        !memory.TryWriteField(binding->actor_address, kActorPositionYOffset, y)) {
-        DematerializeParticipantEntityNow(request.bot_id, true, "update transform write failed");
-        return false;
-    }
     DWORD rebind_exception_code = 0;
-    if (!TryRebindActorToOwnerWorld(
+    if (!TeleportPlayerFamilyActorAndRebind(
             binding->actor_address,
+            x,
+            y,
             &rebind_exception_code)) {
         Log(
-            "[bots] participant transform rebind failed. bot_id=" +
+            "[bots] participant transform teleport failed. bot_id=" +
             std::to_string(request.bot_id) +
             " actor=" + HexString(binding->actor_address) +
             " exception=" + HexString(rebind_exception_code));
+        DematerializeParticipantEntityNow(
+            request.bot_id,
+            true,
+            "update transform teleport failed");
+        return false;
     }
 
     ApplyWizardActorFacingState(binding->actor_address, heading);

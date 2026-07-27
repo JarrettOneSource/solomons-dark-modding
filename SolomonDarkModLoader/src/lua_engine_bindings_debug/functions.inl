@@ -5,6 +5,7 @@
 #include "functions_typed_readers_and_writers.inl"
 #include "functions_native_calls.inl"
 #include "functions_nav_grid_and_copy.inl"
+#include "functions_native_collision.inl"
 #include "functions_field_accessors.inl"
 #include "functions_frame_capture.inl"
 #include "functions_combat_observations.inl"

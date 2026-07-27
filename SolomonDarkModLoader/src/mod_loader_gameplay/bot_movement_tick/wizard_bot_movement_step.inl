@@ -195,9 +195,9 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         return false;
     }
     const auto movement_controller_address =
-        live_world_address != 0 ? (live_world_address + kActorOwnerMovementControllerOffset) : 0;
-    const auto move_step_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorMoveStep);
+        live_world_address != 0
+            ? (live_world_address + kActorOwnerMovementControllerOffset)
+            : 0;
     auto* actor_animation_advance =
         GetX86HookTrampoline<ActorAnimationAdvanceFn>(g_gameplay_keyboard_injection.actor_animation_advance_hook);
     const auto advance_actor_animation = [&](uintptr_t address) {
@@ -274,36 +274,21 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
 
     const auto move_step_x = velocity_x * move_step_scale;
     const auto move_step_y = velocity_y * move_step_scale;
-    DWORD exception_code = 0;
-    std::uint32_t move_result = 0;
+    PlayerFamilyLocomotionResult locomotion;
     if ((binding->kind == ParticipantEntityBinding::Kind::PlaceholderEnemy ||
          IsStandaloneWizardKind(binding->kind) ||
          IsGameplaySlotWizardKind(binding->kind)) &&
-        move_step_address != 0 &&
         movement_controller_address != 0 &&
-        CallPlayerActorMoveStepSafe(
-            move_step_address,
-            movement_controller_address,
+        MovePlayerFamilyActorThroughNativeStep(
             actor_address,
             move_step_x,
             move_step_y,
             0,
-            &exception_code,
-            &move_result)) {
-        float position_after_x = 0.0f;
-        float position_after_y = 0.0f;
-        if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &position_after_x) ||
-            !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &position_after_y)) {
-            if (error_message != nullptr) {
-                *error_message = "Bot actor position is unreadable after movement.";
-            }
-            binding->last_movement_displacement = 0.0f;
-            PublishParticipantGameplaySnapshot(*binding);
-            return false;
-        }
-        const auto delta_x = position_after_x - position_before_x;
-        const auto delta_y = position_after_y - position_before_y;
-        const auto displacement_distance = std::sqrt((delta_x * delta_x) + (delta_y * delta_y));
+            &locomotion,
+            error_message)) {
+        const auto position_after_x = locomotion.position_after_x;
+        const auto position_after_y = locomotion.position_after_y;
+        const auto displacement_distance = locomotion.actual_displacement;
         const auto applied_direction_x = direction_x;
         const auto applied_direction_y = direction_y;
         binding->native_movement_accumulator_x = velocity_x * native_velocity_damping;
@@ -316,7 +301,10 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
             actor_address,
             kActorAnimationDriveParameterOffset,
             binding->native_movement_accumulator_y);
-        auto movement_log_result = move_result != 0 ? "player_move_step_ok" : "player_move_step_blocked";
+        auto movement_log_result =
+            locomotion.native_step_result
+                ? "player_move_step_ok"
+                : "player_move_step_blocked";
         if (!ApplyWizardBindingFacingState(binding, actor_address) && binding->desired_heading_valid) {
             ApplyWizardActorFacingState(actor_address, binding->desired_heading);
         }
@@ -343,7 +331,9 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
                     " after=(" + std::to_string(position_after_x) + ", " + std::to_string(position_after_y) + ")" +
                     " dir=(" + std::to_string(direction_x) + ", " + std::to_string(direction_y) + ")" +
                     " desired_heading=" + std::to_string(binding->desired_heading) +
-                    " move_result=" + std::to_string(move_result) +
+                    " move_result=" +
+                        std::to_string(
+                            locomotion.native_step_result ? 1 : 0) +
                     " movement_controller=" + HexString(movement_controller_address) +
                     " move_step_scale=" + std::to_string(move_step_scale) +
                     " destination=(" + std::to_string(binding->target_x) + ", " + std::to_string(binding->target_y) + ")" +
@@ -368,9 +358,9 @@ bool ApplyWizardBotMovementStep(ParticipantEntityBinding* binding, std::string* 
         return true;
     }
 
-    if (exception_code != 0 && error_message != nullptr) {
-        *error_message = "PlayerActor_MoveStep threw 0x" + HexString(exception_code) + ".";
-    } else if (error_message != nullptr && movement_controller_address == 0) {
+    if (error_message != nullptr &&
+        error_message->empty() &&
+        movement_controller_address == 0) {
         *error_message = "PlayerActor_MoveStep requires a live movement controller.";
     }
 

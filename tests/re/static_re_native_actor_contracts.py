@@ -884,8 +884,14 @@ def test_player_gamenpc_movement_seed_layout_is_named_and_documented() -> str:
     rail_selection_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl"
     )
-    movement_step_text = read_text(
-        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl"
+    movement_step_text = "\n".join(
+        read_text(path)
+        for path in (
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl",
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/player_family_locomotion.inl",
+        )
     )
     player_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"

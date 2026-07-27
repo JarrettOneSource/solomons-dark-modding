@@ -1,6 +1,7 @@
 #include "native_audio_observability.h"
 
 #include "binary_layout.h"
+#include "gameplay_seams.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -24,6 +25,9 @@ constexpr std::size_t kSoundLoopChannelRecordOffset = 0x44;
 constexpr std::size_t kSoundLoopReferenceCountOffset = 0x4C;
 constexpr std::size_t kSoundChannelHandleOffset = 0x00;
 constexpr std::size_t kMinimumLifecycleHookPatchSize = 5;
+constexpr std::size_t kWorldPointGainVfuncOffset = 0x100;
+constexpr std::uint32_t kNativeFootstepCadenceFrames = 25;
+constexpr std::size_t kMaximumObservedFootstepActors = 16;
 
 struct LoopCatalogEntry {
     std::int32_t registry_index;
@@ -56,6 +60,17 @@ constexpr std::array<LoopCatalogEntry, 22> kLoopCatalog = {{
     {172, 0x1C4C, "sounds\\steam__loop"},
 }};
 
+struct OneShotCatalogEntry {
+    std::int32_t registry_index;
+    std::size_t object_offset;
+    const char* asset;
+};
+
+constexpr std::array<OneShotCatalogEntry, 2> kFootstepCatalog = {{
+    {214, 0x23B8, "sounds\\Step\\step1"},
+    {215, 0x23E4, "sounds\\Step\\step2"},
+}};
+
 struct NativeAudioChannelRecord {
     NativeAudioChannelSnapshot snapshot;
 };
@@ -65,11 +80,22 @@ std::unordered_map<uintptr_t, NativeAudioChannelRecord>
     g_native_audio_channels;
 std::uint64_t g_next_event_sequence = 1;
 uintptr_t g_compiled_registry_global = 0;
+uintptr_t g_sound_play_address = 0;
+uintptr_t g_footstep_frame_counter = 0;
+uintptr_t g_footstep_gain_scale = 0;
 X86Hook g_sound_loop_start_hook;
 X86Hook g_sound_loop_stop_hook;
+X86Hook g_sound_play_hook;
 thread_local NativeAudioAttributionContext g_current_attribution;
+std::unordered_map<uintptr_t, std::uint32_t>
+    g_last_footstep_frame_by_actor;
 
 using SoundLoopLifecycleFn = void(__thiscall*)(void* self);
+using SoundPlayFn = void(__thiscall*)(void* self, float gain);
+using NativeRngIntegerFn =
+    std::int32_t(__thiscall*)(void* self, std::int32_t range, char sign_mode);
+using WorldPointGainFn =
+    float(__thiscall*)(void* self, float x, float y);
 
 uintptr_t ToPreferredImageAddress(uintptr_t runtime_address) {
     const auto module_base = ProcessMemory::Instance().ModuleBase();
@@ -121,6 +147,67 @@ const LoopCatalogEntry* ResolveLoopCatalogEntry(uintptr_t object_address) {
             return entry.object_offset == object_offset;
         });
     return it == kLoopCatalog.end() ? nullptr : &*it;
+}
+
+const OneShotCatalogEntry* ResolveFootstepCatalogEntry(
+    uintptr_t object_address) {
+    uintptr_t registry_address = 0;
+    if (g_compiled_registry_global == 0 ||
+        !ProcessMemory::Instance().TryReadValue(
+            g_compiled_registry_global,
+            &registry_address) ||
+        registry_address == 0 ||
+        object_address < registry_address) {
+        return nullptr;
+    }
+
+    const auto object_offset =
+        static_cast<std::size_t>(object_address - registry_address);
+    const auto it = std::find_if(
+        kFootstepCatalog.begin(),
+        kFootstepCatalog.end(),
+        [object_offset](const OneShotCatalogEntry& entry) {
+            return entry.object_offset == object_offset;
+        });
+    return it == kFootstepCatalog.end() ? nullptr : &*it;
+}
+
+void ObserveSoundPlay(
+    uintptr_t object_address,
+    uintptr_t return_address,
+    float gain) {
+    const auto* catalog =
+        ResolveFootstepCatalogEntry(object_address);
+    if (catalog == nullptr) {
+        return;
+    }
+
+    const auto now_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
+    const auto preferred_return_address =
+        ToPreferredImageAddress(return_address);
+    const auto attribution = g_current_attribution;
+    std::uint64_t sequence = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_native_audio_mutex);
+        sequence = g_next_event_sequence++;
+    }
+    Log(
+        "[native-audio] event=play monotonic_ms=" +
+        std::to_string(now_ms) +
+        " sequence=" + std::to_string(sequence) +
+        " asset=\"" + catalog->asset +
+        "\" owner=movement.footstep" +
+        " object=" + HexString(object_address) +
+        " registry_index=" +
+        std::to_string(catalog->registry_index) +
+        " gain=" + std::to_string(gain) +
+        " actor=" + HexString(attribution.actor_address) +
+        " participant_id=" +
+        std::to_string(attribution.participant_id) +
+        " remote=" +
+        std::to_string(attribution.remote ? 1 : 0) +
+        " return=" + HexString(preferred_return_address));
 }
 
 void ReadLoopRuntimeState(
@@ -314,6 +401,25 @@ void __fastcall HookSoundLoopStop(
         return_address);
 }
 
+void __fastcall HookSoundPlay(
+    void* self,
+    void* /*unused_edx*/,
+    float gain) {
+    const auto return_address =
+        reinterpret_cast<uintptr_t>(_ReturnAddress());
+    const auto original =
+        GetX86HookTrampoline<SoundPlayFn>(
+            g_sound_play_hook);
+    if (original == nullptr) {
+        return;
+    }
+    original(self, gain);
+    ObserveSoundPlay(
+        reinterpret_cast<uintptr_t>(self),
+        return_address,
+        gain);
+}
+
 bool ResolveAudioAddress(
     const char* section,
     const char* key,
@@ -329,6 +435,8 @@ bool ResolveAudioAddress(
                preferred_address,
                address);
 }
+
+#include "native_audio_observability/footstep_dispatch_helpers.inl"
 
 }  // namespace
 
@@ -358,14 +466,20 @@ bool InitializeNativeAudioObservability(std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (g_sound_loop_start_hook.installed &&
+    if (g_sound_play_hook.installed &&
+        g_sound_loop_start_hook.installed &&
         g_sound_loop_stop_hook.installed) {
         return true;
     }
 
+    uintptr_t sound_play = 0;
     uintptr_t sound_loop_start = 0;
     uintptr_t sound_loop_stop = 0;
     if (!ResolveAudioAddress(
+            "audio.lifecycle",
+            "sound_play",
+            &sound_play) ||
+        !ResolveAudioAddress(
             "audio.lifecycle",
             "sound_loop_start",
             &sound_loop_start) ||
@@ -376,7 +490,15 @@ bool InitializeNativeAudioObservability(std::string* error_message) {
         !ResolveAudioAddress(
             "audio.globals",
             "compiled_registry",
-            &g_compiled_registry_global)) {
+            &g_compiled_registry_global) ||
+        !ResolveAudioAddress(
+            "audio.globals",
+            "footstep_frame_counter",
+            &g_footstep_frame_counter) ||
+        !ResolveAudioAddress(
+            "audio.globals",
+            "footstep_gain_scale",
+            &g_footstep_gain_scale)) {
         if (error_message != nullptr) {
             *error_message =
                 "Native audio observability could not resolve the stock "
@@ -384,14 +506,29 @@ bool InitializeNativeAudioObservability(std::string* error_message) {
         }
         return false;
     }
+    g_sound_play_address = sound_play;
 
     std::string hook_error;
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(sound_play),
+            reinterpret_cast<void*>(&HookSoundPlay),
+            kMinimumLifecycleHookPatchSize,
+            &g_sound_play_hook,
+            &hook_error)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Native audio observability could not hook Sound_Play: " +
+                hook_error;
+        }
+        return false;
+    }
     if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(sound_loop_start),
             reinterpret_cast<void*>(&HookSoundLoopStart),
             kMinimumLifecycleHookPatchSize,
             &g_sound_loop_start_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_sound_play_hook);
         if (error_message != nullptr) {
             *error_message =
                 "Native audio observability could not hook "
@@ -407,6 +544,7 @@ bool InitializeNativeAudioObservability(std::string* error_message) {
             &g_sound_loop_stop_hook,
             &hook_error)) {
         RemoveX86Hook(&g_sound_loop_start_hook);
+        RemoveX86Hook(&g_sound_play_hook);
         if (error_message != nullptr) {
             *error_message =
                 "Native audio observability could not hook "
@@ -417,19 +555,26 @@ bool InitializeNativeAudioObservability(std::string* error_message) {
     }
 
     Log(
-        "Native audio observability enabled for stock SoundLoop "
-        "lifecycle events.");
+        "Native audio observability enabled for stock Sound_Play and "
+        "SoundLoop lifecycle events.");
     return true;
 }
 
 void ShutdownNativeAudioObservability() {
     RemoveX86Hook(&g_sound_loop_stop_hook);
     RemoveX86Hook(&g_sound_loop_start_hook);
+    RemoveX86Hook(&g_sound_play_hook);
     std::lock_guard<std::mutex> lock(g_native_audio_mutex);
     g_native_audio_channels.clear();
+    g_last_footstep_frame_by_actor.clear();
     g_next_event_sequence = 1;
     g_compiled_registry_global = 0;
+    g_sound_play_address = 0;
+    g_footstep_frame_counter = 0;
+    g_footstep_gain_scale = 0;
 }
+
+#include "native_audio_observability/footstep_dispatch.inl"
 
 std::vector<NativeAudioChannelSnapshot> SnapshotNativeAudioChannels(
     bool include_inactive) {

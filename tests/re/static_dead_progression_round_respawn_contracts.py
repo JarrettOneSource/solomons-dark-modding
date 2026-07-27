@@ -192,7 +192,13 @@ def test_respawn_uses_live_arena_spawn_and_restores_actor_registration() -> None
     )
     state = read(GAMEPLAY_STATE)
     local_respawn = read(GAMEPLAY_RESPAWN)
-    remote_vitals = read(REMOTE_VITALS)
+    remote_vitals = read(REMOTE_VITALS) + read(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/player_family_locomotion.inl"
+    ) + read(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/entity_update_and_rail_selection.inl"
+    )
     scene_drive = read(SCENE_DRIVE)
     death = read(TRANSPORT_PARTS / "death_spectator_sync.inl")
     for token in (

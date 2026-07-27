@@ -648,8 +648,14 @@ def test_active_cast_movement_clears_stale_vector_before_stock_tick() -> str:
     player_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/actor_tick/player_actor_tick_hook.inl"
     )
-    movement_step_text = read_text(
-        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl"
+    movement_step_text = "\n".join(
+        read_text(path)
+        for path in (
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl",
+            ROOT
+            / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/player_family_locomotion.inl",
+        )
     )
 
     required_tokens = (

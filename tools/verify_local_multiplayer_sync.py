@@ -346,6 +346,7 @@ def launch_pair(
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
     enable_audio: bool | None = None,
+    disable_multiplayer_transport: bool = False,
 ) -> dict[str, object]:
     if kill_existing:
         raise ValueError(
@@ -429,6 +430,8 @@ def launch_pair(
         args.append("-QuickStart")
     if enable_audio:
         args.append("-EnableAudio")
+    if disable_multiplayer_transport:
+        args.append("-DisableMultiplayerTransport")
     if game_directory is not None:
         args.extend([
             "-GameDirectory",

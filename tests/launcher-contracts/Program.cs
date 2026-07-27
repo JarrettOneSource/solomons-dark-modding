@@ -38,6 +38,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
     ("strict multiplayer mod parity", TestStrictMultiplayerModParityAsync),
+    ("loading screen asset staging", TestLoadingScreenAssetStagingAsync),
     ("Lua hot reload bootstrap", TestLuaHotReloadBootstrapAsync),
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
     ("invalid Boneyard rejection", TestInvalidBoneyardRejectionAsync),
@@ -2041,6 +2042,46 @@ static Task TestLuaHotReloadBootstrapAsync()
             nonLuaRejected = true;
         }
         Require(nonLuaRejected, "manifest accepted hot reload without a Lua entry point");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestLoadingScreenAssetStagingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var workspaceRoot = Path.Combine(root, "workspace");
+        var stageRoot = Path.Combine(root, "stage");
+        var sourcePath = Path.Combine(
+            workspaceRoot,
+            "assets",
+            "loading",
+            LoadingScreenAssetMaterializer.BackgroundFileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+        var expected = Encoding.UTF8.GetBytes(
+            "canonical-loading-screen-background");
+        File.WriteAllBytes(sourcePath, expected);
+
+        var stagedPath = LoadingScreenAssetMaterializer.Materialize(
+            workspaceRoot,
+            stageRoot);
+        Require(
+            stagedPath == Path.Combine(
+                stageRoot,
+                ".sdmod",
+                "assets",
+                "loading",
+                LoadingScreenAssetMaterializer.BackgroundFileName),
+            "loading screen background staged to the wrong runtime path");
+        Require(
+            File.ReadAllBytes(stagedPath).SequenceEqual(expected),
+            "loading screen background staging changed the canonical bytes");
     }
     finally
     {

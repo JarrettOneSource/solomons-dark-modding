@@ -9,6 +9,7 @@
 #include "bot_runtime.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
+#include "loading_screen.h"
 #include "logger.h"
 #include "lua_camera_runtime.h"
 #include "lua_engine.h"

@@ -8,6 +8,7 @@ struct WizardParticipantCollisionSubject {
     bool movable = false;
     bool local_player = false;
     bool native_remote = false;
+    bool actively_moving = false;
     bool moved = false;
 };
 
@@ -67,6 +68,21 @@ void ResolveWizardParticipantActorCollisions() {
                 false,
                 &player_subject)) {
             player_subject.local_player = true;
+            float movement_x = 0.0f;
+            float movement_y = 0.0f;
+            if (TryReadFiniteFloatField(
+                    local_player_actor,
+                    kActorAnimationConfigBlockOffset,
+                    &movement_x) &&
+                TryReadFiniteFloatField(
+                    local_player_actor,
+                    kActorAnimationDriveParameterOffset,
+                    &movement_y)) {
+                player_subject.actively_moving =
+                    movement_x * movement_x +
+                        movement_y * movement_y >
+                    0.0001f;
+            }
             subjects.push_back(player_subject);
         }
     }
@@ -95,6 +111,9 @@ void ResolveWizardParticipantActorCollisions() {
         binding.materialized_world_address = subject.world_address;
         subject.native_remote =
             IsPacketDrivenRemoteParticipantBinding(&binding);
+        subject.actively_moving =
+            binding.movement_active ||
+            binding.last_movement_displacement > 0.0001f;
         subjects.push_back(subject);
     }
 
@@ -114,22 +133,21 @@ void ResolveWizardParticipantActorCollisions() {
                 const bool native_player_pair =
                     (left.local_player && right.native_remote) ||
                     (right.local_player && left.native_remote);
-                // Never run loader collision response for a local-player vs
-                // native-remote-mirror pair. Pushing the local player creates a
-                // cross-instance feedback loop (each instance displaces its own
-                // player against the other's lagged mirror, which then replicates
-                // back) -> endless oscillation that never converges when the two
-                // players are near each other. Pushing the mirror instead leaves
-                // it permanently offset from the peer's true replicated position
-                // (by radius+radius+padding), breaking remote convergence. Real
-                // player separation is governed by the authoritative simulation
-                // and replication; the local mirror must faithfully reflect the
-                // peer's transform, so we skip the pair entirely here.
-                if (native_player_pair) {
-                    continue;
-                }
-                const bool left_movable = left.movable;
-                const bool right_movable = right.movable;
+                // The peer mirror is packet-owned and must remain at its
+                // replicated transform. Correct only an actively moving local
+                // player out of overlap. The stationary peer's instance does
+                // nothing, so the correction has one owner and cannot become
+                // the old cross-instance push/replicate oscillation.
+                const bool left_movable =
+                    native_player_pair
+                        ? left.local_player &&
+                              left.actively_moving
+                        : left.movable;
+                const bool right_movable =
+                    native_player_pair
+                        ? right.local_player &&
+                              right.actively_moving
+                        : right.movable;
                 if (left.world_address != right.world_address ||
                     (!left_movable && !right_movable)) {
                     continue;

@@ -1,6 +1,7 @@
 #include "multiplayer_join_flow.h"
 
 #include "debug_ui_overlay.h"
+#include "loading_screen.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -236,6 +237,8 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->create_surface_absent_since_ms = 0;
 }
 
+#include "multiplayer_join_flow/loading_screen_progress.inl"
+
 void SetPhaseUnlocked(JoinFlowPhase phase) {
     if (g_join_flow.phase == phase) {
         return;
@@ -247,6 +250,7 @@ void SetPhaseUnlocked(JoinFlowPhase phase) {
     g_join_flow.phase = phase;
     g_join_flow.phase_entered_ms =
         static_cast<std::uint64_t>(GetTickCount64());
+    UpdateLoadingScreenForPhase(phase);
     if (phase == JoinFlowPhase::PostRun) {
         g_join_flow.post_run_menu_retry_not_before_ms = 0;
         g_join_flow.post_run_menu_request_logged = false;

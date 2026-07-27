@@ -15,6 +15,9 @@ import inspect_boneyard  # noqa: E402
 
 FIXTURE = ROOT / "tests/fixtures/boneyards/flat_multiplayer_test.boneyard"
 EXPECTED_SHA256 = "7c7d23f2fbfcdf73b5bb7f4af0f836cc9d199997fe9c7dd38183c7659b6d949d"
+LOADING_BACKGROUND_SHA256 = (
+    "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c"
+)
 
 
 def _read(relative_path: str) -> str:
@@ -225,6 +228,178 @@ def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() 
         "seed transport, full persistent decor families, peer-local Tree/Scrub/"
         "Goodie state, render-time ambient RNG, and all seven compact-flag sites "
         "are mapped"
+    )
+
+
+def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() -> str:
+    loading = _read("SolomonDarkModLoader/src/loading_screen.cpp")
+    renderer = _read("SolomonDarkModLoader/src/loading_screen_renderer.cpp")
+    native_present = _read(
+        "SolomonDarkModLoader/src/loading_screen_native_present.cpp"
+    )
+    renderer_internal = _read(
+        "SolomonDarkModLoader/src/loading_screen_internal.h"
+    )
+    join_flow = _read("SolomonDarkModLoader/src/multiplayer_join_flow.cpp")
+    join_progress = _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/loading_screen_progress.inl"
+    )
+    join_tick = join_progress + _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/tick_state_machine.inl"
+    )
+    barrier = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "run_loading_barrier_sync.inl"
+    )
+    launcher = _read(
+        "SolomonDarkModLauncher/src/Staging/"
+        "LoadingScreenAssetMaterializer.cs"
+    )
+    package = _read("scripts/New-BetaReleasePackage.ps1")
+    verifier = _read("tools/verify_loading_screen.py")
+
+    required_native_stages = (
+        '"arena_start_run_dispatch"',
+        '"boneyard_loader"',
+        '"boneyard_procedural_create_save"',
+        '"boneyard_generator"',
+        '"boneyard_materialize"',
+        "HookArenaStart",
+        "HookBoneyardLoader",
+        "HookProceduralCreateSave",
+        "HookBoneyardGenerator",
+        "HookBoneyardMaterialize",
+        "LoadingScreenStage::PreparingBoneyard",
+        "LoadingScreenStage::GeneratingBoneyard",
+        "LoadingScreenStage::SerializingBoneyard",
+        "LoadingScreenStage::ReadingBoneyard",
+        "LoadingScreenStage::MaterializingWorld",
+        "definition.progress > current.progress",
+        "std::uintptr_t path_word_6",
+    )
+    missing_native = [
+        token for token in required_native_stages if token not in loading
+    ]
+    if missing_native:
+        raise StaticReTestFailure(
+            "loading screen native stage map is incomplete: "
+            + ", ".join(missing_native)
+        )
+    if "progress +=" in loading or "progress +=" in renderer:
+        raise StaticReTestFailure(
+            "loading screen progress must not advance from a timer or easing loop"
+        )
+    if loading.count("std::uintptr_t path_word_6") != 4:
+        raise StaticReTestFailure(
+            "native Boneyard path-object hooks do not preserve the recovered "
+            "seven-DWORD callee-cleaned ABI"
+        )
+
+    required_renderer = (
+        "kBottomBandHeightFraction = 0.18f",
+        "kProgressBarWidthFraction = 0.60f",
+        "viewport_aspect > image_aspect",
+        "visible_height =",
+        "visible_width =",
+        "D3DPOOL_MANAGED",
+        "InstallD3d9FrameHook",
+        "RemoveD3d9FrameCallback",
+    )
+    combined_renderer = renderer + _read(
+        "SolomonDarkModLoader/src/lua_draw_texture_loader.cpp"
+    )
+    missing_renderer = [
+        token for token in required_renderer if token not in combined_renderer
+    ]
+    if missing_renderer:
+        raise StaticReTestFailure(
+            "loading screen renderer contract is incomplete: "
+            + ", ".join(missing_renderer)
+        )
+    if "native_d3d9_lifetime_guard" in renderer:
+        raise StaticReTestFailure(
+            "loading screen renderer bypasses the shared D3D9 frame seam"
+        )
+    for token, source in (
+        ("kLoadingScreenPresentationDelayMs = 150", renderer_internal),
+        ("GetLastSeenD3d9Device()", native_present),
+        ("device->BeginScene()", native_present),
+        ("device->EndScene()", native_present),
+        ("device->Present(", native_present),
+        ("SDMOD_LOADING_SCREEN_CAPTURE_DIRECTORY", native_present),
+        ("PresentLoadingScreenFrame();", loading),
+    ):
+        if token not in source:
+            raise StaticReTestFailure(
+                f"native loading-stage presentation seam is missing: {token}"
+            )
+
+    required_multiplayer = (
+        "LoadingScreenStage::ConnectingTransport",
+        "LoadingScreenStage::ReceivingRunPlan",
+    )
+    if (
+        "loading_screen_progress.inl" not in join_flow
+        or any(token not in join_progress for token in required_multiplayer)
+    ):
+        raise StaticReTestFailure(
+            "multiplayer join phase changes do not start real loading stages"
+        )
+    for token in (
+        "runtime.transport_ready",
+        "LoadingScreenStage::EstablishingSession",
+        "runtime.run_loading_barrier.active",
+        "LoadingScreenStage::WaitingForParticipants",
+    ):
+        if token not in join_tick:
+            raise StaticReTestFailure(
+                f"multiplayer join progress source is missing: {token}"
+            )
+    for token in (
+        "BeginRunLoadingBarrier(",
+        "LoadingScreenStage::ConfirmingParticipants",
+        "ReleaseRunLoadingBarrier(",
+        "CompleteLoadingScreen();",
+    ):
+        if token not in barrier:
+            raise StaticReTestFailure(
+                f"run-loading barrier progress source is missing: {token}"
+            )
+
+    background = ROOT / "assets/loading/Wizards_dire_BG.png"
+    actual_sha256 = hashlib.sha256(background.read_bytes()).hexdigest()
+    if actual_sha256 != LOADING_BACKGROUND_SHA256:
+        raise StaticReTestFailure(
+            "loading screen background is not the owner-approved canonical asset: "
+            f"{actual_sha256}"
+        )
+    if (
+        "FileTreeMirror.Synchronize" not in launcher
+        or '".sdmod"' not in launcher
+        or '"assets"' not in launcher
+        or 'Copy-Item (Join-Path $root "assets")' not in package
+    ):
+        raise StaticReTestFailure(
+            "loading screen asset is not staged and packaged with the loader"
+        )
+    for token in (
+        'INSTANCE_PREFIX = "ffix"',
+        "HOST_PORT = 49711",
+        "CLIENT_PORT = 49712",
+        "enable_audio=False",
+        "disable_multiplayer_transport=(",
+        "stop_exact_game_processes(launch)",
+        "waiting_for_participants",
+    ):
+        if token not in verifier:
+            raise StaticReTestFailure(
+                f"loading-screen live verifier safety contract is missing: {token}"
+            )
+
+    return (
+        "loading progress is monotonic and sourced from native Boneyard, "
+        "multiplayer join, and run-barrier milestones; rendering uses the "
+        "shared D3D9 lifetime seam and canonical packaged art"
     )
 
 

@@ -8,6 +8,7 @@
 #include "bot_runtime.h"
 #include "fresh_save_tutorial_bypass.h"
 #include "launch_audio_disable.h"
+#include "loading_screen.h"
 #include "logger.h"
 #include "lua_camera_runtime.h"
 #include "lua_developer_console.h"
@@ -147,6 +148,7 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
 void ShutdownPartialRuntime() {
     StopLuaExecPipeServer();
     ShutdownLuaDeveloperConsole();
+    ShutdownLoadingScreen();
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
     ShutdownLuaItemNativeHooks();
@@ -530,6 +532,33 @@ void Initialize(HMODULE module_handle) {
             InitializeLuaDeveloperConsole();
         }
 
+        {
+            const auto* loading_screen_config =
+                TryGetDebugUiOverlayConfig();
+            std::string loading_screen_error;
+            if (loading_screen_config == nullptr ||
+                loading_screen_config->device_pointer_global == 0 ||
+                !InitializeLoadingScreen(
+                    loading_screen_config->device_pointer_global,
+                    stage_runtime_directory /
+                        "assets" /
+                        "loading" /
+                        "Wizards_dire_BG.png",
+                    &loading_screen_error)) {
+                const auto message = loading_screen_error.empty()
+                    ? std::string(
+                        "Loading screen could not resolve the D3D9 "
+                        "device pointer seam.")
+                    : loading_screen_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status(
+                    "loading-screen-failed",
+                    message);
+                return;
+            }
+        }
+
         RefreshStartupStatusSnapshot(&startup_status);
         std::ostringstream startup_summary;
         startup_summary << "SolomonDarkModLoader startup complete."
@@ -563,6 +592,7 @@ void Shutdown() {
     Log("SolomonDarkModLoader shutting down.");
     RunShutdownStep("lua exec pipe", &StopLuaExecPipeServer);
     RunShutdownStep("lua developer console", &ShutdownLuaDeveloperConsole);
+    RunShutdownStep("loading screen", &ShutdownLoadingScreen);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("lua item native hooks", &ShutdownLuaItemNativeHooks);

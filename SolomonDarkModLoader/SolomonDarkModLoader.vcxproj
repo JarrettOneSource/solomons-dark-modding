@@ -116,6 +116,7 @@
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
     <ClInclude Include="include\launch_audio_disable.h" />
+    <ClInclude Include="include\loading_screen.h" />
     <ClInclude Include="include\native_audio_observability.h" />
     <ClInclude Include="include\native_d3d9_lifetime_guard.h" />
     <ClInclude Include="include\multiplayer_foundation.h" />
@@ -124,6 +125,7 @@
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="include\multiplayer_native_minion_state.inl" />
+    <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />
@@ -165,6 +167,7 @@
     <ClInclude Include="src\gameplay_seams\size_bindings.inl" />
     <ClInclude Include="src\gameplay_seams\state_and_address_bindings.inl" />
     <ClInclude Include="src\debug_ui_config_internal.h" />
+    <ClInclude Include="src\loading_screen_internal.h" />
     <ClInclude Include="src\debug_ui_overlay\control_observers.inl" />
     <ClInclude Include="src\debug_ui_overlay\control_observers_browser_and_settings_capture.inl" />
     <ClInclude Include="src\debug_ui_overlay\control_observers_exact_capture_helpers.inl" />
@@ -278,6 +281,7 @@
     <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_memory_inspection.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_calls.inl" />
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_collision.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_snapshots_and_chains.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_tracing_and_watches.inl" />
@@ -320,6 +324,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_death_drop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\player_family_locomotion.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\native_ranked_stat_values.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl" />
@@ -556,6 +561,8 @@
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks\wave_and_enemy_spawn_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\spell_cast_hooks.inl" />
     <ClInclude Include="src\run_lifecycle\state_and_targets.inl" />
+    <ClInclude Include="src\native_audio_observability\footstep_dispatch.inl" />
+    <ClInclude Include="src\native_audio_observability\footstep_dispatch_helpers.inl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp" />
@@ -642,6 +649,9 @@
     <ClCompile Include="src\lua_draw_runtime.cpp" />
     <ClCompile Include="src\lua_ui_renderer.cpp" />
     <ClCompile Include="src\lua_ui_runtime.cpp" />
+    <ClCompile Include="src\loading_screen.cpp" />
+    <ClCompile Include="src\loading_screen_native_present.cpp" />
+    <ClCompile Include="src\loading_screen_renderer.cpp" />
     <ClCompile Include="src\lua_content_registry.cpp" />
     <ClCompile Include="src\lua_draw_texture_loader.cpp" />
     <ClCompile Include="src\lua_mod_runtime.cpp" />

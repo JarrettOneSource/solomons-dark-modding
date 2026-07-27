@@ -4,6 +4,11 @@ multiplayer::MultiplayerCharacterProfile BuildLocalPlayerNativePrimaryProfile(
 ParticipantEntityBinding* FindParticipantEntity(std::uint64_t participant_id);
 ParticipantEntityBinding* FindParticipantEntityForGameplaySlot(int gameplay_slot);
 bool TryRebindActorToOwnerWorld(uintptr_t actor_address, DWORD* exception_code);
+bool TeleportPlayerFamilyActorAndRebind(
+    uintptr_t actor_address,
+    float x,
+    float y,
+    DWORD* exception_code);
 void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(
     uintptr_t actor_address,

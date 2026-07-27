@@ -502,26 +502,41 @@ NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback(
     constexpr float kRemoteSettleDistance = 0.05f;
 
     const bool large_discontinuity = distance > kRemoteSnapDistance;
-    const float position_write_distance = large_discontinuity ? 0.0f : kRemoteSettleDistance;
+    const float position_write_distance =
+        large_discontinuity ? 0.0f : kRemoteSettleDistance;
     const float next_x = binding->replicated_target_x;
     const float next_y = binding->replicated_target_y;
-    auto& memory = ProcessMemory::Instance();
     if (distance > position_write_distance) {
-        result.wrote_position =
-            memory.TryWriteField(actor_address, kActorPositionXOffset, next_x) &&
-            memory.TryWriteField(actor_address, kActorPositionYOffset, next_y);
-        if (result.wrote_position) {
-            const auto rebind_actor_address = memory.ResolveGameAddressOrZero(kWorldCellGridRebindActor);
-            uintptr_t world_address = 0;
-            if (rebind_actor_address != 0 &&
-                memory.TryReadField(actor_address, kActorOwnerOffset, &world_address) &&
-                world_address != 0) {
-                DWORD rebind_exception_code = 0;
-                (void)CallWorldCellGridRebindActorSafe(
-                    rebind_actor_address,
-                    world_address,
+        if (large_discontinuity) {
+            DWORD teleport_exception_code = 0;
+            result.wrote_position =
+                TeleportPlayerFamilyActorAndRebind(
                     actor_address,
-                    &rebind_exception_code);
+                    next_x,
+                    next_y,
+                    &teleport_exception_code);
+        } else {
+            PlayerFamilyLocomotionResult locomotion;
+            std::string locomotion_error;
+            result.wrote_position =
+                MovePlayerFamilyActorThroughNativeStep(
+                    actor_address,
+                    dx,
+                    dy,
+                    0,
+                    &locomotion,
+                    &locomotion_error) &&
+                locomotion.actual_displacement > 0.0001f;
+            if (!locomotion_error.empty()) {
+                static std::uint64_t s_last_remote_locomotion_error_ms = 0;
+                if (now_ms - s_last_remote_locomotion_error_ms >= 1000) {
+                    s_last_remote_locomotion_error_ms = now_ms;
+                    Log(
+                        "[bots] native remote locomotion failed. participant_id=" +
+                        std::to_string(binding->bot_id) +
+                        " actor=" + HexString(actor_address) +
+                        " error=" + locomotion_error);
+                }
             }
         }
     }

@@ -23,6 +23,9 @@ internal static class StageBuilder
             catalog.EnabledMods);
         var hudLabels = HudLabelAssetMaterializer.Materialize(configuration.Workspace.StageRootPath);
         var runtimeConfig = RuntimeConfigStageMaterializer.Materialize(configuration);
+        LoadingScreenAssetMaterializer.Materialize(
+            configuration.Workspace.RootPath,
+            configuration.Workspace.StageRootPath);
         var runtimeMetadata = RuntimeMetadataStageMaterializer.Materialize(
             configuration.Workspace.StageRootPath,
             catalog.EnabledMods,

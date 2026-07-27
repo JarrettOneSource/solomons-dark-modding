@@ -88,6 +88,7 @@ def validate_archive(archive_path: Path, version: str) -> dict[str, Any]:
         "launcher/assets/steam/win32/steam_api.dll",
         "config/binary-layout.ini",
         "config/debug-ui.ini",
+        "assets/loading/Wizards_dire_BG.png",
     }
     forbidden_extensions = {
         ".pdb",

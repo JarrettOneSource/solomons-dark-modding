@@ -134,6 +134,9 @@
     <ClInclude Include="src\debug_ui_config_internal.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\loading_screen_internal.h">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\debug_ui_overlay.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -224,6 +227,9 @@
     <ClInclude Include="include\launch_audio_disable.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\loading_screen.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\native_audio_observability.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -235,6 +241,9 @@
     </ClInclude>
     <ClInclude Include="include\multiplayer_join_flow.h">
       <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl">
+      <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl">
       <Filter>Header Files\Internal</Filter>
@@ -501,6 +510,9 @@
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_calls.inl">
+      <Filter>Header Files\Lua Debug Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_collision.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl">
@@ -822,6 +834,9 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\player_family_locomotion.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl">
@@ -1783,6 +1798,15 @@
     <ClCompile Include="src\lua_ui_runtime.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
+    <ClCompile Include="src\loading_screen.cpp">
+      <Filter>Source Files\Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loading_screen_native_present.cpp">
+      <Filter>Source Files\Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\loading_screen_renderer.cpp">
+      <Filter>Source Files\Loader</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua_content_registry.cpp">
       <Filter>Source Files\Lua</Filter>
     </ClCompile>
@@ -1816,6 +1840,12 @@
     <ClCompile Include="src\native_audio_observability.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
+    <ClInclude Include="src\native_audio_observability\footstep_dispatch.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_audio_observability\footstep_dispatch_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClCompile Include="src\native_d3d9_lifetime_guard.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>

@@ -2,6 +2,7 @@
 #include "bot_casting/turn_undead_caster_target_lock.inl"
 #include "bot_casting/targeting_and_facing.inl"
 #include "bot_movement/locomotion_and_animation.inl"
+#include "bot_movement/player_family_locomotion.inl"
 #include "bot_movement/native_remote_playback.inl"
 #include "bot_casting/native_cast_gate_patches.inl"
 #include "bot_casting/skill_selection_rules.inl"

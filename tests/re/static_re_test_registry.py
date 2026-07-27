@@ -11,6 +11,7 @@ from static_re_boneyard_contracts import (
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
     test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
+    test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
     test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
 from static_re_boneyard_lighting_contracts import (
@@ -284,6 +285,7 @@ from static_re_native_movement_contracts import (
     test_hot_path_diagnostics_are_default_off_and_gated,
     test_lua_bot_constants_are_semantic_or_documented,
     test_participant_collision_resolver_is_documented_and_live_probed,
+    test_player_family_locomotion_uses_native_step_and_footstep_dispatch,
     test_remaining_active_hardcode_sources_are_removed,
     test_smell_source_inventory_is_current,
 )
@@ -553,6 +555,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Multiplayer Boneyard scenery shares the host generation boundary",
         test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
+    ),
+    (
+        "Loading screen uses native stage progress and shared D3D9 lifetime",
+        test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
     ),
     (
         "Boneyard Tree last-writer render path is registered",
@@ -1121,6 +1127,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Player/GameNpc movement seed layout is named and documented", test_player_gamenpc_movement_seed_layout_is_named_and_documented),
     ("Bot movement speed uses native live envelope", test_bot_movement_speed_uses_native_live_envelope),
     ("Participant collision resolver is documented and live-probed", test_participant_collision_resolver_is_documented_and_live_probed),
+    (
+        "Player-family locomotion uses native step and footstep dispatch",
+        test_player_family_locomotion_uses_native_step_and_footstep_dispatch,
+    ),
     ("Cast-state native contracts are documented and layout-backed", test_cast_state_native_contracts_are_documented_and_layout_backed),
     ("Lua bot constants are semantic or documented", test_lua_bot_constants_are_semantic_or_documented),
     ("remaining active hardcode sources are removed", test_remaining_active_hardcode_sources_are_removed),

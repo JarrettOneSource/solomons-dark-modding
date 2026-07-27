@@ -18,6 +18,8 @@ void TickMultiplayerJoinFlow() {
     const bool private_gameplay_ready =
         IsPrivateGameplayReady(scene);
 
+    UpdateLoadingScreenForRuntime(g_join_flow.phase, runtime);
+
     DebugUiSurfaceSnapshot current_snapshot;
     const bool snapshot_available =
         TryGetLatestDebugUiSurfaceSnapshot(&current_snapshot);

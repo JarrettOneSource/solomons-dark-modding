@@ -61,6 +61,8 @@ private:
 bool InitializeNativeAudioObservability(std::string* error_message);
 void ShutdownNativeAudioObservability();
 
+bool DispatchNativeWizardFootstep(uintptr_t actor_address);
+
 std::vector<NativeAudioChannelSnapshot> SnapshotNativeAudioChannels(
     bool include_inactive);
 std::size_t ClearInactiveNativeAudioChannelHistory();

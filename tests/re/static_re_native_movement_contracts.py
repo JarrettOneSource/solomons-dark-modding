@@ -263,6 +263,107 @@ def test_participant_collision_resolver_is_documented_and_live_probed() -> str:
     return "participant collision resolver is active, documented, and guarded against the old bridge"
 
 
+def test_player_family_locomotion_uses_native_step_and_footstep_dispatch() -> str:
+    locomotion = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/player_family_locomotion.inl"
+    )
+    motion_includes = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_registry_and_movement_motion_helpers.inl"
+    )
+    remote_playback = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/native_remote_vitals_and_playback.inl"
+    )
+    bot_movement = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/wizard_bot_movement_step.inl"
+    )
+    audio_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/native_audio_observability.h"
+    )
+    audio_source = read_text(
+        ROOT / "SolomonDarkModLoader/src/native_audio_observability.cpp"
+    )
+    debug_bindings = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_debug.cpp"
+    )
+    debug_collision = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/lua_engine_bindings_debug/functions_native_collision.inl"
+    )
+    layout = read_text(BINARY_LAYOUT)
+    verifier = read_text(
+        ROOT / "tools/verify_multiplayer_participant_locomotion.py"
+    )
+
+    required = (
+        (motion_includes, "include tree", 'bot_movement/player_family_locomotion.inl'),
+        (locomotion, "locomotion seam", "MovePlayerFamilyActorThroughNativeStep("),
+        (locomotion, "locomotion seam", "EnsurePlayerFamilyActorNativePresence("),
+        (locomotion, "locomotion seam", "RestoreWizardActorAliveRegistrationState("),
+        (locomotion, "locomotion seam", "TryRebindActorToOwnerWorld("),
+        (locomotion, "locomotion seam", "CallPlayerActorMoveStepSafe("),
+        (locomotion, "locomotion seam", "actual_displacement"),
+        (locomotion, "locomotion seam", "DispatchNativeWizardFootstep("),
+        (remote_playback, "remote playback", "MovePlayerFamilyActorThroughNativeStep("),
+        (remote_playback, "remote playback", "TeleportPlayerFamilyActorAndRebind("),
+        (bot_movement, "bot movement", "MovePlayerFamilyActorThroughNativeStep("),
+        (
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/participant_collision_response.inl"
+            ),
+            "participant collision response",
+            "left.local_player &&",
+        ),
+        (audio_header, "audio header", "DispatchNativeWizardFootstep("),
+        (audio_source, "audio observability", "HookSoundPlay("),
+        (audio_source, "audio observability", '"[native-audio] event=play monotonic_ms="'),
+        (audio_source, "audio observability", '"sounds\\\\Step\\\\step1"'),
+        (audio_source, "audio observability", '"sounds\\\\Step\\\\step2"'),
+        (layout, "binary layout", "footstep_frame_counter=0x0081F658"),
+        (debug_bindings, "debug bindings", '"test_native_movement_collision"'),
+        (debug_collision, "native collision query", "CallMovementCollisionTestCirclePlacementSafe("),
+        (debug_collision, "native collision query", "CallMovementCollisionTestCirclePlacementExtendedSafe("),
+        (verifier, "live verifier", 'INSTANCE_PREFIX = "ffix"'),
+        (verifier, "live verifier", "HOST_PORT = 49711"),
+        (verifier, "live verifier", "CLIENT_PORT = 49712"),
+        (verifier, "live verifier", "enable_audio=False"),
+        (verifier, "live verifier", "test_native_movement_collision"),
+        (verifier, "live verifier", "native_footstep_dispatch"),
+        (verifier, "live verifier", "bot_inherits_player_family_locomotion"),
+    )
+    missing = [
+        f"{label}:{token}"
+        for text, label, token in required
+        if token not in text
+    ]
+    if missing:
+        raise StaticReTestFailure(
+            "player-family locomotion contract is incomplete: "
+            + ", ".join(missing)
+        )
+
+    remote_body = remote_playback[
+        remote_playback.index("NativeRemotePlaybackResult ApplyNativeRemoteParticipantPlayback("):
+    ]
+    if re.search(
+        r"TryWriteField\(\s*actor_address,\s*kActorPosition[XY]Offset",
+        remote_body,
+    ):
+        raise StaticReTestFailure(
+            "remote playback still owns raw transform writes instead of the "
+            "player-family locomotion seam"
+        )
+
+    return (
+        "remote players and Lua bots share native MoveStep collision presence "
+        "and stock footstep dispatch"
+    )
+
+
 def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
     doc_text = read_text(ROOT / "docs/spell-cast-cleanup-chain.md")
     plan_text = read_text(NATIVE_SEAM_PLAN)

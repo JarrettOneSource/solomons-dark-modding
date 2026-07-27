@@ -161,6 +161,7 @@ void ResetRunLoadingBarrierState(std::string_view reason) {
     PublishRunLoadingBarrierRuntime(
         static_cast<std::uint64_t>(GetTickCount64()));
     if (was_active) {
+        CancelLoadingScreen();
         Log(
             "Multiplayer run-loading barrier retired. reason=" +
             std::string(reason));
@@ -345,6 +346,11 @@ void BeginRunLoadingBarrier(
                 .authoritative_expected_participant_count) +
         " timeout_ms=" +
         std::to_string(kRunLoadingBarrierTimeoutMs));
+    BeginLoadingScreen(
+        g_local_transport.is_host
+            ? LoadingScreenFlow::MultiplayerHost
+            : LoadingScreenFlow::MultiplayerJoin,
+        LoadingScreenStage::WaitingForParticipants);
 }
 
 void ReleaseRunLoadingBarrier(
@@ -382,6 +388,8 @@ void ReleaseRunLoadingBarrier(
         " waiting_participant_ids=" +
         RunLoadingParticipantIdsText(
             runtime.waiting_participant_ids));
+    AdvanceLoadingScreen(LoadingScreenStage::GameplayReady);
+    CompleteLoadingScreen();
 }
 
 bool HostRunLoadingReadyByEveryParticipant() {
@@ -478,6 +486,8 @@ void ServiceRunLoadingBarrier(std::uint64_t now_ms) {
 
     if (g_run_loading_barrier
             .local_mutual_visibility) {
+        AdvanceLoadingScreen(
+            LoadingScreenStage::ConfirmingParticipants);
         g_run_loading_barrier.local_ack_nonce =
             run_nonce;
         if (g_local_transport.is_host) {
