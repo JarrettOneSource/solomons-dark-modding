@@ -55,9 +55,9 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "fight, die, and respawn like human players. Name each bot and "
         "choose its element and how it fights in the launcher's mod "
         "settings. Changes apply live, and in multiplayer the host's "
-        "roster syncs to everyone. Requires v0.1.0-beta.21 or newer."
+        "roster syncs to everyone. Requires v0.1.0-beta.22 or newer."
     )
-    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.21"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.22"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
     required_capabilities = set(
