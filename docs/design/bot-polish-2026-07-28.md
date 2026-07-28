@@ -116,10 +116,12 @@ Headless Ghidra decompilation of the retail executable establishes this path:
 1. `0x005D0290`, the stock new-character setup, maps the create-screen
    Discipline selector to skill row `7`, `5`, or `6`.
 2. It calls `0x00660320`
-   (`PlayerAppearance_ApplyChoice(progression, choice_id, side_effects)`) for
-   that row.
-3. `0x00660320` ensures the `Skills_Wizard` table contains the row and
-   increments its permanent learned rank at row `+0x20`.
+   (`PlayerAppearance_ApplyChoice(progression, choice_id, ensure_assets)`) for
+   that row, passing `ensure_assets = 1`.
+3. With `ensure_assets` enabled, `0x00660320` calls `0x005C85E0` when the
+   selected row has not yet been initialized. That populates the row's stat
+   book and compiled maximum. The function then increments the permanent
+   learned rank at row `+0x20` and clamps it against that maximum.
 4. `0x0065F5B0` copies permanent ranks at row `+0x20` to effective ranks at
    row `+0x22`, resets derived scalars, and runs the skill/equipment passes.
 5. `0x0065F9A0` performs the full progression refresh and recomputes the
@@ -148,9 +150,10 @@ primary loadout.
 Therefore Discipline is a valid per-character loadout knob. Applying row
 5/6/7 to the bot's resolved progression object affects that bot's own book; it
 does not require or justify changing slot 0 or a process-global player book.
-For a bot-owned progression object, the native apply call uses side effects
-disabled so it cannot publish local HUD or local-player state. The normal
-native progression refresh then consumes the learned row.
+The stock `ensure_assets = 1` path initializes catalog-backed data for the
+progression object passed to the call; the rank mutation remains confined to
+that bot-owned object. The normal native progression refresh then consumes the
+learned row.
 
 `MultiplayerCharacterProfile.discipline_id` is already validated as `0..2`,
 serialized in participant state, received into remote participant profiles,
@@ -158,13 +161,28 @@ and exposed by `sd.bots` snapshots. The missing seam is materialization:
 `PrimeGameplaySlotBotSelectionState` currently applies element and primary
 loadout but never applies the profile's Discipline row to the slot-owned book.
 
+#### Live parameter correction
+
+The first live implementation passed `ensure_assets = 0` under the mistaken
+assumption that the third parameter only controlled local UI side effects. A
+host/client probe then showed the mapped selection cache at `+0x830` was
+correct for both bots, while rows 5, 6, and 7 remained zero on both machines.
+The same run proved that profile replication and the bot-owned progression
+addresses were correct.
+
+Decompilation explains the exact failure: disabling `ensure_assets` skips
+`0x005C85E0`, leaving the selected row's compiled maximum at zero. The rank
+increment is therefore immediately clamped back to zero. The foundational fix
+is to make the same `ensure_assets = 1` call as stock character creation, not
+to write rank fields directly.
+
 ### 2.5 Resolution
 
 The roster maps `mind/body/arcane` to the existing profile enum and passes the
 choice into `sd.bots.spawn`. Materialization maps the enum to native row
 `6/5/7`, invokes the existing SEH-protected native choice helper with
-process-local side effects disabled, stores the selected row at `+0x830`, and
-runs the existing native refresh. Roster replication needs no parallel
+the stock row-initialization flag enabled, stores the selected row at `+0x830`,
+and runs the existing native refresh. Roster replication needs no parallel
 protocol: `discipline_id` is already part of the replicated character profile.
 
 ## 3. Black robes and incomplete appearance initialization
