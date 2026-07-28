@@ -377,6 +377,9 @@
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
+    <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>

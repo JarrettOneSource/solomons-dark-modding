@@ -573,6 +573,135 @@ def test_empty_run_snapshot_unregisters_stale_enemies_without_parking() -> str:
     )
 
 
+def test_local_native_interaction_completion_precedes_authority_retirement() -> str:
+    layout = _read("config/binary-layout.ini")
+    offsets = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/"
+        "progression_and_actor_offsets.inl"
+    )
+    storage = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage_npcs.inl"
+    )
+    bindings = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl"
+    )
+    retirement = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/run_enemy_targeting_and_retirement.inl"
+    )
+    apply = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "world_snapshot_reconciliation/apply_snapshot.inl"
+    )
+    verifier = _read(
+        "tools/verify_multiplayer_dig_npc_movement_unlock.py"
+    )
+
+    layout_contract = {
+        "solomon_dig_interaction_state": (
+            "kSolomonDigInteractionStateOffset",
+            "0x220",
+        ),
+        "solomon_dig_participant_acquired": (
+            "kSolomonDigParticipantAcquiredOffset",
+            "0x2A0",
+        ),
+        "solomon_dig_target_gameplay_slot": (
+            "kSolomonDigTargetGameplaySlotOffset",
+            "0x2A4",
+        ),
+    }
+    for key, (symbol, value) in layout_contract.items():
+        assert f"{key}={value}" in layout, f"binary layout lacks {key}"
+        assert f"extern std::size_t {symbol};" in offsets
+        assert f"std::size_t {symbol} = 0;" in storage
+        assert (
+            f'SDMOD_SIZE("gameplay.offsets", "{key}", {symbol})'
+            in bindings
+        )
+
+    helper = retirement[
+        retirement.index("bool IsLocalNativeInteractionCompletionPending(") :
+        retirement.index("bool RemoveReplicatedSharedHubActor(")
+    ]
+    _require_in_order(
+        helper,
+        "binding.actor.object_type_id != kSolomonDigNativeTypeId",
+        "kSolomonDigInteractionStateOffset",
+        "kSolomonDigParticipantAcquiredOffset",
+        "kSolomonDigTargetGameplaySlotOffset",
+        "participant_acquired != 0",
+        "target_gameplay_slot == 0",
+        "interaction_state >= 0",
+        "interaction_state < 3",
+    )
+    for forbidden in (
+        "GetTickCount",
+        "TryWrite",
+        "kGameplayCastUiBlockFlagOffset",
+        "kGameplayPrimaryGateBlockFlagOffset",
+        "kGameplayLocalMovementInputXOffset",
+        "0x005C7300",
+        "0x005C7390",
+    ):
+        assert forbidden not in helper, (
+            f"interaction ownership must not force-release native state: {forbidden}"
+        )
+
+    removal = apply[
+        apply.index(
+            "if (IsLocalNativeInteractionCompletionPending(binding))"
+        ) :
+        apply.index(
+            "if (snapshot.scene_intent.kind !=",
+            apply.index(
+                "if (IsLocalNativeInteractionCompletionPending(binding))"
+            ),
+        )
+    ]
+    _require_in_order(
+        removal,
+        "if (IsLocalNativeInteractionCompletionPending(binding))",
+        "RecordWorldSnapshotBinding(&counts, binding, false, false, false);",
+        "continue;",
+        "RemoveReplicatedRunActor(binding, &exception_code)",
+    )
+
+    npc_scenarios = verifier[
+        verifier.index("def run_real_npc_scenario(") :
+        verifier.index("def run_lua_wave_regression(")
+    ]
+    assert "sd.gameplay.start_waves" not in npc_scenarios, (
+        "real-NPC regressions must not use the Lua wave shortcut"
+    )
+    for token in (
+        'INSTANCE_PREFIX = "digfix"',
+        "HOST_PORT = 50211",
+        "CLIENT_B_PORT = 50212",
+        'os.environ["SDMOD_DISABLE_AUDIO"] = "1"',
+        "local_sync.place_player(",
+        '"authorityAdvancedWhileLocalOwnerRetained"',
+        '"retiredAfterNativeCompletion"',
+        "require_locked_motion(",
+        "require_working_motion(",
+        "dialog_trace_summary(",
+        '"requestedInputIntent"',
+        '"appliedInputIntentFrames"',
+        '"peakNativeVector"',
+        '"displacement"',
+    ):
+        assert token in verifier, f"real-NPC movement verifier lacks: {token}"
+    lua_regression = verifier[
+        verifier.index("def run_lua_wave_regression(") :
+    ]
+    assert "sd.gameplay.start_waves" in lua_regression
+
+    return (
+        "authority retirement preserves a locally owned Solomon completion until "
+        "the stock state-2 controller restores have advanced it to state 3"
+    )
+
+
 def test_run_enemy_death_tombstones_precede_structural_omission() -> str:
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
     capture = _read(
