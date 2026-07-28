@@ -500,6 +500,10 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
                         " network_actor_id=" + std::to_string(removed_network_actor_id));
                     continue;
                 }
+                if (IsLocalNativeInteractionCompletionPending(binding)) {
+                    RecordWorldSnapshotBinding(&counts, binding, false, false, false);
+                    continue;
+                }
                 DWORD exception_code = 0;
                 const auto removed_actor_address = binding.actor.actor_address;
                 if (RemoveReplicatedRunActor(binding, &exception_code)) {

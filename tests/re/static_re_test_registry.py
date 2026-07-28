@@ -120,6 +120,7 @@ from static_multiplayer_transport_contracts import (
     test_empty_run_snapshot_unregisters_stale_enemies_without_parking,
     test_hub_service_fragments_are_visual_studio_project_items,
     test_hub_students_remain_in_the_stock_transient_lifecycle,
+    test_local_native_interaction_completion_precedes_authority_retirement,
     test_native_project_uses_repo_local_lua_sources,
     test_exact_spawn_retires_invalid_featured_enemy,
     test_run_enemy_death_tombstones_precede_structural_omission,
@@ -625,6 +626,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "empty run snapshots unregister stale enemies without parking",
         test_empty_run_snapshot_unregisters_stale_enemies_without_parking,
+    ),
+    (
+        "local native interaction completion precedes authority retirement",
+        test_local_native_interaction_completion_precedes_authority_retirement,
     ),
     (
         "run-enemy death tombstones precede structural omission",

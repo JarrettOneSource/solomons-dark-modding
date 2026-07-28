@@ -450,6 +450,38 @@ std::uint32_t ApplyLatestRunEnemyTargetsFromRuntimeSnapshot(
     return write_count;
 }
 
+bool IsLocalNativeInteractionCompletionPending(
+    const ReplicatedWorldActorLocalBinding& binding) {
+    if (binding.actor.actor_address == 0 ||
+        binding.actor.object_type_id != kSolomonDigNativeTypeId) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t interaction_state = -1;
+    std::uint8_t participant_acquired = 0;
+    std::int32_t target_gameplay_slot = -1;
+    if (!memory.TryReadField(
+            binding.actor.actor_address,
+            kSolomonDigInteractionStateOffset,
+            &interaction_state) ||
+        !memory.TryReadField(
+            binding.actor.actor_address,
+            kSolomonDigParticipantAcquiredOffset,
+            &participant_acquired) ||
+        !memory.TryReadField(
+            binding.actor.actor_address,
+            kSolomonDigTargetGameplaySlotOffset,
+            &target_gameplay_slot)) {
+        return false;
+    }
+
+    return participant_acquired != 0 &&
+           target_gameplay_slot == 0 &&
+           interaction_state >= 0 &&
+           interaction_state < 3;
+}
+
 bool RemoveReplicatedSharedHubActor(
     const ReplicatedWorldActorLocalBinding& binding,
     DWORD* exception_code) {

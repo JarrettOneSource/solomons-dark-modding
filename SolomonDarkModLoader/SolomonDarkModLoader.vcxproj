@@ -165,6 +165,7 @@
     <ClInclude Include="src\gameplay_seams.h" />
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
+    <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl" />
     <ClInclude Include="src\gameplay_seams\public_api.inl" />
     <ClInclude Include="src\gameplay_seams\progression_and_actor_offsets.inl" />
