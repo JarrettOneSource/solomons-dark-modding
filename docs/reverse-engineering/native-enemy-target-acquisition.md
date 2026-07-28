@@ -175,6 +175,14 @@ recovered stock re-evaluation paths share one correction:
    and round-trip through its exact ActorWorld bucket;
 5. the nearest candidate wins and only `hostile + 0x168/+0x164` are written.
 
+The retail selector also owns a completion latch at `hostile + 0x68`. It sets
+the byte before scanning and relies on the successful group-zero relocation's
+ActorWorld registration tail to clear it. `Badguy_CommonChaseTick` returns
+before movement while the byte remains set. Extended multiplayer targets are
+committed without relocating the hostile, so a successful extended selection
+must explicitly clear that latch after its target pointer and bucket delta are
+valid. A failed or empty selection leaves the native retry state intact.
+
 Ordinary native-list actors must also pass the retail group-to-region
 comparison. Materialized remote wizard slots do not: live two-peer evidence
 showed their exact ActorWorld group/slot bucket was valid while their

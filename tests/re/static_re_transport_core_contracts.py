@@ -234,6 +234,16 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     continuity_verifier_text = read_text(
         ROOT / "tools/verify_multiplayer_host_death_continuity.py"
     )
+    monster_pathfinding_hook_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "monster_pathfinding_hook.inl"
+    )
+    wave_spawn_filter_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "wave_spawn_filter.inl"
+    )
     spectator_followup_text = read_text(
         ROOT
         / "tools/verify_multiplayer_organic_spectator_followup.py"
@@ -417,18 +427,69 @@ def test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once() -> str:
     assert "invoke_native_magic_hit_trial" not in organic_verifier_text
     for token in (
         "DEFAULT_OBSERVATION_SECONDS = 180.0",
+        "effective-retail-wave.txt",
+        "unmodified_retail_schedule",
+        "test_blank_boneyard=False",
         "enable_audio=False",
+        "invoke_native_magic_hit_trial",
+        "hold_real_key",
+        "analyze_survivor_input",
+        "pending_initialize",
+        "selector_pending",
+        "maximum_displacement",
+        "terminal_damage_coverage",
+        "barrier_restart_count",
+        "authority_change_count",
+        "shared_pause_count",
+        "teardown_count",
+        "game_over_armed_count",
+        "client_bound_replica_sample_count",
+        "session_teardown_count",
         "retarget_success_ratio",
         "client_snapshot_cadence",
         "catch_up_count",
         "manual_spawn_request_count",
         "host-post-death-terminal.png",
-        "client-post-death-terminal.png",
+        "client-b-post-death-terminal.png",
         "stop_exact_game_processes(launch)",
     ):
         assert token in continuity_verifier_text, (
             f"host-death continuity live gate lacks: {token}"
         )
+    for forbidden in (
+        "_isolate_enemy(",
+        "_arm_enemy_arena(",
+        "_set_enemy_attack(",
+        "place_player(",
+        "KILL_OTHER_ENEMIES_LUA",
+        "WAVE_FIXTURES",
+    ):
+        assert forbidden not in continuity_verifier_text, (
+            "host-death continuity live gate is not organic: "
+            f"{forbidden}"
+        )
+    move_step_start = monster_pathfinding_hook_text.index(
+        "std::uint32_t __fastcall HookBadguyMoveStep("
+    )
+    move_step_end = monster_pathfinding_hook_text.index(
+        "bool WriteLuaEnemyAiNativeTarget(",
+        move_step_start,
+    )
+    move_step = monster_pathfinding_hook_text[move_step_start:move_step_end]
+    client_simulation_suppression = move_step.index(
+        "IsBoundReplicatedRunEnemyActorForLocalClient(actor_address)"
+    )
+    stock_move = move_step.rindex(
+        "return original(movement_context, actor, move_x, move_y);"
+    )
+    assert client_simulation_suppression < stock_move
+    wave_client_suppression = wave_spawn_filter_text.index(
+        "ShouldSuppressClientAuthoritativeRunWaveSpawner(now_ms)"
+    )
+    wave_stock_tick = wave_spawn_filter_text.rindex(
+        "original(self, unused_edx);"
+    )
+    assert wave_client_suppression < wave_stock_tick
     for token in (
         "_materialize_native_wave_schedule",
         "pre_wave_actor_addresses",

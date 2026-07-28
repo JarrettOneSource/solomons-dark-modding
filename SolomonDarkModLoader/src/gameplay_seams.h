@@ -361,6 +361,7 @@ extern std::size_t kActorWorldCameraShakeMagnitudeOffset;
 extern std::size_t kActorWorldCameraShakeAccumulatorOffset;
 extern std::size_t kActorPendingInitializeOffset;
 extern std::size_t kActorPendingRemoveOffset;
+extern std::size_t kActorRegisterTransientOffset;
 extern std::size_t kActorVtableInitializeOffset;
 extern std::size_t kActorVtableTickOffset;
 extern std::size_t kActorWorldBucketTableOffset;

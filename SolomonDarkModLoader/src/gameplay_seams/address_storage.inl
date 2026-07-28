@@ -343,6 +343,7 @@ std::size_t kActorWorldCameraShakeMagnitudeOffset = 0;
 std::size_t kActorWorldCameraShakeAccumulatorOffset = 0;
 std::size_t kActorPendingInitializeOffset = 0;
 std::size_t kActorPendingRemoveOffset = 0;
+std::size_t kActorRegisterTransientOffset = 0;
 std::size_t kActorVtableInitializeOffset = 0;
 std::size_t kActorVtableTickOffset = 0;
 std::size_t kActorWorldBucketTableOffset = 0;

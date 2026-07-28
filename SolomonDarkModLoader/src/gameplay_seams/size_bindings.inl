@@ -91,6 +91,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "actor_world_camera_shake_accumulator", kActorWorldCameraShakeAccumulatorOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_pending_initialize", kActorPendingInitializeOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_pending_remove", kActorPendingRemoveOffset),
+        SDMOD_SIZE("gameplay.offsets", "actor_register_transient", kActorRegisterTransientOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_vtable_initialize", kActorVtableInitializeOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_vtable_tick", kActorVtableTickOffset),
         SDMOD_SIZE("gameplay.offsets", "actor_world_bucket_table", kActorWorldBucketTableOffset),

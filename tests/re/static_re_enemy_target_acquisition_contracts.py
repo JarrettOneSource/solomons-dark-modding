@@ -72,6 +72,9 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             "clients must not independently choose a nearest target",
             "Player-owned summon ActorWorld slots are peer-local",
             "owner participant plus the native ally type",
+            "completion latch at `hostile + 0x68`",
+            "ActorWorld registration tail to clear it",
+            "successful extended selection",
             "never relocate or",
             "promote the target actor",
         ),
@@ -111,6 +114,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             "actor_world_relocate_hostile_to_group_zero=0x0063F7A0",
             "gameplay_hostile_target_candidate_list=0x1388",
             "actor_world_region_index=0x78",
+            "actor_register_transient=0x68",
             "actor_hostile_target_ineligible_state=0x160",
             "actor_target_repath_phase=0x1DC",
             "actor_target_missing_state=0x1D8",
@@ -124,6 +128,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             "kBadguyCommonChaseTick",
             "kGameplayHostileTargetCandidateListOffset",
             "kActorWorldRegionIndexOffset",
+            "kActorRegisterTransientOffset",
             "kActorHostileTargetIneligibleStateOffset",
             "kActorTargetRepathPhaseOffset",
             "kActorTargetMissingStateOffset",
@@ -137,6 +142,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             "uintptr_t kBadguyCommonChaseTick = 0;",
             "std::size_t kGameplayHostileTargetCandidateListOffset = 0;",
             "std::size_t kActorWorldRegionIndexOffset = 0;",
+            "std::size_t kActorRegisterTransientOffset = 0;",
             "std::size_t kActorHostileTargetIneligibleStateOffset = 0;",
             "std::size_t kActorTargetRepathPhaseOffset = 0;",
             "std::size_t kActorTargetMissingStateOffset = 0;",
@@ -158,6 +164,7 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
             '"gameplay_hostile_target_candidate_list", '
             "kGameplayHostileTargetCandidateListOffset",
             '"actor_world_region_index", kActorWorldRegionIndexOffset',
+            '"actor_register_transient", kActorRegisterTransientOffset',
             '"actor_hostile_target_ineligible_state", '
             "kActorHostileTargetIneligibleStateOffset",
             '"actor_target_repath_phase", kActorTargetRepathPhaseOffset',
@@ -168,6 +175,49 @@ def test_native_enemy_target_acquisition_is_recovered_and_layout_backed() -> str
     return (
         "native hostile acquisition, candidate ownership, host-death "
         "invalidation, and unsafe relocation boundaries are layout-backed"
+    )
+
+
+def test_extended_target_selection_completes_native_chase_latch() -> str:
+    acquisition = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "hostile_target_acquisition.inl"
+    )
+    start = acquisition.index("bool ApplyNearestValidHostileTarget(")
+    apply_target = acquisition[start:]
+
+    _require_tokens(
+        "extended hostile target completion",
+        apply_target,
+        (
+            "selection.valid",
+            "kActorCurrentTargetActorOffset",
+            "kHostileTargetBucketDeltaOffset",
+            "kActorRegisterTransientOffset",
+            "TryWriteField<std::uint8_t>",
+            "complete the same success contract",
+        ),
+    )
+    target_write = apply_target.index("kActorCurrentTargetActorOffset")
+    bucket_write = apply_target.index(
+        "kHostileTargetBucketDeltaOffset",
+        target_write,
+    )
+    valid_completion = apply_target.index(
+        "if (selection.valid)",
+        bucket_write,
+    )
+    latch_clear = apply_target.index(
+        "kActorRegisterTransientOffset",
+        valid_completion,
+    )
+    assert target_write < bucket_write < valid_completion < latch_clear
+    assert ",\n                0)" in apply_target[latch_clear:latch_clear + 160]
+
+    return (
+        "a validated extended authority target releases the native selector "
+        "latch only after target and bucket publication"
     )
 
 

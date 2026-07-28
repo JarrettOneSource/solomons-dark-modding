@@ -623,6 +623,22 @@ bool ApplyNearestValidHostileTarget(
     if (!success) {
         return false;
     }
+    if (selection.valid) {
+        // The retail selector sets this byte before scanning and clears it
+        // through the ActorWorld registration tail when it commits a
+        // group-zero target. Extended targets are committed without
+        // relocating the hostile, so complete the same success contract
+        // explicitly after both target fields are valid.
+        success =
+            memory.TryWriteField<std::uint8_t>(
+                hostile_actor_address,
+                kActorRegisterTransientOffset,
+                0) &&
+            success;
+    }
+    if (!success) {
+        return false;
+    }
 
     const auto [logged_target_iterator, inserted_logged_target] =
         g_last_logged_hostile_target_by_actor.try_emplace(

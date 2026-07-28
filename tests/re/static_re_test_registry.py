@@ -276,6 +276,7 @@ from static_re_native_actor_contracts import (
 from static_re_enemy_target_acquisition_contracts import (
     test_enemy_retarget_is_authoritative_nearest_and_event_driven,
     test_enemy_retarget_acceptance_gate_is_wired,
+    test_extended_target_selection_completes_native_chase_latch,
     test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
 )
 from static_re_native_movement_contracts import (
@@ -1132,6 +1133,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native enemy target acquisition is recovered and layout-backed",
         test_native_enemy_target_acquisition_is_recovered_and_layout_backed,
+    ),
+    (
+        "Extended target selection completes the native chase latch",
+        test_extended_target_selection_completes_native_chase_latch,
     ),
     (
         "Enemy retarget acceptance gate is wired",
