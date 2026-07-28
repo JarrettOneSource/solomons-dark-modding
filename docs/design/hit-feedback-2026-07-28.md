@@ -44,13 +44,16 @@ special case to one enemy packet.
 | actor HP mutation | `0x0052AC80` | Applies the final HP delta to the target Player's own progression/stat pool and arms terminal behavior when appropriate. |
 | local damage-history record | `0x00528F10` | Records final damage only when the target equals `gameplay + 0x1358`. This is bookkeeping, not the red/sound presentation. |
 | generic damage dispatcher | `0x0063E7D0` | Validates the active target and dispatches its vtable slot `+0x4C`. |
-| damage-context reset | `0x006246F0` | Releases/resets the active native damage context. |
+| damage-context reset | `0x006246F0` | Releases/resets the active native damage context and restores the hit-reaction defaults. |
+| generic Actor hit-reaction latch | `0x00627F80` | For positive primary/secondary damage, arms the target Actor's two decaying hit fields and copies the context's intensity/color parameters. It then dispatches registered Actor damage reactions through `0x00625150`. |
+| generic Actor tick | `0x00624AC0` | Subtracts `0.05` per tick from both Actor hit fields at `+0x78` and `+0x80`, clamping each to zero. |
+| generic Actor render | `0x00624B40` | Uses `Actor + 0x78` and `Actor + 0x7C` for the stock red Actor/sprite overlay. |
 | `Sound::Play` | `0x00407B70` | Receives the selected `Wizard_Ouch` `Sound` object and final gain. |
 | inclusive integer random | `0x00448450` | Returns an integer in `[minimum, maximum]`; the sound gate uses `[20, 60]`. |
 | native integer RNG | `0x00401170` | Selects one of three ouch sounds and supplies the red/cooldown jitter. |
 | presentation-block predicate | `0x00462090` | Returns blocked when the object at `0x008199F8` has a non-null field at `+0x04` or a positive count at `+0x24`. |
 | Arena tick | `0x0046E570` | Decays `Arena + 0x8EBC` by `0.007` per tick and clamps it to zero. |
-| Arena render | `0x0046EC80` | Draws the four red screen-edge quads when `Arena + 0x8EBC` is nonzero. |
+| Arena render | `0x0046EC80` | Draws the four red screen-edge quads with opacity `local Actor + 0x78` multiplied by `Arena + 0x8EBC`; a nonzero Arena scalar alone is not visible. |
 
 The active context globals used by this path are:
 
@@ -62,6 +65,8 @@ The active context globals used by this path are:
 | `0x0081C6E8` | primary/projectile damage lane |
 | `0x0081C6EC` | secondary/magic damage lane |
 | `0x0081C6F0` | special/heal lane |
+| `0x0081C6F8` | Actor hit-overlay intensity; context reset default `1.0` |
+| `0x0081C6FC..0x0081C708` | Actor hit-overlay RGBA; context reset default `(0.65, 0, 0, 1)` |
 | `0x0081C264` | gameplay runtime pointer |
 | `0x0081F658` | stock frame/tick counter |
 | `0x00807B58` | shared hit-presentation deadline |
@@ -80,10 +85,43 @@ actor's gameplay slot and its associated progression pool.
 
 There is no independent positive minimum-damage threshold in the presentation
 tail. Upstream immunity, defense, absorption, cancellation, and terminal guards
-can make the final HP delta zero. Presentation follows only when actor-owned HP
-actually fell. The shared presentation deadline is not an invulnerability
-window: it throttles an ouch request and is re-armed by the red effect, while
-damage application itself still runs.
+can make the final HP delta zero. The ordinary ouch/red tail follows only when
+actor-owned HP actually fell. The shared presentation deadline is not an
+invulnerability window: it throttles an ouch request and is re-armed by the red
+effect, while damage application itself still runs.
+
+Before HP mutation, the common resolver calls `0x00627F80` at
+`0x0052FDF1` after defense/lane resolution. A separate conditional path calls
+the same helper at `0x0052F9FF`. When resolved primary plus secondary damage is
+positive, the helper writes:
+
+```text
+Actor + 0x78 = 1.0
+Actor + 0x80 = (damage_flags & 0x08) ? 0.0 : 1.0
+Actor + 0x7C = context hit-overlay intensity
+Actor + 0x84..0x90 = context hit-overlay RGBA
+```
+
+The primary and secondary latches do not scale with damage magnitude.
+`0x00624AC0` decays each by exactly `0.05` per Actor tick. The base Actor
+renderer uses the primary latch and intensity for the red Actor/sprite
+reaction. The Arena renderer independently multiplies the same primary latch
+by the Arena red-edge scalar for its full-screen quads. Thus the Actor latch is
+part of the native screen reaction, not merely an enemy sprite detail.
+
+`0x00627F80` also invokes `0x00625150`, which dispatches registered Actor
+damage reactions. That dispatch is part of the authority-side damage
+transaction, not an owner-only presentation call: the authority already runs
+it against its materialized remote actor. Re-running the dispatcher on the
+owner would duplicate arbitrary gameplay/mod reactions. Owner replay must copy
+the resolved Actor presentation fields but must not invoke this dispatcher or
+reconstruct an active damage context.
+
+The helper's positive-lane condition is independent of local-player identity
+and of the later HP comparison. The framework's replicated event remains more
+selective: it represents a completed hit only when actor-owned HP actually
+fell. This prevents blocked/cancelled attempts from becoming network hit
+events while preserving all presentation parameters for damage that landed.
 
 After HP mutation, the ordinary ouch block requires all of:
 
@@ -137,14 +175,17 @@ current_tick + 20 + random(0, 11)
 ```
 
 where the native integer RNG call has an exclusive upper bound for this direct
-form. `0x0046E570` subtracts `0.007` each Arena tick. `0x0046EC80` consumes the
-field and draws the red edge/vignette quads.
+form. `0x0046E570` subtracts `0.007` each Arena tick. `0x0046EC80` multiplies
+the field by the local Actor's decaying `+0x78` latch and draws the red
+edge/vignette quads.
 
 No ordinary-hit camera impulse or separate HUD animation occurs in this path.
 The other local-only action is the `0x00528F10` damage-history record. Direction
-does not affect red magnitude. Source/target position affects only the sound's
-world attenuation; the red magnitude and base ouch gain are functions of
-post-hit HP, not raw damage magnitude.
+does not feed the Actor latch, the red-edge magnitude, or the ouch selection.
+Source/target position affects only the sound's world attenuation. The
+full-screen red magnitude and base ouch gain are functions of post-hit HP, not
+raw damage magnitude; the Actor reaction starts at `1.0` and uses the
+context-resolved intensity/color.
 
 If native HP mutation enters its terminal path, it returns before the ordinary
 nonlethal tail. Multiplayer already handles an owner-side lethal correction by
@@ -259,16 +300,47 @@ client B remained at red `0.0`. Thus stock already gives exactly one local
 presentation on the machine that natively simulates its own hit; the missing
 case is specifically the owner of an authority-simulated remote actor.
 
+### Visual-gate correction to the initial model
+
+The first presentation-only prototype proved the event and audio paths but
+failed actual image inspection. On client B it wrote
+`Arena + 0x8EBC = 0.482489`; a backbuffer capture two rendered frames later
+still had `0.475489`, yet showed no red edge. The matched host-native capture
+at `0.478781` visibly showed the stock red wash. A live identity probe also
+proved that the local Actor's owner Arena and the active render Arena were the
+same object, ruling out an Arena alias.
+
+The missing state was then recovered at raw render instruction
+`0x00470538`: stock loads `*(local_actor + 0x78)`, multiplies it by
+`*(Arena + 0x8EBC)`, and passes the product to the quad renderer. The owner
+never ran `0x00627F80`, so its local Actor latch remained zero and multiplied
+the otherwise-correct Arena scalar away. This visual gate is the reason the
+resolved Actor presentation fields are mandatory in the wire event and replay
+below.
+
 ## Fix contract
 
 ### Event origin
 
-`HookPlayerActorMagicDamage` is the foundational event boundary.
+`HookPlayerActorMagicDamage` remains the authority and Lua-filter gate, but it
+is not a reliable completed-event boundary. Live stock-skeleton instrumentation
+showed the host applying real damage and publishing a vitals correction while
+the outer hook's optional damage-context capture reported
+`damage_context_unavailable`. Tying feedback capture to that optional outer
+context silently missed a stock melee path.
 
-For a host-side remote participant whose controller kind is `Native`, the hook
-captures actor-owned HP and ordinary-feedback context immediately before the
-original call, then captures actor-owned HP immediately after it. It publishes
-one hit-feedback event only when:
+The foundational event boundary is therefore
+`HookPlayerActorDamageResolver`, the detour of the common resolver at
+`0x0052F540`. Every Player-family damage route that reaches stock HP mutation
+passes this point after the outer authority/filter work. For a host-side remote
+participant whose controller kind is `Native`, the outermost resolver call on
+the current thread captures the actor-owned HP and progression address before
+stock runs. After stock returns, it reads the final resolved damage lanes and
+the same actor-owned HP pool. Nested resolver calls remain part of their
+outermost transaction rather than producing an inner event plus an aggregate
+outer event.
+
+The resolver hook publishes one hit-feedback event only when:
 
 - both reads are finite and from the same actor-owned progression pool;
 - post-hit HP is strictly lower than pre-hit HP;
@@ -276,11 +348,11 @@ one hit-feedback event only when:
 - the target remains the same authenticated remote human participant; and
 - post-hit HP remains positive.
 
-Capturing after Lua filters and after stock defense resolution makes the event
-describe final damage, not requested damage. It automatically covers stock
-enemies, stock spells, and mod-authored damage that enters the framework's
-common Player damage/filter seam. It is not tied to skeletons, a spell type, or
-an enemy packet.
+The HP transition and final lanes are sampled after Lua filters and stock
+defense resolution, so the event describes completed damage, not requested
+damage. It automatically covers stock enemies, stock spells, and mod-authored
+damage that enters the framework's common Player damage/filter seam. It is not
+tied to skeletons, a spell type, a vitals packet, or an enemy packet.
 
 The hook does not publish for the host's own local actor: stock just presented
 that hit. It does not publish for `LuaBrain` participants, so bot damage never
@@ -297,7 +369,9 @@ containing:
 - target run nonce;
 - per-target hit event sequence;
 - pre-hit, post-hit, and maximum HP;
-- an ouch-eligible bit captured from the native primary/secondary lane gate.
+- an ouch-eligible bit captured from the native primary/secondary lane gate;
+- the resolved Actor hit fields at `+0x78/+0x7C/+0x80`; and
+- the resolved hit-overlay RGBA at `+0x84..+0x90`.
 
 This packet contains no damage-apply instruction.
 
@@ -310,7 +384,13 @@ below N.
 
 The owner authenticates authority, target, run nonce, finite HP bounds, and
 event sequence before queueing presentation on the gameplay-thread action
-pump. A successfully queued sequence becomes idempotent immediately; duplicate
+pump. Target identity uses `GetLocalTransportParticipantId`; the runtime-state
+local participant deliberately uses the internal slot id `1` and is consulted
+only for validity, in-run state, and run nonce. A live diagnostic caught this
+identity-domain distinction: the requested 64-bit transport id and run nonce
+were correct while comparing them to runtime slot `1` rejected every event.
+
+A successfully queued sequence becomes idempotent immediately; duplicate
 retransmissions do not queue again. If the local actor is temporarily
 unavailable, the gameplay action remains pending rather than converting a
 later snapshot into a new event.
@@ -326,11 +406,13 @@ The gameplay-thread action:
 
 1. resolves the true local actor with `TryGetPlayerState`;
 2. verifies it is still the target run and is live/nonterminal;
-3. reproduces the stock ouch gate, RNG choice, health gain, world attenuation,
+3. copies the authority-resolved Actor presentation fields at
+   `+0x78..+0x90`, without invoking `0x00627F80` or its reaction dispatcher;
+4. reproduces the stock ouch gate, RNG choice, health gain, world attenuation,
    and `Sound::Play` request when the event's captured lane bit permits it;
-4. reproduces the local red threshold/formula by writing only
+5. reproduces the local red threshold/formula by writing only
    `Arena + 0x8EBC`; and
-5. updates the same stock presentation deadline exactly as the native blocks
+6. updates the same stock presentation deadline exactly as the native blocks
    do.
 
 It never calls `0x00548150`, `0x0052F540`, `0x0052AC80`, or any HP-write helper.
@@ -362,13 +444,13 @@ Static and focused tests must establish:
 - host-local and bot targets cannot enqueue replicated local feedback;
 - lethal damage remains on the stock death replay only;
 - gameplay replay calls no damage/HP mutation function;
-- ouch asset selection/gain and red threshold/formula match the recovered
-  constants and offsets.
+- ouch asset selection/gain, Actor reaction fields, and red
+  threshold/formula match the recovered constants and offsets.
 
 The two-instance harness must then prove:
 
-1. one real authority-simulated hit on client B produces one owner feedback
-   event and one gameplay replay record;
+1. every completed authority-simulated damage event on client B produces
+   exactly one sequenced owner event and one gameplay replay record;
 2. a duplicate event/resend and periodic vitals/snapshot traffic produce no
    additional replay;
 3. healing produces none;
