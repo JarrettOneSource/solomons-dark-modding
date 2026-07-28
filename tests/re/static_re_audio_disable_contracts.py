@@ -951,6 +951,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
     }
     hard_disabled_python = {
         "tools/verify_bot_capacity_membership.py",
+        "tools/verify_bot_polish.py",
     }
     reference_only_python = {
         "tools/verify_lua_bot_brain.py",
