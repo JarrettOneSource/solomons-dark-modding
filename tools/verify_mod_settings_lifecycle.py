@@ -36,19 +36,40 @@ CLIENT_PIPE = "SolomonDarkModLoader_LuaExec_ms2-client"
 EXACT_MOD_ID = "bot.brain"
 
 INITIAL_ROSTER = [
-    {"name": "Ward", "element": "water", "discipline": "guardian"},
-    {"name": "Spark", "element": "air", "discipline": "striker"},
+    {
+        "name": "Ward", "element": "water", "discipline": "mind",
+        "behavior": "guardian",
+    },
+    {
+        "name": "Spark", "element": "air", "discipline": "body",
+        "behavior": "striker",
+    },
 ]
 RECONCILED_ROSTER = [
-    {"name": "Spark", "element": "earth", "discipline": "striker"},
+    {
+        "name": "Spark", "element": "earth", "discipline": "arcane",
+        "behavior": "striker",
+    },
 ]
 SKIRMISHER_ROSTER = [
-    {"name": "Spark", "element": "earth", "discipline": "skirmisher"},
+    {
+        "name": "Spark", "element": "earth", "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
 ]
 EXHAUSTED_ROSTER = [
-    {"name": "Spark", "element": "earth", "discipline": "skirmisher"},
-    {"name": "Bulwark", "element": "water", "discipline": "guardian"},
-    {"name": "Needle", "element": "air", "discipline": "striker"},
+    {
+        "name": "Spark", "element": "earth", "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
+    {
+        "name": "Bulwark", "element": "water", "discipline": "mind",
+        "behavior": "guardian",
+    },
+    {
+        "name": "Needle", "element": "air", "discipline": "body",
+        "behavior": "striker",
+    },
 ]
 ELEMENT_IDS = {
     "fire": 0,
@@ -131,7 +152,8 @@ def _seed_persisted_values(evidence_dir: Path) -> None:
                 {
                     "name": "ClientLocal",
                     "element": "fire",
-                    "discipline": "skirmisher",
+                    "discipline": "arcane",
+                    "behavior": "skirmisher",
                 }
             ],
             "relaxed",
@@ -167,6 +189,9 @@ for index = 1, 3 do
   emit(
     "setting.roster." .. index .. ".discipline",
     row.discipline or "")
+  emit(
+    "setting.roster." .. index .. ".behavior",
+    row.behavior or "")
 end
 
 local handles = sd.bots.list() or {}
@@ -220,6 +245,7 @@ for index = 1, 3 do
     "name",
     "element",
     "discipline",
+    "behavior",
     "participant_id",
     "active",
     "mode",
@@ -423,7 +449,7 @@ def _initial_values_converged(
     )
 
 
-def _disciplines_measurable(values: dict[str, str]) -> bool:
+def _behaviors_measurable(values: dict[str, str]) -> bool:
     guardian = "brain.bot.1."
     striker = "brain.bot.2."
     leash = _number(values, guardian + "guardian_leash_radius")
@@ -598,15 +624,15 @@ def verify_lifecycle(
         _start_testrun()
         local_sync.wait_for_scene(HOST_PIPE, "testrun", timeout=45.0)
         local_sync.wait_for_scene(CLIENT_PIPE, "testrun", timeout=45.0)
-        disciplines = _wait(
+        behaviors = _wait(
             lambda: _query(HOST_PIPE),
-            _disciplines_measurable,
+            _behaviors_measurable,
             timeout=timeout_seconds,
             label="guardian leash and striker behavior profile",
         )
-        result["disciplineBehavior"] = disciplines
+        result["behaviorProfiles"] = behaviors
         host_changes = _integer(
-            disciplines,
+            behaviors,
             "brain.settings_change_count",
         )
         client_changes = _integer(
@@ -756,7 +782,7 @@ def verify_lifecycle(
                 ) > 0
             ),
             timeout=30.0,
-            label="shipped skirmisher profile after discipline respawn",
+            label="shipped skirmisher profile after Behavior respawn",
         )
         result["skirmisherBehavior"] = skirmisher
 

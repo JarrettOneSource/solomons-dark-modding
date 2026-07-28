@@ -1030,23 +1030,34 @@ def test_native_derived_wizard_visuals_are_layout_backed() -> str:
     )
     if (
         lua_visual_branch is None or
-        "CaptureActorRenderBuildSnapshot(" not in lua_visual_branch.group("body") or
-        "native_visual_actor_address" not in lua_visual_branch.group("body") or
-        "ResolveStandaloneWizardRenderSelectionIndex(" not in
-            lua_visual_branch.group("body")
+        not re.search(
+            r"CreateWizardCloneSourceActor\(\s*"
+            r"world_address,\s*"
+            r"native_visual_actor_address,\s*"
+            r"character_profile,\s*"
+            r"x,\s*y,\s*heading,\s*"
+            r"&source_actor_address",
+            lua_visual_branch.group("body"),
+        ) or
+        not re.search(
+            r"CaptureActorRenderBuildSnapshot\(\s*"
+            r"source_actor_address\s*\)"
+            r"[\s\S]*DestroyWizardCloneSourceActor\(\s*"
+            r"source_actor_address",
+            lua_visual_branch.group("body"),
+        )
     ):
         raise StaticReTestFailure(
-            "Lua gameplay-slot visuals do not seed from the already-live stock "
-            "player descriptor before helper publication")
-    for forbidden in (
-        "CreateWizardCloneSourceActor(",
-        "DestroyWizardCloneSourceActor(",
-        "source_actor_address",
+            "Lua gameplay-slot visuals do not run the bot profile through "
+            "the native source builder before helper publication")
+    if re.search(
+        r"CaptureActorRenderBuildSnapshot\(\s*"
+        r"native_visual_actor_address\s*\)",
+        lua_visual_branch.group("body"),
     ):
-        if forbidden in lua_visual_branch.group("body"):
-            raise StaticReTestFailure(
-                "Lua gameplay-slot visuals resurrect disposable standalone "
-                f"materialization: {forbidden}")
+        raise StaticReTestFailure(
+            "Lua gameplay-slot visuals still reinterpret finalized actor "
+            "animation bytes as a reusable appearance descriptor")
     if "ApplyNativeRemoteParticipantRenderSelectorBytes" in native_remote_playback_text:
         raise StaticReTestFailure(
             "remote playback still overwrites profile-built clone render selector bytes")

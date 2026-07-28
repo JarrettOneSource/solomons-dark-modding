@@ -55,6 +55,11 @@ struct ParticipantEntityBinding {
     float current_waypoint_x = 0.0f;
     float current_waypoint_y = 0.0f;
     std::vector<BotPathWaypoint> path_waypoints;
+    BotStuckProgressTracker stuck_progress;
+    bool stuck_waypoint_anchor_valid = false;
+    float stuck_waypoint_anchor_x = 0.0f;
+    float stuck_waypoint_anchor_y = 0.0f;
+    bool stuck_waypoint_progress_pending = false;
     std::uint64_t next_scene_materialize_retry_ms = 0;
     uintptr_t materialized_scene_address = 0;
     uintptr_t materialized_world_address = 0;

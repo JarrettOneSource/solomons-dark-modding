@@ -156,25 +156,3 @@ bool CallSkillsWizardGetPrimaryColorSafe(
         return false;
     }
 }
-
-bool CallPlayerAppearanceApplyChoiceSafe(
-    uintptr_t apply_choice_address,
-    uintptr_t progression_address,
-    int choice_id,
-    int ensure_assets,
-    DWORD* exception_code) {
-    auto* apply_choice = reinterpret_cast<PlayerAppearanceApplyChoiceFn>(apply_choice_address);
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (apply_choice == nullptr || progression_address == 0 || choice_id < 0) {
-        return false;
-    }
-
-    __try {
-        apply_choice(reinterpret_cast<void*>(progression_address), choice_id, ensure_assets);
-        return true;
-    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}

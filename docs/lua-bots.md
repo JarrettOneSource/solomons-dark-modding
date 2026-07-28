@@ -12,6 +12,7 @@ presentation, and peer replication.
 local bot, err = sd.bots.spawn({
   name = "Ember",
   class = "fire",
+  discipline = "arcane",
 })
 assert(bot, err)
 
@@ -38,6 +39,8 @@ bot:despawn()
 
 - `name`: a nonempty persona name of at most 31 bytes.
 - `class`: `fire`, `water`, `earth`, `air`, or `ether`.
+- `discipline`: optional native loadout choice `mind`, `body`, or `arcane`;
+  omitted values default to `arcane`.
 
 Humans and bots consume the same configured lobby capacity. Solomon Dark has
 four native player slots, so `maxParticipants` may be two through four. If
@@ -57,8 +60,12 @@ client receives the bot in `list` and may use all read methods, but mutation
 returns `false, "only the multiplayer host can control bots"`.
 
 `move_to(x, y)` submits a destination to the stock player movement tick. The
-native placement/collision path remains authoritative; this call does not
-teleport.
+native placement/collision path remains authoritative. If an authority-owned
+bot makes neither meaningful target-distance progress nor waypoint progress
+for a rolling 30-second window, the loader's stuck failsafe places it at the
+nearest valid circle-placement candidate around the target, clears the stock
+walk vector, and replicates the correction. Repath revisions and exhausted
+waypoint segments do not reset or fake that progress window.
 
 `stop()` clears the destination and movement intent.
 
@@ -111,7 +118,11 @@ sd.events.on("runtime.tick", function(event)
   elapsed_ms = 0
 
   if not bot then
-    bot = sd.bots.spawn({name = "Ember", class = "fire"})
+    bot = sd.bots.spawn({
+      name = "Ember",
+      class = "fire",
+      discipline = "arcane",
+    })
   elseif bot:alive() then
     local x, y = bot:position()
     if x then

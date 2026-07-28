@@ -76,7 +76,6 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using ActorWorldAttachFn = void(__thiscall*)(void* self, void* actor);
 using PlayerActorInitializeControlBrainFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
-using PlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
 using SkillsWizardBuildPrimarySpellFn = std::uint32_t(__thiscall*)(
     void* self,
     std::uint32_t primary_entry,

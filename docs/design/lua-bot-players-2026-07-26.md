@@ -215,6 +215,7 @@ snapshot available on either peer.
 local bot = sd.bots.spawn({
   name = "Ember",
   class = "fire",
+  discipline = "arcane",
 })
 
 bot:despawn()
@@ -233,7 +234,8 @@ local bots = sd.bots.list()
 
 Contract details:
 
-- `spawn` validates a nonempty bounded persona name, a supported class, host
+- `spawn` validates a nonempty bounded persona name, a supported class, an
+  optional native `mind`/`body`/`arcane` Discipline (default `arcane`), host
   authority, and available participant/slot capacity. It returns a stable
   handle or `nil, error`.
 - Classes are `fire`, `water`, `earth`, `air`, and `ether`, mapped to the

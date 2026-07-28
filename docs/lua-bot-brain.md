@@ -2,12 +2,13 @@
 
 `mods/bot-brain/` is the opt-in reference brain for host-owned synthetic
 participants. Its host-scoped `roster` list contains zero to four ordered rows:
-name, element (`fire`, `water`, `earth`, `air`, or `ether`), and discipline
-(`skirmisher`, `guardian`, or `striker`). The mod is disabled by default, so an
-ordinary game never gains an unsolicited participant.
+name, element (`fire`, `water`, `earth`, `air`, or `ether`), native Discipline
+(Mind, Body, or Arcane; stored as `mind`, `body`, or `arcane`), and Behavior
+(`skirmisher`, `guardian`, or `striker`). The mod is disabled by default, so
+an ordinary game never gains an unsolicited participant.
 
-The default roster contains one fire skirmisher named `Ember`. The earlier
-`persona_name` scalar is gone; names belong to rows. The other launcher
+The default roster contains one Arcane fire skirmisher named `Ember`. The
+earlier `persona_name` scalar is gone; names belong to rows. The other launcher
 controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
 cadence, local focus key, and the confirmed host-only roster respawn action.
 
@@ -18,8 +19,15 @@ startup, live reload, and replicated list changes it compares rows by order:
 
 - an unchanged row keeps its participant and behavior state;
 - a removed row despawns through its bot handle;
-- a new row spawns with that row's name and element; and
-- a changed name, element, or discipline despawns and respawns the row.
+- a new row spawns with that row's name, element, and Discipline; and
+- a changed name, element, Discipline, or Behavior despawns and respawns the
+  row.
+
+The v1.0.1 launcher migration recognizes only the old bot-brain rows whose
+`discipline` value was `skirmisher`, `guardian`, or `striker`. It rewrites that
+value once under `behavior`, adds native `discipline: "arcane"`, and persists
+the result atomically. Runtime Lua reads only the new keys; there is no lasting
+legacy alias.
 
 Retirement uses the reliable participant tombstone path. Solomon Dark has four
 native player/progression slots, so humans and bots share one four-participant
@@ -37,11 +45,13 @@ State, Frame, Cast, and retirement traffic.
 
 ## Shared native movement and offense
 
-Every discipline samples `sd.world.get_replicated_actors()` and keeps live
+Every Behavior samples `sd.world.get_replicated_actors()` and keeps live
 `tracked_enemy` rows. Candidate destinations come from short steering
 lookaheads clamped to the current arena. Every candidate must pass
-`sd.nav.test_segment` before `bot:move_to`; there is no Lua grid fallback or
-teleport.
+`sd.nav.test_segment` before `bot:move_to`; the brain contains no Lua grid
+fallback or transform write. The loader may apply its authority-owned,
+native-placement-validated stuck recovery only after a full 30-second
+no-progress window.
 
 Each bot asks `sd.bots.get_primary_attack_window(participant_id)` for its own
 live class primary. A cast uses
@@ -55,7 +65,7 @@ With no enemies, contexts continue short orbit/anchor movement. That preserves
 native movement across spawn gaps and wave transitions rather than stopping
 the actor or replacing the stock movement tick.
 
-## Disciplines
+## Behaviors
 
 ### Skirmisher
 
@@ -97,10 +107,11 @@ lookup, replicated slot-0 cast ingress, and wave-transition movement.
 The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
 `bots` is an ordered array matching the roster. Each row reports identity,
 participant ID, mode, HP ratio, accepted movement/casts, attack window,
-discipline thresholds, and guardian ward distance. Root scalar fields mirror
-the first row for compatibility with the existing wave-five verifier. The root
-also reports desired, active, and capacity-refused counts plus the aggregate
-status string. This is acceptance telemetry, not a gameplay control API.
+Behavior thresholds, native Discipline, and guardian ward distance. Root
+scalar fields mirror the first row for compatibility with the existing
+wave-five verifier. The root also reports desired, active, and
+capacity-refused counts plus the aggregate status string. This is acceptance
+telemetry, not a gameplay control API.
 
 The existing retail-schedule longevity gate remains:
 
@@ -115,10 +126,11 @@ python3 tools/verify_mod_settings_lifecycle.py
 ```
 
 It launches only `ms2-host` and `ms2-client` on UDP ports 49211/49212 with
-audio disabled. The live proof covers two different elements/disciplines,
-strict guardian leash distance, the striker's distinct threshold/cadence,
-skirmisher movement, removal plus element respawn, client list replication and
-copy isolation, and a numbered slot-exhaustion reload error with both game
-processes still responsive. Cleanup targets only the exact launcher-returned
-PIDs whose executable paths match the two `ms2` stages. Evidence is written to
+audio disabled. The live proof covers different elements, native Disciplines,
+and Behaviors, strict guardian leash distance, the striker's distinct
+threshold/cadence, skirmisher movement, removal plus element respawn, client
+list replication and copy isolation, and a numbered slot-exhaustion reload
+error with both game processes still responsive. Cleanup targets only the
+exact launcher-returned PIDs whose executable paths match the two `ms2`
+stages. Evidence is written to
 `/mnt/d/codex-evidence/mod-settings-v2-20260727/`.

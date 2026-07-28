@@ -110,10 +110,6 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
         }
         return false;
     }
-    (void)x;
-    (void)y;
-    (void)heading;
-
     auto& memory = ProcessMemory::Instance();
     // 0x00461F70 constructs the robe (0x1B5E) and the actor-owned equip
     // runtime's +0x1C lane accepts it. 0x00461ED0 constructs the hat (0x1B5D)
@@ -175,19 +171,39 @@ bool SeedGameplaySlotBotRenderStateFromSourceActor(
                 character_profile.element_id));
         built_snapshot.variant_tertiary = 0;
     } else if (multiplayer::IsLuaControlledParticipant(*participant)) {
-        // A host-owned synthetic participant starts from the already-live
-        // stock player descriptor. This source is read-only: the bot keeps its
-        // own slot, actor, progression, and participant identity. Once the
-        // slot actor is materialized, its visual payload is captured into the
-        // participant stream and clients take the packet-backed branch above.
+        // A finalized PlayerActor's +0x244..+0x263 bytes are clone-local
+        // animation/capacity state, not a reusable robe palette. Reconstruct
+        // the bot's native source profile and run the stock 0x005E3080 builder
+        // so robe, hat, staff selector, and element palette all come from the
+        // bot's own profile. Clients consume the helper block published from
+        // this initialized actor through the packet-backed branch above.
+        uintptr_t source_actor_address = 0;
+        if (!CreateWizardCloneSourceActor(
+                world_address,
+                native_visual_actor_address,
+                character_profile,
+                x,
+                y,
+                heading,
+                &source_actor_address,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message = stage_error;
+            }
+            return false;
+        }
         built_snapshot =
-            CaptureActorRenderBuildSnapshot(
-                native_visual_actor_address);
-        built_snapshot.render_selection =
-            static_cast<std::uint8_t>(
-                ResolveStandaloneWizardRenderSelectionIndex(
-                    character_profile.element_id));
-        built_snapshot.weapon_type = 0;
+            CaptureActorRenderBuildSnapshot(source_actor_address);
+        if (!DestroyWizardCloneSourceActor(
+                source_actor_address,
+                &stage_error)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Native bot appearance source cleanup failed: " +
+                    stage_error;
+            }
+            return false;
+        }
     } else {
         if (error_message != nullptr) {
             *error_message = "Unsupported gameplay-slot participant controller.";

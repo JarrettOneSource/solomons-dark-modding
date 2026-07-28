@@ -1,3 +1,4 @@
+using SolomonDarkModLauncher.ModSettings;
 using SolomonDarkModLauncher.Mods;
 using SolomonDarkModLauncher.Steam;
 using SolomonDarkModLauncher.Target;
@@ -16,6 +17,8 @@ internal static class StageBuilder
             configuration.Game.InstallDirectory,
             configuration.Workspace.StageRootPath,
             excludeSandbox: freshInstall);
+        BotBrainRosterSettingsMigration.TryMigrateStage(
+            configuration.Workspace.StageRootPath);
         StageSandboxCompatibilityLinks.Materialize(configuration.Workspace.StageRootPath);
 
         var appliedOverlayCount = OverlayStageMaterializer.Materialize(

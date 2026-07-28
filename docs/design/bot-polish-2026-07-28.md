@@ -350,7 +350,40 @@ reset on revision would never fire. Conversely, a timer based only on an empty
 waypoint list would misclassify segment-exhaustion oscillation as arrival or
 progress.
 
-### 4.3 Rolling progress model
+### 4.3 Live oscillation finding
+
+The first rolling-window implementation still had two coupled defects. A live
+test-run obstacle reproduced them under one unchanged active target for longer
+than 30 seconds: the bot repeatedly circled the obstacle, exhausting and
+rebuilding one-waypoint path segments while its target distance cycled between
+roughly 80 and 275 units. No teleport fired.
+
+The tracker called that churn progress for two reasons:
+
+1. it compared the arbitrary first sample in the window with the minimum
+   distance anywhere later in the window. Each oscillation therefore looked
+   like a fresh decrease from a far phase to the same previously reached near
+   phase;
+2. it marked completion of the final waypoint as meaningful waypoint progress.
+   A rebuilt one-waypoint segment could therefore protect the next identical
+   segment even though neither one advanced the final pursuit.
+
+The corrected one-waypoint rule exposed the same class in longer rebuilt
+segments: intermediate waypoints were credited immediately, and that credit
+remained in the rolling samples after the segment exhausted short of the
+target. A live protected run stayed under one target for 100 seconds while
+circling through those rebuilt segments and never recovered. Once a segment
+runs dry without arrival, none of its waypoint completions established
+progress toward the final pursuit; that segment's waypoint credit must be
+discarded. Its target-distance samples remain, so real spatial improvement is
+still retained.
+
+This is the segment-exhaustion failure class, not a slow reachable approach.
+The target stays active, the bot never establishes a new best approach, and
+the credited waypoint sequence belongs to a segment that immediately runs
+dry.
+
+### 4.4 Rolling progress model
 
 The authority binding owns a rolling sample window for one continuous active
 target. Revisions do not reset it. A material target-coordinate change does.
@@ -358,13 +391,19 @@ Samples contain:
 
 - monotonic timestamp;
 - distance from the actor to the active final target;
-- a monotonic **meaningful waypoint progress** generation.
+- a **meaningful waypoint progress** event flag.
 
-Meaningful target progress means a decrease larger than the movement epsilon
-within the rolling window. Meaningful waypoint progress requires reaching a
-new steering waypoint after real actor displacement; incrementing an index
-over a waypoint that is already within its threshold does not count. Emptying
-the segment never counts by itself.
+Meaningful target progress means the best distance in the closing half of the
+rolling window improves on the best distance in the opening half by more than
+the movement epsilon. Comparing half-window minima rejects periodic
+far-to-near oscillation while retaining a true new best approach.
+
+Meaningful waypoint progress requires reaching a non-final steering waypoint
+after real actor displacement. Incrementing an index over a waypoint already
+within its threshold does not count, and completing the final waypoint cannot
+protect a rebuilt segment. If the segment later exhausts short of the target,
+its waypoint credit is removed from the rolling samples. Emptying the segment
+never counts by itself.
 
 The bot is stuck only when a full 30-second rolling window shows both:
 
@@ -374,7 +413,7 @@ The bot is stuck only when a full 30-second rolling window shows both:
 Reachable movement, including slow movement and ordinary path rebuild churn,
 keeps at least one progress condition true.
 
-### 4.4 Validated landing and authority
+### 4.5 Validated landing and authority
 
 Only the authority-owned Lua participant evaluates or executes the failsafe.
 Packet-driven remote actors never do.

@@ -9,6 +9,15 @@ bool TeleportPlayerFamilyActorAndRebind(
     float x,
     float y,
     DWORD* exception_code);
+bool ResolveNativeBotSpawnPlacement(
+    std::uint64_t bot_id,
+    multiplayer::ParticipantSceneIntentKind scene_kind,
+    std::string_view phase,
+    float anchor_x,
+    float anchor_y,
+    float* resolved_x,
+    float* resolved_y,
+    std::string* error_message);
 void StopWizardBotActorMotion(uintptr_t actor_address);
 void StopDeadWizardBotActorMotion(
     uintptr_t actor_address,
@@ -78,12 +87,6 @@ bool CallSkillsWizardGetPrimaryColorSafe(
 bool CallPlayerActorActionManagerTickSafe(
     uintptr_t tick_address,
     uintptr_t action_manager_address,
-    DWORD* exception_code);
-bool CallPlayerAppearanceApplyChoiceSafe(
-    uintptr_t apply_choice_address,
-    uintptr_t progression_address,
-    int choice_id,
-    int ensure_assets,
     DWORD* exception_code);
 bool CallGameplayActorAttachSafe(
     uintptr_t gameplay_address,
@@ -168,9 +171,9 @@ bool CallPlayerActorCtorSafe(
     void* actor_memory,
     uintptr_t* actor_address,
     DWORD* exception_code);
-bool PrimeStandaloneWizardProgressionSelectionState(
+bool PrimeGameplaySlotBotBaseBookState(
     uintptr_t progression_inner_address,
-    int selection_state,
+    int discipline_skill_row,
     std::string* error_message);
 bool PrimeGameplaySlotBotSelectionState(
     uintptr_t actor_address,

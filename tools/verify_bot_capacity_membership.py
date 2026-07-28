@@ -59,10 +59,22 @@ PASSWORD_ITERATIONS = 210_000
 JWT_SECRET = "sdr-bcap-local-jwt-secret-20260727-only"
 
 FULL_ROSTER = [
-    {"name": "Ember", "element": "fire", "discipline": "skirmisher"},
-    {"name": "Bastion", "element": "earth", "discipline": "guardian"},
-    {"name": "Gale", "element": "air", "discipline": "striker"},
-    {"name": "Tide", "element": "water", "discipline": "skirmisher"},
+    {
+        "name": "Ember", "element": "fire", "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
+    {
+        "name": "Bastion", "element": "earth", "discipline": "body",
+        "behavior": "guardian",
+    },
+    {
+        "name": "Gale", "element": "air", "discipline": "mind",
+        "behavior": "striker",
+    },
+    {
+        "name": "Tide", "element": "water", "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
 ]
 OPEN_SEAT_ROSTER = FULL_ROSTER[:1]
 

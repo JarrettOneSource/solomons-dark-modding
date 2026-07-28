@@ -16,6 +16,32 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     steering = _read("mods/bot-brain/scripts/steering.lua")
     docs = _read("docs/lua-bot-brain.md")
     verifier = _read("tools/verify_bot_polish.py")
+    spawn_binding = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_bots/"
+        "participant_handle_bindings.inl"
+    )
+    selection_priming = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "standalone_materialization_selection_priming.inl"
+    )
+    stuck_tracker = _read(
+        "SolomonDarkModLoader/include/bot_stuck_progress.h"
+    )
+    stuck_motion = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_pathfinding_motion_update.inl"
+    )
+    settings_store = _read(
+        "SolomonDarkModLauncher/src/ModSettings/ModSettingsStore.cs"
+    )
+    settings_migration = _read(
+        "SolomonDarkModLauncher/src/ModSettings/"
+        "BotBrainRosterSettingsMigration.cs"
+    )
+    stage_builder = _read(
+        "SolomonDarkModLauncher/src/Staging/StageBuilder.cs"
+    )
+    design = _read("docs/design/bot-polish-2026-07-28.md")
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
@@ -175,6 +201,121 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     assert "row.discipline ~= \"guardian\"" not in brain
     assert "PROFILES[row.discipline]" not in brain
 
+    _require_in_order(
+        settings_store,
+        "BotBrainRosterSettingsMigration.TryMigrateFile(path)",
+        "File.Exists(path)",
+    )
+    _require_in_order(
+        settings_migration,
+        'row["behavior"] = legacyBehavior;',
+        'row["discipline"] = "arcane";',
+        "WriteAtomically(settingsPath, root);",
+    )
+    assert "BotBrainRosterSettingsMigration.TryMigrateStage(" in stage_builder
+
+    for token in (
+        'lua_getfield(state, table_index, "discipline")',
+        'discipline_text == "mind"',
+        'discipline_text == "body"',
+        'discipline_text != "arcane"',
+        "request.character_profile.discipline_id =",
+    ):
+        assert token in spawn_binding, (
+            f"sd.bots.spawn lacks native Discipline parsing: {token}"
+        )
+    _require_in_order(
+        selection_priming,
+        "NativeSkillRowForDiscipline(",
+        "CharacterDisciplineId::Mind:",
+        "return 6;",
+        "CharacterDisciplineId::Body:",
+        "return 5;",
+        "CharacterDisciplineId::Arcane:",
+        "return 7;",
+    )
+    _require_in_order(
+        selection_priming,
+        "slot_progression_inner != progression_address",
+        "Gameplay-slot bot progression is not the bot's slot-owned native book.",
+        "discipline_skill_row =",
+        "PrimeGameplaySlotBotBaseBookState(",
+        "progression_address,",
+        "discipline_skill_row,",
+        "CallActorProgressionRefreshSafe(",
+    )
+    _require_in_order(
+        selection_priming,
+        "bool PrimeGameplaySlotBotBaseBookState(",
+        "kStockBaseBookRowCount = 8",
+        "kStandaloneWizardProgressionEntryStatbookOffset",
+        "kStatbookMaxLevelOffset",
+        "internal_id != row",
+        "kStandaloneWizardProgressionActiveFlagOffset",
+        "kPlayerProgressionDisciplineSkillRowOffset,",
+        "selected_row != discipline_skill_row",
+    )
+    assert "CallPlayerAppearanceApplyChoiceSafe(" not in selection_priming
+    assert re.search(
+        r"kPlayerProgressionDisciplineSkillRowOffset[\s\S]{0,160}"
+        r"choice_ids\[3\]",
+        selection_priming,
+    ) is None
+
+    for token in (
+        "kBotStuckWindowMs = 30000",
+        "kBotStuckTeleportCooldownMs = 10000",
+        "opening_nearest_distance",
+        "closing_nearest_distance",
+        "midpoint_ms",
+        "sample.waypoint_progress",
+        "DiscardBotStuckWaypointProgress",
+        "distance_progress <",
+    ):
+        assert token in stuck_tracker, (
+            f"rolling stuck tracker lacks: {token}"
+        )
+    _require_in_order(
+        stuck_motion,
+        "multiplayer::IsLuaModSimulationAuthority()",
+        "ParticipantControllerKind::LuaBrain",
+        "ObserveBotStuckProgress(",
+        "ResolveNativeBotSpawnPlacement(",
+        '"stuck_teleport"',
+        "TeleportPlayerFamilyActorAndRebind(",
+        "StopBotPathMotion(binding, false)",
+        "StopWizardBotActorMotion(binding->actor_address)",
+        "multiplayer::StopBot(binding->bot_id)",
+        "RecordBotStuckTeleport(",
+        "PublishParticipantGameplaySnapshot(*binding)",
+        '"[bots] stuck teleport. bot_id="',
+    )
+    path_failure = re.search(
+        r"if \(!TryBuildBotPath\([\s\S]*?\n\s*\}",
+        stuck_motion,
+    )
+    assert path_failure is not None
+    assert "multiplayer::StopBot" not in path_failure.group(0)
+    assert "if (!final_waypoint &&" in stuck_motion
+    _require_in_order(
+        stuck_motion,
+        "if (!arrived_at_target)",
+        "DiscardBotStuckWaypointProgress(",
+        "binding->stuck_waypoint_anchor_valid = true",
+        "action=rebuild",
+    )
+    for token in (
+        "`0x005D0290`",
+        "Mind (0)   -> row 6",
+        "Body (1)   -> row 5",
+        "Arcane (2) -> row 7",
+        "`0x005E3080`",
+        "`+0x244..+0x263`",
+        "`+0x158/+0x15C`",
+        "Name-label",
+    ):
+        assert token in design, f"bot-polish root-cause record lacks: {token}"
+
     for token in (
         "actor.tracked_enemy == true",
         "inverse_distance_weight",
@@ -223,7 +364,6 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         assert token in docs, f"bot roster documentation lacks: {token}"
 
     for token in (
-        'INSTANCE_PREFIX = "bot"',
         'INSTANCE_PREFIX = "botpolish"',
         "HOST_PORT = 50011",
         "CLIENT_PORT = 50012",
@@ -234,6 +374,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         '"stuckTeleportPlacementValidated"',
         '"slowReachableTeleportCount"',
         '"humanClickTeleportCount"',
+        "test_native_movement_collision",
         '"host-four-slot-lobby.png"',
         '"client-b-four-slot-lobby.png"',
     ):

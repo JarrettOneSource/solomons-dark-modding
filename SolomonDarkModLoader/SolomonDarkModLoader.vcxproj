@@ -88,6 +88,7 @@
     <ClInclude Include="include\binary_layout_internal.h" />
     <ClInclude Include="include\bot_runtime.h" />
     <ClInclude Include="include\bot_spawn_placement.h" />
+    <ClInclude Include="include\bot_stuck_progress.h" />
     <ClInclude Include="include\d3d9_end_scene_hook.h" />
     <ClInclude Include="include\d3d9_font_atlas.h" />
     <ClInclude Include="include\debug_ui_config.h" />

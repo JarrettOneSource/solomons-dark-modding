@@ -245,7 +245,8 @@ Current external CLI fallback already installed:
   - the current live-memory workflow is now primarily for:
     - validating player/bot parity on a chosen element slot
     - comparing helper-item float blocks when a deeper stock-contract question remains
-    - tracing future work on full discipline/loadout ownership beyond the current element-only MVP
+    - tracing native Discipline/loadout ownership on each participant's own
+      progression book
 - Important harness note:
   - `sample.lua.ui_sandbox_lab` no longer auto-spawns patrol bots during `testrun`
   - enable `sample.lua.bots` when you want the current single-bot patrol harness, or use the live debug helpers to spawn targeted test bots on demand

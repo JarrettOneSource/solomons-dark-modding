@@ -285,7 +285,7 @@ extern std::size_t kStandaloneWizardProgressionEntryCategoryOffset;
 extern std::size_t kStandaloneWizardProgressionEntryStatbookOffset;
 extern std::size_t kStandaloneWizardProgressionRefreshModeOffset;
 extern std::size_t kPlayerProgressionAppearancePrimaryAOffset;
-extern std::size_t kPlayerProgressionAppearanceSecondaryOffset;
+extern std::size_t kPlayerProgressionDisciplineSkillRowOffset;
 extern std::size_t kPlayerProgressionAppearancePrimaryBOffset;
 extern std::size_t kPlayerProgressionAppearancePrimaryCOffset;
 extern std::size_t kGameplayTestrunModeFlagOffset;

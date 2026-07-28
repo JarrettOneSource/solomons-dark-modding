@@ -116,6 +116,7 @@ local function log(context, message)
       "roster=" .. tostring(context.roster_index) ..
       " name=" .. tostring(context.row.name) ..
       " element=" .. tostring(context.row.element) ..
+      " behavior=" .. tostring(context.row.behavior) ..
       " discipline=" .. tostring(context.row.discipline) .. " "
   end
   print("[bot-brain] " .. prefix .. message)

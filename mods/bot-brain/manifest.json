@@ -1,7 +1,9 @@
 {
   "id": "bot.brain",
   "name": "Lua Bots",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "summary": "Bot teammates that play like real players.",
+  "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they fight, die, and respawn like human players. Name each bot and choose its element and how it fights in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. Requires v0.1.0-beta.21 or newer.",
   "minimumLoaderVersion": "0.1.0-beta.21",
   "enabled": false,
   "runtime": {
@@ -56,7 +58,7 @@
         "group": "Bots",
         "min_items": 0,
         "max_items": 4,
-        "item_label": "{name} · {element} {discipline}",
+        "item_label": "{name} · {element} · {discipline} · {behavior}",
         "item": {
           "fields": [
             {
@@ -98,6 +100,26 @@
               "key": "discipline",
               "type": "choice",
               "label": "Discipline",
+              "default": "arcane",
+              "choices": [
+                {
+                  "value": "mind",
+                  "label": "Mind"
+                },
+                {
+                  "value": "body",
+                  "label": "Body"
+                },
+                {
+                  "value": "arcane",
+                  "label": "Arcane"
+                }
+              ]
+            },
+            {
+              "key": "behavior",
+              "type": "choice",
+              "label": "Behavior",
               "default": "skirmisher",
               "choices": [
                 {
@@ -120,7 +142,8 @@
           {
             "name": "Ember",
             "element": "fire",
-            "discipline": "skirmisher"
+            "discipline": "arcane",
+            "behavior": "skirmisher"
           }
         ]
       },

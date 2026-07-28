@@ -12,7 +12,8 @@ using NativeSkillOptionRollFn = void(__thiscall*)(void* progression, int desired
 using NativeIntArrayClearFn = void(__thiscall*)(void* array);
 using NativeProgressionNoArgFn = void(__thiscall*)(void* progression);
 using NativeProgressionIntArgFn = void(__thiscall*)(void* progression, int value);
-using NativePlayerAppearanceApplyChoiceFn = void(__thiscall*)(void* progression, int choice_id, int ensure_assets);
+using NativePlayerAppearanceApplyChoiceFn =
+    void(__thiscall*)(void* progression, int choice_id, int publish_gameplay_side_effects);
 using NativeActorProgressionRefreshFn = void(__thiscall*)(void* progression);
 using NativeLevelUpFn = void(__fastcall*)(void* progression, void* unused_edx);
 

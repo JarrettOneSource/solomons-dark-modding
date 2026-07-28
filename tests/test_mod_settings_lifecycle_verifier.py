@@ -128,7 +128,7 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
         views["client"]["setting.roster.2.element"] = "fire"
         self.assertFalse(verifier._initial_values_converged(views))
 
-    def test_discipline_predicate_requires_live_leash_and_thresholds(self) -> None:
+    def test_behavior_predicate_requires_live_leash_and_thresholds(self) -> None:
         values = {
             "scene": "testrun",
             "brain.bot.1.active": "true",
@@ -147,9 +147,9 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
             "brain.bot.1.move_accepted": "2",
             "brain.bot.2.move_accepted": "2",
         }
-        self.assertTrue(verifier._disciplines_measurable(values))
+        self.assertTrue(verifier._behaviors_measurable(values))
         values["brain.bot.1.guardian_ward_distance"] = "261"
-        self.assertFalse(verifier._disciplines_measurable(values))
+        self.assertFalse(verifier._behaviors_measurable(values))
 
     def test_integer_parser_preserves_uint64_participant_ids(self) -> None:
         first = "1152921504606851072"
@@ -173,7 +173,7 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 },
                 "client": {},
             }
-            disciplines = {"brain.settings_change_count": "0"}
+            behaviors = {"brain.settings_change_count": "0"}
             reconciled = {
                 "host": {"brain.bot.1.participant_id": "12"},
                 "client": {},
@@ -207,7 +207,7 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                     "_wait",
                     side_effect=[
                         initial,
-                        disciplines,
+                        behaviors,
                         reconciled,
                         skirmisher,
                         survived,

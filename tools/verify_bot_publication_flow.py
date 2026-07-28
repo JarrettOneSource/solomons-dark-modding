@@ -31,18 +31,39 @@ CLIENT_PIPE = f"SolomonDarkModLoader_LuaExec_{CLIENT_INSTANCE}"
 MOD_ID = "bot.brain"
 
 INITIAL_ROSTER = [
-    {"name": "Ember", "element": "fire", "discipline": "skirmisher"},
-    {"name": "Bastion", "element": "earth", "discipline": "guardian"},
+    {
+        "name": "Ember",
+        "element": "fire",
+        "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
+    {
+        "name": "Bastion",
+        "element": "earth",
+        "discipline": "body",
+        "behavior": "guardian",
+    },
 ]
 CHANGED_ROSTER = [
-    {"name": "Gale", "element": "air", "discipline": "striker"},
-    {"name": "Bastion", "element": "earth", "discipline": "guardian"},
+    {
+        "name": "Gale",
+        "element": "air",
+        "discipline": "mind",
+        "behavior": "striker",
+    },
+    {
+        "name": "Bastion",
+        "element": "earth",
+        "discipline": "body",
+        "behavior": "guardian",
+    },
 ]
 CLIENT_LOCAL_ROSTER = [
     {
         "name": "ClientLocalDefault",
         "element": "water",
-        "discipline": "striker",
+        "discipline": "arcane",
+        "behavior": "striker",
     }
 ]
 
@@ -85,6 +106,7 @@ local function emit_roster(prefix, rows)
     emit(prefix .. "." .. index .. ".name", row.name or "")
     emit(prefix .. "." .. index .. ".element", row.element or "")
     emit(prefix .. "." .. index .. ".discipline", row.discipline or "")
+    emit(prefix .. "." .. index .. ".behavior", row.behavior or "")
   end
 end
 
@@ -133,6 +155,7 @@ for index = 1, 3 do
   emit("brain.bot." .. index .. ".name", item.name)
   emit("brain.bot." .. index .. ".element", item.element)
   emit("brain.bot." .. index .. ".discipline", item.discipline)
+  emit("brain.bot." .. index .. ".behavior", item.behavior)
   emit("brain.bot." .. index .. ".participant_id", item.participant_id)
 end
 """
@@ -221,6 +244,10 @@ def roster_from(values: dict[str, str], prefix: str) -> list[dict[str, str]]:
             "element": values.get(f"{prefix}.{index}.element", ""),
             "discipline": values.get(
                 f"{prefix}.{index}.discipline",
+                "",
+            ),
+            "behavior": values.get(
+                f"{prefix}.{index}.behavior",
                 "",
             ),
         }

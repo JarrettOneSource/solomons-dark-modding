@@ -218,9 +218,10 @@ owner request.
 ## 10. v2 — structured `list` entries (owner-requested 2026-07-27)
 
 Motivating case: the bot-brain roster — add/remove bots and pick each bot's
-element and discipline. The general capability is an ordered list of composite
-items; a `list` entry closes the whole "custom datatype" class (rosters, loot
-tables, schedules) without new per-mod machinery.
+element, native Discipline, and AI Behavior. The general capability is an
+ordered list of composite items; a `list` entry closes the whole "custom
+datatype" class (rosters, loot tables, schedules) without new per-mod
+machinery.
 
 ### Declaration
 
@@ -228,7 +229,7 @@ tables, schedules) without new per-mod machinery.
 { "key": "roster", "type": "list", "label": "Bot roster",
   "scope": "host", "group": "Bots",
   "min_items": 0, "max_items": 4,
-  "item_label": "{name} · {element} {discipline}",
+  "item_label": "{name} · {element} · {discipline} · {behavior}",
   "item": { "fields": [
     { "key": "name", "type": "text", "label": "Name",
       "default": "Ember", "max_length": 31 },
@@ -240,13 +241,19 @@ tables, schedules) without new per-mod machinery.
                    { "value": "air", "label": "Air" },
                    { "value": "ether", "label": "Ether" } ] },
     { "key": "discipline", "type": "choice", "label": "Discipline",
+      "default": "arcane",
+      "choices": [ { "value": "mind", "label": "Mind" },
+                   { "value": "body", "label": "Body" },
+                   { "value": "arcane", "label": "Arcane" } ] },
+    { "key": "behavior", "type": "choice", "label": "Behavior",
       "default": "skirmisher",
       "choices": [ { "value": "skirmisher", "label": "Skirmisher — kite and cast" },
                    { "value": "guardian", "label": "Guardian — protect a player" },
                    { "value": "striker", "label": "Striker — aggressive pressure" } ] }
   ] },
   "default": [ { "name": "Ember", "element": "fire",
-                 "discipline": "skirmisher" } ] }
+                 "discipline": "arcane",
+                 "behavior": "skirmisher" } ] }
 ```
 
 ### Rules
@@ -288,10 +295,11 @@ The dogfood `roster` above replaces the single hard-coded bot. On apply (start
 or live reload/replication), the brain reconciles running bots against the
 roster by list order: missing bots spawn (subject to free gameplay slots —
 spawn rejection surfaces in the entry error, not a crash), removed bots
-despawn, and a row whose element or discipline changed respawns that bot. The
-`persona_name` scalar entry is superseded by per-row names and is removed from
-the dogfood block in the same commit. Disciplines are brain profiles (ATC
-spec): `skirmisher` = the shipped kite-and-cast behavior; `guardian` = anchor
+despawn, and a row whose element, Discipline, or Behavior changed respawns
+that bot. The `persona_name` scalar entry is superseded by per-row names and is
+removed from the dogfood block in the same commit. Behaviors are brain
+profiles (ATC spec): `skirmisher` = the shipped kite-and-cast behavior;
+`guardian` = anchor
 within a leash radius of the nearest human player, engaging only threats that
 approach the ward; `striker` = tighter engage range, faster cast cadence,
 flee threshold at 20% instead of 35%. All three keep native traversability,
@@ -348,7 +356,8 @@ commit.
 - `mods/bot-brain/` exercises every v1 type. End-to-end acceptance is
   `tools/verify_mod_settings_lifecycle.py`, fixed to the isolated `ms2` pair
   and ports 49211/49212. It also exercises the v2 roster on both peers,
-  ordered despawn/respawn, all three disciplines, and slot-exhaustion errors.
+  ordered despawn/respawn, all three Behaviors, all three native Disciplines,
+  and slot-exhaustion errors.
   No new Solomon Dark native address or layout offset was added. Keybind reads
   use only the operating-system `GetForegroundWindow`,
   `GetWindowThreadProcessId`, and `GetAsyncKeyState` APIs.

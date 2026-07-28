@@ -400,6 +400,18 @@ bool BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() {
             "waypoint progress inside the rolling window was ignored")) {
         return false;
     }
+    DiscardBotStuckWaypointProgress(&waypoint_tracker);
+    if (!Require(
+            ObserveBotStuckProgress(
+                &waypoint_tracker,
+                31001,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "exhausted segment retained stale waypoint credit")) {
+        return false;
+    }
 
     BotStuckProgressTracker exhausted_tracker;
     return Require(
@@ -420,6 +432,57 @@ bool BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() {
                 200.0f,
                 false),
             "segment exhaustion without progress prevented recovery");
+}
+
+bool BotStuckProgressRejectsRepeatedDistanceOscillation() {
+    using namespace sdmod;
+
+    BotStuckProgressTracker tracker;
+    return Require(
+               !ObserveBotStuckProgress(
+                   &tracker,
+                   1000,
+                   500.0f,
+                   600.0f,
+                   200.0f,
+                   false),
+               "oscillation tracker fired on its first sample") &&
+        Require(
+            !ObserveBotStuckProgress(
+                &tracker,
+                8000,
+                500.0f,
+                600.0f,
+                198.0f,
+                false),
+            "opening oscillation fired before a full window") &&
+        Require(
+            !ObserveBotStuckProgress(
+                &tracker,
+                16000,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "mid-window oscillation fired before a full window") &&
+        Require(
+            !ObserveBotStuckProgress(
+                &tracker,
+                24000,
+                500.0f,
+                600.0f,
+                198.0f,
+                false),
+            "closing oscillation fired before a full window") &&
+        Require(
+            ObserveBotStuckProgress(
+                &tracker,
+                31000,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "repeated far-to-near oscillation counted as new progress");
 }
 
 bool BotStuckProgressResetsForNewTargetsAndHonorsCooldown() {
@@ -547,6 +610,7 @@ int main() {
         !BotStuckProgressRequiresAFullRollingWindow() ||
         !BotStuckProgressAcceptsSlowReachableMovement() ||
         !BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() ||
+        !BotStuckProgressRejectsRepeatedDistanceOscillation() ||
         !BotStuckProgressResetsForNewTargetsAndHonorsCooldown() ||
         !PacketSplitsHaveBoundedVariableWireSizes()) {
         return 1;

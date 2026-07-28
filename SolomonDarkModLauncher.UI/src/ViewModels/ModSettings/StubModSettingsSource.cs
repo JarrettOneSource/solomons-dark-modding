@@ -45,7 +45,7 @@ internal sealed class StubModSettingsSource : IModSettingsSource
         return new ModSettingsSchema(
             modId,
             "Bot Brain",
-            "v0.1.0",
+            "v1.0.1",
             ModSettingsBlockState.Valid,
             null,
             [
@@ -57,15 +57,17 @@ internal sealed class StubModSettingsSource : IModSettingsSource
                 [
                     new Dictionary<string, object>
                     {
-                        ["name"] = "Ember", ["element"] = "fire", ["discipline"] = "skirmisher"
+                        ["name"] = "Ember", ["element"] = "fire",
+                        ["discipline"] = "arcane", ["behavior"] = "skirmisher"
                     },
                     new Dictionary<string, object>
                     {
-                        ["name"] = "Brook", ["element"] = "water", ["discipline"] = "guardian"
+                        ["name"] = "Brook", ["element"] = "water",
+                        ["discipline"] = "mind", ["behavior"] = "guardian"
                     }
                 ],
-                MinItems: 0, MaxItems: 3,
-                ItemLabel: "{name} · {element} {discipline}",
+                MinItems: 0, MaxItems: 4,
+                ItemLabel: "{name} · {element} · {discipline} · {behavior}",
                 ItemFields:
                 [
                     new ModSettingEntry(
@@ -84,6 +86,15 @@ internal sealed class StubModSettingsSource : IModSettingsSource
                         ]),
                     new ModSettingEntry(
                         "discipline", ModSettingType.Choice, "Discipline", null, null,
+                        ModSettingScope.Host, false, "arcane",
+                        Choices:
+                        [
+                            new ModSettingChoice("mind", "Mind"),
+                            new ModSettingChoice("body", "Body"),
+                            new ModSettingChoice("arcane", "Arcane")
+                        ]),
+                    new ModSettingEntry(
+                        "behavior", ModSettingType.Choice, "Behavior", null, null,
                         ModSettingScope.Host, false, "skirmisher",
                         Choices:
                         [
@@ -103,10 +114,6 @@ internal sealed class StubModSettingsSource : IModSettingsSource
                 "respawn_bot", ModSettingType.Action, "Respawn bot",
                 "Despawns and respawns the bot at the arena center.", "Combat",
                 ModSettingScope.Host, false, null, Confirm: true),
-            new ModSettingEntry(
-                "persona_name", ModSettingType.Text, "Bot name",
-                "Member-list persona for the synthetic participant.", "Identity",
-                ModSettingScope.Host, true, "Ember", MaxLength: 31),
             new ModSettingEntry(
                 "think_profile", ModSettingType.Choice, "Think cadence",
                 null, "Identity", ModSettingScope.Local, false, "standard",

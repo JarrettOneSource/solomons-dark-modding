@@ -10,10 +10,17 @@ local ELEMENT_IDS = {
   ether = 4,
 }
 
+local DISCIPLINE_IDS = {
+  mind = 0,
+  body = 1,
+  arcane = 2,
+}
+
 local function row_copy(row)
   return {
     name = tostring(row.name or ""),
     element = tostring(row.element or ""),
+    behavior = tostring(row.behavior or ""),
     discipline = tostring(row.discipline or ""),
   }
 end
@@ -22,6 +29,7 @@ local function rows_match(left, right)
   return left ~= nil and right ~= nil and
     left.name == right.name and
     left.element == right.element and
+    left.behavior == right.behavior and
     left.discipline == right.discipline
 end
 
@@ -45,7 +53,8 @@ local function snapshot_matches_row(participant_id, row)
   return tostring(snapshot.controller_kind or "") == "LuaBrain" and
     tostring(snapshot.name or "") == row.name and
     type(profile) == "table" and
-    tonumber(profile.element_id) == ELEMENT_IDS[row.element]
+    tonumber(profile.element_id) == ELEMENT_IDS[row.element] and
+    tonumber(profile.discipline_id) == DISCIPLINE_IDS[row.discipline]
 end
 
 local function clear_handle(context)
@@ -173,6 +182,7 @@ function Manager:ensure_context(
     {
       name = context.row.name,
       class = context.row.element,
+      discipline = context.row.discipline,
     })
   if not ok or bot == nil then
     local message =

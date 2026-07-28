@@ -1,3 +1,16 @@
+int NativeSkillRowForDiscipline(
+    multiplayer::CharacterDisciplineId discipline_id) {
+    switch (discipline_id) {
+    case multiplayer::CharacterDisciplineId::Mind:
+        return 6;
+    case multiplayer::CharacterDisciplineId::Body:
+        return 5;
+    case multiplayer::CharacterDisciplineId::Arcane:
+        return 7;
+    }
+    return -1;
+}
+
 bool PrimeGameplaySlotBotSelectionState(
     uintptr_t actor_address,
     uintptr_t progression_address,
@@ -41,13 +54,20 @@ bool PrimeGameplaySlotBotSelectionState(
         " actor_prog_inner=" + HexString(ReadSmartPointerInnerObject(actor_progression_handle)) +
         " slot_prog=" + HexString(slot_progression_wrapper) +
         " slot_prog_inner=" + HexString(slot_progression_inner));
+    if (slot_progression_inner == 0 ||
+        slot_progression_inner != progression_address) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Gameplay-slot bot progression is not the bot's slot-owned native book.";
+        }
+        return false;
+    }
 
     // Gameplay_CreatePlayerSlot allocates a fresh PlayerProgression, but the
-    // stock "new character" flow (FUN_005D0290) is what grows the appearance
-    // table vector at progression+0x20 before PlayerAppearance_ApplyChoice.
-    // Slot bot visuals are therefore seeded from the native visual snapshot
-    // path; only mirror explicit profile choices when the profile already owns
-    // them, and never invent synthetic appearance ids here.
+    // late bot-clone path skips the stock new-character selection block.
+    // Slot bot visuals are seeded from the native source-profile builder; only
+    // mirror explicit profile choices when the profile already owns them, and
+    // never invent synthetic appearance ids here.
     const bool has_primary_choice_ids =
         choice_ids[0] >= 0 && choice_ids[1] >= 0 && choice_ids[2] >= 0;
     if (has_primary_choice_ids) {
@@ -87,9 +107,18 @@ bool PrimeGameplaySlotBotSelectionState(
             std::to_string(choice_ids[3]));
     }
 
-    if (!PrimeStandaloneWizardProgressionSelectionState(
+    const auto discipline_skill_row =
+        NativeSkillRowForDiscipline(character_profile.discipline_id);
+    if (discipline_skill_row < 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the bot's native Discipline choice.";
+        }
+        return false;
+    }
+    if (!PrimeGameplaySlotBotBaseBookState(
             progression_address,
-            selection_state,
+            discipline_skill_row,
             error_message)) {
         return false;
     }
@@ -129,19 +158,6 @@ bool PrimeGameplaySlotBotSelectionState(
         return false;
     }
 
-    if (choice_ids[3] >= 0) {
-        if (!memory.TryWriteField<std::int32_t>(
-                progression_address,
-                kPlayerProgressionAppearanceSecondaryOffset,
-                choice_ids[3])) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "Failed to mirror explicit secondary wizard appearance id into the slot progression object.";
-            }
-            return false;
-        }
-    }
-
     // The pure-primary builder mutates the progression runtime after the
     // initial refresh above. Re-run the stock progression refresh so the live
     // actor mirrors the rebuilt primary spell before any combat startup.
@@ -176,19 +192,20 @@ bool PrimeGameplaySlotBotSelectionState(
     return true;
 }
 
-bool PrimeStandaloneWizardProgressionSelectionState(
+bool PrimeGameplaySlotBotBaseBookState(
     uintptr_t progression_inner_address,
-    int selection_state,
+    int discipline_skill_row,
     std::string* error_message) {
+    constexpr int kStockBaseBookRowCount = 8;
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (selection_state < 0) {
-        return true;
-    }
-    if (progression_inner_address == 0) {
+    if (progression_inner_address == 0 ||
+        discipline_skill_row < 5 ||
+        discipline_skill_row > 7) {
         if (error_message != nullptr) {
-            *error_message = "Standalone progression selection prime requires a live runtime object.";
+            *error_message =
+                "Bot base-book prime requires a live progression and native Discipline row.";
         }
         return false;
     }
@@ -205,36 +222,107 @@ bool PrimeStandaloneWizardProgressionSelectionState(
             kStandaloneWizardProgressionTableCountOffset,
             &progression_table_count)) {
         if (error_message != nullptr) {
-            *error_message = "Standalone progression selection table fields are unreadable.";
+            *error_message = "Bot base-book table fields are unreadable.";
         }
         return false;
     }
-    if (progression_table_address == 0 || progression_table_count <= selection_state) {
+    if (progression_table_address == 0 ||
+        progression_table_count < kStockBaseBookRowCount) {
         if (error_message != nullptr) {
-            *error_message =
-                "Standalone progression selection table is unavailable for state=" +
-                std::to_string(selection_state) + ".";
+            *error_message = "Bot base-book table does not contain the stock rows 0..7.";
         }
         return false;
     }
 
-    const auto selection_offset =
-        static_cast<std::size_t>(selection_state) * kStandaloneWizardProgressionEntryStride;
-    if (!memory.TryWriteField<std::uint16_t>(
-            progression_table_address,
-            selection_offset + kStandaloneWizardProgressionActiveFlagOffset,
-            1) ||
-        !memory.TryWriteField<std::uint16_t>(
-            progression_table_address,
-            selection_offset + kStandaloneWizardProgressionVisibleFlagOffset,
-            1)) {
+    for (int row = 0; row < kStockBaseBookRowCount; ++row) {
+        const auto entry_address =
+            progression_table_address +
+            static_cast<std::size_t>(row) *
+                kStandaloneWizardProgressionEntryStride;
+        std::int16_t internal_id = -1;
+        uintptr_t statbook_address = 0;
+        std::int32_t maximum_rank = 0;
+        if (!memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionEntryInternalIdOffset,
+                &internal_id) ||
+            !memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionEntryStatbookOffset,
+                &statbook_address) ||
+            statbook_address == 0 ||
+            !memory.TryReadField(
+                statbook_address,
+                kStatbookMaxLevelOffset,
+                &maximum_rank) ||
+            internal_id != row ||
+            maximum_rank < 1) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Bot base-book row " + std::to_string(row) +
+                    " does not match a rankable native definition.";
+            }
+            return false;
+        }
+    }
+
+    for (int row = 0; row < kStockBaseBookRowCount; ++row) {
+        const auto entry_address =
+            progression_table_address +
+            static_cast<std::size_t>(row) *
+                kStandaloneWizardProgressionEntryStride;
+        if (!memory.TryWriteField<std::uint16_t>(
+                entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                1)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Failed to prime native base-book row " +
+                    std::to_string(row) + ".";
+            }
+            return false;
+        }
+    }
+    if (!memory.TryWriteField<std::int32_t>(
+            progression_inner_address,
+            kPlayerProgressionDisciplineSkillRowOffset,
+            discipline_skill_row)) {
         if (error_message != nullptr) {
             *error_message =
-                "Failed to mark standalone progression state=" + std::to_string(selection_state) +
-                " as active.";
+                "Failed to publish the bot's selected native Discipline row.";
         }
         return false;
     }
 
+    for (int row = 0; row < kStockBaseBookRowCount; ++row) {
+        const auto entry_address =
+            progression_table_address +
+            static_cast<std::size_t>(row) *
+                kStandaloneWizardProgressionEntryStride;
+        std::uint16_t active = 0;
+        if (!memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &active) ||
+            active != 1) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Native base-book verification failed for row " +
+                    std::to_string(row) + ".";
+            }
+            return false;
+        }
+    }
+    std::int32_t selected_row = -1;
+    if (!memory.TryReadField(
+            progression_inner_address,
+            kPlayerProgressionDisciplineSkillRowOffset,
+            &selected_row) ||
+        selected_row != discipline_skill_row) {
+        if (error_message != nullptr) {
+            *error_message = "Native Discipline selection verification failed.";
+        }
+        return false;
+    }
     return true;
 }

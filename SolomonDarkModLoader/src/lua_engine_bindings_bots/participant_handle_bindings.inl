@@ -532,6 +532,37 @@ int LuaBotsSpawn(lua_State* state) {
             "bot class must be fire, water, earth, air, or ether");
     }
 
+    auto discipline_id =
+        multiplayer::CharacterDisciplineId::Arcane;
+    lua_getfield(state, table_index, "discipline");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isstring(state, -1)) {
+            lua_pop(state, 1);
+            return PushBotOperationError(
+                state,
+                true,
+                "bot discipline must be mind, body, or arcane");
+        }
+        const auto* discipline_name =
+            lua_tostring(state, -1);
+        const std::string discipline_text =
+            discipline_name != nullptr ? discipline_name : "";
+        if (discipline_text == "mind") {
+            discipline_id =
+                multiplayer::CharacterDisciplineId::Mind;
+        } else if (discipline_text == "body") {
+            discipline_id =
+                multiplayer::CharacterDisciplineId::Body;
+        } else if (discipline_text != "arcane") {
+            lua_pop(state, 1);
+            return PushBotOperationError(
+                state,
+                true,
+                "bot discipline must be mind, body, or arcane");
+        }
+    }
+    lua_pop(state, 1);
+
     multiplayer::BotCreateRequest request;
     request.display_name = display_name;
     request.ready = true;
@@ -540,7 +571,7 @@ int LuaBotsSpawn(lua_State* state) {
     request.character_profile.element_id =
         element_id;
     request.character_profile.discipline_id =
-        multiplayer::CharacterDisciplineId::Arcane;
+        discipline_id;
     request.character_profile.level = 1;
     const auto primary_entry =
         ResolveNativePrimaryEntryForElement(

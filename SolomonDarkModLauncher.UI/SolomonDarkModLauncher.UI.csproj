@@ -23,6 +23,7 @@
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsModels.cs" Link="ModSettings\ModSettingsModels.cs" />
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsManifestService.cs" Link="ModSettings\ModSettingsManifestService.cs" />
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsDiscoveryService.cs" Link="ModSettings\ModSettingsDiscoveryService.cs" />
+    <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\BotBrainRosterSettingsMigration.cs" Link="ModSettings\BotBrainRosterSettingsMigration.cs" />
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsStore.cs" Link="ModSettings\ModSettingsStore.cs" />
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsRuntimeClient.cs" Link="ModSettings\ModSettingsRuntimeClient.cs" />
     <Compile Include="..\SolomonDarkModLauncher\src\ModSettings\ModSettingsService.cs" Link="ModSettings\ModSettingsService.cs" />

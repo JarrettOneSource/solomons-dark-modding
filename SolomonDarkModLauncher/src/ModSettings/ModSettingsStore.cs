@@ -64,6 +64,13 @@ public sealed class ModSettingsStore(
         var values = Defaults(definition);
         var warnings = new List<string>();
         var path = GetSettingsPath(stageRootPath, modId);
+        if (string.Equals(
+                modId,
+                BotBrainRosterSettingsMigration.ModId,
+                StringComparison.Ordinal))
+        {
+            BotBrainRosterSettingsMigration.TryMigrateFile(path);
+        }
         if (!File.Exists(path))
         {
             return new ModSettingsSnapshot { Values = values };

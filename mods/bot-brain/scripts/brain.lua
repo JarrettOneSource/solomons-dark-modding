@@ -223,7 +223,7 @@ local function guardian_idle_direction(context, bot_x, bot_y, ward)
 end
 
 local function constrain_to_guardian_leash(context, target, ward)
-  if context.row.discipline ~= "guardian" or ward == nil then
+  if context.row.behavior ~= "guardian" or ward == nil then
     return target
   end
   local offset_x = target.x - ward.x
@@ -350,11 +350,12 @@ local function update_wave_debug(context)
 end
 
 function brain.new(row, roster_index, shared, steering)
-  local profile = assert(PROFILES[row.discipline])
+  local profile = assert(PROFILES[row.behavior])
   return {
     row = {
       name = row.name,
       element = row.element,
+      behavior = row.behavior,
       discipline = row.discipline,
     },
     roster_index = roster_index,
@@ -382,6 +383,7 @@ function brain.new(row, roster_index, shared, steering)
       roster_index = roster_index,
       name = row.name,
       element = row.element,
+      behavior = row.behavior,
       discipline = row.discipline,
       authority = false,
       active = false,
@@ -523,7 +525,7 @@ function brain.think(context, now_ms, authority)
 
   local ward = nil
   local enemies = all_enemies
-  if context.row.discipline == "guardian" then
+  if context.row.behavior == "guardian" then
     local ward_distance
     ward, ward_distance = nearest_human(bot_x, bot_y)
     context.debug.guardian_human_participant_id =
@@ -564,13 +566,13 @@ function brain.think(context, now_ms, authority)
       now_ms,
       threat_radius)
 
-  if context.row.discipline == "guardian" and ward ~= nil and
+  if context.row.behavior == "guardian" and ward ~= nil and
       not context.fleeing and #enemies == 0 then
     direction_x, direction_y =
       guardian_idle_direction(context, bot_x, bot_y, ward)
     context.debug.mode = "guard"
   end
-  if context.row.discipline == "guardian" and ward ~= nil and
+  if context.row.behavior == "guardian" and ward ~= nil and
       context.debug.guardian_ward_distance >
         context.profile.leash_radius * 0.82 then
     direction_x, direction_y =
