@@ -36,7 +36,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 86;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 87;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
@@ -460,8 +460,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 86;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 86;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 87;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 87;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),
@@ -594,7 +594,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
                 "WPF launcher retains the global Steam status: " + removed_status
             )
     return (
-        "Steam friends-only lobby, authenticated v86 handshake, idle keepalive, owner-checked gameplay "
+        "Steam friends-only lobby, authenticated v87 handshake, idle keepalive, owner-checked gameplay "
         "routing, Solomon Dark AppID launch, x86 runtime staging, and a live launch-token-bound "
         "lobby connection panel are wired"
     )

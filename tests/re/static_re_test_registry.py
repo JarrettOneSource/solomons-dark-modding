@@ -220,6 +220,7 @@ from static_multiplayer_behavior_contracts import (
 )
 from static_multiplayer_vitals_contracts import (
     test_client_owned_magic_shield_consumption_is_host_authoritative,
+    test_local_participant_hit_feedback_is_event_owned_and_presentation_only,
 )
 from static_dead_progression_round_respawn_contracts import (
     test_dead_picker_uses_only_the_stock_screen_virtual_gate,
@@ -810,6 +811,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "client-owned Magic Shield consumption is host authoritative",
         test_client_owned_magic_shield_consumption_is_host_authoritative,
+    ),
+    (
+        "local participant hit feedback is event-owned and presentation-only",
+        test_local_participant_hit_feedback_is_event_owned_and_presentation_only,
     ),
     (
         "spell verifiers quiesce input and prearm manual spawning",

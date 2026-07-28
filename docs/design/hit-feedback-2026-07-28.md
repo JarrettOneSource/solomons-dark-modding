@@ -361,7 +361,7 @@ owner-side stock death replay remains the sole killing-blow presentation.
 
 ### Wire event and reliability
 
-Protocol 87 adds `ParticipantHitFeedback`, a small authority-to-owner packet
+Protocol 87 adds the 80-byte `ParticipantHitFeedback` authority-to-owner packet
 containing:
 
 - authenticated authority participant id;
@@ -374,6 +374,11 @@ containing:
 - the resolved hit-overlay RGBA at `+0x84..+0x90`.
 
 This packet contains no damage-apply instruction.
+
+The target run nonce is captured at the completed damage transaction, not
+looked up later when the transport drains its queue. If that participant has
+changed runs before send, the queued event is discarded instead of being
+relabeled into the new run.
 
 The authority keeps every event in a bounded per-target pending queue and
 resends unacknowledged events for the local UDP lane. Steam sends the same

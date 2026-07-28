@@ -26,7 +26,7 @@ The implemented path is:
    participant state/frame packets through the ordinary remote playback path.
 6. Despawn sends `ParticipantStateFlagRetired` before destroying the binding.
 
-Protocol 86 carries the synthetic controller, authority, gameplay state, and
+Protocol 87 carries the synthetic controller, authority, gameplay state, and
 durable retirement flag. A client accepts a `LuaBrain` epoch only from its
 configured host endpoint. The host rejects network peers that claim synthetic
 authority.

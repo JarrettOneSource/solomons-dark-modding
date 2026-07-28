@@ -471,6 +471,78 @@ bool QueueLocalPlayerVitalsCorrection(
     return true;
 }
 
+bool QueueLocalPlayerHitFeedback(
+    std::uint64_t authority_participant_id,
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::uint32_t event_sequence,
+    float health_before,
+    float health_after,
+    float health_maximum,
+    const multiplayer::ParticipantHitReactionState& hit_reaction,
+    std::uint8_t feedback_flags,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (!g_gameplay_keyboard_injection.initialized) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay action pump is not initialized.";
+        }
+        return false;
+    }
+    if (authority_participant_id == 0 ||
+        target_participant_id == 0 ||
+        target_participant_id !=
+            multiplayer::GetLocalTransportParticipantId() ||
+        run_nonce == 0 ||
+        event_sequence == 0 ||
+        !std::isfinite(health_before) ||
+        !std::isfinite(health_after) ||
+        !std::isfinite(health_maximum) ||
+        health_maximum <= 0.0f ||
+        health_before <= health_after ||
+        health_after <= 0.0f ||
+        health_before > health_maximum ||
+        !multiplayer::IsValidParticipantHitReactionState(
+            hit_reaction) ||
+        (feedback_flags &
+         ~multiplayer::kParticipantHitFeedbackKnownFlags) != 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local-player hit-feedback event is invalid.";
+        }
+        return false;
+    }
+
+    PendingLocalPlayerHitFeedback request;
+    request.authority_participant_id = authority_participant_id;
+    request.target_participant_id = target_participant_id;
+    request.run_nonce = run_nonce;
+    request.event_sequence = event_sequence;
+    request.health_before = health_before;
+    request.health_after = health_after;
+    request.health_maximum = health_maximum;
+    request.hit_reaction = hit_reaction;
+    request.feedback_flags = feedback_flags;
+
+    std::lock_guard<std::mutex> lock(
+        g_gameplay_keyboard_injection
+            .pending_gameplay_world_actions_mutex);
+    auto& pending =
+        g_gameplay_keyboard_injection
+            .pending_local_player_hit_feedback;
+    if (pending.size() >= kQueuedGameplayWorldActionLimit) {
+        if (error_message != nullptr) {
+            *error_message =
+                "The local-player hit-feedback queue is full.";
+        }
+        return false;
+    }
+    pending.push_back(request);
+    return true;
+}
+
 #include "public_api_native_behavior_probes.inl"
 
 #include "public_api_combat_control_queues.inl"

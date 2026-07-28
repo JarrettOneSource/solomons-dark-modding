@@ -1,11 +1,12 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 86;
+constexpr std::uint16_t kProtocolVersion = 87;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -75,6 +76,7 @@ enum class PacketKind : std::uint16_t {
     ParticipantInventorySnapshot = 30,
     ParticipantProgressionBookSnapshot = 31,
     WaveSummary = 32,
+    ParticipantHitFeedback = 33,
 };
 
 enum ParticipantStateFlag : std::uint8_t {
@@ -413,6 +415,38 @@ constexpr std::uint8_t kParticipantVitalsCorrectionKnownFlags =
     ParticipantVitalsCorrectionFlagMagicShieldState |
     ParticipantVitalsCorrectionFlagHagathaRuntimeState;
 
+enum ParticipantHitFeedbackFlags : std::uint8_t {
+    ParticipantHitFeedbackFlagOuchEligible = 1 << 0,
+};
+
+constexpr std::uint8_t kParticipantHitFeedbackKnownFlags =
+    ParticipantHitFeedbackFlagOuchEligible;
+
+struct ParticipantHitReactionState {
+    float primary_alpha = 0.0f;
+    float intensity = 0.0f;
+    float secondary_alpha = 0.0f;
+    float color_red = 0.0f;
+    float color_green = 0.0f;
+    float color_blue = 0.0f;
+    float color_alpha = 0.0f;
+};
+
+inline bool IsValidParticipantHitReactionState(
+    const ParticipantHitReactionState& state) {
+    return std::isfinite(state.primary_alpha) &&
+           state.primary_alpha > 0.0f &&
+           state.primary_alpha <= 1.0f &&
+           std::isfinite(state.intensity) &&
+           std::isfinite(state.secondary_alpha) &&
+           state.secondary_alpha >= 0.0f &&
+           state.secondary_alpha <= 1.0f &&
+           std::isfinite(state.color_red) &&
+           std::isfinite(state.color_green) &&
+           std::isfinite(state.color_blue) &&
+           std::isfinite(state.color_alpha);
+}
+
 enum ParticipantHagathaRuntimeFlags : std::uint8_t {
     ParticipantHagathaRuntimeFlagSerendipityActive = 1 << 0,
     ParticipantHagathaRuntimeFlagReverieActive = 1 << 1,
@@ -537,6 +571,7 @@ struct StatePacket {
     std::uint32_t lua_time_scale_units;
     std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
+    std::uint32_t participant_hit_feedback_ack_sequence;
     std::int32_t element_id;
     std::int32_t discipline_id;
     std::int32_t appearance_choice_ids[4];
@@ -681,6 +716,7 @@ struct ParticipantFramePacket {
     std::uint32_t lua_time_scale_units;
     std::uint32_t lua_time_revision;
     std::uint32_t participant_vitals_correction_ack_sequence;
+    std::uint32_t participant_hit_feedback_ack_sequence;
     std::int32_t region_index;
     std::int32_t region_type_id;
     std::int32_t level;
@@ -1463,6 +1499,20 @@ struct ParticipantVitalsCorrectionPacket {
     float magic_shield_hit_flash;
 };
 
+struct ParticipantHitFeedbackPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t target_participant_id;
+    std::uint32_t event_sequence;
+    std::uint32_t run_nonce;
+    float health_before;
+    float health_after;
+    float health_maximum;
+    ParticipantHitReactionState hit_reaction;
+    std::uint8_t feedback_flags;
+    std::uint8_t reserved[3] = {};
+};
+
 struct EnemyDamageClaimPacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -1705,12 +1755,12 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 653, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 657, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
 static_assert(sizeof(WaveSummaryPacket) == 296,
               "Unexpected wave summary packet size");
-static_assert(sizeof(ParticipantFramePacket) == 370,
+static_assert(sizeof(ParticipantFramePacket) == 374,
               "Unexpected participant frame packet size");
 static_assert(
     sizeof(ParticipantInventorySnapshotPacket) == 1832,
@@ -1810,6 +1860,8 @@ static_assert(SpellEffectSnapshotPacketWireSize(
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
 static_assert(sizeof(AirChainSnapshotPacket) == 260, "Unexpected Air chain snapshot packet size");
 static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88, "Unexpected participant vitals correction packet size");
+static_assert(sizeof(ParticipantHitReactionState) == 28, "Unexpected participant hit reaction size");
+static_assert(sizeof(ParticipantHitFeedbackPacket) == 80, "Unexpected participant hit feedback packet size");
 static_assert(sizeof(EnemyDamageClaimPacket) == 72, "Unexpected enemy damage claim packet size");
 static_assert(sizeof(EnemyDamageResultPacket) == 56, "Unexpected enemy damage result packet size");
 static_assert(sizeof(LootPickupRequestPacket) == 56, "Unexpected loot pickup request packet size");

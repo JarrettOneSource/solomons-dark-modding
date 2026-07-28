@@ -5,6 +5,225 @@ from __future__ import annotations
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
+def test_local_participant_hit_feedback_is_event_owned_and_presentation_only() -> str:
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    transport_header = _read(
+        "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+    )
+    transport_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    hit_feedback_sync = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_hit_feedback_sync.inl"
+    )
+    incoming = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_sync.inl"
+    )
+    local_state = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_state_packet_sync.inl"
+    )
+    damage_authority_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "player_hit_feedback_authority_hook.inl"
+    )
+    layout = _read("config/binary-layout.ini")
+    gameplay_header = _read(
+        "SolomonDarkModLoader/include/mod_loader_public_api.inl"
+    )
+    request_state = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
+        "runtime_request_state.inl"
+    )
+    action_queue = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_gameplay_action_queues.inl"
+    )
+    action_executor = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_local_hit_feedback.inl"
+    )
+    native_audio = _read(
+        "SolomonDarkModLoader/src/native_audio_observability.cpp"
+    )
+    vitals_correction = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_vitals_correction.inl"
+    )
+    native_remote_vitals = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
+        "native_remote_vitals_and_playback.inl"
+    )
+    verifier = _read("tools/verify_multiplayer_local_hit_feedback.py")
+    design = _read("docs/design/hit-feedback-2026-07-28.md")
+
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 87;",
+        "ParticipantHitFeedback = 33",
+        "struct ParticipantHitFeedbackPacket",
+        "std::uint32_t event_sequence;",
+        "std::uint32_t run_nonce;",
+        "float health_before;",
+        "float health_after;",
+        "float health_maximum;",
+        "struct ParticipantHitReactionState",
+        "ParticipantHitReactionState hit_reaction;",
+        "IsValidParticipantHitReactionState",
+        "ParticipantHitFeedbackFlagOuchEligible",
+        "participant_hit_feedback_ack_sequence",
+        "static_assert(sizeof(ParticipantHitFeedbackPacket) == 80",
+    ):
+        assert token in protocol, f"hit-feedback protocol lacks: {token}"
+
+    assert "QueueHostParticipantHitFeedback(" in transport_header
+    for token in (
+        "next_hit_feedback_event_sequence_by_participant",
+        "pending_hit_feedback_events_by_participant",
+        "received_hit_feedback_events_by_sequence",
+        "local_hit_feedback_ack_sequence",
+    ):
+        assert token in transport_state, (
+            f"transport lacks retained event state: {token}"
+        )
+
+    for token in (
+        "QueueHostParticipantHitFeedbackInternal(",
+        "SendQueuedHostParticipantHitFeedback(",
+        "ApplyParticipantHitFeedbackPacket(",
+        "RetireAcknowledgedParticipantHitFeedbackEvents(",
+        "ResetParticipantHitFeedbackState()",
+        "event.event_sequence = next_sequence;",
+        "PacketKind::ParticipantHitFeedback",
+        "QueueLocalPlayerHitFeedback(",
+        "expected_sequence",
+        "received.emplace(packet.event_sequence, packet);",
+        "local_hit_feedback_ack_sequence =",
+    ):
+        assert token in hit_feedback_sync, (
+            f"hit-feedback event transport lacks: {token}"
+        )
+    _require_in_order(
+        hit_feedback_sync,
+        "QueueLocalPlayerHitFeedback(",
+        "received.erase(expected);",
+        "g_local_transport.local_hit_feedback_ack_sequence =",
+    )
+    assert "participant_hit_feedback_ack_sequence" in incoming
+    assert "RetireAcknowledgedParticipantHitFeedbackEvents(" in incoming
+    assert "participant_hit_feedback_ack_sequence" in local_state
+
+    resolved_damage_hook = damage_authority_hook[
+        damage_authority_hook.index(
+            "std::uint32_t __fastcall HookPlayerActorDamageResolver("
+        ):
+    ]
+    _require_in_order(
+        resolved_damage_hook,
+        "TryPrepareRemoteParticipantHitFeedback(",
+        "original(self)",
+        "TryReadResolvedHitFeedbackLanes(",
+        "TryReadNativeActorHitReactionState(",
+        "PublishRemoteParticipantHitFeedback(",
+    )
+    assert "player_actor_damage_resolver=0x0052F540" in layout
+    for token in (
+        "multiplayer::IsLocalTransportHost()",
+        "FindParticipantEntityForActor(actor_address)",
+        "IsNativeRemoteParticipantBinding(binding)",
+        "g_player_damage_resolver_depth",
+        "lanes[2] != 0.0f",
+        "health_after >= capture.health_before",
+        "health_after <= 0.0f",
+        "QueueHostParticipantHitFeedback(",
+        "capture.run_nonce",
+        "capture.hit_reaction",
+    ):
+        assert token in damage_authority_hook, (
+            f"authority transaction does not own hit events: {token}"
+        )
+
+    assert "QueueLocalPlayerHitFeedback(" in gameplay_header
+    assert "struct PendingLocalPlayerHitFeedback" in request_state
+    assert "QueueLocalPlayerHitFeedback(" in action_queue
+    for token in (
+        "multiplayer::GetLocalTransportParticipantId()",
+        "TryGetPlayerState(",
+        "TryWriteNativeActorHitReactionState(",
+        "actor_reaction_written",
+        "kArenaHitFeedbackAlphaOffset",
+        "(request.health_after / 40.0f)",
+        "*\n                    0.7f",
+        "request.health_after < 30.0f",
+        "TryDispatchNativeWizardOuchSound(",
+        "[hit-feedback] event=replay",
+    ):
+        assert token in action_executor, (
+            f"local native presentation replay lacks: {token}"
+        )
+    for token in (
+        "sounds/Wizard_Ouch/SAY_OUCH1.wav",
+        "sounds/Wizard_Ouch/SAY_OUCH2.wav",
+        "sounds/Wizard_Ouch/SAY_OUCH3.wav",
+    ):
+        assert token in native_audio, (
+            f"native Ouch catalog lacks: {token}"
+        )
+    for forbidden in (
+        "TryWriteLocalPlayerOrbResource(",
+        "TryApplyAuthoritativeLocalPlayerDeath(",
+        "HookPlayerActorMagicDamage(",
+        "kPlayerActorMagicDamage",
+    ):
+        assert forbidden not in action_executor, (
+            f"presentation replay must not apply damage: {forbidden}"
+        )
+
+    for source, label in (
+        (vitals_correction, "vitals correction"),
+        (native_remote_vitals, "remote vitals polling"),
+    ):
+        assert "QueueLocalPlayerHitFeedback(" not in source, (
+            f"{label} must not infer a hit event from an HP snapshot"
+        )
+
+    for token in (
+        "HOST_PORT = 50111",
+        "CLIENT_PORT = 50112",
+        "SDMOD_DISABLE_AUDIO",
+        "client B",
+        "assert_exactly_once",
+        "assert_no_feedback_on_heal",
+        "assert_no_feedback_on_snapshot_reapply",
+        "assert_no_feedback_for_other_participant",
+        "assert_host_native_feedback_unchanged",
+        "capture_red_feedback_frame",
+        "sd.debug.capture_backbuffer",
+        "client-b-silent-before-hit.png",
+        "captured_actor_alpha",
+        "actorReactionReplayCount",
+    ):
+        assert token in verifier, f"two-instance verifier lacks: {token}"
+
+    for doctrine in (
+        "one hit-feedback event only when",
+        "not hit events",
+        "Presentation-only replay",
+        "It does not publish for `LuaBrain` participants",
+        "`local Actor + 0x78` multiplied by `Arena + 0x8EBC`",
+    ):
+        assert doctrine in design, f"design doctrine lacks: {doctrine}"
+
+    return (
+        "host-owned damage transactions emit retained per-hit events; the "
+        "local owner acknowledges each sequence only after queuing stock "
+        "presentation, while HP snapshots and bot damage stay silent"
+    )
+
+
 def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     protocol = _read(
         "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
@@ -67,7 +286,7 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 86;",
+        "constexpr std::uint16_t kProtocolVersion = 87;",
         "ParticipantVitalsCorrectionFlagMagicShieldState",
         "std::uint8_t correction_flags;",
         "float magic_shield_absorb_remaining;",

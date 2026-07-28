@@ -517,7 +517,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 86,
+               kProtocolVersion == 87,
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             std::string(
@@ -565,10 +565,10 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationRenderTick(298) == 159,
             "death presentation render projection does not reach and hold the corpse frame") &&
         Require(
-            sizeof(StatePacket) == 653,
+            sizeof(StatePacket) == 657,
             "StatePacket regained checkpoint-array payload") &&
         Require(
-            sizeof(ParticipantFramePacket) == 370,
+            sizeof(ParticipantFramePacket) == 374,
             "ParticipantFramePacket regained wave-summary payload") &&
         Require(
             ParticipantInventorySnapshotPacketWireSize(0) ==

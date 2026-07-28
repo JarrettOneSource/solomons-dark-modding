@@ -1059,7 +1059,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 86;",
+        "constexpr std::uint16_t kProtocolVersion = 87;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1070,7 +1070,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 653",
+        "static_assert(sizeof(StatePacket) == 657",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 120",
         "static_assert(sizeof(LootSnapshotPacket) == 7712",
         "static_assert(sizeof(LootPickupResultPacket) == 172",
@@ -1232,7 +1232,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 86;",
+        "constexpr std::uint16_t kProtocolVersion = 87;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1242,7 +1242,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 653",
+        "static_assert(sizeof(StatePacket) == 657",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 

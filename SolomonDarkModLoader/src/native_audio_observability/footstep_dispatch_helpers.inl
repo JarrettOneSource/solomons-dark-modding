@@ -71,3 +71,50 @@ bool CallSoundPlaySafe(
         return false;
     }
 }
+
+bool ResolveOuchDispatchSafe(
+    uintptr_t world_address,
+    float x,
+    float y,
+    uintptr_t rng_integer_address,
+    uintptr_t rng_state_address,
+    float* spatial_gain,
+    std::int32_t* sound_index) {
+    if (world_address == 0 ||
+        rng_integer_address == 0 ||
+        rng_state_address == 0 ||
+        spatial_gain == nullptr ||
+        sound_index == nullptr) {
+        return false;
+    }
+    __try {
+        const auto world_vtable =
+            *reinterpret_cast<uintptr_t*>(world_address);
+        if (world_vtable == 0) {
+            return false;
+        }
+        const auto gain_address =
+            *reinterpret_cast<uintptr_t*>(
+                world_vtable + kWorldHitPointGainVfuncOffset);
+        auto* resolve_gain =
+            reinterpret_cast<WorldPointGainFn>(gain_address);
+        auto* random_integer =
+            reinterpret_cast<NativeRngIntegerFn>(
+                rng_integer_address);
+        if (resolve_gain == nullptr ||
+            random_integer == nullptr) {
+            return false;
+        }
+        *spatial_gain = resolve_gain(
+            reinterpret_cast<void*>(world_address),
+            x,
+            y);
+        *sound_index = random_integer(
+            reinterpret_cast<void*>(rng_state_address),
+            static_cast<std::int32_t>(kOuchCatalog.size()),
+            0);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}

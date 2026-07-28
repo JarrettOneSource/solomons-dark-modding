@@ -12,6 +12,7 @@ namespace {
 #include "gameplay_seams/size_bindings.inl"
 #include "gameplay_seams/loading_helpers.inl"
 #include "gameplay_seams/address_storage.inl"
+#include "gameplay_seams/hit_feedback_storage.inl"
 #include "gameplay_seams/public_api.inl"
 
 }  // namespace sdmod

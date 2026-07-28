@@ -184,6 +184,8 @@ void PumpQueuedGameplayActions() {
     std::vector<PendingMultiplayerDampenEffectRequest> multiplayer_dampen_effect_requests;
     PendingLocalPlayerVitalsCorrection local_player_vitals_correction;
     bool have_local_player_vitals_correction = false;
+    std::vector<PendingLocalPlayerHitFeedback>
+        local_player_hit_feedback;
     std::vector<PendingNativePoisonBehaviorProbe> native_poison_behavior_probes;
     std::vector<PendingNativeMagicHitBehaviorProbe>
         native_magic_hit_behavior_probes;
@@ -325,6 +327,14 @@ void PumpQueuedGameplayActions() {
             have_local_player_vitals_correction = true;
         }
         while (!g_gameplay_keyboard_injection
+                    .pending_local_player_hit_feedback.empty()) {
+            local_player_hit_feedback.push_back(
+                g_gameplay_keyboard_injection
+                    .pending_local_player_hit_feedback.front());
+            g_gameplay_keyboard_injection
+                .pending_local_player_hit_feedback.pop_front();
+        }
+        while (!g_gameplay_keyboard_injection
                     .pending_native_poison_behavior_probes.empty()) {
             native_poison_behavior_probes.push_back(
                 g_gameplay_keyboard_injection
@@ -370,6 +380,8 @@ void PumpQueuedGameplayActions() {
         have_local_player_vitals_correction,
         local_player_vitals_correction,
         native_poison_behavior_probes);
+    ExecuteQueuedLocalHitFeedbackActions(
+        local_player_hit_feedback);
 
     ExecuteQueuedNativeDiagnosticProbes(
         native_magic_hit_behavior_probes,
