@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Status: implemented and live-proven; full validation pending
+Status: implemented, live-proven, and fully validated
 
 ## Contract
 
@@ -295,15 +295,25 @@ spawner suppression.
 ## Post-fix live proof
 
 The dedicated verifier ran three fresh two-instance pairs from the patched
-Release build on ports `50211/50212`, with audio disabled. Its final record is
-`/mnt/d/codex-evidence/digfix-20260727/postfix-live.json` and reports
-`ok=true`.
+Release build on ports `50211/50212`, with audio disabled. The initial green
+record is `/mnt/d/codex-evidence/digfix-20260727/postfix-live.json`. The same
+three scenarios were rerun after the Release build and full source integration
+on commit `986d0c6`; the final record is
+`/mnt/d/codex-evidence/digfix-20260727/postfix-live-final-sha.json`. Both
+report `ok=true`.
+
+Lua bot polish then landed on main. The branch was rebased onto
+`d52a4ee8669f3b7e5813a03aa90f1b9ad38cd6d3`, and the integrated implementation
+commit `96e7282` was rebuilt and run through the full battery again. Its fresh
+three-pair record is
+`/mnt/d/codex-evidence/digfix-20260727/postfix-live-integrated-main-d52a4ee.json`
+and also reports `ok=true`.
 
 In the client-B real-NPC case:
 
 - 90 applied movement-intent frames while the modal was open produced native
   vector `0.0` and displacement `0.0`;
-- the host moved 257 units during client B's modal, with a peak native vector
+- the host moved 228 units during client B's modal, with a peak native vector
   of `0.9`;
 - host wave 1 replicated to client B while client B's original Solomon owner
   remained locally acquired in state 2;
@@ -314,7 +324,7 @@ In the client-B real-NPC case:
 - client B's controller restored to current/saved `20/20`, the dialog block
   cleared, and the Solomon actor retired only after that completion;
 - 180 applied post-completion intent frames reached a peak native vector of
-  `0.9` and produced 173 units of real displacement;
+  `0.9` and produced 170 units of real displacement;
 - the host remained movable after completion as well.
 
 In the host real-NPC control, the modal still suppressed host movement, the
@@ -331,12 +341,12 @@ only its launcher-returned host and client-B PIDs.
 
 ## Verification
 
-Static contracts will cover the layout-backed Solomon state/acquisition/target
+Static contracts cover the layout-backed Solomon state/acquisition/target
 offsets, the local-slot and pre-state-3 predicate, and its placement before
-`RemoveReplicatedRunActor`. They will reject direct unlock calls, controller
-writes, and time-based release logic in the reconciliation seam.
+`RemoveReplicatedRunActor`. They reject direct unlock calls, controller writes,
+and time-based release logic in the reconciliation seam.
 
-The two-instance verifier will cover:
+The completed two-instance verifier covers:
 
 1. client B initiates through the real Solomon proximity path, with a
    deterministic state-2 delay:
@@ -358,3 +368,14 @@ The two-instance verifier will cover:
 All game launches use disabled audio, the isolated `digfix` instance group, and
 ports `50211/50212`. Cleanup is limited to launcher-returned PIDs whose staged
 executable paths match the isolated worktree.
+
+The completed full battery is:
+
+- source organization: `626 / 626`;
+- `Build-All.ps1 -Configuration Release`: zero warnings and zero errors;
+- `Verify-Workspace.ps1 -Configuration Release` against the specified retail
+  game directory: passed;
+- Python unit discovery: `406 / 406`;
+- static reverse-engineering contracts: `289 / 289`;
+- Windows launcher contracts: `45 / 45`;
+- final dedicated two-instance verifier: all three scenarios passed.
