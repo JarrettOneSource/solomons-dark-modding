@@ -15,11 +15,22 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     brain = _read("mods/bot-brain/scripts/brain.lua")
     steering = _read("mods/bot-brain/scripts/steering.lua")
     docs = _read("docs/lua-bot-brain.md")
-    verifier = _read("tools/verify_lua_bot_brain.py")
+    verifier = _read("tools/verify_bot_polish.py")
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
-    assert manifest["version"] == "1.0.0"
+    assert manifest["version"] == "1.0.1"
+    assert manifest["summary"] == (
+        "Bot teammates that play like real players."
+    )
+    assert manifest["description"] == (
+        "Adds bot teammates to your lobby. Bots fill real player slots: "
+        "they show up in the member list, enemies target them, and they "
+        "fight, die, and respawn like human players. Name each bot and "
+        "choose its element and how it fights in the launcher's mod "
+        "settings. Changes apply live, and in multiplayer the host's "
+        "roster syncs to everyone. Requires v0.1.0-beta.21 or newer."
+    )
     assert manifest["minimumLoaderVersion"] == "0.1.0-beta.21"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
@@ -57,7 +68,12 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         field["key"]: field
         for field in roster_entry["item"]["fields"]
     }
-    assert set(fields) == {"name", "element", "discipline"}
+    assert set(fields) == {
+        "name",
+        "element",
+        "behavior",
+        "discipline",
+    }
     assert [choice["value"] for choice in fields["element"]["choices"]] == [
         "fire",
         "water",
@@ -67,8 +83,14 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     ]
     assert [
         choice["value"]
-        for choice in fields["discipline"]["choices"]
+        for choice in fields["behavior"]["choices"]
     ] == ["skirmisher", "guardian", "striker"]
+    assert fields["behavior"]["label"] == "Behavior"
+    assert [
+        choice["value"]
+        for choice in fields["discipline"]["choices"]
+    ] == ["mind", "body", "arcane"]
+    assert fields["discipline"]["label"] == "Discipline"
 
     _require_in_order(
         main,
@@ -108,6 +130,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "sd.bots.list",
         "context.bot:despawn()",
         "class = context.row.element",
+        "discipline = context.row.discipline",
         "roster entry ",
         "last_spawn_attempt_ms",
         "self.brain.new(",
@@ -134,11 +157,23 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "sd.bots.get_skill_choices",
         "sd.bots.choose_skill",
         'context.row.element == "fire"',
+        'context.row.behavior == "guardian"',
         "priority[16] = 2",
         "priority[18] = 3",
         "priority[17] = 4",
     ):
-        assert token in brain, f"bot discipline policy lacks: {token}"
+        assert token in brain, f"bot behavior policy lacks: {token}"
+
+    for token in (
+        "behavior = tostring(row.behavior or \"\")",
+        "discipline = tostring(row.discipline or \"\")",
+        "left.behavior == right.behavior",
+        "left.discipline == right.discipline",
+        "DISCIPLINE_IDS",
+    ):
+        assert token in roster, f"roster vocabulary/loadout lacks: {token}"
+    assert "row.discipline ~= \"guardian\"" not in brain
+    assert "PROFILES[row.discipline]" not in brain
 
     for token in (
         "actor.tracked_enemy == true",
@@ -172,6 +207,10 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     for token in (
         "zero to four ordered rows",
         "a changed name",
+        "Behavior",
+        "Mind",
+        "Body",
+        "Arcane",
         "`sd.nav.test_segment`",
         "`bot:cast(0, target.x, target.y, 80)`",
         "nearest living human",
@@ -185,32 +224,28 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
 
     for token in (
         'INSTANCE_PREFIX = "bot"',
-        "HOST_PORT = 48811",
-        "CLIENT_PORT = 48812",
+        'INSTANCE_PREFIX = "botpolish"',
+        "HOST_PORT = 50011",
+        "CLIENT_PORT = 50012",
         'EXACT_MOD_ID = "bot.brain"',
-        "DEFAULT_RUN_COUNT = 3",
         "enable_audio=False",
-        'launch.get("testWaveOverride") not in ("", None)',
         "stop_exact_game_processes(launch)",
-        '"highestWaveReached"',
-        '"botAliveAtWaveFive"',
-        '"timeline"',
-        '"castsIssued"',
-        '"castsAccepted"',
-        '"kitePathDistance"',
-        '"host-wave3-mid-fight.png"',
-        '"client-wave3-mid-fight.png"',
-        "sd.camera.set_focus",
-        "sd.camera.clear_focus",
+        '"stuckTeleportElapsedMs"',
+        '"stuckTeleportPlacementValidated"',
+        '"slowReachableTeleportCount"',
+        '"humanClickTeleportCount"',
+        '"host-four-slot-lobby.png"',
+        '"client-b-four-slot-lobby.png"',
     ):
-        assert token in verifier, f"wave-five acceptance lacks: {token}"
+        assert token in verifier, f"bot-polish acceptance lacks: {token}"
     assert "test_wave_override=" not in verifier
     assert "stop_game_processes(" not in verifier
+    assert "verify_local_multiplayer_sync" not in verifier
 
     return (
         "The opt-in ordered roster fills up to four capacity-bounded seats "
-        "with three native-routed disciplines on "
-        "authority ticks while retaining the retail three-run wave-five gate"
+        "with three Lua Behavior profiles and native per-bot Discipline on "
+        "authority ticks while retaining the existing combat gate"
     )
 
 

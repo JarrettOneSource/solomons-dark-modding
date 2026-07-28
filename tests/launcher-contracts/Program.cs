@@ -65,8 +65,75 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Steam shortcut UI child isolation", TestSteamShortcutUiChildIsolationAsync),
     ("shared mod settings validation vectors", TestModSettingsValidationVectorsAsync),
     ("mod settings backend services", TestModSettingsBackendServicesAsync),
+    ("bot-brain roster vocabulary migration", TestBotBrainRosterMigrationAsync),
     ("mod settings view-facing coordinator", TestModSettingsCoordinatorAsync)
 };
+
+static Task TestBotBrainRosterMigrationAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var settingsDirectory =
+            Path.Combine(root, ".sdmod", "mod-settings");
+        Directory.CreateDirectory(settingsDirectory);
+        var settingsPath =
+            Path.Combine(settingsDirectory, "bot.brain.json");
+        File.WriteAllText(
+            settingsPath,
+            """
+            {
+              "schemaVersion": 1,
+              "values": {
+                "roster": [
+                  {
+                    "name": "Ember",
+                    "element": "fire",
+                    "discipline": "guardian"
+                  },
+                  {
+                    "name": "Brook",
+                    "element": "water",
+                    "discipline": "striker"
+                  }
+                ]
+              }
+            }
+            """);
+
+        Require(
+            BotBrainRosterSettingsMigration.TryMigrateStage(root),
+            "legacy bot-brain roster was not migrated");
+        using (var migrated = JsonDocument.Parse(
+                   File.ReadAllText(settingsPath)))
+        {
+            var rows = migrated.RootElement
+                .GetProperty("values")
+                .GetProperty("roster")
+                .EnumerateArray()
+                .ToArray();
+            Require(
+                rows[0].GetProperty("behavior").GetString() == "guardian" &&
+                rows[0].GetProperty("discipline").GetString() == "arcane" &&
+                rows[1].GetProperty("behavior").GetString() == "striker" &&
+                rows[1].GetProperty("discipline").GetString() == "arcane",
+                "legacy AI Discipline was not rewritten as Behavior plus native Arcane");
+        }
+
+        var migratedBytes = File.ReadAllBytes(settingsPath);
+        Require(
+            !BotBrainRosterSettingsMigration.TryMigrateStage(root),
+            "already-migrated bot-brain roster was rewritten again");
+        Require(
+            migratedBytes.SequenceEqual(File.ReadAllBytes(settingsPath)),
+            "second migration changed the persisted roster");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+    return Task.CompletedTask;
+}
 
 var failures = 0;
 foreach (var test in tests)

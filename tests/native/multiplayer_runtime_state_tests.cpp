@@ -1,4 +1,5 @@
 #include "bot_spawn_placement.h"
+#include "bot_stuck_progress.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
 
@@ -325,6 +326,130 @@ bool BotSpawnPlacementStopsWhenNativeProbeIsUnavailable() {
             "unavailable native placement probe did not stop immediately");
 }
 
+bool BotStuckProgressRequiresAFullRollingWindow() {
+    using namespace sdmod;
+
+    BotStuckProgressTracker tracker;
+    return Require(
+               !ObserveBotStuckProgress(
+                   &tracker, 1000, 500.0f, 600.0f, 200.0f, false),
+               "stuck tracking fired on its first sample") &&
+        Require(
+            !ObserveBotStuckProgress(
+                &tracker, 30999, 500.0f, 600.0f, 200.0f, false),
+            "stuck tracking fired before 30 seconds") &&
+        Require(
+            ObserveBotStuckProgress(
+                &tracker, 31000, 500.0f, 600.0f, 200.0f, false),
+            "stuck tracking did not fire at 30 seconds");
+}
+
+bool BotStuckProgressAcceptsSlowReachableMovement() {
+    using namespace sdmod;
+
+    BotStuckProgressTracker tracker;
+    for (std::uint64_t now_ms = 1000; now_ms <= 41000; now_ms += 1000) {
+        const auto elapsed_seconds =
+            static_cast<float>((now_ms - 1000) / 1000);
+        const auto distance = 200.0f - elapsed_seconds * 0.25f;
+        if (!Require(
+                !ObserveBotStuckProgress(
+                    &tracker,
+                    now_ms,
+                    500.0f,
+                    600.0f,
+                    distance,
+                    false),
+                "slow reachable movement triggered a stuck teleport")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() {
+    using namespace sdmod;
+
+    BotStuckProgressTracker waypoint_tracker;
+    if (!Require(
+            !ObserveBotStuckProgress(
+                &waypoint_tracker,
+                1000,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "waypoint tracker fired on its first sample") ||
+        !Require(
+            !ObserveBotStuckProgress(
+                &waypoint_tracker,
+                20000,
+                500.0f,
+                600.0f,
+                200.0f,
+                true),
+            "meaningful waypoint progress fired a teleport") ||
+        !Require(
+            !ObserveBotStuckProgress(
+                &waypoint_tracker,
+                31000,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "waypoint progress inside the rolling window was ignored")) {
+        return false;
+    }
+
+    BotStuckProgressTracker exhausted_tracker;
+    return Require(
+               !ObserveBotStuckProgress(
+                   &exhausted_tracker,
+                   1000,
+                   500.0f,
+                   600.0f,
+                   200.0f,
+                   false),
+               "exhaustion tracker fired on its first sample") &&
+        Require(
+            ObserveBotStuckProgress(
+                &exhausted_tracker,
+                31000,
+                500.0f,
+                600.0f,
+                200.0f,
+                false),
+            "segment exhaustion without progress prevented recovery");
+}
+
+bool BotStuckProgressResetsForNewTargetsAndHonorsCooldown() {
+    using namespace sdmod;
+
+    BotStuckProgressTracker tracker;
+    (void)ObserveBotStuckProgress(
+        &tracker, 1000, 500.0f, 600.0f, 200.0f, false);
+    if (!Require(
+            !ObserveBotStuckProgress(
+                &tracker, 31000, 700.0f, 800.0f, 200.0f, false),
+            "materially different target inherited the old stuck window") ||
+        !Require(
+            ObserveBotStuckProgress(
+                &tracker, 61000, 700.0f, 800.0f, 200.0f, false),
+            "new continuous target did not mature its own stuck window")) {
+        return false;
+    }
+
+    RecordBotStuckTeleport(&tracker, 61000);
+    return Require(
+               !ObserveBotStuckProgress(
+                   &tracker, 91000, 700.0f, 800.0f, 200.0f, false),
+               "teleport cooldown retained the pre-teleport window") &&
+        Require(
+            !ObserveBotStuckProgress(
+                &tracker, 101000, 700.0f, 800.0f, 200.0f, false),
+            "teleport cooldown allowed an immediate loop");
+}
+
 bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
@@ -419,6 +544,10 @@ int main() {
         !BotSpawnPlacementSearchesPastBlockedNaiveAnchor() ||
         !BotSpawnPlacementExhaustionIsBounded() ||
         !BotSpawnPlacementStopsWhenNativeProbeIsUnavailable() ||
+        !BotStuckProgressRequiresAFullRollingWindow() ||
+        !BotStuckProgressAcceptsSlowReachableMovement() ||
+        !BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() ||
+        !BotStuckProgressResetsForNewTargetsAndHonorsCooldown() ||
         !PacketSplitsHaveBoundedVariableWireSizes()) {
         return 1;
     }
