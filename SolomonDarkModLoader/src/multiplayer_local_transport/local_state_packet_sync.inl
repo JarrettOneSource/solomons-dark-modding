@@ -409,12 +409,16 @@ void PopulateParticipantFrameFields(
         static_cast<std::uint8_t>(participant.controller_kind);
     packet->run_nonce = participant.runtime.run_nonce;
     if (include_local_authority_state) {
+        ResetLocalHitFeedbackAcknowledgementForRun(
+            participant.runtime.run_nonce);
         PopulateRunGameOverPacketFields(packet);
         PopulateRunLoadingBarrierPacketFields(packet);
         PopulateSharedGameplayPausePacketFields(runtime_state, packet);
         PopulateLuaTimeControlPacketFields(packet);
         packet->participant_vitals_correction_ack_sequence =
             g_local_transport.last_applied_participant_vitals_correction_sequence;
+        packet->participant_hit_feedback_ack_sequence =
+            g_local_transport.local_hit_feedback_ack_sequence;
     }
     packet->level = participant.runtime.level;
     packet->wave = participant.runtime.wave;

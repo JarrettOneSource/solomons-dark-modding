@@ -330,6 +330,11 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
         return normalized;
     }
 
+    RetireAcknowledgedParticipantHitFeedbackEvents(
+        packet.participant_id,
+        packet.run_nonce,
+        packet.participant_hit_feedback_ack_sequence);
+
     const auto pending_it =
         g_local_transport.pending_participant_vitals_corrections_by_participant.find(
             packet.participant_id);

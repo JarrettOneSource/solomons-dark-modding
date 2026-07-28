@@ -3,7 +3,7 @@
 This is a source-level review of the current multiplayer transport, protocol,
 interpolation, and steady-state packet cost. It also records the disposition of
 each optimization identified during the review. The code and packet sizes below
-are for protocol 86.
+are for protocol 87.
 
 ## Verdict
 
@@ -12,7 +12,7 @@ their player state, the host owns world actors and shared progression
 lifecycles, and receivers reject packets that do not match the expected
 endpoint, participant session, scene epoch, or run nonce. The original review
 did find a real world-motion cadence problem and three unnecessarily hot payload
-families. Protocol 86 addresses those without changing the authority model.
+families. Protocol 87 addresses those without changing the authority model.
 
 The remaining scaling boundary is gameplay, not a hidden eight-player wire
 limit. The level-up barrier now carries a variable-length list of as many as 250
@@ -28,8 +28,8 @@ compile-time sizes live in
 
 | Lane | Payload | Cadence | Steam mode |
 |---|---:|---|---|
-| Participant frame | 370 B | 50 ms / 20 Hz | UnreliableNoDelay |
-| Participant state checkpoint | 652 B | 1,000 ms | ReliableNoNagle |
+| Participant frame | 374 B | 50 ms / 20 Hz | UnreliableNoDelay |
+| Participant state checkpoint | 657 B | 1,000 ms | ReliableNoNagle |
 | Run-world motion | 968 B per 10 actors | 67 ms minimum / about 15 Hz, bandwidth-stretched | UnreliableNoDelay |
 | Run-world identity | 1,032 B per 3 actors | spawn/identity change plus bandwidth-limited reliable checkpoint | ReliableNoNagle |
 | Shared-hub world state | 1,032 B per 3 actors | 200 ms minimum / 5 Hz, bandwidth-stretched | Unreliable with reliable checkpoints |

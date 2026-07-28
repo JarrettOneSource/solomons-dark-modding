@@ -166,6 +166,7 @@
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
+    <ClInclude Include="src\gameplay_seams\hit_feedback_storage.inl" />
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl" />
     <ClInclude Include="src\gameplay_seams\public_api.inl" />
     <ClInclude Include="src\gameplay_seams\progression_and_actor_offsets.inl" />
@@ -376,6 +377,7 @@
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_mouse_refresh_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_native_probe_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_participant_vitals_actions.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_local_hit_feedback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_pump_loop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_request_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\dispatch_and_hooks_standalone_wizard_tracking.inl" />
@@ -407,6 +409,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\registered_spell_input.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_secondary_spell_cast_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_hit_feedback_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\poison_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\webbed_authority_hook.inl" />
@@ -487,6 +490,7 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\participant_hit_feedback_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_codec.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_public.inl" />
@@ -574,6 +578,7 @@
     <ClInclude Include="src\run_lifecycle\state_and_targets.inl" />
     <ClInclude Include="src\native_audio_observability\footstep_dispatch.inl" />
     <ClInclude Include="src\native_audio_observability\footstep_dispatch_helpers.inl" />
+    <ClInclude Include="src\native_audio_observability\ouch_dispatch.inl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\background_focus_bypass.cpp" />

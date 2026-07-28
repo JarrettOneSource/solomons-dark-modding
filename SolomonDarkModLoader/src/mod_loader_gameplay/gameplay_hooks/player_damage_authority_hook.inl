@@ -1,3 +1,5 @@
+#include "player_hit_feedback_authority_hook.inl"
+
 struct RemoteMagicShieldDamageAuthority {
     bool applicable = false;
     std::uint64_t participant_id = 0;

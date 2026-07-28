@@ -98,7 +98,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         assert token in bindings, f"Lua time scheduler lacks: {token}"
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 86;",
+        "constexpr std::uint16_t kProtocolVersion = 87;",
         "LuaTimeControl = 27",
         "struct LuaTimeControlPacket",
         "authority_session_nonce",
@@ -106,8 +106,8 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "lua_time_revision",
         "LuaTimeControlPacketFlagStepFrames",
         "sizeof(LuaTimeControlPacket) == 56",
-        "sizeof(StatePacket) == 653",
-        "sizeof(ParticipantFramePacket) == 370",
+        "sizeof(StatePacket) == 657",
+        "sizeof(ParticipantFramePacket) == 374",
     ):
         assert token in protocol, f"Lua time protocol lacks: {token}"
     assert 'lua_time_control_sync.inl"' in transport
@@ -167,7 +167,7 @@ def test_lua_time_is_authority_owned_replicated_and_coherently_gated() -> str:
         "fixed-point",
         "minimum active",
         "take precedence",
-        "Protocol 86",
+        "Protocol 87",
         "reliable no-Nagle",
         "kGameTimingScaleGlobal",
         "cannot synthesize extra",

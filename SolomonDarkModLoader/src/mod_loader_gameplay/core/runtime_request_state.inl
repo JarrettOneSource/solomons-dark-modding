@@ -106,6 +106,18 @@ struct PendingLocalPlayerVitalsCorrection {
     float magic_shield_hit_flash = 0.0f;
 };
 
+struct PendingLocalPlayerHitFeedback {
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t event_sequence = 0;
+    float health_before = 0.0f;
+    float health_after = 0.0f;
+    float health_maximum = 0.0f;
+    multiplayer::ParticipantHitReactionState hit_reaction{};
+    std::uint8_t feedback_flags = 0;
+};
+
 struct PendingNativePoisonBehaviorProbe {
     std::uint64_t target_participant_id = 0;
     std::int32_t duration_ticks = 0;
@@ -187,6 +199,7 @@ struct GameplayKeyboardInjectionState {
     X86Hook player_actor_secondary_spell_cast_hook;
     X86Hook secondary_cursor_world_projection_hook;
     X86Hook player_actor_magic_damage_hook;
+    X86Hook player_actor_damage_resolver_hook;
     X86Hook badguy_damage_hook;
     X86Hook poisoned_modifier_tick_hook;
     X86Hook webbed_modifier_tick_hook;
@@ -300,6 +313,8 @@ struct GameplayKeyboardInjectionState {
     std::deque<PendingMultiplayerDampenEffectRequest> pending_multiplayer_dampen_effect_requests;
     std::deque<PendingLocalPlayerVitalsCorrection>
         pending_local_player_vitals_corrections;
+    std::deque<PendingLocalPlayerHitFeedback>
+        pending_local_player_hit_feedback;
     std::deque<PendingNativePoisonBehaviorProbe> pending_native_poison_behavior_probes;
     std::deque<PendingNativeMagicHitBehaviorProbe> pending_native_magic_hit_behavior_probes;
     std::uint64_t next_native_magic_hit_behavior_probe_serial = 1;

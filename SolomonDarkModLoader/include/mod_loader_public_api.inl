@@ -77,6 +77,17 @@ bool QueueLocalPlayerVitalsCorrection(
     float magic_shield_explosion_fraction,
     float magic_shield_hit_flash,
     std::string* error_message);
+bool QueueLocalPlayerHitFeedback(
+    std::uint64_t authority_participant_id,
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    std::uint32_t event_sequence,
+    float health_before,
+    float health_after,
+    float health_maximum,
+    const multiplayer::ParticipantHitReactionState& hit_reaction,
+    std::uint8_t feedback_flags,
+    std::string* error_message);
 bool QueueNativePoisonBehaviorProbe(
     std::uint64_t target_participant_id,
     std::int32_t duration_ticks,

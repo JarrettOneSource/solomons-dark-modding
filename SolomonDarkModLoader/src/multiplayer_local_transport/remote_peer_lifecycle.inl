@@ -58,6 +58,14 @@ void ResetRemoteParticipantSessionEpoch(
         participant_id);
     g_local_transport.last_participant_vitals_correction_send_ms_by_participant.erase(
         participant_id);
+    g_local_transport
+        .next_hit_feedback_event_sequence_by_participant.erase(
+            participant_id);
+    g_local_transport.hit_feedback_run_nonce_by_participant.erase(
+        participant_id);
+    g_local_transport
+        .pending_hit_feedback_events_by_participant.erase(
+            participant_id);
     g_local_transport.remote_cast_inputs_by_participant.erase(participant_id);
     g_local_transport.last_enemy_claim_sequence_by_participant.erase(participant_id);
     g_local_transport.last_loot_pickup_request_sequence_by_participant.erase(
@@ -90,6 +98,15 @@ void ResetRemoteParticipantSessionEpoch(
                     return correction.target_participant_id == participant_id;
                 }),
             g_queued_host_participant_vitals_corrections.end());
+        g_queued_host_participant_hit_feedback.erase(
+            std::remove_if(
+                g_queued_host_participant_hit_feedback.begin(),
+                g_queued_host_participant_hit_feedback.end(),
+                [&](const QueuedHostParticipantHitFeedback& event) {
+                    return event.target_participant_id ==
+                        participant_id;
+                }),
+            g_queued_host_participant_hit_feedback.end());
         g_queued_authoritative_lua_item_grants.erase(
             std::remove_if(
                 g_queued_authoritative_lua_item_grants.begin(),
@@ -121,6 +138,10 @@ void ResetRemoteParticipantSessionEpoch(
     if (configured_authority_disconnected) {
         g_local_transport.last_client_host_run_request_ms = 0;
         g_local_transport.last_applied_participant_vitals_correction_sequence = 0;
+        g_local_transport.local_hit_feedback_ack_sequence = 0;
+        g_local_transport.received_hit_feedback_run_nonce = 0;
+        g_local_transport
+            .received_hit_feedback_events_by_sequence.clear();
         g_local_transport.active_local_cast_input = ActiveLocalCastInput{};
         g_local_transport.pending_air_chain_terminals.clear();
         g_local_transport.local_spell_effects_by_address.clear();

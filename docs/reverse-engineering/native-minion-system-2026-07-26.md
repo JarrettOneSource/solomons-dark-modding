@@ -506,7 +506,7 @@ timeline.
 
 ## Phase 2 implementation and acceptance
 
-Phase 2 implements protocol 86 as a descriptor-backed native-minion authority
+Phase 2 implements protocol 87 as a descriptor-backed native-minion authority
 lane. The registry describes Good Imp, Leviathan, and Golem without claiming a
 shared stock superclass. Golem is the first class with complete live behavior
 coverage; Good Imp and Leviathan have typed capture/apply state and lifecycle

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -26,6 +27,7 @@ constexpr std::size_t kSoundLoopReferenceCountOffset = 0x4C;
 constexpr std::size_t kSoundChannelHandleOffset = 0x00;
 constexpr std::size_t kMinimumLifecycleHookPatchSize = 5;
 constexpr std::size_t kWorldPointGainVfuncOffset = 0x100;
+constexpr std::size_t kWorldHitPointGainVfuncOffset = 0x104;
 constexpr std::uint32_t kNativeFootstepCadenceFrames = 25;
 constexpr std::size_t kMaximumObservedFootstepActors = 16;
 
@@ -64,11 +66,18 @@ struct OneShotCatalogEntry {
     std::int32_t registry_index;
     std::size_t object_offset;
     const char* asset;
+    const char* owner;
 };
 
 constexpr std::array<OneShotCatalogEntry, 2> kFootstepCatalog = {{
-    {214, 0x23B8, "sounds\\Step\\step1"},
-    {215, 0x23E4, "sounds\\Step\\step2"},
+    {214, 0x23B8, "sounds\\Step\\step1", "movement.footstep"},
+    {215, 0x23E4, "sounds\\Step\\step2", "movement.footstep"},
+}};
+
+constexpr std::array<OneShotCatalogEntry, 3> kOuchCatalog = {{
+    {228, 0x2620, "sounds/Wizard_Ouch/SAY_OUCH1.wav", "player.hit"},
+    {229, 0x264C, "sounds/Wizard_Ouch/SAY_OUCH2.wav", "player.hit"},
+    {230, 0x2678, "sounds/Wizard_Ouch/SAY_OUCH3.wav", "player.hit"},
 }};
 
 struct NativeAudioChannelRecord {
@@ -149,7 +158,7 @@ const LoopCatalogEntry* ResolveLoopCatalogEntry(uintptr_t object_address) {
     return it == kLoopCatalog.end() ? nullptr : &*it;
 }
 
-const OneShotCatalogEntry* ResolveFootstepCatalogEntry(
+const OneShotCatalogEntry* ResolveOneShotCatalogEntry(
     uintptr_t object_address) {
     uintptr_t registry_address = 0;
     if (g_compiled_registry_global == 0 ||
@@ -163,13 +172,22 @@ const OneShotCatalogEntry* ResolveFootstepCatalogEntry(
 
     const auto object_offset =
         static_cast<std::size_t>(object_address - registry_address);
-    const auto it = std::find_if(
+    const auto footstep = std::find_if(
         kFootstepCatalog.begin(),
         kFootstepCatalog.end(),
         [object_offset](const OneShotCatalogEntry& entry) {
             return entry.object_offset == object_offset;
         });
-    return it == kFootstepCatalog.end() ? nullptr : &*it;
+    if (footstep != kFootstepCatalog.end()) {
+        return &*footstep;
+    }
+    const auto ouch = std::find_if(
+        kOuchCatalog.begin(),
+        kOuchCatalog.end(),
+        [object_offset](const OneShotCatalogEntry& entry) {
+            return entry.object_offset == object_offset;
+        });
+    return ouch == kOuchCatalog.end() ? nullptr : &*ouch;
 }
 
 void ObserveSoundPlay(
@@ -177,7 +195,7 @@ void ObserveSoundPlay(
     uintptr_t return_address,
     float gain) {
     const auto* catalog =
-        ResolveFootstepCatalogEntry(object_address);
+        ResolveOneShotCatalogEntry(object_address);
     if (catalog == nullptr) {
         return;
     }
@@ -197,7 +215,7 @@ void ObserveSoundPlay(
         std::to_string(now_ms) +
         " sequence=" + std::to_string(sequence) +
         " asset=\"" + catalog->asset +
-        "\" owner=movement.footstep" +
+        "\" owner=" + catalog->owner +
         " object=" + HexString(object_address) +
         " registry_index=" +
         std::to_string(catalog->registry_index) +
@@ -575,6 +593,7 @@ void ShutdownNativeAudioObservability() {
 }
 
 #include "native_audio_observability/footstep_dispatch.inl"
+#include "native_audio_observability/ouch_dispatch.inl"
 
 std::vector<NativeAudioChannelSnapshot> SnapshotNativeAudioChannels(
     bool include_inactive) {

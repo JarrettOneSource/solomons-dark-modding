@@ -14,6 +14,7 @@ constexpr std::size_t kPlayerActorSecondarySpellCastHookMinimumPatchSize = 5;
 // followed by a six-byte world-origin load. The safe hook keeps both whole.
 constexpr std::size_t kSecondaryCursorWorldProjectionHookMinimumPatchSize = 5;
 constexpr std::size_t kPlayerActorMagicDamageHookMinimumPatchSize = 5;
+constexpr std::size_t kPlayerActorDamageResolverHookMinimumPatchSize = 5;
 // Badguy::Contact starts with sub esp,8; push ebx; push esi (five bytes).
 constexpr std::size_t kBadguyDamageHookMinimumPatchSize = 5;
 // Mod_Poisoned::Tick begins with one whole five-byte absolute load.

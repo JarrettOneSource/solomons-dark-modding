@@ -40,6 +40,7 @@ bool InitializeLocalTransport() {
         true,
         std::memory_order_release);
     g_local_transport_host.store(false, std::memory_order_release);
+    ResetParticipantHitFeedbackState();
     ResetRunGameOverState("transport_initialize");
     ResetRunLoadingBarrierState("transport_initialize");
     if (!ConfigureLocalTransport()) {
@@ -232,6 +233,7 @@ void ShutdownLocalTransport() {
         g_queued_local_cast_events.clear();
         g_queued_local_enemy_damage_claims.clear();
         g_queued_host_participant_vitals_corrections.clear();
+        g_queued_host_participant_hit_feedback.clear();
         ClearLocalLootPickupRequestStateLocked();
         g_queued_local_host_powerup_pickups.clear();
         g_queued_local_level_up_choices.clear();
@@ -313,6 +315,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendSpellEffectSnapshot(now_ms);
     SendLocalEnemyDamageClaims();
     SendQueuedHostParticipantVitalsCorrections(now_ms);
+    SendQueuedHostParticipantHitFeedback(now_ms);
     SendQueuedAuthoritativeLuaItemGrants();
     SendQueuedLuaConsumableUses();
     SendQueuedLuaRegisteredSpellCasts();

@@ -1810,7 +1810,7 @@ static Task TestBotMemberStatusCompatibilityAsync()
               "localSteamId": 42,
               "personaName": "Host",
               "privacy": "local",
-              "protocolVersion": 86,
+              "protocolVersion": 87,
               "manifestSha256": "",
               "friendSteamIds": [],
               "maxParticipants": 4,

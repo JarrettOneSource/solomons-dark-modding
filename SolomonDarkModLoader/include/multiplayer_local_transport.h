@@ -148,6 +148,14 @@ bool RegisterSteamGameplayPeer(
 void UnregisterSteamGameplayPeer(std::uint64_t steam_id);
 void ConfirmLocalParticipantVitalsCorrection(
     std::uint32_t correction_sequence);
+bool QueueHostParticipantHitFeedback(
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    float health_before,
+    float health_after,
+    float health_maximum,
+    const ParticipantHitReactionState& hit_reaction,
+    bool ouch_eligible);
 bool SubmitSteamGameplayPacket(
     std::uint64_t sender_steam_id,
     const void* data,

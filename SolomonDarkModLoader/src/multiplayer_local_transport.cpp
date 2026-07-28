@@ -110,6 +110,8 @@ constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 250;
 constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportSpellEffectSnapshotIntervalMs = 16;
+constexpr std::uint64_t kParticipantHitFeedbackResendMs = 100;
+constexpr std::size_t kParticipantHitFeedbackMaximumPendingEvents = 256;
 constexpr std::uint64_t
     kParticipantProgressionReliableCheckpointIntervalMs = 5000;
 constexpr std::uint64_t kLuaModStateCheckpointIntervalMs = 5000;
@@ -600,6 +602,16 @@ struct QueuedHostParticipantVitalsCorrection {
     bool hagatha_runtime_valid = false;
 };
 
+struct QueuedHostParticipantHitFeedback {
+    std::uint64_t target_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    float health_before = 0.0f;
+    float health_after = 0.0f;
+    float health_maximum = 0.0f;
+    ParticipantHitReactionState hit_reaction{};
+    std::uint8_t feedback_flags = 0;
+};
+
 struct ActiveLocalCastInput {
     bool active = false;
     std::uint32_t cast_sequence = 0;
@@ -838,6 +850,11 @@ struct PendingParticipantVitalsCorrection {
     std::uint64_t last_sent_ms = 0;
 };
 
+struct PendingParticipantHitFeedback {
+    ParticipantHitFeedbackPacket packet{};
+    std::uint64_t last_sent_ms = 0;
+};
+
 struct QueuedLuaModStreamMessage {
     LuaModStreamMessageKind kind = LuaModStreamMessageKind::StateCheckpoint;
     std::uint64_t stream_sequence = 0;
@@ -1011,6 +1028,8 @@ struct LocalTransportState {
     std::uint32_t next_air_chain_frame_sequence = 1;
     std::uint32_t next_participant_vitals_correction_sequence = 1;
     std::uint32_t last_applied_participant_vitals_correction_sequence = 0;
+    std::uint32_t local_hit_feedback_ack_sequence = 0;
+    std::uint32_t received_hit_feedback_run_nonce = 0;
     std::uint32_t recent_local_cast_sequence = 0;
     std::int32_t recent_local_cast_skill_id = -1;
     std::uint64_t recent_local_cast_ms = 0;
@@ -1084,6 +1103,16 @@ struct LocalTransportState {
         pending_participant_vitals_corrections_by_participant;
     std::unordered_map<std::uint64_t, std::uint64_t>
         last_participant_vitals_correction_send_ms_by_participant;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        next_hit_feedback_event_sequence_by_participant;
+    std::unordered_map<std::uint64_t, std::uint32_t>
+        hit_feedback_run_nonce_by_participant;
+    std::unordered_map<
+        std::uint64_t,
+        std::deque<PendingParticipantHitFeedback>>
+        pending_hit_feedback_events_by_participant;
+    std::map<std::uint32_t, ParticipantHitFeedbackPacket>
+        received_hit_feedback_events_by_sequence;
     std::unordered_map<uintptr_t, LocalSpellEffectTracking> local_spell_effects_by_address;
     std::vector<LocalSpellEffectTracking> local_spell_effect_tombstones;
     std::unordered_map<std::uint64_t, std::uint16_t> next_spell_effect_ordinal_by_cast_type;
@@ -1168,6 +1197,8 @@ std::uint64_t g_next_local_cast_event_id = 1;
 std::vector<QueuedLocalEnemyDamageClaim> g_queued_local_enemy_damage_claims;
 std::vector<QueuedHostParticipantVitalsCorrection>
     g_queued_host_participant_vitals_corrections;
+std::vector<QueuedHostParticipantHitFeedback>
+    g_queued_host_participant_hit_feedback;
 std::vector<QueuedLocalLootPickupRequest> g_queued_local_loot_pickup_requests;
 std::unordered_map<std::uint64_t, InFlightLocalLootPickupRequest>
     g_in_flight_local_loot_pickup_requests_by_drop_id;
@@ -1506,6 +1537,11 @@ void SendLocalParticipantProgressionSnapshots(
     std::uint64_t now_ms);
 bool IsRunGameOverAccepted(std::uint32_t run_nonce);
 bool HasPendingLocalLevelUpChoice(const RuntimeState& runtime_state);
+void ResetLocalHitFeedbackAcknowledgementForRun(std::uint32_t run_nonce);
+void RetireAcknowledgedParticipantHitFeedbackEvents(
+    std::uint64_t participant_id,
+    std::uint32_t run_nonce,
+    std::uint32_t ack_sequence);
 void DisarmDeadLevelUpScreenTickBridgeForOffer(
     std::uint64_t offer_id);
 bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code) {
@@ -1555,6 +1591,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_sync.inl"
+#include "multiplayer_local_transport/participant_hit_feedback_sync.inl"
 #include "multiplayer_local_transport/wave_summary_sync.inl"
 #include "multiplayer_local_transport/participant_progression_snapshot_sync.inl"
 #include "multiplayer_local_transport/lua_item_grant_sync.inl"
@@ -1726,6 +1763,24 @@ void ConfirmLocalParticipantVitalsCorrection(
     }
 }
 
+bool QueueHostParticipantHitFeedback(
+    std::uint64_t target_participant_id,
+    std::uint32_t run_nonce,
+    float health_before,
+    float health_after,
+    float health_maximum,
+    const ParticipantHitReactionState& hit_reaction,
+    bool ouch_eligible) {
+    return QueueHostParticipantHitFeedbackInternal(
+        target_participant_id,
+        run_nonce,
+        health_before,
+        health_after,
+        health_maximum,
+        hit_reaction,
+        ouch_eligible);
+}
+
 void NotifyLocalRunStarted() {
     if (!g_local_transport.initialized) {
         return;
@@ -1735,6 +1790,7 @@ void NotifyLocalRunStarted() {
     ResetWaveRespawnState();
     ResetRunGameOverState("new_run");
     ResetRunLoadingBarrierState("new_run");
+    ResetParticipantHitFeedbackState();
     UpdateRuntimeState([](RuntimeState& state) {
         state.run_end_pending_lobby_return = false;
     });
@@ -1761,6 +1817,7 @@ void NotifyLocalRunEnded(std::string_view reason) {
     ResetLocalDeathSpectatorState(reason);
     ResetWaveRespawnState();
     ResetRunLoadingBarrierState(reason);
+    ResetParticipantHitFeedbackState();
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
     const auto current_nonce =

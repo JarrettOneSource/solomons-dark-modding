@@ -504,6 +504,10 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (TryDispatchParticipantHitFeedbackPacket(kind, packet_buffer.data(), received, from, now_ms)) {
+            continue;
+        }
+
         if (kind == PacketKind::WorldSnapshot && received == static_cast<int>(sizeof(WorldSnapshotPacket))) {
             WorldSnapshotPacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));

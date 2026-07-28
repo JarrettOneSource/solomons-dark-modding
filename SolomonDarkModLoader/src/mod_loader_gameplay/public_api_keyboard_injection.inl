@@ -31,6 +31,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
             kSecondaryCursorWorldProjection);
     const auto player_actor_magic_damage =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kPlayerActorMagicDamage);
+    const auto player_actor_damage_resolver =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kPlayerActorDamageResolver);
     const auto badguy_damage =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kBadguyDamage);
     const auto poisoned_modifier_tick =
@@ -118,6 +121,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         player_actor_secondary_spell_cast == 0 ||
         secondary_cursor_world_projection == 0 ||
         player_actor_magic_damage == 0 ||
+        player_actor_damage_resolver == 0 ||
         badguy_damage == 0 ||
         poisoned_modifier_tick == 0 ||
         webbed_modifier_tick == 0 ||
@@ -923,6 +927,22 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     }
 
     if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(player_actor_damage_resolver),
+            reinterpret_cast<void*>(&HookPlayerActorDamageResolver),
+            kPlayerActorDamageResolverHookMinimumPatchSize,
+            &g_gameplay_keyboard_injection
+                 .player_actor_damage_resolver_hook,
+            &hook_error)) {
+        ShutdownGameplayKeyboardInjection();
+        if (error_message != nullptr) {
+            *error_message =
+                "Failed to install resolved Player damage hook: " +
+                hook_error;
+        }
+        return false;
+    }
+
+    if (!InstallSafeX86Hook(
             reinterpret_cast<void*>(badguy_damage),
             reinterpret_cast<void*>(&HookBadguyDamage),
             kBadguyDamageHookMinimumPatchSize,
@@ -1074,6 +1094,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();
         g_gameplay_keyboard_injection
             .pending_local_player_vitals_corrections.clear();
+        g_gameplay_keyboard_injection
+            .pending_local_player_hit_feedback.clear();
         g_gameplay_keyboard_injection.pending_native_poison_behavior_probes.clear();
         g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
         g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
@@ -1108,6 +1130,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " secondary_cursor_world_projection=" +
             HexString(secondary_cursor_world_projection) +
         " incoming_damage=" + HexString(player_actor_magic_damage) +
+        " resolved_player_damage=" +
+            HexString(player_actor_damage_resolver) +
         " enemy_damage=" + HexString(badguy_damage) +
         " poisoned_modifier_tick=" + HexString(poisoned_modifier_tick) +
         " damage_context_reset=" + HexString(damage_context_reset) +
@@ -1168,6 +1192,9 @@ void ShutdownGameplayKeyboardInjection() {
     RemoveX86Hook(&g_gameplay_keyboard_injection.webbed_modifier_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.poisoned_modifier_tick_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_magic_damage_hook);
+    RemoveX86Hook(
+        &g_gameplay_keyboard_injection
+             .player_actor_damage_resolver_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.badguy_damage_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_actor_pure_primary_gate_hook);
     RemoveX86Hook(&g_gameplay_keyboard_injection.player_control_brain_update_hook);
@@ -1282,6 +1309,8 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection.pending_multiplayer_dampen_effect_requests.clear();
         g_gameplay_keyboard_injection
             .pending_local_player_vitals_corrections.clear();
+        g_gameplay_keyboard_injection
+            .pending_local_player_hit_feedback.clear();
         g_gameplay_keyboard_injection.pending_native_poison_behavior_probes.clear();
         g_gameplay_keyboard_injection.pending_native_magic_hit_behavior_probes.clear();
         g_gameplay_keyboard_injection.next_native_magic_hit_behavior_probe_serial = 1;
