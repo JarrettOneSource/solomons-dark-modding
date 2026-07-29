@@ -117,6 +117,29 @@ struct WindowSearch {
     unsigned int match_count = 0;
 };
 
+bool ProcessPathMatches(DWORD process_id, const wchar_t* expected_path) {
+    HANDLE process = OpenProcess(
+        PROCESS_QUERY_LIMITED_INFORMATION,
+        FALSE,
+        process_id);
+    if (process == nullptr) {
+        return false;
+    }
+    std::vector<wchar_t> path(32768);
+    DWORD path_length = static_cast<DWORD>(path.size());
+    const BOOL queried = QueryFullProcessImageNameW(
+        process,
+        0,
+        path.data(),
+        &path_length);
+    CloseHandle(process);
+    if (!queried) {
+        return false;
+    }
+    const std::wstring actual(path.data(), path_length);
+    return _wcsicmp(actual.c_str(), expected_path) == 0;
+}
+
 BOOL CALLBACK VisitWindow(HWND window, LPARAM parameter) {
     auto* search = reinterpret_cast<WindowSearch*>(parameter);
     DWORD process_id = 0;
@@ -150,6 +173,56 @@ HWND FindGameWindow(DWORD process_id) {
             "expected one visible SolomonDark window for process %lu; "
             "found %u\n",
             static_cast<unsigned long>(process_id),
+            search.match_count);
+        std::exit(11);
+    }
+    return search.match;
+}
+
+struct ExactPathWindowSearch {
+    const wchar_t* expected_path = nullptr;
+    HWND match = nullptr;
+    unsigned int match_count = 0;
+};
+
+BOOL CALLBACK VisitExactPathWindow(HWND window, LPARAM parameter) {
+    auto* search =
+        reinterpret_cast<ExactPathWindowSearch*>(parameter);
+    if (!IsWindowVisible(window)) {
+        return TRUE;
+    }
+    wchar_t title[64]{};
+    GetWindowTextW(window, title, static_cast<int>(std::size(title)));
+    if (std::wcscmp(title, L"SolomonDark") != 0) {
+        return TRUE;
+    }
+    DWORD process_id = 0;
+    GetWindowThreadProcessId(window, &process_id);
+    if (!ProcessPathMatches(process_id, search->expected_path)) {
+        return TRUE;
+    }
+    search->match = window;
+    search->match_count += 1;
+    return TRUE;
+}
+
+HWND FindGameWindowForExactPath(const wchar_t* expected_path) {
+    ExactPathWindowSearch search{};
+    search.expected_path = expected_path;
+    if (!EnumWindows(
+            VisitExactPathWindow,
+            reinterpret_cast<LPARAM>(&search))) {
+        std::fprintf(
+            stderr,
+            "EnumWindows failed with Win32 error %lu\n",
+            static_cast<unsigned long>(GetLastError()));
+        std::exit(10);
+    }
+    if (search.match_count != 1 || search.match == nullptr) {
+        std::fprintf(
+            stderr,
+            "expected one visible SolomonDark window for the exact staged "
+            "path; found %u\n",
             search.match_count);
         std::exit(11);
     }
@@ -305,16 +378,34 @@ int main(int argc, char** argv) {
             "usage: win32_real_input click <process-id> "
             "<expected-executable-path> <x-fraction> <y-fraction> "
             "<hold-milliseconds>\n"
+            "       win32_real_input click-path "
+            "<expected-executable-path> <x-fraction> <y-fraction> "
+            "<hold-milliseconds>\n"
             "       win32_real_input key <process-id> "
             "<expected-executable-path> <key> <hold-milliseconds>\n");
         return 2;
     }
     const bool is_click = std::strcmp(argv[1], "click") == 0;
+    const bool is_click_path =
+        std::strcmp(argv[1], "click-path") == 0;
     const bool is_key = std::strcmp(argv[1], "key") == 0;
-    if ((!is_click && !is_key) ||
+    if ((!is_click && !is_click_path && !is_key) ||
         (is_click && argc != 7) ||
+        (is_click_path && argc != 6) ||
         (is_key && argc != 6)) {
         Fail("invalid real-input command line", 2);
+    }
+    if (is_click_path) {
+        const std::wstring expected_path = Utf8ToWide(argv[2]);
+        const HWND window =
+            FindGameWindowForExactPath(expected_path.c_str());
+        FocusWindow(window);
+        Click(
+            window,
+            ParseFraction(argv[3], "x-fraction"),
+            ParseFraction(argv[4], "y-fraction"),
+            ParseHoldMilliseconds(argv[5]));
+        return 0;
     }
     const DWORD process_id = ParseProcessId(argv[2]);
     const std::wstring expected_path = Utf8ToWide(argv[3]);

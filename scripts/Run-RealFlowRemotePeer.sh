@@ -329,14 +329,40 @@ launcher_key() {
 game_click() {
     [[ $# -eq 2 ]]
     [[ -f "$tools_root/win32_real_input.exe" ]]
+    [[ -s "$process_root/client.json" ]]
     local helper
+    local expected_game
+    local expected_game_windows
+    local scope
+    local instance
+    local -a peer_identity=()
     helper="$(windows_path "$tools_root/win32_real_input.exe")"
+    mapfile -t peer_identity < <(
+        python3 - "$process_root/client.json" <<'PY'
+import json
+import pathlib
+import sys
+
+row = json.loads(pathlib.Path(sys.argv[1]).read_text())
+print(row["scope"])
+print(row["instance"])
+PY
+    )
+    [[ ${#peer_identity[@]} -eq 2 ]]
+    scope="${peer_identity[0]}"
+    instance="${peer_identity[1]}"
+    validate_token "$scope"
+    validate_token "$instance"
+    expected_game="$package_root/.sdmod-test-data/$scope/SolomonDarkMultiplayerBeta/runtime/instances/$instance/stage/SolomonDark.exe"
+    [[ -f "$expected_game" ]]
+    expected_game_windows="$(windows_path "$expected_game")"
     export WINEPREFIX="$prefix_root/pfx"
     export WINEDEBUG=-all
     export WINEFSYNC=1
     "$proton_root/files/bin/wine" \
         "$helper" \
-        click \
+        click-path \
+        "$expected_game_windows" \
         "$1" \
         "$2" \
         300

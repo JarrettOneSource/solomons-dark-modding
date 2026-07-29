@@ -253,6 +253,36 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn("SDMOD_NETWORK_TELEMETRY=1", remote)
         self.assertIn("SDMOD_DISABLE_AUDIO=1", remote)
 
+    def test_nfo_game_input_targets_the_exact_staged_executable(
+        self,
+    ) -> None:
+        remote = (
+            ROOT / "scripts/Run-RealFlowRemotePeer.sh"
+        ).read_text(encoding="utf-8")
+        input_helper = (
+            ROOT / "tools/win32_real_input.cpp"
+        ).read_text(encoding="utf-8")
+        game_click = remote.split(
+            "game_click() {", 1
+        )[1].split("invoke_lua() {", 1)[0]
+
+        self.assertIn(
+            'expected_game="$package_root/.sdmod-test-data/'
+            '$scope/SolomonDarkMultiplayerBeta/runtime/instances/'
+            '$instance/stage/SolomonDark.exe"',
+            game_click,
+        )
+        self.assertIn('"$expected_game_windows"', game_click)
+        self.assertIn("click-path", game_click)
+        self.assertIn(
+            "FindGameWindowForExactPath(expected_path.c_str())",
+            input_helper,
+        )
+        self.assertIn(
+            "ProcessPathMatches(process_id, search->expected_path)",
+            input_helper,
+        )
+
     def test_observer_mod_is_inert_and_has_no_gameplay_callbacks(
         self,
     ) -> None:
