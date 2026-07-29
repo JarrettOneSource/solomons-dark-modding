@@ -8,12 +8,14 @@ import re
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
-def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
+def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     main = _read("mods/bot-brain/scripts/main.lua")
     roster = _read("mods/bot-brain/scripts/roster.lua")
     brain = _read("mods/bot-brain/scripts/brain.lua")
     steering = _read("mods/bot-brain/scripts/steering.lua")
+    cast_range_test = _read("tools/test_bot_brain_cast_range.lua")
+    combat_verifier = _read("tools/verify_bot_cast_in_range.py")
     docs = _read("docs/lua-bot-brain.md")
     verifier = _read("tools/verify_bot_polish.py")
     spawn_binding = _read(
@@ -45,7 +47,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
-    assert manifest["version"] == "1.0.1"
+    assert manifest["version"] == "1.0.2"
     assert manifest["summary"] == (
         "Bot teammates that play like real players."
     )
@@ -141,6 +143,45 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "issue_movement(",
         "issue_primary_cast(context, now_ms, target)",
     )
+    approach_start = brain.find("if not context.fleeing and")
+    approach_end = brain.find("context.debug.mode = \"approach\"", approach_start)
+    assert approach_start >= 0 and approach_end > approach_start
+    approach_block = brain[approach_start:approach_end]
+    assert "threat_count == 0" not in approach_block, (
+        "an outside-range threat still blocks the existing approach path"
+    )
+
+    nearest_cast_start = steering.find(
+        "function steering.nearest_cast_target(")
+    nearest_cast_end = steering.find(
+        "function steering.nearest_enemy(", nearest_cast_start)
+    assert nearest_cast_start >= 0 and nearest_cast_end > nearest_cast_start
+    nearest_cast_block = steering[nearest_cast_start:nearest_cast_end]
+    assert "contact_distance" not in nearest_cast_block, (
+        "cast eligibility still subtracts target radius instead of checking "
+        "the target center used by the native spell query"
+    )
+
+    for token in (
+        "outside-range threat must use existing approach movement",
+        "bot cast with target center outside native spell range",
+        "in-range bot did not cast",
+        "low-HP flee behavior was replaced by approach",
+    ):
+        assert token in cast_range_test, (
+            f"bot cast-range behavior test lacks: {token}"
+        )
+    for token in (
+        "damage_edge_count",
+        "applied_damage_links(",
+        "authorized_fireball_damage_links(",
+        "applied no enemy damage",
+        "cast outside its native range",
+        '"combatAcceptance": "applied enemy HP damage edges"',
+    ):
+        assert token in combat_verifier, (
+            f"bot applied-damage verifier lacks: {token}"
+        )
 
     for token in (
         "sd.state.is_authority",
@@ -242,6 +283,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "PrimeGameplaySlotBotBaseBookState(",
         "progression_address,",
         "discipline_skill_row,",
+        "ActivateProfilePrimaryRows(",
         "CallActorProgressionRefreshSafe(",
     )
     _require_in_order(
@@ -255,7 +297,17 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
         "kPlayerProgressionDisciplineSkillRowOffset,",
         "selected_row != discipline_skill_row",
     )
-    assert "CallPlayerAppearanceApplyChoiceSafe(" not in selection_priming
+    _require_in_order(
+        selection_priming,
+        "bool ActivateProfilePrimaryRows(",
+        "TryResolveNativePrimarySelectionForProfile(",
+        "kStandaloneWizardProgressionActiveFlagOffset",
+        "if (active == 0)",
+        "CallPlayerAppearanceApplyChoiceSafe(",
+        "entry_index,",
+        "false,",
+        "return active > 0;",
+    )
     assert re.search(
         r"kPlayerProgressionDisciplineSkillRowOffset[\s\S]{0,160}"
         r"choice_ids\[3\]",
@@ -386,7 +438,8 @@ def test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated() -> str:
     return (
         "The opt-in ordered roster fills up to four capacity-bounded seats "
         "with three Lua Behavior profiles and native per-bot Discipline on "
-        "authority ticks while retaining the existing combat gate"
+        "authority ticks, while combat acceptance requires bot-attributed "
+        "enemy HP damage inside the equipped spell's native range"
     )
 
 

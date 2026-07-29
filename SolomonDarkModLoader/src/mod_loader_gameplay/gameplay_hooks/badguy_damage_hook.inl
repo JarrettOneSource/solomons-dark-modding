@@ -627,12 +627,13 @@ std::uint8_t __fastcall HookBadguyDamage(
                 &synthetic_participant_id)) {
             return 0;
         }
-        Log(
-            "[bots] host synthetic Fireball native damage authorized. "
-            "participant_id=" +
+        const auto target_network_actor_id = multiplayer::GetLocalRunEnemyNetworkActorId(actor_address);
+        Log("[bots] host synthetic Fireball native damage authorized. monotonic_ms=" +
+            std::to_string(GetTickCount64()) + " participant_id=" +
             std::to_string(synthetic_participant_id) +
             " projectile_actor=" + HexString(context_source) +
-            " target_actor=" + HexString(actor_address));
+            " target_actor=" + HexString(actor_address) + " target_network_actor_id=" +
+            std::to_string(target_network_actor_id));
     }
 
     const auto local_damage_capture =

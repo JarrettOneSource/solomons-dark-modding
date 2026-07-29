@@ -92,40 +92,6 @@ bool CallActorProgressionRefreshSafe(
     }
 }
 
-bool CallSkillsWizardBuildPrimarySpellSafe(
-    uintptr_t build_address,
-    uintptr_t progression_address,
-    std::uint32_t primary_entry_arg,
-    std::uint32_t combo_entry_arg,
-    std::uint32_t* output_spell_id,
-    DWORD* exception_code) {
-    auto* build_primary_spell =
-        reinterpret_cast<SkillsWizardBuildPrimarySpellFn>(build_address);
-    if (exception_code != nullptr) {
-        *exception_code = 0;
-    }
-    if (build_primary_spell == nullptr || progression_address == 0) {
-        return false;
-    }
-
-    __try {
-        const auto spell_id = build_primary_spell(
-            reinterpret_cast<void*>(progression_address),
-            primary_entry_arg,
-            combo_entry_arg,
-            0,
-            0,
-            0,
-            0);
-        if (output_spell_id != nullptr) {
-            *output_spell_id = spell_id;
-        }
-        return true;
-    } __except (CaptureSehCode(GetExceptionInformation(), exception_code)) {
-        return false;
-    }
-}
-
 bool CallSkillsWizardGetPrimaryColorSafe(
     uintptr_t color_address,
     uintptr_t progression_address,

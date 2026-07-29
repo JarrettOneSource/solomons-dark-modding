@@ -304,7 +304,9 @@ BotManaCost ResolveBotCastManaCost(
     uintptr_t progression_runtime_address,
     BotCastKind kind,
     std::int32_t secondary_slot,
-    std::int32_t skill_id);
+    std::int32_t skill_id,
+    std::int32_t resolved_primary_entry,
+    std::int32_t resolved_primary_combo_entry);
 float ResolveBotManaRequiredToStart(const BotManaCost& cost);
 bool CanBotManaStartCast(const BotManaCost& cost, float current_mp, float max_mp);
 const char* BotManaChargeKindLabel(BotManaChargeKind kind);

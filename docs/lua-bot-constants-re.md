@@ -48,18 +48,31 @@ Lua no longer computes attack ranges or the water cone formula. Autonomous
 combat asks `sd.bots.get_primary_attack_window(bot_id, element_id)` and treats a
 missing native/semantic window as "do not cast yet".
 
-The C++ semantic producer now reads the live native target-selection range
-instead of owning fixed attack windows. Ghidra artifacts
+The C++ semantic producer reads native range state instead of owning fixed
+attack windows. Ghidra artifacts
 `runtime/ghidra_primary_attack_window_dispatcher.txt` and
 `runtime/ghidra_actor_spell_config_writer_context.txt` show the primary
 dispatcher (`FUN_00548B00`) filling the live actor spell-config block before the
-water handler feeds the native cone query `FUN_00641B10`. The stock control-brain
-target selector `FUN_0052C910` owns `actor_control_brain_pursuit_range` at the
-layout-backed `kActorControlBrainPursuitRangeOffset` seam and applies the native
-Water special-case global `water_primary_control_brain_range=0x00786CE8` for the
-`0x20` selection state. `sd.bots.get_primary_attack_window(...)` exposes those
-native sources as `native_selection_pursuit_range` or
-`native_water_control_brain_range`.
+water handler feeds the native cone query `FUN_00641B10`. For Frost Jet,
+`FUN_00543860` consumes the progression-derived `mWiden` output at actor
+`+0x290` and computes the radial query range as
+`(mWiden / *0x00784750 * *0x007DE810) + *0x007DE888 + *0x007DE960`.
+The four layout-backed globals are exposed as
+`kFrostJetRangeWidenDivisorGlobal`, `kFrostJetRangeWidenScaleGlobal`,
+`kFrostJetRangeBaseGlobal`, and `kFrostJetRangeTailGlobal`. The resulting
+upgrade-dependent value is reported as `native_frost_jet_query_range`.
+Their retail layout entries are
+`frost_jet_range_widen_divisor=0x00784750`,
+`frost_jet_range_widen_scale=0x007DE810`,
+`frost_jet_range_base=0x007DE888`, and
+`frost_jet_range_tail=0x007DE960`.
+
+For the other primaries, the stock control-brain target selector
+`FUN_0052C910` owns `actor_control_brain_pursuit_range` at the layout-backed
+`kActorControlBrainPursuitRangeOffset` seam. The API exposes that source as
+`native_selection_pursuit_range`. If either native source cannot be resolved,
+the attack window stays unavailable instead of falling back to a guessed
+spell range.
 
 ## Policy Values
 

@@ -532,7 +532,13 @@ bool PreparePendingWizardBotCast(ParticipantEntityBinding* binding, std::string*
             ongoing.progression_runtime_address,
             request.kind,
             request.secondary_slot,
-            ongoing.skill_id);
+            ongoing.skill_id,
+            have_primary_descriptor
+                ? primary_descriptor.primary_entry_index
+                : -1,
+            have_primary_descriptor
+                ? primary_descriptor.combo_entry_index
+                : -1);
     if (!cast_mana.resolved) {
         Log(
             "[bots] mana rejected. bot_id=" + std::to_string(binding->bot_id) +

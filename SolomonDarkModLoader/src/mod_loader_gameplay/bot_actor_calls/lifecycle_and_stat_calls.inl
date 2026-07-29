@@ -443,3 +443,34 @@ bool CallStatBookComputeValueSafe(
         return false;
     }
 }
+
+bool CallPlayerAppearanceApplyChoiceSafe(
+    uintptr_t apply_choice_address,
+    uintptr_t progression_address,
+    int choice_id,
+    bool publish_gameplay_side_effects,
+    DWORD* exception_code) {
+    auto* apply_choice =
+        reinterpret_cast<PlayerAppearanceApplyChoiceFn>(
+            apply_choice_address);
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (apply_choice == nullptr ||
+        progression_address == 0 ||
+        choice_id < 0) {
+        return false;
+    }
+
+    __try {
+        apply_choice(
+            reinterpret_cast<void*>(progression_address),
+            choice_id,
+            publish_gameplay_side_effects ? 1 : 0);
+        return true;
+    } __except (CaptureSehCode(
+        GetExceptionInformation(),
+        exception_code)) {
+        return false;
+    }
+}

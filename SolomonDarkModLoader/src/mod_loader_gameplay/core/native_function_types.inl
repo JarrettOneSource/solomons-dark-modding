@@ -76,14 +76,8 @@ using ActorAnimationAdvanceFn = void(__thiscall*)(void* self);
 using ActorWorldAttachFn = void(__thiscall*)(void* self, void* actor);
 using PlayerActorInitializeControlBrainFn = void(__thiscall*)(void* self);
 using ActorProgressionRefreshFn = void(__thiscall*)(void* self);
-using SkillsWizardBuildPrimarySpellFn = std::uint32_t(__thiscall*)(
-    void* self,
-    std::uint32_t primary_entry,
-    std::uint32_t combo_entry,
-    std::uint32_t reserved0,
-    std::uint32_t reserved1,
-    std::uint32_t reserved2,
-    std::uint32_t reserved3);
+using PlayerAppearanceApplyChoiceFn =
+    void(__thiscall*)(void* self, int choice_id, int publish_gameplay_side_effects);
 using SkillsWizardGetPrimaryColorFn = void(__thiscall*)(
     void* self,
     float* out_color,

@@ -37,16 +37,6 @@ bool TryResolveNativePrimarySelectionFromSkillId(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
     std::int32_t previous_current_spell_id = 0;
     const bool have_previous_current_spell_id =
         TryReadProgressionCurrentSpellId(
@@ -63,14 +53,14 @@ bool TryResolveNativePrimarySelectionFromSkillId(
             const auto primary_entry = kNativePrimaryEntryIndices[primary_index];
             const auto combo_entry = kNativePrimaryEntryIndices[combo_index];
             std::uint32_t native_spell_id = 0;
-            DWORD exception_code = 0;
-            if (!CallSkillsWizardBuildPrimarySpellSafe(
-                    build_primary_spell_address,
+            std::uint32_t exception_code = 0;
+            if (!TryBuildNativePrimarySpellPreservingProgressionFlags(
                     progression_runtime_address,
-                    EncodeSkillsWizardSelectionArg(primary_entry),
-                    EncodeSkillsWizardSelectionArg(combo_entry),
+                    primary_entry,
+                    combo_entry,
                     &native_spell_id,
-                    &exception_code)) {
+                    &exception_code,
+                    nullptr)) {
                 last_exception_code = exception_code;
                 continue;
             }
@@ -139,16 +129,6 @@ bool TryResolveNativePrimarySelectionFromLiveProgression(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
     std::int32_t previous_current_spell_id = 0;
     const bool have_previous_current_spell_id =
         TryReadProgressionCurrentSpellId(
@@ -156,22 +136,21 @@ bool TryResolveNativePrimarySelectionFromLiveProgression(
             &previous_current_spell_id);
 
     std::uint32_t native_spell_id = 0;
-    DWORD exception_code = 0;
-    if (!CallSkillsWizardBuildPrimarySpellSafe(
-            build_primary_spell_address,
+    std::uint32_t exception_code = 0;
+    std::string build_error;
+    if (!TryBuildNativePrimarySpellPreservingProgressionFlags(
             progression_runtime_address,
-            EncodeSkillsWizardSelectionArg(primary_entry_index),
-            EncodeSkillsWizardSelectionArg(combo_entry_index),
+            primary_entry_index,
+            combo_entry_index,
             &native_spell_id,
-            &exception_code)) {
+            &exception_code,
+            &build_error)) {
         RestoreProgressionCurrentSpellIdIfNeeded(
             progression_runtime_address,
             have_previous_current_spell_id,
             previous_current_spell_id);
         if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary selection failed with 0x" +
-                std::to_string(exception_code);
+            *error_message = build_error;
         }
         return false;
     }
@@ -247,31 +226,21 @@ bool TryResolveNativePrimarySpellStats(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "unable to resolve Skills_Wizard primary spell builder";
-        }
-        return false;
-    }
-
     std::uint32_t native_spell_id = 0;
-    DWORD exception_code = 0;
-    const bool build_succeeded = CallSkillsWizardBuildPrimarySpellSafe(
-        build_primary_spell_address,
-        progression_runtime_address,
-        EncodeSkillsWizardSelectionArg(selection.primary_entry_index),
-        EncodeSkillsWizardSelectionArg(selection.combo_entry_index),
-        &native_spell_id,
-        &exception_code);
+    std::uint32_t exception_code = 0;
+    std::string build_error;
+    const bool build_succeeded =
+        TryBuildNativePrimarySpellPreservingProgressionFlags(
+            progression_runtime_address,
+            selection.primary_entry_index,
+            selection.combo_entry_index,
+            &native_spell_id,
+            &exception_code,
+            &build_error);
     if (!build_succeeded) {
         stats->builder_seh_code = exception_code;
         if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary spell builder failed with 0x" +
-                std::to_string(exception_code);
+            *error_message = build_error;
         }
         return false;
     }
@@ -304,6 +273,7 @@ bool TryResolveNativePrimarySpellStats(
 
     stats->output_values_address = output_values_address;
     stats->output_count = output_count;
+    auto& memory = ProcessMemory::Instance();
     if (!memory.TryReadValue(output_values_address, &stats->damage)) {
         if (error_message != nullptr) {
             *error_message = "native primary damage output read failed";

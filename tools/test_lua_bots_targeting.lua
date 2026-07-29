@@ -119,7 +119,14 @@ _G.sd = {
     get_primary_attack_window = function(bot_id, element_id)
       local id = tonumber(element_id) or 0
       if id == 1 then
-        return { min_range = 0.0, max_range = 170.0, native_backed = true, source = "native_water_control_brain_range" }
+        local widen = 0.0
+        local widen_divisor = 2.5
+        local widen_scale = 10.0
+        local base_range = 180.0
+        local tail_range = 25.0
+        local frost_jet_query_range =
+          (widen / widen_divisor * widen_scale) + base_range + tail_range
+        return { min_range = 0.0, max_range = frost_jet_query_range, native_backed = true, source = "native_frost_jet_query_range" }
       end
       return { min_range = 0.0, max_range = 300.0, native_backed = true, source = "native_selection_pursuit_range" }
     end,
@@ -811,7 +818,7 @@ assert(casts[1].target_actor_address == enemy_a.actor_address, "water-range atta
 casts = {}
 faces = {}
 face_targets = {}
-enemy_a.x = 190.0
+enemy_a.x = 220.0
 enemy_a.hp = 100.0
 bot.cast_ready = true
 hooks.state.bot_profile = { element_id = 1 }

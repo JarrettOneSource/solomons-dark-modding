@@ -72,13 +72,14 @@ the actor or replacing the stock movement tick.
 Skirmisher is the shipped kite-and-cast policy. Enemies inside the configured
 kite radius contribute inverse-distance-weighted repulsion, blended with arena
 center recovery that cannot reverse through a threat. It casts on a 500 ms
-cadence. Below 35% HP it flees with a 900-unit threat sample and longer
-lookahead; it resumes kiting above 45%.
+cadence only when an enemy's center is inside the equipped primary spell's
+native effective range. Below 35% HP it flees with a 900-unit threat sample and
+longer lookahead; it resumes kiting above 45%.
 
-When enemies sit outside both threat and class-primary range, the skirmisher
-approaches the nearest enemy and stops just inside its live attack window.
-Long approach destinations are held for one second; kite and flee destinations
-retarget every 250 ms.
+When the nearest enemy sits outside that range, the skirmisher approaches and
+stops just inside its live attack window even if the enemy has already entered
+the wider kite radius. Long approach destinations are held for one second;
+kite and flee destinations retarget every 250 ms.
 
 ### Guardian
 
@@ -109,14 +110,17 @@ The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
 participant ID, mode, HP ratio, accepted movement/casts, attack window,
 Behavior thresholds, native Discipline, and guardian ward distance. Root
 scalar fields mirror the first row for compatibility with the existing
-wave-five verifier. The root also reports desired, active, and
-capacity-refused counts plus the aggregate status string. This is acceptance
-telemetry, not a gameplay control API.
+diagnostic readers. The root also reports desired, active, and capacity-refused
+counts plus the aggregate status string. This is acceptance telemetry, not a
+gameplay control API.
 
-The existing retail-schedule longevity gate remains:
+The retail host/client combat gate uses the launcher-configured roster and
+stock wave schedule. Cast acceptance is diagnostic only; success requires
+authoritative enemy HP damage edges linked to the same target after a cast,
+and every per-cast target-distance must be inside that cast's native range:
 
 ```bash
-python3 tools/verify_lua_bot_brain.py --runs 3
+python3 tools/verify_bot_cast_in_range.py
 ```
 
 The structured-settings gate is:

@@ -28,7 +28,7 @@ from static_lua_bot_players_contracts import (
 )
 from static_lua_bot_brain_contracts import (
     test_lua_bot_brain_late_join_waits_for_complete_host_settings,
-    test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated,
+    test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
 )
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
@@ -252,6 +252,7 @@ from static_re_multiplayer_combat_contracts import (
     test_bot_level_sync_uses_native_level_up,
     test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana,
     test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_release_policy,
+    test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped,
     test_hub_start_testrun_uses_gameplay_region_switch,
     test_hub_start_testrun_waits_for_app_tick_pump,
     test_lightning_chaining_verifier_uses_native_dispatcher_loop,
@@ -553,8 +554,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_lua_bots_are_synthetic_remote_participants,
     ),
     (
-        "Lua bot brain is rostered and wave-five gated",
-        test_lua_bot_brain_is_rostered_native_routed_and_wave_five_gated,
+        "Lua bot brain is rostered and applied-damage gated",
+        test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
     ),
     (
         "Lua bot brain late join waits for complete host settings",
@@ -1129,6 +1130,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Lightning Chaining verifier uses native dispatcher loop", test_lightning_chaining_verifier_uses_native_dispatcher_loop),
     ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
     ("primary attack window uses live native selection range", test_primary_attack_window_uses_live_native_selection_range),
+    ("Frost Jet synthetic damage gate is authoritative and cast scoped", test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped),
     ("bot level sync uses native level_up", test_bot_level_sync_uses_native_level_up),
     ("native stat refresh preserves live vitals", test_native_stat_refresh_preserves_live_vitals),
     ("bot skill-upgrade combat probe checks native damage and mana", test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana),

@@ -71,12 +71,11 @@ bool CallActorProgressionRefreshSafe(
     uintptr_t refresh_address,
     uintptr_t actor_address,
     DWORD* exception_code);
-bool CallSkillsWizardBuildPrimarySpellSafe(
-    uintptr_t build_address,
+bool CallPlayerAppearanceApplyChoiceSafe(
+    uintptr_t apply_choice_address,
     uintptr_t progression_address,
-    std::uint32_t primary_entry_arg,
-    std::uint32_t combo_entry_arg,
-    std::uint32_t* output_spell_id,
+    int choice_id,
+    bool publish_gameplay_side_effects,
     DWORD* exception_code);
 bool CallSkillsWizardGetPrimaryColorSafe(
     uintptr_t color_address,

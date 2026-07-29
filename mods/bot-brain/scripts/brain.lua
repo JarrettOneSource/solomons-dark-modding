@@ -613,8 +613,7 @@ function brain.think(context, now_ms, authority)
     (threat_count > 0 and
       context.shared.kite_move_interval_ms or
       context.shared.orbit_move_interval_ms)
-  if not context.fleeing and threat_count == 0 and
-      target == nil and nearest_enemy ~= nil and
+  if not context.fleeing and target == nil and nearest_enemy ~= nil and
       nearest_enemy_distance >
         math.max(
           effective_attack_range,
@@ -624,13 +623,11 @@ function brain.think(context, now_ms, authority)
         bot_x,
         bot_y,
         nearest_enemy,
-        context.arena)
-    local desired_center_distance =
-      effective_attack_range +
-      (tonumber(nearest_enemy.radius) or 0.0) - 8.0
+      context.arena)
     movement_lookahead = math.max(
       math.min(
-        nearest_enemy_distance - desired_center_distance,
+        nearest_enemy_distance -
+          (effective_attack_range - 8.0),
         context.shared.normal_lookahead),
       28.0)
     move_interval = context.shared.approach_move_interval_ms

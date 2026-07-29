@@ -93,7 +93,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             details = json.loads(metadata.read_text())
             self.assertEqual(details["id"], "bot.brain")
-            self.assertEqual(details["version"], "1.0.1")
+            self.assertEqual(details["version"], "1.0.2")
             self.assertEqual(
                 details["minimumLoaderVersion"],
                 "0.1.0-beta.22",

@@ -361,7 +361,9 @@ BotManaCost ResolveBotCastManaCost(
     uintptr_t progression_runtime_address,
     BotCastKind kind,
     std::int32_t secondary_slot,
-    std::int32_t skill_id) {
+    std::int32_t skill_id,
+    std::int32_t resolved_primary_entry,
+    std::int32_t resolved_primary_combo_entry) {
     if (kind == BotCastKind::Secondary) {
         const auto resolved_secondary_entry =
             skill_id > 0
@@ -403,7 +405,14 @@ BotManaCost ResolveBotCastManaCost(
     NativePrimarySpellSelection selection{};
     bool selection_resolved = false;
 
-    if (skill_id > 0) {
+    if (resolved_primary_entry >= 0 &&
+        resolved_primary_combo_entry >= 0) {
+        selection_resolved =
+            TryResolveNativePrimarySelectionFromPair(
+                resolved_primary_entry,
+                resolved_primary_combo_entry,
+                &selection);
+    } else if (skill_id > 0) {
         selection_resolved =
             TryResolveNativePrimarySelectionFromSkillId(
                 progression_runtime_address,

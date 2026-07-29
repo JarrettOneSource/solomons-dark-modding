@@ -47,6 +47,17 @@ struct NativeSecondarySpellManaStats {
 bool TryResolveNativePrimaryEntryForElement(int element_id, int* primary_entry);
 int ResolveNativePrimaryEntryForElement(int element_id);
 std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value);
+bool TryBuildNativePrimarySpellPreservingProgressionFlags(
+    uintptr_t progression_runtime_address,
+    int primary_entry_index,
+    int combo_entry_index,
+    std::uint32_t* output_spell_id,
+    std::uint32_t* builder_seh_code = nullptr,
+    std::string* error_message = nullptr);
+bool TryResolveNativeFrostJetQueryRange(
+    uintptr_t actor_address,
+    float* effective_range,
+    std::string* error_message = nullptr);
 bool TryResolveNativePrimarySelectionFromPair(
     int primary_entry_index,
     int combo_entry_index,
