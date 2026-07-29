@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -17,8 +19,10 @@ from tools._real_flow_e2e.evidence import (
 )
 from tools._real_flow_e2e.runtime import (
     damage_click_targets,
+    damage_enemy_with_real_input,
     normalize_state,
 )
+from tools._real_flow_e2e.ws20 import Ws20Peer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -516,7 +520,39 @@ class RealFlowE2ETests(unittest.TestCase):
             25,
         )
 
-    def test_damage_targets_try_actor_sprite_neighborhood_first(
+    def test_runtime_state_includes_native_camera_projection(
+        self,
+    ) -> None:
+        state = normalize_state(
+            {
+                "camera.available": "true",
+                "camera.scene_available": "true",
+                "camera.origin_x": "1250",
+                "camera.origin_y": "-100",
+                "camera.width": "1600",
+                "camera.height": "900",
+                "camera.center_x": "2050",
+                "camera.center_y": "350",
+                "camera.scale": "1",
+            }
+        )
+
+        self.assertEqual(
+            state["camera"],
+            {
+                "available": True,
+                "sceneAvailable": True,
+                "originX": 1250.0,
+                "originY": -100.0,
+                "width": 1600.0,
+                "height": 900.0,
+                "centerX": 2050.0,
+                "centerY": 350.0,
+                "scale": 1.0,
+            },
+        )
+
+    def test_damage_targets_choose_nearest_visible_actor_first(
         self,
     ) -> None:
         targets = damage_click_targets(
@@ -538,15 +574,188 @@ class RealFlowE2ETests(unittest.TestCase):
             ],
             {"x": 514.0, "y": 150.0},
             {"width": 1600, "height": 900},
+            {"sceneAvailable": False},
         )
 
         self.assertEqual(
             targets[:2],
             [
                 (0.2925, 22.0 / 900.0),
-                (0.3625, 22.0 / 900.0 + 0.06),
+                (0.625, 500.0 / 900.0),
             ],
         )
+
+    def test_damage_targets_use_stock_cursor_projection_when_draw_is_stale(
+        self,
+    ) -> None:
+        targets = damage_click_targets(
+            [
+                {
+                    "screen_valid": False,
+                    "screen_x": 2046.0,
+                    "screen_y": 207.0,
+                    "x": 2046.0,
+                    "y": 207.0,
+                }
+            ],
+            {"x": 2050.0, "y": 250.0},
+            {"width": 1600, "height": 900},
+            {
+                "sceneAvailable": True,
+                "originX": 1250.0,
+                "originY": -100.0,
+                "scale": 1.0,
+            },
+        )
+
+        self.assertEqual(targets[0], (796.0 / 1600.0, 307.0 / 900.0))
+
+    def test_damage_probe_refreshes_native_target_before_each_click(
+        self,
+    ) -> None:
+        def state(enemy_x: float, hp: float) -> dict[str, object]:
+            return {
+                "scene": {"name": "testrun"},
+                "viewport": {"width": 1000, "height": 1000},
+                "camera": {
+                    "sceneAvailable": True,
+                    "originX": 0.0,
+                    "originY": 0.0,
+                    "scale": 1.0,
+                },
+                "player": {
+                    "valid": True,
+                    "x": 50.0,
+                    "y": 50.0,
+                    "hp": 50.0,
+                },
+                "replicatedEnemies": [
+                    {
+                        "network_id": 101,
+                        "dead": False,
+                        "hp": hp,
+                        "x": enemy_x,
+                        "y": 100.0,
+                        "screen_valid": False,
+                        "screen_x": enemy_x,
+                        "screen_y": 100.0,
+                    }
+                ],
+            }
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.states = iter(
+                    [
+                        state(100.0, 2.5),
+                        state(200.0, 2.5),
+                        state(200.0, 1.5),
+                    ]
+                )
+
+            def state(self) -> dict[str, object]:
+                return next(self.states)
+
+        clicks: list[tuple[float, float, int]] = []
+
+        def click(
+            _source: Path,
+            _peer: object,
+            x: float,
+            y: float,
+            hold_ms: int,
+        ) -> str:
+            clicks.append((x, y, hold_ms))
+            return "ok"
+
+        with (
+            mock.patch(
+                "tools._real_flow_e2e.runtime._click",
+                side_effect=click,
+            ),
+            mock.patch(
+                "tools._real_flow_e2e.runtime.time.sleep",
+                return_value=None,
+            ),
+        ):
+            result = damage_enemy_with_real_input(
+                ROOT,
+                object(),
+                FakePipe(),  # type: ignore[arg-type]
+                timeout=5.0,
+            )
+
+        self.assertEqual(
+            clicks,
+            [
+                (0.1, 0.1, 90),
+                (0.2, 0.1, 90),
+            ],
+        )
+        self.assertEqual(result["hpAfter"], 1.5)
+
+    def test_ws20_action_uses_one_remote_powershell_round_trip(
+        self,
+    ) -> None:
+        class FakeConnection:
+            stage_root = r"C:\Users\test\sd-netrepro-stage"
+
+            def __init__(self) -> None:
+                self.scripts: list[str] = []
+
+            def run_ps(
+                self,
+                script: str,
+                *,
+                timeout: float,
+            ) -> str:
+                self.scripts.append(script)
+                return json.dumps(
+                    {"ok": True, "detail": {"processId": 42}}
+                )
+
+            def write_json(
+                self,
+                _path: str,
+                _value: dict[str, object],
+            ) -> None:
+                raise AssertionError("second SSH request was used")
+
+        peer = object.__new__(Ws20Peer)
+        peer.harness = SimpleNamespace(run_name="one-round-trip")
+        peer.connection = FakeConnection()
+        peer._action_counter = 0
+
+        detail = peer._invoke(
+            "click",
+            {"ProcessId": 42, "X": "0.5", "Y": "0.5"},
+            timeout=30,
+        )
+
+        self.assertEqual(detail, {"processId": 42})
+        self.assertEqual(len(peer.connection.scripts), 1)
+        self.assertIn(
+            "[System.Convert]::FromBase64String",
+            peer.connection.scripts[0],
+        )
+
+    def test_client_attack_precedes_paired_capture(self) -> None:
+        source = (
+            ROOT / "tools/verify_real_flow_e2e.py"
+        ).read_text(encoding="utf-8")
+        materialized = source.index(
+            'result["clientEnemyMaterialization"] = materialization'
+        )
+        damage = source.index(
+            'sampler.set_phase("client-real-damage")',
+            materialized,
+        )
+        capture = source.index(
+            'sampler.set_phase("paired-render-capture")',
+            materialized,
+        )
+
+        self.assertLess(damage, capture)
 
     def test_ws20_capture_uses_remote_execution_wall_clock(
         self,

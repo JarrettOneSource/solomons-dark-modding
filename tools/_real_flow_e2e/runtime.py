@@ -94,6 +94,7 @@ local replicated = safe_call(
   sd.world and sd.world.get_replicated_actors)
 local solomon = safe_call(
   sd.hub and sd.hub.get_solomon_dig_state)
+local camera = safe_call(sd.camera and sd.camera.get_state)
 local viewport = safe_call(sd.draw and sd.draw.get_viewport)
 local actors = safe_call(sd.world and sd.world.list_actors) or {}
 
@@ -106,6 +107,17 @@ emit("world.wave_index", world and world.wave_index or 0)
 emit("world.wave_counter", world and world.wave_counter or 0)
 emit("viewport.width", viewport and viewport.width or 0)
 emit("viewport.height", viewport and viewport.height or 0)
+emit("camera.available", camera and camera.available or false)
+emit(
+  "camera.scene_available",
+  camera and camera.scene_available or false)
+emit("camera.origin_x", camera and camera.origin_x or 0)
+emit("camera.origin_y", camera and camera.origin_y or 0)
+emit("camera.width", camera and camera.width or 0)
+emit("camera.height", camera and camera.height or 0)
+emit("camera.center_x", camera and camera.center_x or 0)
+emit("camera.center_y", camera and camera.center_y or 0)
+emit("camera.scale", camera and camera.scale or 0)
 
 emit("player.valid", player ~= nil)
 emit("player.address", player and player.actor_address or 0)
@@ -460,6 +472,19 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
         "viewport": {
             "width": _integer(values, "viewport.width"),
             "height": _integer(values, "viewport.height"),
+        },
+        "camera": {
+            "available": _boolean(values, "camera.available"),
+            "sceneAvailable": _boolean(
+                values, "camera.scene_available"
+            ),
+            "originX": _number(values, "camera.origin_x"),
+            "originY": _number(values, "camera.origin_y"),
+            "width": _number(values, "camera.width"),
+            "height": _number(values, "camera.height"),
+            "centerX": _number(values, "camera.center_x"),
+            "centerY": _number(values, "camera.center_y"),
+            "scale": _number(values, "camera.scale"),
         },
         "player": {
             "valid": _boolean(values, "player.valid"),
@@ -1381,8 +1406,21 @@ def damage_click_targets(
     candidates: list[dict[str, Any]],
     player: dict[str, Any],
     viewport: dict[str, Any],
+    camera: dict[str, Any],
 ) -> list[tuple[float, float]]:
     projected: list[tuple[float, float]] = []
+    viewport_width = float(viewport["width"])
+    viewport_height = float(viewport["height"])
+    if viewport_width <= 0.0 or viewport_height <= 0.0:
+        return projected
+    camera_scale = float(camera.get("scale", math.nan))
+    camera_projection_available = (
+        bool(camera.get("sceneAvailable"))
+        and math.isfinite(camera_scale)
+        and camera_scale > 0.0001
+        and math.isfinite(float(camera.get("originX", math.nan)))
+        and math.isfinite(float(camera.get("originY", math.nan)))
+    )
     for enemy in sorted(
         candidates,
         key=lambda row: _distance(
@@ -1392,30 +1430,36 @@ def damage_click_targets(
             row["y"],
         ),
     ):
-        if not enemy["screen_valid"]:
-            continue
-        x = float(enemy["screen_x"]) / viewport["width"]
-        y = float(enemy["screen_y"]) / viewport["height"]
-        # The stock world projection is anchored to the actor origin while
-        # the clickable sprite can extend down and right. Try a tight sprite
-        # neighborhood before moving to the next enemy.
-        for offset_x, offset_y in (
-            (0.0, 0.0),
-            (0.07, 0.06),
-            (0.03, 0.03),
-            (-0.03, 0.03),
-        ):
-            target = (
-                max(0.01, min(0.99, x + offset_x)),
-                max(0.01, min(0.99, y + offset_y)),
-            )
-            if target not in projected:
-                projected.append(target)
-    return projected + [(0.72, 0.50)] + [
-        (x, y)
-        for y in (0.20, 0.35, 0.50, 0.65)
-        for x in (0.25, 0.50, 0.75)
-    ]
+        if camera_projection_available:
+            screen_x = (
+                float(enemy["x"]) - float(camera["originX"])
+            ) * camera_scale
+            screen_y = (
+                float(enemy["y"]) - float(camera["originY"])
+            ) * camera_scale
+            if not (
+                math.isfinite(screen_x)
+                and math.isfinite(screen_y)
+                and 0.0 <= screen_x < viewport_width
+                and 0.0 <= screen_y < viewport_height
+            ):
+                continue
+        else:
+            if not enemy["screen_valid"]:
+                continue
+            screen_x = float(enemy["screen_x"])
+            screen_y = float(enemy["screen_y"])
+        x = screen_x / viewport_width
+        y = screen_y / viewport_height
+        # Physical pointer input is converted back to world space with this
+        # native camera origin and scale, so the actor origin is the exact aim.
+        target = (
+            max(0.01, min(0.99, x)),
+            max(0.01, min(0.99, y)),
+        )
+        if target not in projected:
+            projected.append(target)
+    return projected
 
 
 def damage_enemy_with_real_input(
@@ -1425,50 +1469,57 @@ def damage_enemy_with_real_input(
     *,
     timeout: float,
 ) -> dict[str, Any]:
+    def live_candidates(state: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            enemy
+            for enemy in state["replicatedEnemies"]
+            if not enemy["dead"] and enemy["hp"] > 0
+        ]
+
     before = wait_for_state(
         pipe,
-        lambda state: any(
-            not enemy["dead"]
-            and enemy["hp"] > 0
-            for enemy in state["replicatedEnemies"]
+        lambda state: (
+            state["scene"]["name"] == "testrun"
+            and state["player"]["valid"]
+            and state["player"]["hp"] > 0
+            and bool(
+                damage_click_targets(
+                    live_candidates(state),
+                    state["player"],
+                    state["viewport"],
+                    state["camera"],
+                )
+            )
         ),
         timeout=timeout,
-        label="client B visible replicated enemy for damage",
+        label="client B native-camera-visible replicated enemy for damage",
     )
     viewport = before["viewport"]
     if viewport["width"] <= 0 or viewport["height"] <= 0:
         raise RuntimeProbeError(f"invalid client viewport: {viewport}")
-    player = before["player"]
-    candidates = [
-        enemy
-        for enemy in before["replicatedEnemies"]
-        if not enemy["dead"]
-        and enemy["hp"] > 0
-    ]
+    candidates = live_candidates(before)
     hp_before_by_id = {
         int(enemy["network_id"]): float(enemy["hp"])
         for enemy in candidates
     }
-    click_targets = damage_click_targets(
-        candidates,
-        player,
-        viewport,
-    )
     actions: list[dict[str, Any]] = []
-    deadline = time.monotonic() + min(timeout, 25.0)
+    deadline = time.monotonic() + min(timeout, 45.0)
     last = before
-    click_index = 0
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and len(actions) < 8:
+        live_scene = (
+            last["scene"]["name"] == "testrun"
+            and last["player"]["valid"]
+        )
         current_by_id = {
             int(enemy["network_id"]): enemy
             for enemy in last["replicatedEnemies"]
         }
         for network_id, hp_before in hp_before_by_id.items():
             current = current_by_id.get(network_id)
-            hp_after = (
-                0.0
-                if current is None or current["dead"]
-                else float(current["hp"])
+            if current is None and not live_scene:
+                continue
+            hp_after = 0.0 if current is None or current["dead"] else float(
+                current["hp"]
             )
             if hp_after < hp_before - 0.01:
                 return {
@@ -1479,19 +1530,41 @@ def damage_enemy_with_real_input(
                     "before": before,
                     "after": last,
                 }
-        x, y = click_targets[click_index % len(click_targets)]
-        click_index += 1
+        if (
+            not live_scene
+            or last["player"]["hp"] <= 0
+        ):
+            raise RuntimeProbeError(
+                "client B left live combat before physical input damaged "
+                f"an enemy; actions={len(actions)}"
+            )
+        current_candidates = live_candidates(last)
+        click_targets = damage_click_targets(
+            current_candidates,
+            last["player"],
+            last["viewport"],
+            last["camera"],
+        )
+        if not click_targets:
+            time.sleep(0.1)
+            last = pipe.state()
+            continue
+        x, y = click_targets[0]
         detail = _click(source_root, peer, x, y, 90)
         actions.append(
             {
                 "timeUtcNanoseconds": time.time_ns(),
                 "screenFraction": [x, y],
                 "result": detail,
+                "playerHp": float(last["player"]["hp"]),
+                "candidateCount": len(current_candidates),
             }
         )
-        time.sleep(0.25)
+        time.sleep(0.1)
         last = pipe.state()
     raise RuntimeProbeError(
         "client B real input did not damage any replicated enemy; "
-        f"baseline={hp_before_by_id}; actions={len(actions)}"
+        f"baseline={hp_before_by_id}; actions={actions}; "
+        f"lastScene={last['scene']['name']!r}; "
+        f"lastPlayerHp={last['player']['hp']}"
     )

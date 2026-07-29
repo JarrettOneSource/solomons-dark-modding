@@ -515,6 +515,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         assert materialization is not None
         result["clientEnemyMaterialization"] = materialization
 
+        sampler.set_phase("client-real-damage")
+        result["clientEnemyDamage"] = damage_enemy_with_real_input(
+            config.source_root,
+            client,
+            client_pipe,
+            timeout=config.timeout_seconds,
+        )
+        sampler.sample_now("client-damage-observed")
+
         sampler.set_phase("paired-render-capture")
         capture_state = sampler.sample_now("paired-capture-state")
         result["pairedCapture"] = paired_windows_capture(
@@ -531,15 +540,6 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             capture_state["clientB"],
             client_capture_path,
         )
-
-        sampler.set_phase("client-real-damage")
-        result["clientEnemyDamage"] = damage_enemy_with_real_input(
-            config.source_root,
-            client,
-            client_pipe,
-            timeout=config.timeout_seconds,
-        )
-        sampler.sample_now("client-damage-observed")
 
         sampler.set_phase("enemy-motion")
         motion_deadline = time.monotonic() + min(

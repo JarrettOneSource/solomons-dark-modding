@@ -599,24 +599,6 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
                 f"({completed.returncode})"
             )
 
-    def write_json(self, path: str, value: dict[str, Any]) -> None:
-        payload = base64.b64encode(
-            (json.dumps(value, separators=(",", ":")) + "\n").encode(
-                "utf-8"
-            )
-        ).decode("ascii")
-        escaped_path = path.replace("'", "''")
-        self.run_ps(
-            f"""
-$path='{escaped_path}'
-$parent=Split-Path -Parent $path
-New-Item -ItemType Directory -Path $parent -Force | Out-Null
-[System.IO.File]::WriteAllBytes(
-  $path,
-  [System.Convert]::FromBase64String('{payload}'))
-"""
-        )
-
     def _require_confined(self, path: str) -> None:
         prefix = self.stage_root.rstrip("\\") + "\\"
         if not path.casefold().startswith(prefix.casefold()):
@@ -954,7 +936,11 @@ $values | ConvertTo-Json -Compress
             f"{self._action_counter:03d}-result.json",
         )
         payload = {"Action": action, **request}
-        self.connection.write_json(request_path, payload)
+        encoded_payload = base64.b64encode(
+            (
+                json.dumps(payload, separators=(",", ":")) + "\n"
+            ).encode("utf-8")
+        ).decode("ascii")
         controller = ntpath.join(
             self.connection.stage_root,
             "tools",
@@ -962,7 +948,16 @@ $values | ConvertTo-Json -Compress
         )
         quote = lambda value: "'" + value.replace("'", "''") + "'"
         output = self.connection.run_ps(
-            "& "
+            "$requestPath="
+            + quote(request_path)
+            + "\n$requestParent=Split-Path -Parent $requestPath"
+            + "\nNew-Item -ItemType Directory -Path $requestParent "
+            "-Force | Out-Null"
+            + "\n[System.IO.File]::WriteAllBytes("
+            "$requestPath,[System.Convert]::FromBase64String("
+            + quote(encoded_payload)
+            + "))"
+            + "\n& "
             + quote(controller)
             + " -StageRoot "
             + quote(self.connection.stage_root)
