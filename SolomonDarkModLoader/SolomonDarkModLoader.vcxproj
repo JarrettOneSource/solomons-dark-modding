@@ -271,6 +271,7 @@
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
     <ClInclude Include="src\bot_runtime\helpers\defaults_and_lookup.inl" />
     <ClInclude Include="src\bot_runtime\helpers\dispatch_queues.inl" />
+    <ClInclude Include="src\bot_runtime\helpers\loadout_details.inl" />
     <ClInclude Include="src\bot_runtime\helpers\pending_scheduling.inl" />
     <ClInclude Include="src\bot_runtime\helpers\request_validation.inl" />
     <ClInclude Include="src\bot_runtime\helpers\skill_choices.inl" />
@@ -280,6 +281,7 @@
     <ClInclude Include="src\bot_runtime\public_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\casting_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\lifecycle_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\loadout_details_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\movement_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl" />
@@ -573,12 +575,16 @@
     <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
+    <ClInclude Include="src\mod_loader\startup_status_snapshot.inl" />
+    <ClInclude Include="src\native_spell_stats\primary_build_mapping.inl" />
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl" />
     <ClInclude Include="src\native_spell_stats\ranked_numeric_properties.inl" />
+    <ClInclude Include="src\native_spell_stats\secondary_resolution.inl" />
     <ClInclude Include="src\runtime_debug\hde32_impl.inl" />
     <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl" />
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />
     <ClInclude Include="src\run_lifecycle\game_over_dispatch.inl" />
+    <ClInclude Include="src\run_lifecycle\hook_installation.inl" />
     <ClInclude Include="src\run_lifecycle\lua_enemy_spawn_api.inl" />
     <ClInclude Include="src\run_lifecycle\public_api_and_install.inl" />
     <ClInclude Include="src\run_lifecycle\run_and_enemy_hooks.inl" />

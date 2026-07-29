@@ -31,9 +31,17 @@ def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> s
         "SolomonDarkModLoader/src/bot_runtime/public_api/"
         "bot_skill_choice_api.inl"
     )
-    native = _read(
-        "SolomonDarkModLoader/src/native_spell_stats/"
-        "primary_and_secondary_resolution.inl"
+    native = "\n".join(
+        (
+            _read(
+                "SolomonDarkModLoader/src/native_spell_stats/"
+                "primary_and_secondary_resolution.inl"
+            ),
+            _read(
+                "SolomonDarkModLoader/src/native_spell_stats/"
+                "secondary_resolution.inl"
+            ),
+        )
     )
     live_probe = _read(
         "tests/re/run_live_native_spell_stats_probe.py"
