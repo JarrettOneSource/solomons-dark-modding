@@ -361,7 +361,8 @@ owner-side stock death replay remains the sole killing-blow presentation.
 
 ### Wire event and reliability
 
-Protocol 87 adds the 80-byte `ParticipantHitFeedback` authority-to-owner packet
+Protocol 88 carries the 80-byte `ParticipantHitFeedback` authority-to-owner
+packet
 containing:
 
 - authenticated authority participant id;
@@ -380,12 +381,15 @@ looked up later when the transport drains its queue. If that participant has
 changed runs before send, the queued event is discarded instead of being
 relabeled into the new run.
 
-The authority keeps every event in a bounded per-target pending queue and
-resends unacknowledged events for the local UDP lane. Steam sends the same
-packet reliably. The target's participant frame carries its highest contiguous
-hit-feedback acknowledgement. The client tracks out-of-order arrivals until
-the gap closes, so acknowledging event N can never discard an unseen event
-below N.
+The authority keeps every event in a bounded per-target pending queue. Local
+UDP uses an eight-event cumulative-acknowledgement window and a four-send
+per-tick budget. A timeout retransmits only the oldest unacknowledged event;
+later events are already buffered or remain behind the window, so replaying
+the entire pending queue cannot amplify an acknowledgement delay into a
+traffic flood. Steam sends the same packet reliably. The target's participant
+frame carries its highest contiguous hit-feedback acknowledgement. The client
+tracks out-of-order arrivals until the gap closes, so acknowledging event N
+can never discard an unseen event below N.
 
 The owner authenticates authority, target, run nonce, finite HP bounds, and
 event sequence before queueing presentation on the gameplay-thread action

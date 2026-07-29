@@ -36,7 +36,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 87;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 88;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
@@ -157,7 +157,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
 def test_packet_send_mode_dispatch_is_type_safe() -> str:
     outgoing_text = read_text(
         ROOT
-        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_packet_sync.inl"
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_endpoint_send.inl"
     )
     required_tokens = (
         "SteamNetworkSendMode SteamSendModeForPacket(const CastPacket& packet)",
@@ -460,8 +460,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 87;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 87;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 88;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 88;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),

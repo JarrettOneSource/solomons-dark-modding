@@ -1,7 +1,8 @@
 LuaExecResult QueueLuaExecRequestAndWait(
     const std::string& code,
     std::uint32_t timeout_ms,
-    const std::atomic<bool>* service_running) {
+    const std::atomic<bool>* service_running,
+    std::string target_mod_id) {
     LuaExecResult result;
     if (code.empty()) {
         result.error = "No Lua code was provided.";
@@ -27,7 +28,8 @@ LuaExecResult QueueLuaExecRequestAndWait(
         queued = detail::EnqueueLuaExecRequest(
             code,
             {},
-            true);
+            true,
+            std::move(target_mod_id));
     }
     const auto pump_generation_at_enqueue =
         detail::LuaExecPumpGeneration().load(std::memory_order_acquire);

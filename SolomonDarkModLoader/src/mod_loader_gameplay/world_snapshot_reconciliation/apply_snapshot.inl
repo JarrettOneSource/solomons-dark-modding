@@ -1,4 +1,6 @@
-void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::uint64_t now_ms) {
+void ApplyReplicatedWorldSnapshotIfActiveImpl(
+    uintptr_t /*gameplay_address*/,
+    std::uint64_t now_ms) {
     PumpAuthoritativeNativeMinionOwnerLifecycle();
     MaybeQueueRunLifecycleForRemoteAuthority(now_ms);
 
@@ -640,4 +642,44 @@ void ApplyReplicatedWorldSnapshotIfActive(uintptr_t /*gameplay_address*/, std::u
         holding_stale_snapshot
             ? sampled_snapshot_age_ms
             : now_ms - snapshot.received_ms);
+}
+
+void ApplyReplicatedWorldSnapshotIfActive(
+    uintptr_t gameplay_address,
+    std::uint64_t now_ms) {
+    const bool telemetry_enabled =
+        IsNetworkTelemetryEnabled();
+    const auto started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
+    ApplyReplicatedWorldSnapshotIfActiveImpl(
+        gameplay_address,
+        now_ms);
+    if (!telemetry_enabled) {
+        return;
+    }
+    const auto apply =
+        multiplayer::SnapshotRuntimeState().world_snapshot_apply;
+    const bool applied_this_tick =
+        apply.valid && apply.applied_ms == now_ms;
+    RecordNetworkWorldApply(
+        applied_this_tick,
+        applied_this_tick &&
+            apply.holding_stale_snapshot,
+        apply.sequence,
+        applied_this_tick
+            ? apply.source_snapshot_age_ms
+            : 0,
+        applied_this_tick ? apply.local_actor_count : 0,
+        applied_this_tick ? apply.matched_actor_count : 0,
+        applied_this_tick ? apply.created_actor_count : 0,
+        applied_this_tick ? apply.removed_actor_count : 0,
+        applied_this_tick ? apply.transform_write_count : 0,
+        applied_this_tick
+            ? apply.presentation_write_count
+            : 0,
+        telemetry_enabled
+            ? NetworkTelemetryNowMicroseconds() -
+                started_us
+            : 0);
 }

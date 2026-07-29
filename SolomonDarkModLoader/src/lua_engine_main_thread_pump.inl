@@ -15,12 +15,6 @@ void ProcessLuaExecQueueOnMainThread() {
         return;
     }
 
-    auto& mods = LoadedLuaModsStorage();
-    lua_State* shared_state =
-        (mods.empty() || mods.front() == nullptr)
-            ? LuaExecControlStateStorage()
-            : mods.front()->state;
-
     std::vector<std::pair<std::shared_ptr<PendingLuaExecRequest>, LuaExecResult>>
         completed;
     completed.reserve(drained.size());
@@ -28,10 +22,20 @@ void ProcessLuaExecQueueOnMainThread() {
         if (!TryClaimLuaExecRequest(request)) {
             continue;
         }
+        lua_State* state =
+            ResolveLuaExecTargetState(request->target_mod_id);
+        if (state == nullptr) {
+            LuaExecResult result;
+            result.error =
+                "Lua exec target mod is unavailable: " +
+                request->target_mod_id;
+            completed.emplace_back(request, std::move(result));
+            continue;
+        }
         completed.emplace_back(
             request,
             ExecuteLuaCodeOnLockedState(
-                shared_state,
+                state,
                 request->code,
                 request->privileged));
     }

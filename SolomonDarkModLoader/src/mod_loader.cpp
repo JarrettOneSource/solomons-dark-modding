@@ -23,6 +23,7 @@
 #include "native_audio_observability.h"
 #include "native_close_url_patch.h"
 #include "native_d3d9_lifetime_guard.h"
+#include "network_telemetry.h"
 #include "runtime_bootstrap.h"
 #include "runtime_debug.h"
 #include "runtime_flags.h"
@@ -171,6 +172,7 @@ void ShutdownPartialRuntime() {
     ShutdownGameplaySeams();
     ShutdownNativeCloseUrlPatch();
     ShutdownBinaryLayout();
+    ShutdownNetworkTelemetry();
 }
 
 void RunShutdownStep(const char* name, void (*step)()) noexcept {
@@ -196,6 +198,8 @@ void Initialize(HMODULE module_handle) {
     const auto stage_runtime_directory = GetStageRuntimeDirectory();
     std::filesystem::create_directories(stage_runtime_directory / "logs");
     InitializeLogger(stage_runtime_directory / "logs" / "solomondarkmodloader.log");
+    InitializeNetworkTelemetry(
+        stage_runtime_directory / "logs" / "network-telemetry.jsonl");
     InstallCrashHandler(stage_runtime_directory / "logs" / "solomondarkmodloader.crash.log");
     ResetStartupStatus(stage_runtime_directory);
 
@@ -640,6 +644,7 @@ void Shutdown() {
         "native close URL patch",
         &ShutdownNativeCloseUrlPatch);
     RunShutdownStep("binary layout", &ShutdownBinaryLayout);
+    RunShutdownStep("network telemetry", &ShutdownNetworkTelemetry);
     RunShutdownStep("logger flush", &FlushLogger);
     RunShutdownStep("crash handler", &ShutdownCrashHandler);
     RunShutdownStep("logger", &ShutdownLogger);

@@ -108,8 +108,8 @@ bool QueueLuaExecRequestAsync(
     const std::string& code,
     LuaExecCompletion completion);
 
-// Return the mod id targeted by queued exec requests (the first loaded Lua
-// mod), or an empty string when no target is available.
+// Return the mod id targeted by queued exec requests, or an empty string when
+// the zero-mod control state is active.
 std::string GetLuaExecTargetModId();
 
 // Queue a Lua chunk for execution on the gameplay thread and block the
@@ -123,7 +123,8 @@ std::string GetLuaExecTargetModId();
 LuaExecResult QueueLuaExecRequestAndWait(
     const std::string& code,
     std::uint32_t timeout_ms,
-    const std::atomic<bool>* service_running = nullptr);
+    const std::atomic<bool>* service_running = nullptr,
+    std::string target_mod_id = {});
 
 // Drain any pending Lua exec requests and dispatch a runtime.tick event
 // to all registered handlers. Takes the engine mutex once for the whole

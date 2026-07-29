@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <algorithm>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 namespace sdmod::detail::logger {
@@ -25,6 +27,16 @@ namespace sdmod::detail::logger {
 extern std::mutex g_log_mutex;
 extern std::ofstream g_log_stream;
 extern std::filesystem::path g_log_path;
+extern std::condition_variable g_log_queue_changed;
+extern std::condition_variable g_log_queue_drained;
+extern std::deque<std::string> g_queued_log_lines;
+extern std::size_t g_queued_log_bytes;
+extern std::uint64_t g_enqueued_log_line_count;
+extern std::uint64_t g_written_log_line_count;
+extern std::uint64_t g_dropped_log_line_count;
+extern bool g_log_writer_stopping;
+extern bool g_log_writer_running;
+extern std::thread g_log_writer_thread;
 extern std::filesystem::path g_crash_log_path;
 extern LPTOP_LEVEL_EXCEPTION_FILTER g_previous_exception_filter;
 extern bool g_crash_handler_installed;
@@ -34,12 +46,21 @@ extern std::string g_crash_context_summary;
 extern std::unordered_map<DWORD, unsigned int> g_first_chance_exception_counts;
 
 constexpr std::size_t kRecentLogLineLimit = 128;
+constexpr std::size_t kQueuedLogLineLimit = 8192;
+constexpr std::size_t kQueuedLogByteLimit = 4 * 1024 * 1024;
 
 std::string Timestamp();
 std::string HexString(uintptr_t value);
 void CloseStream(std::ofstream& stream);
 void FlushOpenStream();
 void RememberRecentLogLine(std::string_view line);
+bool StartLogWriter();
+void FlushLogWriter();
+void StopLogWriter();
+bool EnqueueLogLine(
+    std::string line,
+    std::size_t* queue_depth,
+    std::uint64_t* dropped_line_count);
 
 void AppendCrashText(const char* text);
 std::string FormatWin32Error(DWORD error_code);

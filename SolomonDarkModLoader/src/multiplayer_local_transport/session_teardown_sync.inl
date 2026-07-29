@@ -127,6 +127,7 @@ void ServiceLocalTransportTeardown(std::uint64_t now_ms) {
         return;
     }
 
+    StopLocalUdpIngressWorker();
     if (g_local_transport.socket_handle != INVALID_SOCKET) {
         closesocket(g_local_transport.socket_handle);
         g_local_transport.socket_handle = INVALID_SOCKET;

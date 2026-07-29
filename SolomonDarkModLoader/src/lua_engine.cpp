@@ -53,6 +53,7 @@ enum class LuaExecRequestState {
 
 struct PendingLuaExecRequest {
     std::string code;
+    std::string target_mod_id;
     bool privileged = false;
     std::promise<LuaExecResult> promise;
     LuaExecCompletion completion;
@@ -82,9 +83,11 @@ std::atomic<std::uint64_t>& LuaExecPumpGeneration() {
 QueuedLuaExecRequest EnqueueLuaExecRequest(
     std::string code,
     LuaExecCompletion completion = {},
-    bool privileged = false) {
+    bool privileged = false,
+    std::string target_mod_id = {}) {
     auto request = std::make_shared<PendingLuaExecRequest>();
     request->code = std::move(code);
+    request->target_mod_id = std::move(target_mod_id);
     request->completion = std::move(completion);
     request->privileged = privileged;
     auto future = request->promise.get_future();
@@ -340,10 +343,7 @@ RuntimeBootstrap& LuaRuntimeBootstrapStorage() {
     return bootstrap;
 }
 
-std::vector<std::unique_ptr<LoadedLuaMod>>& LoadedLuaModsStorage() {
-    static std::vector<std::unique_ptr<LoadedLuaMod>> loaded_mods;
-    return loaded_mods;
-}
+#include "lua_engine/lua_exec_target.inl"
 
 std::vector<std::string> BuildLuaCapabilitySet() {
     std::vector<std::string> capabilities = {
@@ -650,12 +650,11 @@ bool HasLuaRuntimeTickHandlers() {
 
 std::string GetLuaExecTargetModId() {
     std::scoped_lock lock(detail::LuaEngineMutex());
-    const auto& mods = detail::LoadedLuaModsStorage();
-    if (!detail::LuaEngineInitializedFlag() ||
-        mods.empty() || mods.front() == nullptr || mods.front()->state == nullptr) {
+    if (!detail::LuaEngineInitializedFlag()) {
         return {};
     }
-    return mods.front()->descriptor.id;
+    const auto* mod = detail::ResolveLuaExecTargetMod();
+    return mod == nullptr ? std::string{} : mod->descriptor.id;
 }
 
 bool QueueLuaExecRequestAsync(

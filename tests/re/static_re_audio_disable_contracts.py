@@ -960,6 +960,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "tools/verify_mod_settings_lifecycle.py",
         "tools/verify_multiplayer_organic_enemy_cast_timing.py",
         "tools/verify_multiplayer_replicated_audio_events.py",
+        "tools/verify_remote_latency_wave5.py",
     }
 
     discovered_scripts: set[str] = set()

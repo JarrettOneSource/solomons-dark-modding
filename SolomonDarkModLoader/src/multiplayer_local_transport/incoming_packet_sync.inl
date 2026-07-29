@@ -361,6 +361,15 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
         (correction.correction_flags &
          ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
     if (life_acknowledged) {
+        RecordNetworkRecoveryAck(
+            "participant_vitals_correction",
+            packet.participant_id,
+            packet.participant_vitals_correction_ack_sequence,
+            1,
+            g_local_transport
+                    .pending_participant_vitals_corrections_by_participant
+                    .size() -
+                1);
         g_local_transport.pending_participant_vitals_corrections_by_participant.erase(
             pending_it);
         return normalized;

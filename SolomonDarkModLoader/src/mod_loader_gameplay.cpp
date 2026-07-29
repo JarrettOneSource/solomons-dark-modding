@@ -20,6 +20,7 @@
 #include "multiplayer_service_loop.h"
 #include "native_audio_observability.h"
 #include "native_spell_stats.h"
+#include "network_telemetry.h"
 #include "runtime_debug.h"
 #include "runtime_tick_service.h"
 #include "x86_hook.h"

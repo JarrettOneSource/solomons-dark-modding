@@ -673,28 +673,3 @@ void DispatchReceivedPacket(
         }
     } while (false);
 }
-
-void ReceivePackets(std::uint64_t now_ms) {
-    if (g_local_transport.backend != GameplayTransportBackend::LocalUdp) {
-        return;
-    }
-    for (int packet_index = 0; packet_index < kMaxPacketsPerTick; ++packet_index) {
-        TransportPacketBuffer packet_buffer{};
-        sockaddr_in udp_from{};
-        int from_length = sizeof(udp_from);
-        const int received = recvfrom(
-            g_local_transport.socket_handle,
-            packet_buffer.data(),
-            static_cast<int>(packet_buffer.size()),
-            0,
-            reinterpret_cast<sockaddr*>(&udp_from),
-            &from_length);
-        if (received == SOCKET_ERROR) {
-            return;
-        }
-        TransportPeerEndpoint from;
-        from.backend = GameplayTransportBackend::LocalUdp;
-        from.udp_address = udp_from;
-        DispatchReceivedPacket(packet_buffer, received, from, now_ms);
-    }
-}

@@ -386,7 +386,7 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         "tools/verify_game_over_session_semantics.py"
     )
 
-    assert "kProtocolVersion = 87" in protocol
+    assert "kProtocolVersion = 88" in protocol
     for field in (
         "run_loading_ack_nonce",
         "run_loading_release_nonce",

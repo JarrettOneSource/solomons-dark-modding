@@ -1,4 +1,5 @@
 #include "logger_internal.h"
+#include "network_telemetry.h"
 
 namespace sdmod::detail::logger {
 
@@ -57,27 +58,33 @@ namespace sdmod {
 void InitializeLogger(const std::filesystem::path& log_path) {
     using namespace sdmod::detail::logger;
 
-    std::scoped_lock lock(g_log_mutex);
+    StopLogWriter();
 
-    CloseStream(g_log_stream);
-    g_log_path.clear();
-    g_recent_log_lines.clear();
-    g_crash_context_summary.clear();
+    {
+        std::scoped_lock lock(g_log_mutex);
 
-    const auto log_directory = log_path.parent_path();
-    if (!log_directory.empty()) {
-        std::filesystem::create_directories(log_directory);
+        CloseStream(g_log_stream);
+        g_log_path.clear();
+        g_recent_log_lines.clear();
+        g_crash_context_summary.clear();
+
+        const auto log_directory = log_path.parent_path();
+        if (!log_directory.empty()) {
+            std::filesystem::create_directories(log_directory);
+        }
+
+        g_log_stream.open(
+            log_path,
+            std::ios::out | std::ios::trunc);
+        g_log_path = log_path;
     }
-
-    g_log_stream.open(log_path, std::ios::out | std::ios::trunc);
-    g_log_path = log_path;
+    StartLogWriter();
 }
 
 void FlushLogger() {
     using namespace sdmod::detail::logger;
 
-    std::scoped_lock lock(g_log_mutex);
-    FlushOpenStream();
+    FlushLogWriter();
 }
 
 std::filesystem::path GetLoggerPath() {
@@ -90,6 +97,7 @@ std::filesystem::path GetLoggerPath() {
 void ShutdownLogger() {
     using namespace sdmod::detail::logger;
 
+    StopLogWriter();
     std::scoped_lock lock(g_log_mutex);
     g_recent_log_lines.clear();
     g_crash_context_summary.clear();
@@ -100,18 +108,43 @@ void ShutdownLogger() {
 void Log(std::string_view message) {
     using namespace sdmod::detail::logger;
 
-    std::scoped_lock lock(g_log_mutex);
+    const bool telemetry_enabled =
+        IsNetworkTelemetryEnabled();
+    const auto telemetry_started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
+    std::uint64_t mutex_wait_us = 0;
+    std::size_t queue_depth = 0;
+    std::uint64_t dropped_line_count = 0;
+    bool queued = false;
+    {
+        std::unique_lock<std::mutex> lock(g_log_mutex);
+        if (telemetry_enabled) {
+            mutex_wait_us =
+                NetworkTelemetryNowMicroseconds() -
+                telemetry_started_us;
+        }
 
-    const std::string line = "[" + Timestamp() + "] " + std::string(message);
-    RememberRecentLogLine(line);
-    if (g_log_stream.is_open()) {
-        g_log_stream << line << '\n';
-        g_log_stream.flush();
+        const std::string line =
+            "[" + Timestamp() + "] " + std::string(message);
+        RememberRecentLogLine(line);
+        if (g_log_writer_running && !g_log_writer_stopping) {
+            queued = EnqueueLogLine(
+                line,
+                &queue_depth,
+                &dropped_line_count);
+        }
     }
-
-    std::wstring wide(line.begin(), line.end());
-    wide.append(L"\n");
-    OutputDebugStringW(wide.c_str());
+    if (telemetry_enabled) {
+        RecordNetworkLoggerEnqueue(
+            message.size(),
+            mutex_wait_us,
+            queue_depth,
+            queued,
+            dropped_line_count,
+            NetworkTelemetryNowMicroseconds() -
+                telemetry_started_us);
+    }
 }
 
 void SetCrashContextSummary(std::string_view summary) {

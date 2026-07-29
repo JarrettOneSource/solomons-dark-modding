@@ -6,6 +6,7 @@
 #include "multiplayer_session_teardown.h"
 #include "multiplayer_steam_session.h"
 #include "multiplayer_steam_gameplay_queue.h"
+#include "network_telemetry.h"
 #include "steam_bootstrap.h"
 
 #include <Windows.h>
@@ -245,9 +246,10 @@ void TickGameplayTransportOnAppThread(std::uint64_t now_ms) {
         return;
     }
 
+    std::uint64_t tick_gap_ms = 0;
     if (g_has_gameplay_transport_tick &&
         now_ms >= g_last_gameplay_transport_tick_ms) {
-        const auto tick_gap_ms = now_ms - g_last_gameplay_transport_tick_ms;
+        tick_gap_ms = now_ms - g_last_gameplay_transport_tick_ms;
         if (tick_gap_ms < kServiceTickIntervalMs) {
             return;
         }
@@ -260,8 +262,28 @@ void TickGameplayTransportOnAppThread(std::uint64_t now_ms) {
     g_last_gameplay_transport_tick_ms = now_ms;
     g_has_gameplay_transport_tick = true;
 
+    const bool telemetry_enabled =
+        IsNetworkTelemetryEnabled();
+    const auto telemetry_started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
+    BeginNetworkTransportTick(tick_gap_ms * 1000ull);
     TickLocalTransport(now_ms);
+    const auto teardown_started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
     TickSessionTeardownOnAppThread(now_ms);
+    if (telemetry_enabled) {
+        RecordNetworkTransportStage(
+            "session_teardown",
+            NetworkTelemetryNowMicroseconds() -
+                teardown_started_us);
+    }
+    EndNetworkTransportTick(
+        telemetry_enabled
+            ? NetworkTelemetryNowMicroseconds() -
+                telemetry_started_us
+            : 0);
 }
 
 void FlushGameplayCastReleaseOnAppThread(std::uint64_t now_ms) {

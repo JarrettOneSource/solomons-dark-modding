@@ -192,18 +192,56 @@ void SendQueuedHostParticipantHitFeedback(std::uint64_t now_ms) {
     for (auto& [participant_id, pending_events] :
          g_local_transport
              .pending_hit_feedback_events_by_participant) {
-        for (auto& pending : pending_events) {
-            if (pending.last_sent_ms != 0 &&
-                now_ms - pending.last_sent_ms <
-                    kParticipantHitFeedbackResendMs) {
+        auto in_flight_count = static_cast<std::size_t>(
+            std::count_if(
+                pending_events.begin(),
+                pending_events.end(),
+                [](const PendingParticipantHitFeedback& pending) {
+                    return pending.last_sent_ms != 0;
+                }));
+        std::size_t sends_this_tick = 0;
+        for (std::size_t pending_index = 0;
+             pending_index < pending_events.size();
+             ++pending_index) {
+            auto& pending = pending_events[pending_index];
+            const auto action =
+                SelectParticipantHitFeedbackSendAction(
+                    pending_index,
+                    pending.last_sent_ms,
+                    now_ms,
+                    in_flight_count,
+                    sends_this_tick);
+            if (action ==
+                ParticipantHitFeedbackSendAction::None) {
                 continue;
             }
+            const bool retransmit =
+                action ==
+                ParticipantHitFeedbackSendAction::Retransmit;
+            const auto previous_send_age_ms = retransmit
+                ? now_ms - pending.last_sent_ms
+                : 0;
             pending.packet.header.sequence =
                 g_local_transport.next_sequence++;
             SendPacketToParticipantOrPeers(
                 pending.packet,
                 participant_id);
+            RecordNetworkRecoverySend(
+                "participant_hit_feedback",
+                participant_id,
+                pending.packet.event_sequence,
+                pending.packet.header.sequence,
+                pending_events.size(),
+                in_flight_count +
+                    (retransmit ? 0u : 1u),
+                kParticipantHitFeedbackMaximumInFlightEvents,
+                retransmit,
+                previous_send_age_ms);
             pending.last_sent_ms = now_ms;
+            ++sends_this_tick;
+            if (!retransmit) {
+                ++in_flight_count;
+            }
         }
     }
 }
@@ -244,6 +282,7 @@ void RetireAcknowledgedParticipantHitFeedbackEvents(
     }
 
     auto& pending = pending_it->second;
+    const auto pending_before = pending.size();
     const auto acknowledged = std::find_if(
         pending.begin(),
         pending.end(),
@@ -255,6 +294,14 @@ void RetireAcknowledgedParticipantHitFeedbackEvents(
         return;
     }
     pending.erase(pending.begin(), std::next(acknowledged));
+    const auto retired_count =
+        pending_before - pending.size();
+    RecordNetworkRecoveryAck(
+        "participant_hit_feedback",
+        participant_id,
+        ack_sequence,
+        retired_count,
+        pending.size());
     if (pending.empty()) {
         g_local_transport
             .pending_hit_feedback_events_by_participant.erase(

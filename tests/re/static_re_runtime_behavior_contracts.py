@@ -921,6 +921,10 @@ def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread
         ROOT
         / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_packet_sync.inl"
     )
+    outgoing_packet_text += read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/outgoing_endpoint_send.inl"
+    )
     public_pump_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_main_thread_pump.inl"

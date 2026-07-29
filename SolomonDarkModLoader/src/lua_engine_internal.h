@@ -278,6 +278,10 @@ bool& LuaEngineInitializedFlag();
 std::filesystem::path& LuaRuntimeDirectoryStorage();
 RuntimeBootstrap& LuaRuntimeBootstrapStorage();
 std::vector<std::unique_ptr<LoadedLuaMod>>& LoadedLuaModsStorage();
+LoadedLuaMod* ResolveLuaExecTargetMod(
+    std::string_view requested_mod_id = {});
+lua_State* ResolveLuaExecTargetState(
+    std::string_view requested_mod_id = {});
 lua_State*& LuaExecControlStateStorage();
 bool InitializeLuaExecControlState(std::string* error_message);
 void ShutdownLuaExecControlState();

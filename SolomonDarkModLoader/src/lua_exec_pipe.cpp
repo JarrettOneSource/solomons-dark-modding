@@ -24,6 +24,8 @@ constexpr wchar_t kPipeNameEnvironmentVariable[] = L"SDMOD_LUA_EXEC_PIPE_NAME";
 constexpr DWORD kPipeBufferSize = 64 * 1024;
 constexpr DWORD kPipeReconnectDelayMs = 250;
 constexpr size_t kMaxPipeMessageSize = 1024 * 1024;
+constexpr std::string_view kTargetDirective =
+    "-- sdmod-exec-target: ";
 // Stock scene construction can block every game-thread pump for several
 // seconds. This is a hang backstop, not a frame budget; pump-generation checks
 // in the Lua engine detect a running pump that actually skips queued work.
@@ -231,6 +233,48 @@ std::string SerializeResponse(const LuaExecResult& response) {
     return payload.str();
 }
 
+bool ExtractTargetDirective(
+    std::string* code,
+    std::string* target_mod_id,
+    std::string* error_message) {
+    if (code == nullptr ||
+        target_mod_id == nullptr ||
+        error_message == nullptr) {
+        return false;
+    }
+    target_mod_id->clear();
+    error_message->clear();
+    if (code->compare(0, kTargetDirective.size(), kTargetDirective) != 0) {
+        return true;
+    }
+
+    const auto line_end = code->find('\n');
+    if (line_end == std::string::npos) {
+        *error_message =
+            "Lua exec target directive must end before the Lua code.";
+        return false;
+    }
+    auto target = code->substr(
+        kTargetDirective.size(),
+        line_end - kTargetDirective.size());
+    if (!target.empty() && target.back() == '\r') {
+        target.pop_back();
+    }
+    if (!IsValidLuaModIdentifier(target)) {
+        *error_message =
+            "Lua exec target directive names an invalid mod id.";
+        return false;
+    }
+    code->erase(0, line_end + 1);
+    if (code->empty()) {
+        *error_message =
+            "Lua exec target directive was not followed by Lua code.";
+        return false;
+    }
+    *target_mod_id = std::move(target);
+    return true;
+}
+
 PipeReadStatus ReadPipeMessage(HANDLE pipe, std::string* message) {
     if (message == nullptr) {
         return PipeReadStatus::Error;
@@ -406,10 +450,22 @@ unsigned __stdcall PipeServerMain(void*) {
         std::string code;
         switch (ReadPipeMessage(pipe, &code)) {
         case PipeReadStatus::Success: {
+            std::string target_mod_id;
+            std::string parse_error;
+            if (!ExtractTargetDirective(
+                    &code,
+                    &target_mod_id,
+                    &parse_error)) {
+                LuaExecResult response;
+                response.error = std::move(parse_error);
+                WritePipeMessage(pipe, SerializeResponse(response));
+                break;
+            }
             const LuaExecResult response = QueueLuaExecRequestAndWait(
                 code,
                 kLuaExecHangBackstopMs,
-                &g_pipe_running);
+                &g_pipe_running,
+                std::move(target_mod_id));
             std::string payload = SerializeResponse(response);
             if (payload.size() > kMaxPipeMessageSize) {
                 payload =

@@ -4,6 +4,7 @@
 #include "lua_engine.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "network_telemetry.h"
 
 #include <Windows.h>
 #include <d3d9.h>
@@ -168,6 +169,11 @@ std::size_t D3d9CaptureBytesPerPixel(D3DFORMAT format) {
 }
 
 HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
+    const bool telemetry_enabled =
+        IsNetworkTelemetryEnabled();
+    const auto telemetry_started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
     g_last_seen_device.store(device, std::memory_order_release);
     lua_exec_diag::g_last_endscene_ms.store(
         static_cast<std::uint64_t>(GetTickCount64()),
@@ -222,9 +228,16 @@ HRESULT STDMETHODCALLTYPE HookEndScene(IDirect3DDevice9* device) {
         state_block->Release();
     }
 
-    return original_end_scene != nullptr
+    const auto result = original_end_scene != nullptr
         ? original_end_scene(device)
         : D3D_OK;
+    RecordNetworkPresent(
+        telemetry_started_us,
+        telemetry_enabled
+            ? NetworkTelemetryNowMicroseconds() -
+                telemetry_started_us
+            : 0);
+    return result;
 }
 
 HRESULT STDMETHODCALLTYPE HookReset(

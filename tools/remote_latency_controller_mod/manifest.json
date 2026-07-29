@@ -1,0 +1,13 @@
+{
+  "id": "harness.remote_latency_controller",
+  "name": "Remote Latency Harness Controller",
+  "version": "1.0.0",
+  "priority": -1000,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "runtime.mod.info"
+    ]
+  }
+}

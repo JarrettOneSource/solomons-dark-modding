@@ -55,6 +55,69 @@ from static_re_contract_support import (
 )
 
 
+def test_async_logger_keeps_blocking_output_off_callers() -> str:
+    """Ordinary game-thread logs enqueue; only the writer thread flushes."""
+
+    core_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/logger_core.cpp"
+    )
+    writer_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/logger_writer.cpp"
+    )
+    project_text = read_text(MOD_LOADER_PROJECT)
+    filters_text = read_text(MOD_LOADER_PROJECT_FILTERS)
+
+    log_start = core_text.index("void Log(std::string_view message)")
+    log_end = core_text.index(
+        "void SetCrashContextSummary",
+        log_start,
+    )
+    log_body = core_text[log_start:log_end]
+    assert "EnqueueLogLine(" in log_body
+    forbidden_caller_io = [
+        token
+        for token in (
+            "g_log_stream",
+            "FlushOpenStream(",
+            "OutputDebugStringW(",
+        )
+        if token in log_body
+    ]
+    assert not forbidden_caller_io, (
+        "ordinary Log callers still perform blocking output: "
+        + ", ".join(forbidden_caller_io)
+    )
+
+    for token in (
+        "kQueuedLogLineLimit = 8192",
+        "kQueuedLogByteLimit = 4 * 1024 * 1024",
+        "g_queued_log_lines",
+        "g_log_writer_thread",
+    ):
+        assert token in (
+            read_text(
+                ROOT / "SolomonDarkModLoader/src/logger_internal.h"
+            )
+            + read_text(ROOT / "SolomonDarkModLoader/src/logger.cpp")
+        ), f"bounded asynchronous logger state lacks: {token}"
+    for token in (
+        "void LogWriterMain()",
+        "FlushOpenStream();",
+        "OutputDebugStringW(wide.c_str());",
+        "RecordNetworkLoggerFlush(",
+    ):
+        assert token in writer_text, (
+            f"asynchronous logger writer lacks: {token}"
+        )
+    assert 'src\\logger_writer.cpp' in project_text
+    assert 'src\\logger_writer.cpp' in filters_text
+
+    return (
+        "ordinary log callers only enqueue into a bounded buffer; the "
+        "dedicated writer owns file flush and debugger output"
+    )
+
+
 def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() -> str:
     """A connected death stays in-run and becomes spectatable after 5 seconds."""
 
@@ -816,7 +879,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
     )
     binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
 
-    assert "kProtocolVersion = 87" in protocol_text
+    assert "kProtocolVersion = 88" in protocol_text
     for field in (
         "game_over_command_epoch",
         "game_over_ack_epoch",
@@ -1071,7 +1134,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 87" in protocol_text
+    assert "kProtocolVersion = 88" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -1610,7 +1673,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 87;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 88;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -1843,7 +1906,8 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "SDMOD_MULTIPLAYER_REMOTE_PORT"),
         (transport_text, "SDMOD_MULTIPLAYER_PLAYER_NAME"),
         (transport_text, "loopback_peer ? INADDR_LOOPBACK : INADDR_ANY"),
-        (transport_text, '" bind=" << (loopback_peer ? "127.0.0.1" : "0.0.0.0")'),
+        (transport_text, '" bind="'),
+        (transport_text, '(loopback_peer ? "127.0.0.1" : "0.0.0.0")'),
         (transport_text, "RelayParticipantPacketToPeers"),
         (transport_text, "NormalizeMagicShieldState"),
         (transport_text, "kMagicShieldAbsorbEpsilon"),

@@ -32,140 +32,6 @@ void NotifyLocalNativeMinionTerminal(
 
 void ApplyQueuedSteamGameplayEvents(std::uint64_t now_ms);
 
-bool InitializeLocalTransport() {
-    g_local_transport_enabled.store(false, std::memory_order_release);
-    g_local_transport_is_udp.store(false, std::memory_order_release);
-    g_local_teardown_requested.store(false, std::memory_order_release);
-    g_local_transport_teardown_complete.store(
-        true,
-        std::memory_order_release);
-    g_local_transport_host.store(false, std::memory_order_release);
-    ResetParticipantHitFeedbackState();
-    ResetRunGameOverState("transport_initialize");
-    ResetRunLoadingBarrierState("transport_initialize");
-    if (!ConfigureLocalTransport()) {
-        g_local_transport_authority_participant_id.store(
-            0,
-            std::memory_order_release);
-        return !g_local_transport.configured;
-    }
-    g_local_transport_authority_participant_id.store(
-        0,
-        std::memory_order_release);
-    ResetSteamGameplayQueues();
-
-    g_local_transport.local_session_nonce = GenerateTransportSessionNonce();
-    if (g_local_transport.backend == GameplayTransportBackend::Steam) {
-        if (g_local_transport.local_peer_id == 0) {
-            Log("Multiplayer Steam transport requested without an initialized Steam identity.");
-            g_local_transport = LocalTransportState{};
-            return false;
-        }
-        std::string death_hook_error;
-        if (!InitializeLocalDeathProgressionTickHook(
-                &death_hook_error)) {
-            Log(
-                "Multiplayer Steam transport could not install the "
-                "dead-owner progression boundary: " +
-                death_hook_error);
-            g_local_transport = LocalTransportState{};
-            return false;
-        }
-        g_local_transport.initialized = true;
-        g_local_transport_enabled.store(true, std::memory_order_release);
-        g_local_transport_host.store(
-            g_local_transport.is_host,
-            std::memory_order_release);
-        if (g_local_transport.is_host) {
-            g_local_transport_authority_participant_id.store(
-                g_local_transport.local_peer_id,
-                std::memory_order_release);
-        }
-        Log(
-            "Multiplayer Steam gameplay transport initialized. role=" +
-            std::string(g_local_transport.is_host ? "host" : "client") +
-            " participant_id=" + std::to_string(g_local_transport.local_peer_id) +
-            " session_nonce=" +
-            std::to_string(g_local_transport.local_session_nonce));
-        return true;
-    }
-
-    WSADATA data{};
-    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
-        Log("Multiplayer local UDP: WSAStartup failed.");
-        g_local_transport = LocalTransportState{};
-        return false;
-    }
-    g_local_transport.winsock_initialized = true;
-
-    g_local_transport.socket_handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (g_local_transport.socket_handle == INVALID_SOCKET) {
-        Log("Multiplayer local UDP: socket creation failed.");
-        ShutdownLocalTransport();
-        return false;
-    }
-
-    u_long nonblocking = 1;
-    if (ioctlsocket(g_local_transport.socket_handle, FIONBIO, &nonblocking) != 0) {
-        Log("Multiplayer local UDP: failed to set non-blocking mode.");
-        ShutdownLocalTransport();
-        return false;
-    }
-
-    sockaddr_in bind_address{};
-    bind_address.sin_family = AF_INET;
-    const auto remote_address = ntohl(
-        g_local_transport.configured_remote.udp_address.sin_addr.s_addr);
-    const bool loopback_peer =
-        (remote_address & 0xFF000000u) == 0x7F000000u;
-    bind_address.sin_addr.s_addr = htonl(
-        loopback_peer ? INADDR_LOOPBACK : INADDR_ANY);
-    bind_address.sin_port = htons(g_local_transport.local_port);
-    if (bind(
-            g_local_transport.socket_handle,
-            reinterpret_cast<const sockaddr*>(&bind_address),
-            sizeof(bind_address)) != 0) {
-        Log("Multiplayer local UDP: bind failed on port " + std::to_string(g_local_transport.local_port) + ".");
-        ShutdownLocalTransport();
-        return false;
-    }
-
-    std::string death_hook_error;
-    if (!InitializeLocalDeathProgressionTickHook(
-            &death_hook_error)) {
-        Log(
-            "Multiplayer local UDP could not install the dead-owner "
-            "progression boundary: " +
-            death_hook_error);
-        ShutdownLocalTransport();
-        return false;
-    }
-    g_local_transport.initialized = true;
-    g_local_transport_is_udp.store(true, std::memory_order_release);
-    g_local_transport_enabled.store(true, std::memory_order_release);
-    g_local_transport_host.store(
-        g_local_transport.is_host,
-        std::memory_order_release);
-    g_local_transport_teardown_complete.store(
-        false,
-        std::memory_order_release);
-    if (g_local_transport.is_host) {
-        g_local_transport_authority_participant_id.store(
-            g_local_transport.local_peer_id,
-            std::memory_order_release);
-    }
-    std::ostringstream message;
-    message << "Multiplayer local UDP transport initialized. role="
-            << (g_local_transport.is_host ? "host" : "client")
-            << " local_port=" << g_local_transport.local_port
-            << " bind=" << (loopback_peer ? "127.0.0.1" : "0.0.0.0")
-            << " remote=" << g_local_transport.remote_host << ":" << g_local_transport.remote_port
-            << " participant_id=" << g_local_transport.local_peer_id;
-    message << " session_nonce=" << g_local_transport.local_session_nonce;
-    Log(message.str());
-    return true;
-}
-
 void ShutdownLocalTransport() {
     const bool pending_teardown =
         g_local_teardown_requested.exchange(
@@ -202,6 +68,7 @@ void ShutdownLocalTransport() {
     ResetLocalDeathSpectatorState("transport_shutdown");
     ResetWaveRespawnState();
     sdmod::ClearHostLootDropDeactivationState();
+    StopLocalUdpIngressWorker();
     if (g_local_transport.socket_handle != INVALID_SOCKET) {
         closesocket(g_local_transport.socket_handle);
     }
@@ -267,13 +134,39 @@ void TickLocalTransport(std::uint64_t now_ms) {
         return;
     }
 
+    const bool telemetry_enabled = IsNetworkTelemetryEnabled();
+    auto stage_started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
+    const auto finish_stage =
+        [telemetry_enabled, &stage_started_us](const char* stage) {
+            if (!telemetry_enabled) {
+                return;
+            }
+            const auto finished_us =
+                NetworkTelemetryNowMicroseconds();
+            RecordNetworkTransportStage(
+                stage,
+                finished_us - stage_started_us);
+            stage_started_us = finished_us;
+        };
+
+    if (telemetry_enabled) {
+        SetNetworkTransportQueueDepth(
+            true,
+            SnapshotQueuedTransportEventCountForTelemetry());
+    }
     ApplyQueuedSteamGameplayEvents(now_ms);
+    finish_stage("steam_events");
     RefreshLocalParticipantFromGameState();
+    finish_stage("local_participant_refresh");
     RefreshHostSyntheticParticipantSceneIntent();
     RefreshHostWaveRespawnCommand(now_ms);
     RetryHostWaveRespawnCommand(now_ms);
     RefreshLocalMenuPauseRequest(now_ms);
+    finish_stage("host_scene_control");
     ReceivePackets(now_ms);
+    finish_stage("receive_apply");
     if (g_local_teardown_requested.exchange(
             false,
             std::memory_order_acq_rel)) {
@@ -286,8 +179,15 @@ void TickLocalTransport(std::uint64_t now_ms) {
                 std::memory_order_acquire);
         g_local_transport.teardown_requested = true;
     }
+    finish_stage("teardown_request");
     if (g_local_transport.teardown_requested) {
         ServiceLocalTransportTeardown(now_ms);
+        if (telemetry_enabled) {
+            SetNetworkTransportQueueDepth(
+                false,
+                SnapshotQueuedTransportEventCountForTelemetry());
+        }
+        finish_stage("teardown_service");
         return;
     }
     PruneStaleLocalUdpPeers(now_ms);
@@ -298,24 +198,30 @@ void TickLocalTransport(std::uint64_t now_ms) {
     ProcessCompletedHostLootPickups();
     ProcessQueuedLocalHostPowerupPickups(now_ms);
     ServiceClientHostRunExitFollow(now_ms);
+    finish_stage("run_lifecycle");
     ReconcileRemoteParticipantNativeProgression(now_ms);
     ProcessPendingHostPowerupPreparations(now_ms);
+    finish_stage("native_reconciliation");
     ProcessPendingHostLevelUpOffers(now_ms);
     ProcessHostLevelUpBarrier(now_ms);
     BroadcastHostLevelUpBarrierState(now_ms, false);
     SendLuaTimeControlUpdate();
+    finish_stage("level_up");
     SendLocalState(now_ms);
     SendLocalParticipantFrame(now_ms);
     SendSyntheticParticipantState(now_ms);
     ServiceSyntheticParticipantCastInputs(now_ms);
     SendLocalWaveSummary(now_ms);
+    finish_stage("outbound_state");
     SendActiveLocalCastInput(now_ms);
     SendQueuedCastEvents(now_ms);
     SendAirChainSnapshots(now_ms);
     SendSpellEffectSnapshot(now_ms);
     SendLocalEnemyDamageClaims();
+    finish_stage("outbound_casts");
     SendQueuedHostParticipantVitalsCorrections(now_ms);
     SendQueuedHostParticipantHitFeedback(now_ms);
+    finish_stage("outbound_corrections");
     SendQueuedAuthoritativeLuaItemGrants();
     SendQueuedLuaConsumableUses();
     SendQueuedLuaRegisteredSpellCasts();
@@ -325,9 +231,17 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendQueuedLootPickupRequests();
     SendQueuedLevelUpChoices();
     SendLuaModStream(now_ms);
+    finish_stage("outbound_lua");
     SendWorldSnapshot(now_ms);
     SendLootSnapshot(now_ms);
+    finish_stage("outbound_snapshots");
     PublishLocalTransportRuntimeState();
+    if (telemetry_enabled) {
+        SetNetworkTransportQueueDepth(
+            false,
+            SnapshotQueuedTransportEventCountForTelemetry());
+    }
+    finish_stage("publish");
 }
 
 void FlushActiveLocalCastRelease(std::uint64_t now_ms) {

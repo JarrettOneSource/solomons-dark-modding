@@ -263,6 +263,24 @@
     <ClInclude Include="include\multiplayer_local_transport.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\multiplayer_local_udp_framing.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\network_telemetry.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\participant_hit_feedback_flow_control.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\network_telemetry\runtime_events.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\network_telemetry\writer.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine\lua_exec_target.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_runtime_protocol.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1328,6 +1346,12 @@
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\receive_packets.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\outgoing_endpoint_send.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1464,6 +1488,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\transport_initialization.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl">
@@ -1643,6 +1670,9 @@
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\logger.cpp">
+      <Filter>Source Files\Support</Filter>
+    </ClCompile>
+    <ClCompile Include="src\logger_writer.cpp">
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\lua_engine_bindings.cpp">
@@ -1922,6 +1952,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_local_transport.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\network_telemetry.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_runtime_labels.cpp">

@@ -593,8 +593,24 @@ void SendQueuedHostParticipantVitalsCorrections(std::uint64_t now_ms) {
                 kParticipantVitalsCorrectionResendMs) {
             continue;
         }
+        const bool retransmit = pending.last_sent_ms != 0;
+        const auto previous_send_age_ms = retransmit
+            ? now_ms - pending.last_sent_ms
+            : 0;
         pending.packet.header.sequence = g_local_transport.next_sequence++;
         SendPacketToParticipantOrPeers(pending.packet, participant_id);
+        RecordNetworkRecoverySend(
+            "participant_vitals_correction",
+            participant_id,
+            pending.packet.correction_sequence,
+            pending.packet.header.sequence,
+            g_local_transport
+                .pending_participant_vitals_corrections_by_participant
+                .size(),
+            1,
+            1,
+            retransmit,
+            previous_send_age_ms);
         pending.last_sent_ms = now_ms;
         g_local_transport.last_participant_vitals_correction_send_ms_by_participant[
             participant_id] = now_ms;

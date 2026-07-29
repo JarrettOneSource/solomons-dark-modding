@@ -174,7 +174,14 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "SetLuaSettingsPrivilegedExecState(nullptr)",
     ):
         assert token in engine, f"exec-pipe privilege scope lacks: {token}"
-    assert "true);" in wait
+    _require_in_order(
+        wait,
+        "detail::EnqueueLuaExecRequest(",
+        "code,",
+        "{},",
+        "true,",
+        "std::move(target_mod_id)",
+    )
 
     for token in (
         "CanonicalKeybindNames",

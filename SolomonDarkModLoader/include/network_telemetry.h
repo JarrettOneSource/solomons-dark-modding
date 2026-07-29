@@ -1,0 +1,136 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <string_view>
+
+namespace sdmod {
+
+void InitializeNetworkTelemetry(
+    const std::filesystem::path& default_output_path);
+void ShutdownNetworkTelemetry();
+bool IsNetworkTelemetryEnabled();
+std::uint64_t NetworkTelemetryNowMicroseconds();
+
+void RecordNetworkTransportStart(
+    std::string_view backend,
+    std::string_view role,
+    std::uint16_t local_port,
+    int socket_receive_buffer_bytes,
+    int socket_send_buffer_bytes);
+void BeginNetworkTransportTick(
+    std::uint64_t gap_microseconds);
+void SetNetworkTransportQueueDepth(
+    bool tick_start,
+    std::size_t queue_depth);
+void RecordNetworkTransportStage(
+    std::string_view stage,
+    std::uint64_t duration_microseconds);
+void EndNetworkTransportTick(
+    std::uint64_t duration_microseconds);
+void RecordNetworkPacketSend(
+    std::string_view backend,
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t logical_bytes,
+    std::size_t wire_bytes,
+    std::size_t datagram_count,
+    std::size_t largest_datagram_bytes,
+    std::uint64_t endpoint_id,
+    std::uint16_t endpoint_port,
+    int result,
+    int error_code,
+    std::uint64_t duration_microseconds);
+void RecordNetworkPacketReceive(
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t bytes,
+    std::uint64_t endpoint_id,
+    std::uint16_t endpoint_port,
+    std::size_t ingress_queue_depth,
+    std::size_t ingress_queue_bytes,
+    bool physical_datagram);
+void RecordNetworkFragmentReceive(
+    std::uint16_t original_kind,
+    std::uint32_t original_sequence,
+    std::size_t logical_bytes,
+    std::size_t datagram_bytes,
+    std::uint16_t fragment_index,
+    std::uint16_t fragment_count,
+    std::uint64_t endpoint_id,
+    std::uint16_t endpoint_port,
+    bool accepted,
+    bool assembly_complete);
+void RecordNetworkIngressDrop(
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t bytes,
+    std::size_t queue_depth,
+    std::size_t queue_bytes,
+    std::uint64_t cumulative_dropped_packets,
+    std::uint64_t cumulative_dropped_bytes);
+void RecordNetworkPacketApply(
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t bytes,
+    bool accepted,
+    std::uint64_t queue_age_microseconds,
+    std::uint64_t duration_microseconds);
+void RecordNetworkReceiveBatch(
+    std::size_t packet_count,
+    std::size_t byte_count,
+    bool packet_limit_reached,
+    bool time_limit_reached,
+    int terminal_error_code,
+    std::size_t queue_depth_start,
+    std::size_t queue_depth_end,
+    std::size_t queue_bytes_start,
+    std::size_t queue_bytes_end,
+    std::uint64_t oldest_queue_age_microseconds,
+    std::uint64_t duration_microseconds);
+void RecordNetworkWorldApply(
+    bool valid,
+    bool holding_stale,
+    std::uint32_t sequence,
+    std::uint64_t snapshot_age_milliseconds,
+    std::uint32_t local_actor_count,
+    std::uint32_t matched_actor_count,
+    std::uint32_t created_actor_count,
+    std::uint32_t removed_actor_count,
+    std::uint32_t transform_write_count,
+    std::uint32_t presentation_write_count,
+    std::uint64_t duration_microseconds);
+void RecordNetworkPresent(
+    std::uint64_t started_microseconds,
+    std::uint64_t duration_microseconds);
+void RecordNetworkLoggerEnqueue(
+    std::size_t message_bytes,
+    std::uint64_t mutex_wait_microseconds,
+    std::size_t queue_depth,
+    bool queued,
+    std::uint64_t dropped_line_count,
+    std::uint64_t total_microseconds);
+void RecordNetworkLoggerFlush(
+    std::size_t line_count,
+    std::size_t bytes,
+    std::uint64_t dropped_line_count,
+    std::uint64_t duration_microseconds);
+void RecordNetworkRecoverySend(
+    std::string_view channel,
+    std::uint64_t participant_id,
+    std::uint32_t event_sequence,
+    std::uint32_t packet_sequence,
+    std::size_t pending_count,
+    std::size_t in_flight_count,
+    std::size_t send_window,
+    bool retransmit,
+    std::uint64_t previous_send_age_milliseconds);
+void RecordNetworkRecoveryAck(
+    std::string_view channel,
+    std::uint64_t participant_id,
+    std::uint32_t acknowledged_sequence,
+    std::size_t retired_count,
+    std::size_t pending_count);
+
+}  // namespace sdmod

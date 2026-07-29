@@ -137,7 +137,7 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 87;",
+        "constexpr std::uint16_t kProtocolVersion = 88;",
         "enum ParticipantStateFlag",
         "ParticipantStateFlagRetired",
         "std::uint8_t participant_state_flags;",

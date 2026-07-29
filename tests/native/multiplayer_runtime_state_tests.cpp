@@ -1,12 +1,16 @@
 #include "bot_spawn_placement.h"
 #include "bot_stuck_progress.h"
+#include "multiplayer_local_udp_framing.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
+#include "participant_hit_feedback_flow_control.h"
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -517,7 +521,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 87,
+               kProtocolVersion == 88,
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             std::string(
@@ -597,6 +601,194 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
             "truncated level-up barrier wire size was accepted");
 }
 
+bool LocalUdpFramingStaysBelowPathMtuAndReassembles() {
+    using namespace sdmod::multiplayer;
+
+    ParticipantProgressionBookSnapshotPacket packet{};
+    packet.header = MakePacketHeader(
+        PacketKind::ParticipantProgressionBookSnapshot,
+        42);
+    packet.entry_count = 83;
+    const auto packet_bytes =
+        ParticipantProgressionBookSnapshotPacketWireSize(
+            packet.entry_count);
+    if (!Require(
+            packet_bytes == 1704,
+            "WAN regression fixture is not the captured 1704-byte packet")) {
+        return false;
+    }
+
+    std::vector<std::vector<std::uint8_t>> datagrams;
+    if (!Require(
+            BuildLocalUdpFragmentDatagrams(
+                &packet,
+                packet_bytes,
+                &datagrams),
+            "oversized local UDP packet was not fragmented") ||
+        !Require(
+            datagrams.size() == 2,
+            "captured progression packet did not produce two datagrams") ||
+        !Require(
+            datagrams[0].size() ==
+                    kLocalUdpMaximumDatagramBytes &&
+                datagrams[1].size() <
+                    kLocalUdpMaximumDatagramBytes,
+            "transport fragment crossed the 1200-byte wire ceiling")) {
+        return false;
+    }
+
+    LocalUdpFragmentReassembler reassembler;
+    std::vector<std::uint8_t> completed;
+    if (!Require(
+            reassembler.Accept(
+                7,
+                datagrams[1].data(),
+                datagrams[1].size(),
+                1000,
+                &completed) ==
+                LocalUdpFragmentAcceptResult::Pending,
+            "out-of-order final fragment was rejected") ||
+        !Require(
+            reassembler.Accept(
+                7,
+                datagrams[1].data(),
+                datagrams[1].size(),
+                1001,
+                &completed) ==
+                LocalUdpFragmentAcceptResult::Pending,
+            "duplicate fragment corrupted its assembly") ||
+        !Require(
+            reassembler.Accept(
+                7,
+                datagrams[0].data(),
+                datagrams[0].size(),
+                1002,
+                &completed) ==
+                LocalUdpFragmentAcceptResult::Complete,
+            "out-of-order fragment assembly did not complete") ||
+        !Require(
+            completed.size() == packet_bytes &&
+                std::memcmp(
+                    completed.data(),
+                    &packet,
+                    packet_bytes) == 0,
+            "reassembled local UDP packet differs from its input")) {
+        return false;
+    }
+
+    if (!Require(
+            reassembler.Accept(
+                7,
+                datagrams[0].data(),
+                datagrams[0].size(),
+                2000,
+                &completed) ==
+                LocalUdpFragmentAcceptResult::Pending,
+            "fresh incomplete fragment did not create an assembly")) {
+        return false;
+    }
+    reassembler.Prune(
+        2000 +
+        kLocalUdpFragmentAssemblyExpiryMicroseconds);
+    return Require(
+               reassembler.pending_assembly_count() == 0 &&
+                   reassembler.pending_bytes() == 0,
+               "expired fragment assembly retained bounded state") &&
+        Require(
+            !BuildLocalUdpFragmentDatagrams(
+                &packet,
+                kLocalUdpMaximumLogicalPacketBytes + 1,
+                &datagrams),
+            "transport accepted a logical packet above its hard bound");
+}
+
+bool HitFeedbackRecoveryUsesABoundedCumulativeAckWindow() {
+    using namespace sdmod::multiplayer;
+
+    std::vector<std::uint64_t> last_sent_ms(20, 0);
+    std::size_t in_flight_count = 0;
+    std::size_t sends_this_tick = 0;
+    std::vector<std::size_t> selected;
+    for (std::size_t index = 0;
+         index < last_sent_ms.size();
+         ++index) {
+        const auto action =
+            SelectParticipantHitFeedbackSendAction(
+                index,
+                last_sent_ms[index],
+                1000,
+                in_flight_count,
+                sends_this_tick);
+        if (action == ParticipantHitFeedbackSendAction::None) {
+            continue;
+        }
+        selected.push_back(index);
+        last_sent_ms[index] = 1000;
+        ++in_flight_count;
+        ++sends_this_tick;
+    }
+    if (!Require(
+            selected == std::vector<std::size_t>({0, 1, 2, 3}),
+            "hit-feedback first-send burst exceeded its per-tick budget")) {
+        return false;
+    }
+
+    sends_this_tick = 0;
+    selected.clear();
+    for (std::size_t index = 0;
+         index < last_sent_ms.size();
+         ++index) {
+        const auto action =
+            SelectParticipantHitFeedbackSendAction(
+                index,
+                last_sent_ms[index],
+                1050,
+                in_flight_count,
+                sends_this_tick);
+        if (action == ParticipantHitFeedbackSendAction::FirstSend) {
+            selected.push_back(index);
+            last_sent_ms[index] = 1050;
+            ++in_flight_count;
+            ++sends_this_tick;
+        }
+    }
+    if (!Require(
+            selected == std::vector<std::size_t>({4, 5, 6, 7}),
+            "hit-feedback send window did not fill predictably")) {
+        return false;
+    }
+
+    sends_this_tick = 0;
+    selected.clear();
+    for (std::size_t index = 0;
+         index < last_sent_ms.size();
+         ++index) {
+        const auto action =
+            SelectParticipantHitFeedbackSendAction(
+                index,
+                last_sent_ms[index],
+                1101,
+                in_flight_count,
+                sends_this_tick);
+        if (action != ParticipantHitFeedbackSendAction::None) {
+            selected.push_back(index);
+            ++sends_this_tick;
+        }
+    }
+    return Require(
+               selected == std::vector<std::size_t>({0}),
+               "cumulative-ACK recovery resent more than the oldest gap") &&
+        Require(
+            SelectParticipantHitFeedbackSendAction(
+                8,
+                0,
+                1101,
+                in_flight_count,
+                0) ==
+                ParticipantHitFeedbackSendAction::None,
+            "hit-feedback flow control admitted work beyond its window");
+}
+
 }  // namespace
 
 int main() {
@@ -612,7 +804,9 @@ int main() {
         !BotStuckProgressSeparatesWaypointsFromSegmentExhaustion() ||
         !BotStuckProgressRejectsRepeatedDistanceOscillation() ||
         !BotStuckProgressResetsForNewTargetsAndHonorsCooldown() ||
-        !PacketSplitsHaveBoundedVariableWireSizes()) {
+        !PacketSplitsHaveBoundedVariableWireSizes() ||
+        !LocalUdpFramingStaysBelowPathMtuAndReassembles() ||
+        !HitFeedbackRecoveryUsesABoundedCumulativeAckWindow()) {
         return 1;
     }
 

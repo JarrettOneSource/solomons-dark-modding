@@ -21,12 +21,15 @@
 #include "lua_ui_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_udp_framing.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
 #include "multiplayer_session_teardown.h"
 #include "multiplayer_steam_gameplay_queue.h"
 #include "native_enemy_lifecycle.h"
 #include "native_spell_stats.h"
+#include "network_telemetry.h"
+#include "participant_hit_feedback_flow_control.h"
 #include "steam_bootstrap.h"
 #include "startup_status.h"
 #include "wave_intelligence.h"
@@ -53,6 +56,7 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -110,7 +114,6 @@ constexpr std::uint64_t kLocalTransportWorldSnapshotReliableCheckpointIntervalMs
 constexpr std::uint64_t kLocalTransportLootSnapshotIntervalMs = 250;
 constexpr std::uint64_t kLocalTransportAnimatedLootSnapshotIntervalMs = 50;
 constexpr std::uint64_t kLocalTransportSpellEffectSnapshotIntervalMs = 16;
-constexpr std::uint64_t kParticipantHitFeedbackResendMs = 100;
 constexpr std::size_t kParticipantHitFeedbackMaximumPendingEvents = 256;
 constexpr std::uint64_t
     kParticipantProgressionReliableCheckpointIntervalMs = 5000;
@@ -289,7 +292,8 @@ constexpr std::size_t kVisualLinkColorBlockOffset = 0x88;
 constexpr std::uint32_t kAttachmentStaffItemTypeId = 0x1B5C;
 constexpr std::uint32_t kHatItemTypeId = 0x1B5D;
 constexpr std::uint32_t kRobeItemTypeId = 0x1B5E;
-constexpr int kMaxPacketsPerTick = 64;
+constexpr int kMaxPacketsPerTick = 16;
+constexpr std::uint64_t kMaximumPacketApplyBatchMicroseconds = 2000;
 constexpr float kMagicShieldAbsorbEpsilon = 0.001f;
 constexpr float kMagicShieldMaximumAbsorb = 1'000'000.0f;
 constexpr float kMagicShieldMaximumExplosionFraction = 100.0f;
@@ -1230,6 +1234,37 @@ bool g_fireball_explode_effect_config_attempted = false;
 thread_local std::int32_t
     g_local_native_spell_damage_dispatch_skill_id = -1;
 
+std::size_t SnapshotQueuedTransportEventCountForTelemetry() {
+    std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);
+    std::size_t pending_hit_feedback_count = 0;
+    for (const auto& [participant_id, events] :
+         g_local_transport
+             .pending_hit_feedback_events_by_participant) {
+        (void)participant_id;
+        pending_hit_feedback_count += events.size();
+    }
+    return
+        g_queued_local_cast_events.size() +
+        g_queued_local_enemy_damage_claims.size() +
+        g_queued_host_participant_vitals_corrections.size() +
+        g_queued_host_participant_hit_feedback.size() +
+        g_queued_local_loot_pickup_requests.size() +
+        g_in_flight_local_loot_pickup_requests_by_drop_id.size() +
+        g_queued_local_host_powerup_pickups.size() +
+        g_queued_local_level_up_choices.size() +
+        g_queued_lua_mod_stream_messages.size() +
+        g_queued_authoritative_lua_item_grants.size() +
+        g_queued_lua_consumable_uses.size() +
+        g_queued_lua_registered_spell_casts.size() +
+        g_queued_lua_ui_action_requests.size() +
+        g_queued_lua_net_messages.size() +
+        g_local_transport
+            .pending_participant_vitals_corrections_by_participant
+            .size() +
+        pending_hit_feedback_count +
+        (g_have_queued_local_air_chain_frame ? 1u : 0u);
+}
+
 void ClearLocalLootPickupRequestStateLocked() {
     g_queued_local_loot_pickup_requests.clear();
     g_in_flight_local_loot_pickup_requests_by_drop_id.clear();
@@ -1587,6 +1622,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/cast_target_resolution.inl"
 #include "multiplayer_local_transport/outgoing_packet_sync.inl"
 #include "multiplayer_local_transport/local_session_status.inl"
+void StopLocalUdpIngressWorker();
 #include "multiplayer_local_transport/session_teardown_sync.inl"
 #include "multiplayer_local_transport/outgoing_cast_packet_sync.inl"
 #include "multiplayer_local_transport/client_enemy_damage_sync.inl"
@@ -1609,6 +1645,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/synthetic_participant_cast_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
 #include "multiplayer_local_transport/incoming_packet_dispatch.inl"
+#include "multiplayer_local_transport/receive_packets.inl"
 #include "multiplayer_local_transport/native_progression_sync.inl"
 #include "multiplayer_local_transport/remote_peer_lifecycle.inl"
 
@@ -1882,6 +1919,7 @@ void ProcessHostLevelUpBarrier(std::uint64_t now_ms);
 int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* exception_code);
 
 #include "multiplayer_local_transport/public_cast_damage_api.inl"
+#include "multiplayer_local_transport/transport_initialization.inl"
 #include "multiplayer_local_transport/public_cast_loot_api.inl"
 #include "multiplayer_local_transport/public_session_teardown_api.inl"
 #include "multiplayer_local_transport/public_cast_loot_queue_api.inl"

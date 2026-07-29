@@ -25,12 +25,205 @@ def test_app_thread_transport_verifier_tracks_named_cadence_gap() -> str:
     )
     _require_in_order(
         service_loop,
-        "const auto tick_gap_ms = now_ms - g_last_gameplay_transport_tick_ms;",
+        "std::uint64_t tick_gap_ms = 0;",
+        "tick_gap_ms = now_ms - g_last_gameplay_transport_tick_ms;",
         "if (tick_gap_ms < kServiceTickIntervalMs)",
         "if (tick_gap_ms >= kTransportTickGapDiagnosticMs)",
         "std::to_string(tick_gap_ms)",
     )
     return "the app-thread gameplay cadence and gap diagnostic share one named interval"
+
+
+def test_local_udp_ingress_and_wire_framing_are_bounded() -> str:
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    framing = _read(
+        "SolomonDarkModLoader/include/multiplayer_local_udp_framing.h"
+    )
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    receive = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "receive_packets.inl"
+    )
+    outgoing = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_packet_sync.inl"
+    )
+    outgoing += _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_endpoint_send.inl"
+    )
+    initialization = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "transport_initialization.inl"
+    )
+    shutdown = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    graceful_shutdown = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "session_teardown_sync.inl"
+    )
+    native_test = _read(
+        "tests/native/multiplayer_runtime_state_tests.cpp"
+    )
+    hit_feedback_flow_control = _read(
+        "SolomonDarkModLoader/include/"
+        "participant_hit_feedback_flow_control.h"
+    )
+    hit_feedback_sync = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_hit_feedback_sync.inl"
+    )
+
+    assert "constexpr std::uint16_t kProtocolVersion = 88;" in protocol
+    for token in (
+        "kLocalUdpMaximumDatagramBytes = 1200",
+        "kLocalUdpMaximumLogicalPacketBytes = 8192",
+        "kLocalUdpMaximumPendingFragmentAssemblies = 64",
+        "kLocalUdpMaximumPendingFragmentBytes = 512 * 1024",
+        "BuildLocalUdpFragmentDatagrams(",
+        "class LocalUdpFragmentReassembler",
+        "LocalUdpFragmentAssemblyExpiryMicroseconds",
+    ):
+        assert token in framing, f"local UDP framing lacks: {token}"
+
+    for token in (
+        "constexpr int kMaxPacketsPerTick = 16;",
+        "kMaximumPacketApplyBatchMicroseconds = 2000",
+    ):
+        assert token in transport, f"bounded app apply lacks: {token}"
+    for token in (
+        "void LocalUdpIngressWorkerMain(",
+        "select(",
+        "ProcessLocalUdpDatagram(",
+        "kLocalUdpMaximumIngressPackets = 2048",
+        "kLocalUdpMaximumIngressBytes",
+        "TakeNextLocalUdpPacket(",
+        "sizeof(TransportPacketBuffer)",
+        "queue_age_us",
+    ):
+        assert token in receive + _read(
+            "SolomonDarkModLoader/src/network_telemetry.cpp"
+        ), f"continuous local UDP ingress lacks: {token}"
+    assert (
+        "const auto batch_started_us = telemetry_enabled"
+        not in receive
+    ), "the app apply time budget must remain active without telemetry"
+    assert (
+        "if (apply_finished_us - batch_started_us >="
+        in receive
+    )
+
+    _require_in_order(
+        outgoing,
+        "if (packet_size <= kLocalUdpMaximumDatagramBytes)",
+        "BuildLocalUdpFragmentDatagrams(",
+        "RecordNetworkPacketSend(",
+    )
+    _require_in_order(
+        initialization,
+        "bind(",
+        "StartLocalUdpIngressWorker(",
+        "g_local_transport.initialized = true;",
+    )
+    _require_in_order(
+        shutdown,
+        "SendLocalSessionGoodbye(",
+        "StopLocalUdpIngressWorker();",
+        "closesocket(",
+    )
+    _require_in_order(
+        graceful_shutdown,
+        "StopLocalUdpIngressWorker();",
+        "closesocket(",
+        "g_local_transport.initialized = false;",
+    )
+    for token in (
+        "LocalUdpFramingStaysBelowPathMtuAndReassembles",
+        "packet_bytes == 1704",
+        "datagrams.size() == 2",
+        "kLocalUdpMaximumDatagramBytes",
+        "LocalUdpFragmentAcceptResult::Complete",
+    ):
+        assert token in native_test, (
+            f"local UDP framing regression lacks: {token}"
+        )
+    for token in (
+        "kParticipantHitFeedbackMaximumInFlightEvents = 8",
+        "kParticipantHitFeedbackMaximumSendsPerTick = 4",
+        "pending_index != 0",
+        "ParticipantHitFeedbackSendAction::Retransmit",
+    ):
+        assert token in hit_feedback_flow_control, (
+            f"hit-feedback flow control lacks: {token}"
+        )
+    for token in (
+        "SelectParticipantHitFeedbackSendAction(",
+        "in_flight_count",
+        "sends_this_tick",
+    ):
+        assert token in hit_feedback_sync, (
+            f"hit-feedback sender bypasses flow control: {token}"
+        )
+    assert (
+        "HitFeedbackRecoveryUsesABoundedCumulativeAckWindow"
+        in native_test
+    )
+
+    return (
+        "local UDP drains off-thread, applies through bounded app-thread work, "
+        "fragments every oversized logical packet below 1200 wire bytes, and "
+        "bounds cumulative-ACK recovery traffic"
+    )
+
+
+def test_transport_telemetry_names_slow_app_thread_stages() -> str:
+    telemetry_header = _read(
+        "SolomonDarkModLoader/include/network_telemetry.h"
+    )
+    telemetry = _read(
+        "SolomonDarkModLoader/src/network_telemetry.cpp"
+    )
+    transport_tick = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    service_loop = _read(
+        "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
+    )
+
+    assert "RecordNetworkTransportStage(" in telemetry_header
+    assert (
+        "kTransportStageTelemetryThresholdMicroseconds = 5000"
+        in telemetry
+    )
+    assert 'EnqueueEvent("transport_stage", fields.str());' in telemetry
+    for stage in (
+        "local_participant_refresh",
+        "receive_apply",
+        "run_lifecycle",
+        "native_reconciliation",
+        "outbound_state",
+        "outbound_casts",
+        "outbound_corrections",
+        "outbound_lua",
+        "outbound_snapshots",
+        "publish",
+    ):
+        assert f'finish_stage("{stage}")' in transport_tick, (
+            f"transport stage telemetry lacks: {stage}"
+        )
+    assert '"session_teardown"' in service_loop
+
+    return (
+        "network telemetry names transport stages exceeding five milliseconds "
+        "without emitting per-stage noise on ordinary ticks"
+    )
 
 
 def test_hub_service_fragments_are_visual_studio_project_items() -> str:
@@ -209,6 +402,10 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_packet_sync.inl"
     )
+    outgoing += _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_endpoint_send.inl"
+    )
     outgoing_cast = _read(
         "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "outgoing_cast_packet_sync.inl"
@@ -249,7 +446,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 87;",
+        "constexpr std::uint16_t kProtocolVersion = 88;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
         "static_assert(sizeof(ParticipantFramePacket) == 374",
@@ -476,7 +673,9 @@ def test_empty_run_snapshot_unregisters_stale_enemies_without_parking() -> str:
     verifier = _read("tools/verify_steam_friend_large_enemy_sync.py")
 
     apply = reconciliation[
-        reconciliation.index("void ApplyReplicatedWorldSnapshotIfActive(") :
+        reconciliation.index(
+            "void ApplyReplicatedWorldSnapshotIfActiveImpl("
+        ) :
     ]
     sample_gate = apply[
         apply.index("const bool have_snapshot =") :

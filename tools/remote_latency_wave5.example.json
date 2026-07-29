@@ -1,0 +1,26 @@
+{
+  "execution": {
+    "timeout_seconds": 900
+  },
+  "local": {
+    "evidence_root": "/mnt/d/codex-evidence/netlag-20260728",
+    "game_root": "/mnt/d/codex-evidence/netlag-20260728/staging/local/game",
+    "lua_client": "/mnt/d/codex-evidence/netlag-20260728/staging/tools/win32_lua_exec_client.exe",
+    "package_root": "/mnt/d/codex-evidence/netlag-20260728/staging/local/package",
+    "runtime_root": "/mnt/d/codex-evidence/netlag-20260728/runtime/local"
+  },
+  "network": {
+    "local_client_port": 50312,
+    "local_host_port": 50311,
+    "local_public_host": "198.51.100.10",
+    "remote_client_port": 51512,
+    "remote_host_port": 51511,
+    "remote_public_host": "203.0.113.10"
+  },
+  "ssh": {
+    "alias": "nfoservers-root",
+    "executable": "/mnt/c/Windows/System32/OpenSSH/ssh.exe",
+    "remote_root": "/root/sd-netlag-20260728",
+    "scp_executable": "/mnt/c/Windows/System32/OpenSSH/scp.exe"
+  }
+}

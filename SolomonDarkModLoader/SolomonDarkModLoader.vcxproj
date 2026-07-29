@@ -125,9 +125,15 @@
     <ClInclude Include="include\multiplayer_foundation.h" />
     <ClInclude Include="include\multiplayer_join_flow.h" />
     <ClInclude Include="include\multiplayer_local_transport.h" />
+    <ClInclude Include="include\multiplayer_local_udp_framing.h" />
     <ClInclude Include="include\multiplayer_runtime_protocol.h" />
     <ClInclude Include="include\multiplayer_runtime_state.h" />
     <ClInclude Include="include\multiplayer_session_teardown.h" />
+    <ClInclude Include="include\network_telemetry.h" />
+    <ClInclude Include="include\participant_hit_feedback_flow_control.h" />
+    <ClInclude Include="src\network_telemetry\runtime_events.inl" />
+    <ClInclude Include="src\network_telemetry\writer.inl" />
+    <ClInclude Include="src\lua_engine\lua_exec_target.inl" />
     <ClInclude Include="include\multiplayer_native_minion_state.inl" />
     <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
@@ -489,6 +495,8 @@
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\receive_packets.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\outgoing_endpoint_send.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_hit_feedback_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
@@ -536,6 +544,7 @@
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_damage_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_api.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\transport_initialization.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_cast_loot_queue_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\public_session_teardown_api.inl" />
     <ClInclude Include="src\multiplayer_local_transport\remote_peer_lifecycle.inl" />
@@ -598,6 +607,7 @@
     <ClCompile Include="src\logger_crash_reporting.cpp" />
     <ClCompile Include="src\logger_exception_handlers.cpp" />
     <ClCompile Include="src\logger.cpp" />
+    <ClCompile Include="src\logger_writer.cpp" />
     <ClCompile Include="src\lua_engine.cpp" />
     <ClCompile Include="src\lua_developer_console.cpp" />
     <ClCompile Include="src\lua_hot_reload.cpp" />
@@ -695,6 +705,7 @@
     <ClCompile Include="src\multiplayer_steam_gameplay_queue.cpp" />
     <ClCompile Include="src\multiplayer_steam_gameplay_queue_policy.cpp" />
     <ClCompile Include="src\multiplayer_steam_session.cpp" />
+    <ClCompile Include="src\network_telemetry.cpp" />
     <ClCompile Include="src\native_enemy_lifecycle.cpp" />
     <ClCompile Include="src\native_spell_stats.cpp" />
     <ClCompile Include="src\runtime_bootstrap.cpp" />
