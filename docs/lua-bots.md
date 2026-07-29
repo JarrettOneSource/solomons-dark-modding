@@ -82,6 +82,26 @@ The host derives the participant/session/run identity, origin, heading,
 profile, resolved skill, and monotonic cast sequence. The same cast packet is
 played on every peer. A dead or unmaterialized bot cannot move or cast.
 
+### Bot loot pickup
+
+`sd.world.request_loot_pickup(network_drop_id[, participant_id])` keeps its
+one-argument local-player form. On a local-transport host, the optional
+`participant_id` may name an active Lua-controlled synthetic participant:
+
+```lua
+local accepted, sequence_or_error =
+  sd.world.request_loot_pickup(network_drop_id, bot:participant_id())
+```
+
+The second form is semantic and address-free. It rejects non-bots, inactive
+participants, clients, stale run/drop identities, and drops absent from the
+host snapshot. An accepted queue request still passes through the existing
+host pickup arbitration: the participant's live derived pickup range,
+position, drop kind, deactivation, reward credit, result publication, and
+run/drop exactly-once ledger remain authoritative. Callers should correlate
+the returned request sequence with `last_pickup_result` from
+`sd.world.get_replicated_loot()`.
+
 ### Inspection
 
 `position()` returns `x, y` or `nil, error`.

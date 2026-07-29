@@ -20,6 +20,7 @@ param(
     [switch]$EnableNetworkTelemetry,
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
+    [string]$TestSurvivalBoneyardOverride = "",
     [switch]$Headless,
     [switch]$DisableMultiplayerTransport,
     [switch]$EnableAudio,
@@ -101,6 +102,31 @@ if (-not [string]::IsNullOrWhiteSpace($TestWaveOverride)) {
     $resolvedTestWaveOverride = $resolvedWaveOverrideItem.FullName
 }
 
+$resolvedTestSurvivalBoneyardOverride = ""
+$requestedBoneyardSha256 = ""
+if (-not [string]::IsNullOrWhiteSpace(
+        $TestSurvivalBoneyardOverride)) {
+    $resolvedBoneyardOverrideItem =
+        Get-Item `
+            -LiteralPath $TestSurvivalBoneyardOverride `
+            -ErrorAction Stop
+    if ($resolvedBoneyardOverrideItem.PSIsContainer -or
+        $resolvedBoneyardOverrideItem.Extension -notmatch
+            '^\.boneyard$') {
+        throw (
+            "Test survival boneyard override must be a .boneyard " +
+            "file: $TestSurvivalBoneyardOverride"
+        )
+    }
+    $resolvedTestSurvivalBoneyardOverride =
+        $resolvedBoneyardOverrideItem.FullName
+    $requestedBoneyardSha256 = (
+        Get-FileHash `
+            -LiteralPath $resolvedTestSurvivalBoneyardOverride `
+            -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+}
+
 if (-not [string]::IsNullOrWhiteSpace($ExactModIds)) {
     Set-ExactMultiplayerModState `
         -RuntimeRootPath $effectiveRuntimeRoot `
@@ -138,6 +164,8 @@ $environment = @{
     SDMOD_TEST_WAVE_OVERRIDE = $resolvedTestWaveOverride
     SDMOD_NETWORK_TELEMETRY = $(if (
         $EnableNetworkTelemetry) { "1" } else { "" })
+    SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE =
+        $resolvedTestSurvivalBoneyardOverride
 }
 if (-not $audioEnabled) {
     $environment["SDMOD_DISABLE_AUDIO"] = "1"
@@ -203,6 +231,14 @@ if (
     throw "Launcher returned a process that does not own the exact staged executable."
 }
 
+$stagedBoneyardPath =
+    Join-Path $instanceRoot "stage\data\levels\survival.boneyard"
+if (-not (Test-Path -LiteralPath $stagedBoneyardPath -PathType Leaf)) {
+    throw "Staged survival boneyard was not found: $stagedBoneyardPath"
+}
+$stagedBoneyardSha256 = (
+    Get-FileHash -LiteralPath $stagedBoneyardPath -Algorithm SHA256
+).Hash.ToLowerInvariant()
 $summary = [ordered]@{
     success = $true
     instance = $Instance
@@ -221,6 +257,11 @@ $summary = [ordered]@{
     multiplayerTransportEnabled = -not [bool]$DisableMultiplayerTransport
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedTestWaveOverride
+    testSurvivalBoneyardOverride =
+        $resolvedTestSurvivalBoneyardOverride
+    requestedBoneyardSha256 = $requestedBoneyardSha256
+    stagedBoneyardPath = $stagedBoneyardPath
+    stagedBoneyardSha256 = $stagedBoneyardSha256
     runtimeRoot = $effectiveRuntimeRoot
     executablePath = Join-Path $instanceRoot "stage\SolomonDark.exe"
 }

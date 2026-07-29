@@ -192,7 +192,6 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "participant.movement_intent_y",
         "resource_kind == 0",
         "resource_kind == 1",
-        "participant_is_owner(",
         "function observation.select_target(",
         "function observation.build_cast_mask(",
         "capture.target_mask[mask_index] ~= true",
@@ -231,7 +230,7 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         'preference == "auto"',
         "learned[components[1]] ~= true",
         "request_nearby_pickup(",
-        "capture.loot_host_owned ~= true",
+        "capture.loadout.pickup_range <= 0.0",
         "pickup.pickup_range_multiplier",
         "sd.world.request_loot_pickup",
         "selected_target",
@@ -561,19 +560,35 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     ):
         assert token in bridge
     assert "PinRunLifecycleManualEnemyTestState();" in gameplay_pump
-    for workflow in (trainer, _read("tools/verify_ml_bot_live.py")):
-        _require_in_order(
-            workflow,
-            "session.write_empty_roster(",
-            "session.start_test_run(",
-            "session.prepare_training_combat(",
-            "session.write_learned_roster(",
-            "session.wait_for_run_ready(",
-            "session.wait_for_bot_materialized(",
-            "session.prime_training_progression(",
-            "session.start_training_arena(",
-            "session.wait_for_training_enemy(",
-        )
+    _require_in_order(
+        trainer,
+        "session.write_empty_roster(",
+        "session.set_run_seed(",
+        "session.start_test_run(",
+        "session.prepare_training_combat(",
+        "session.write_composition(",
+        "session.wait_for_run_ready(",
+        "session.wait_for_bot_materialized(",
+        "session.prime_learned_progression(",
+        "session.start_training_arena(",
+        "session.wait_for_training_enemy(",
+    )
+    verifier = _read("tools/verify_ml_bot_live.py").split(
+        "def verify(", 1
+    )[1]
+    _require_in_order(
+        verifier,
+        "session.write_empty_roster(",
+        "session.set_run_seed(",
+        "session.start_test_run(",
+        "session.prepare_training_combat(",
+        "session.write_composition(",
+        "session.wait_for_run_ready(",
+        "session.wait_for_bot_materialized(",
+        "session.prime_learned_progression(",
+        "_apply_one_weld(",
+        "_spawn_enemy(",
+    )
     _require_in_order(
         brain,
         "pcall(sd.world.get_replicated_actors)",
@@ -606,19 +621,209 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "cast_entropy_coefficient",
         "_atomic_checkpoint(",
         "session.load_policy(policy)",
-        '"learned policy had no accepted live movement"',
-        '"learned policy had no accepted live attacks"',
+        '"learned policy did not make live movement decisions"',
+        '"live trajectory buffer dropped records"',
     ):
         assert token in trainer
     for token in (
         "MINIMUM_LIVE_DISPLACEMENT = 1.0",
-        "MINIMUM_ACCEPTANCE_TICKS = 25",
-        "maximum_distance >= MINIMUM_LIVE_DISPLACEMENT",
-        "tick - first_tick >= MINIMUM_ACCEPTANCE_TICKS",
+        "displacement < MINIMUM_LIVE_DISPLACEMENT",
+        "request_distance > pickup_range",
+        "last_pickup_request_distance",
     ):
         assert token in _read("tools/verify_ml_bot_live.py")
 
     return (
         "The bot keeps its simulation clock, strict v2 runtime, native action "
         "routing, historical-v1 rejection, and exact-process training bridge"
+    )
+
+
+def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
+    bridge = _read("tools/ml_bot/bridge.py")
+    compositions = _read("tools/ml_bot/compositions.py")
+    composition_config = json.loads(
+        _read("tools/ml_bot/team-compositions.json")
+    )
+    trainer = _read("tools/train_bot_policy.py")
+    live = _read("tools/verify_ml_bot_live.py")
+    scripted = _read("tools/verify_lua_bot_brain.py")
+    launcher = _read("scripts/Launch-LocalSoloSession.ps1")
+    brain = _read("mods/bot-brain/scripts/brain.lua")
+    binding = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
+    )
+    transport_header = _read(
+        "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+    )
+    pickup_queue = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_queue_api.inl"
+    )
+    pickup_handler = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "loot_pickup_packet_handlers.inl"
+    )
+    pickup_authority = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "loot_pickup_authority.inl"
+    )
+
+    configured = composition_config["compositions"]
+    assert composition_config["schema_version"] == 1
+    assert any(row["learned_count"] == 1 and not row["scripted_behaviors"]
+               for row in configured)
+    assert any(row["learned_count"] == 1 and row["scripted_behaviors"]
+               for row in configured)
+    assert any(row["learned_count"] > 1 and not row["scripted_behaviors"]
+               for row in configured)
+    assert {
+        behavior
+        for row in configured
+        for behavior in row["scripted_behaviors"]
+    } == {"skirmisher", "guardian", "striker"}
+    for token in (
+        "class TeamComposition:",
+        "def load_compositions(",
+        "def select_compositions(",
+        "def build_roster(",
+        "range(1, composition.learned_count + 1)",
+    ):
+        assert token in compositions
+    for forbidden in (
+        "MAX_PARTICIPANTS",
+        "maximum_participants",
+        "min(composition.learned_count",
+    ):
+        assert forbidden not in compositions
+
+    for token in (
+        "def set_run_seed(self, seed: int)",
+        "sd.rng.set_seed(requested)",
+        "sd.rng.get_seed()",
+        "run seed did not round-trip exactly",
+        "def get_run_identity(self)",
+        "participant.run_nonce",
+        "def write_composition(",
+        "def learned_participant_ids(",
+        "def prime_learned_progression(",
+        "self.layout_sha256()",
+        '"-TestSurvivalBoneyardOverride"',
+        '"-MaxParticipants"',
+        "str(self.max_participants)",
+    ):
+        assert token in bridge, f"Phase-5 bridge lacks {token}"
+    assert "slot <= 3" not in bridge
+
+    _require_in_order(
+        trainer,
+        "for iteration in range(1, args.iterations + 1):",
+        "session = SoloSession(",
+        "session.set_run_seed(requested_seed)",
+        "session.write_composition(composition)",
+        "partition_rollout_records(",
+        "ppo_epochs(",
+        "_atomic_checkpoint(",
+        "session.load_policy(policy)",
+        "session.close()",
+    )
+    for token in (
+        '"requested_seed": requested_seed',
+        '"observed_run_nonce": run_identity["run_nonce"]',
+        '"layout_sha256": session.layout_sha256()',
+        '"composition": composition.to_log()',
+        '"trajectory_participant_count"',
+        '"trajectory_counts"',
+        '"policy_generation_advanced"',
+        "candidate not in run_seeds",
+        "max_participants=composition.participant_count + 1",
+    ):
+        assert token in trainer, f"Phase-5 trainer lacks {token}"
+
+    for token in (
+        "[string]$TestSurvivalBoneyardOverride",
+        "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE",
+        "requestedBoneyardSha256",
+        "stagedBoneyardSha256",
+        "Test survival boneyard override must be a .boneyard",
+    ):
+        assert token in launcher, f"solo layout plumbing lacks {token}"
+
+    for token in (
+        "observation_count",
+        "observation_finite",
+        "movement_mask_mismatches",
+        "target_mask_mismatches",
+        "cast_mask_mismatches",
+        "actor-ID target persistence after enemy re-sort",
+        "primary_welded",
+        "pickup observation block population",
+        "native exactly-once pickup credit",
+        "team ally observation population",
+        "secondary_beyond_primary_accepted",
+        "policy target selected",
+        "policy secondary accepted",
+    ):
+        assert token in live, f"Phase-5 live verifier lacks {token}"
+    for token in (
+        "policy.version",
+        "mlp-tanh-three-head-v2",
+        "policy.observation_size",
+        "policy.target_actions",
+        "def _prime_scripted_primary()",
+        "sd.bots.get_loadout_details(participant_id)",
+        "sd.bots.debug_sync_level_up",
+        "def _prepare_stock_arena(",
+        "BOT_ARENA_SEPARATION_DISTANCE",
+        "sd.__settings_invoke_action(",
+        "'respawn_bot'",
+        "and wave >= 1",
+        'result["primaryPrime"] = _prime_scripted_primary()',
+    ):
+        assert token in scripted, (
+            f"scripted-bot regression verifier lacks {token}"
+        )
+    scripted_gate_order = (
+        'result["waveStart"] = start',
+        'result["arenaTransition"] = _prepare_stock_arena(run_views)',
+        'result["primaryPrime"] = _prime_scripted_primary()',
+        "monitored = _monitor_run(",
+    )
+    assert [
+        scripted.index(token) for token in scripted_gate_order
+    ] == sorted(scripted.index(token) for token in scripted_gate_order), (
+        "scripted-bot regression must enter the stock arena before "
+        "materializing and priming the accepted roster"
+    )
+
+    assert "sd.world.request_loot_pickup" in brain
+    assert "pickup_id,\n        context.participant_id" in brain
+    assert "pickup request queued network_drop_id=" in brain
+    assert (
+        "QueueSyntheticParticipantLootPickupRequest(" in transport_header
+    )
+    assert (
+        "participant_id == 0\n"
+        "            ? multiplayer::QueueLocalLootPickupRequest("
+    ) in binding
+    for token in (
+        "bool QueueSyntheticParticipantLootPickupRequest(",
+        "IsLuaControlledParticipant(*participant)",
+        "TryFindHostRunLootDropByNetworkId(",
+        "ApplyLootPickupRequestPacket(",
+        "TransportPeerEndpoint{}",
+    ):
+        assert token in pickup_queue, (
+            f"synthetic pickup ingress lacks {token}"
+        )
+    assert "if (!g_local_transport.is_host ||" in pickup_handler
+    assert "if (!host_synthetic_ingress)" in pickup_handler
+    assert "host_synthetic_ingress &&" in pickup_authority
+    assert "IsLuaControlledParticipant(*participant)" in pickup_authority
+    assert "memory.pickup_request_accepted[pickup_id] ~= true" in brain
+
+    return (
+        "Phase 5 pins disposable seeded episodes, config-driven solo/mixed/"
+        "multi-learned rotation, participant-grouped PPO, strict live v2 "
+        "behavior checks, and semantic host pickup ingress"
     )

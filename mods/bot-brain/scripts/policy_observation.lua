@@ -89,17 +89,6 @@ local function find_participant(multiplayer, participant_id)
   return nil
 end
 
-local function participant_is_owner(
-    multiplayer,
-    participant_id)
-  for _, participant in ipairs(multiplayer.participants or {}) do
-    if number(participant.participant_id) == participant_id then
-      return participant.is_owner == true
-    end
-  end
-  return false
-end
-
 local function enemy_health(enemies)
   local result = {}
   for _, enemy in ipairs(enemies) do
@@ -122,6 +111,7 @@ local function new_memory()
     target_actor_id = nil,
     enemy_position_history = {},
     pickup_request_ms = {},
+    pickup_request_accepted = {},
   }
 end
 
@@ -500,9 +490,6 @@ function observation.capture(builder, context, frame)
   local loot = builder.get_loot()
   loot = type(loot) == "table" and loot or {}
   local pickups = sort_pickups(loot, bot_x, bot_y)
-  local loot_host_owned = participant_is_owner(
-    multiplayer,
-    number(loot.authority_participant_id))
 
   local hp_current = number(frame.hp, number(snapshot.hp))
   local hp_max = number(frame.max_hp, number(snapshot.max_hp))
@@ -1203,7 +1190,6 @@ function observation.capture(builder, context, frame)
     allies = allies,
     loot = loot,
     pickups = pickups,
-    loot_host_owned = loot_host_owned,
     bot_x = bot_x,
     bot_y = bot_y,
     offense_enabled = frame.offense_enabled == true,

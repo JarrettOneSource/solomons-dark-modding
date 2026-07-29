@@ -535,6 +535,7 @@ struct SyntheticParticipantTransportState {
     std::uint64_t last_state_send_ms = 0;
     std::uint64_t last_frame_send_ms = 0;
     std::uint32_t next_cast_sequence = 1;
+    std::uint32_t next_loot_pickup_sequence = 1;
     bool primary_cast_active = false;
     CastPacket active_primary_cast{};
     std::uint64_t next_primary_held_send_ms = 0;
@@ -1781,6 +1782,84 @@ bool QueueSyntheticParticipantCast(
         target_y,
         hold_ms,
         error_message);
+}
+
+bool RefreshSyntheticParticipantOwnedProgressionEntry(
+    std::uint64_t participant_id,
+    std::int32_t entry_index,
+    uintptr_t progression_address) {
+    NativeProgressionBookTableView table;
+    NativeProgressionBookEntryView entry;
+    SDModDerivedProgressionStatState derived_stats;
+    if (participant_id == 0 ||
+        entry_index < 0 ||
+        !TryReadNativeProgressionBookTable(
+            progression_address,
+            &table) ||
+        !TryReadNativeProgressionBookEntry(
+            table,
+            entry_index,
+            &entry) ||
+        !TryCaptureNativeParticipantDerivedStats(
+            progression_address,
+            &derived_stats)) {
+        return false;
+    }
+
+    bool applied = false;
+    UpdateRuntimeState([&](RuntimeState& state) {
+        auto* participant =
+            FindParticipant(state, participant_id);
+        if (participant == nullptr ||
+            !IsLuaControlledParticipant(*participant)) {
+            return;
+        }
+        participant->owned_progression.initialized = true;
+        auto& owned = participant->owned_progression;
+        RefreshOwnedDerivedStats(derived_stats, &owned);
+        const auto existing = std::find_if(
+            owned.progression_book_entries.begin(),
+            owned.progression_book_entries.end(),
+            [&](const ParticipantProgressionBookEntryState& candidate) {
+                return candidate.entry_index == entry_index;
+            });
+        if (existing != owned.progression_book_entries.end()) {
+            applied = ApplyAuthoritativeProgressionBookEntryState(
+                entry_index,
+                entry.active,
+                entry.visible,
+                &owned);
+            return;
+        }
+
+        ParticipantProgressionBookEntryState promoted;
+        promoted.entry_index = entry_index;
+        promoted.internal_id = entry.internal_id;
+        promoted.active = entry.active;
+        promoted.visible = entry.visible;
+        promoted.category = entry.category;
+        owned.progression_book_entries.push_back(promoted);
+        std::sort(
+            owned.progression_book_entries.begin(),
+            owned.progression_book_entries.end(),
+            [](const ParticipantProgressionBookEntryState& left,
+               const ParticipantProgressionBookEntryState& right) {
+                return left.entry_index < right.entry_index;
+            });
+        owned.progression_book_entry_total_count =
+            static_cast<std::uint16_t>(
+                (std::min)(
+                    table.entry_count,
+                    static_cast<std::int32_t>(
+                        (std::numeric_limits<std::uint16_t>::max)())));
+        owned.progression_book_truncated =
+            owned.progression_book_entries.size() <
+            owned.progression_book_entry_total_count;
+        owned.spellbook_revision += 1;
+        owned.statbook_revision += 1;
+        applied = true;
+    });
+    return applied;
 }
 
 void ConfirmLocalParticipantVitalsCorrection(

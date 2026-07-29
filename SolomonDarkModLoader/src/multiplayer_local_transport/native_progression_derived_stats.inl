@@ -1,3 +1,75 @@
+bool TryCaptureNativeParticipantDerivedStats(
+    uintptr_t progression_address,
+    SDModDerivedProgressionStatState* captured) {
+    if (captured == nullptr) {
+        return false;
+    }
+    *captured = SDModDerivedProgressionStatState{};
+    if (progression_address == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto read_float = [&](std::size_t offset, float* value) {
+        return offset != 0 &&
+               memory.TryReadField(progression_address, offset, value) &&
+               std::isfinite(*value) &&
+               std::fabs(*value) <= 1000000.0f;
+    };
+    const bool complete =
+        read_float(
+            kProgressionCastSpeedMultiplierOffset,
+            &captured->cast_speed_multiplier) &&
+        read_float(
+            kProgressionManaRecoveryMultiplierOffset,
+            &captured->mana_recovery_multiplier) &&
+        read_float(
+            kProgressionResistMagicFractionOffset,
+            &captured->resist_magic_fraction) &&
+        read_float(
+            kProgressionResistPoisonFractionOffset,
+            &captured->resist_poison_fraction) &&
+        read_float(
+            kProgressionDeflectChanceOffset,
+            &captured->deflect_chance) &&
+        read_float(
+            kProgressionStaffMeleeDamageAOffset,
+            &captured->staff_melee_damage_a) &&
+        read_float(
+            kProgressionStaffMeleeDamageBOffset,
+            &captured->staff_melee_damage_b) &&
+        read_float(
+            kProgressionPickupRangeOffset,
+            &captured->pickup_range) &&
+        read_float(
+            kProgressionSecondaryRechargeMultiplierOffset,
+            &captured->secondary_recharge_multiplier) &&
+        read_float(
+            kProgressionOffensiveDamageMultiplierOffset,
+            &captured->offensive_damage_multiplier) &&
+        read_float(
+            kProgressionOffensiveManaMultiplierOffset,
+            &captured->offensive_mana_multiplier) &&
+        read_float(
+            kProgressionMeleeDamageMultiplierOffset,
+            &captured->melee_damage_multiplier) &&
+        read_float(
+            kProgressionPushStrengthOffset,
+            &captured->push_strength) &&
+        read_float(
+            kProgressionMeditationRecoveryBonusOffset,
+            &captured->meditation_recovery_bonus) &&
+        kProgressionMeditationIdleTicksOffset != 0 &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionMeditationIdleTicksOffset,
+            &captured->meditation_idle_ticks) &&
+        captured->meditation_idle_ticks >= -1 &&
+        captured->meditation_idle_ticks <= 1000000000;
+    captured->valid = complete;
+    return complete;
+}
+
 bool ApplyAuthoritativeParticipantDerivedStats(
     uintptr_t progression_address,
     const ParticipantDerivedStatState& desired,

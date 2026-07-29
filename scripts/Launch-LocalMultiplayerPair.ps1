@@ -500,9 +500,13 @@ function Convert-KeyValueText {
 function Enable-InstanceGodMode {
     param([string]$PipeName)
 
-    $resultText = Invoke-InstanceLuaExec `
-        -PipeName $PipeName `
-        -Code @"
+    $deadline = (Get-Date).AddSeconds(30)
+    $last = ""
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $resultText = Invoke-InstanceLuaExec `
+                -PipeName $PipeName `
+                -Code @"
 local function emit(key, value) print(key .. '=' .. tostring(value)) end
 local function sustain()
   local player = sd.player.get_state()
@@ -535,15 +539,61 @@ local function sustain()
     return false, 'layout_unavailable'
   end
 
-  local max_hp = tonumber(sd.debug.read_float(progression + max_hp_offset)) or tonumber(player.max_hp) or 0
-  local max_mp = tonumber(sd.debug.read_float(progression + max_mp_offset)) or tonumber(player.max_mp) or 0
-  if max_hp > 0 then
-    sd.debug.write_float(progression + hp_offset, max_hp)
+  local function refill(
+      target_progression,
+      fallback_max_hp,
+      fallback_max_mp)
+    target_progression =
+      tonumber(target_progression) or 0
+    if target_progression == 0 then
+      return false
+    end
+    local max_hp =
+      tonumber(
+        sd.debug.read_float(
+          target_progression + max_hp_offset)) or
+      tonumber(fallback_max_hp) or 0
+    local max_mp =
+      tonumber(
+        sd.debug.read_float(
+          target_progression + max_mp_offset)) or
+      tonumber(fallback_max_mp) or 0
+    if max_hp > 0 then
+      sd.debug.write_float(
+        target_progression + hp_offset,
+        max_hp)
+    end
+    if max_mp > 0 then
+      sd.debug.write_float(
+        target_progression + mp_offset,
+        max_mp)
+    end
+    return max_hp > 0 or max_mp > 0
   end
-  if max_mp > 0 then
-    sd.debug.write_float(progression + mp_offset, max_mp)
+
+  if not refill(
+      progression,
+      player.max_hp,
+      player.max_mp) then
+    return false, 'player_vitals_unavailable', 0
   end
-  return true, 'ok'
+
+  local sustained_bots = 0
+  if sd.state.is_authority() then
+    for _, bot in ipairs(sd.bots.list() or {}) do
+      local participant_id =
+        tonumber(bot:participant_id()) or 0
+      local state =
+        sd.bots.get_state(participant_id) or {}
+      if refill(
+          state.progression_runtime_state_address,
+          0,
+          0) then
+        sustained_bots = sustained_bots + 1
+      end
+    end
+  end
+  return true, 'ok', sustained_bots
 end
 
 if not _G.__sdmod_launch_godmode_enabled then
@@ -558,16 +608,23 @@ if not _G.__sdmod_launch_godmode_enabled then
   _G.__sdmod_launch_godmode_enabled = true
 end
 
-local ok, status = sustain()
+local ok, status, sustained_bots = sustain()
 emit('registered', true)
 emit('initial_apply', ok)
 emit('status', status)
+emit('sustained_bots', sustained_bots or 0)
 "@
-    $values = Convert-KeyValueText -Text $resultText
-    if ($values["registered"] -ne "true") {
-        throw "Failed to enable godmode on pipe $PipeName. Output: $resultText"
+            $values = Convert-KeyValueText -Text $resultText
+            if ($values["registered"] -eq "true") {
+                return $values
+            }
+            $last = $resultText
+        } catch {
+            $last = $_.Exception.Message
+        }
+        Start-Sleep -Milliseconds 250
     }
-    return $values
+    throw "Failed to enable godmode on pipe $PipeName. Last output: $last"
 }
 
 function Get-StagedGraphicsResolution {

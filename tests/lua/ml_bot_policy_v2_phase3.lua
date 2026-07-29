@@ -591,6 +591,7 @@ details.primary.combo_entry_id = -1
 details.primary.build_id = 8
 
 local pickup_requests = 0
+local pickup_request_participant_id = 0
 local chosen_options = {}
 _G.sd = {
   runtime = {
@@ -608,8 +609,9 @@ _G.sd = {
     end,
   },
   world = {
-    request_loot_pickup = function()
+    request_loot_pickup = function(_, participant_id)
       pickup_requests = pickup_requests + 1
+      pickup_request_participant_id = participant_id
       return true, pickup_requests
     end,
   },
@@ -663,6 +665,7 @@ brain.request_nearby_pickup(
   capture,
   1100)
 assert(pickup_requests == 1)
+assert(pickup_request_participant_id == 42)
 capture.pickups = {}
 brain.request_nearby_pickup(
   assist_context,

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "compositions": [
+    {
+      "name": "solo-learned",
+      "learned_count": 1,
+      "scripted_behaviors": []
+    },
+    {
+      "name": "mixed-skirmisher",
+      "learned_count": 1,
+      "scripted_behaviors": [
+        "skirmisher"
+      ]
+    },
+    {
+      "name": "mixed-guardian-striker",
+      "learned_count": 1,
+      "scripted_behaviors": [
+        "guardian",
+        "striker"
+      ]
+    },
+    {
+      "name": "mixed-striker-skirmisher",
+      "learned_count": 1,
+      "scripted_behaviors": [
+        "striker",
+        "skirmisher"
+      ]
+    },
+    {
+      "name": "multi-learned-2",
+      "learned_count": 2,
+      "scripted_behaviors": []
+    },
+    {
+      "name": "multi-learned-3",
+      "learned_count": 3,
+      "scripted_behaviors": []
+    }
+  ]
+}

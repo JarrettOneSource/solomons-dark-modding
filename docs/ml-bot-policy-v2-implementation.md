@@ -1331,3 +1331,98 @@ The eight former owner questions are resolved by
    multi-layout corpus remains non-blocking.
 8. Bootstrap remains, but Phase 4 rewrites it target-first and reuses no v1
    weights, trajectories, or expert data.
+
+## F. Phase 5 implementation outcome
+
+Phase 5 closes the plan with disposable, seed-verified environment episodes
+and configuration-driven team rotation:
+
+- `tools/ml_bot/bridge.py` owns exact native seed set/get round trips,
+  validates the in-run nonce, hashes the staged Boneyard, writes arbitrary
+  configured rosters, waits for every materialized bot without a slot
+  ceiling, and primes every learned participant.
+- `tools/train_bot_policy.py` launches and closes one session inside each
+  episode iteration, chooses a unique native seed, rotates configured
+  compositions/layouts, groups trajectory-v2 records by episode and
+  participant, trains all three heads, atomically checkpoints,
+  chunk-hot-loads the update, and logs seed/nonce/layout/composition/
+  trajectory evidence.
+- `tools/verify_ml_bot_live.py` checks all 395 finite values and the three live
+  masks, actor-ID target persistence after distance re-sorting, weld
+  activation, beyond-primary secondary casting, pickup observation/movement/
+  exactly-once credit, and solo-zero/team-populated ally transitions.
+  `tools/verify_lua_bot_brain.py` keeps the existing scripted behaviors under
+  live regression while pinning the strict v2 runtime shape.
+- `scripts/Launch-LocalSoloSession.ps1` now validates
+  `TestSurvivalBoneyardOverride` and publishes requested/staged SHA-256
+  evidence.
+
+One narrow correction to the Phase 1 seam forecast was required for the
+approved pickup behavior gate. The existing one-argument
+`sd.world.request_loot_pickup(network_drop_id)` represents the local player
+and cannot credit a synthetic participant in the one-process training host.
+It now accepts an optional semantic `participant_id` for an active Lua bot.
+This adds no address or game-memory surface: it feeds the existing host
+request validation, native pickup-range calculation, deactivation, reward,
+result, and exactly-once ledger. All observation features remain computed in
+Lua.
+
+The composition parser and loops have no participant maximum. Checked-in
+runnable rows stop at the current native one-owner capacity (one learned plus
+two scripted, or three learned); the contract's larger team cases require the
+separate cap raise. Multi-layout cycling is complete, but only the stock
+layout is gated until the owner supplies an approved fixture corpus.
+
+Live gating exposed three internal consistency requirements that are now
+covered without adding an observation seam. Applying a selected native skill
+offer also promotes its progression row into the synthetic participant's
+owned-skill snapshot, including the derived stats used by loadout details.
+Spawn placement reserves every same-scene participant transform, including
+learned participants, before selecting a free cell. Synthetic pickup requests
+enter the existing host authority path through an internal flag so normal
+remote/Lua callers cannot impersonate another participant. The public surface
+remains address-free.
+
+The solo bridge treats the launcher's published result sidecar as the
+automation completion boundary and reaps its PowerShell wrapper during
+cleanup. Waiting for wrapper exit is not reliable because the launched game
+can inherit redirected handles. The paired scripted-verifier launcher also
+retries its God-mode registration during the short Lua-state handoff instead
+of treating the first transient unavailable-state response as terminal, and
+the test-only God-mode loop sustains authority-owned Lua bot progression
+alongside the two native players. The stock scripted acceptance waits for
+real wave/enemy activation, rematerializes the roster only when the bot is
+stranded outside the owner arena, and acquires a genuine primary through
+native level-up offers before judging casts.
+
+### Phase 5 release evidence (2026-07-29)
+
+- The Release loader build completed with zero warnings and zero errors.
+  Python passed 438/438 tests, the static RE/Lua registry passed 295/295,
+  the generated Lua API stub was current, and the standalone Lua fixture
+  passed.
+- The deterministic Lua contract fixture produced exactly 395 finite values
+  in exact order and passed target-conditioned masks, actor-ID persistence,
+  ally, weld, pickup, trajectory-v2, and one-build nav-cache checks.
+- The live v2 verifier round-tripped requested seed, accepted seed, and
+  observed run nonce `7295011`; staged the stock Boneyard at SHA-256
+  `fe2e01b0ab62f644c3e5bf53f71df3a41968b95c8e22fa44c1d1250ba08cdb5b`;
+  observed solo ally count zero and team ally count two; preserved actor
+  `281474976710657` while its target slot changed from 1 to 2; activated weld
+  build 1000; accepted 6 beyond-primary secondary casts after spawning the
+  target at 478.438 units against a 298.438-unit primary window; and credited
+  one seven-gold pickup from exactly one accepted request. The pickup request
+  was made at 30.263 units against a native 37.5-unit range.
+- The accelerated PPO smoke used two disposable sessions. `solo-learned`
+  round-tripped seed/run nonce `56933477` and collected 64 records from one
+  participant. `multi-learned-2` round-tripped `990726269` and collected
+  32 records from each of two participants. Both used the stock-layout hash
+  above, produced finite losses, wrote JSON/Lua checkpoints, chunk-hot-loaded
+  them, and advanced the runtime generation. Policy/value losses were
+  `0.004895/0.002757` and `0.033771/0.121909`, respectively.
+- The live scripted-profile regression passed guardian and striker behavior
+  checks and a live reload to skirmisher without crash artifacts. The stock
+  scripted-bot verifier then reached wave 5 alive at 50/50 HP, accepted 43
+  casts against replicated enemies, moved 4,792.718 units, and captured
+  matching host/client combat frames. Its native Fire primary resolved to
+  mana cost 12 and range 401.320 for that generated progression state.

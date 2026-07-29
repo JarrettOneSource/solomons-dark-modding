@@ -1,7 +1,8 @@
 void ApplyLootPickupRequestPacket(
     const LootPickupRequestPacket& packet,
     const TransportPeerEndpoint& from,
-    std::uint64_t now_ms) {
+    std::uint64_t now_ms,
+    bool host_synthetic_ingress = false) {
     if (!g_local_transport.is_host ||
         packet.participant_id == 0 ||
         packet.participant_id == g_local_transport.local_peer_id ||
@@ -10,7 +11,9 @@ void ApplyLootPickupRequestPacket(
         return;
     }
 
-    UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    if (!host_synthetic_ingress) {
+        UpsertPeerEndpoint(from, packet.participant_id, now_ms);
+    }
     if (IsLootPickupRequestSequenceDuplicate(packet)) {
         return;
     }
@@ -66,7 +69,13 @@ void ApplyLootPickupRequestPacket(
 
     std::string reject_reason;
     LootPickupResultCode result_code = LootPickupResultCode::Rejected;
-    if (!ValidateLootPickupRequest(packet, participant, drop, &reject_reason, &result_code)) {
+    if (!ValidateLootPickupRequest(
+            packet,
+            participant,
+            drop,
+            host_synthetic_ingress,
+            &reject_reason,
+            &result_code)) {
         SendLootPickupResult(
             packet,
             from,

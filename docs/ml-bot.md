@@ -120,11 +120,30 @@ py -3 tools/train_bot_policy.py live-ppo `
   --rollout-steps 1024
 ```
 
-The command owns a staged single-player instance with only `bot.brain`
-enabled. By default it launches headless, disables audio, keeps the stock
-10 ms fixed simulation step, and batches unchanged steps as fast as the
-machine allows. Learned decisions remain exactly 100 ms apart in simulation
-time regardless of wall-clock acceleration.
+Each environment episode owns a new staged one-process local-authority
+session with only `bot.brain` enabled. By default it launches headless,
+disables audio, keeps the stock 10 ms fixed simulation step, and batches
+unchanged steps as fast as the machine allows. Learned decisions remain
+exactly 100 ms apart in simulation time regardless of wall-clock
+acceleration. The session is closed after that episode; the trainer never
+reuses a run by automating Leave Game.
+
+Every episode receives a distinct native run seed. The trainer sets and reads
+it back in the hub, then verifies that the in-run participant `run_nonce`
+equals it. Its JSON episode line includes `requested_seed`,
+`seed_round_trip`, `observed_run_nonce`, `observed_run_seed`,
+`layout_sha256`, the full composition, learned participant IDs, and
+per-participant trajectory counts.
+
+Team compositions are data-driven in
+`tools/ml_bot/team-compositions.json`. The default rotation includes solo,
+mixed scripted teams that rotate Skirmisher/Guardian/Striker, and
+multi-learned teams sharing the current weights. Every authority-side learned
+participant writes trajectory v2, and PPO/GAE partitions by
+`(episode_id, participant_id)`. The parser has no participant maximum; the
+checked-in active sizes fit the current native lobby, while larger mixed and
+multi-learned rows can be added to the config when the cap-raise workstream
+lands.
 
 The live trainer uses a controlled curriculum arena. It enables the existing
 manual-enemy test mode, keeps stock wave production suppressed, and asks the
@@ -133,14 +152,16 @@ elite modifiers. The bot's primary spell is unlocked through native level-up
 offers and `sd.bots.choose_skill`; the trainer does not write a spell directly
 into its loadout.
 
-For each update the trainer:
+For each environment episode/update the trainer:
 
-1. collects strict trajectory-v2 observations, three masks, three actions,
+1. launches a disposable session and verifies its seed, run nonce, staged
+   Boneyard hash, and configured composition;
+2. collects strict trajectory-v2 observations, three masks, three actions,
    composite old log probabilities, values, rewards, and simulation ticks;
-2. computes trajectory-local generalized advantage estimates;
-3. applies clipped three-head PPO with finite and gradient checks;
-4. atomically replaces each JSON/Lua checkpoint file; and
-5. stages the large Lua export in sub-1-MiB pipe chunks, validates/commits it
+3. computes participant-trajectory-local generalized advantage estimates;
+4. applies clipped three-head PPO with finite and gradient checks;
+5. atomically replaces each JSON/Lua checkpoint file; and
+6. stages the large Lua export in sub-1-MiB pipe chunks, validates/commits it
    as one runtime candidate, and verifies generation advance.
 
 Default entropy coefficients are movement `0.01`, target `0.02`, and cast
@@ -151,6 +172,36 @@ head's entropy independently as well as their sum.
 Checkpoints are written under `runtime/ml-training/<instance>/`; the source
 model is not overwritten. Cleanup targets only the exact process launched and
 registered by that session.
+
+Repeat `--composition` to select and order a subset. Repeat
+`--boneyard-layout` to cycle owner-approved `.boneyard` files. Omit the latter
+to use the stock layout with fresh native seeds. The solo launcher validates
+each override, stages it through
+`SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE`, and publishes both requested and
+staged SHA-256 values.
+
+A short release-gate smoke is:
+
+```powershell
+py -3 tools/train_bot_policy.py live-ppo `
+  --iterations 2 `
+  --rollout-steps 64 `
+  --epochs 1 `
+  --batch-size 32 `
+  --composition solo-learned `
+  --composition multi-learned-2 `
+  --boneyard-layout `
+    "C:\path\to\SolomonDarkAbandonware\data\levels\survival.boneyard"
+```
+
+The 2026-07-29 release gate ran that two-episode shape with native
+seed/run-nonce pairs `56933477` and `990726269`. The solo episode collected
+64 trajectory-v2 rows from one learned participant; the two-learned episode
+collected 32 rows from each participant. Both updates remained finite,
+exported matching JSON/Lua checkpoints, completed chunked hot reload, and
+advanced the runtime policy generation. The live behavior verifier separately
+proved target selection, movement, weld activation, a secondary cast beyond
+the primary window, and exactly one pickup credit.
 
 ## Known limitations
 
@@ -164,11 +215,16 @@ registered by that session.
 - There is no learned skill-upgrade/weld head, aim-offset head, recurrent
   state, item consume/equip action, or inventory-transfer action.
 - The controlled one-enemy arena is curriculum plumbing, not a competence
-  evaluation. It omits normal wave cadence, elites, broad builds, and team
-  compositions.
-- Fresh boneyard seed/session and team-composition rotation belong to the
-  Phase 5 training harness. Until that gate lands, do not promote a long run
-  from the current single-session curriculum as a production-trained policy.
+  evaluation. It omits normal wave cadence, elites, and broad builds.
+- The current native four-participant lobby limits a one-owner session to
+  three synthetic teammates. Thus the checked-in runnable rotation reaches
+  one learned plus two scripted bots or three learned bots. Composition
+  parsing and observation/training loops contain no such ceiling; the
+  contract's one-learned-plus-three-scripted and four-learned cases become
+  runnable when the separate cap-raise lands.
+- Fresh native seeds vary stock procedural generation. A diverse,
+  owner-approved Boneyard fixture corpus has not yet been supplied; multi-file
+  layout cycling is implemented but remains a non-blocking future input.
 
 ## Install a trained checkpoint
 

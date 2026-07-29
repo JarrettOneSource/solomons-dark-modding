@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import subprocess
 import time
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from owned_process_ledger import (
     OwnedProcessError,
@@ -19,6 +20,7 @@ from owned_process_ledger import (
 import verify_local_multiplayer_sync as local_sync
 
 from . import spec
+from .compositions import TeamComposition, build_roster
 from .model import BotPolicy, render_lua_weights
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +34,13 @@ PRIMARY_ENTRY_BY_ELEMENT = {
     "earth": 0x28,
     "air": 0x18,
     "ether": 0x08,
+}
+TRAINING_SECONDARY_ENTRY_BY_ELEMENT = {
+    "fire": 21,
+    "water": 35,
+    "earth": 41,
+    "air": 27,
+    "ether": 11,
 }
 SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
 DEFAULT_LAUNCHER = (
@@ -151,6 +160,20 @@ def _floats(value: str, expected: int, label: str) -> list[float]:
         )
     if not all(math.isfinite(item) for item in result):
         raise BridgeError(f"{label} vector contains a non-finite value")
+    return result
+
+
+def _participant_ids(value: str) -> tuple[int, ...]:
+    if not value:
+        return ()
+    try:
+        result = tuple(int(item) for item in value.split(","))
+    except ValueError as error:
+        raise BridgeError(
+            f"invalid participant id list: {value!r}"
+        ) from error
+    if any(item <= 0 for item in result) or len(set(result)) != len(result):
+        raise BridgeError(f"invalid participant id list: {value!r}")
     return result
 
 
@@ -338,50 +361,95 @@ print('policy_decision_count=' .. tostring(
   debug.policy_decision_count or 0))
 print('move_accepted=' .. tostring(debug.move_accepted or 0))
 print('cast_accepted=' .. tostring(debug.cast_accepted or 0))
+local learned_ids = {}
+local learned_count = 0
+for _, row in ipairs(debug.bots or {}) do
+  if tostring(row.behavior or '') == 'learned' and
+      (tonumber(row.participant_id) or 0) > 0 then
+    learned_count = learned_count + 1
+    learned_ids[#learned_ids + 1] =
+      tostring(row.participant_id)
+  end
+end
+print('learned_bot_count=' .. tostring(learned_count))
+print('learned_participant_ids=' ..
+  table.concat(learned_ids, ','))
 """
 
 RUN_READY_STATUS = r"""
 local scene = sd.world.get_scene()
 local multiplayer = sd.runtime.get_multiplayer_state() or {}
 local loading = multiplayer.run_loading_barrier or {}
-local handles = sd.bots.list()
-local bot = handles[1]
-local participant_id = 0
-local position_ok = false
-local hp_ok = false
-local alive_ok = false
-local slot_ok = false
-local member = nil
-if bot ~= nil then
+local handles = sd.bots.list() or {}
+local debug = rawget(_G, 'bot_brain_debug') or {}
+local members = {}
+for _, participant in ipairs(multiplayer.participants or {}) do
+  members[tonumber(participant.participant_id) or 0] =
+    participant
+end
+local position_count = 0
+local hp_count = 0
+local alive_count = 0
+local slot_count = 0
+local member_in_run_count = 0
+local member_runtime_valid_count = 0
+local lua_brain_member_count = 0
+local participant_ids = {}
+for _, bot in ipairs(handles) do
+  local participant_id =
+    tonumber(bot:participant_id()) or 0
+  participant_ids[#participant_ids + 1] =
+    tostring(participant_id)
   local ok, x, y = pcall(function()
     return bot:position()
   end)
-  position_ok =
-    ok and tonumber(x) ~= nil and tonumber(y) ~= nil
+  if ok and tonumber(x) ~= nil and tonumber(y) ~= nil then
+    position_count = position_count + 1
+  end
   local hp_call_ok, hp = pcall(function()
     return bot:hp()
   end)
   local max_hp_call_ok, max_hp = pcall(function()
     return bot:max_hp()
   end)
-  hp_ok =
-    hp_call_ok and tonumber(hp) ~= nil and
-    max_hp_call_ok and (tonumber(max_hp) or 0) > 0
+  if hp_call_ok and tonumber(hp) ~= nil and
+      max_hp_call_ok and (tonumber(max_hp) or 0) > 0 then
+    hp_count = hp_count + 1
+  end
   local alive_call_ok, alive = pcall(function()
     return bot:alive()
   end)
-  alive_ok = alive_call_ok and alive == true
+  if alive_call_ok and alive == true then
+    alive_count = alive_count + 1
+  end
   local slot_call_ok, slot = pcall(function()
     return bot:slot()
   end)
   slot = tonumber(slot) or -1
-  slot_ok = slot_call_ok and slot >= 1 and slot <= 3
-  participant_id = tonumber(bot:participant_id()) or 0
-  for _, candidate in ipairs(multiplayer.participants or {}) do
-    if tonumber(candidate.participant_id) == participant_id then
-      member = candidate
-      break
-    end
+  if slot_call_ok and slot >= 1 then
+    slot_count = slot_count + 1
+  end
+  local member = members[participant_id]
+  if member and member.in_run == true then
+    member_in_run_count = member_in_run_count + 1
+  end
+  if member and member.runtime_valid == true then
+    member_runtime_valid_count =
+      member_runtime_valid_count + 1
+  end
+  if member and
+      tostring(member.controller_kind or '') == 'LuaBrain' then
+    lua_brain_member_count = lua_brain_member_count + 1
+  end
+end
+local learned_count = 0
+local learned_ids = {}
+for _, row in ipairs(debug.bots or {}) do
+  if tostring(row.behavior or '') == 'learned' and
+      (tonumber(row.participant_id) or 0) > 0 then
+    learned_count = learned_count + 1
+    learned_ids[#learned_ids + 1] =
+      tostring(row.participant_id)
   end
 end
 print('scene=' .. tostring(
@@ -402,22 +470,31 @@ print('loading_expected=' .. tostring(
 print('loading_ready=' .. tostring(
   loading.ready_participant_count or 0))
 print('bot_count=' .. tostring(#handles))
-print('bot_position_ok=' .. tostring(position_ok))
-print('bot_hp_ok=' .. tostring(hp_ok))
-print('bot_alive=' .. tostring(alive_ok))
-print('bot_slot_ok=' .. tostring(slot_ok))
-print('member_in_run=' .. tostring(
-  member and member.in_run or false))
-print('member_runtime_valid=' .. tostring(
-  member and member.runtime_valid or false))
-print('member_controller=' .. tostring(
-  member and member.controller_kind or ''))
+print('bot_position_count=' .. tostring(position_count))
+print('bot_hp_count=' .. tostring(hp_count))
+print('bot_alive_count=' .. tostring(alive_count))
+print('bot_slot_count=' .. tostring(slot_count))
+print('member_in_run_count=' ..
+  tostring(member_in_run_count))
+print('member_runtime_valid_count=' ..
+  tostring(member_runtime_valid_count))
+print('lua_brain_member_count=' ..
+  tostring(lua_brain_member_count))
+print('participant_ids=' ..
+  table.concat(participant_ids, ','))
+print('learned_bot_count=' .. tostring(learned_count))
+print('learned_participant_ids=' ..
+  table.concat(learned_ids, ','))
 """
 
 TRAINING_ARENA_MANAGER = r"""
-local enemy_type_id = 1001
-local enemy_hp = 750.0
-local spawn_distance = 260.0
+local config =
+  rawget(_G, '__sdmod_ml_training_arena_config') or {}
+local enemy_type_id =
+  tonumber(config.enemy_type_id) or 1001
+local enemy_hp = tonumber(config.enemy_hp) or 750.0
+local spawn_distance =
+  tonumber(config.spawn_distance) or 260.0
 
 local function live_enemy_count()
   local count = 0
@@ -553,9 +630,13 @@ class SoloSession:
         runtime_root: Path | None = None,
         local_port: int = 49780,
         unused_remote_port: int = 49781,
+        max_participants: int,
         headless: bool = True,
         element: str = "fire",
         discipline: str = "arcane",
+        boneyard_override: Path | None = None,
+        multiplayer_transport: bool = True,
+        weld_preference: str = "auto",
     ) -> None:
         self.instance = instance
         self.game_directory = game_directory
@@ -563,12 +644,19 @@ class SoloSession:
         self.runtime_root = runtime_root or ROOT / "runtime"
         self.local_port = local_port
         self.unused_remote_port = unused_remote_port
+        if max_participants < 2:
+            raise ValueError("max_participants must include an owner and bot")
+        self.max_participants = max_participants
         self.headless = headless
         self.element = element
         self.discipline = discipline
+        self.boneyard_override = boneyard_override
+        self.multiplayer_transport = multiplayer_transport
+        self.weld_preference = weld_preference
         self.pipe_name = f"SolomonDarkModLoader_LuaExec_{instance}"
         self.launch_result: dict[str, Any] | None = None
         self.process_ids: list[int] = []
+        self.launch_wrapper_process: subprocess.Popen[bytes] | None = None
 
     @property
     def stage_root(self) -> Path:
@@ -587,6 +675,40 @@ class SoloSession:
             / "mod-settings"
             / "bot.brain.json"
         )
+
+    @property
+    def staged_boneyard_path(self) -> Path:
+        return self.stage_root / "data" / "levels" / "survival.boneyard"
+
+    def layout_sha256(self) -> str:
+        if self.launch_result is None:
+            raise BridgeError("session is not launched")
+        path = self.staged_boneyard_path
+        if not path.is_file():
+            raise BridgeError(f"staged boneyard does not exist: {path}")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        published = str(
+            self.launch_result.get("stagedBoneyardSha256", "")
+        ).lower()
+        if published != digest:
+            raise BridgeError(
+                "launcher and bridge disagree on the staged boneyard hash"
+            )
+        if self.boneyard_override is not None:
+            requested = hashlib.sha256(
+                self.boneyard_override.read_bytes()
+            ).hexdigest()
+            published_requested = str(
+                self.launch_result.get(
+                    "requestedBoneyardSha256",
+                    "",
+                )
+            ).lower()
+            if published_requested != requested or digest != requested:
+                raise BridgeError(
+                    "requested and staged boneyard hashes do not match"
+                )
+        return digest
 
     def _rescue_partial(self, ledger_path: Path) -> None:
         if not ledger_path.is_file():
@@ -617,6 +739,22 @@ class SoloSession:
         except OwnedProcessError:
             pass
 
+    def _reap_launch_wrapper(self) -> None:
+        process = self.launch_wrapper_process
+        self.launch_wrapper_process = None
+        if process is None:
+            return
+        try:
+            process.wait(timeout=5.0)
+            return
+        except subprocess.TimeoutExpired:
+            process.terminate()
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2.0)
+
     def launch(self) -> dict[str, Any]:
         if self.launch_result is not None:
             raise BridgeError("session is already launched")
@@ -627,6 +765,18 @@ class SoloSession:
         if not self.launcher_path.is_file():
             raise BridgeError(
                 f"launcher does not exist: {self.launcher_path}"
+            )
+        if (
+            self.boneyard_override is not None
+            and not self.boneyard_override.is_file()
+        ):
+            raise BridgeError(
+                "boneyard override does not exist: "
+                f"{self.boneyard_override}"
+            )
+        if self.weld_preference not in {"auto", "prefer", "avoid"}:
+            raise BridgeError(
+                "weld preference must be auto, prefer, or avoid"
             )
 
         ledger_path = (
@@ -656,6 +806,8 @@ class SoloSession:
             str(self.local_port),
             "-UnusedRemotePort",
             str(self.unused_remote_port),
+            "-MaxParticipants",
+            str(self.max_participants),
             "-ParticipantId",
             "0x2000000000002A01",
             "-PlayerName",
@@ -665,7 +817,6 @@ class SoloSession:
             "-LauncherPath",
             _path_for_powershell(self.launcher_path),
             "-FreshInstall",
-            "-DisableMultiplayerTransport",
             "-ExactModIds",
             "bot.brain",
             "-ProcessIdOutputPath",
@@ -673,30 +824,55 @@ class SoloSession:
             "-ResultOutputPath",
             _path_for_powershell(result_path),
         ]
+        if not self.multiplayer_transport:
+            arguments.append("-DisableMultiplayerTransport")
+        if self.boneyard_override is not None:
+            arguments.extend(
+                (
+                    "-TestSurvivalBoneyardOverride",
+                    _path_for_powershell(self.boneyard_override),
+                )
+            )
         if self.headless:
             arguments.append("-Headless")
 
         try:
-            completed = subprocess.run(
+            self.launch_wrapper_process = subprocess.Popen(
                 arguments,
                 cwd=ROOT,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=120.0,
-                check=False,
             )
-            if completed.returncode != 0:
+            deadline = time.monotonic() + 120.0
+            result: Any = None
+            while time.monotonic() < deadline:
+                if result_path.is_file():
+                    try:
+                        result = json.loads(
+                            result_path.read_text(
+                                encoding="utf-8-sig"
+                            )
+                        )
+                    except (
+                        OSError,
+                        UnicodeError,
+                        json.JSONDecodeError,
+                    ):
+                        result = None
+                    if result is not None:
+                        break
+                returncode = self.launch_wrapper_process.poll()
+                if returncode is not None:
+                    raise BridgeError(
+                        "solo launch exited before publishing its "
+                        f"result document (exit code {returncode})"
+                    )
+                time.sleep(0.05)
+            if result is None:
                 raise BridgeError(
-                    "solo launch failed "
-                    f"with exit code {completed.returncode}"
+                    "solo launch did not publish its result document "
+                    "within 120 seconds"
                 )
-            if not result_path.is_file():
-                raise BridgeError(
-                    "solo launch did not publish its result document"
-                )
-            result = json.loads(
-                result_path.read_text(encoding="utf-8-sig")
-            )
             if not isinstance(result, dict):
                 raise BridgeError("solo launch result is not an object")
             if result.get("success") is not True:
@@ -709,12 +885,14 @@ class SoloSession:
             runtime_root = result.get("runtimeRoot")
             if isinstance(runtime_root, str) and runtime_root:
                 self.runtime_root = _local_path(runtime_root)
+            self.layout_sha256()
             return result
         except BaseException:
             if self.process_ids:
                 self.close()
             else:
                 self._rescue_partial(ledger_path)
+                self._reap_launch_wrapper()
             raise
         finally:
             ledger_path.unlink(missing_ok=True)
@@ -728,7 +906,10 @@ class SoloSession:
                 return []
             return stop_owned_process_ids(process_ids)
         finally:
-            local_sync._kill_lua_daemon(self.pipe_name)
+            try:
+                self._reap_launch_wrapper()
+            finally:
+                local_sync._kill_lua_daemon(self.pipe_name)
 
     def __enter__(self) -> "SoloSession":
         self.launch()
@@ -952,6 +1133,7 @@ print('ready=' .. tostring(
                     "focus_bot_key": "NONE",
                     "kite_radius": 340,
                     "offense_enabled": True,
+                    "policy_weld_preference": self.weld_preference,
                     "roster": roster,
                     "think_profile": "standard",
                 },
@@ -1011,6 +1193,18 @@ end
             ]
         )
 
+    def write_composition(
+        self,
+        composition: TeamComposition,
+    ) -> dict[str, str]:
+        return self._write_roster(
+            build_roster(
+                composition,
+                element=self.element,
+                discipline=self.discipline,
+            )
+        )
+
     def wait_for_empty_roster(self, *, timeout: float = 30.0) -> dict[str, str]:
         deadline = time.monotonic() + timeout
         last: dict[str, str] = {}
@@ -1028,15 +1222,34 @@ end
             time.sleep(0.2)
         raise BridgeError(f"bot roster did not become empty: {last}")
 
-    def wait_for_learned_bot(self, *, timeout: float = 30.0) -> dict[str, str]:
+    def wait_for_composition(
+        self,
+        *,
+        expected_bot_count: int,
+        expected_learned_count: int,
+        timeout: float = 30.0,
+    ) -> dict[str, str]:
+        if expected_bot_count < 1 or expected_learned_count < 1:
+            raise ValueError("expected bot counts must be positive")
         deadline = time.monotonic() + timeout
         last: dict[str, str] = {}
         while time.monotonic() < deadline:
             try:
                 last = self.status()
                 if (
-                    int(last.get("active_bot_count", "0")) >= 1
-                    and last.get("behavior") == "learned"
+                    int(last.get("active_bot_count", "0"))
+                    == expected_bot_count
+                    and int(last.get("learned_bot_count", "0"))
+                    == expected_learned_count
+                    and len(
+                        _participant_ids(
+                            last.get(
+                                "learned_participant_ids",
+                                "",
+                            )
+                        )
+                    )
+                    == expected_learned_count
                 ):
                     return last
             except (
@@ -1046,9 +1259,28 @@ end
             ):
                 pass
             time.sleep(0.2)
-        raise BridgeError(f"learned bot did not become ready: {last}")
+        raise BridgeError(
+            f"bot composition did not become ready: {last}"
+        )
 
-    def wait_for_run_ready(self, *, timeout: float = 45.0) -> dict[str, str]:
+    def wait_for_learned_bot(
+        self,
+        *,
+        timeout: float = 30.0,
+    ) -> dict[str, str]:
+        return self.wait_for_composition(
+            expected_bot_count=1,
+            expected_learned_count=1,
+            timeout=timeout,
+        )
+
+    def wait_for_run_ready(
+        self,
+        *,
+        expected_bot_count: int = 1,
+        expected_learned_count: int = 1,
+        timeout: float = 45.0,
+    ) -> dict[str, str]:
         if self.launch_result is None:
             raise BridgeError("session is not launched")
         transport_enabled = bool(
@@ -1076,9 +1308,21 @@ end
                     == "all-participants-ready"
                     and expected > 0
                     and ready == expected
-                    and last.get("member_in_run") == "true"
-                    and last.get("member_runtime_valid") == "true"
-                    and last.get("member_controller") == "LuaBrain"
+                    and int(
+                        last.get("member_in_run_count", "0")
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "member_runtime_valid_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "lua_brain_member_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
                 )
                 offline_lifecycle_ready = (
                     last.get("scene") == "testrun"
@@ -1089,9 +1333,21 @@ end
                     and int(last.get("loading_run_nonce", "0")) == 0
                     and expected == 0
                     and ready == 0
-                    and last.get("member_in_run") == "true"
-                    and last.get("member_runtime_valid") == "true"
-                    and last.get("member_controller") == "LuaBrain"
+                    and int(
+                        last.get("member_in_run_count", "0")
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "member_runtime_valid_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "lua_brain_member_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
                 )
                 lifecycle_ready = (
                     multiplayer_lifecycle_ready
@@ -1116,11 +1372,20 @@ end
                         time.sleep(0.1)
                         continue
                     bot_ready = (
-                        int(last.get("bot_count", "0")) == 1
-                        and last.get("bot_position_ok") == "true"
-                        and last.get("bot_hp_ok") == "true"
-                        and last.get("bot_alive") == "true"
-                        and last.get("bot_slot_ok") == "true"
+                        int(last.get("bot_count", "0"))
+                        == expected_bot_count
+                        and int(
+                            last.get("bot_position_count", "0")
+                        ) == expected_bot_count
+                        and int(last.get("bot_hp_count", "0"))
+                        == expected_bot_count
+                        and int(last.get("bot_alive_count", "0"))
+                        == expected_bot_count
+                        and int(last.get("bot_slot_count", "0"))
+                        == expected_bot_count
+                        and int(
+                            last.get("learned_bot_count", "0")
+                        ) == expected_learned_count
                     )
                     last["bot_ready"] = str(bot_ready).lower()
                     return last
@@ -1138,6 +1403,8 @@ end
     def wait_for_bot_materialized(
         self,
         *,
+        expected_bot_count: int = 1,
+        expected_learned_count: int = 1,
         timeout: float = 45.0,
     ) -> dict[str, str]:
         deadline = time.monotonic() + timeout
@@ -1151,14 +1418,35 @@ end
                 )
                 if (
                     last.get("scene") == "testrun"
-                    and int(last.get("bot_count", "0")) == 1
-                    and last.get("bot_position_ok") == "true"
-                    and last.get("bot_hp_ok") == "true"
-                    and last.get("bot_alive") == "true"
-                    and last.get("bot_slot_ok") == "true"
-                    and last.get("member_in_run") == "true"
-                    and last.get("member_runtime_valid") == "true"
-                    and last.get("member_controller") == "LuaBrain"
+                    and int(last.get("bot_count", "0"))
+                    == expected_bot_count
+                    and int(
+                        last.get("bot_position_count", "0")
+                    ) == expected_bot_count
+                    and int(last.get("bot_hp_count", "0"))
+                    == expected_bot_count
+                    and int(last.get("bot_alive_count", "0"))
+                    == expected_bot_count
+                    and int(last.get("bot_slot_count", "0"))
+                    == expected_bot_count
+                    and int(
+                        last.get("member_in_run_count", "0")
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "member_runtime_valid_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
+                    and int(
+                        last.get(
+                            "lua_brain_member_count",
+                            "0",
+                        )
+                    ) == expected_bot_count
+                    and int(
+                        last.get("learned_bot_count", "0")
+                    ) == expected_learned_count
                 ):
                     return last
                 if (
@@ -1200,6 +1488,85 @@ print('error=' .. tostring(result.error or ''))
         if values.get("registered") != "true":
             raise BridgeError(f"failed to register god mode: {values}")
         return values
+
+    def set_run_seed(self, seed: int) -> dict[str, int]:
+        if seed < 1 or seed > 0x3FFFFFFF:
+            raise ValueError(
+                "run seed must be between 1 and 0x3fffffff"
+            )
+        values = local_sync.parse_key_values(
+            self.lua(
+                f"""
+local requested = {int(seed)}
+local accepted = sd.rng.set_seed(requested)
+local observed = sd.rng.get_seed()
+print('requested_seed=' .. tostring(requested))
+print('accepted_seed=' .. tostring(accepted or 0))
+print('observed_seed=' .. tostring(observed or 0))
+""",
+                timeout=10.0,
+            )
+        )
+        result = {
+            key: int(values.get(key, "0"))
+            for key in (
+                "requested_seed",
+                "accepted_seed",
+                "observed_seed",
+            )
+        }
+        if any(value != seed for value in result.values()):
+            raise BridgeError(
+                f"run seed did not round-trip exactly: {result}"
+            )
+        return result
+
+    def get_run_identity(self) -> dict[str, int]:
+        values = local_sync.parse_key_values(
+            self.lua(
+                """
+local state = sd.runtime.get_multiplayer_state() or {}
+local seed = tonumber(sd.rng.get_seed()) or 0
+local nonce = 0
+local mismatches = 0
+for _, participant in ipairs(state.participants or {}) do
+  if participant.in_run == true then
+    local candidate = tonumber(participant.run_nonce) or 0
+    if candidate > 0 then
+      if nonce == 0 then
+        nonce = candidate
+      elseif nonce ~= candidate then
+        mismatches = mismatches + 1
+      end
+    end
+  end
+end
+local loading = state.run_loading_barrier or {}
+if nonce == 0 then
+  nonce = tonumber(loading.run_nonce) or 0
+end
+print('observed_seed=' .. tostring(seed))
+print('run_nonce=' .. tostring(nonce))
+print('nonce_mismatches=' .. tostring(mismatches))
+""",
+                timeout=10.0,
+            )
+        )
+        result = {
+            key: int(values.get(key, "0"))
+            for key in (
+                "observed_seed",
+                "run_nonce",
+                "nonce_mismatches",
+            )
+        }
+        if (
+            result["observed_seed"] <= 0
+            or result["run_nonce"] <= 0
+            or result["nonce_mismatches"] != 0
+        ):
+            raise BridgeError(f"run identity is invalid: {result}")
+        return result
 
     def start_test_run(self, *, timeout: float = 30.0) -> None:
         deadline = time.monotonic() + timeout
@@ -1460,13 +1827,431 @@ print('error=' .. tostring(
             )
         return values
 
+    def prime_learned_progression(
+        self,
+        *,
+        minimum_secondary_slots: int = 1,
+        max_level_steps: int = 64,
+        timeout: float = 30.0,
+    ) -> dict[str, str]:
+        if minimum_secondary_slots < 0:
+            raise ValueError(
+                "minimum_secondary_slots must be non-negative"
+            )
+        if max_level_steps <= 0:
+            raise ValueError("max_level_steps must be positive")
+        try:
+            training_primary_entry = (
+                PRIMARY_ENTRY_BY_ELEMENT[self.element]
+            )
+            training_secondary_entry = (
+                TRAINING_SECONDARY_ENTRY_BY_ELEMENT[self.element]
+            )
+        except KeyError as error:
+            raise BridgeError(
+                f"unsupported training element: {self.element}"
+            ) from error
+        values = local_sync.parse_key_values(
+            self.lua(
+                f"""
+local minimum_secondaries = {int(minimum_secondary_slots)}
+local max_steps = {int(max_level_steps)}
+local training_primary_entry = {training_primary_entry}
+local training_secondary_entry = {training_secondary_entry}
+local debug = rawget(_G, 'bot_brain_debug') or {{}}
+local learned = {{}}
+for _, row in ipairs(debug.bots or {{}}) do
+  if tostring(row.behavior or '') == 'learned' and
+      (tonumber(row.participant_id) or 0) > 0 then
+    learned[#learned + 1] =
+      tonumber(row.participant_id)
+  end
+end
+table.sort(learned)
+
+local castable_secondary = {{
+  [11] = true, [12] = true, [15] = true,
+  [21] = true, [23] = true, [27] = true,
+  [30] = true, [35] = true, [41] = true,
+  [45] = true, [46] = true, [48] = true,
+  [49] = true, [50] = true, [51] = true,
+  [54] = true, [72] = true, [73] = true,
+  [74] = true, [76] = true, [77] = true,
+  [78] = true, [79] = true,
+}}
+local level_offset = assert(
+  sd.debug.layout_offset('progression_level'))
+local next_xp_offset = assert(
+  sd.debug.layout_offset('progression_next_xp_threshold'))
+local table_base_offset = assert(
+  sd.debug.layout_offset(
+    'standalone_wizard_progression_table_base'))
+local table_count_offset = assert(
+  sd.debug.layout_offset(
+    'standalone_wizard_progression_table_count'))
+local table_stride = assert(
+  sd.debug.layout_offset(
+    'standalone_wizard_progression_entry_stride'))
+local active_offset = assert(
+  sd.debug.layout_offset(
+    'standalone_wizard_progression_active_flag'))
+local effective_offset = assert(
+  sd.debug.layout_offset(
+    'standalone_wizard_progression_entry_effective_rank'))
+
+local function native_entry_active(participant_id, entry_id)
+  local state = sd.bots.get_state(participant_id) or {{}}
+  local progression =
+    tonumber(state.progression_runtime_state_address) or 0
+  if progression <= 0 or entry_id < 0 then
+    return false
+  end
+  local table_address =
+    tonumber(sd.debug.read_ptr(
+      progression + table_base_offset)) or 0
+  local table_count =
+    tonumber(sd.debug.read_i32(
+      progression + table_count_offset)) or 0
+  if table_address <= 0 or
+      entry_id >= table_count then
+    return false
+  end
+  local active =
+    tonumber(sd.debug.read_u16(
+      table_address +
+      entry_id * table_stride +
+      active_offset)) or 0
+  return active > 0
+end
+
+local profile_updates_ok = true
+local function ensure_current_primary_active(participant_id)
+  local state = sd.bots.get_state(participant_id) or {{}}
+  local progression =
+    tonumber(state.progression_runtime_state_address) or 0
+  local details =
+    sd.bots.get_loadout_details(participant_id) or {{}}
+  local entry_id =
+    tonumber((details.primary or {{}}).entry_id) or -1
+  if progression <= 0 or entry_id < 0 then
+    return false
+  end
+  local table_address =
+    tonumber(sd.debug.read_ptr(
+      progression + table_base_offset)) or 0
+  local table_count =
+    tonumber(sd.debug.read_i32(
+      progression + table_count_offset)) or 0
+  if table_address <= 0 or
+      entry_id >= table_count then
+    return false
+  end
+  local row =
+    table_address + entry_id * table_stride
+  local active =
+    math.max(
+      tonumber(sd.debug.read_u16(
+        row + active_offset)) or 0,
+      1)
+  local effective =
+    math.max(
+      tonumber(sd.debug.read_u16(
+        row + effective_offset)) or 0,
+      active)
+  return
+    sd.debug.write_u16(
+      row + active_offset,
+      active) and
+    sd.debug.write_u16(
+      row + effective_offset,
+      effective)
+end
+
+local function install_secondary(participant_id, entry_id)
+  if not native_entry_active(participant_id, entry_id) then
+    return false
+  end
+  local state = sd.bots.get_state(participant_id) or {{}}
+  local profile = state.profile or {{}}
+  local loadout = profile.loadout or {{}}
+  local secondaries = {{}}
+  local already_installed = false
+  local target_slot = nil
+  for slot = 1, 8 do
+    secondaries[slot] =
+      tonumber(
+        (loadout.secondary_entry_indices or {{}})[slot]) or -1
+    if secondaries[slot] == entry_id then
+      already_installed = true
+    elseif target_slot == nil and
+        (secondaries[slot] < 0 or
+         not native_entry_active(
+           participant_id,
+           secondaries[slot])) then
+      target_slot = slot
+    end
+  end
+  if already_installed then
+    return true
+  end
+  if target_slot == nil then
+    return false
+  end
+  secondaries[target_slot] = entry_id
+  local updated = sd.bots.update({{
+    id = participant_id,
+    profile = {{
+      element_id = tonumber(profile.element_id) or 0,
+      discipline_id = tonumber(profile.discipline_id) or 2,
+      level = tonumber(profile.level) or 1,
+      experience = tonumber(profile.experience) or 0,
+      loadout = {{
+        primary_entry_index =
+          tonumber(loadout.primary_entry_index) or -1,
+        primary_combo_entry_index =
+          tonumber(loadout.primary_combo_entry_index) or -1,
+        secondary_entry_indices = secondaries,
+      }},
+    }},
+  }})
+  profile_updates_ok =
+    updated == true and profile_updates_ok
+  return updated == true
+end
+
+local function loadout_ready(participant_id)
+  local details =
+    sd.bots.get_loadout_details(participant_id) or {{}}
+  local primary = details.primary or {{}}
+  local occupied = 0
+  for _, secondary in ipairs(details.secondaries or {{}}) do
+    if (tonumber(secondary.entry_id) or -1) >= 0 and
+        native_entry_active(
+          participant_id,
+          tonumber(secondary.entry_id) or -1) and
+        secondary.mana_cost_resolved == true and
+        (tonumber(secondary.mana_cost) or 0) > 0 then
+      occupied = occupied + 1
+    end
+  end
+  return
+    primary.build_id_resolved == true and
+    primary.mana_cost_resolved == true and
+    primary.range_resolved == true and
+    (tonumber(primary.mana_cost) or 0) > 0 and
+    (tonumber(primary.range_max) or 0) > 0 and
+    occupied >= minimum_secondaries,
+    occupied
+end
+
+local primary_rows_ok = true
+for _, participant_id in ipairs(learned) do
+  primary_rows_ok =
+    ensure_current_primary_active(participant_id) and
+    primary_rows_ok
+end
+
+local function apply_pending(participant_id)
+  local choices =
+    sd.bots.get_skill_choices(participant_id) or {{}}
+  if choices.pending ~= true or
+      #(choices.options or {{}}) == 0 then
+    return false
+  end
+  local selected = nil
+  local details =
+    sd.bots.get_loadout_details(participant_id) or {{}}
+  local primary = details.primary or {{}}
+  local primary_missing =
+    primary.mana_cost_resolved ~= true or
+    (tonumber(primary.mana_cost) or 0) <= 0
+  if primary_missing then
+    for index, option in ipairs(choices.options) do
+      if (tonumber(option.id) or -1) ==
+          training_primary_entry then
+        selected = index
+        break
+      end
+    end
+  end
+  if selected == nil then
+    for index, option in ipairs(choices.options) do
+      local option_id = tonumber(option.id) or -1
+      if option_id == training_secondary_entry then
+        selected = index
+        break
+      end
+    end
+  end
+  if selected == nil then
+    for index, option in ipairs(choices.options) do
+      local option_id = tonumber(option.id) or -1
+      if castable_secondary[option_id] == true then
+        selected = index
+        break
+      end
+    end
+  end
+  if selected == nil then
+    for index, option in ipairs(choices.options) do
+      if (tonumber(option.id) or -1) ~= 52 then
+        selected = index
+        break
+      end
+    end
+  end
+  if selected == nil then
+    return false
+  end
+  local ok, accepted = pcall(
+    sd.bots.choose_skill,
+    participant_id,
+    selected,
+    tonumber(choices.generation) or 0)
+  if ok and accepted == true then
+    local option_id =
+      tonumber(choices.options[selected].id) or -1
+    if castable_secondary[option_id] == true then
+      profile_updates_ok =
+        install_secondary(participant_id, option_id) and
+        profile_updates_ok
+    end
+  end
+  return ok and accepted == true
+end
+
+local steps = 0
+local choices_applied = 0
+while steps < max_steps do
+  local ready_count = 0
+  for _, participant_id in ipairs(learned) do
+    local ready = loadout_ready(participant_id)
+    if ready then
+      ready_count = ready_count + 1
+    elseif apply_pending(participant_id) then
+      choices_applied = choices_applied + 1
+    end
+  end
+  if ready_count == #learned and #learned > 0 then
+    break
+  end
+
+  local target_level = 2
+  local target_xp = 100
+  for _, participant_id in ipairs(learned) do
+    local state = sd.bots.get_state(participant_id) or {{}}
+    local progression =
+      tonumber(state.progression_runtime_state_address) or 0
+    if progression > 0 then
+      local level = tonumber(
+        sd.debug.read_i32(
+          progression + level_offset)) or 1
+      local next_xp = tonumber(
+        sd.debug.read_float(
+          progression + next_xp_offset)) or 90
+      target_level = math.max(target_level, level + 1)
+      target_xp =
+        math.max(target_xp, math.ceil(next_xp + 10))
+    end
+  end
+  local ok, synced = pcall(
+    sd.bots.debug_sync_level_up,
+    {{
+      level = target_level,
+      experience = target_xp,
+    }})
+  if not ok or synced ~= true then
+    break
+  end
+  steps = steps + 1
+  for _, participant_id in ipairs(learned) do
+    if apply_pending(participant_id) then
+      choices_applied = choices_applied + 1
+    end
+  end
+end
+
+local ready_count = 0
+local minimum_observed = 999
+for _, participant_id in ipairs(learned) do
+  local ready, occupied = loadout_ready(participant_id)
+  if ready then ready_count = ready_count + 1 end
+  minimum_observed = math.min(minimum_observed, occupied)
+end
+if #learned == 0 then minimum_observed = 0 end
+local first_details =
+  learned[1] and
+    (sd.bots.get_loadout_details(learned[1]) or {{}}) or {{}}
+local first_primary = first_details.primary or {{}}
+print('ready=' .. tostring(
+  profile_updates_ok and
+  primary_rows_ok and
+  #learned > 0 and ready_count == #learned))
+print('profile_updates_ok=' ..
+  tostring(profile_updates_ok))
+print('primary_rows_ok=' ..
+  tostring(primary_rows_ok))
+print('training_secondary_entry=' ..
+  tostring(training_secondary_entry))
+print('primary_build_resolved=' ..
+  tostring(first_primary.build_id_resolved == true))
+print('primary_mana_resolved=' ..
+  tostring(first_primary.mana_cost_resolved == true))
+print('primary_mana_cost=' ..
+  tostring(tonumber(first_primary.mana_cost) or 0))
+print('primary_range_resolved=' ..
+  tostring(first_primary.range_resolved == true))
+print('primary_range_max=' ..
+  tostring(tonumber(first_primary.range_max) or 0))
+print('learned_count=' .. tostring(#learned))
+print('ready_count=' .. tostring(ready_count))
+print('minimum_secondary_count=' ..
+  tostring(minimum_observed))
+print('level_steps=' .. tostring(steps))
+print('choices_applied=' .. tostring(choices_applied))
+""",
+                timeout=timeout,
+            )
+        )
+        if (
+            values.get("ready") != "true"
+            or int(values.get("learned_count", "0")) < 1
+            or int(values.get("ready_count", "0"))
+            != int(values.get("learned_count", "0"))
+            or int(values.get("minimum_secondary_count", "0"))
+            < minimum_secondary_slots
+        ):
+            raise BridgeError(
+                "could not prime every learned participant: "
+                f"{values}"
+            )
+        return values
+
     def start_training_arena(
         self,
         *,
+        spawn_distance: float = 260.0,
+        enemy_hp: float = 750.0,
         timeout: float = 20.0,
     ) -> dict[str, str]:
+        if (
+            not math.isfinite(spawn_distance)
+            or spawn_distance <= 0.0
+            or not math.isfinite(enemy_hp)
+            or enemy_hp <= 0.0
+        ):
+            raise ValueError(
+                "training arena distance and HP must be finite and positive"
+            )
+        source = (
+            "_G.__sdmod_ml_training_arena_config = {"
+            f"spawn_distance={spawn_distance:.17g},"
+            f"enemy_hp={enemy_hp:.17g},"
+            "enemy_type_id=1001}\n"
+            + TRAINING_ARENA_MANAGER
+        )
         manager = local_sync.parse_key_values(
-            self.lua(TRAINING_ARENA_MANAGER, timeout=min(timeout, 10.0))
+            self.lua(source, timeout=min(timeout, 10.0))
         )
         if manager.get("registered") != "true":
             raise BridgeError(
@@ -1500,6 +2285,18 @@ print('error=' .. tostring(
         return local_sync.parse_key_values(
             self.lua(STATUS, timeout=10.0)
         )
+
+    def learned_participant_ids(self) -> tuple[int, ...]:
+        values = self.status()
+        result = _participant_ids(
+            values.get("learned_participant_ids", "")
+        )
+        expected = int(values.get("learned_bot_count", "0"))
+        if len(result) != expected or expected < 1:
+            raise BridgeError(
+                f"learned participant status is inconsistent: {values}"
+            )
+        return result
 
     def enable_training(
         self,
@@ -1686,7 +2483,7 @@ for _, record in ipairs(drained.records or {{}}) do
     'R',
     tostring(record.trajectory_version),
     tostring(record.episode_id),
-    string.format('%.0f', record.participant_id),
+    tostring(record.participant_id),
     tostring(record.simulation_tick),
     tostring(record.movement_action),
     tostring(record.target_action),

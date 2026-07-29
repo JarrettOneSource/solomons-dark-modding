@@ -33,6 +33,7 @@ from static_lua_bot_brain_contracts import (
 )
 from static_lua_ml_bot_contracts import (
     test_ml_bot_phase3_observation_masks_and_assists_are_pinned,
+    test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned,
     test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
     test_ml_bot_is_simulation_timed_local_and_native_action_routed,
 )
@@ -587,6 +588,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "ML bot v2 Phase 3 observation, masks, and assists are pinned",
         test_ml_bot_phase3_observation_masks_and_assists_are_pinned,
+    ),
+    (
+        "ML bot v2 Phase 5 rotation and live acceptance are pinned",
+        test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned,
     ),
     (
         "Lua bot brain late join waits for complete host settings",

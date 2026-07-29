@@ -113,6 +113,21 @@ require a fresh Lua render of `policy-v2.json` to equal the checked-in
 `policy_weights.lua`, and compare Lua/Python probabilities, actions, value,
 and composite log probability on the same fixture.
 
+Live PPO creates one disposable local-authority session per environment
+episode. Before run entry it sets a fresh native seed and requires exact
+`set_seed`/`get_seed` round-trip; after entry it requires the observed
+participant `run_nonce` to equal that seed. Every episode log carries the
+requested/observed identity, staged Boneyard SHA-256, composition, learned
+participant IDs, and per-participant trajectory counts.
+
+Compositions come from `tools/ml_bot/team-compositions.json`: solo, one
+learned bot with rotating scripted teammates, and multiple learned bots
+sharing current weights. All learned participants record trajectories, and
+GAE partitions by `(episode_id, participant_id)`. Config parsing, roster
+construction, readiness, and rollout collection impose no participant-count
+ceiling. The checked-in runnable rows remain within the current native lobby;
+larger contract rows become runnable after the separate cap raise.
+
 Live PPO hot-loads the same strict model after writing temporary JSON and Lua
 files and atomically replacing each destination. Because the v2 text export is
 larger than the loader's 1 MiB exec request limit, the bridge stages 512 KiB
@@ -128,5 +143,8 @@ data/action path but is not a production competence environment.
 - Per-slot enemy/ally observations are bounded to 8/4 while aggregate roster
   counts remain cap-agnostic.
 - Scripted pickup and weld managers remain outside the learned action heads.
-- Skill-choice learning, aim offsets, recurrence, inventory mutations, fresh
-  seed/session rotation, and team-composition rotation are outside Phase 4.
+- Skill-choice learning, aim offsets, recurrence, and inventory mutations
+  remain out of scope.
+- Multi-layout cycling is wired and hash-verified, but an owner-approved
+  Boneyard corpus is not checked in. Fresh native seeds on the stock layout
+  are the current release gate.

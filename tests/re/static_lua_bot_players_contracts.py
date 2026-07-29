@@ -194,7 +194,7 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         "kMovementCollisionTestCirclePlacement",
         "kMovementCollisionTestCirclePlacementExtended",
         "const std::uint32_t overlap_allow_mask = 0;",
-        "reserved_bot_placements",
+        "reserved_participant_placements",
         "reserved_distance_squared",
         "reservation_count=",
         '"no clear spawn position"',

@@ -118,6 +118,16 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
     }
     UpdateBotLevelProfileState(request.bot_id, level, experience, next_experience);
 
+    bool owned_progression_refreshed = true;
+    if (selected_option.option_id !=
+        NativeSpecialChoiceActivationId()) {
+        owned_progression_refreshed =
+            RefreshSyntheticParticipantOwnedProgressionEntry(
+                request.bot_id,
+                selected_option.option_id,
+                gameplay_state.progression_runtime_state_address);
+    }
+
     {
         std::scoped_lock lock(g_bot_runtime_mutex);
         InvalidateParticipantLoadoutDetailsLocked(
@@ -144,6 +154,8 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
         " progression=" + HexString(gameplay_state.progression_runtime_state_address) +
         " option_id=" + std::to_string(selected_option.option_id) +
         " level=" + std::to_string(level) +
-        " xp=" + std::to_string(experience));
+        " xp=" + std::to_string(experience) +
+        " owned_progression_refreshed=" +
+        std::to_string(owned_progression_refreshed ? 1 : 0));
     return true;
 }

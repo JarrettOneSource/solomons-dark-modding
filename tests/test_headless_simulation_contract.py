@@ -136,6 +136,92 @@ class HeadlessSimulationContractTests(unittest.TestCase):
         )
         self.assertNotIn('"--multiplayer", "off"', launcher)
 
+    def test_solo_automation_validates_and_hashes_boneyard_override(
+        self,
+    ) -> None:
+        launcher = read("scripts/Launch-LocalSoloSession.ps1")
+        self.assertIn(
+            "[string]$TestSurvivalBoneyardOverride",
+            launcher,
+        )
+        self.assertIn(
+            "SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE",
+            launcher,
+        )
+        self.assertIn("'^\\.boneyard$'", launcher)
+        self.assertIn("requestedBoneyardSha256", launcher)
+        self.assertIn("stagedBoneyardSha256", launcher)
+        self.assertIn(
+            '"stage\\data\\levels\\survival.boneyard"',
+            launcher,
+        )
+
+    def test_live_trainer_uses_disposable_seeded_composition_sessions(
+        self,
+    ) -> None:
+        trainer = read("tools/train_bot_policy.py")
+        bridge = read("tools/ml_bot/bridge.py")
+        composition = read(
+            "tools/ml_bot/team-compositions.json"
+        )
+        self.assertIn("for iteration in range(1, args.iterations + 1)", trainer)
+        self.assertIn("session = SoloSession(", trainer)
+        self.assertIn(
+            "max_participants=composition.participant_count + 1",
+            trainer,
+        )
+        self.assertIn("finally:", trainer)
+        self.assertIn("session.close()", trainer)
+        self.assertIn("session.set_run_seed(requested_seed)", trainer)
+        self.assertIn('"observed_run_nonce"', trainer)
+        self.assertIn('"layout_sha256"', trainer)
+        self.assertIn('"composition"', trainer)
+        self.assertIn("trajectory_counts", trainer)
+        self.assertIn("sd.rng.set_seed(requested)", bridge)
+        self.assertNotIn("slot <= 3", bridge)
+        for behavior in ("skirmisher", "guardian", "striker"):
+            self.assertIn(f'"{behavior}"', composition)
+        self.assertIn('"learned_count": 2', composition)
+
+    def test_solo_bridge_completes_on_the_published_launch_result(
+        self,
+    ) -> None:
+        bridge = read("tools/ml_bot/bridge.py")
+        self.assertIn(
+            "self.launch_wrapper_process = subprocess.Popen(",
+            bridge,
+        )
+        self.assertIn(
+            "requested and staged boneyard hashes do not match",
+            bridge,
+        )
+        self.assertIn("if result_path.is_file():", bridge)
+        self.assertIn("self._reap_launch_wrapper()", bridge)
+        self.assertNotIn(
+            "completed = subprocess.run(\n"
+            "                arguments,\n"
+            "                cwd=ROOT,\n"
+            "                stdout=subprocess.DEVNULL",
+            bridge,
+        )
+
+    def test_pair_godmode_waits_for_the_lua_state_handoff(self) -> None:
+        launcher = read("scripts/Launch-LocalMultiplayerPair.ps1")
+        godmode = launcher.split(
+            "function Enable-InstanceGodMode {", 1
+        )[1].split("function Get-StagedGraphicsResolution {", 1)[0]
+        self.assertIn("$deadline = (Get-Date).AddSeconds(30)", godmode)
+        self.assertIn("while ((Get-Date) -lt $deadline)", godmode)
+        self.assertIn("} catch {", godmode)
+        self.assertIn("Start-Sleep -Milliseconds 250", godmode)
+        self.assertIn("if sd.state.is_authority() then", godmode)
+        self.assertIn("sd.bots.list() or {}", godmode)
+        self.assertIn(
+            "state.progression_runtime_state_address",
+            godmode,
+        )
+        self.assertIn("emit('sustained_bots'", godmode)
+
 
 if __name__ == "__main__":
     unittest.main()

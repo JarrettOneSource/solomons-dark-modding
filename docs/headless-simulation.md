@@ -9,6 +9,13 @@ Launch an isolated single-player instance with:
 The desktop launcher exposes the same option under **Headless simulation**.
 The setting applies only to its single-player launch button.
 
+For owned automation, `scripts/Launch-LocalSoloSession.ps1` accepts
+`-TestSurvivalBoneyardOverride <file.boneyard>`. It resolves a real
+`.boneyard` file, passes it through
+`SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE`, and reports the requested and staged
+SHA-256 values plus the staged path. Omitting the parameter keeps the stock
+layout.
+
 ## Contract
 
 Headless mode:

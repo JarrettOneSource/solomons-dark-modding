@@ -331,6 +331,53 @@ def prepare_rollout_batch(
     }
 
 
+def partition_rollout_records(
+    records: Sequence[object],
+    *,
+    expected_participant_ids: Sequence[int],
+) -> tuple[list[object], list[object]]:
+    """Reserve one non-terminal bootstrap frame per learned trajectory."""
+
+    expected = set(expected_participant_ids)
+    if not expected:
+        raise ValueError("expected learned participant ids must not be empty")
+    groups: dict[tuple[int, int], list[int]] = {}
+    for index, record in enumerate(records):
+        key = (record.episode_id, record.participant_id)
+        groups.setdefault(key, []).append(index)
+    observed = {participant_id for _, participant_id in groups}
+    if observed != expected:
+        raise ValueError(
+            "rollout participants do not match the learned composition: "
+            f"expected={sorted(expected)} observed={sorted(observed)}"
+        )
+
+    bootstrap_indices: set[int] = set()
+    for key, indices in groups.items():
+        ticks = [records[index].simulation_tick for index in indices]
+        if any(right <= left for left, right in zip(ticks, ticks[1:])):
+            raise ValueError(
+                "simulation ticks are not strictly increasing within "
+                f"trajectory {key}"
+            )
+        last_index = indices[-1]
+        if not records[last_index].done:
+            bootstrap_indices.add(last_index)
+    training = [
+        record
+        for index, record in enumerate(records)
+        if index not in bootstrap_indices
+    ]
+    bootstrap = [
+        record
+        for index, record in enumerate(records)
+        if index in bootstrap_indices
+    ]
+    if not training:
+        raise ValueError("rollout partition produced no training records")
+    return training, bootstrap
+
+
 def _atomic_checkpoint(
     policy: BotPolicy,
     model_path: Path,
@@ -378,6 +425,10 @@ def _mean_ppo_metrics(metrics: Sequence[object]) -> dict[str, float]:
 
 def live_ppo(args: argparse.Namespace) -> int:
     from ml_bot.bridge import BridgeError, SoloSession
+    from ml_bot.compositions import (
+        load_compositions,
+        select_compositions,
+    )
     from verify_local_multiplayer_sync import VerifyFailure
 
     for name in ("iterations", "rollout_steps", "epochs", "batch_size"):
@@ -409,76 +460,170 @@ def live_ppo(args: argparse.Namespace) -> int:
         else ROOT / "runtime" / "ml-training" / instance
     ).resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
-
-    session = SoloSession(
-        instance=instance,
-        game_directory=Path(args.game_directory),
-        launcher_path=Path(args.launcher_path),
-        runtime_root=Path(args.runtime_root),
-        local_port=args.local_port,
-        unused_remote_port=args.unused_remote_port,
-        headless=not args.visible,
-        element=args.element,
-        discipline=args.discipline,
+    compositions = select_compositions(
+        load_compositions(Path(args.composition_config)),
+        args.composition,
     )
-    launch: dict[str, object] | None = None
-    initial_status: dict[str, str] = {}
+    layouts: tuple[Path | None, ...]
+    if args.boneyard_layout:
+        resolved_layouts = tuple(
+            Path(value).resolve()
+            for value in args.boneyard_layout
+        )
+        for path in resolved_layouts:
+            if not path.is_file() or path.suffix.lower() != ".boneyard":
+                raise ValueError(
+                    "boneyard layouts must be existing .boneyard files: "
+                    f"{path}"
+                )
+        layouts = resolved_layouts
+    else:
+        layouts = (None,)
+
+    maximum_port = max(args.local_port, args.unused_remote_port) + (
+        args.iterations - 1
+    ) * 2
+    if maximum_port > 65535:
+        raise ValueError("episode port schedule exceeds 65535")
+    seed_rng = np.random.default_rng(args.seed)
+    run_seeds: list[int] = []
+    while len(run_seeds) < args.iterations:
+        candidate = int(seed_rng.integers(1, 0x40000000))
+        if candidate not in run_seeds:
+            run_seeds.append(candidate)
+
     reports: list[dict[str, object]] = []
     started_at = time.monotonic()
-    try:
-        launch = session.launch()
-        session.wait_for_pipe(timeout=args.startup_timeout)
-        session.drive_new_game_to_hub(timeout=args.startup_timeout)
-        session.write_empty_roster()
-        session.wait_for_empty_roster(timeout=args.startup_timeout)
-        generation = session.load_policy(policy)
-        session.enable_god_mode()
-        session.start_test_run(timeout=args.startup_timeout)
-        session.prepare_training_combat(
-            timeout=args.startup_timeout
+    for iteration in range(1, args.iterations + 1):
+        composition = compositions[(iteration - 1) % len(compositions)]
+        boneyard = layouts[(iteration - 1) % len(layouts)]
+        requested_seed = run_seeds[iteration - 1]
+        episode_instance = (
+            f"{instance[:38]}-e{iteration:04d}"
         )
-        session.write_learned_roster()
-        session.wait_for_learned_bot(timeout=args.startup_timeout)
-        session.wait_for_run_ready(timeout=args.startup_timeout)
-        session.wait_for_bot_materialized(
-            timeout=args.startup_timeout
+        session = SoloSession(
+            instance=episode_instance,
+            game_directory=Path(args.game_directory),
+            launcher_path=Path(args.launcher_path),
+            runtime_root=Path(args.runtime_root),
+            local_port=args.local_port + (iteration - 1) * 2,
+            unused_remote_port=(
+                args.unused_remote_port + (iteration - 1) * 2
+            ),
+            max_participants=composition.participant_count + 1,
+            headless=not args.visible,
+            element=args.element,
+            discipline=args.discipline,
+            boneyard_override=boneyard,
+            multiplayer_transport=True,
         )
-        session.prime_training_progression(
-            timeout=args.startup_timeout
-        )
-        session.start_training_arena(
-            timeout=args.startup_timeout
-        )
-        session.wait_for_training_enemy(
-            timeout=args.startup_timeout
-        )
-        initial_status = session.status()
-        if initial_status.get("clock_source") != "simulation":
-            raise BridgeError(
-                "live trainer requires the simulation-time policy clock"
+        launch: dict[str, object] | None = None
+        try:
+            launch = session.launch()
+            session.wait_for_pipe(timeout=args.startup_timeout)
+            session.drive_new_game_to_hub(
+                timeout=args.startup_timeout
             )
-        if int(initial_status.get("simulation_tick", "0")) <= 0:
-            raise BridgeError(
-                "live trainer did not observe a published simulation tick"
+            session.write_empty_roster()
+            session.wait_for_empty_roster(
+                timeout=args.startup_timeout
             )
+            generation = session.load_policy(policy)
+            seed_round_trip = session.set_run_seed(requested_seed)
+            session.enable_god_mode()
+            session.start_test_run(timeout=args.startup_timeout)
+            session.prepare_training_combat(
+                timeout=args.startup_timeout
+            )
+            session.write_composition(composition)
+            session.wait_for_composition(
+                expected_bot_count=composition.participant_count,
+                expected_learned_count=composition.learned_count,
+                timeout=args.startup_timeout,
+            )
+            session.wait_for_run_ready(
+                expected_bot_count=composition.participant_count,
+                expected_learned_count=composition.learned_count,
+                timeout=args.startup_timeout,
+            )
+            session.wait_for_bot_materialized(
+                expected_bot_count=composition.participant_count,
+                expected_learned_count=composition.learned_count,
+                timeout=args.startup_timeout,
+            )
+            run_identity = session.get_run_identity()
+            if (
+                run_identity["observed_seed"] != requested_seed
+                or run_identity["run_nonce"] != requested_seed
+            ):
+                raise BridgeError(
+                    "native run identity does not match the requested seed: "
+                    f"requested={requested_seed} observed={run_identity}"
+                )
+            session.prime_learned_progression(
+                minimum_secondary_slots=1,
+                timeout=args.startup_timeout,
+            )
+            session.start_training_arena(
+                timeout=args.startup_timeout
+            )
+            session.wait_for_training_enemy(
+                timeout=args.startup_timeout
+            )
+            initial_status = session.status()
+            if initial_status.get("clock_source") != "simulation":
+                raise BridgeError(
+                    "live trainer requires the simulation-time policy clock"
+                )
+            if int(initial_status.get("simulation_tick", "0")) <= 0:
+                raise BridgeError(
+                    "live trainer did not observe a simulation tick"
+                )
+            learned_participant_ids = (
+                session.learned_participant_ids()
+            )
+            if (
+                len(learned_participant_ids)
+                != composition.learned_count
+            ):
+                raise BridgeError(
+                    "materialized learned participants do not match "
+                    "the composition"
+                )
 
-        for iteration in range(1, args.iterations + 1):
             session.clear_training()
             session.enable_training(
-                seed=args.seed + iteration - 1,
-                capacity=max(args.rollout_steps * 3, 1024),
+                seed=requested_seed,
+                capacity=max(
+                    (
+                        args.rollout_steps
+                        + composition.learned_count
+                    )
+                    * 3,
+                    1024,
+                ),
+            )
+            requested_records = (
+                args.rollout_steps + composition.learned_count
             )
             collection_status = session.wait_for_rollouts(
-                args.rollout_steps + 1,
+                requested_records,
                 timeout=args.rollout_timeout,
             )
             session.disable_training()
-            records = session.drain_rollouts(args.rollout_steps + 1)
+            records = session.drain_rollouts(requested_records)
             session.clear_training()
-
+            training_records, bootstrap_records = (
+                partition_rollout_records(
+                    records,
+                    expected_participant_ids=(
+                        learned_participant_ids
+                    ),
+                )
+            )
             batch = prepare_rollout_batch(
-                records[:-1],
-                records[-1:],
+                training_records,
+                bootstrap_records,
                 gamma=args.gamma,
                 gae_lambda=args.gae_lambda,
             )
@@ -514,8 +659,12 @@ def live_ppo(args: argparse.Namespace) -> int:
                 {
                     "training_kind": "live_ppo",
                     "live_training_seed": args.seed,
+                    "live_native_run_seed": requested_seed,
                     "live_training_iteration": iteration,
-                    "live_training_rollout_steps": args.rollout_steps,
+                    "live_training_rollout_steps": len(
+                        training_records
+                    ),
+                    "live_training_composition": composition.name,
                     "movement_entropy_coefficient": (
                         args.movement_entropy_coefficient
                     ),
@@ -540,22 +689,87 @@ def live_ppo(args: argparse.Namespace) -> int:
                 checkpoint_model,
                 checkpoint_lua,
             )
+            previous_generation = generation
             next_generation = session.load_policy(policy)
-            if next_generation <= generation:
+            if next_generation <= previous_generation:
                 raise BridgeError(
                     "hot-loaded policy generation did not advance"
                 )
             generation = next_generation
+            final_status = session.status()
+            decision_delta = (
+                int(
+                    final_status.get(
+                        "policy_decision_count",
+                        "0",
+                    )
+                )
+                - int(
+                    initial_status.get(
+                        "policy_decision_count",
+                        "0",
+                    )
+                )
+            )
+            movement_delta = (
+                int(final_status.get("move_accepted", "0"))
+                - int(initial_status.get("move_accepted", "0"))
+            )
+            if decision_delta <= 0 or movement_delta <= 0:
+                raise BridgeError(
+                    "learned policy did not make live movement decisions"
+                )
+            trajectory_counts = {
+                str(participant_id): sum(
+                    record.participant_id == participant_id
+                    for record in training_records
+                )
+                for participant_id in learned_participant_ids
+            }
+            if any(count <= 0 for count in trajectory_counts.values()):
+                raise BridgeError(
+                    "a learned participant produced no trajectories"
+                )
             report: dict[str, object] = {
                 "iteration": iteration,
-                "rollout_steps": args.rollout_steps,
+                "environment_episode": iteration,
+                "instance": episode_instance,
+                "process_id": (
+                    launch.get("processId") if launch else None
+                ),
+                "requested_seed": requested_seed,
+                "seed_round_trip": seed_round_trip,
+                "observed_run_nonce": run_identity["run_nonce"],
+                "observed_run_seed": run_identity["observed_seed"],
+                "layout_sha256": session.layout_sha256(),
+                "layout_override": (
+                    str(boneyard) if boneyard is not None else None
+                ),
+                "composition": composition.to_log(),
+                "learned_participant_ids": list(
+                    learned_participant_ids
+                ),
+                "trajectory_participant_count": len(
+                    trajectory_counts
+                ),
+                "trajectory_counts": trajectory_counts,
+                "rollout_steps": len(training_records),
+                "bootstrap_records": len(bootstrap_records),
                 "episode_ids": sorted(
-                    {record.episode_id for record in records[:-1]}
+                    {
+                        record.episode_id
+                        for record in training_records
+                    }
                 ),
                 "reward_mean": float(np.mean(batch["rewards"])),
                 "reward_sum": float(np.sum(batch["rewards"])),
                 "terminal_count": int(np.sum(batch["dones"])),
                 "policy_generation": generation,
+                "policy_generation_advanced": (
+                    next_generation > previous_generation
+                ),
+                "policy_decision_delta": decision_delta,
+                "move_accepted_delta": movement_delta,
                 "buffer_dropped": int(
                     collection_status.get("dropped", "0")
                 ),
@@ -567,60 +781,38 @@ def live_ppo(args: argparse.Namespace) -> int:
                 raise BridgeError("live trajectory buffer dropped records")
             reports.append(report)
             print(json.dumps(report, sort_keys=True))
+        finally:
+            if launch is not None:
+                try:
+                    session.disable_training()
+                except (
+                    BridgeError,
+                    VerifyFailure,
+                    subprocess.TimeoutExpired,
+                ):
+                    pass
+            session.close()
 
-        final_model = output_directory / "policy-final.json"
-        final_lua = output_directory / "policy-final.lua"
-        _atomic_checkpoint(policy, final_model, final_lua)
-        final_status = session.status()
-        decision_delta = (
-            int(final_status.get("policy_decision_count", "0"))
-            - int(initial_status.get("policy_decision_count", "0"))
-        )
-        movement_delta = (
-            int(final_status.get("move_accepted", "0"))
-            - int(initial_status.get("move_accepted", "0"))
-        )
-        cast_delta = (
-            int(final_status.get("cast_accepted", "0"))
-            - int(initial_status.get("cast_accepted", "0"))
-        )
-        if decision_delta <= 0:
-            raise BridgeError("learned policy made no live decisions")
-        if movement_delta <= 0:
-            raise BridgeError("learned policy had no accepted live movement")
-        if cast_delta <= 0:
-            raise BridgeError("learned policy had no accepted live attacks")
-
-        result = {
-            "status": "ok",
-            "instance": instance,
-            "headless": not args.visible,
-            "process_id": launch.get("processId") if launch else None,
-            "iterations": reports,
-            "policy_generation": generation,
-            "policy_decision_delta": decision_delta,
-            "move_accepted_delta": movement_delta,
-            "cast_accepted_delta": cast_delta,
-            "simulation_tick": int(
-                final_status.get("simulation_tick", "0")
-            ),
-            "elapsed_wall_seconds": time.monotonic() - started_at,
-            "final_model": str(final_model),
-            "final_lua": str(final_lua),
-        }
-        print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
-    finally:
-        if launch is not None:
-            try:
-                session.disable_training()
-            except (
-                BridgeError,
-                VerifyFailure,
-                subprocess.TimeoutExpired,
-            ):
-                pass
-        session.close()
+    final_model = output_directory / "policy-final.json"
+    final_lua = output_directory / "policy-final.lua"
+    _atomic_checkpoint(policy, final_model, final_lua)
+    result = {
+        "status": "ok",
+        "instance_prefix": instance,
+        "headless": not args.visible,
+        "environment_episode_count": len(reports),
+        "requested_seeds": run_seeds,
+        "distinct_seed_count": len(set(run_seeds)),
+        "composition_names": [
+            report["composition"]["name"] for report in reports
+        ],
+        "iterations": reports,
+        "elapsed_wall_seconds": time.monotonic() - started_at,
+        "final_model": str(final_model),
+        "final_lua": str(final_lua),
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -706,6 +898,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     live_parser.add_argument("--seed", type=int, default=20260729)
     live_parser.add_argument("--instance")
+    live_parser.add_argument(
+        "--composition-config",
+        default=str(
+            ROOT / "tools" / "ml_bot" / "team-compositions.json"
+        ),
+    )
+    live_parser.add_argument(
+        "--composition",
+        action="append",
+        default=[],
+        help=(
+            "composition name to include in rotation; repeat to set "
+            "the rotation order"
+        ),
+    )
+    live_parser.add_argument(
+        "--boneyard-layout",
+        action="append",
+        default=[],
+        help=(
+            "validated .boneyard layout to rotate; repeat for multiple "
+            "layouts (stock layout is used when omitted)"
+        ),
+    )
     live_parser.add_argument(
         "--game-directory",
         default=str(DEFAULT_GAME_DIRECTORY),

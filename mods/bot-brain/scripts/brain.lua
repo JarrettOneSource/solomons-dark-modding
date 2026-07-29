@@ -512,6 +512,7 @@ end
 
 local function issue_policy_cast(
     context,
+    capture,
     decision,
     target,
     now_ms)
@@ -540,6 +541,21 @@ local function issue_policy_cast(
       context.debug.cast_accepted + 1
     context.debug.last_error = ""
     memory.last_cast_ms = now_ms
+    if action.skill_slot > 0 and
+        target.in_primary_range ~= true then
+      context.debug.secondary_beyond_primary_accepted =
+        context.debug.secondary_beyond_primary_accepted + 1
+      context.shared.log(
+        context,
+        "policy secondary accepted slot=" ..
+        tostring(action.skill_slot) ..
+        " target=" ..
+        tostring(target.network_actor_id) ..
+        " contact_distance=" ..
+        tostring(target.contact_distance) ..
+        " primary_max=" ..
+        tostring(capture.loadout.primary.range_max))
+    end
   else
     context.debug.last_error =
       tostring(
@@ -552,8 +568,7 @@ local function request_nearby_pickup(
     context,
     capture,
     now_ms)
-  if capture.loot_host_owned ~= true or
-      capture.loadout.pickup_range <= 0.0 then
+  if capture.loadout.pickup_range <= 0.0 then
     return
   end
 
@@ -572,19 +587,35 @@ local function request_nearby_pickup(
       pickup.pickup_range_multiplier
     local previous = memory.pickup_request_ms[pickup_id]
     if pickup_id > 0 and pickup.distance <= native_range and
+        memory.pickup_request_accepted[pickup_id] ~= true and
         (previous == nil or now_ms - previous >= interval) then
       memory.last_pickup_request_ms = now_ms
       memory.pickup_request_ms[pickup_id] = now_ms
       context.debug.pickup_request_issued =
         context.debug.pickup_request_issued + 1
+      context.debug.last_pickup_request_distance =
+        pickup.distance
+      context.debug.last_pickup_request_x = capture.bot_x
+      context.debug.last_pickup_request_y = capture.bot_y
       local ok, accepted, sequence_or_error = pcall(
         sd.world.request_loot_pickup,
-        pickup_id)
+        pickup_id,
+        context.participant_id)
       if ok and accepted == true then
+        memory.pickup_request_accepted[pickup_id] = true
         context.debug.pickup_request_accepted =
           context.debug.pickup_request_accepted + 1
         context.debug.last_pickup_request_sequence =
           tonumber(sequence_or_error) or 0
+        context.debug.last_pickup_network_drop_id =
+          pickup_id
+        context.shared.log(
+          context,
+          "pickup request queued network_drop_id=" ..
+          tostring(pickup_id) ..
+          " sequence=" ..
+          tostring(
+            context.debug.last_pickup_request_sequence))
       else
         context.debug.last_pickup_error =
           tostring(
@@ -646,6 +677,74 @@ local function think_with_policy(
   context.debug.target_distance =
     selected_target and
       selected_target.distance or 0.0
+  context.debug.policy_observation_version =
+    shared.policy_spec.observation_version
+  context.debug.policy_observation_count =
+    #capture.values
+  context.debug.policy_observation_finite = true
+  context.debug.policy_observation = capture.values
+  context.debug.policy_loadout = capture.loadout
+  context.debug.policy_snapshot = capture.snapshot
+  context.debug.policy_selected_target = selected_target
+  context.debug.policy_capture_target_id =
+    capture.current_target and
+      capture.current_target.network_actor_id or 0
+  context.debug.policy_bot_x = capture.bot_x
+  context.debug.policy_bot_y = capture.bot_y
+  context.debug.policy_movement_mask =
+    capture.movement_mask
+  context.debug.policy_movement_targets =
+    capture.movement_targets
+  context.debug.policy_target_mask =
+    capture.target_mask
+  context.debug.policy_cast_mask =
+    decision.cast_mask
+  context.debug.policy_selected_actions_legal =
+    capture.movement_mask[
+      decision.movement_action + 1] == true and
+    capture.target_mask[
+      decision.target_action + 1] == true and
+    decision.cast_mask[
+      decision.cast_action + 1] == true
+  context.debug.primary_welded =
+    capture.loadout.primary.welded == true
+  context.debug.primary_build_id =
+    capture.loadout.primary.build_id
+  context.debug.primary_range_max =
+    capture.loadout.primary.range_max
+  context.debug.pickup_observation_count =
+    #capture.pickups
+  context.debug.pickup_observation_first_id =
+    capture.pickups[1] and
+      capture.pickups[1].network_drop_id or 0
+  context.debug.pickup_range =
+    capture.loadout.pickup_range
+  context.debug.pickup_distance =
+    capture.pickups[1] and
+      capture.pickups[1].distance or 0.0
+  context.debug.loot_authority_participant_id =
+    tonumber(capture.loot.authority_participant_id) or 0
+  context.debug.ally_observation_count =
+    #capture.allies
+  context.debug.current_target_slot = 0
+  context.debug.enemy_slot_actor_ids = {}
+  for slot, enemy in ipairs(capture.enemy_slots) do
+    context.debug.enemy_slot_actor_ids[slot] =
+      enemy and enemy.network_actor_id or 0
+    if selected_target ~= nil and
+        enemy.network_actor_id ==
+          selected_target.network_actor_id then
+      context.debug.current_target_slot = slot
+    end
+  end
+  if target_switched and selected_target ~= nil then
+    shared.log(
+      context,
+      "policy target selected network_actor_id=" ..
+      tostring(selected_target.network_actor_id) ..
+      " slot=" ..
+      tostring(context.debug.current_target_slot))
+  end
 
   issue_policy_movement(
     context,
@@ -654,6 +753,7 @@ local function think_with_policy(
     frame.now_ms)
   issue_policy_cast(
     context,
+    capture,
     decision,
     selected_target,
     frame.now_ms)
@@ -784,7 +884,38 @@ function brain.new(row, roster_index, shared, steering)
       pickup_request_issued = 0,
       pickup_request_accepted = 0,
       last_pickup_request_sequence = 0,
+      last_pickup_network_drop_id = 0,
+      last_pickup_request_distance = 0.0,
+      last_pickup_request_x = 0.0,
+      last_pickup_request_y = 0.0,
       last_pickup_error = "",
+      policy_observation_version = 0,
+      policy_observation_count = 0,
+      policy_observation_finite = false,
+      policy_observation = {},
+      policy_loadout = {},
+      policy_snapshot = {},
+      policy_selected_target = nil,
+      policy_capture_target_id = 0,
+      policy_bot_x = 0.0,
+      policy_bot_y = 0.0,
+      policy_movement_mask = {},
+      policy_movement_targets = {},
+      policy_target_mask = {},
+      policy_cast_mask = {},
+      policy_selected_actions_legal = false,
+      primary_welded = false,
+      primary_build_id = 0,
+      primary_range_max = 0.0,
+      current_target_slot = 0,
+      enemy_slot_actor_ids = {},
+      pickup_observation_count = 0,
+      pickup_observation_first_id = 0,
+      pickup_range = 0.0,
+      pickup_distance = 0.0,
+      loot_authority_participant_id = 0,
+      ally_observation_count = 0,
+      secondary_beyond_primary_accepted = 0,
       weld_preference = shared.weld_preference,
       last_error = "",
     },

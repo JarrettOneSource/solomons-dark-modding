@@ -75,18 +75,17 @@ bool ResolveNativeBotSpawnPlacement(
         return false;
     }
 
-    std::vector<std::pair<float, float>> reserved_bot_placements;
+    std::vector<std::pair<float, float>> reserved_participant_placements;
     const auto runtime = multiplayer::SnapshotRuntimeState();
     for (const auto& participant : runtime.participants) {
         if (participant.participant_id == bot_id ||
-            !multiplayer::IsLuaControlledParticipant(participant) ||
             !participant.runtime.transform_valid ||
             participant.runtime.scene_intent.kind != scene_kind ||
             !std::isfinite(participant.runtime.position_x) ||
             !std::isfinite(participant.runtime.position_y)) {
             continue;
         }
-        reserved_bot_placements.emplace_back(
+        reserved_participant_placements.emplace_back(
             participant.runtime.position_x,
             participant.runtime.position_y);
     }
@@ -133,7 +132,7 @@ bool ResolveNativeBotSpawnPlacement(
             collision_radius + collision_radius;
         const auto reserved_clearance_squared =
             reserved_clearance * reserved_clearance;
-        for (const auto& reserved : reserved_bot_placements) {
+        for (const auto& reserved : reserved_participant_placements) {
             const auto dx = x - reserved.first;
             const auto dy = y - reserved.second;
             const auto reserved_distance_squared =
@@ -171,7 +170,7 @@ bool ResolveNativeBotSpawnPlacement(
             " radius=" + std::to_string(collision_radius) +
             " primary_mask=" + HexString(primary_collision_mask) +
             " reservation_count=" +
-            std::to_string(reserved_bot_placements.size()) +
+            std::to_string(reserved_participant_placements.size()) +
             " probe_count=" +
             std::to_string(placement.probe_count) +
             " search_distance=" +
@@ -203,7 +202,7 @@ bool ResolveNativeBotSpawnPlacement(
         " radius=" + std::to_string(collision_radius) +
         " primary_mask=" + HexString(primary_collision_mask) +
         " reservation_count=" +
-        std::to_string(reserved_bot_placements.size()) +
+        std::to_string(reserved_participant_placements.size()) +
         " probe_count=" + std::to_string(placement.probe_count) +
         " search_distance=" +
         std::to_string(placement.search_distance) +

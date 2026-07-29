@@ -370,6 +370,107 @@ bool QueueLocalLootPickupRequest(
     return true;
 }
 
+bool QueueSyntheticParticipantLootPickupRequest(
+    std::uint64_t participant_id,
+    std::uint64_t network_drop_id,
+    std::uint32_t* request_sequence,
+    std::string* error_message) {
+    if (request_sequence != nullptr) {
+        *request_sequence = 0;
+    }
+    auto fail = [&](const char* message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+    if (!IsLocalTransportHost()) {
+        return fail(
+            "synthetic loot pickup requires the multiplayer host");
+    }
+    if (participant_id == 0 || network_drop_id == 0) {
+        return fail(
+            "participant_id and network_drop_id must be non-zero");
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* participant =
+        FindParticipant(runtime_state, participant_id);
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        !IsLuaControlledParticipant(*participant) ||
+        !participant->runtime.valid ||
+        !participant->runtime.in_run ||
+        participant->runtime.scene_intent.kind !=
+            ParticipantSceneIntentKind::Run) {
+        return fail(
+            "the bot is not active in the current run");
+    }
+
+    SDModSceneActorState actor;
+    LootDropSnapshotPacketState drop{};
+    if (!TryFindHostRunLootDropByNetworkId(
+            network_drop_id,
+            &actor,
+            &drop)) {
+        return fail(
+            "network_drop_id is not present in the host loot snapshot");
+    }
+
+    float requester_x = participant->runtime.position_x;
+    float requester_y = participant->runtime.position_y;
+    SDModParticipantGameplayState gameplay_state;
+    if (TryGetParticipantGameplayState(
+            participant_id,
+            &gameplay_state) &&
+        gameplay_state.entity_materialized &&
+        std::isfinite(gameplay_state.x) &&
+        std::isfinite(gameplay_state.y)) {
+        requester_x = gameplay_state.x;
+        requester_y = gameplay_state.y;
+    }
+    if (!std::isfinite(requester_x) ||
+        !std::isfinite(requester_y)) {
+        return fail(
+            "the bot does not have a usable pickup position");
+    }
+
+    auto* transport_state =
+        EnsureSyntheticParticipantTransportState(participant_id);
+    if (transport_state == nullptr) {
+        return fail(
+            "the bot transport epoch is unavailable");
+    }
+    auto sequence =
+        transport_state->next_loot_pickup_sequence++;
+    if (sequence == 0) {
+        sequence =
+            transport_state->next_loot_pickup_sequence++;
+    }
+
+    LootPickupRequestPacket packet{};
+    packet.header = MakePacketHeader(
+        PacketKind::LootPickupRequest,
+        g_local_transport.next_sequence++);
+    packet.participant_id = participant_id;
+    packet.request_sequence = sequence;
+    packet.run_nonce = participant->runtime.run_nonce;
+    packet.network_drop_id = network_drop_id;
+    packet.requester_position_x = requester_x;
+    packet.requester_position_y = requester_y;
+    packet.drop_position_x = drop.position_x;
+    packet.drop_position_y = drop.position_y;
+    if (request_sequence != nullptr) {
+        *request_sequence = sequence;
+    }
+    ApplyLootPickupRequestPacket(
+        packet,
+        TransportPeerEndpoint{},
+        static_cast<std::uint64_t>(GetTickCount64()),
+        true);
+    return true;
+}
+
 bool QueueLocalHostPowerupPickup(
     uintptr_t actor_address,
     const LootPickupRequestCapture* capture) {

@@ -362,6 +362,7 @@ bool ValidateLootPickupRequest(
     const LootPickupRequestPacket& packet,
     const ParticipantInfo* participant,
     const LootDropSnapshotPacketState& drop,
+    bool host_synthetic_ingress,
     std::string* reject_reason,
     LootPickupResultCode* result_code) {
     auto reject = [&](const char* reason, LootPickupResultCode code) {
@@ -376,7 +377,9 @@ bool ValidateLootPickupRequest(
 
     if (participant == nullptr ||
         !IsRemoteParticipant(*participant) ||
-        !IsNativeControlledParticipant(*participant) ||
+        (!IsNativeControlledParticipant(*participant) &&
+         !(host_synthetic_ingress &&
+           IsLuaControlledParticipant(*participant))) ||
         !participant->runtime.valid ||
         !participant->runtime.in_run ||
         participant->runtime.scene_intent.kind != ParticipantSceneIntentKind::Run) {

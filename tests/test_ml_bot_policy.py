@@ -27,6 +27,12 @@ from ml_bot.bridge import (  # noqa: E402
     SoloSession,
     parse_rollout_output,
 )
+from ml_bot.compositions import (  # noqa: E402
+    TeamComposition,
+    build_roster,
+    load_compositions,
+    select_compositions,
+)
 from ml_bot.expert import generate_expert_dataset  # noqa: E402
 from ml_bot.model import (  # noqa: E402
     Adam,
@@ -41,13 +47,17 @@ from ml_bot.model import (  # noqa: E402
     save_model,
     selected_log_probabilities,
 )
-from train_bot_policy import prepare_rollout_batch  # noqa: E402
+from train_bot_policy import (  # noqa: E402
+    partition_rollout_records,
+    prepare_rollout_batch,
+)
 
 
 MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
 HISTORICAL_V1_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
 LUA_WEIGHTS = ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
 LUA_CONTRACT = ROOT / "tests" / "lua" / "ml_bot_policy_contract.lua"
+COMPOSITIONS = ROOT / "tools" / "ml_bot" / "team-compositions.json"
 
 
 def _record(
@@ -56,11 +66,13 @@ def _record(
     reward: float,
     value: float,
     done: bool = False,
+    participant_id: int = 42,
+    episode_id: int = 3,
 ) -> RolloutRecord:
     return RolloutRecord(
         trajectory_version=spec.TRAJECTORY_VERSION,
-        episode_id=3,
-        participant_id=42,
+        episode_id=episode_id,
+        participant_id=participant_id,
         simulation_tick=tick,
         observation=[0.01 * tick] * len(spec.OBSERVATION_NAMES),
         movement_mask=[True] * len(spec.MOVEMENT_ACTION_NAMES),
@@ -452,7 +464,7 @@ class MlBotPolicyTests(unittest.TestCase):
             "R",
             str(spec.TRAJECTORY_VERSION),
             "2",
-            "2305843009213704704",
+            "2305843009213704705",
             "100",
             "1",
             "3",
@@ -473,7 +485,7 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(records[0].target_action, 3)
         self.assertEqual(
             records[0].participant_id,
-            2305843009213704704,
+            2305843009213704705,
         )
 
         invalid = fields.copy()
@@ -517,6 +529,130 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(batch["observations"].shape, (2, 395))
         self.assertEqual(batch["target_masks"].shape, (2, 9))
         np.testing.assert_array_equal(batch["target_actions"], [3, 3])
+
+    def test_multi_participant_rollouts_reserve_matching_bootstraps(
+        self,
+    ) -> None:
+        records = [
+            _record(
+                tick=10,
+                reward=0.1,
+                value=0.2,
+                participant_id=41,
+            ),
+            _record(
+                tick=10,
+                reward=0.3,
+                value=0.4,
+                participant_id=42,
+            ),
+            _record(
+                tick=20,
+                reward=0.5,
+                value=0.6,
+                participant_id=41,
+            ),
+            _record(
+                tick=20,
+                reward=0.7,
+                value=0.8,
+                participant_id=42,
+            ),
+        ]
+        training, bootstrap = partition_rollout_records(
+            records,
+            expected_participant_ids=(41, 42),
+        )
+        self.assertEqual(
+            [record.participant_id for record in training],
+            [41, 42],
+        )
+        self.assertEqual(
+            [record.participant_id for record in bootstrap],
+            [41, 42],
+        )
+        batch = prepare_rollout_batch(
+            training,
+            bootstrap,
+            gamma=0.9,
+            gae_lambda=0.8,
+        )
+        self.assertEqual(batch["observations"].shape, (2, 395))
+        with self.assertRaisesRegex(
+            ValueError,
+            "do not match the learned composition",
+        ):
+            partition_rollout_records(
+                records,
+                expected_participant_ids=(41,),
+            )
+
+    def test_team_composition_rotation_is_config_driven(self) -> None:
+        compositions = load_compositions(COMPOSITIONS)
+        self.assertTrue(any(item.kind == "solo" for item in compositions))
+        self.assertTrue(any(item.kind == "mixed" for item in compositions))
+        self.assertTrue(
+            any(item.kind == "multi-learned" for item in compositions)
+        )
+        selected = select_compositions(
+            compositions,
+            ("solo-learned", "multi-learned-2"),
+        )
+        self.assertEqual(
+            [item.name for item in selected],
+            ["solo-learned", "multi-learned-2"],
+        )
+        roster = build_roster(
+            TeamComposition(
+                "fixture",
+                1,
+                ("skirmisher", "guardian", "striker"),
+            ),
+            element="fire",
+            discipline="arcane",
+        )
+        self.assertEqual(
+            [row["behavior"] for row in roster],
+            ["learned", "skirmisher", "guardian", "striker"],
+        )
+        # No parser-side participant maximum: the cap-raise workstream can
+        # expand only configuration.
+        large = TeamComposition("future-cap", 51, ())
+        self.assertEqual(
+            len(
+                build_roster(
+                    large,
+                    element="fire",
+                    discipline="arcane",
+                )
+            ),
+            51,
+        )
+
+    def test_seed_round_trip_uses_the_native_rng_contract(self) -> None:
+        session = object.__new__(SoloSession)
+        calls: list[str] = []
+
+        def fake_lua(code: str, *, timeout: float = 15.0) -> str:
+            del timeout
+            calls.append(code)
+            return (
+                "requested_seed=12345\n"
+                "accepted_seed=12345\n"
+                "observed_seed=12345\n"
+            )
+
+        session.lua = fake_lua
+        self.assertEqual(
+            session.set_run_seed(12345),
+            {
+                "requested_seed": 12345,
+                "accepted_seed": 12345,
+                "observed_seed": 12345,
+            },
+        )
+        self.assertIn("sd.rng.set_seed(requested)", calls[0])
+        self.assertIn("sd.rng.get_seed()", calls[0])
 
     def test_lua_and_python_contract_and_inference_match(self) -> None:
         values = self._run_lua_contract()

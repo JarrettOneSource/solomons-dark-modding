@@ -57,6 +57,10 @@ bool QueueSyntheticParticipantCast(
     float target_y,
     std::uint32_t hold_ms,
     std::string* error_message);
+bool RefreshSyntheticParticipantOwnedProgressionEntry(
+    std::uint64_t participant_id,
+    std::int32_t entry_index,
+    uintptr_t progression_address);
 
 class ScopedLocalNativeSpellDamageDispatch final {
 public:
@@ -325,6 +329,11 @@ bool QueueLocalLootPickupRequest(
     std::uint32_t* request_sequence,
     std::string* error_message,
     const LootPickupRequestCapture* capture = nullptr);
+bool QueueSyntheticParticipantLootPickupRequest(
+    std::uint64_t participant_id,
+    std::uint64_t network_drop_id,
+    std::uint32_t* request_sequence,
+    std::string* error_message);
 bool QueueLocalHostPowerupPickup(
     uintptr_t actor_address,
     const LootPickupRequestCapture* capture = nullptr);

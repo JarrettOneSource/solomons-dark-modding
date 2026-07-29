@@ -77,6 +77,7 @@ EnsureSyntheticParticipantTransportState(
         it->second.session_nonce =
             GenerateTransportSessionNonce(participant_id);
         it->second.next_cast_sequence = 1;
+        it->second.next_loot_pickup_sequence = 1;
         Log(
             "Multiplayer synthetic participant transport epoch registered. "
             "participant_id=" +

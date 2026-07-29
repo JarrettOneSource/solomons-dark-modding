@@ -2151,12 +2151,24 @@ int LuaWorldSpawnReward(lua_State* state) {
 
 int LuaWorldRequestLootPickup(lua_State* state) {
     const auto network_drop_id = static_cast<std::uint64_t>(luaL_checkinteger(state, 1));
+    const auto participant_id =
+        lua_gettop(state) >= 2 && !lua_isnil(state, 2)
+            ? static_cast<std::uint64_t>(luaL_checkinteger(state, 2))
+            : 0;
     std::uint32_t request_sequence = 0;
     std::string error_message;
-    if (!multiplayer::QueueLocalLootPickupRequest(
-            network_drop_id,
-            &request_sequence,
-            &error_message)) {
+    const bool queued =
+        participant_id == 0
+            ? multiplayer::QueueLocalLootPickupRequest(
+                  network_drop_id,
+                  &request_sequence,
+                  &error_message)
+            : multiplayer::QueueSyntheticParticipantLootPickupRequest(
+                  participant_id,
+                  network_drop_id,
+                  &request_sequence,
+                  &error_message);
+    if (!queued) {
         lua_pushboolean(state, 0);
         lua_pushstring(state, error_message.c_str());
         return 2;
