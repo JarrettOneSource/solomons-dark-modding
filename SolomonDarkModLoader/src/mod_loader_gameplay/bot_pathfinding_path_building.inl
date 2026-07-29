@@ -81,6 +81,48 @@ bool TryBuildBotPath(
         return false;
     }
 
+    // Preserve an exact straight approach whenever the native placement
+    // policy proves the whole segment traversable. Besides avoiding needless
+    // A* work, this matters for contact-opened segments: a cell-center detour
+    // can drive into a hinged leaf obliquely, while the direct route supplies
+    // the same continuous push that opens it for a stock player.
+    if (IsGameplayPathPlacementTraversable(
+            grid_snapshot,
+            binding,
+            path_target_x,
+            path_target_y,
+            nullptr) &&
+        IsGameplayPathSegmentTraversable(
+            grid_snapshot,
+            binding,
+            current_x,
+            current_y,
+            path_target_x,
+            path_target_y,
+            nullptr)) {
+        const auto delta_x = path_target_x - current_x;
+        const auto delta_y = path_target_y - current_y;
+        const auto distance =
+            std::sqrt(delta_x * delta_x + delta_y * delta_y);
+        binding->path_waypoints.clear();
+        if (distance > kWizardBotPathFinalArrivalThreshold) {
+            binding->path_waypoints.push_back(BotPathWaypoint{
+                goal_grid_x,
+                goal_grid_y,
+                path_target_x,
+                path_target_y,
+            });
+        }
+        binding->path_waypoint_index = 0;
+        binding->path_active = !binding->path_waypoints.empty();
+        binding->path_failed = false;
+        binding->active_path_revision = binding->movement_intent_revision;
+        binding->next_path_retry_not_before_ms = 0;
+        binding->current_waypoint_x = path_target_x;
+        binding->current_waypoint_y = path_target_y;
+        return true;
+    }
+
     const auto original_start_grid_x = start_grid_x;
     const auto original_start_grid_y = start_grid_y;
     std::vector<std::int8_t> traversable_cache(static_cast<std::size_t>(grid_snapshot.width * grid_snapshot.height), -1);

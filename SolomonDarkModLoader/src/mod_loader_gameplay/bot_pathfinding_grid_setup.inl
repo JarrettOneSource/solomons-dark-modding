@@ -7,6 +7,14 @@ struct GameplayPathCircleObstacle {
     std::uint32_t mask = 0;
 };
 
+struct GameplayPathSegmentObstacle {
+    uintptr_t record_address = 0;
+    float start_x = 0.0f;
+    float start_y = 0.0f;
+    float end_x = 0.0f;
+    float end_y = 0.0f;
+};
+
 struct GameplayPathGridSnapshot {
     uintptr_t controller_address = 0;
     uintptr_t cells_address = 0;
@@ -15,7 +23,7 @@ struct GameplayPathGridSnapshot {
     float cell_width = 0.0f;
     float cell_height = 0.0f;
     std::vector<GameplayPathCircleObstacle> static_circle_obstacles;
-    std::vector<GameplayPathCircleObstacle> ignored_circle_obstacles;
+    std::vector<GameplayPathSegmentObstacle> openable_segment_obstacles;
 };
 
 int GameplayPathCellPlacementSampleResolution() {
@@ -36,33 +44,118 @@ std::uint32_t GameplayPathPushableCircleObstacleMask() {
     return static_cast<std::uint32_t>(kGameplayPathPushableCircleObstacleMask);
 }
 
-std::uint32_t GameplayPathPushThroughGateCircleObjectType() {
-    return static_cast<std::uint32_t>(kGameplayPathPushThroughGateCircleObjectType);
+std::uint32_t GameplayPathOpenableSegmentObstacleMask() {
+    return static_cast<std::uint32_t>(kGameplayPathOpenableSegmentObstacleMask);
 }
 
-float GameplayPathPushThroughGateCircleRadius() {
-    return static_cast<float>(kGameplayPathPushThroughGateCircleRadius);
-}
-
-float GameplayPathPushThroughGateRadiusEpsilon() {
-    return static_cast<float>(kGameplayPathPushThroughGateRadiusEpsilonMilliunits) / 1000.0f;
-}
-
-bool IsGameplayPathIgnoredStaticCircleObstacle(
-    std::uint32_t mask,
-    std::uint32_t object_type,
-    float radius) {
-    if ((mask & GameplayPathPushableCircleObstacleMask()) != 0) {
-        return true;
+bool TryReadGameplayPathSegmentObstacle(
+    uintptr_t record_address,
+    GameplayPathSegmentObstacle* obstacle) {
+    if (record_address == 0 || obstacle == nullptr) {
+        return false;
     }
 
-    const auto push_through_gate_radius = GameplayPathPushThroughGateCircleRadius();
-    const auto radius_delta =
-        radius > push_through_gate_radius
-            ? radius - push_through_gate_radius
-            : push_through_gate_radius - radius;
-    return object_type == GameplayPathPushThroughGateCircleObjectType() &&
-           radius_delta <= GameplayPathPushThroughGateRadiusEpsilon();
+    GameplayPathSegmentObstacle read;
+    read.record_address = record_address;
+    if (!TryReadFiniteFloatField(
+            record_address,
+            kGameplayPathSegmentStartXOffset,
+            &read.start_x) ||
+        !TryReadFiniteFloatField(
+            record_address,
+            kGameplayPathSegmentStartYOffset,
+            &read.start_y) ||
+        !TryReadFiniteFloatField(
+            record_address,
+            kGameplayPathSegmentEndXOffset,
+            &read.end_x) ||
+        !TryReadFiniteFloatField(
+            record_address,
+            kGameplayPathSegmentEndYOffset,
+            &read.end_y)) {
+        return false;
+    }
+    *obstacle = read;
+    return true;
+}
+
+void CaptureGameplayPathSegmentObstaclePolicy(
+    uintptr_t world_address,
+    GameplayPathGridSnapshot* snapshot) {
+    if (world_address == 0 ||
+        snapshot == nullptr ||
+        snapshot->controller_address == 0 ||
+        kActorWorldSceneryObjectListOffset == 0 ||
+        kPointerListCountOffset == 0 ||
+        kPointerListItemsOffset == 0 ||
+        kGameplayPathOpenableSegmentBuilder == 0 ||
+        kGameplayPathOpenableSegmentBuilderVtableSlotOffset == 0 ||
+        kGameplayPathOpenableSegmentRecordOffset == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto openable_builder_address =
+        memory.ResolveGameAddressOrZero(
+            kGameplayPathOpenableSegmentBuilder);
+    if (openable_builder_address == 0) {
+        return;
+    }
+
+    const auto scenery_list_address =
+        world_address + kActorWorldSceneryObjectListOffset;
+    std::int32_t scenery_count = 0;
+    uintptr_t scenery_items_address = 0;
+    if (memory.TryReadField(
+            scenery_list_address,
+            kPointerListCountOffset,
+            &scenery_count) &&
+        scenery_count > 0 &&
+        static_cast<std::size_t>(scenery_count) <=
+            kGameplayPathMaxStaticCircleObstacles &&
+        memory.TryReadField(
+            scenery_list_address,
+            kPointerListItemsOffset,
+            &scenery_items_address) &&
+        scenery_items_address != 0) {
+        snapshot->openable_segment_obstacles.reserve(
+            static_cast<std::size_t>(scenery_count));
+        for (std::int32_t index = 0; index < scenery_count; ++index) {
+            uintptr_t object_address = 0;
+            uintptr_t vtable_address = 0;
+            uintptr_t collision_builder_address = 0;
+            uintptr_t segment_record_address = 0;
+            if (!memory.TryReadValue(
+                    scenery_items_address +
+                        static_cast<std::size_t>(index) *
+                            sizeof(uintptr_t),
+                    &object_address) ||
+                object_address == 0 ||
+                !memory.TryReadValue(
+                    object_address,
+                    &vtable_address) ||
+                vtable_address == 0 ||
+                !memory.TryReadValue(
+                    vtable_address +
+                        kGameplayPathOpenableSegmentBuilderVtableSlotOffset,
+                    &collision_builder_address) ||
+                collision_builder_address != openable_builder_address ||
+                !memory.TryReadField(
+                    object_address,
+                    kGameplayPathOpenableSegmentRecordOffset,
+                    &segment_record_address) ||
+                segment_record_address == 0) {
+                continue;
+            }
+            GameplayPathSegmentObstacle obstacle;
+            if (TryReadGameplayPathSegmentObstacle(
+                    segment_record_address,
+                    &obstacle)) {
+                snapshot->openable_segment_obstacles.push_back(
+                    obstacle);
+            }
+        }
+    }
 }
 
 float NormalizeGameplayHeadingDegrees(float heading_degrees) {
@@ -202,6 +295,8 @@ bool TryBuildGameplayPathGridSnapshot(
     snapshot->height = grid_height;
     snapshot->cell_width = cell_width;
     snapshot->cell_height = cell_height;
+    snapshot->static_circle_obstacles.clear();
+    snapshot->openable_segment_obstacles.clear();
 
     std::int32_t circle_count = 0;
     uintptr_t circle_list_address = 0;
@@ -215,7 +310,6 @@ bool TryBuildGameplayPathGridSnapshot(
                 ? static_cast<std::size_t>(circle_count)
                 : kGameplayPathMaxStaticCircleObstacles;
         snapshot->static_circle_obstacles.reserve(clamped_count);
-        snapshot->ignored_circle_obstacles.reserve(clamped_count);
         for (std::size_t index = 0; index < clamped_count; ++index) {
             uintptr_t circle_address = 0;
             if (!memory.TryReadValue(
@@ -235,16 +329,15 @@ bool TryBuildGameplayPathGridSnapshot(
             if ((mask & GameplayPathStaticCircleObstacleMask()) == 0) {
                 continue;
             }
+            if ((mask & GameplayPathPushableCircleObstacleMask()) != 0) {
+                continue;
+            }
 
             float radius = -1.0f;
             if (!TryReadFiniteFloatField(circle_address, kMovementCircleRadiusOffset, &radius)) {
                 continue;
             }
             if (!std::isfinite(radius) || radius < 0.0f) {
-                continue;
-            }
-            std::uint32_t object_type = 0;
-            if (!memory.TryReadField(circle_address, kMovementCircleObjectTypeOffset, &object_type)) {
                 continue;
             }
 
@@ -258,13 +351,11 @@ bool TryBuildGameplayPathGridSnapshot(
                 continue;
             }
 
-            if (IsGameplayPathIgnoredStaticCircleObstacle(mask, object_type, radius)) {
-                snapshot->ignored_circle_obstacles.push_back(GameplayPathCircleObstacle{x, y, radius, mask});
-                continue;
-            }
-
             snapshot->static_circle_obstacles.push_back(GameplayPathCircleObstacle{x, y, radius, mask});
         }
     }
+    CaptureGameplayPathSegmentObstaclePolicy(
+        world_address,
+        snapshot);
     return true;
 }

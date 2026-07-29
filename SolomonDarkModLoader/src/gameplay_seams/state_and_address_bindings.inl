@@ -86,6 +86,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "world_cell_grid_rebind_actor", kWorldCellGridRebindActor),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement", kMovementCollisionTestCirclePlacement),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_test_circle_placement_extended", kMovementCollisionTestCirclePlacementExtended),
+        SDMOD_ADDR("gameplay.boneyard_re", "gate_collision_build", kGameplayPathOpenableSegmentBuilder),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_query_type2_hazards_crash", kMovementCollisionQueryType2HazardsCrash),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_query_type2_hazards_recover", kMovementCollisionQueryType2HazardsRecover),
         SDMOD_ADDR("gameplay.hooks", "movement_collision_iterate_primary_crash", kMovementCollisionIteratePrimaryCrash),

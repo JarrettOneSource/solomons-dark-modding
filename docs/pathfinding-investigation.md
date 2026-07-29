@@ -1023,17 +1023,42 @@ standalone clone transforms and routes dynamic actor/actor overlap response.
     instead of C++ literals:
     - `static_circle_obstacle_mask=0x00000004`
     - `pushable_circle_obstacle_mask=0x00002000`
-    - `push_through_gate_circle_object_type=0x00000BBE`
-    - `push_through_gate_circle_radius=10`
+    - `openable_segment_obstacle_mask=0x00000100`
   - loader-owned sampling knobs also live in `[gameplay.pathfinding]`:
     - `cell_placement_sample_resolution=5`
     - `cell_line_sample_resolution=12`
-    - `push_through_gate_radius_epsilon_milliunits=10`
     - `max_static_circle_obstacles=8192`
   - `tests/re/run_live_pathfinding_layout_probe.py` now verifies the staged
     profile keys and scans live movement circles through `sd.debug.read_*`,
-    requiring at least one static-circle hit and one push-through gate with the
-    configured type/radius.
+    requiring at least one static-circle hit and the recovered openable segment
+    mask.
+
+### July 29 Gate-class correction
+
+The April circle inference above was incomplete. Type `0xBBE`, radius 10 is a
+fixed `Fencepost`, not the moving Gate. Native factory, collision-builder, and
+live-object evidence identifies the two hinged leaves as type `0xBC4`.
+`Gate::BuildCollision` at `0x005ED4D0` registers each moving line with mask
+`0x100`; `Gate::Tick` at `0x005ED5F0` moves and rebuilds that line after
+physical contact.
+
+Fixed `FenceGrate::Setup` at `0x005E8650` and
+`Gate::BuildCollision` at `0x005ED4D0` both register `0x100` segments, so
+`0x100` cannot be allowed globally. The planner keeps ordinary `0x4`
+circles/shapes/segments blocked, excludes only `0x2000` pushable circles from
+the explicit static-circle pass, and performs a second `0x100`-allowed native
+query only when the first query's per-candidate secondary overlap scratch
+contains a segment owned by an object whose vtable `+0x64` resolves to the
+Gate collision builder. The secondary list is empty while idle and is rebuilt
+by each placement query; it is not a stable registry to snapshot beforehand.
+For these segment records the collision mask is `+0x14`; `+0x10` contains the
+separate registration policy (`0x64`).
+Same-mask records in that exact query result that are not owned by the
+openable builder remain explicitly blocked. It no longer special-cases an
+object type/radius or accepts an otherwise blocked sample merely because it
+overlaps a skipped circle. See
+[`design/all-bot-match-2026-07-28.md`](design/all-bot-match-2026-07-28.md) for
+the disassembly and live-contact evidence.
 
 ## Exact Next Runtime Probes
 

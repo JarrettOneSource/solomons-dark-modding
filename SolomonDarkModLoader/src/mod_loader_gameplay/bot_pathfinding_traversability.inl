@@ -40,16 +40,74 @@ bool IsGameplayPathBlockedByStaticCircleObstacle(
         radius);
 }
 
-bool IsGameplayPathOverlappingIgnoredCircleObstacle(
+bool TryClassifyCurrentGameplayPathSegmentOverlaps(
     const GameplayPathGridSnapshot& snapshot,
-    float world_x,
-    float world_y,
-    float radius) {
-    return DoesGameplayPathCircleOverlapObstacle(
-        snapshot.ignored_circle_obstacles,
-        world_x,
-        world_y,
-        radius);
+    std::uint32_t shared_mask,
+    bool* overlaps_openable,
+    bool* overlaps_fixed) {
+    if (snapshot.controller_address == 0 ||
+        shared_mask == 0 ||
+        overlaps_openable == nullptr ||
+        overlaps_fixed == nullptr ||
+        kMovementControllerSecondaryCountOffset == 0 ||
+        kMovementControllerSecondaryListOffset == 0 ||
+        kGameplayPathSegmentMaskOffset == 0) {
+        return false;
+    }
+
+    *overlaps_openable = false;
+    *overlaps_fixed = false;
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t overlap_count = 0;
+    uintptr_t overlap_list_address = 0;
+    if (!memory.TryReadField(
+            snapshot.controller_address,
+            kMovementControllerSecondaryCountOffset,
+            &overlap_count) ||
+        overlap_count < 0 ||
+        static_cast<std::size_t>(overlap_count) >
+            kGameplayPathMaxStaticCircleObstacles ||
+        !memory.TryReadField(
+            snapshot.controller_address,
+            kMovementControllerSecondaryListOffset,
+            &overlap_list_address) ||
+        (overlap_count > 0 && overlap_list_address == 0)) {
+        return false;
+    }
+
+    for (std::int32_t index = 0; index < overlap_count; ++index) {
+        uintptr_t record_address = 0;
+        std::uint32_t mask = 0;
+        if (!memory.TryReadValue(
+                overlap_list_address +
+                    static_cast<std::size_t>(index) *
+                        sizeof(uintptr_t),
+                &record_address) ||
+            record_address == 0 ||
+            !memory.TryReadField(
+                record_address,
+                kGameplayPathSegmentMaskOffset,
+                &mask)) {
+            return false;
+        }
+        if ((mask & shared_mask) == 0) {
+            continue;
+        }
+
+        const auto openable = std::any_of(
+            snapshot.openable_segment_obstacles.begin(),
+            snapshot.openable_segment_obstacles.end(),
+            [record_address](
+                const GameplayPathSegmentObstacle& obstacle) {
+                return obstacle.record_address == record_address;
+            });
+        if (openable) {
+            *overlaps_openable = true;
+        } else {
+            *overlaps_fixed = true;
+        }
+    }
+    return true;
 }
 
 bool IsGameplayPathBlockedByWizardParticipant(
@@ -167,14 +225,12 @@ bool IsGameplayPathPlacementTraversable(
 
     std::uint32_t blocked = 0;
     DWORD exception_code = 0;
-    const auto static_circle_obstacle_mask = GameplayPathStaticCircleObstacleMask();
     const auto pushable_circle_obstacle_mask = GameplayPathPushableCircleObstacleMask();
+    const auto openable_segment_obstacle_mask = GameplayPathOpenableSegmentObstacleMask();
     const auto native_circle_block_mask =
         collision_mask &
-        ~(static_circle_obstacle_mask | pushable_circle_obstacle_mask);
+        ~pushable_circle_obstacle_mask;
     const auto native_overlap_allow_mask =
-        collision_mask |
-        static_circle_obstacle_mask |
         pushable_circle_obstacle_mask;
     const auto extended_placement_address =
         memory.ResolveGameAddressOrZero(kMovementCollisionTestCirclePlacementExtended);
@@ -214,14 +270,66 @@ bool IsGameplayPathPlacementTraversable(
         return false;
     }
 
-    // Native overlap lists can still report the push-through gate as blocked
-    // after the raw circle prepass is filtered. The kept static-circle pass
-    // above has already rejected trees, gravestones, and holes.
-    if (blocked != 0 &&
-        IsGameplayPathOverlappingIgnoredCircleObstacle(snapshot, world_x, world_y, radius)) {
+    if (blocked == 0) {
         return true;
     }
 
+    bool overlaps_openable_segment = false;
+    bool overlaps_fixed_shared_mask_segment = false;
+    if (!TryClassifyCurrentGameplayPathSegmentOverlaps(
+            snapshot,
+            openable_segment_obstacle_mask,
+            &overlaps_openable_segment,
+            &overlaps_fixed_shared_mask_segment) ||
+        !overlaps_openable_segment ||
+        overlaps_fixed_shared_mask_segment) {
+        return false;
+    }
+
+    const auto openable_overlap_allow_mask =
+        native_overlap_allow_mask |
+        openable_segment_obstacle_mask;
+    blocked = 0;
+    exception_code = 0;
+    if (extended_placement_address != 0) {
+        placement_ok =
+            CallMovementCollisionTestCirclePlacementExtendedSafe(
+                extended_placement_address,
+                snapshot.controller_address,
+                world_x,
+                world_y,
+                radius,
+                native_circle_block_mask,
+                openable_overlap_allow_mask,
+                &blocked,
+                &exception_code);
+    } else {
+        placement_ok =
+            CallMovementCollisionTestCirclePlacementSafe(
+                memory.ResolveGameAddressOrZero(
+                    kMovementCollisionTestCirclePlacement),
+                snapshot.controller_address,
+                world_x,
+                world_y,
+                radius,
+                openable_overlap_allow_mask,
+                &blocked,
+                &exception_code);
+    }
+    if (!placement_ok) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Native openable-segment placement query failed. actor=" +
+                HexString(binding->actor_address) +
+                " controller=" +
+                HexString(snapshot.controller_address) +
+                " openable_overlap_allow_mask=" +
+                HexString(openable_overlap_allow_mask) +
+                " exception=0x" +
+                HexString(exception_code);
+        }
+        return false;
+    }
     return blocked == 0;
 }
 

@@ -790,9 +790,14 @@ def test_pathfinding_movement_layout_is_named_and_documented() -> str:
         "cell_line_sample_resolution=12",
         "static_circle_obstacle_mask=0x00000004",
         "pushable_circle_obstacle_mask=0x00002000",
-        "push_through_gate_circle_object_type=0x00000BBE",
-        "push_through_gate_circle_radius=10",
-        "push_through_gate_radius_epsilon_milliunits=10",
+        "openable_segment_obstacle_mask=0x00000100",
+        "openable_segment_builder_vtable_slot=0x64",
+        "openable_segment_record=0x1C8",
+        "segment_start_x=0x00",
+        "segment_start_y=0x04",
+        "segment_end_x=0x08",
+        "segment_end_y=0x0C",
+        "segment_mask=0x14",
         "max_static_circle_obstacles=8192",
     )
     missing_layout = [token for token in required_layout_tokens if token not in layout_text]
@@ -806,7 +811,7 @@ def test_pathfinding_movement_layout_is_named_and_documented() -> str:
         (grid_text, "path grid", "kMovementControllerGridHeightOffset"),
         (grid_text, "path grid", "kMovementCircleMaskOffset"),
         (grid_text, "path grid", "GameplayPathStaticCircleObstacleMask()"),
-        (grid_text, "path grid", "GameplayPathPushThroughGateCircleObjectType()"),
+        (grid_text, "path grid", "GameplayPathOpenableSegmentObstacleMask()"),
         (cell_text, "path cell sampling", "GameplayPathCellLineSampleResolution()"),
         (cell_text, "path cell sampling", "GameplayPathCellPlacementSampleResolution()"),
         (traversability_text, "path traversability", "GameplayPathPushableCircleObstacleMask()"),
@@ -826,8 +831,7 @@ def test_pathfinding_movement_layout_is_named_and_documented() -> str:
     forbidden_patterns = (
         (grid_text, "path grid", r"ReadFieldOr<[^>]+>\(controller_address,\s*0x(?:B4|D8|DC|E0|E4)"),
         (grid_text, "path grid", r"constexpr\s+(?:int|float|std::uint32_t|std::size_t)\s+kGameplayPath"),
-        (grid_text, "path grid", r"0x0000(?:0004|2000|0BBE)"),
-        (grid_text, "path grid", r"\b10\.0f\b"),
+        (grid_text, "path grid", r"0x0000(?:0004|0100|2000|0BBE)"),
         (cell_text, "path cell sampling", r"constexpr\s+int\s+kGameplayPathCellLineSampleResolution"),
         (cell_text, "path cell sampling", r"kGameplayPathCellPlacementSampleResolution\s*;"),
         (traversability_text, "path traversability", r"kGameplayPath(?:StaticCircleObstacleMask|PushableCircleObstacleMask)(?!\()"),
@@ -852,8 +856,8 @@ def test_pathfinding_movement_layout_is_named_and_documented() -> str:
     required_live_probe_tokens = (
         "query_movement_circle_policy_sample",
         "static_circle_obstacle_mask",
-        "push_through_gate_circle_object_type",
-        "gate_radius_match_count",
+        "openable_segment_obstacle_mask",
+        "openable_segment_mask",
         "movement_circle_policy",
     )
     missing_live_probe = [token for token in required_live_probe_tokens if token not in live_probe_text]
@@ -863,6 +867,146 @@ def test_pathfinding_movement_layout_is_named_and_documented() -> str:
             ", ".join(missing_live_probe))
 
     return "movement grid, circle, GameNpc, and pathfinding policy values are documented and layout-backed"
+
+
+def test_openable_obstacle_path_policy_uses_native_collision_classes() -> str:
+    design_text = read_text(
+        ROOT / "docs/design/all-bot-match-2026-07-28.md"
+    )
+    grid_text = read_text(
+        ROOT /
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_pathfinding_grid_setup.inl"
+    )
+    traversability_text = read_text(
+        ROOT /
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_pathfinding_traversability.inl"
+    )
+    path_building_text = read_text(
+        ROOT /
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_pathfinding_path_building.inl"
+    )
+    layout_text = read_text(BINARY_LAYOUT)
+
+    for token in (
+        "Native type `0xBC4`",
+        "Moving collision builder `0x005ED4D0`",
+        "Motion/contact tick `0x005ED5F0`",
+        "segment collision mask",
+        "`Gate + 0x1C8`",
+        "maximum moving-endpoint displacement `49.5022`",
+        "no position write and no stuck-failsafe teleport",
+        "does not contain Gate object types, radii, coordinates, or map",
+        "vtable slot",
+        "`0x005E8650`",
+        "two-phase native query",
+        "secondary overlap list is query scratch",
+    ):
+        if token not in design_text:
+            raise StaticReTestFailure(
+                f"all-bot design lacks Gate root-cause evidence: {token}"
+            )
+
+    if "openable_segment_obstacle_mask=0x00000100" not in layout_text:
+        raise StaticReTestFailure(
+            "binary layout does not expose the native openable-segment mask"
+        )
+    for removed_key in (
+        "push_through_gate_circle_object_type",
+        "push_through_gate_circle_radius",
+        "push_through_gate_radius_epsilon_milliunits",
+    ):
+        if removed_key in layout_text:
+            raise StaticReTestFailure(
+                f"object-specific Gate policy remains in binary layout: {removed_key}"
+            )
+
+    for token in (
+        "GameplayPathOpenableSegmentObstacleMask()",
+        "CaptureGameplayPathSegmentObstaclePolicy",
+        "kGameplayPathOpenableSegmentBuilderVtableSlotOffset",
+        "kGameplayPathOpenableSegmentRecordOffset",
+        "collision_builder_address != openable_builder_address",
+        "TryReadGameplayPathSegmentObstacle",
+        "snapshot->openable_segment_obstacles.push_back",
+        "(mask & GameplayPathPushableCircleObstacleMask()) != 0",
+        "snapshot->static_circle_obstacles.push_back",
+    ):
+        if token not in grid_text:
+            raise StaticReTestFailure(
+                f"path-grid openable-obstacle classification lacks: {token}"
+            )
+    for removed_token in (
+        "GameplayPathPushThroughGate",
+        "ignored_circle_obstacles",
+        "IsGameplayPathIgnoredStaticCircleObstacle",
+    ):
+        if removed_token in grid_text or removed_token in traversability_text:
+            raise StaticReTestFailure(
+                f"object-specific blocked-sample bypass remains: {removed_token}"
+            )
+
+    if not re.search(
+        r"native_circle_block_mask\s*=\s*"
+        r"collision_mask\s*&\s*~pushable_circle_obstacle_mask",
+        traversability_text,
+    ):
+        raise StaticReTestFailure(
+            "native raw-circle policy does not keep actor collision while "
+            "excluding pushable circles"
+        )
+    if not re.search(
+        r"native_overlap_allow_mask\s*=\s*"
+        r"pushable_circle_obstacle_mask\s*;",
+        traversability_text,
+    ):
+        raise StaticReTestFailure(
+            "the first native overlap query does not keep fixed 0x100 segments blocked"
+        )
+    for token in (
+        "TryClassifyCurrentGameplayPathSegmentOverlaps",
+        "snapshot.openable_segment_obstacles",
+        "kMovementControllerSecondaryCountOffset",
+        "kMovementControllerSecondaryListOffset",
+        "kGameplayPathSegmentMaskOffset",
+        "obstacle.record_address == record_address",
+        "overlaps_openable_segment",
+        "overlaps_fixed_shared_mask_segment",
+        "const auto openable_overlap_allow_mask",
+        "native_overlap_allow_mask |",
+        "openable_segment_obstacle_mask",
+        "Native openable-segment placement query failed",
+    ):
+        if token not in traversability_text:
+            raise StaticReTestFailure(
+                f"two-phase openable-segment placement lacks: {token}"
+            )
+    if "static_circle_obstacle_mask" in traversability_text[
+        traversability_text.find("const auto native_overlap_allow_mask") :
+        traversability_text.find(
+            "const auto extended_placement_address",
+            traversability_text.find("const auto native_overlap_allow_mask"),
+        )
+    ]:
+        raise StaticReTestFailure(
+            "native overlap policy still exempts fixed static collision"
+        )
+    for token in (
+        "Preserve an exact straight approach",
+        "IsGameplayPathPlacementTraversable(",
+        "IsGameplayPathSegmentTraversable(",
+        "path_target_x",
+        "path_target_y",
+        "binding->path_waypoints.push_back",
+    ):
+        if token not in path_building_text:
+            raise StaticReTestFailure(
+                f"openable-segment route does not preserve direct contact approach: {token}"
+            )
+
+    return "Gate and pushable path policy uses native collision behavior without object or coordinate exceptions"
 
 
 def test_player_gamenpc_movement_seed_layout_is_named_and_documented() -> str:

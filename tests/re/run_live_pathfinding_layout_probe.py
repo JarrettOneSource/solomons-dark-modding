@@ -53,9 +53,14 @@ REQUIRED_LAYOUT_KEYS = (
     "cell_line_sample_resolution",
     "static_circle_obstacle_mask",
     "pushable_circle_obstacle_mask",
-    "push_through_gate_circle_object_type",
-    "push_through_gate_circle_radius",
-    "push_through_gate_radius_epsilon_milliunits",
+    "openable_segment_obstacle_mask",
+    "openable_segment_builder_vtable_slot",
+    "openable_segment_record",
+    "segment_start_x",
+    "segment_start_y",
+    "segment_end_x",
+    "segment_end_y",
+    "segment_mask",
     "max_static_circle_obstacles",
 )
 
@@ -231,9 +236,7 @@ local y_offset = {layout["movement_circle_y"]}
 local radius_offset = {layout["movement_circle_radius"]}
 local static_mask = {layout["static_circle_obstacle_mask"]}
 local pushable_mask = {layout["pushable_circle_obstacle_mask"]}
-local gate_type = {layout["push_through_gate_circle_object_type"]}
-local gate_radius = {layout["push_through_gate_circle_radius"]}
-local gate_epsilon = {layout["push_through_gate_radius_epsilon_milliunits"]} / 1000.0
+local openable_segment_mask = {layout["openable_segment_obstacle_mask"]}
 local function emit(key, value)
   if value == nil then
     print(key .. '=')
@@ -253,10 +256,7 @@ local static_bit_count = 0
 local static_exact_count = 0
 local pushable_bit_count = 0
 local pushable_static_exact_count = 0
-local gate_type_count = 0
-local gate_radius_match_count = 0
 local first_static_mask = 0
-local first_gate_radius = -1
 for index = 0, sample_limit - 1 do
   scanned = scanned + 1
   local circle = sd.debug.read_ptr(circle_list + index * 4) or 0
@@ -283,15 +283,6 @@ for index = 0, sample_limit - 1 do
       if mask == (static_mask + pushable_mask) then
         pushable_static_exact_count = pushable_static_exact_count + 1
       end
-      if object_type == gate_type then
-        gate_type_count = gate_type_count + 1
-        if first_gate_radius < 0 then
-          first_gate_radius = radius
-        end
-        if math.abs(radius - gate_radius) <= gate_epsilon then
-          gate_radius_match_count = gate_radius_match_count + 1
-        end
-      end
     end
   end
 end
@@ -303,10 +294,8 @@ emit('static_bit_count', static_bit_count)
 emit('static_exact_count', static_exact_count)
 emit('pushable_bit_count', pushable_bit_count)
 emit('pushable_static_exact_count', pushable_static_exact_count)
-emit('gate_type_count', gate_type_count)
-emit('gate_radius_match_count', gate_radius_match_count)
 emit('first_static_mask', first_static_mask)
-emit('first_gate_radius', first_gate_radius)
+emit('openable_segment_mask', openable_segment_mask)
 """.strip()
         )
     )
@@ -568,10 +557,9 @@ def run_probe(element: str, discipline: str) -> dict[str, Any]:
         raise LivePathfindingLayoutProbeFailure(f"movement circle policy sample read no circles: {circle_policy}")
     if csp.int_value(circle_policy, "static_bit_count") <= 0:
         raise LivePathfindingLayoutProbeFailure(f"movement circle policy sample found no static mask: {circle_policy}")
-    if csp.int_value(circle_policy, "gate_radius_match_count") <= 0:
+    if csp.int_value(circle_policy, "openable_segment_mask") == 0:
         raise LivePathfindingLayoutProbeFailure(
-            "movement circle policy sample found no push-through gate matching "
-            f"configured type/radius: {circle_policy}"
+            f"movement collision policy has no openable-segment mask: {circle_policy}"
         )
     result["movement_circle_policy"] = circle_policy
 
