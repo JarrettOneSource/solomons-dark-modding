@@ -56,6 +56,7 @@ internal static class LauncherJsonConsole
                 FreshInstall = execution.Command.FreshInstall,
                 ShowStockTutorial = execution.Command.ShowStockTutorial,
                 DisableAudio = execution.Command.DisableAudio,
+                Headless = execution.Command.Headless,
                 LoaderDebugUi = runtimeFlags.LoaderDebugUi,
                 SteamAppId = execution.Configuration.Steam.AppId,
                 SteamApiOverride = execution.Configuration.Steam.ApiDllOverridePath
@@ -197,6 +198,8 @@ internal static class LauncherJsonConsole
                     StartupCode = execution.LaunchedGame.StartupStatus.Code,
                     StartupMessage = execution.LaunchedGame.StartupStatus.Message,
                     StartupLogPath = execution.LaunchedGame.StartupStatus.LogPath,
+                    HeadlessSimulationEnabled =
+                        execution.LaunchedGame.StartupStatus.HeadlessSimulationEnabled,
                     SavegamesRootPath = execution.LaunchedGame.SavegamesRootPath,
                     SavegamesUsesDirectoryMirror =
                         execution.LaunchedGame.SavegamesUsesDirectoryMirror,
@@ -425,6 +428,7 @@ internal static class LauncherJsonConsole
         public required bool FreshInstall { get; init; }
         public required bool ShowStockTutorial { get; init; }
         public required bool DisableAudio { get; init; }
+        public required bool Headless { get; init; }
         public required bool LoaderDebugUi { get; init; }
         public required string SteamAppId { get; init; }
         public required string? SteamApiOverride { get; init; }
@@ -473,6 +477,7 @@ internal static class LauncherJsonConsole
         public required string StartupCode { get; init; }
         public required string StartupMessage { get; init; }
         public required string? StartupLogPath { get; init; }
+        public required bool HeadlessSimulationEnabled { get; init; }
         public required string? SavegamesRootPath { get; init; }
         public required bool SavegamesUsesDirectoryMirror { get; init; }
         public required LauncherJsonMultiplayerSession? MultiplayerSession { get; init; }

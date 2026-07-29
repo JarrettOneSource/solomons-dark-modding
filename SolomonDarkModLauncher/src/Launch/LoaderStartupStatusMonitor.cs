@@ -14,6 +14,7 @@ internal sealed record LoaderStartupStatus(
     public string? RuntimeBootstrapPath { get; init; }
     public string? BinaryLayoutPath { get; init; }
     public bool BinaryLayoutLoaded { get; init; }
+    public bool HeadlessSimulationEnabled { get; init; }
     public bool SteamTransportReady { get; init; }
     public bool MultiplayerFoundationReady { get; init; }
     public bool LuaEngineEnabled { get; init; }

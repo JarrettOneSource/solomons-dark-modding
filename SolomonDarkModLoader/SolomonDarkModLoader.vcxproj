@@ -119,6 +119,7 @@
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
+    <ClInclude Include="include\headless_simulation.h" />
     <ClInclude Include="include\launch_audio_disable.h" />
     <ClInclude Include="include\loading_screen.h" />
     <ClInclude Include="include\native_audio_observability.h" />
@@ -694,6 +695,7 @@
     <ClCompile Include="src\memory_access_io.cpp" />
     <ClCompile Include="src\memory_access_regions.cpp" />
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
+    <ClCompile Include="src\headless_simulation.cpp" />
     <ClCompile Include="src\launch_audio_disable.cpp" />
     <ClCompile Include="src\native_audio_observability.cpp" />
     <ClCompile Include="src\native_close_url_patch.cpp" />

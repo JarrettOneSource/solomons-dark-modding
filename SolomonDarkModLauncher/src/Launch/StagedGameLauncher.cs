@@ -48,6 +48,7 @@ internal static class StagedGameLauncher
         bool freshInstall = false,
         bool showStockTutorial = false,
         bool disableAudio = false,
+        bool headless = false,
         MultiplayerLaunchOptions? multiplayer = null,
         string? savegamesRootOverride = null,
         LaunchOptions? options = null)
@@ -71,9 +72,12 @@ internal static class StagedGameLauncher
         options = TutorialLaunchEnvironment.Apply(
             options,
             showStockTutorial);
+        options = HeadlessLaunchEnvironment.Apply(
+            options,
+            headless);
         options = AudioLaunchEnvironment.Apply(
             options,
-            disableAudio);
+            disableAudio || headless);
         options = MultiplayerLaunchEnvironment.Apply(
             options,
             multiplayer ?? MultiplayerLaunchOptions.Create(
@@ -101,7 +105,11 @@ internal static class StagedGameLauncher
         {
             FileName = stage.StageExecutablePath,
             WorkingDirectory = stage.StageRootPath,
-            UseShellExecute = false
+            UseShellExecute = false,
+            CreateNoWindow = headless,
+            WindowStyle = headless
+                ? ProcessWindowStyle.Hidden
+                : ProcessWindowStyle.Normal
         };
         ApplyEnvironmentOverrides(startInfo, options.EnvironmentOverrides);
         LoaderStartupStatusMonitor.Reset(stage.StageRootPath);
@@ -120,7 +128,7 @@ internal static class StagedGameLauncher
             WindowsDllInjector.Inject(
                 process,
                 loaderPath,
-                waitForInputIdle: !disableAudio);
+                waitForInputIdle: !disableAudio && !headless);
             var startupStatus = LoaderStartupStatusMonitor.WaitForCompletion(stage.StageRootPath, launchToken);
             if (!startupStatus.Success)
             {

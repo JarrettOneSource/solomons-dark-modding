@@ -34,6 +34,7 @@ internal sealed class LauncherUiCommandClient
     private bool debugUiEnabled_ = true;
     private bool showStockTutorial_;
     private bool disableAudio_;
+    private bool headless_;
     private string lobbyId_ = string.Empty;
     private string gameDirectory_;
     private string directoryUrl_;
@@ -50,6 +51,7 @@ internal sealed class LauncherUiCommandClient
             DefaultDirectoryUrl;
         showStockTutorial_ = settingsStore_.LoadShowStockTutorial();
         disableAudio_ = settingsStore_.LoadDisableAudio();
+        headless_ = settingsStore_.LoadHeadless();
         var portableMarkerPath = Path.Combine(
             workspaceRoot,
             DistributionLayout.PortableRootMarkerFileName);
@@ -62,6 +64,7 @@ internal sealed class LauncherUiCommandClient
     public bool DebugUiEnabled => debugUiEnabled_;
     public bool ShowStockTutorial => showStockTutorial_;
     public bool DisableAudio => disableAudio_;
+    public bool Headless => headless_;
 
     public string LobbyId => lobbyId_;
 
@@ -89,6 +92,12 @@ internal sealed class LauncherUiCommandClient
     {
         disableAudio_ = disableAudio;
         settingsStore_.SaveDisableAudio(disableAudio);
+    }
+
+    public void UpdateHeadless(bool headless)
+    {
+        headless_ = headless;
+        settingsStore_.SaveHeadless(headless);
     }
 
     public void UpdateLobbyId(string? lobbyId)
@@ -263,6 +272,12 @@ internal sealed class LauncherUiCommandClient
             LauncherUiCommandRouting.LaunchesGame(mode))
         {
             arguments.Add("--disable-audio");
+        }
+
+        if (headless_ &&
+            mode == LauncherUiCommandMode.LaunchSinglePlayer)
+        {
+            arguments.Add("--headless");
         }
 
         if (!string.IsNullOrWhiteSpace(gameDirectory_))

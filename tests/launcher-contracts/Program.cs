@@ -56,6 +56,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("fresh install isolation", TestFreshInstallIsolationAsync),
     ("tutorial bypass launch routing", TestTutorialBypassLaunchRoutingAsync),
     ("audio disable launch routing", TestAudioDisableLaunchRoutingAsync),
+    ("headless simulation launch routing", TestHeadlessSimulationLaunchRoutingAsync),
     ("normal runtime hides diagnostic UI", TestNormalRuntimeHidesDiagnosticUiAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
@@ -1705,6 +1706,87 @@ static Task TestAudioDisableLaunchRoutingAsync()
             AudioLaunchEnvironment.DisableAudioVariable !=
                 MultiplayerLaunchEnvironment.QuickStartVariable,
             "audio disable shares an environment gate with another launch behavior");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestHeadlessSimulationLaunchRoutingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var defaultCommand = LauncherCommandParser.Parse(["launch"]);
+        Require(
+            !defaultCommand.Headless,
+            "normal player launch unexpectedly enabled headless simulation");
+        var headlessCommand = LauncherCommandParser.Parse(
+            ["launch", "--headless", "--multiplayer", "off"]);
+        Require(
+            headlessCommand.Headless,
+            "launcher parser lost --headless");
+
+        RequireThrows<InvalidOperationException>(
+            () => LauncherCommandParser.Parse(["stage", "--headless"]),
+            "launcher accepted --headless without launching the game");
+        RequireThrows<InvalidOperationException>(
+            () => LauncherCommandParser.Parse(
+                ["launch", "--headless", "--multiplayer", "host"]),
+            "launcher accepted accelerated headless simulation for a host");
+        RequireThrows<InvalidOperationException>(
+            () => LauncherCommandParser.Parse(
+                ["launch", "--headless", "--multiplayer", "join"]),
+            "launcher accepted accelerated headless simulation for a client");
+
+        var settingsRoot = Path.Combine(root, "ui-settings");
+        var settings = new LauncherUiSettingsStore(settingsRoot);
+        Require(
+            !settings.LoadHeadless(),
+            "desktop launcher settings defaulted to headless simulation");
+        settings.SaveHeadless(true);
+        Require(
+            new LauncherUiSettingsStore(settingsRoot).LoadHeadless(),
+            "desktop launcher did not persist headless simulation");
+
+        var inheritedOptions = new LaunchOptions(
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                ["PRESERVED"] = "yes",
+                [HeadlessLaunchEnvironment.EnabledVariable] = "1"
+            });
+        var normalOptions = HeadlessLaunchEnvironment.Apply(
+            inheritedOptions,
+            enabled: false);
+        Require(
+            normalOptions.EnvironmentOverrides?[
+                HeadlessLaunchEnvironment.EnabledVariable] ==
+                string.Empty,
+            "normal launch inherited the headless process signal");
+        Require(
+            normalOptions.EnvironmentOverrides?["PRESERVED"] == "yes",
+            "headless routing discarded an existing environment override");
+
+        var headlessOptions = HeadlessLaunchEnvironment.Apply(
+            inheritedOptions,
+            enabled: true);
+        Require(
+            headlessOptions.EnvironmentOverrides?[
+                HeadlessLaunchEnvironment.EnabledVariable] == "1",
+            "headless launch omitted the native loader signal");
+
+        Require(
+            HeadlessLaunchEnvironment.EnabledVariable !=
+                AudioLaunchEnvironment.DisableAudioVariable &&
+            HeadlessLaunchEnvironment.EnabledVariable !=
+                TutorialLaunchEnvironment.SkipFreshSaveTutorialVariable &&
+            HeadlessLaunchEnvironment.EnabledVariable !=
+                MultiplayerLaunchEnvironment.QuickStartVariable,
+            "headless simulation shares an environment gate with another launch behavior");
     }
     finally
     {

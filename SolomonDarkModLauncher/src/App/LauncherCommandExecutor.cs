@@ -229,6 +229,7 @@ internal static class LauncherCommandExecutor
             command.FreshInstall,
             command.ShowStockTutorial,
             command.DisableAudio,
+            command.Headless,
             multiplayer,
             command.SavegamesRootOverride);
         return new LauncherCommandExecution(

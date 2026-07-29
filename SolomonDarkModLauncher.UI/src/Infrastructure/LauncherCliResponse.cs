@@ -103,6 +103,7 @@ internal sealed class LauncherCliConfiguration
     public bool HasRuntimeFlagOverrides { get; set; }
     public bool ShowStockTutorial { get; set; }
     public bool DisableAudio { get; set; }
+    public bool Headless { get; set; }
     public bool LoaderDebugUi { get; set; }
     public string SteamAppId { get; set; } = string.Empty;
     public string? SteamApiOverride { get; set; }
@@ -146,6 +147,7 @@ internal sealed class LauncherCliLaunch
     public string StartupCode { get; set; } = string.Empty;
     public string StartupMessage { get; set; } = string.Empty;
     public string? StartupLogPath { get; set; }
+    public bool HeadlessSimulationEnabled { get; set; }
     public string? SavegamesRootPath { get; set; }
     public bool SavegamesUsesDirectoryMirror { get; set; }
     public LauncherCliMultiplayerSession? MultiplayerSession { get; set; }

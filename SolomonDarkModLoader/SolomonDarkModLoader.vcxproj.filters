@@ -236,6 +236,9 @@
     <ClInclude Include="include\fresh_save_tutorial_bypass.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\headless_simulation.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\launch_audio_disable.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1931,6 +1934,9 @@
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp">
+      <Filter>Source Files\Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\headless_simulation.cpp">
       <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\launch_audio_disable.cpp">

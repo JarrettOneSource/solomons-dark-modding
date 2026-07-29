@@ -187,6 +187,7 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 ./dist/launcher/SolomonDarkModLauncher.exe stage --runtime-profile bootstrap_only
 ./dist/launcher/SolomonDarkModLauncher.exe launch
 ./dist/launcher/SolomonDarkModLauncher.exe launch --disable-audio
+./dist/launcher/SolomonDarkModLauncher.exe launch --headless --multiplayer off
 ./dist/launcher/SolomonDarkModLauncher.exe launch --fresh-install
 ./dist/launcher/SolomonDarkModLauncher.exe launch --savegames-root path\to\launcher-savegames
 ./dist/launcher/SolomonDarkModLauncher.exe launch --steam-api-dll path\to\steam_api.dll
@@ -195,6 +196,14 @@ CLI (defaults to `../SolomonDarkAbandonware` when present):
 `--fresh-install` always uses a reset instance-local temporary profile, imports
 no retail APPDATA, and excludes the source install's `sandbox` tree from the
 stage. It cannot be combined with `--savegames-root`.
+
+`--headless` hides the game window, disables audio, and runs the single-player
+simulation as fast as the machine allows. Hidden menu and hub rendering remains
+available for automation, then rendering is suppressed in simulation scenes.
+The stock 100 Hz fixed step is preserved and unchanged steps are batched instead
+of increasing delta time. Headless host/join launches are rejected because
+accelerated simulation cannot stay synchronized with real-time peers. See
+`docs/headless-simulation.md` for the native contract and diagnostics.
 
 GUI:
 

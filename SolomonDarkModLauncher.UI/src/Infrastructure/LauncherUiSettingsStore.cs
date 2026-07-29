@@ -107,6 +107,13 @@ internal sealed class LauncherUiSettingsStore
         Save(Load() with { DisableAudio = disableAudio });
     }
 
+    public bool LoadHeadless() => Load().Headless;
+
+    public void SaveHeadless(bool headless)
+    {
+        Save(Load() with { Headless = headless });
+    }
+
     public int LoadActiveSaveSlot()
     {
         var slot = Load().ActiveSaveSlot;
@@ -150,5 +157,6 @@ internal sealed class LauncherUiSettingsStore
         public int ActiveSaveSlot { get; init; }
         public bool ShowStockTutorial { get; init; }
         public bool DisableAudio { get; init; }
+        public bool Headless { get; init; }
     }
 }

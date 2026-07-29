@@ -18,6 +18,7 @@ struct StartupStatusSnapshot {
     std::filesystem::path runtime_bootstrap_path;
     std::filesystem::path binary_layout_path;
     bool binary_layout_loaded = false;
+    bool headless_simulation_enabled = false;
     bool steam_transport_ready = false;
     bool multiplayer_foundation_ready = false;
     bool lua_engine_enabled = false;

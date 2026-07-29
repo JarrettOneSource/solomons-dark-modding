@@ -24,6 +24,7 @@ internal static class LauncherCommandParser
         var freshInstall = false;
         var showStockTutorial = false;
         var disableAudio = false;
+        var headless = false;
         string? steamAppId = null;
         string? steamApiDll = null;
         var multiplayerMode = MultiplayerLaunchMode.Unspecified;
@@ -149,6 +150,12 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--headless")
+            {
+                headless = true;
+                continue;
+            }
+
             if (arg == "--steam-appid")
             {
                 steamAppId = ReadValue(args, ref index, arg);
@@ -241,6 +248,17 @@ internal static class LauncherCommandParser
             multiplayerMaxParticipants,
             openSteamInviteDialog,
             lobbyHost);
+        if (headless && mode != LauncherMode.Launch)
+        {
+            throw new InvalidOperationException(
+                "--headless is only valid with the launch command.");
+        }
+        if (headless &&
+            multiplayer.Mode is MultiplayerLaunchMode.Host or MultiplayerLaunchMode.Join)
+        {
+            throw new InvalidOperationException(
+                "--headless is single-player only because accelerated simulation is incompatible with real-time multiplayer.");
+        }
         if (lobbyTicket is not null &&
             (multiplayer.Mode != MultiplayerLaunchMode.Join || multiplayer.LobbyId is null))
         {
@@ -266,6 +284,7 @@ internal static class LauncherCommandParser
             freshInstall,
             showStockTutorial,
             disableAudio,
+            headless,
             steamAppId,
             steamApiDll,
             multiplayer.Mode,

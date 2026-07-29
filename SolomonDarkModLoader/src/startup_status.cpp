@@ -100,6 +100,8 @@ void WriteStartupStatus(
            << "\",\n";
     stream << "  \"binaryLayoutPath\": \"" << EscapeJsonString(NarrowPath(snapshot.binary_layout_path)) << "\",\n";
     stream << "  \"binaryLayoutLoaded\": " << (snapshot.binary_layout_loaded ? "true" : "false") << ",\n";
+    stream << "  \"headlessSimulationEnabled\": "
+           << (snapshot.headless_simulation_enabled ? "true" : "false") << ",\n";
     stream << "  \"steamTransportReady\": " << (snapshot.steam_transport_ready ? "true" : "false") << ",\n";
     stream << "  \"multiplayerFoundationReady\": "
            << (snapshot.multiplayer_foundation_ready ? "true" : "false") << ",\n";

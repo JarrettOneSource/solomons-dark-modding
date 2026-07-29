@@ -40,6 +40,7 @@ internal static class LauncherOutputFormatter
             "  --fresh-install         Reset an isolated temporary profile and exclude all source sandbox data.",
             "  --show-stock-tutorial   Opt in to the stock fresh-save tutorial instead of the launcher default bypass.",
             "  --disable-audio         Disable all game audio for this launch.",
+            "  --headless              Hide the game, disable rendering and audio, and run single-player fixed-step simulation as fast as possible.",
             "  --savegames-root <path> Use this launcher-owned directory for game saves.",
             "  --steam-appid <id>      Override steam_appid.txt. Default: 3362180.",
             "  --steam-api-dll <path>  Override the x86 steam_api.dll used when the mirrored game does not already ship one.",

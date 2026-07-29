@@ -7,6 +7,7 @@
 
 #include "bot_runtime.h"
 #include "fresh_save_tutorial_bypass.h"
+#include "headless_simulation.h"
 #include "launch_audio_disable.h"
 #include "loading_screen.h"
 #include "logger.h"
@@ -139,6 +140,8 @@ void RefreshStartupStatusSnapshot(StartupStatusSnapshot* snapshot) {
     }
 
     snapshot->log_path = GetLoggerPath();
+    snapshot->headless_simulation_enabled =
+        IsHeadlessSimulationEnabled();
     snapshot->steam_transport_ready = GetSteamBootstrapSnapshot().transport_interfaces_ready;
     snapshot->multiplayer_foundation_ready = multiplayer::IsFoundationInitialized();
     snapshot->lua_engine_initialized = IsLuaEngineInitialized();
@@ -153,6 +156,7 @@ void ShutdownPartialRuntime() {
     ShutdownLoadingScreen();
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
+    ShutdownHeadlessSimulation();
     ShutdownLuaItemNativeHooks();
     ShutdownGameplayKeyboardInjection();
     ShutdownNativeAudioObservability();
@@ -373,6 +377,16 @@ void Initialize(HMODULE module_handle) {
 
         auto& memory = ProcessMemory::Instance();
         Log("Host module base: " + HexString(memory.ModuleBase()));
+        std::string headless_error;
+        if (!InitializeHeadlessSimulation(&headless_error)) {
+            const auto message = headless_error.empty()
+                ? std::string("Headless simulation failed to initialize.")
+                : headless_error;
+            Log(message);
+            ShutdownPartialRuntime();
+            write_failed_status("headless-simulation-failed", message);
+            return;
+        }
 
         {
             std::string background_focus_bypass_error;
@@ -587,6 +601,7 @@ void Initialize(HMODULE module_handle) {
         std::ostringstream startup_summary;
         startup_summary << "SolomonDarkModLoader startup complete."
                         << " binary_layout=" << (startup_status.binary_layout_loaded ? 1 : 0)
+                        << " headless_simulation=" << (startup_status.headless_simulation_enabled ? 1 : 0)
                         << " steam_transport=" << (startup_status.steam_transport_ready ? 1 : 0)
                         << " multiplayer_foundation=" << (startup_status.multiplayer_foundation_ready ? 1 : 0)
                         << " bot_runtime=" << (startup_status.bot_runtime_initialized ? 1 : 0)
@@ -619,6 +634,7 @@ void Shutdown() {
     RunShutdownStep("loading screen", &ShutdownLoadingScreen);
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
+    RunShutdownStep("headless simulation", &ShutdownHeadlessSimulation);
     RunShutdownStep("lua item native hooks", &ShutdownLuaItemNativeHooks);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);
     RunShutdownStep(

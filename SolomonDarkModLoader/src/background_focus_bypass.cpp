@@ -3,6 +3,7 @@
 #include "mod_loader.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
+#include "headless_simulation.h"
 #include "lua_developer_console.h"
 #include "lua_ui_runtime.h"
 #include "mod_loader_internal.h"
@@ -47,6 +48,21 @@ constexpr int kMinimumWindowClientHeight = 360;
 constexpr std::size_t kAppDeactivatedFlagOffset = 0xc25;
 constexpr std::size_t kAppDeepPauseFlagOffset = 0xc23;
 constexpr std::size_t kAppLightPauseFlagOffset = 0xc24;
+
+bool IsHeadlessGameplaySceneActive() {
+    if (!IsHeadlessSimulationEnabled()) {
+        return false;
+    }
+
+    SDModSceneState scene;
+    if (!TryGetSceneState(&scene) || !scene.valid) {
+        return false;
+    }
+
+    return scene.kind == "arena" ||
+           scene.kind == "region" ||
+           scene.kind == "tutorial";
+}
 
 struct BackgroundFocusBypassState {
     X86Hook window_proc_hook = {};
@@ -407,6 +423,7 @@ void CorrectRestoredWindowAspectIfNeeded(HWND hwnd) {
 }
 
 LRESULT __stdcall DetourGameWindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    ObserveHeadlessSimulationWindow(hwnd);
     auto* const original = g_background_focus_bypass_state.original_window_proc;
     if (original == nullptr) {
         return DefWindowProcA(hwnd, message, wparam, lparam);
@@ -502,9 +519,13 @@ void __fastcall DetourAppMainTick(void* app, void* edx) {
     }
 
     const auto original = g_background_focus_bypass_state.original_app_main_tick;
+    PrepareHeadlessSimulationTick(
+        app,
+        IsHeadlessGameplaySceneActive());
     if (original != nullptr) {
         original(app, edx);
     }
+    FinishHeadlessSimulationTick(app);
     PumpGameplayPostStockTickWork();
     LogCpuLifecycleGuardActivity();
 }
