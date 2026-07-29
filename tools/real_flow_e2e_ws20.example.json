@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "runName": "netrepro-ws20-yyyymmdd-hhmmss",
+  "topology": "steam_windows_ws20",
+  "sourceRoot": "/mnt/c/sd-netrepro-worktree",
+  "packageRoot": "/replace/with/extracted/release/package",
+  "gameDirectory": "/replace/with/original/game/directory",
+  "evidenceRoot": "/mnt/d/codex-evidence/netrepro/run-name",
+  "directoryUrl": "https://solomondarker.com",
+  "privacy": "friends",
+  "expectedSourceSha": "0000000000000000000000000000000000000000",
+  "timeoutSeconds": 180,
+  "samplingSeconds": 0.25,
+  "host": {
+    "platform": "windows_local",
+    "launcherScope": "netrepro-steam-host",
+    "instance": "netrepro-steam-host",
+    "playerName": "Host",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-steam-host",
+    "participantId": "0x3000000000000001",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 0,
+    "remoteHost": "",
+    "remotePort": 0,
+    "matchStartActions": [
+      {
+        "kind": "click",
+        "x": 0.956,
+        "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "wait_scene",
+        "scene": "testrun",
+        "timeoutSeconds": 60
+      }
+    ]
+  },
+  "client": {
+    "platform": "windows_ssh",
+    "launcherScope": "netrepro-steam-client-b",
+    "instance": "netrepro-steam-client-b",
+    "playerName": "client B",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-steam-client-b",
+    "participantId": "0x3000000000000002",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 0,
+    "remoteHost": "",
+    "remotePort": 0,
+    "matchStartActions": [],
+    "ssh": {
+      "executable": "ssh",
+      "target": "temporary-account@workstation20.example",
+      "keyPath": "/replace/with/temporary-access-key",
+      "stageRoot": "%USERPROFILE%\\sd-netrepro-stage"
+    }
+  },
+  "metadata": {
+    "brokerScope": "desktop-launcher Steam lobby and SDR",
+    "purpose": "host starts match and physically completes Solomon Dig"
+  }
+}

@@ -9,7 +9,10 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(100, 300000)]
-    [int]$MaximumResponseTimeoutMilliseconds = 300000
+    [int]$MaximumResponseTimeoutMilliseconds = 300000,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeExecutionUtcNanoseconds
 )
 
 Set-StrictMode -Version Latest
@@ -103,6 +106,27 @@ function Invoke-GameLua {
     }
 }
 
+function Write-ResponseHeader {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.Stream]$Stream,
+
+        [Parameter(Mandatory = $true)]
+        [uint32]$ResponseLength,
+
+        [Parameter(Mandatory = $true)]
+        [uint64]$ExecutionUtcNanoseconds
+    )
+
+    $responseHeader = [System.BitConverter]::GetBytes($ResponseLength)
+    $Stream.Write($responseHeader, 0, $responseHeader.Length)
+    if ($IncludeExecutionUtcNanoseconds) {
+        $timestamp = [System.BitConverter]::GetBytes(
+            $ExecutionUtcNanoseconds)
+        $Stream.Write($timestamp, 0, $timestamp.Length)
+    }
+}
+
 $listener = [System.Net.Sockets.TcpListener]::new(
     [System.Net.IPAddress]::Loopback,
     $ListenPort
@@ -128,15 +152,19 @@ try {
                     $header,
                     4)
                 if ($requestLength -eq [uint32]::MaxValue) {
-                    $emptyResponse = [System.BitConverter]::GetBytes([uint32]0)
-                    $stream.Write($emptyResponse, 0, $emptyResponse.Length)
+                    Write-ResponseHeader `
+                        -Stream $stream `
+                        -ResponseLength 0 `
+                        -ExecutionUtcNanoseconds 0
                     $stream.Flush()
                     continue
                 }
                 if ($requestLength -eq 0) {
                     $shutdownRequested = $true
-                    $emptyResponse = [System.BitConverter]::GetBytes([uint32]0)
-                    $stream.Write($emptyResponse, 0, $emptyResponse.Length)
+                    Write-ResponseHeader `
+                        -Stream $stream `
+                        -ResponseLength 0 `
+                        -ExecutionUtcNanoseconds 0
                     $stream.Flush()
                     continue
                 }
@@ -153,6 +181,9 @@ try {
                     -Stream $stream `
                     -Length ([int]$requestLength)
                 $code = $utf8.GetString($requestBytes)
+                $executionUtcNanoseconds = [uint64](
+                    ([DateTime]::UtcNow.Ticks - 621355968000000000) *
+                    100)
 
                 try {
                     $response = Invoke-GameLua `
@@ -173,9 +204,10 @@ try {
                 if ($responseBytes.Length -gt $maximumFrameBytes) {
                     throw "Lua response exceeds $maximumFrameBytes bytes."
                 }
-                $responseHeader = [System.BitConverter]::GetBytes(
-                    [uint32]$responseBytes.Length)
-                $stream.Write($responseHeader, 0, $responseHeader.Length)
+                Write-ResponseHeader `
+                    -Stream $stream `
+                    -ResponseLength ([uint32]$responseBytes.Length) `
+                    -ExecutionUtcNanoseconds $executionUtcNanoseconds
                 if ($responseBytes.Length -gt 0) {
                     $stream.Write($responseBytes, 0, $responseBytes.Length)
                 }

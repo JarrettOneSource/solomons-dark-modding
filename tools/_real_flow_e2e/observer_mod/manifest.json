@@ -1,0 +1,14 @@
+{
+  "id": "tool.real_flow_e2e_observer",
+  "name": "Real-flow E2E Observer",
+  "version": "1.0.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "lua.engine",
+      "nav.read"
+    ]
+  }
+}

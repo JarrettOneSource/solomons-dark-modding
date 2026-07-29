@@ -78,14 +78,7 @@ unsigned __stdcall ServiceThreadMain(void*) {
         TickSteamSession(now_ms);
         const auto session_finished_ms =
             static_cast<std::uint64_t>(GetTickCount64());
-        for (const auto& congestion :
-             ServiceSteamGameplaySendQueue()) {
-            RecoverSteamSessionFromGameplayCongestion(
-                congestion.remote_steam_id,
-                congestion.duration_ms,
-                congestion.queued_reliable_packets,
-                congestion.dropped_disposable_packets);
-        }
+        ServiceSteamGameplaySendQueue();
         const auto send_finished_ms =
             static_cast<std::uint64_t>(GetTickCount64());
         const auto runtime_state = SnapshotRuntimeState();

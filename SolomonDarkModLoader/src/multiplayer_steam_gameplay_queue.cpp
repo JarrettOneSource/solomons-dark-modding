@@ -1,10 +1,13 @@
 #include "multiplayer_steam_gameplay_queue.h"
 
 #include "logger.h"
+#include "multiplayer_runtime_protocol.h"
+#include "network_telemetry.h"
 
 #include <Windows.h>
 
 #include <algorithm>
+#include <cstring>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -145,11 +148,10 @@ bool QueueSteamGameplayPacketSend(
         mode);
 }
 
-std::vector<SteamGameplayCongestionEvent>
-ServiceSteamGameplaySendQueue() {
+void ServiceSteamGameplaySendQueue() {
     bool should_log_failure = false;
     SteamGameplayQueueStats stats;
-    std::vector<SteamGameplayCongestionEvent> events;
+    std::vector<SteamGameplayBackpressureEvent> events;
     {
         std::scoped_lock lock(g_queue_mutex);
         const auto before =
@@ -161,12 +163,36 @@ ServiceSteamGameplaySendQueue() {
                std::size_t size,
                SteamNetworkSendMode mode,
                std::int32_t* result_code) {
-                return SteamSendNetworkMessage(
+                const bool telemetry_enabled =
+                    IsNetworkTelemetryEnabled();
+                PacketHeader header{};
+                if (telemetry_enabled &&
+                    data != nullptr &&
+                    size >= sizeof(header)) {
+                    std::memcpy(&header, data, sizeof(header));
+                }
+                const auto started_us = telemetry_enabled
+                    ? NetworkTelemetryNowMicroseconds()
+                    : 0;
+                const bool accepted = SteamSendNetworkMessage(
                     remote_steam_id,
                     data,
                     size,
                     mode,
                     result_code);
+                RecordNetworkSteamSendResult(
+                    header.kind,
+                    header.sequence,
+                    size,
+                    remote_steam_id,
+                    mode == SteamNetworkSendMode::ReliableNoNagle,
+                    accepted,
+                    result_code != nullptr ? *result_code : 0,
+                    telemetry_enabled
+                        ? NetworkTelemetryNowMicroseconds() -
+                            started_us
+                        : 0);
+                return accepted;
             });
         stats = g_outbound_queue.SnapshotStats();
         if (stats.send_failures != before) {
@@ -189,7 +215,16 @@ ServiceSteamGameplaySendQueue() {
             " congested_peers=" +
             std::to_string(stats.congested_peers));
     }
-    return events;
+    for (const auto& event : events) {
+        Log(
+            "Steam gameplay send sustained backpressure. steam_id=" +
+            std::to_string(event.remote_steam_id) +
+            " duration_ms=" + std::to_string(event.duration_ms) +
+            " queued_reliable=" +
+            std::to_string(event.queued_reliable_packets) +
+            " dropped_disposable=" +
+            std::to_string(event.dropped_disposable_packets));
+    }
 }
 
 SteamGameplayQueueStats SnapshotSteamGameplayQueueStats() {

@@ -332,7 +332,7 @@ from static_re_steam_contracts import (
     test_packet_send_mode_dispatch_is_type_safe,
     test_player_state_exports_native_heading_for_bot_spawn,
     test_solomon_dark_steam_app_id_is_consistent,
-    test_steam_send_queue_owns_backpressure_and_route_recovery,
+    test_steam_send_queue_owns_backpressure_without_resetting_session,
     test_steam_friend_hub_lifecycle_soak_is_wired,
     test_steam_friend_multiplayer_contract_is_wired,
     test_steam_pair_driver_rejects_ended_runs_before_client_navigation,
@@ -1306,8 +1306,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_world_snapshots_are_complete_mtu_sized_generations,
     ),
     (
-        "Steam send queue owns backpressure and route recovery",
-        test_steam_send_queue_owns_backpressure_and_route_recovery,
+        "Steam send queue owns backpressure without resetting session",
+        test_steam_send_queue_owns_backpressure_without_resetting_session,
     ),
     (
         "run enemy materialization preserves exact native type",

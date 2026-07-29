@@ -967,7 +967,7 @@ def test_steam_io_is_service_thread_owned_and_gameplay_application_is_app_thread
         (service_loop_text, "g_session_transport_lifecycle_mutex"),
         (service_thread_body, "SteamBootstrapTick();"),
         (service_thread_body, "TickSteamSession(now_ms);"),
-        (service_thread_body, "ServiceSteamGameplaySendQueue())"),
+        (service_thread_body, "ServiceSteamGameplaySendQueue();"),
         (service_loop_text, "void TickGameplayTransportOnAppThread"),
         (public_pump_text, "multiplayer::TickGameplayTransportOnAppThread("),
         (local_transport_public_api_text, "void ApplyQueuedSteamGameplayEvents("),

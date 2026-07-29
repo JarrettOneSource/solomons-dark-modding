@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "runName": "netrepro-yyyymmdd-hhmmss",
+  "topology": "loopback_windows",
+  "sourceRoot": "/mnt/c/sd-netrepro-worktree",
+  "packageRoot": "/replace/with/extracted/release/package",
+  "gameDirectory": "/replace/with/original/game/directory",
+  "evidenceRoot": "/mnt/d/codex-evidence/netrepro/run-name",
+  "directoryUrl": "https://solomondarker.com",
+  "privacy": "friends",
+  "expectedSourceSha": "0000000000000000000000000000000000000000",
+  "timeoutSeconds": 180,
+  "samplingSeconds": 0.25,
+  "host": {
+    "platform": "windows_local",
+    "launcherScope": "netrepro-host",
+    "instance": "netrepro-host",
+    "playerName": "Host",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-host",
+    "participantId": "0x1000000000000001",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 50711,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 50712,
+    "matchStartActions": [
+      {
+        "kind": "click",
+        "x": 0.956,
+        "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "wait_scene",
+        "scene": "testrun",
+        "timeoutSeconds": 60
+      }
+    ]
+  },
+  "client": {
+    "platform": "windows_local",
+    "launcherScope": "netrepro-client",
+    "instance": "netrepro-client",
+    "playerName": "client B",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-client",
+    "participantId": "0x1000000000000002",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 50712,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 50711,
+    "matchStartActions": []
+  },
+  "metadata": {
+    "purpose": "host starts match and physically completes Solomon Dig"
+  }
+}

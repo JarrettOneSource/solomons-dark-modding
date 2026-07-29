@@ -17,7 +17,7 @@ struct SteamGameplayQueueStats {
     std::uint64_t reliable_send_failures = 0;
     std::uint64_t limit_exceeded_failures = 0;
     std::uint64_t backpressure_episodes = 0;
-    std::uint64_t congestion_recoveries = 0;
+    std::uint64_t sustained_backpressure_reports = 0;
     std::uint64_t dropped_outbound_packets = 0;
     std::uint64_t dropped_inbound_packets = 0;
     std::size_t queued_outbound_packets = 0;
@@ -25,7 +25,7 @@ struct SteamGameplayQueueStats {
     std::int32_t last_send_failure_result = 0;
 };
 
-struct SteamGameplayCongestionEvent {
+struct SteamGameplayBackpressureEvent {
     std::uint64_t remote_steam_id = 0;
     std::uint64_t first_limit_exceeded_ms = 0;
     std::uint64_t duration_ms = 0;
@@ -46,7 +46,8 @@ public:
     static constexpr std::size_t kMaximumQueuedPackets = 1024;
     static constexpr std::size_t kMaximumSendsPerServiceTick = 256;
     static constexpr std::uint64_t kLimitRetryIntervalMs = 250;
-    static constexpr std::uint64_t kCongestionRecoveryIntervalMs = 2000;
+    static constexpr std::uint64_t
+        kSustainedBackpressureReportIntervalMs = 2000;
 
     bool Queue(
         std::uint64_t remote_steam_id,
@@ -54,7 +55,7 @@ public:
         std::size_t size,
         SteamNetworkSendMode mode);
 
-    std::vector<SteamGameplayCongestionEvent> Service(
+    std::vector<SteamGameplayBackpressureEvent> Service(
         std::uint64_t now_ms,
         const SteamGameplaySendFunction& send);
 
@@ -72,7 +73,7 @@ private:
 
     struct PeerBackpressure {
         bool limited = false;
-        bool recovery_reported = false;
+        bool sustained_reported = false;
         std::uint64_t first_limit_exceeded_ms = 0;
         std::uint64_t retry_after_ms = 0;
         std::uint64_t dropped_disposable_packets = 0;
@@ -80,7 +81,6 @@ private:
 
     static bool IsReliable(SteamNetworkSendMode mode);
     bool MakeRoom(bool reliable);
-    void RequeueReliableBeforePeerPackets(OutboundPacket packet);
     void CoalesceDisposablePackets(std::uint64_t remote_steam_id);
     std::size_t CountQueuedReliablePackets(
         std::uint64_t remote_steam_id) const;

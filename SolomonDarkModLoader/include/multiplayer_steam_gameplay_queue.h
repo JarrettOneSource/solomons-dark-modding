@@ -45,8 +45,7 @@ bool QueueSteamGameplayPacketSend(
     const void* data,
     std::size_t size,
     SteamNetworkSendMode mode);
-std::vector<SteamGameplayCongestionEvent>
-ServiceSteamGameplaySendQueue();
+void ServiceSteamGameplaySendQueue();
 SteamGameplayQueueStats SnapshotSteamGameplayQueueStats();
 
 }  // namespace sdmod::multiplayer

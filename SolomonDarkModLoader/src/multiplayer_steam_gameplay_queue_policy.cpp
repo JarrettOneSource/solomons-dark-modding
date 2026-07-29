@@ -1,6 +1,7 @@
 #include "multiplayer_steam_gameplay_queue_policy.h"
 
 #include <algorithm>
+#include <iterator>
 #include <unordered_set>
 #include <utility>
 
@@ -77,18 +78,6 @@ bool SteamGameplayOutboundQueuePolicy::Queue(
     return true;
 }
 
-void SteamGameplayOutboundQueuePolicy::
-    RequeueReliableBeforePeerPackets(OutboundPacket packet) {
-    const auto next_for_peer = std::find_if(
-        packets_.begin(),
-        packets_.end(),
-        [&](const OutboundPacket& queued) {
-            return queued.remote_steam_id ==
-                packet.remote_steam_id;
-        });
-    packets_.insert(next_for_peer, std::move(packet));
-}
-
 void SteamGameplayOutboundQueuePolicy::CoalesceDisposablePackets(
     std::uint64_t remote_steam_id) {
     OutboundPacket latest;
@@ -127,7 +116,7 @@ std::size_t SteamGameplayOutboundQueuePolicy::
         }));
 }
 
-std::vector<SteamGameplayCongestionEvent>
+std::vector<SteamGameplayBackpressureEvent>
 SteamGameplayOutboundQueuePolicy::Service(
     std::uint64_t now_ms,
     const SteamGameplaySendFunction& send) {
@@ -135,6 +124,7 @@ SteamGameplayOutboundQueuePolicy::Service(
     const auto packets_at_start = packets_.size();
     std::size_t examined = 0;
     std::size_t attempts = 0;
+    std::deque<OutboundPacket> deferred;
 
     while (examined < packets_at_start &&
            attempts < kMaximumSendsPerServiceTick &&
@@ -149,9 +139,8 @@ SteamGameplayOutboundQueuePolicy::Service(
                 blocked_peers.end() ||
             (pressure != backpressure_by_peer_.end() &&
              pressure->second.limited &&
-             (pressure->second.recovery_reported ||
-              now_ms < pressure->second.retry_after_ms))) {
-            packets_.push_back(std::move(packet));
+             now_ms < pressure->second.retry_after_ms)) {
+            deferred.push_back(std::move(packet));
             continue;
         }
 
@@ -195,8 +184,7 @@ SteamGameplayOutboundQueuePolicy::Service(
 
         const auto limited_peer = packet.remote_steam_id;
         if (IsReliable(packet.mode)) {
-            RequeueReliableBeforePeerPackets(
-                std::move(packet));
+            deferred.push_back(std::move(packet));
         } else {
             peer_pressure.dropped_disposable_packets += 1;
             stats_.dropped_outbound_packets += 1;
@@ -206,18 +194,24 @@ SteamGameplayOutboundQueuePolicy::Service(
         blocked_peers.insert(limited_peer);
     }
 
-    std::vector<SteamGameplayCongestionEvent> events;
+    deferred.insert(
+        deferred.end(),
+        std::make_move_iterator(packets_.begin()),
+        std::make_move_iterator(packets_.end()));
+    packets_ = std::move(deferred);
+
+    std::vector<SteamGameplayBackpressureEvent> events;
     for (auto& [steam_id, pressure] :
          backpressure_by_peer_) {
         if (!pressure.limited ||
-            pressure.recovery_reported ||
+            pressure.sustained_reported ||
             now_ms < pressure.first_limit_exceeded_ms ||
             now_ms - pressure.first_limit_exceeded_ms <
-                kCongestionRecoveryIntervalMs) {
+                kSustainedBackpressureReportIntervalMs) {
             continue;
         }
-        pressure.recovery_reported = true;
-        SteamGameplayCongestionEvent event;
+        pressure.sustained_reported = true;
+        SteamGameplayBackpressureEvent event;
         event.remote_steam_id = steam_id;
         event.first_limit_exceeded_ms =
             pressure.first_limit_exceeded_ms;
@@ -228,7 +222,7 @@ SteamGameplayOutboundQueuePolicy::Service(
         event.dropped_disposable_packets =
             pressure.dropped_disposable_packets;
         events.push_back(event);
-        stats_.congestion_recoveries += 1;
+        stats_.sustained_backpressure_reports += 1;
     }
     RefreshGauges();
     return events;

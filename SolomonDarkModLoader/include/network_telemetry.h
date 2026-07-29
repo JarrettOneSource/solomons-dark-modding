@@ -42,6 +42,15 @@ void RecordNetworkPacketSend(
     int result,
     int error_code,
     std::uint64_t duration_microseconds);
+void RecordNetworkSteamSendResult(
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t bytes,
+    std::uint64_t endpoint_id,
+    bool reliable,
+    bool accepted,
+    std::int32_t result_code,
+    std::uint64_t duration_microseconds);
 void RecordNetworkPacketReceive(
     std::uint16_t kind,
     std::uint32_t sequence,

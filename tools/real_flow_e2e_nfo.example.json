@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "runName": "netrepro-nfo-yyyymmdd-hhmmss",
+  "topology": "wan_udp_nfo",
+  "sourceRoot": "/mnt/c/sd-netrepro-worktree",
+  "packageRoot": "/replace/with/extracted/release/package",
+  "gameDirectory": "/replace/with/original/game/directory",
+  "evidenceRoot": "/mnt/d/codex-evidence/netrepro/run-name",
+  "protonArchive": "/replace/with/GE-Proton.tar.gz",
+  "directoryUrl": "https://solomondarker.com",
+  "privacy": "friends",
+  "expectedSourceSha": "0000000000000000000000000000000000000000",
+  "timeoutSeconds": 180,
+  "samplingSeconds": 0.25,
+  "host": {
+    "platform": "windows_local",
+    "launcherScope": "netrepro-wan-host",
+    "instance": "netrepro-wan-host",
+    "playerName": "Host",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-wan-host",
+    "participantId": "0x2000000000000001",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 51611,
+    "remoteHost": "198.51.100.20",
+    "remotePort": 51612,
+    "matchStartActions": [
+      {
+        "kind": "click",
+        "x": 0.956,
+        "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "wait_scene",
+        "scene": "testrun",
+        "timeoutSeconds": 60
+      }
+    ]
+  },
+  "client": {
+    "platform": "linux_ssh_proton",
+    "launcherScope": "netrepro-nfo-client",
+    "instance": "netrepro-nfo-client",
+    "playerName": "client B",
+    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-nfo-client",
+    "participantId": "0x2000000000000002",
+    "loadoutElement": "fire",
+    "loadoutDiscipline": "body",
+    "localPort": 51612,
+    "remoteHost": "203.0.113.10",
+    "remotePort": 51611,
+    "matchStartActions": [],
+    "ssh": {
+      "executable": "/mnt/c/Windows/System32/OpenSSH/ssh.exe",
+      "target": "nfo-alias",
+      "stageRoot": "/root/sd-netrepro-20260729",
+      "display": ":97",
+      "protonPath": "/root/sd-netrepro-20260729/proton/proton",
+      "xvfbPath": "/root/sd-netrepro-20260729/x11/usr/bin/Xvfb"
+    }
+  },
+  "metadata": {
+    "brokerScope": "desktop-launcher local_udp WAN projection",
+    "purpose": "host starts match and physically completes Solomon Dig"
+  }
+}

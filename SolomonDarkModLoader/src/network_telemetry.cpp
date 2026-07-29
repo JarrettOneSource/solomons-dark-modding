@@ -406,6 +406,35 @@ void RecordNetworkPacketSend(
     EnqueueEvent("packet_send", fields.str());
 }
 
+void RecordNetworkSteamSendResult(
+    std::uint16_t kind,
+    std::uint32_t sequence,
+    std::size_t bytes,
+    std::uint64_t endpoint_id,
+    bool reliable,
+    bool accepted,
+    std::int32_t result_code,
+    std::uint64_t duration_microseconds) {
+    if (!IsNetworkTelemetryEnabled()) {
+        return;
+    }
+
+    std::ostringstream fields;
+    fields << ",\"kind\":" << kind
+           << ",\"sequence\":" << sequence
+           << ",\"bytes\":" << bytes
+           << ",\"endpoint_id\":" << endpoint_id
+           << ",\"endpoint_ipv4\":"
+           << EndpointIpv4Identifier(endpoint_id)
+           << ",\"reliable\":"
+           << (reliable ? "true" : "false")
+           << ",\"accepted\":"
+           << (accepted ? "true" : "false")
+           << ",\"result_code\":" << result_code
+           << ",\"duration_us\":" << duration_microseconds;
+    EnqueueEvent("steam_send_result", fields.str());
+}
+
 void RecordNetworkPacketReceive(
     std::uint16_t kind,
     std::uint32_t sequence,

@@ -196,7 +196,7 @@ def test_packet_send_mode_dispatch_is_type_safe() -> str:
     return "Steam send-mode selection is type-safe, keeps ordinary world generations disposable, and uses bounded reliable convergence checkpoints"
 
 
-def test_steam_send_queue_owns_backpressure_and_route_recovery() -> str:
+def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
     policy_header = read_text(
         ROOT
         / "SolomonDarkModLoader/include/"
@@ -206,6 +206,14 @@ def test_steam_send_queue_owns_backpressure_and_route_recovery() -> str:
         ROOT
         / "SolomonDarkModLoader/src/"
         "multiplayer_steam_gameplay_queue_policy.cpp"
+    )
+    queue_source = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/"
+        "multiplayer_steam_gameplay_queue.cpp"
+    )
+    telemetry_source = read_text(
+        ROOT / "SolomonDarkModLoader/src/network_telemetry.cpp"
     )
     service_loop = read_text(
         ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
@@ -231,26 +239,46 @@ def test_steam_send_queue_owns_backpressure_and_route_recovery() -> str:
     required = (
         (policy_header, "kResultLimitExceeded = 25"),
         (policy_header, "kLimitRetryIntervalMs = 250"),
-        (policy_header, "kCongestionRecoveryIntervalMs = 2000"),
-        (policy_source, "RequeueReliableBeforePeerPackets("),
+        (
+            policy_header,
+            "kSustainedBackpressureReportIntervalMs = 2000",
+        ),
+        (policy_source, "std::deque<OutboundPacket> deferred;"),
+        (policy_source, "deferred.push_back(std::move(packet));"),
         (policy_source, "CoalesceDisposablePackets("),
-        (policy_source, "pressure.recovery_reported = true"),
-        (service_loop, "RecoverSteamSessionFromGameplayCongestion("),
-        (session, '"gameplay_send_congestion"'),
-        (session, "SteamCloseNetworkSession(remote_steam_id)"),
+        (policy_source, "pressure.sustained_reported = true"),
+        (queue_source, "Steam gameplay send sustained backpressure."),
+        (queue_source, "RecordNetworkSteamSendResult("),
+        (telemetry_source, 'EnqueueEvent("steam_send_result"'),
+        (service_loop, "ServiceSteamGameplaySendQueue();"),
         (session, "ResetSteamGameplayPeerSendQueue(steam_id)"),
         (outgoing, "BuildWorldMotionSnapshotForIdentity("),
         (outgoing, "needs_initial_identity"),
         (outgoing, "identity_timeline_changed"),
         (native_test, "ReliablePacketsSurviveTemporaryLimitExceeded"),
         (native_test, "DisposableTrafficCoalescesWithoutBlockingOtherPeers"),
-        (native_test, "SustainedLimitExceededRequestsOneRouteRecovery"),
+        (
+            native_test,
+            "SustainedLimitExceededRetainsReliableUntilBufferClears",
+        ),
     )
     missing = [token for text, token in required if token not in text]
     if missing:
         raise StaticReTestFailure(
             "Steam backpressure ownership is incomplete: "
             + ", ".join(missing)
+        )
+
+    forbidden = (
+        (service_loop, "RecoverSteamSessionFromGameplayCongestion("),
+        (session, '"gameplay_send_congestion"'),
+        (session, "void RecoverSteamSessionFromGameplayCongestion("),
+    )
+    present = [token for text, token in forbidden if token in text]
+    if present:
+        raise StaticReTestFailure(
+            "Steam send-buffer pressure still destroys the authenticated "
+            "session: " + ", ".join(present)
         )
 
     if "identity_changed ||" in outgoing:
@@ -260,8 +288,9 @@ def test_steam_send_queue_owns_backpressure_and_route_recovery() -> str:
 
     return (
         "Steam result-25 backpressure retains reliable packets, coalesces "
-        "disposable state, preserves peer fairness, and resets a saturated "
-        "route before the authentication timeout"
+        "disposable state, records actual Steam API results, preserves peer "
+        "fairness, and keeps retrying the authenticated session until "
+        "Steam's send buffer clears"
     )
 
 

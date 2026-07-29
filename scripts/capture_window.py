@@ -385,9 +385,11 @@ def main() -> int:
         activate_window(window.hwnd, args.activation_delay_ms)
         window = find_window(args.title, args.exact_title, args.pid)
 
+    capture_utc_nanoseconds = time.time_ns()
     capture_window(window, output_path, args.method)
     print(f"captured {window.title} -> {output_path}")
     print(f"bounds={window.left},{window.top},{window.right},{window.bottom}")
+    print(f"captureUtcNanoseconds={capture_utc_nanoseconds}")
     return 0
 
 
