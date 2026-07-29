@@ -28,7 +28,14 @@ hidden layer, deterministic target selection in the Lua wrapper).
    a welded primary build (IDs 1000–1009). Spell observations are per-slot
    structured descriptors read from the live loadout each decision — never
    baked at spawn.
-5. **Native game stays authoritative.** All actions still route through
+5. **Cap-agnostic by construction.** The native 4-participant cap is being
+   virtualized to 50 in a separate mandated workstream (main-repo tasks
+   #20/#72); party sizes may become absurd later. No bot-brain, policy, or
+   trainer code may assume a maximum participant count: ally perception is
+   K-nearest by construction, total-count features use fixed
+   large-headroom scales, and roster/team sizes are configuration. This
+   branch must be cap-ready; it does not implement the cap raise.
+6. **Native game stays authoritative.** All actions still route through
    `bot:move_to` / `bot:stop` / `bot:cast` / `sd.bots.choose_skill` /
    `sd.world.request_loot_pickup`. The native game keeps enforcing mana,
    cooldowns, collision, replication. Masks exist to remove wasted actions,
@@ -161,6 +168,34 @@ Plus one aggregate: `pickup_count_scaled` (/8).
 - Add `has_spell_welding_skill` (boolean) and `weld_offer_pending` (boolean —
   a pending skill choice includes option id 52).
 
+### Block I — Allies / other players (new; K = 4; added 2026-07-29)
+
+The policy must see teammates — human players and bots alike — for learned
+team play. From `sd.runtime.get_multiplayer_state().participants[]`
+(all fields already replicated; no seam), the K=4 nearest in-run
+participants excluding self, nearest-first with deterministic
+participant-id tiebreak, zeros when absent:
+
+- `present` — row exists and participant is in-run.
+- `dx`, `dy` — unit direction, egocentric.
+- `distance_scaled` — /1000.
+- `hp_ratio` — life_current / life_max.
+- `mana_ratio` — mana_current / mana_max.
+- `alive` — life_current > 0 (dead allies stay present: their position
+  still matters).
+- `is_human` — controller_kind is Native.
+- `intent_dx`, `intent_dy` — replicated movement intent, normalized
+  (verify semantics in Phase 3).
+
+Plus one aggregate: `ally_count_scaled` — in-run allies / 50 (fixed scale
+matching the mandated cap target so the feature stays stationary when
+parties grow; small values today are fine).
+
+41 values total. This supersedes the "ally features" entry under non-goals.
+The implementation plan's §C layout must be recomputed in Phase 3
+(354 → 395) with Block I placed after Block G's pickups and before the
+Block H aggregates.
+
 ## Action space v2
 
 Three heads, factored autoregressively per decision:
@@ -249,6 +284,15 @@ The deterministic upgrade manager remains in v2 but must become weld-capable:
   breaks with learned targeting.
 - Export both weight artifacts; bump format/version fields everywhere
   consistently (spec, weights, trainer, trajectory writer, verifiers).
+- **Team-composition rotation (added 2026-07-29):** training episodes must
+  rotate compositions so the policy learns solo and team play:
+  (a) solo — one learned bot; (b) mixed — the learned bot plus 1–3 scripted
+  Lua bots (rotating skirmisher/guardian/striker behaviors) as teammates;
+  (c) multi-learned — 2–4 learned bots sharing the current policy weights,
+  every authority-side learned participant collecting trajectories (GAE
+  already groups by episode_id + participant_id). Composition goes in the
+  episode log next to the seed. Sizes are configuration, never hardcoded,
+  so compositions scale when the cap-raise workstream lands.
 
 ## Native seams (loader C++) — implement as needed
 
@@ -335,5 +379,6 @@ These amend the blocks above where they conflict.
 - Learned skill-upgrade / weld-choice head (v3; scripted manager handles it).
 - Aim-point offset or analog movement magnitude.
 - Inventory actions (equip/use/drop) and per-item identity observations.
-- Ally/other-player observation features.
 - Recurrent memory (GRU/LSTM).
+- Implementing the participant cap raise itself (separate workstream,
+  main-repo tasks #20/#72); this branch is cap-agnostic, not cap-raising.
