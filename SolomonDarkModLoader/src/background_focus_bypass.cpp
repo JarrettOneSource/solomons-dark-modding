@@ -4,6 +4,7 @@
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "headless_simulation.h"
+#include "loading_screen.h"
 #include "lua_developer_console.h"
 #include "lua_ui_runtime.h"
 #include "mod_loader_internal.h"
@@ -56,6 +57,9 @@ bool IsHeadlessGameplaySceneActive() {
 
     SDModSceneState scene;
     if (!TryGetSceneState(&scene) || !scene.valid) {
+        return false;
+    }
+    if (GetLoadingScreenSnapshot().active) {
         return false;
     }
 

@@ -274,6 +274,8 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_hub_service_request{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};
     std::atomic<std::uint32_t> pending_enable_combat_prelude_requests{0};
+    std::atomic<bool>
+        pending_enable_combat_prelude_recover_untracked_wave{false};
     std::atomic<std::uint32_t> pending_run_generation_seed{0};
     std::atomic<std::uint8_t> pending_run_generation_seed_valid{0};
     std::atomic<std::uint32_t> applied_run_generation_seed{0};
@@ -285,6 +287,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<uintptr_t> local_player_tick_scene_address{0};
     std::atomic<uintptr_t> local_player_tick_actor_address{0};
     std::atomic<std::uint64_t> local_player_tick_generation{0};
+    std::atomic<std::uint64_t> local_player_simulation_tick_count{0};
     std::atomic<std::uint64_t> local_player_tick_observed_ms{0};
     std::atomic<std::uint64_t>
         app_tick_observed_local_player_tick_generation{0};
@@ -332,11 +335,11 @@ struct GameplayKeyboardInjectionState {
     std::deque<std::uint64_t> pending_participant_destroy_requests;
 } g_gameplay_keyboard_injection;
 
-void PublishLocalPlayerTickOwnership(
+std::uint64_t PublishLocalPlayerTickOwnership(
     uintptr_t gameplay_address,
     uintptr_t actor_address) {
     if (gameplay_address == 0 || actor_address == 0) {
-        return;
+        return 0;
     }
 
     g_gameplay_keyboard_injection.local_player_tick_scene_address.store(
@@ -351,6 +354,10 @@ void PublishLocalPlayerTickOwnership(
     g_gameplay_keyboard_injection.local_player_tick_generation.fetch_add(
         1,
         std::memory_order_release);
+    return g_gameplay_keyboard_injection.local_player_simulation_tick_count.fetch_add(
+               1,
+               std::memory_order_relaxed) +
+           1;
 }
 
 void ClearLocalPlayerTickOwnership() {
@@ -379,6 +386,9 @@ void ResetLocalPlayerTickOwnershipState() {
         0,
         std::memory_order_relaxed);
     g_gameplay_keyboard_injection.local_player_tick_generation.store(
+        0,
+        std::memory_order_relaxed);
+    g_gameplay_keyboard_injection.local_player_simulation_tick_count.store(
         0,
         std::memory_order_relaxed);
     g_gameplay_keyboard_injection

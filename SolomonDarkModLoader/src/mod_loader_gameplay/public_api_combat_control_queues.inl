@@ -38,7 +38,9 @@ bool QueueGameplayStartWaves(std::string* error_message) {
     return true;
 }
 
-bool QueueGameplayEnableCombatPrelude(std::string* error_message) {
+bool QueueGameplayEnableCombatPrelude(
+    bool recover_untracked_wave,
+    std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
@@ -67,13 +69,28 @@ bool QueueGameplayEnableCombatPrelude(std::string* error_message) {
 
     ArenaWaveStartState arena_state;
     const bool have_arena_state = TryReadArenaWaveStartState(arena_address, &arena_state);
-    if (have_arena_state && arena_state.combat_wave_index > 0) {
+    int enemy_count = 0;
+    const bool untracked_wave_recovery_allowed =
+        recover_untracked_wave &&
+        GetRunLifecycleCurrentWave() == 0 &&
+        TryReadResolvedGlobalInt(kEnemyCountGlobal, &enemy_count) &&
+        enemy_count == 0;
+    if (have_arena_state &&
+        arena_state.combat_wave_index > 0 &&
+        !untracked_wave_recovery_allowed) {
         if (error_message != nullptr) {
-            *error_message = "Arena waves are already active; refusing to switch to prelude-only combat state.";
+            *error_message =
+                recover_untracked_wave
+                ? "Arena wave recovery requires zero tracked waves and zero enemies."
+                : "Arena waves are already active; refusing to switch to prelude-only combat state.";
         }
         return false;
     }
 
+    g_gameplay_keyboard_injection
+        .pending_enable_combat_prelude_recover_untracked_wave.store(
+            untracked_wave_recovery_allowed,
+            std::memory_order_release);
     g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.exchange(
         1,
         std::memory_order_acq_rel);
@@ -84,6 +101,10 @@ bool QueueGameplayEnableCombatPrelude(std::string* error_message) {
         " prelude_primary=" + HexString(kGameplayCombatPreludePrimaryMode) +
         " prelude_secondary=" + HexString(kGameplayCombatPreludeSecondaryMode) +
         " prelude_dispatch=" + HexString(kArenaCombatPreludeDispatch) +
+        " recover_untracked_wave=" +
+        std::to_string(
+            static_cast<unsigned>(
+                untracked_wave_recovery_allowed)) +
         " state=" + (have_arena_state ? DescribeArenaWaveStartState(arena_state) : std::string("unreadable")));
     return true;
 }

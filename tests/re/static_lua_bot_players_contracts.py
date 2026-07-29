@@ -270,17 +270,18 @@ def test_lua_bots_are_synthetic_remote_participants() -> str:
         assert token in cast_ingress, f"shared replicated cast ingress lacks: {token}"
     assert "kLocalPlayerActorGlobal" not in cast_ingress
     for token in (
-        "host synthetic Fireball damage source registered",
-        "RememberHostSyntheticDamageSource(",
-        "multiplayer::IsLocalTransportHost()",
+        "authority synthetic Fireball damage source registered",
+        "RememberAuthoritySyntheticDamageSource(",
+        "multiplayer::IsLuaModSimulationAuthority()",
         "ParticipantControllerKind::LuaBrain",
     ):
         assert token in cast_dispatch, f"synthetic cast ownership lacks: {token}"
     for token in (
-        "IsAuthorizedHostSyntheticFireballDamage(",
-        "FindHostSyntheticDamageSourceParticipant(",
+        "IsAuthorizedAuthoritySyntheticFireballDamage(",
+        "FindAuthoritySyntheticDamageSourceParticipant(",
+        "multiplayer::IsLuaModSimulationAuthority()",
         "source_gameplay_slot != 0",
-        "host synthetic Fireball native damage authorized",
+        "authority synthetic Fireball native damage authorized",
         "const auto result = original(self);",
     ):
         assert token in damage_dispatch, f"synthetic damage authority lacks: {token}"

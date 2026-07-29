@@ -60,7 +60,7 @@ void PumpQueuedGameplayActions() {
         ReconcileExplicitTestBlankBoneyard(
             active_gameplay_address,
             now_ms);
-        PinRunLifecycleFrozenManualEnemies();
+        PinRunLifecycleManualEnemyTestState();
     }
 
     // AppMainTick and HookPlayerActorTick both call this pump. Character
@@ -145,7 +145,17 @@ void PumpQueuedGameplayActions() {
             continue;
         }
 
-        if (!TryEnableCombatPreludeOnGameThread()) {
+        const bool recover_untracked_wave =
+            g_gameplay_keyboard_injection
+                .pending_enable_combat_prelude_recover_untracked_wave
+                .exchange(false, std::memory_order_acq_rel);
+        if (!TryEnableCombatPreludeOnGameThread(
+                recover_untracked_wave)) {
+            g_gameplay_keyboard_injection
+                .pending_enable_combat_prelude_recover_untracked_wave
+                .store(
+                    recover_untracked_wave,
+                    std::memory_order_release);
             g_gameplay_keyboard_injection.pending_enable_combat_prelude_requests.fetch_add(
                 1,
                 std::memory_order_acq_rel);

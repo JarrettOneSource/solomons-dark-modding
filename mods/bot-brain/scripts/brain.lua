@@ -20,6 +20,11 @@ local PROFILES = {
     engage_radius = 240.0,
     threat_radius = 220.0,
   },
+  learned = {
+    cast_interval_ms = 100,
+    flee_threshold = 0.30,
+    flee_recovery_threshold = 0.45,
+  },
 }
 
 local function distance(x1, y1, x2, y2)
@@ -101,23 +106,49 @@ local function choose_pending_skill(context)
     return
   end
 
-  local priority = {
-    [64] = 1, -- Health Up
+  local element_bands = {
+    ether = { 8, 15 },
+    fire = { 16, 23 },
+    air = { 24, 31 },
+    water = { 32, 39 },
+    earth = { 40, 47 },
   }
-  if context.row.element == "fire" then
-    priority[16] = 2 -- Fireball
-    priority[18] = 3 -- Explode
-    priority[17] = 4 -- Embers
+  local primary_entries = {
+    [8] = true,
+    [16] = true,
+    [24] = true,
+    [32] = true,
+    [40] = true,
+  }
+  local priority = {
+    [64] = 30, -- Health Up
+  }
+  local band = element_bands[context.row.element]
+  if band ~= nil then
+    for option_id = band[1], band[2] do
+      priority[option_id] = 10 + option_id - band[1]
+    end
+    priority[band[1]] = 1
   end
-  local selected_index = 1
+  local selected_index = nil
   local selected_priority = math.huge
   for index, option in ipairs(choices.options) do
-    local option_priority =
-      priority[tonumber(option.id)] or 100 + index
+    local option_id = tonumber(option.id)
+    local option_priority = priority[option_id]
+    if option_priority == nil and
+        primary_entries[option_id] ~= true then
+      option_priority = 100 + index
+    end
+    option_priority = option_priority or math.huge
     if option_priority < selected_priority then
       selected_priority = option_priority
       selected_index = index
     end
+  end
+  if selected_index == nil then
+    context.debug.last_error =
+      "skill choices contained only conflicting elemental primaries"
+    return
   end
   local apply_ok, accepted = pcall(
     sd.bots.choose_skill,
@@ -332,6 +363,144 @@ local function issue_primary_cast(context, now_ms, target)
   end
 end
 
+local function issue_policy_movement(
+    context,
+    capture,
+    decision,
+    now_ms)
+  local memory = context.policy_memory
+  local action = decision.movement
+  context.debug.policy_movement_action =
+    decision.movement_action
+  context.debug.policy_movement_name = action.name
+  context.debug.policy_movement_probability =
+    decision.movement_probability
+  if decision.movement_action == 0 then
+    if memory.previous_move_action ~= 0 then
+      context.debug.policy_stop_issued =
+        context.debug.policy_stop_issued + 1
+      local ok, accepted = pcall(function()
+        return context.bot:stop()
+      end)
+      if ok and accepted == true then
+        context.debug.policy_stop_accepted =
+          context.debug.policy_stop_accepted + 1
+      end
+    end
+  else
+    local target =
+      capture.movement_targets[
+        decision.movement_action + 1]
+    context.debug.move_issued =
+      context.debug.move_issued + 1
+    local ok, accepted, error_message = pcall(function()
+      return context.bot:move_to(target.x, target.y)
+    end)
+    if ok and accepted == true then
+      context.debug.move_accepted =
+        context.debug.move_accepted + 1
+      context.debug.destination_x = target.x
+      context.debug.destination_y = target.y
+      context.debug.last_error = ""
+      memory.last_move_ms = now_ms
+    else
+      context.debug.last_error =
+        tostring(
+          ok and error_message or accepted or
+          "policy move rejected")
+    end
+  end
+  memory.previous_move_action =
+    decision.movement_action
+  memory.previous_move_x = action.x
+  memory.previous_move_y = action.y
+end
+
+local function issue_policy_cast(
+    context,
+    decision,
+    target,
+    now_ms)
+  local memory = context.policy_memory
+  local action = decision.cast
+  context.debug.policy_cast_action = decision.cast_action
+  context.debug.policy_cast_name = action.name
+  context.debug.policy_cast_probability =
+    decision.cast_probability
+  memory.previous_cast_action = decision.cast_action
+  if decision.cast_action == 0 or target == nil then
+    return
+  end
+
+  context.last_cast_attempt_ms = now_ms
+  context.debug.cast_issued = context.debug.cast_issued + 1
+  local ok, accepted, error_message = pcall(function()
+    return context.bot:cast(
+      action.skill_slot,
+      target.x,
+      target.y,
+      context.shared.cast_hold_ms)
+  end)
+  if ok and accepted == true then
+    context.debug.cast_accepted =
+      context.debug.cast_accepted + 1
+    context.debug.last_error = ""
+    memory.last_cast_ms = now_ms
+  else
+    context.debug.last_error =
+      tostring(
+        ok and error_message or accepted or
+        "policy cast rejected")
+  end
+end
+
+local function think_with_policy(
+    context,
+    frame)
+  local shared = context.shared
+  local capture = shared.policy_observation.capture(
+    shared.policy_observation_builder,
+    context,
+    frame)
+  local decision = shared.policy_runtime:forward(
+    capture.values,
+    capture.movement_mask,
+    capture.cast_mask,
+    shared.policy_training.enabled == true)
+  context.debug.mode = "learned"
+  context.debug.policy_generation = decision.generation
+  context.debug.policy_decision_count =
+    context.debug.policy_decision_count + 1
+  context.debug.policy_value = decision.value
+  context.debug.policy_log_probability =
+    decision.log_probability
+  context.debug.inventory_distinct_count =
+    capture.progression.inventory_distinct_count
+  context.debug.inventory_stack_count =
+    capture.progression.inventory_stack_count
+  context.debug.potion_stack_count =
+    capture.progression.potion_stack_count
+  context.debug.secondary_slot_count =
+    capture.progression.secondary_count
+
+  issue_policy_movement(
+    context,
+    capture,
+    decision,
+    frame.now_ms)
+  issue_policy_cast(
+    context,
+    decision,
+    frame.target,
+    frame.now_ms)
+  shared.policy_training:record(
+    context,
+    capture,
+    decision,
+    frame.simulation_tick)
+  context.last_policy_metrics = capture.metrics
+end
+
 local function update_wave_debug(context)
   local ok, wave = pcall(sd.waves.get_state)
   if not ok or type(wave) ~= "table" then
@@ -370,6 +539,9 @@ function brain.new(row, roster_index, shared, steering)
       -shared.attack_window_refresh_ms,
     last_cast_attempt_ms = -profile.cast_interval_ms,
     last_move_attempt_ms = -shared.approach_move_interval_ms,
+    last_think_ms = -math.max(
+      shared.think_interval_ms,
+      shared.policy_interval_ms),
     last_skill_choice_generation = -1,
     last_position_x = nil,
     last_position_y = nil,
@@ -379,6 +551,14 @@ function brain.new(row, roster_index, shared, steering)
     death_latched = false,
     last_wave = -1,
     ward_enemy_distances = {},
+    policy_pending = nil,
+    last_policy_metrics = nil,
+    policy_memory = {
+      previous_move_action = 0,
+      previous_move_x = 0.0,
+      previous_move_y = 0.0,
+      previous_cast_action = 0,
+    },
     debug = {
       roster_index = roster_index,
       name = row.name,
@@ -416,12 +596,35 @@ function brain.new(row, roster_index, shared, steering)
       guardian_human_participant_id = 0,
       guardian_engaging = false,
       flee_transition_count = 0,
+      policy_generation = 0,
+      policy_decision_count = 0,
+      policy_movement_action = 0,
+      policy_movement_name = "idle",
+      policy_movement_probability = 0.0,
+      policy_cast_action = 0,
+      policy_cast_name = "none",
+      policy_cast_probability = 0.0,
+      policy_value = 0.0,
+      policy_log_probability = 0.0,
+      policy_stop_issued = 0,
+      policy_stop_accepted = 0,
+      inventory_distinct_count = 0,
+      inventory_stack_count = 0,
+      potion_stack_count = 0,
+      secondary_slot_count = 0,
       last_error = "",
     },
   }
 end
 
 function brain.reset_run(context, started)
+  if context.row.behavior == "learned" and not started then
+    context.shared.policy_training:terminal(
+      context,
+      context.last_policy_metrics)
+  else
+    context.policy_pending = nil
+  end
   context.fleeing = false
   context.death_latched = false
   context.last_position_x = nil
@@ -429,13 +632,24 @@ function brain.reset_run(context, started)
   context.last_move_attempt_ms =
     -context.shared.approach_move_interval_ms
   context.ward_enemy_distances = {}
+  context.last_policy_metrics = nil
+  context.policy_memory = {
+    previous_move_action = 0,
+    previous_move_x = 0.0,
+    previous_move_y = 0.0,
+    previous_cast_action = 0,
+  }
   if not started then
     context.debug.active = false
     context.debug.mode = "hub"
   end
 end
 
-function brain.think(context, now_ms, authority)
+function brain.think(
+    context,
+    now_ms,
+    authority,
+    simulation_tick)
   context.debug.authority = authority == true
   if not authority then
     context.debug.active = false
@@ -447,6 +661,15 @@ function brain.think(context, now_ms, authority)
     context.debug.mode = "spawning"
     return
   end
+
+  local think_interval =
+    context.row.behavior == "learned" and
+      context.shared.policy_interval_ms or
+      context.shared.think_interval_ms
+  if now_ms - context.last_think_ms < think_interval then
+    return
+  end
+  context.last_think_ms = now_ms
 
   local wave = update_wave_debug(context)
   choose_pending_skill(context)
@@ -491,6 +714,15 @@ function brain.think(context, now_ms, authority)
         "death wave=" .. tostring(context.debug.wave) ..
         " hp=" .. tostring(hp))
     end
+    if context.row.behavior == "learned" then
+      local metrics = context.last_policy_metrics or {}
+      metrics.hp_ratio = 0.0
+      metrics.alive = false
+      context.shared.policy_training:terminal(
+        context,
+        metrics)
+      context.last_policy_metrics = nil
+    end
     return
   end
 
@@ -528,6 +760,18 @@ function brain.think(context, now_ms, authority)
 
   local snapshot_ok, world_snapshot =
     pcall(sd.world.get_replicated_actors)
+  local snapshot_actors =
+    snapshot_ok and type(world_snapshot) == "table" and
+      world_snapshot.actors or nil
+  if type(snapshot_actors) ~= "table" or
+      #snapshot_actors == 0 then
+    local actors_ok, local_actors =
+      pcall(sd.world.list_actors)
+    if actors_ok and type(local_actors) == "table" then
+      world_snapshot = { actors = local_actors }
+      snapshot_ok = true
+    end
+  end
   local all_enemies = context.steering.live_enemies(
     snapshot_ok and world_snapshot or nil)
   context.debug.live_enemy_count = #all_enemies
@@ -648,6 +892,46 @@ function brain.think(context, now_ms, authority)
     nearest_threat_distance < math.huge and
       nearest_threat_distance or 0.0
   context.debug.edge_pressure = edge_pressure
+  if context.row.behavior == "learned" then
+    think_with_policy(
+      context,
+      {
+        now_ms = now_ms,
+        simulation_tick = simulation_tick,
+        bot_x = bot_x,
+        bot_y = bot_y,
+        hp = hp,
+        max_hp = max_hp,
+        wave = wave,
+        enemies = enemies,
+        target = target,
+        target_distance = target_distance,
+        target_in_primary_range = target ~= nil,
+        primary_min_range =
+          type(attack_window) == "table" and
+          tonumber(attack_window.min_range) or 0.0,
+        primary_max_range = effective_attack_range,
+        primary_available =
+          type(attack_window) == "table" and
+          effective_attack_range > 0.0,
+        threat_count = threat_count,
+        threat_radius = threat_radius,
+        edge_pressure = edge_pressure,
+        suggested_move_x = direction_x,
+        suggested_move_y = direction_y,
+        arena = context.arena,
+        movement_lookahead =
+          context.shared.policy_move_lookahead,
+        offense_enabled =
+          context.shared.offense_enabled,
+      })
+    context.debug.target_network_actor_id =
+      target and target.network_actor_id or 0
+    context.debug.target_distance =
+      target_distance < math.huge and
+        target_distance or 0.0
+    return
+  end
   issue_movement(
     context,
     bot_x,

@@ -537,7 +537,7 @@ void __fastcall HookActorWorldUnregister(
     g_last_logged_hostile_target_by_actor.erase(actor_address);
 
     ForgetAuthoritativeTurnUndeadTargetLocksForActor(actor_address);
-    ForgetHostSyntheticDamageSource(actor_address);
+    ForgetAuthoritySyntheticDamageSource(actor_address);
     if (actor_address != 0 && remove_from_container == 1) {
         multiplayer::NotifyLocalWorldActorUnregistered(actor_address);
         ForgetRunLifecycleEnemyTracking(actor_address);

@@ -22,6 +22,7 @@ constexpr int kMaximumSimulationBatchSize = 262144;
 constexpr double kTargetBatchDurationMilliseconds = 250.0;
 constexpr double kMinimumMeasuredDurationMilliseconds = 0.01;
 constexpr double kThroughputReportIntervalSeconds = 2.0;
+constexpr std::uint64_t kGameplaySceneSettleMilliseconds = 1000;
 
 using TimeGetTimeFn = DWORD(WINAPI*)();
 
@@ -33,6 +34,7 @@ struct HeadlessSimulationState {
     bool timing_sample_active = false;
     bool window_hidden_logged = false;
     bool rendering_suppressed = false;
+    bool batching_active = false;
     std::size_t scheduler_baseline_offset = 0;
     std::size_t scheduler_tick_offset = 0;
     std::size_t render_skip_offset = 0;
@@ -48,6 +50,7 @@ struct HeadlessSimulationState {
     LARGE_INTEGER batch_started = {};
     LARGE_INTEGER report_started = {};
     std::uint64_t reported_simulation_steps = 0;
+    std::uint64_t scene_settle_deadline_ms = 0;
 } g_headless_simulation;
 
 bool IsHeadlessRequested() {
@@ -365,14 +368,58 @@ void PrepareHeadlessSimulationTick(
         }
 
         state.rendering_suppressed = false;
+        state.batching_active = false;
         state.simulation_batch_size = kInitialSimulationBatchSize;
         state.prepared_batch_size = 0;
         state.reported_simulation_steps = 0;
+        state.scene_settle_deadline_ms = 0;
         QueryPerformanceCounter(&state.report_started);
         Log(
             "Headless simulation left the gameplay scene; "
             "hidden bootstrap rendering and stock pacing are restored.");
         return;
+    }
+
+    const auto now_ms =
+        static_cast<std::uint64_t>(GetTickCount64());
+    if (!state.rendering_suppressed) {
+        state.rendering_suppressed = true;
+        state.batching_active = false;
+        state.scene_settle_deadline_ms =
+            now_ms + kGameplaySceneSettleMilliseconds;
+        state.prepared_batch_size = 0;
+        state.reported_simulation_steps = 0;
+        QueryPerformanceCounter(&state.report_started);
+        Log(
+            "Headless simulation entered a settled gameplay scene; "
+            "stock pacing retained for " +
+            std::to_string(kGameplaySceneSettleMilliseconds) +
+            " ms before fixed-step batching.");
+    }
+
+    if (now_ms < state.scene_settle_deadline_ms) {
+        state.timing_sample_active = false;
+        if (!memory.TryWriteField(
+                app_address,
+                state.render_skip_offset,
+                std::int32_t{1}) ||
+            !memory.TryWriteField(
+                app_address,
+                state.simulation_batch_offset,
+                state.original_simulation_batch_size)) {
+            DisableAfterRuntimeFailure(
+                "could not suppress rendering during gameplay settling.");
+        }
+        return;
+    }
+
+    if (!state.batching_active) {
+        state.batching_active = true;
+        state.reported_simulation_steps = 0;
+        QueryPerformanceCounter(&state.report_started);
+        Log(
+            "Headless gameplay settling completed; "
+            "adaptive stock fixed-step batching is active.");
     }
 
     const std::int32_t scheduler_tick = -1;
@@ -401,14 +448,6 @@ void PrepareHeadlessSimulationTick(
         return;
     }
 
-    if (!state.rendering_suppressed) {
-        state.reported_simulation_steps = 0;
-        QueryPerformanceCounter(&state.report_started);
-        Log(
-            "Headless simulation entered a gameplay scene; "
-            "stock rendering is now suppressed.");
-    }
-    state.rendering_suppressed = true;
     state.prepared_batch_size = batch_size;
     state.timing_sample_active =
         QueryPerformanceCounter(&state.batch_started) != FALSE;

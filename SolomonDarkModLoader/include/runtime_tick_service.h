@@ -10,6 +10,8 @@ struct RuntimeTickContext {
     std::uint64_t monotonic_milliseconds;
 };
 
+constexpr std::uint32_t kGameplaySimulationTickIntervalMs = 10;
+
 bool StartRuntimeTickService();
 void StopRuntimeTickService();
 bool IsRuntimeTickServiceRunning();

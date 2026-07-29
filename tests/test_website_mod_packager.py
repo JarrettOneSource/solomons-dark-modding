@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -77,7 +78,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             for output in (first, second):
                 result = subprocess.run(
                     [
-                        "python3",
+                        sys.executable,
                         str(PACKAGER),
                         str(ROOT / "mods" / "bot-brain"),
                         str(output),
@@ -93,7 +94,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             details = json.loads(metadata.read_text())
             self.assertEqual(details["id"], "bot.brain")
-            self.assertEqual(details["version"], "1.0.3")
+            self.assertEqual(details["version"], "1.1.0")
             self.assertEqual(
                 details["minimumLoaderVersion"],
                 "0.1.0-beta.22",
@@ -109,6 +110,17 @@ class WebsiteModPackagerTests(unittest.TestCase):
                     archive.namelist(),
                     sorted(archive.namelist()),
                 )
+                for required in (
+                    "scripts/policy.lua",
+                    "scripts/policy_observation.lua",
+                    "scripts/policy_spec.lua",
+                    "scripts/policy_training.lua",
+                    "scripts/policy_weights.lua",
+                ):
+                    self.assertIn(required, archive.namelist())
+                self.assertFalse(
+                    any(name.endswith(".py") for name in archive.namelist())
+                )
                 for name in archive.namelist():
                     content = archive.read(name)
                     aggregate.update(
@@ -123,7 +135,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
             output = Path(temporary) / "update.zip"
             result = subprocess.run(
                 [
-                    "python3",
+                    sys.executable,
                     str(PACKAGER),
                     str(source_manifest.parent),
                     str(output),

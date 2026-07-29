@@ -20,8 +20,11 @@ param(
     [switch]$EnableNetworkTelemetry,
     [switch]$TestBlankBoneyard,
     [string]$TestWaveOverride = "",
+    [switch]$Headless,
+    [switch]$DisableMultiplayerTransport,
     [switch]$EnableAudio,
-    [string]$ProcessIdOutputPath = ""
+    [string]$ProcessIdOutputPath = "",
+    [string]$ResultOutputPath = ""
 )
 
 Set-StrictMode -Version 3.0
@@ -125,13 +128,6 @@ $environment = @{
     SDMOD_UI_SANDBOX_PRESET = $Preset
     SDMOD_LUA_EXEC_PIPE_NAME = $pipeName
     SDMOD_LUA_EXEC_TARGET_MOD_ID = $LuaExecTargetModId
-    SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
-    SDMOD_MULTIPLAYER_ROLE = "host"
-    SDMOD_MULTIPLAYER_LOCAL_PORT = [string]$LocalPort
-    SDMOD_MULTIPLAYER_REMOTE_HOST = "127.0.0.1"
-    SDMOD_MULTIPLAYER_REMOTE_PORT = [string]$UnusedRemotePort
-    SDMOD_MULTIPLAYER_PARTICIPANT_ID = $ParticipantId
-    SDMOD_MULTIPLAYER_PLAYER_NAME = $PlayerName
     SDMOD_MULTIPLAYER_MAX_PARTICIPANTS = [string]$MaxParticipants
     SDMOD_MULTIPLAYER_QUICK_START = $(if ($QuickStart) { "1" } else { "" })
     SDMOD_MULTIPLAYER_QUICK_START_ELEMENT = $(if (
@@ -147,6 +143,23 @@ if (-not $audioEnabled) {
     $environment["SDMOD_DISABLE_AUDIO"] = "1"
     $environment["SDMOD_ENABLE_AUDIO"] = "0"
 }
+if (-not $DisableMultiplayerTransport) {
+    $environment.SDMOD_MULTIPLAYER_TRANSPORT = "local_udp"
+    $environment.SDMOD_MULTIPLAYER_ROLE = "host"
+    $environment.SDMOD_MULTIPLAYER_LOCAL_PORT = [string]$LocalPort
+    $environment.SDMOD_MULTIPLAYER_REMOTE_HOST = "127.0.0.1"
+    $environment.SDMOD_MULTIPLAYER_REMOTE_PORT = [string]$UnusedRemotePort
+    $environment.SDMOD_MULTIPLAYER_PARTICIPANT_ID = $ParticipantId
+    $environment.SDMOD_MULTIPLAYER_PLAYER_NAME = $PlayerName
+} else {
+    $environment.SDMOD_MULTIPLAYER_TRANSPORT = ""
+    $environment.SDMOD_MULTIPLAYER_ROLE = ""
+    $environment.SDMOD_MULTIPLAYER_LOCAL_PORT = ""
+    $environment.SDMOD_MULTIPLAYER_REMOTE_HOST = ""
+    $environment.SDMOD_MULTIPLAYER_REMOTE_PORT = ""
+    $environment.SDMOD_MULTIPLAYER_PARTICIPANT_ID = ""
+    $environment.SDMOD_MULTIPLAYER_PLAYER_NAME = ""
+}
 $arguments = @(
     "--json",
     "launch",
@@ -160,6 +173,9 @@ if ($FreshInstall) {
 }
 if (-not $audioEnabled) {
     $arguments += "--disable-audio"
+}
+if ($Headless) {
+    $arguments += "--headless"
 }
 if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
     $arguments += @("--game-dir", $GameDirectory)
@@ -187,7 +203,7 @@ if (
     throw "Launcher returned a process that does not own the exact staged executable."
 }
 
-$payload = [ordered]@{
+$summary = [ordered]@{
     success = $true
     instance = $Instance
     preset = $Preset
@@ -201,12 +217,14 @@ $payload = [ordered]@{
     audioDisabled = -not [bool]$audioEnabled
     maxParticipants = $MaxParticipants
     telemetryEnabled = [bool]$EnableNetworkTelemetry
+    headlessEnabled = [bool]$Headless
+    multiplayerTransportEnabled = -not [bool]$DisableMultiplayerTransport
     testBlankBoneyardEnabled = [bool]$TestBlankBoneyard
     testWaveOverride = $resolvedTestWaveOverride
     runtimeRoot = $effectiveRuntimeRoot
     executablePath = Join-Path $instanceRoot "stage\SolomonDark.exe"
 }
-$json = $payload | ConvertTo-Json -Depth 4 -Compress
+$summaryJson = $summary | ConvertTo-Json -Depth 4 -Compress
 if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     $outputParent = Split-Path -Parent $ProcessIdOutputPath
     if (-not [string]::IsNullOrWhiteSpace($outputParent)) {
@@ -216,6 +234,13 @@ if (-not [string]::IsNullOrWhiteSpace($ProcessIdOutputPath)) {
     }
     [System.IO.File]::WriteAllText(
         $ProcessIdOutputPath,
-        $json)
+        $summaryJson)
 }
-Write-Output $json
+if (-not [string]::IsNullOrWhiteSpace($ResultOutputPath)) {
+    $resultParent = Split-Path -Parent $ResultOutputPath
+    if (-not [string]::IsNullOrWhiteSpace($resultParent)) {
+        [System.IO.Directory]::CreateDirectory($resultParent) | Out-Null
+    }
+    [System.IO.File]::WriteAllText($ResultOutputPath, $summaryJson)
+}
+$summaryJson

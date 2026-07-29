@@ -327,7 +327,8 @@ std::string DescribeArenaWaveStartState(const ArenaWaveStartState& candidate) {
         " combat_active=" + std::to_string(static_cast<unsigned>(candidate.combat_active));
 }
 
-bool TryEnableCombatPreludeOnGameThread() {
+bool TryEnableCombatPreludeOnGameThread(
+    bool recover_untracked_wave) {
     auto& memory = ProcessMemory::Instance();
 
     uintptr_t arena_address = 0;
@@ -350,10 +351,18 @@ bool TryEnableCombatPreludeOnGameThread() {
         return false;
     }
     if (have_before && before.combat_wave_index > 0) {
+        if (!recover_untracked_wave ||
+            GetRunLifecycleCurrentWave() != 0 ||
+            enemy_count != 0) {
+            Log(
+                "combat_prelude: refusing because waves are already active. arena=" + HexString(arena_address) +
+                " state=" + DescribeArenaWaveStartState(before));
+            return true;
+        }
         Log(
-            "combat_prelude: refusing because waves are already active. arena=" + HexString(arena_address) +
+            "combat_prelude: recovering untracked false-start wave. arena=" +
+            HexString(arena_address) +
             " state=" + DescribeArenaWaveStartState(before));
-        return true;
     }
     if (enemy_count > 0) {
         Log(
@@ -419,6 +428,17 @@ bool TryEnableCombatPreludeOnGameThread() {
 
     (void)memory.TryWriteField(arena_address, kArenaCombatStartedMusicOffset, static_cast<std::uint8_t>(1));
     (void)memory.TryWriteField(arena_address, kArenaCombatActiveFlagOffset, static_cast<std::uint8_t>(1));
+    if (!memory.TryWriteField<std::int32_t>(
+            arena_address,
+            kArenaCombatWaveIndexOffset,
+            0) ||
+        !memory.TryWriteField<std::int32_t>(
+            arena_address,
+            kArenaCombatWaveCounterOffset,
+            999999999)) {
+        Log("combat_prelude: failed to pin explicit no-wave state.");
+        return false;
+    }
 
     ArenaWaveStartState after;
     const bool have_after = TryReadArenaWaveStartState(arena_address, &after);

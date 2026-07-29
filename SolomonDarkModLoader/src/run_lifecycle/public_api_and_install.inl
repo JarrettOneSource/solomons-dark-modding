@@ -199,6 +199,7 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
     float y,
     bool allow_active_waves,
     bool freeze_on_spawn,
+    bool allow_direct_arena_spawn,
     std::string* error_message,
     std::uint64_t* request_id) {
     if (error_message != nullptr) {
@@ -248,6 +249,7 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
     request.y = y;
     request.allow_active_waves = allow_active_waves;
     request.freeze_on_spawn = freeze_on_spawn;
+    request.allow_direct_arena_spawn = allow_direct_arena_spawn;
 
     std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
     if (!freeze_on_spawn && allow_active_waves) {
@@ -314,7 +316,9 @@ bool QueueRunLifecycleEnemySpawnRequestInternal(
         " type_id=" + std::to_string(type_id) +
         " requested_pos=(" + std::to_string(x) + "," + std::to_string(y) + ")" +
         " allow_active_waves=" + std::to_string(request.allow_active_waves ? 1 : 0) +
-        " freeze_on_spawn=" + std::to_string(request.freeze_on_spawn ? 1 : 0));
+        " freeze_on_spawn=" + std::to_string(request.freeze_on_spawn ? 1 : 0) +
+        " allow_direct_arena_spawn=" +
+        std::to_string(request.allow_direct_arena_spawn ? 1 : 0));
     return true;
 }
 
@@ -323,9 +327,23 @@ bool QueueRunLifecycleManualEnemySpawn(
     float x,
     float y,
     bool freeze_on_spawn,
+    bool allow_direct_arena_spawn,
     std::string* error_message,
     std::uint64_t* request_id) {
-    if (!IsRunLifecycleManualEnemySpawnerReady()) {
+    const bool manual_test_mode =
+        g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire);
+    if (allow_direct_arena_spawn && !manual_test_mode) {
+        if (error_message != nullptr) {
+            *error_message =
+                "manual run enemy spawn: direct arena spawn requires manual "
+                "enemy spawner test mode.";
+        }
+        if (request_id != nullptr) {
+            *request_id = 0;
+        }
+        return false;
+    }
+    if (!allow_direct_arena_spawn && !IsRunLifecycleManualEnemySpawnerReady()) {
         if (error_message != nullptr) {
             *error_message =
                 "manual run enemy spawn: stock wave spawner is not ready.";
@@ -341,8 +359,9 @@ bool QueueRunLifecycleManualEnemySpawn(
         type_id,
         x,
         y,
-        g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire),
+        manual_test_mode,
         freeze_on_spawn,
+        allow_direct_arena_spawn,
         error_message,
         request_id);
 }
@@ -362,6 +381,7 @@ bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
         x,
         y,
         true,
+        false,
         false,
         error_message,
         request_id);
@@ -424,6 +444,15 @@ bool PumpRunLifecycleManualEnemySpawnRequest(std::string* error_message) {
     uintptr_t spawner_address = 0;
     uintptr_t remembered_vtable = 0;
     if (!TryGetPreferredManualRunEnemySpawner(&spawner_address, &remembered_vtable)) {
+        const auto direct_dispatch_result =
+            TryDispatchDirectManualRunEnemySpawnWithoutSpawner();
+        if (direct_dispatch_result ==
+            ManualRunEnemySpawnerDispatchResult::Handled) {
+            Log(
+                "manual run enemy spawn: dispatched directly without a "
+                "remembered stock spawner.");
+            return true;
+        }
         constexpr std::string_view kSpawnerUnavailable =
             "manual run enemy spawn: stock wave spawner became unavailable.";
         if (CompletePendingDirectManualRunEnemySpawnFailure(kSpawnerUnavailable)) {
@@ -531,8 +560,12 @@ bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address) {
     return true;
 }
 
-void PinRunLifecycleFrozenManualEnemies() {
+void PinRunLifecycleManualEnemyTestState() {
     PinFrozenManualRunEnemies();
+    if (g_state.manual_enemy_spawner_test_mode.load(
+            std::memory_order_acquire)) {
+        PinManualRunEnemySpawnerTestModeArenaState();
+    }
 }
 
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address) {

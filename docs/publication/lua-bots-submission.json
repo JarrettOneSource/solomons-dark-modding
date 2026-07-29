@@ -5,13 +5,13 @@
   "contentType": "multipart/form-data",
   "fields": {
     "name": "Lua Bots",
-    "summary": "Bot teammates that play like real players.",
-    "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they fight, die, and respawn like human players. Name each bot and choose its element and how it fights in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. Requires v0.1.0-beta.22 or newer.",
+    "summary": "Scripted and ML bot teammates that play like real players.",
+    "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they move, cast spells, die, and respawn like human players. Choose a scripted style or the bundled learned policy for each bot. Name each bot and choose its element and discipline in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. The learned policy runs locally inside Lua with no Python, GPU, or network service. Requires v0.1.0-beta.22 or newer.",
     "tags": "",
-    "version": "1.0.3"
+    "version": "1.1.0"
   },
   "files": {
-    "file": "/mnt/d/codex-evidence/botmatch-20260728/package/lua-bots-1.0.3.zip",
+    "file": "/mnt/d/codex-evidence/ml-bot-20260729/package/lua-bots-1.1.0.zip",
     "screenshots": []
   }
 }

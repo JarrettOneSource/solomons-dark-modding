@@ -4,13 +4,14 @@
 participants. Its host-scoped `roster` list contains zero to four ordered rows:
 name, element (`fire`, `water`, `earth`, `air`, or `ether`), native Discipline
 (Mind, Body, or Arcane; stored as `mind`, `body`, or `arcane`), and Behavior
-(`skirmisher`, `guardian`, or `striker`). The mod is disabled by default, so
-an ordinary game never gains an unsolicited participant.
+(`skirmisher`, `guardian`, `striker`, or `learned`). The mod is disabled by
+default, so an ordinary game never gains an unsolicited participant.
 
 The default roster contains one Arcane fire skirmisher named `Ember`. The
 earlier `persona_name` scalar is gone; names belong to rows. The other launcher
 controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
-cadence, local focus key, and the confirmed host-only roster respawn action.
+cadence for scripted rows, local focus key, and the confirmed host-only roster
+respawn action. Learned rows decide every 100 ms of simulation time.
 
 ## Ordered reconciliation
 
@@ -58,8 +59,9 @@ live class primary. A cast uses
 `bot:cast(0, target.x, target.y, 80)`, so Fire, Water, Earth, Air, and Ether all
 enter through the same replicated participant-cast ingress. Rejected casts
 remain rejected; there is no alternate damage path. Native level-up offers
-prefer Health Up. Fire bots retain the shipped Fireball, Explode, then Embers
-fallback order; other elements otherwise take their first stock option.
+prioritize the configured element's primary and same-element family before
+general upgrades, and the chooser never takes a conflicting elemental
+primary.
 
 With no enemies, contexts continue short orbit/anchor movement. That preserves
 native movement across spawn gaps and wave transitions rather than stopping
@@ -103,6 +105,29 @@ on a faster 300 ms cadence, and flees only below 20% HP. It recovers above 30%.
 It otherwise uses the same native path checks, class-primary attack-window
 lookup, replicated slot-0 cast ingress, and wave-transition movement.
 
+### Learned
+
+Learned uses the bundled version 1 actor-critic to select idle/eight-way
+movement and no-cast/primary/eight-secondary attacks. It does not merely choose
+a scripted profile: every 100 ms it captures the bot's live state, applies
+navigation and cast masks, runs the Lua neural network, then calls
+`bot:move_to`, `bot:stop`, or `bot:cast` with the selected action. The native
+participant rail still owns collision, mana, cooldown, spell dispatch, damage,
+death, and replication.
+
+The model observes combat geometry and vitals together with status, native
+Discipline, element, inventory and potion counts, equipped slots, gold,
+spellbook progression, loaded-secondary-slot availability, derived combat
+multipliers, prior actions, and one-step temporal deltas. The existing native
+skill-choice flow still runs before the learned decision.
+
+Player inference is local Lua only. It does not start Python, require a GPU, or
+contact a model service. The current native bot API has no owner-safe
+per-bot consume/equip mutation, so version 1 observes those states but does not
+pretend it can use or equip items. See [`ml-bot.md`](ml-bot.md) for player
+setup, live PPO training, checkpoint replacement, and the versioned action
+boundary.
+
 ## Diagnostics and acceptance
 
 The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
@@ -110,8 +135,12 @@ The mod publishes an address-free `bot_brain_debug` table in its own Lua state.
 participant ID, mode, HP ratio, accepted movement/casts, attack window,
 Behavior thresholds, native Discipline, and guardian ward distance. Root
 scalar fields mirror the first row for compatibility with the existing
-diagnostic readers. The root also reports desired, active, and capacity-refused
-counts plus the aggregate status string. This is acceptance telemetry, not a
+diagnostic readers and the longevity verifier. The root also reports desired,
+active, and
+capacity-refused counts plus the aggregate status string. Learned rows also
+report policy generation, decision count, selected actions/probabilities,
+value estimate, inventory/loadout counts, and whether the scheduler is using
+the simulation or fallback wall clock. This is acceptance telemetry, not a
 gameplay control API.
 
 The retail host/client combat gate uses the launcher-configured roster and
@@ -121,6 +150,12 @@ and every per-cast target-distance must be inside that cast's native range:
 
 ```bash
 python3 tools/verify_bot_cast_in_range.py
+```
+
+The stock-schedule longevity gate remains:
+
+```bash
+python3 tools/verify_lua_bot_brain.py --runs 3
 ```
 
 The structured-settings gate is:

@@ -204,7 +204,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         gameplay_address_for_pump != 0 &&
         TryResolvePlayerActorForSlot(gameplay_address_for_pump, 0, &local_actor_address) &&
         local_actor_address == actor_address) {
-        PublishLocalPlayerTickOwnership(
+        const auto simulation_tick_count = PublishLocalPlayerTickOwnership(
             gameplay_address_for_pump,
             actor_address);
         MaybeArmLocalPlayerCastProbe(gameplay_address_for_pump, actor_address);
@@ -212,8 +212,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         g_allow_gameplay_action_pump_in_gameplay = true;
         PumpQueuedGameplayActions();
         const RuntimeTickContext lua_tick_context = {
-            GetRuntimeTickServiceIntervalMs(),
-            0,
+            kGameplaySimulationTickIntervalMs,
+            simulation_tick_count,
             static_cast<std::uint64_t>(GetTickCount64()),
         };
         PumpLuaWorkOnGameplayThread(lua_tick_context);

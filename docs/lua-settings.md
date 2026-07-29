@@ -118,8 +118,10 @@ continues.
 
 `mods/bot-brain` declares the v1 scalar/action controls plus the v2 `roster`
 list. It applies kite radius, offense, think cadence, per-row bot identity,
-focus key, and roster respawn behavior. Run the isolated lifecycle acceptance
-after a Release build:
+focus key, and roster respawn behavior. The cadence selector applies to
+Skirmisher, Guardian, and Striker; Learned rows use a fixed 100 ms
+simulation-time decision interval. Run the isolated lifecycle acceptance after
+a Release build:
 
 ```bash
 python3 tools/verify_mod_settings_lifecycle.py
@@ -128,6 +130,8 @@ python3 tools/verify_mod_settings_lifecycle.py
 It uses only `ms2-host`/`ms2-client`, UDP ports 49211/49212, disabled audio,
 and exact launcher-returned staged process IDs. It proves two-row startup and
 replication, copied Lua list reads, ordered removal and element respawn,
-guardian/striker/skirmisher behavior, and a slot-exhaustion `entry_errors`
+guardian/striker/skirmisher behavior and a slot-exhaustion `entry_errors`
 result without a crash. Results and copied runtime logs are written under
-`/mnt/d/codex-evidence/mod-settings-v2-20260727/`.
+`/mnt/d/codex-evidence/mod-settings-v2-20260727/`. Learned policy operation and
+training are documented in [`ml-bot.md`](ml-bot.md); its settings shape is
+covered by the static ML bot contract.

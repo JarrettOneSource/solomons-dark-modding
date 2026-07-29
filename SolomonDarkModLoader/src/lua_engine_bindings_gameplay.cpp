@@ -710,8 +710,23 @@ int LuaGameplayStartWaves(lua_State* state) {
 }
 
 int LuaGameplayEnableCombatPrelude(lua_State* state) {
+    bool recover_untracked_wave = false;
+    if (lua_gettop(state) >= 1) {
+        if (!lua_istable(state, 1)) {
+            return luaL_error(
+                state,
+                "sd.gameplay.enable_combat_prelude expects an optional table");
+        }
+        lua_getfield(state, 1, "recover_untracked_wave");
+        recover_untracked_wave =
+            !lua_isnil(state, -1) &&
+            lua_toboolean(state, -1) != 0;
+        lua_pop(state, 1);
+    }
     std::string error_message;
-    if (!QueueGameplayEnableCombatPrelude(&error_message)) {
+    if (!QueueGameplayEnableCombatPrelude(
+            recover_untracked_wave,
+            &error_message)) {
         return luaL_error(state, "sd.gameplay.enable_combat_prelude failed: %s", error_message.c_str());
     }
 
@@ -839,6 +854,7 @@ int LuaGameplaySpawnManualRunEnemy(lua_State* state) {
     float x = 0.0f;
     float y = 0.0f;
     bool freeze_on_spawn = true;
+    bool allow_direct_arena_spawn = false;
     if (lua_istable(state, 1)) {
         lua_getfield(state, 1, "type_id");
         if (!lua_isnil(state, -1)) {
@@ -856,12 +872,20 @@ int LuaGameplaySpawnManualRunEnemy(lua_State* state) {
             freeze_on_spawn = lua_toboolean(state, -1) != 0;
         }
         lua_pop(state, 1);
+        lua_getfield(state, 1, "allow_direct_arena_spawn");
+        if (!lua_isnil(state, -1)) {
+            allow_direct_arena_spawn = lua_toboolean(state, -1) != 0;
+        }
+        lua_pop(state, 1);
     } else {
         type_id = static_cast<int>(luaL_checkinteger(state, 1));
         x = static_cast<float>(luaL_checknumber(state, 2));
         y = static_cast<float>(luaL_checknumber(state, 3));
         if (lua_gettop(state) >= 4 && !lua_isnil(state, 4)) {
             freeze_on_spawn = lua_toboolean(state, 4) != 0;
+        }
+        if (lua_gettop(state) >= 5 && !lua_isnil(state, 5)) {
+            allow_direct_arena_spawn = lua_toboolean(state, 5) != 0;
         }
     }
 
@@ -872,6 +896,7 @@ int LuaGameplaySpawnManualRunEnemy(lua_State* state) {
             x,
             y,
             freeze_on_spawn,
+            allow_direct_arena_spawn,
             &error_message,
             &request_id)) {
         lua_pushboolean(state, 0);

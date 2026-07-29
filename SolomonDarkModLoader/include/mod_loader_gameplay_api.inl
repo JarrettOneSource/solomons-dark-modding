@@ -17,6 +17,7 @@ bool QueueRunLifecycleManualEnemySpawn(
     float x,
     float y,
     bool freeze_on_spawn,
+    bool allow_direct_arena_spawn,
     std::string* error_message,
     std::uint64_t* request_id);
 bool QueueRunLifecycleReplicatedEnemyCatchupSpawn(
@@ -76,7 +77,7 @@ bool TryGetRunLifecycleManualEnemySpawnResult(
     std::uint64_t request_id = 0);
 bool TryGetRunLifecycleManualEnemyFreezePosition(uintptr_t actor_address, float* x, float* y);
 bool RestoreRunLifecycleFrozenManualEnemyPosition(uintptr_t actor_address);
-void PinRunLifecycleFrozenManualEnemies();
+void PinRunLifecycleManualEnemyTestState();
 void ClearRunLifecycleManualEnemyFreeze(uintptr_t actor_address = 0);
 bool TryGetPlayerState(SDModPlayerState* state);
 bool TryResolveBotSpawnPlacement(
@@ -203,6 +204,7 @@ bool QueueManualRunEnemySpawn(
     float x,
     float y,
     bool freeze_on_spawn,
+    bool allow_direct_arena_spawn,
     std::string* error_message,
     std::uint64_t* request_id = nullptr);
 bool TryGetLastManualRunEnemySpawnResult(

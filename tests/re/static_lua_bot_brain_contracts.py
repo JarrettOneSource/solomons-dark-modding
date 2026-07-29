@@ -47,17 +47,20 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
-    assert manifest["version"] == "1.0.3"
+    assert manifest["version"] == "1.1.0"
     assert manifest["summary"] == (
-        "Bot teammates that play like real players."
+        "Scripted and ML bot teammates that play like real players."
     )
     assert manifest["description"] == (
         "Adds bot teammates to your lobby. Bots fill real player slots: "
         "they show up in the member list, enemies target them, and they "
-        "fight, die, and respawn like human players. Name each bot and "
-        "choose its element and how it fights in the launcher's mod "
-        "settings. Changes apply live, and in multiplayer the host's "
-        "roster syncs to everyone. Requires v0.1.0-beta.22 or newer."
+        "move, cast spells, die, and respawn like human players. Choose "
+        "a scripted style or the bundled learned policy for each bot. "
+        "Name each bot and choose its element and discipline in the "
+        "launcher's mod settings. Changes apply live, and in multiplayer "
+        "the host's roster syncs to everyone. The learned policy runs "
+        "locally inside Lua with no Python, GPU, or network service. "
+        "Requires v0.1.0-beta.22 or newer."
     )
     assert manifest["minimumLoaderVersion"] == "0.1.0-beta.22"
     assert manifest["enabled"] is False
@@ -112,7 +115,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     assert [
         choice["value"]
         for choice in fields["behavior"]["choices"]
-    ] == ["skirmisher", "guardian", "striker"]
+    ] == ["skirmisher", "guardian", "striker", "learned"]
     assert fields["behavior"]["label"] == "Behavior"
     assert [
         choice["value"]
@@ -127,7 +130,8 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         'elseif key == "roster" then',
         "manager:apply(",
         'sd.events.on("runtime.tick"',
-        "manager:tick(now_ms, authority)",
+        "manager:tick(",
+        "tonumber(event.tick_count) or 0)",
     )
     _require_in_order(
         roster,
@@ -223,11 +227,10 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         "context.bot:cast(",
         "sd.bots.get_skill_choices",
         "sd.bots.choose_skill",
-        'context.row.element == "fire"',
+        "element_bands[context.row.element]",
+        "primary_entries[option_id] ~= true",
         'context.row.behavior == "guardian"',
-        "priority[16] = 2",
-        "priority[18] = 3",
-        "priority[17] = 4",
+        "priority[band[1]] = 1",
     ):
         assert token in brain, f"bot behavior policy lacks: {token}"
 
@@ -437,9 +440,10 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
 
     return (
         "The opt-in ordered roster fills up to four capacity-bounded seats "
-        "with three Lua Behavior profiles and native per-bot Discipline on "
-        "authority ticks, while combat acceptance requires bot-attributed "
-        "enemy HP damage inside the equipped spell's native range"
+        "with three scripted profiles plus a learned movement/casting "
+        "policy and native per-bot Discipline on authority ticks, while "
+        "combat acceptance requires bot-attributed enemy HP damage inside "
+        "the equipped spell's native range"
     )
 
 

@@ -52,6 +52,23 @@ local require_mod = create_mod_require()
 local steering = assert(require_mod("scripts/steering.lua"))
 local brain = assert(require_mod("scripts/brain.lua"))
 local roster = assert(require_mod("scripts/roster.lua"))
+local policy_spec =
+  assert(require_mod("scripts/policy_spec.lua"))
+local policy_weights =
+  assert(require_mod("scripts/policy_weights.lua"))
+local policy_module =
+  assert(require_mod("scripts/policy.lua"))
+local policy_observation =
+  assert(require_mod("scripts/policy_observation.lua"))
+local policy_training_module =
+  assert(require_mod("scripts/policy_training.lua"))
+
+local policy_runtime =
+  policy_module.new(policy_spec, policy_weights, 20260729)
+local policy_observation_builder =
+  policy_observation.new(policy_spec)
+local policy_training =
+  policy_training_module.new(policy_spec, policy_runtime)
 
 local shared = {
   think_interval_ms = 250,
@@ -70,6 +87,13 @@ local shared = {
   offense_enabled = true,
   think_profile = "standard",
   focus_bot_key = "NONE",
+  policy_interval_ms = 100,
+  manager_interval_ms = 100,
+  policy_move_lookahead = 110.0,
+  policy_runtime = policy_runtime,
+  policy_observation = policy_observation,
+  policy_observation_builder = policy_observation_builder,
+  policy_training = policy_training,
 }
 
 shared.threat_radius = sd.settings.get("kite_radius")
@@ -106,6 +130,11 @@ local debug = {
   respawn_action_count = 0,
   reconciliation_error_count = 0,
   last_reconciliation_error = "",
+  clock_source = "wall",
+  clock_now_ms = 0,
+  simulation_tick_count = 0,
+  policy = policy_runtime:status(),
+  policy_training = policy_training:status(),
 }
 rawset(_G, "bot_brain_debug", debug)
 
@@ -130,11 +159,49 @@ end
 
 local manager = roster.new(brain, steering, shared, debug)
 local state = {
-  last_tick_ms = -shared.think_interval_ms,
+  last_tick_ms = -shared.manager_interval_ms,
   last_now_ms = 0,
+  last_wall_ms = nil,
+  last_simulation_tick_count = nil,
   focus_key_down = false,
   focus_active = false,
 }
+
+local function resolve_policy_clock(event)
+  local wall_ms = tonumber(event.monotonic_milliseconds)
+  if wall_ms == nil then
+    return nil
+  end
+
+  local tick_count = tonumber(event.tick_count) or 0
+  local tick_interval_ms = tonumber(event.tick_interval_ms) or 0
+  local delta_ms = 0
+  local simulation_clock =
+    tick_count > 0 and tick_interval_ms > 0
+  if simulation_clock then
+    if state.last_simulation_tick_count ~= nil and
+        tick_count >= state.last_simulation_tick_count then
+      delta_ms =
+        (tick_count - state.last_simulation_tick_count) *
+        tick_interval_ms
+    end
+    state.last_simulation_tick_count = tick_count
+    debug.clock_source = "simulation"
+    debug.simulation_tick_count = tick_count
+  else
+    if state.last_wall_ms ~= nil and
+        wall_ms >= state.last_wall_ms then
+      delta_ms = wall_ms - state.last_wall_ms
+    end
+    state.last_simulation_tick_count = nil
+    debug.clock_source = "wall"
+  end
+
+  state.last_wall_ms = wall_ms
+  state.last_now_ms = state.last_now_ms + delta_ms
+  debug.clock_now_ms = state.last_now_ms
+  return state.last_now_ms
+end
 
 local startup_roster = sd.settings.get("roster")
 local startup_errors = manager:apply(
@@ -227,6 +294,7 @@ sd.settings.on_action("respawn_bot", function()
 end)
 
 sd.events.on("run.started", function()
+  policy_training:begin_episode()
   manager:reset_run(true)
   log(nil, "run started")
 end)
@@ -240,18 +308,22 @@ sd.events.on("runtime.tick", function(event)
   if type(event) ~= "table" then
     return
   end
-  local now_ms = tonumber(event.monotonic_milliseconds)
+  local now_ms = resolve_policy_clock(event)
   if now_ms == nil then
     return
   end
-  state.last_now_ms = now_ms
   update_focus_key()
   if now_ms - state.last_tick_ms <
-      shared.think_interval_ms then
+      shared.manager_interval_ms then
     return
   end
   state.last_tick_ms = now_ms
   local authority = simulation_authority()
   debug.authority = authority
-  manager:tick(now_ms, authority)
+  manager:tick(
+    now_ms,
+    authority,
+    tonumber(event.tick_count) or 0)
+  debug.policy = policy_runtime:status()
+  debug.policy_training = policy_training:status()
 end)

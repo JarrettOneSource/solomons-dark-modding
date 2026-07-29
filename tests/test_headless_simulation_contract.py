@@ -68,6 +68,16 @@ class HeadlessSimulationContractTests(unittest.TestCase):
         self.assertIn("kTargetBatchDurationMilliseconds = 250.0", native)
         self.assertIn("kMaximumSimulationBatchSize = 262144", native)
         self.assertIn("ShowWindow(state.game_window, SW_HIDE)", native)
+        self.assertIn(
+            "kGameplaySceneSettleMilliseconds = 1000",
+            native,
+        )
+        self.assertIn("GetLoadingScreenSnapshot().active", app_tick)
+        self.assertIn("if (now_ms < state.scene_settle_deadline_ms)", native)
+        self.assertIn(
+            "state.original_simulation_batch_size",
+            native,
+        )
         self.assertIn("ObserveHeadlessSimulationWindow(hwnd);", app_tick)
         self.assertIn("IsHeadlessGameplaySceneActive()", app_tick)
         for scene_kind in ("arena", "region", "tutorial"):
@@ -99,6 +109,32 @@ class HeadlessSimulationContractTests(unittest.TestCase):
             "StartupStatus.HeadlessSimulationEnabled",
             json_console,
         )
+
+    def test_solo_automation_can_request_headless_without_network_flags(
+        self,
+    ) -> None:
+        launcher = read("scripts/Launch-LocalSoloSession.ps1")
+
+        self.assertIn("[switch]$Headless", launcher)
+        self.assertIn("[switch]$DisableMultiplayerTransport", launcher)
+        self.assertIn('if ($Headless) {', launcher)
+        self.assertIn('$arguments += "--headless"', launcher)
+        self.assertIn("headlessEnabled = [bool]$Headless", launcher)
+        self.assertIn(
+            "multiplayerTransportEnabled = "
+            "-not [bool]$DisableMultiplayerTransport",
+            launcher,
+        )
+        self.assertIn(
+            'if (-not $DisableMultiplayerTransport) {',
+            launcher,
+        )
+        self.assertIn("[string]$ResultOutputPath", launcher)
+        self.assertIn(
+            "[System.IO.File]::WriteAllText($ResultOutputPath, $summaryJson)",
+            launcher,
+        )
+        self.assertNotIn('"--multiplayer", "off"', launcher)
 
 
 if __name__ == "__main__":

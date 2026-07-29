@@ -87,7 +87,7 @@ uintptr_t ResolveDamageSourceOwnerActorAddress(uintptr_t source_address) {
     }
 
     const auto synthetic_participant_id =
-        FindHostSyntheticDamageSourceParticipant(source_address);
+        FindAuthoritySyntheticDamageSourceParticipant(source_address);
     if (synthetic_participant_id != 0) {
         std::lock_guard<std::recursive_mutex> lock(
             g_participant_entities_mutex);

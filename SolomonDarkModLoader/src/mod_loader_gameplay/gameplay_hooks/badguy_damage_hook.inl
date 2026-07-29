@@ -517,19 +517,20 @@ void ObserveEarthBoulderDamageAfterNativeCall(
         " hp_delta=" + trace_float(observation.hp_delta));
 }
 
-bool IsAuthorizedHostSyntheticFireballDamage(
+bool IsAuthorizedAuthoritySyntheticFireballDamage(
     uintptr_t source_actor_address,
     std::uint64_t* participant_id) {
     if (participant_id != nullptr) {
         *participant_id = 0;
     }
-    if (!multiplayer::IsLocalTransportHost() ||
+    if (!multiplayer::IsLuaModSimulationAuthority() ||
         source_actor_address == 0) {
         return false;
     }
 
     const auto synthetic_participant_id =
-        FindHostSyntheticDamageSourceParticipant(source_actor_address);
+        FindAuthoritySyntheticDamageSourceParticipant(
+            source_actor_address);
     if (synthetic_participant_id == 0) {
         return false;
     }
@@ -597,7 +598,7 @@ std::uint8_t __fastcall HookBadguyDamage(
         source_native_type_id == kFireballDamageSourceNativeTypeId &&
         source_gameplay_slot != 0) {
         std::uint64_t synthetic_participant_id = 0;
-        if (!IsAuthorizedHostSyntheticFireballDamage(
+        if (!IsAuthorizedAuthoritySyntheticFireballDamage(
                 context_source,
                 &synthetic_participant_id)) {
             return 0;

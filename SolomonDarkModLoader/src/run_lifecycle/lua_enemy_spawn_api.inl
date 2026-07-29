@@ -44,6 +44,7 @@ bool QueueRunLifecycleLuaEnemySpawn(
         y,
         true,
         false,
+        false,
         error_message,
         request_id);
 }

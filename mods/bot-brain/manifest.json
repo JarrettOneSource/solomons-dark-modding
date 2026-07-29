@@ -1,9 +1,9 @@
 {
   "id": "bot.brain",
   "name": "Lua Bots",
-  "version": "1.0.3",
-  "summary": "Bot teammates that play like real players.",
-  "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they fight, die, and respawn like human players. Name each bot and choose its element and how it fights in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. Requires v0.1.0-beta.22 or newer.",
+  "version": "1.1.0",
+  "summary": "Scripted and ML bot teammates that play like real players.",
+  "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they move, cast spells, die, and respawn like human players. Choose a scripted style or the bundled learned policy for each bot. Name each bot and choose its element and discipline in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. The learned policy runs locally inside Lua with no Python, GPU, or network service. Requires v0.1.0-beta.22 or newer.",
   "minimumLoaderVersion": "0.1.0-beta.22",
   "enabled": false,
   "runtime": {
@@ -133,6 +133,10 @@
                 {
                   "value": "striker",
                   "label": "Striker — aggressive pressure"
+                },
+                {
+                  "value": "learned",
+                  "label": "Learned — ML movement and casting"
                 }
               ]
             }
@@ -150,7 +154,8 @@
       {
         "key": "think_profile",
         "type": "choice",
-        "label": "Think cadence",
+        "label": "Scripted bot cadence",
+        "description": "Learned bots always make policy decisions every 100 ms of simulation time.",
         "default": "standard",
         "choices": [
           {

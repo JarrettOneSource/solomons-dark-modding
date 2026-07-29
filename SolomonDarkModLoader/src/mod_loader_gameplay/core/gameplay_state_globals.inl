@@ -19,7 +19,7 @@ std::mutex g_native_spell_effect_actor_mutex;
 std::vector<SDModNativeSpellEffectActorState> g_recent_native_spell_effect_actors;
 std::mutex g_synthetic_damage_source_mutex;
 std::unordered_map<uintptr_t, std::uint64_t>
-    g_host_synthetic_damage_source_participants;
+    g_authority_synthetic_damage_source_participants;
 std::mutex g_local_mana_delta_observation_mutex;
 SDModLocalManaDeltaObservation g_local_mana_delta_observation;
 constexpr std::size_t kMaximumEarthBoulderDamageObservations = 32;
@@ -46,39 +46,40 @@ bool g_local_player_animation_probe_has_last_position = false;
 float g_local_player_animation_probe_last_x = 0.0f;
 float g_local_player_animation_probe_last_y = 0.0f;
 
-void RememberHostSyntheticDamageSource(
+void RememberAuthoritySyntheticDamageSource(
     uintptr_t source_actor_address,
     std::uint64_t participant_id) {
     if (source_actor_address == 0 || participant_id == 0) {
         return;
     }
     std::lock_guard<std::mutex> lock(g_synthetic_damage_source_mutex);
-    g_host_synthetic_damage_source_participants[source_actor_address] =
+    g_authority_synthetic_damage_source_participants[source_actor_address] =
         participant_id;
 }
 
-std::uint64_t FindHostSyntheticDamageSourceParticipant(
+std::uint64_t FindAuthoritySyntheticDamageSourceParticipant(
     uintptr_t source_actor_address) {
     if (source_actor_address == 0) {
         return 0;
     }
     std::lock_guard<std::mutex> lock(g_synthetic_damage_source_mutex);
-    const auto it =
-        g_host_synthetic_damage_source_participants.find(source_actor_address);
-    return it == g_host_synthetic_damage_source_participants.end()
+    const auto it = g_authority_synthetic_damage_source_participants.find(
+        source_actor_address);
+    return it == g_authority_synthetic_damage_source_participants.end()
                ? 0
                : it->second;
 }
 
-void ForgetHostSyntheticDamageSource(uintptr_t source_actor_address) {
+void ForgetAuthoritySyntheticDamageSource(uintptr_t source_actor_address) {
     if (source_actor_address == 0) {
         return;
     }
     std::lock_guard<std::mutex> lock(g_synthetic_damage_source_mutex);
-    g_host_synthetic_damage_source_participants.erase(source_actor_address);
+    g_authority_synthetic_damage_source_participants.erase(
+        source_actor_address);
 }
 
-void ClearHostSyntheticDamageSources() {
+void ClearAuthoritySyntheticDamageSources() {
     std::lock_guard<std::mutex> lock(g_synthetic_damage_source_mutex);
-    g_host_synthetic_damage_source_participants.clear();
+    g_authority_synthetic_damage_source_participants.clear();
 }

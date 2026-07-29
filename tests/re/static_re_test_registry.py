@@ -30,6 +30,9 @@ from static_lua_bot_brain_contracts import (
     test_lua_bot_brain_late_join_waits_for_complete_host_settings,
     test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
 )
+from static_lua_ml_bot_contracts import (
+    test_ml_bot_is_simulation_timed_local_and_native_action_routed,
+)
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
 )
@@ -565,6 +568,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua bot brain is rostered and applied-damage gated",
         test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
+    ),
+    (
+        "Learned Lua bot is simulation-timed and native action-routed",
+        test_ml_bot_is_simulation_timed_local_and_native_action_routed,
     ),
     (
         "Lua bot brain late join waits for complete host settings",

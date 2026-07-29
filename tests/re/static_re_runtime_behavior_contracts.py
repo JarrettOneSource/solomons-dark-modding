@@ -831,7 +831,7 @@ def test_main_thread_work_pump_is_not_render_owned() -> str:
         ),
         (
             runtime_request_state_text,
-            "void PublishLocalPlayerTickOwnership(",
+            "std::uint64_t PublishLocalPlayerTickOwnership(",
         ),
         (
             runtime_request_state_text,

@@ -116,6 +116,7 @@ struct ManualRunEnemySpawnRequest {
     float y = 0.0f;
     bool allow_active_waves = false;
     bool freeze_on_spawn = true;
+    bool allow_direct_arena_spawn = false;
 };
 
 struct FrozenManualRunEnemy {

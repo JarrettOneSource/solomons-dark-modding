@@ -317,7 +317,7 @@ function Manager:apply(rows, authority, now_ms)
   return errors
 end
 
-function Manager:tick(now_ms, authority)
+function Manager:tick(now_ms, authority, simulation_tick)
   if authority then
     self:process_retirements()
   end
@@ -342,7 +342,11 @@ function Manager:tick(now_ms, authority)
         " (" .. context.row.name .. ") could not spawn: " ..
         tostring(spawn_error or context.debug.last_error))
     end
-    self.brain.think(context, now_ms, authority)
+    self.brain.think(
+      context,
+      now_ms,
+      authority,
+      simulation_tick)
   end
   self.debug.reconciliation_error_count = #errors
   self.debug.last_reconciliation_error =

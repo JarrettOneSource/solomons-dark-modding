@@ -40,8 +40,11 @@ virtual repeatedly without changing its delta.
 Before each headless app tick, the loader rebases only the scheduler-private
 baseline and counter in active simulation scenes so exactly one stock due slot
 is available, then writes the adaptive batch count. Menus, transitions, the hub,
-and shops retain stock pacing. The stock function executes that many ordinary
-fixed steps. The loader does not change:
+shops, active loading screens, and the first second after a gameplay scene
+settles retain stock pacing. That transition window lets the stock arena,
+participant, and wave lifecycle finish before batching can run ahead of it.
+The stock function then executes that many ordinary fixed steps. The loader
+does not change:
 
 - the 100 Hz timing/conversion globals;
 - any gameplay delta or floating-point mode;

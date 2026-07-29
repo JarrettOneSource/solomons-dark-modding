@@ -45,7 +45,9 @@ bool QueueGameplayBindingPress(std::string_view binding_name, std::string* error
 bool QueueGameplayKeyPress(std::string_view binding_name, std::string* error_message);
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message);
 bool QueueGameplayStartWaves(std::string* error_message);
-bool QueueGameplayEnableCombatPrelude(std::string* error_message);
+bool QueueGameplayEnableCombatPrelude(
+    bool recover_untracked_wave,
+    std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool QueueHubOpenService(
     std::string_view service_name,

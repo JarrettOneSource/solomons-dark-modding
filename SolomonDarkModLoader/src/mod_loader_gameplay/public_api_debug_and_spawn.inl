@@ -428,6 +428,7 @@ bool QueueManualRunEnemySpawn(
     float x,
     float y,
     bool freeze_on_spawn,
+    bool allow_direct_arena_spawn,
     std::string* error_message,
     std::uint64_t* request_id) {
     if (error_message != nullptr) {
@@ -451,6 +452,7 @@ bool QueueManualRunEnemySpawn(
         x,
         y,
         freeze_on_spawn,
+        allow_direct_arena_spawn,
         error_message,
         request_id);
 }

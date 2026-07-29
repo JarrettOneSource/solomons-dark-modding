@@ -125,7 +125,11 @@ def test_primary_kill_stress_verifier_uses_manual_spawns_without_waves() -> str:
         ),
         (run_lifecycle_public_api_text, "run lifecycle API", "TryDispatchManualRunEnemySpawnFromSpawner("),
         (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: dispatched from remembered stock spawner"),
-        (run_lifecycle_public_api_text, "run lifecycle API", "if (!IsRunLifecycleManualEnemySpawnerReady())"),
+        (
+            run_lifecycle_public_api_text,
+            "run lifecycle API",
+            "if (!allow_direct_arena_spawn && !IsRunLifecycleManualEnemySpawnerReady())",
+        ),
         (run_lifecycle_public_api_text, "run lifecycle API", "CompletePendingDirectManualRunEnemySpawnFailure"),
         (run_lifecycle_public_api_text, "run lifecycle API", "manual run enemy spawn: stock wave spawner became unavailable."),
         (run_lifecycle_state_text, "run lifecycle state", "last_arena_enemy_wave_spawner"),
