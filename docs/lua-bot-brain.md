@@ -114,7 +114,7 @@ lookup, replicated slot-0 cast ingress, and wave-transition movement.
 
 ### Learned
 
-Phase 3 installs the version 2 observation and action boundary. Every 100 ms it
+Policy v2's learned runtime is bundled. Every 100 ms it
 can capture exactly 395 ordered finite values: self state; dynamic primary and
 eight-secondary descriptors; eight enemies with actor-ID velocity history;
 the persisted target; cached local geometry; four pickups; the four nearest
@@ -123,11 +123,10 @@ and combat-multiplier values. Target selection is a separate nine-action head.
 The cast mask is rebuilt against the target selected on that same decision, so
 secondary range/readiness is not constrained by the primary attack window.
 
-No v2 weights exist until Phase 4. A row configured as `learned` therefore
-reports a clear unavailable-policy error instead of loading the incompatible
-bundled v1 weights. Once matching weights are installed, inference remains
-local Lua only: it does not start Python, require a GPU, or contact a model
-service, and all movement and casts still use the native participant rails.
+The strict 395 -> 192 -> 96 three-head weights run locally in Lua: inference
+does not start Python, require a GPU, or contact a model service, and all
+movement and casts still use the native participant rails. Historical v1
+weights are rejected explicitly rather than reinterpreted.
 
 The shared skill manager sees learned primary progression, pending weld build
 IDs, and Spell Welding option 52. In `auto` mode it accepts a weld only after

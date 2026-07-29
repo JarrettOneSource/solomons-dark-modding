@@ -23,6 +23,7 @@ from .model import BotPolicy, render_lua_weights
 
 ROOT = Path(__file__).resolve().parents[2]
 MAX_ROLLOUTS_PER_RESPONSE = 256
+POLICY_LOAD_CHUNK_BYTES = 512 * 1024
 RUN_READY_STABILITY_SECONDS = 0.35
 BOT_MATERIALIZATION_GRACE_SECONDS = 15.0
 PRIMARY_ENTRY_BY_ELEMENT = {
@@ -60,8 +61,10 @@ class RolloutRecord:
     simulation_tick: int
     observation: list[float]
     movement_mask: list[bool]
+    target_mask: list[bool]
     cast_mask: list[bool]
     movement_action: int
+    target_action: int
     cast_action: int
     old_log_probability: float
     old_value: float
@@ -122,6 +125,15 @@ def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def _lua_long_string(value: str) -> str:
+    for equals_count in range(1, 17):
+        equals = "=" * equals_count
+        closing = f"]{equals}]"
+        if closing not in value:
+            return f"[{equals}[{value}{closing}"
+    raise BridgeError("could not delimit policy chunk as a Lua string")
+
+
 def _bits(value: str, expected: int, label: str) -> list[bool]:
     if len(value) != expected or any(bit not in "01" for bit in value):
         raise BridgeError(f"invalid {label} bit mask: {value!r}")
@@ -152,10 +164,12 @@ def parse_rollout_output(
         if not line.startswith("R\t"):
             continue
         fields = line.split("\t")
-        if len(fields) != 14:
+        if len(fields) != 16:
             raise BridgeError(
                 f"rollout frame has {len(fields)} fields"
             )
+        if fields[11] not in ("0", "1"):
+            raise BridgeError("rollout done flag must be 0 or 1")
         try:
             record = RolloutRecord(
                 trajectory_version=int(fields[1]),
@@ -163,23 +177,29 @@ def parse_rollout_output(
                 participant_id=int(fields[3]),
                 simulation_tick=int(fields[4]),
                 movement_action=int(fields[5]),
-                cast_action=int(fields[6]),
-                old_log_probability=float(fields[7]),
-                old_value=float(fields[8]),
-                reward=float(fields[9]),
-                done=fields[10] == "1",
+                target_action=int(fields[6]),
+                cast_action=int(fields[7]),
+                old_log_probability=float(fields[8]),
+                old_value=float(fields[9]),
+                reward=float(fields[10]),
+                done=fields[11] == "1",
                 observation=_floats(
-                    fields[11],
+                    fields[12],
                     len(spec.OBSERVATION_NAMES),
                     "observation",
                 ),
                 movement_mask=_bits(
-                    fields[12],
+                    fields[13],
                     len(spec.MOVEMENT_ACTION_NAMES),
                     "movement",
                 ),
+                target_mask=_bits(
+                    fields[14],
+                    len(spec.TARGET_ACTION_NAMES),
+                    "target",
+                ),
                 cast_mask=_bits(
-                    fields[13],
+                    fields[15],
                     len(spec.CAST_ACTION_NAMES),
                     "cast",
                 ),
@@ -187,8 +207,13 @@ def parse_rollout_output(
         except ValueError as error:
             raise BridgeError("rollout frame contains an invalid number") from error
         if record.trajectory_version != spec.TRAJECTORY_VERSION:
+            if record.trajectory_version == 1:
+                raise BridgeError(
+                    "trajectory-v1 frames are incompatible with the strict "
+                    "trajectory-v2 bridge"
+                )
             raise BridgeError(
-                "rollout trajectory version does not match trainer"
+                "rollout trajectory version does not match trajectory-v2"
             )
         if not (
             math.isfinite(record.old_log_probability)
@@ -198,10 +223,14 @@ def parse_rollout_output(
             raise BridgeError("rollout frame contains a non-finite scalar")
         if not 0 <= record.movement_action < len(spec.MOVEMENT_ACTION_NAMES):
             raise BridgeError("rollout movement action is outside the policy head")
+        if not 0 <= record.target_action < len(spec.TARGET_ACTION_NAMES):
+            raise BridgeError("rollout target action is outside the policy head")
         if not 0 <= record.cast_action < len(spec.CAST_ACTION_NAMES):
             raise BridgeError("rollout cast action is outside the policy head")
         if not record.movement_mask[record.movement_action]:
             raise BridgeError("rollout selected a masked movement action")
+        if not record.target_mask[record.target_action]:
+            raise BridgeError("rollout selected a masked target action")
         if not record.cast_mask[record.cast_action]:
             raise BridgeError("rollout selected a masked cast action")
         records.append(record)
@@ -1529,19 +1558,77 @@ print('recorded=' .. tostring(status.recorded))
 
     def load_policy(self, policy: BotPolicy) -> int:
         source = render_lua_weights(policy)
-        code = (
-            "local candidate = (function()\n"
-            + source
-            + "end)()\n"
-            + """
+        if not source.isascii():
+            raise BridgeError("policy Lua export must be ASCII")
+        chunks = [
+            source[start : start + POLICY_LOAD_CHUNK_BYTES]
+            for start in range(0, len(source), POLICY_LOAD_CHUNK_BYTES)
+        ]
+        if not chunks:
+            raise BridgeError("policy Lua export is empty")
+        token = f"{os.getpid()}-{time.time_ns()}"
+        quoted_token = json.dumps(token)
+        self.lua(
+            """
+_G.__sdmod_ml_policy_staging = {
+  token = %s,
+  parts = {},
+}
+print('staging=true')
+""" % quoted_token,
+            timeout=10.0,
+        )
+        try:
+            for index, chunk in enumerate(chunks, start=1):
+                code = """
+local staging = assert(
+  rawget(_G, '__sdmod_ml_policy_staging'),
+  'policy staging is unavailable')
+assert(staging.token == %s, 'policy staging token changed')
+staging.parts[%d] = %s
+print('part=%d')
+""" % (
+                    quoted_token,
+                    index,
+                    _lua_long_string(chunk),
+                    index,
+                )
+                if len(code.encode("utf-8")) >= 1024 * 1024:
+                    raise BridgeError(
+                        "policy staging request exceeds the loader pipe limit"
+                    )
+                self.lua(code, timeout=30.0)
+            code = """
+local staging = assert(
+  rawget(_G, '__sdmod_ml_policy_staging'),
+  'policy staging is unavailable')
+assert(staging.token == %s, 'policy staging token changed')
+assert(#staging.parts == %d, 'policy staging is incomplete')
+local source = table.concat(staging.parts)
+_G.__sdmod_ml_policy_staging = nil
+local loader, load_error = load(
+  source,
+  '@ml-bot-policy-v2-hot-reload',
+  't',
+  _ENV)
+assert(loader, load_error)
+local candidate = loader()
 local result = assert(
   rawget(_G, 'bot_policy_training')).load_parameters(candidate)
 print('generation=' .. tostring(result.generation))
-"""
-        )
-        values = local_sync.parse_key_values(
-            self.lua(code, timeout=30.0)
-        )
+""" % (quoted_token, len(chunks))
+            values = local_sync.parse_key_values(
+                self.lua(code, timeout=30.0)
+            )
+        except Exception:
+            try:
+                self.lua(
+                    "_G.__sdmod_ml_policy_staging = nil",
+                    timeout=10.0,
+                )
+            except Exception:
+                pass
+            raise
         try:
             generation = int(values.get("generation", "0"))
         except ValueError as error:
@@ -1587,6 +1674,10 @@ for _, record in ipairs(drained.records or {{}}) do
   for index, value in ipairs(record.movement_mask or {{}}) do
     movement_mask[index] = value and '1' or '0'
   end
+  local target_mask = {{}}
+  for index, value in ipairs(record.target_mask or {{}}) do
+    target_mask[index] = value and '1' or '0'
+  end
   local cast_mask = {{}}
   for index, value in ipairs(record.cast_mask or {{}}) do
     cast_mask[index] = value and '1' or '0'
@@ -1598,6 +1689,7 @@ for _, record in ipairs(drained.records or {{}}) do
     string.format('%.0f', record.participant_id),
     tostring(record.simulation_tick),
     tostring(record.movement_action),
+    tostring(record.target_action),
     tostring(record.cast_action),
     string.format('%.17g', record.old_log_probability),
     string.format('%.17g', record.old_value),
@@ -1605,6 +1697,7 @@ for _, record in ipairs(drained.records or {{}}) do
     record.done and '1' or '0',
     table.concat(observation, ','),
     table.concat(movement_mask),
+    table.concat(target_mask),
     table.concat(cast_mask)
   }}, '\\t'))
 end

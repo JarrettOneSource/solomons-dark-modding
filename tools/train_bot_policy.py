@@ -30,7 +30,7 @@ from ml_bot.model import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
+DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
 DEFAULT_LUA = (
     ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
 )
@@ -50,8 +50,10 @@ def _batch(
     return (
         dataset.observations[indices],
         dataset.movement_masks[indices],
+        dataset.target_masks[indices],
         dataset.cast_masks[indices],
         dataset.movement_actions[indices],
+        dataset.target_actions[indices],
         dataset.cast_actions[indices],
     )
 
@@ -59,13 +61,15 @@ def _batch(
 def _accuracies(
     policy: BotPolicy,
     dataset: ExpertDataset,
-) -> tuple[float, float, float]:
+) -> tuple[float, float, float, float]:
     return classification_accuracy(
         policy,
         dataset.observations,
         dataset.movement_masks,
+        dataset.target_masks,
         dataset.cast_masks,
         dataset.movement_actions,
+        dataset.target_actions,
         dataset.cast_actions,
     )
 
@@ -80,9 +84,14 @@ def bootstrap(args: argparse.Namespace) -> int:
     policy = BotPolicy.initialize(
         policy_rng,
         metadata={
-            "training_kind": "semantic_behavior_cloning",
+            "training_kind": "target_first_semantic_behavior_cloning_v2",
             "seed": args.seed,
             "expert_samples": args.samples,
+            "movement_entropy_coefficient": (
+                spec.MOVEMENT_ENTROPY_COEFFICIENT
+            ),
+            "target_entropy_coefficient": spec.TARGET_ENTROPY_COEFFICIENT,
+            "cast_entropy_coefficient": spec.CAST_ENTROPY_COEFFICIENT,
         },
     )
     optimizer = Adam(
@@ -101,7 +110,7 @@ def bootstrap(args: argparse.Namespace) -> int:
                 optimizer,
                 *_batch(training, indices),
             )
-        movement, cast, joint = _accuracies(policy, validation)
+        movement, target, cast, joint = _accuracies(policy, validation)
         print(
             json.dumps(
                 {
@@ -109,6 +118,7 @@ def bootstrap(args: argparse.Namespace) -> int:
                     "loss": last_loss,
                     "gradient_norm": last_gradient_norm,
                     "validation_movement_accuracy": movement,
+                    "validation_target_accuracy": target,
                     "validation_cast_accuracy": cast,
                     "validation_joint_accuracy": joint,
                 },
@@ -120,13 +130,15 @@ def bootstrap(args: argparse.Namespace) -> int:
     validation_accuracy = _accuracies(policy, validation)
     gates = {
         "movement": args.minimum_movement_accuracy,
+        "target": args.minimum_target_accuracy,
         "cast": args.minimum_cast_accuracy,
         "joint": args.minimum_joint_accuracy,
     }
     actual = {
         "movement": validation_accuracy[0],
-        "cast": validation_accuracy[1],
-        "joint": validation_accuracy[2],
+        "target": validation_accuracy[1],
+        "cast": validation_accuracy[2],
+        "joint": validation_accuracy[3],
     }
     failed = [
         name
@@ -147,11 +159,13 @@ def bootstrap(args: argparse.Namespace) -> int:
     policy.metadata.update(
         {
             "training_movement_accuracy": training_accuracy[0],
-            "training_cast_accuracy": training_accuracy[1],
-            "training_joint_accuracy": training_accuracy[2],
+            "training_target_accuracy": training_accuracy[1],
+            "training_cast_accuracy": training_accuracy[2],
+            "training_joint_accuracy": training_accuracy[3],
             "validation_movement_accuracy": validation_accuracy[0],
-            "validation_cast_accuracy": validation_accuracy[1],
-            "validation_joint_accuracy": validation_accuracy[2],
+            "validation_target_accuracy": validation_accuracy[1],
+            "validation_cast_accuracy": validation_accuracy[2],
+            "validation_joint_accuracy": validation_accuracy[3],
         }
     )
     model_path = Path(args.model).resolve()
@@ -167,8 +181,9 @@ def bootstrap(args: argparse.Namespace) -> int:
                 "shape": spec.model_shape(),
                 "training_accuracy": {
                     "movement": training_accuracy[0],
-                    "cast": training_accuracy[1],
-                    "joint": training_accuracy[2],
+                    "target": training_accuracy[1],
+                    "cast": training_accuracy[2],
+                    "joint": training_accuracy[3],
                 },
                 "validation_accuracy": actual,
             },
@@ -218,12 +233,20 @@ def prepare_rollout_batch(
         [record.movement_mask for record in records],
         dtype=np.bool_,
     )
+    target_masks = np.asarray(
+        [record.target_mask for record in records],
+        dtype=np.bool_,
+    )
     cast_masks = np.asarray(
         [record.cast_mask for record in records],
         dtype=np.bool_,
     )
     movement_actions = np.asarray(
         [record.movement_action for record in records],
+        dtype=np.int64,
+    )
+    target_actions = np.asarray(
+        [record.target_action for record in records],
         dtype=np.int64,
     )
     cast_actions = np.asarray(
@@ -295,8 +318,10 @@ def prepare_rollout_batch(
     return {
         "observations": observations,
         "movement_masks": movement_masks,
+        "target_masks": target_masks,
         "cast_masks": cast_masks,
         "movement_actions": movement_actions,
+        "target_actions": target_actions,
         "cast_actions": cast_actions,
         "old_log_probabilities": old_log_probabilities,
         "advantages": advantages,
@@ -335,8 +360,12 @@ def _mean_ppo_metrics(metrics: Sequence[object]) -> dict[str, float]:
         "policy_loss",
         "value_loss",
         "entropy",
+        "movement_entropy",
+        "target_entropy",
+        "cast_entropy",
         "approximate_kl",
         "clip_fraction",
+        "gradient_norm",
     )
     result = {
         name: float(np.mean([getattr(metric, name) for metric in metrics]))
@@ -356,6 +385,16 @@ def live_ppo(args: argparse.Namespace) -> int:
             raise ValueError(f"{name.replace('_', '-')} must be positive")
     if args.rollout_timeout <= 0.0:
         raise ValueError("rollout-timeout must be positive")
+    for name in (
+        "movement_entropy_coefficient",
+        "target_entropy_coefficient",
+        "cast_entropy_coefficient",
+    ):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value < 0.0:
+            raise ValueError(
+                f"{name.replace('_', '-')} must be finite and non-negative"
+            )
 
     policy = load_model(Path(args.model))
     optimizer = Adam(
@@ -448,8 +487,10 @@ def live_ppo(args: argparse.Namespace) -> int:
                 optimizer,
                 batch["observations"],
                 batch["movement_masks"],
+                batch["target_masks"],
                 batch["cast_masks"],
                 batch["movement_actions"],
+                batch["target_actions"],
                 batch["cast_actions"],
                 batch["old_log_probabilities"],
                 batch["advantages"],
@@ -459,7 +500,13 @@ def live_ppo(args: argparse.Namespace) -> int:
                 batch_size=args.batch_size,
                 clip_ratio=args.clip_ratio,
                 value_coefficient=args.value_coefficient,
-                entropy_coefficient=args.entropy_coefficient,
+                movement_entropy_coefficient=(
+                    args.movement_entropy_coefficient
+                ),
+                target_entropy_coefficient=(
+                    args.target_entropy_coefficient
+                ),
+                cast_entropy_coefficient=args.cast_entropy_coefficient,
                 maximum_gradient_norm=args.maximum_gradient_norm,
             )
             summary = _mean_ppo_metrics(metrics)
@@ -469,6 +516,15 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "live_training_seed": args.seed,
                     "live_training_iteration": iteration,
                     "live_training_rollout_steps": args.rollout_steps,
+                    "movement_entropy_coefficient": (
+                        args.movement_entropy_coefficient
+                    ),
+                    "target_entropy_coefficient": (
+                        args.target_entropy_coefficient
+                    ),
+                    "cast_entropy_coefficient": (
+                        args.cast_entropy_coefficient
+                    ),
                 }
             )
             checkpoint_model = (
@@ -588,14 +644,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.90,
     )
     bootstrap_parser.add_argument(
+        "--minimum-target-accuracy",
+        type=float,
+        default=0.80,
+    )
+    bootstrap_parser.add_argument(
         "--minimum-cast-accuracy",
         type=float,
-        default=0.96,
+        default=0.92,
     )
     bootstrap_parser.add_argument(
         "--minimum-joint-accuracy",
         type=float,
-        default=0.87,
+        default=0.72,
     )
     bootstrap_parser.add_argument("--model", default=str(DEFAULT_MODEL))
     bootstrap_parser.add_argument("--lua", default=str(DEFAULT_LUA))
@@ -624,9 +685,19 @@ def build_parser() -> argparse.ArgumentParser:
     live_parser.add_argument("--clip-ratio", type=float, default=0.2)
     live_parser.add_argument("--value-coefficient", type=float, default=0.5)
     live_parser.add_argument(
-        "--entropy-coefficient",
+        "--movement-entropy-coefficient",
         type=float,
-        default=0.01,
+        default=spec.MOVEMENT_ENTROPY_COEFFICIENT,
+    )
+    live_parser.add_argument(
+        "--target-entropy-coefficient",
+        type=float,
+        default=spec.TARGET_ENTROPY_COEFFICIENT,
+    )
+    live_parser.add_argument(
+        "--cast-entropy-coefficient",
+        type=float,
+        default=spec.CAST_ENTROPY_COEFFICIENT,
     )
     live_parser.add_argument(
         "--maximum-gradient-norm",

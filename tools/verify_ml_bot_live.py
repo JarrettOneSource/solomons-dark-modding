@@ -22,7 +22,7 @@ import verify_local_multiplayer_sync as local_sync
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
+DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
 MINIMUM_LIVE_DISPLACEMENT = 1.0
 MINIMUM_ACCEPTANCE_TICKS = 25
 

@@ -166,10 +166,6 @@ function Controller:begin_episode()
 end
 
 function Controller:enable(options)
-  if self.runtime == nil then
-    error(
-      "ML policy v2 weights are unavailable until Phase 4")
-  end
   options = type(options) == "table" and options or {}
   local capacity = math.floor(
     tonumber(options.capacity) or self.capacity)
@@ -215,10 +211,6 @@ function Controller:drain(max_records)
 end
 
 function Controller:load_parameters(candidate)
-  if self.runtime == nil then
-    error(
-      "ML policy v2 weights are unavailable until Phase 4")
-  end
   local generation = self.runtime:load(candidate)
   return {
     generation = generation,
@@ -227,16 +219,6 @@ function Controller:load_parameters(candidate)
 end
 
 function Controller:status()
-  local policy_status
-  if self.runtime ~= nil then
-    policy_status = self.runtime:status()
-  else
-    policy_status = {
-      available = false,
-      version = self.spec.model_version,
-      architecture = self.spec.architecture,
-    }
-  end
   return {
     enabled = self.enabled,
     episode_id = self.episode_id,
@@ -244,7 +226,7 @@ function Controller:status()
     buffered = self:buffer_size(),
     dropped = self.dropped,
     recorded = self.recorded,
-    policy = policy_status,
+    policy = self.runtime:status(),
   }
 end
 

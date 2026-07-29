@@ -1,96 +1,132 @@
 # ML bot policy contract
 
-The player build executes a compact feed-forward policy entirely inside the
+The player build executes a feed-forward policy entirely inside the
 `bot.brain` Lua mod. Python and NumPy are training tools only. The shipped mod
 does not open a network service, start Python, require a GPU, or send gameplay
 state outside the game process.
 
 ## Versioned model
 
-Model format `solomon-dark-bot-policy` version 1 uses architecture
-`mlp-tanh-two-head-v1`:
+Model format `solomon-dark-bot-policy` version 2 uses architecture
+`mlp-tanh-three-head-v2`:
 
-1. 87 normalized observations;
-2. one fully connected tanh layer with 48 units;
-3. a masked 9-way movement head;
-4. a masked 10-way cast head; and
-5. one scalar value head used only while training.
+1. 395 ordered normalized observations;
+2. a fully connected tanh layer with 192 units;
+3. a fully connected tanh layer with 96 units;
+4. masked movement, target, and cast heads of 9, 9, and 10 logits; and
+5. one scalar value head.
 
-The ordered observation and action names are canonical in
-`tools/ml_bot/spec.py`. `scripts/policy_spec.lua` carries the same contract for
-the in-game runtime. A model is rejected unless every version, name, and tensor
-shape matches exactly.
+`tools/ml_bot/spec.py` and
+`mods/bot-brain/scripts/policy_spec.lua` carry the same ordered observation
+and action names. A model is rejected unless format, model/observation
+versions, architecture, both hidden sizes, all four output sizes, every name,
+every parameter name/shape, and every parameter value match the contract.
 
-A recurrent model is deliberately not the first shipped architecture. The
-observations include one-step deltas, the preceding action, and elapsed-action
-signals. This keeps player inference small and makes the initial PPO evidence
-easy to audit. A future GRU must use a new architecture and model version; it
-cannot silently reinterpret version 1 weights.
+`models/bot-brain/policy-v1.json` is historical only. Its version, 87-input
+shape, 48-unit layer, and two-head architecture are incompatible. Lua and
+Python issue an explicit v1 error and provide no adapter, migration, or
+fallback.
 
-## Actions
+## Observations
 
-Movement action 0 stops the bot. Actions 1 through 8 select a world-space
-compass direction. Before sampling or selecting, Lua tests the corresponding
-segment against the navigation grid. Untraversable directions are masked. A
-selected direction is sent to the existing native `bot:move_to` participant
-rail, so the learned bot moves as a real replicated player slot.
+The canonical 395-name list is generated in the same block order in both spec
+files:
+
+- A: 15 self values;
+- B: 11 active-primary values;
+- C: 104 values for eight secondary slots;
+- D: 80 values for eight nearest enemies;
+- E: 10 persisted-target values;
+- F: 56 cached geometry values;
+- G: 33 values for four replicated pickups plus count;
+- I: 41 values for four nearest allies plus cap-independent count; and
+- H: 45 aggregate, arena, config, history, weld, and multiplier values.
+
+All values are finite. Fixed scales are mana 2000, HP 1000, velocity 1000,
+cooldown 60, range 1000, and radius 100. These constants derive from
+catalogued stat/skill maxima and live movement/cooldown probes and do not vary
+with a batch.
+
+The navigation patch and clearance rays come from a per-scene cached grid
+refreshed at roughly two seconds only from complete snapshots.
+`sd.nav.test_segment` remains exclusive to the movement mask. Enemy velocity
+and target persistence use `network_actor_id`. The four ally slots exclude
+self, but the ally count traverses the full in-run participant list without a
+participant-cap constant.
+
+## Autoregressive actions
+
+Movement action 0 stops the bot. Actions 1 through 8 select compass
+directions. The corresponding 110-unit native segment must be legal.
+
+Target action 0 keeps the persisted target. It is legal when that actor is
+live or when no enemy exists. Actions 1 through 8 choose the corresponding
+present, living Block D enemy slot. The selected actor then persists by
+network ID even though distance-sorted slots can change.
 
 Cast action 0 does nothing. Action 1 uses primary slot 0. Actions 2 through 9
-use secondary slots 1 through 8. Cast actions are masked unless offense is
-enabled, a live target is in the validated attack window, the native bot is
-ready to cast, and the selected loadout slot exists. The selected action is
-sent through `bot:cast`, which retains the native queue, mana, cooldown, and
-spell validation.
+use secondary slots 1 through 8. Lua selects movement and target from their
+masks first, invokes the observation builder to persist that target and build
+its cast mask, then selects cast. A cast requires common offense/readiness plus
+per-slot occupancy, affordability, readable readiness, and resolved range
+legality. Unknown secondary range is not guessed and remains subject to native
+validation.
 
-Scripted skill-upgrade selection remains active for learned bots. Inventory,
-equipment, spellbook, ability-loadout, gold, status, and derived-stat state are
-observed by version 1. The loader does not currently expose owner-safe
-per-bot consume or equip mutations, so version 1 has no dishonest item action
-that could never execute. Adding those native rails requires a new masked
-action head and a contract version bump.
+The selected composite log probability is:
 
-Version 1 records whether each secondary slot is populated, but not that
-slot's spell identity, mana cost, range, or independent readiness. Its cast
-mask therefore uses the bot's validated primary attack window and relies on
-the native cast rail for final per-spell rejection. Per-slot spell semantics
-and learned target selection are higher-priority version-2 additions than
-recurrence.
+```text
+log p(move) + log p(target) + log p(cast | target mask)
+```
+
+PPO clips the ratio of this composite action. Entropy bonuses and metrics are
+separate per head. Defaults are movement `0.01`, target `0.02`, and cast
+`0.01`; the doubled target coefficient counteracts early attraction to the
+often-legal `keep_current` action.
 
 ## Rollouts
 
-Training is disabled by default. When explicitly enabled through the local Lua
-execution pipe, each completed transition contains:
+Training is disabled by default. Strict trajectory version 2 records:
 
-- contract and episode identity;
-- participant and exact 100 Hz simulation tick;
-- observation, movement mask, and cast mask;
-- zero-based movement and cast actions;
-- the combined old log probability and old value estimate;
+- trajectory, episode, participant, and exact simulation-tick identity;
+- the 395-value observation;
+- movement, target, and target-conditioned cast masks;
+- zero-based movement, target, and cast actions;
+- the three-head composite old log probability and old value;
 - transition reward; and
 - terminal state.
 
-The reward belongs to the preceding selected action: Lua holds a pending
-transition until it observes the next state. Death and run-end events flush the
-pending transition as terminal. PPO uses a single combined log probability for
-the two conditionally independent masked heads.
+The reward belongs to the preceding composite action: Lua holds a transition
+until the next state. Its coefficients are unchanged from v1 and contain no
+wrapper-target reward. GAE groups by `(episode_id, participant_id)`.
+Trajectory-v1 frames are rejected rather than reinterpreted.
 
-## Controlled live-training arena
+## Bootstrap and live training
 
-The live PPO bridge deliberately separates curriculum combat from production
-waves. It enables manual-enemy test mode and queues a direct call to the game's
-exact stock enemy constructor with an empty modifier array. The gameplay pump
-accepts that path only for explicit direct-arena requests while test mode is
-active and the process is the simulation authority. Arena wave state is pinned
-for the duration of test mode so stock wave production cannot race the
-curriculum manager.
+The deterministic bootstrap initializes a new v2 model and generates new
+target-first expert samples. It scores the eight enemy slots, selects a slot
+or legal persisted target, and only then derives the cast mask/action for that
+enemy. Block E remains the pre-decision persisted target; it is not copied into
+the target label. No v1 weights, trajectories, or expert data are loaded.
 
-Each requested enemy must appear as a tracked, living world actor before a
-rollout can continue. The enemy retains stock AI and combat behavior. The
-bridge also unlocks the configured elemental primary by stepping the real
-native level-up and pending-choice APIs; it refuses conflicting elemental
-primaries rather than mutating a loadout directly.
+The checked-in JSON and Lua artifacts originate from the same model map. Tests
+require a fresh Lua render of `policy-v2.json` to equal the checked-in
+`policy_weights.lua`, and compare Lua/Python probabilities, actions, value,
+and composite log probability on the same fixture.
 
-This controlled arena proves and trains the policy-to-native action loop. It
-does not reproduce wave cadence, multi-enemy credit assignment, elite
-modifiers, or the distribution of elements, Disciplines, items, and builds
-seen in player games. Those require separate ordinary-wave evaluation gates.
+Live PPO hot-loads the same strict model after writing temporary JSON and Lua
+files and atomically replacing each destination. Because the v2 text export is
+larger than the loader's 1 MiB exec request limit, the bridge stages 512 KiB
+chunks in Lua and invokes `load_parameters` only after every chunk is present
+and the candidate compiles. A partial transfer cannot replace the active
+weights or advance generation. The current controlled arena proves this
+data/action path but is not a production competence environment.
+
+## Accepted limits
+
+- Some native secondary range/cooldown rows remain unresolved; explicit flags
+  select the approved no-range-gate/global-readiness behavior.
+- Per-slot enemy/ally observations are bounded to 8/4 while aggregate roster
+  counts remain cap-agnostic.
+- Scripted pickup and weld managers remain outside the learned action heads.
+- Skill-choice learning, aim offsets, recurrence, inventory mutations, fresh
+  seed/session rotation, and team-composition rotation are outside Phase 4.

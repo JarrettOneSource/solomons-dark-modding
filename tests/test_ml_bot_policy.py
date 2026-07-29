@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Numerical, serialization, Lua-parity, and trajectory tests for ML bots."""
+"""Numerical, serialization, Lua-parity, and trajectory-v2 tests."""
 
 from __future__ import annotations
 
 import copy
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -20,20 +21,32 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 from ml_bot import spec  # noqa: E402
-from ml_bot.bridge import RolloutRecord, parse_rollout_output  # noqa: E402
+from ml_bot.bridge import (  # noqa: E402
+    POLICY_LOAD_CHUNK_BYTES,
+    RolloutRecord,
+    SoloSession,
+    parse_rollout_output,
+)
+from ml_bot.expert import generate_expert_dataset  # noqa: E402
 from ml_bot.model import (  # noqa: E402
     Adam,
     BotPolicy,
+    behavior_clone_batch,
     export_lua_weights,
     generalized_advantage_estimate,
     load_model,
+    ppo_batch,
     ppo_epochs,
+    render_lua_weights,
     save_model,
+    selected_log_probabilities,
 )
 from train_bot_policy import prepare_rollout_batch  # noqa: E402
 
 
-MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
+MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
+HISTORICAL_V1_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
+LUA_WEIGHTS = ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
 LUA_CONTRACT = ROOT / "tests" / "lua" / "ml_bot_policy_contract.lua"
 
 
@@ -51,10 +64,12 @@ def _record(
         simulation_tick=tick,
         observation=[0.01 * tick] * len(spec.OBSERVATION_NAMES),
         movement_mask=[True] * len(spec.MOVEMENT_ACTION_NAMES),
+        target_mask=[True] * len(spec.TARGET_ACTION_NAMES),
         cast_mask=[True] * len(spec.CAST_ACTION_NAMES),
         movement_action=1,
+        target_action=3,
         cast_action=2,
-        old_log_probability=-1.5,
+        old_log_probability=-2.5,
         old_value=value,
         reward=reward,
         done=done,
@@ -62,31 +77,86 @@ def _record(
 
 
 class MlBotPolicyTests(unittest.TestCase):
+    def test_contract_is_exact_policy_v2(self) -> None:
+        self.assertEqual(spec.MODEL_VERSION, 2)
+        self.assertEqual(spec.OBSERVATION_VERSION, 2)
+        self.assertEqual(spec.TRAJECTORY_VERSION, 2)
+        self.assertEqual(spec.ARCHITECTURE, "mlp-tanh-three-head-v2")
+        self.assertEqual(spec.HIDDEN_SIZES, (192, 96))
+        self.assertEqual(len(spec.OBSERVATION_NAMES), 395)
+        self.assertEqual(len(set(spec.OBSERVATION_NAMES)), 395)
+        self.assertEqual(len(spec.MOVEMENT_ACTION_NAMES), 9)
+        self.assertEqual(len(spec.TARGET_ACTION_NAMES), 9)
+        self.assertEqual(len(spec.CAST_ACTION_NAMES), 10)
+        self.assertEqual(
+            spec.model_shape(),
+            {
+                "observation_size": 395,
+                "hidden_sizes": [192, 96],
+                "movement_action_size": 9,
+                "target_action_size": 9,
+                "cast_action_size": 10,
+                "value_size": 1,
+            },
+        )
+        self.assertEqual(spec.MANA_SCALE, 2000.0)
+        self.assertEqual(spec.HP_SCALE, 1000.0)
+        self.assertEqual(spec.VELOCITY_SCALE, 1000.0)
+        self.assertEqual(spec.COOLDOWN_SCALE, 60.0)
+
     def test_seed_model_is_strict_and_passes_bootstrap_gates(self) -> None:
         policy = load_model(MODEL)
-        shape = spec.model_shape()
-
+        self.assertEqual(policy.input_weight.shape, (192, 395))
+        self.assertEqual(policy.hidden_weight.shape, (96, 192))
+        self.assertEqual(policy.movement_weight.shape, (9, 96))
+        self.assertEqual(policy.target_weight.shape, (9, 96))
+        self.assertEqual(policy.cast_weight.shape, (10, 96))
+        self.assertEqual(policy.value_weight.shape, (96,))
         self.assertEqual(
-            policy.input_weight.shape,
-            (shape["hidden_size"], shape["observation_size"]),
+            policy.metadata["training_kind"],
+            "target_first_semantic_behavior_cloning_v2",
         )
         self.assertGreaterEqual(
             policy.metadata["validation_movement_accuracy"],
             0.90,
         )
         self.assertGreaterEqual(
+            policy.metadata["validation_target_accuracy"],
+            0.80,
+        )
+        self.assertGreaterEqual(
             policy.metadata["validation_cast_accuracy"],
-            0.96,
+            0.92,
         )
         self.assertGreaterEqual(
             policy.metadata["validation_joint_accuracy"],
-            0.87,
+            0.72,
         )
 
         invalid = copy.deepcopy(policy.to_dict())
         invalid["observation_names"][0] = "contract_drift"
         with self.assertRaisesRegex(ValueError, "observation_names"):
             BotPolicy.from_dict(invalid)
+        invalid = copy.deepcopy(policy.to_dict())
+        invalid["parameters"]["hidden_weight"] = invalid["parameters"][
+            "hidden_weight"
+        ][:-1]
+        with self.assertRaisesRegex(ValueError, "hidden_weight has shape"):
+            BotPolicy.from_dict(invalid)
+
+    def test_v1_model_is_rejected_with_a_clear_error(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "v1 artifacts are incompatible.*policy-v2",
+        ):
+            load_model(HISTORICAL_V1_MODEL)
+
+    def test_json_and_lua_artifacts_are_identical_exports(self) -> None:
+        policy = load_model(MODEL)
+        self.assertEqual(
+            render_lua_weights(policy).encode("utf-8"),
+            LUA_WEIGHTS.read_bytes(),
+        )
 
     def test_model_exports_use_repository_line_endings(self) -> None:
         policy = load_model(MODEL)
@@ -95,11 +165,137 @@ class MlBotPolicyTests(unittest.TestCase):
             lua_path = Path(directory) / "policy.lua"
             save_model(policy, model_path)
             export_lua_weights(policy, lua_path)
-
+            reloaded = load_model(model_path)
+            for name, parameter in policy.parameter_arrays().items():
+                np.testing.assert_array_equal(
+                    parameter,
+                    reloaded.parameter_arrays()[name],
+                )
             for path in (model_path, lua_path):
                 contents = path.read_bytes()
                 self.assertNotIn(b"\r", contents)
                 self.assertTrue(contents.endswith(b"\n"))
+
+    def test_hot_reload_stages_sub_limit_chunks_before_commit(self) -> None:
+        policy = load_model(MODEL)
+        session = object.__new__(SoloSession)
+        calls: list[str] = []
+
+        def fake_lua(code: str, *, timeout: float = 15.0) -> str:
+            del timeout
+            calls.append(code)
+            if "load_parameters(candidate)" in code:
+                return "generation=7"
+            return "ok=true"
+
+        session.lua = fake_lua
+        self.assertEqual(session.load_policy(policy), 7)
+        self.assertGreater(len(calls), 4)
+        self.assertLess(
+            max(len(code.encode("utf-8")) for code in calls),
+            1024 * 1024,
+        )
+        self.assertEqual(POLICY_LOAD_CHUNK_BYTES, 512 * 1024)
+        self.assertIn("__sdmod_ml_policy_staging", calls[0])
+        self.assertEqual(
+            sum("staging.parts[" in code for code in calls),
+            math.ceil(
+                len(render_lua_weights(policy)) / POLICY_LOAD_CHUNK_BYTES
+            ),
+        )
+        self.assertIn("load_parameters(candidate)", calls[-1])
+
+        failed_calls: list[str] = []
+
+        def fail_mid_transfer(
+            code: str,
+            *,
+            timeout: float = 15.0,
+        ) -> str:
+            del timeout
+            failed_calls.append(code)
+            if "staging.parts[2]" in code:
+                raise RuntimeError("injected transfer failure")
+            return "ok=true"
+
+        session.lua = fail_mid_transfer
+        with self.assertRaisesRegex(RuntimeError, "injected transfer failure"):
+            session.load_policy(policy)
+        self.assertFalse(
+            any(
+                "load_parameters(candidate)" in code
+                for code in failed_calls
+            )
+        )
+        self.assertEqual(
+            failed_calls[-1],
+            "_G.__sdmod_ml_policy_staging = nil",
+        )
+
+    def test_target_first_bootstrap_batch_is_finite_and_legal(self) -> None:
+        rng = np.random.default_rng(90210)
+        dataset = generate_expert_dataset(512, rng=rng)
+        self.assertEqual(dataset.observations.shape, (512, 395))
+        self.assertTrue(np.all(np.isfinite(dataset.observations)))
+        rows = np.arange(512)
+        self.assertTrue(
+            np.all(
+                dataset.movement_masks[rows, dataset.movement_actions]
+            )
+        )
+        self.assertTrue(
+            np.all(dataset.target_masks[rows, dataset.target_actions])
+        )
+        self.assertTrue(np.all(dataset.cast_masks[rows, dataset.cast_actions]))
+        self.assertTrue(np.any(dataset.target_actions == 0))
+        self.assertTrue(np.any(dataset.target_actions > 0))
+
+        policy = BotPolicy.initialize(np.random.default_rng(90211))
+        loss, gradient_norm = behavior_clone_batch(
+            policy,
+            Adam(policy.parameter_arrays(), learning_rate=0.001),
+            dataset.observations,
+            dataset.movement_masks,
+            dataset.target_masks,
+            dataset.cast_masks,
+            dataset.movement_actions,
+            dataset.target_actions,
+            dataset.cast_actions,
+        )
+        self.assertTrue(math.isfinite(loss))
+        self.assertTrue(math.isfinite(gradient_norm))
+
+    def test_composite_log_probability_sums_all_three_heads(self) -> None:
+        rng = np.random.default_rng(1800)
+        policy = BotPolicy.initialize(rng)
+        rows = 8
+        observations = rng.uniform(-1.0, 1.0, size=(rows, 395))
+        movement_masks = np.ones((rows, 9), dtype=np.bool_)
+        target_masks = np.ones((rows, 9), dtype=np.bool_)
+        cast_masks = np.ones((rows, 10), dtype=np.bool_)
+        actions = policy.act(
+            observations,
+            movement_masks,
+            target_masks,
+            cast_masks,
+            deterministic=False,
+            rng=rng,
+        )
+        expected = (
+            selected_log_probabilities(
+                actions.movement_probabilities,
+                actions.movement_actions,
+            )
+            + selected_log_probabilities(
+                actions.target_probabilities,
+                actions.target_actions,
+            )
+            + selected_log_probabilities(
+                actions.cast_probabilities,
+                actions.cast_actions,
+            )
+        )
+        np.testing.assert_allclose(actions.log_probabilities, expected)
 
     def test_generalized_advantage_estimate_matches_known_values(self) -> None:
         advantages, returns = generalized_advantage_estimate(
@@ -115,23 +311,15 @@ class MlBotPolicyTests(unittest.TestCase):
     def test_ppo_update_is_finite_and_changes_parameters(self) -> None:
         rng = np.random.default_rng(1801)
         policy = BotPolicy.initialize(rng)
-        count = 64
-        observations = rng.uniform(
-            -1.0,
-            1.0,
-            size=(count, len(spec.OBSERVATION_NAMES)),
-        )
-        movement_masks = np.ones(
-            (count, len(spec.MOVEMENT_ACTION_NAMES)),
-            dtype=np.bool_,
-        )
-        cast_masks = np.ones(
-            (count, len(spec.CAST_ACTION_NAMES)),
-            dtype=np.bool_,
-        )
+        count = 48
+        observations = rng.uniform(-1.0, 1.0, size=(count, 395))
+        movement_masks = np.ones((count, 9), dtype=np.bool_)
+        target_masks = np.ones((count, 9), dtype=np.bool_)
+        cast_masks = np.ones((count, 10), dtype=np.bool_)
         actions = policy.act(
             observations,
             movement_masks,
+            target_masks,
             cast_masks,
             deterministic=False,
             rng=rng,
@@ -153,8 +341,10 @@ class MlBotPolicyTests(unittest.TestCase):
             Adam(policy.parameter_arrays(), learning_rate=0.0003),
             observations,
             movement_masks,
+            target_masks,
             cast_masks,
             actions.movement_actions,
+            actions.target_actions,
             actions.cast_actions,
             actions.log_probabilities,
             advantages,
@@ -173,8 +363,12 @@ class MlBotPolicyTests(unittest.TestCase):
                             metric.policy_loss,
                             metric.value_loss,
                             metric.entropy,
+                            metric.movement_entropy,
+                            metric.target_entropy,
+                            metric.cast_entropy,
                             metric.approximate_kl,
                             metric.clip_fraction,
+                            metric.gradient_norm,
                         ]
                     )
                 )
@@ -186,9 +380,73 @@ class MlBotPolicyTests(unittest.TestCase):
             )
         )
 
-    def test_rollout_parser_rejects_drift_and_accepts_valid_frame(self) -> None:
+    def test_target_entropy_default_resists_keep_current_collapse(self) -> None:
+        self.assertEqual(
+            spec.TARGET_ENTROPY_COEFFICIENT,
+            2.0 * spec.MOVEMENT_ENTROPY_COEFFICIENT,
+        )
+        self.assertEqual(
+            spec.TARGET_ENTROPY_COEFFICIENT,
+            2.0 * spec.CAST_ENTROPY_COEFFICIENT,
+        )
+        rng = np.random.default_rng(1802)
+        policy = BotPolicy.initialize(rng)
+        policy.target_weight.fill(0.0)
+        policy.target_bias.fill(0.0)
+        policy.target_bias[0] = 3.0
+        rows = 32
+        observations = np.zeros((rows, 395))
+        movement_masks = np.zeros((rows, 9), dtype=np.bool_)
+        movement_masks[:, 0] = True
+        target_masks = np.ones((rows, 9), dtype=np.bool_)
+        cast_masks = np.zeros((rows, 10), dtype=np.bool_)
+        cast_masks[:, 0] = True
+        before = policy.act(
+            observations,
+            movement_masks,
+            target_masks,
+            cast_masks,
+            deterministic=True,
+        )
+        before_entropy = -np.sum(
+            before.target_probabilities[0]
+            * np.log(before.target_probabilities[0])
+        )
+        metrics = ppo_batch(
+            policy,
+            Adam(policy.parameter_arrays(), learning_rate=0.01),
+            observations,
+            movement_masks,
+            target_masks,
+            cast_masks,
+            before.movement_actions,
+            before.target_actions,
+            before.cast_actions,
+            before.log_probabilities,
+            np.zeros(rows),
+            before.values,
+            movement_entropy_coefficient=0.0,
+            target_entropy_coefficient=spec.TARGET_ENTROPY_COEFFICIENT,
+            cast_entropy_coefficient=0.0,
+        )
+        after = policy.act(
+            observations,
+            movement_masks,
+            target_masks,
+            cast_masks,
+            deterministic=True,
+        )
+        after_entropy = -np.sum(
+            after.target_probabilities[0]
+            * np.log(after.target_probabilities[0])
+        )
+        self.assertGreater(after_entropy, before_entropy)
+        self.assertGreater(metrics.target_entropy, 0.0)
+
+    def test_rollout_parser_is_strict_trajectory_v2(self) -> None:
         observation = ",".join(["0"] * len(spec.OBSERVATION_NAMES))
         movement_mask = "1" * len(spec.MOVEMENT_ACTION_NAMES)
+        target_mask = "1" * len(spec.TARGET_ACTION_NAMES)
         cast_mask = "1" * len(spec.CAST_ACTION_NAMES)
         fields = [
             "R",
@@ -197,6 +455,7 @@ class MlBotPolicyTests(unittest.TestCase):
             "2305843009213704704",
             "100",
             "1",
+            "3",
             "2",
             "-0.5",
             "0.1",
@@ -204,25 +463,30 @@ class MlBotPolicyTests(unittest.TestCase):
             "0",
             observation,
             movement_mask,
+            target_mask,
             cast_mask,
         ]
         records = parse_rollout_output(
             "\t".join(fields) + "\nbuffered=0\n",
             expected_count=1,
         )
-        self.assertEqual(records[0].movement_action, 1)
+        self.assertEqual(records[0].target_action, 3)
         self.assertEqual(
             records[0].participant_id,
             2305843009213704704,
         )
 
-        fields[12] = "1" + "0" * (len(movement_mask) - 1)
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "masked movement action",
-        ):
+        invalid = fields.copy()
+        invalid[14] = "1" + "0" * (len(target_mask) - 1)
+        with self.assertRaisesRegex(RuntimeError, "masked target action"):
+            parse_rollout_output("\t".join(invalid), expected_count=1)
+        invalid = fields.copy()
+        invalid[1] = "1"
+        with self.assertRaisesRegex(RuntimeError, "trajectory-v1.*trajectory-v2"):
+            parse_rollout_output("\t".join(invalid), expected_count=1)
+        with self.assertRaisesRegex(RuntimeError, "15 fields"):
             parse_rollout_output(
-                "\t".join(fields),
+                "\t".join(fields[:-1]),
                 expected_count=1,
             )
 
@@ -250,12 +514,105 @@ class MlBotPolicyTests(unittest.TestCase):
         )
         np.testing.assert_allclose(batch["advantages"], expected_advantages)
         np.testing.assert_allclose(batch["returns"], expected_returns)
-        self.assertEqual(
-            batch["observations"].shape,
-            (2, len(spec.OBSERVATION_NAMES)),
-        )
+        self.assertEqual(batch["observations"].shape, (2, 395))
+        self.assertEqual(batch["target_masks"].shape, (2, 9))
+        np.testing.assert_array_equal(batch["target_actions"], [3, 3])
 
-    def test_lua_and_python_inference_match(self) -> None:
+    def test_lua_and_python_contract_and_inference_match(self) -> None:
+        values = self._run_lua_contract()
+        self.assertEqual(values.get("training_ring_ok"), "true")
+        self.assertEqual(values.get("v1_rejected"), "true")
+        self.assertEqual(
+            values["observation_names"].split(","),
+            list(spec.OBSERVATION_NAMES),
+        )
+        self.assertEqual(
+            values["movement_names"].split(","),
+            list(spec.MOVEMENT_ACTION_NAMES),
+        )
+        self.assertEqual(
+            values["target_names"].split(","),
+            list(spec.TARGET_ACTION_NAMES),
+        )
+        self.assertEqual(
+            values["cast_names"].split(","),
+            list(spec.CAST_ACTION_NAMES),
+        )
+        self.assertEqual(values["hidden_sizes"], "192,96")
+
+        observation = np.asarray(
+            [
+                ((index * 37) % 101 - 50) / 50
+                for index in range(1, 396)
+            ]
+        )
+        movement_mask = np.asarray(
+            [index % 3 != 0 for index in range(1, 10)]
+        )
+        target_mask = np.asarray(
+            [index % 4 != 0 for index in range(1, 10)]
+        )
+        policy = load_model(MODEL)
+        preliminary = policy.forward(
+            observation,
+            movement_mask[None, :],
+            target_mask[None, :],
+            np.ones((1, 10), dtype=np.bool_),
+        )
+        target_action = int(np.argmax(preliminary.target_probabilities[0]))
+        cast_mask = np.asarray(
+            [
+                ((index + target_action) % 4 != 0) or index == 1
+                for index in range(1, 11)
+            ]
+        )
+        forward = policy.forward(
+            observation,
+            movement_mask[None, :],
+            target_mask[None, :],
+            cast_mask[None, :],
+        )
+        movement_action = int(
+            np.argmax(forward.movement_probabilities[0])
+        )
+        cast_action = int(np.argmax(forward.cast_probabilities[0]))
+        expected_log_probability = (
+            math.log(
+                forward.movement_probabilities[0, movement_action]
+            )
+            + math.log(forward.target_probabilities[0, target_action])
+            + math.log(forward.cast_probabilities[0, cast_action])
+        )
+        self.assertEqual(int(values["movement_action"]), movement_action)
+        self.assertEqual(int(values["target_action"]), target_action)
+        self.assertEqual(int(values["cast_action"]), cast_action)
+        self.assertEqual(
+            values["cast_mask"],
+            "".join("1" if value else "0" for value in cast_mask),
+        )
+        self.assertAlmostEqual(
+            float(values["log_probability"]),
+            expected_log_probability,
+            places=11,
+        )
+        self.assertAlmostEqual(
+            float(values["value"]),
+            float(forward.values[0]),
+            places=11,
+        )
+        for key, expected in (
+            ("movement_probabilities", forward.movement_probabilities[0]),
+            ("target_probabilities", forward.target_probabilities[0]),
+            ("cast_probabilities", forward.cast_probabilities[0]),
+        ):
+            np.testing.assert_allclose(
+                np.fromstring(values[key], sep=","),
+                expected,
+                rtol=2e-12,
+                atol=2e-12,
+            )
+
+    def _run_lua_contract(self) -> dict[str, str]:
         command = self._lua_command()
         if command is None:
             self.skipTest("Lua 5.4 or WSL Lua is unavailable")
@@ -264,7 +621,7 @@ class MlBotPolicyTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
-            timeout=30.0,
+            timeout=60.0,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         values = {}
@@ -272,62 +629,7 @@ class MlBotPolicyTests(unittest.TestCase):
             if "=" in line:
                 key, value = line.split("=", 1)
                 values[key] = value
-        self.assertEqual(values.get("training_ring_ok"), "true")
-
-        observation = np.asarray(
-            [
-                ((index * 37) % 101 - 50) / 50
-                for index in range(1, len(spec.OBSERVATION_NAMES) + 1)
-            ]
-        )
-        movement_mask = np.asarray(
-            [
-                index % 3 != 0
-                for index in range(
-                    1,
-                    len(spec.MOVEMENT_ACTION_NAMES) + 1,
-                )
-            ]
-        )
-        cast_mask = np.asarray(
-            [
-                index % 4 != 0
-                for index in range(
-                    1,
-                    len(spec.CAST_ACTION_NAMES) + 1,
-                )
-            ]
-        )
-        forward = load_model(MODEL).forward(
-            observation,
-            movement_mask[None, :],
-            cast_mask[None, :],
-        )
-        self.assertEqual(
-            int(values["movement_action"]),
-            int(np.argmax(forward.movement_probabilities[0])),
-        )
-        self.assertEqual(
-            int(values["cast_action"]),
-            int(np.argmax(forward.cast_probabilities[0])),
-        )
-        self.assertAlmostEqual(
-            float(values["value"]),
-            float(forward.values[0]),
-            places=11,
-        )
-        np.testing.assert_allclose(
-            np.fromstring(values["movement_probabilities"], sep=","),
-            forward.movement_probabilities[0],
-            rtol=2e-12,
-            atol=2e-12,
-        )
-        np.testing.assert_allclose(
-            np.fromstring(values["cast_probabilities"], sep=","),
-            forward.cast_probabilities[0],
-            rtol=2e-12,
-            atol=2e-12,
-        )
+        return values
 
     def _lua_command(self) -> list[str] | None:
         lua = shutil.which("lua")

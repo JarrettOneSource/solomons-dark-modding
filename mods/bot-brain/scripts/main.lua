@@ -68,19 +68,8 @@ local policy_observation =
 local policy_training_module =
   assert(require_mod("scripts/policy_training.lua"))
 
-local policy_runtime = nil
-local policy_runtime_unavailable_reason = ""
-if policy_weights.version == policy_spec.model_version and
-    policy_weights.observation_version ==
-      policy_spec.observation_version and
-    policy_weights.architecture ==
-      policy_spec.architecture then
-  policy_runtime =
-    policy_module.new(policy_spec, policy_weights, 20260729)
-else
-  policy_runtime_unavailable_reason =
-    "ML policy v2 weights are unavailable until Phase 4"
-end
+local policy_runtime =
+  policy_module.new(policy_spec, policy_weights, 20260729)
 local policy_geometry =
   policy_geometry_module.new(policy_spec)
 local policy_spell_descriptors =
@@ -96,17 +85,7 @@ local policy_training =
   policy_training_module.new(policy_spec, policy_runtime)
 
 local function policy_status()
-  if policy_runtime ~= nil then
-    return policy_runtime:status()
-  end
-  return {
-    available = false,
-    format = policy_spec.model_format,
-    version = policy_spec.model_version,
-    architecture = policy_spec.architecture,
-    observation_size = #policy_spec.observation_names,
-    reason = policy_runtime_unavailable_reason,
-  }
+  return policy_runtime:status()
 end
 
 local shared = {

@@ -246,11 +246,9 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "policy_training.lua",
     ):
         assert f'"scripts/{script}"' in main
-    assert "policy_weights.version == policy_spec.model_version" in main
-    assert (
-        '"ML policy v2 weights are unavailable until Phase 4"'
-        in main
-    )
+    assert "policy_module.new(policy_spec, policy_weights, 20260729)" in main
+    assert "policy_runtime_unavailable_reason" not in main
+    assert "weights are unavailable until Phase 4" not in main
     assert "policy_geometry:reset(nil)" in main
 
     _require_in_order(
@@ -307,7 +305,10 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
 
 def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
-    model = json.loads(_read("models/bot-brain/policy-v1.json"))
+    model = json.loads(_read("models/bot-brain/policy-v2.json"))
+    historical_v1 = json.loads(
+        _read("models/bot-brain/policy-v1.json")
+    )
     runtime_tick = _read(
         "SolomonDarkModLoader/include/runtime_tick_service.h"
     )
@@ -342,6 +343,10 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     )
     trainer = _read("tools/train_bot_policy.py")
     bridge = _read("tools/ml_bot/bridge.py")
+    python_spec = _read("tools/ml_bot/spec.py")
+    python_model = _read("tools/ml_bot/model.py")
+    expert = _read("tools/ml_bot/expert.py")
+    weights = _read("mods/bot-brain/scripts/policy_weights.lua")
 
     assert manifest["version"] == "1.1.0"
     learned = next(
@@ -356,19 +361,84 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     assert learned["label"] == "Learned — ML movement and casting"
     assert "no Python, GPU, or network service" in manifest["description"]
 
-    # Phase 3 intentionally retains the v1 artifact so main.lua can reject it
-    # explicitly; Phase 4 replaces both runtime and weights.
     assert model["format"] == "solomon-dark-bot-policy"
-    assert model["version"] == 1
-    assert model["observation_version"] == 1
-    assert model["architecture"] == "mlp-tanh-two-head-v1"
-    assert model["hidden_size"] == 48
-    assert model["observation_size"] == 87
+    assert model["version"] == 2
+    assert model["observation_version"] == 2
+    assert model["architecture"] == "mlp-tanh-three-head-v2"
+    assert model["hidden_sizes"] == [192, 96]
+    assert model["observation_size"] == 395
     assert model["movement_action_size"] == 9
+    assert model["target_action_size"] == 9
     assert model["cast_action_size"] == 10
+    assert model["value_size"] == 1
     assert len(model["observation_names"]) == model["observation_size"]
     assert len(model["movement_action_names"]) == 9
+    assert len(model["target_action_names"]) == 9
     assert len(model["cast_action_names"]) == 10
+    assert set(model["parameters"]) == {
+        "input_weight",
+        "input_bias",
+        "hidden_weight",
+        "hidden_bias",
+        "movement_weight",
+        "movement_bias",
+        "target_weight",
+        "target_bias",
+        "cast_weight",
+        "cast_bias",
+        "value_weight",
+        "value_bias",
+    }
+    assert historical_v1["version"] == 1
+    assert historical_v1["architecture"] == "mlp-tanh-two-head-v1"
+    for token in (
+        "MODEL_VERSION = 2",
+        "OBSERVATION_VERSION = 2",
+        "TRAJECTORY_VERSION = 2",
+        'ARCHITECTURE = "mlp-tanh-three-head-v2"',
+        "HIDDEN_SIZES = (192, 96)",
+        "if len(names) != 395:",
+        "TARGET_ACTION_NAMES = (",
+        "MOVEMENT_ENTROPY_COEFFICIENT = 0.01",
+        "TARGET_ENTROPY_COEFFICIENT = 0.02",
+        "CAST_ENTROPY_COEFFICIENT = 0.01",
+        "policy v1 artifacts are incompatible",
+    ):
+        assert token in python_spec
+    for token in (
+        "class ForwardPass:",
+        "first_hidden: Array",
+        "second_hidden: Array",
+        "target_probabilities: Array",
+        "target_actions: Array",
+        '"hidden_weight": self.hidden_weight',
+        '"target_weight": self.target_weight',
+        "movement_log + target_log + cast_log",
+        "movement_entropy_coefficient",
+        "target_entropy_coefficient",
+        "cast_entropy_coefficient",
+    ):
+        assert token in python_model
+    for token in (
+        "class ExpertDataset:",
+        "target_masks: Array",
+        "target_actions: Array",
+        "def _choose_target(",
+        "target_action, selected = _choose_target(",
+        "prevents v1 wrapper-selected target supervision",
+        "selected=selected,",
+    ):
+        assert token in expert
+    for token in (
+        '["version"] = 2',
+        '["observation_version"] = 2',
+        '["architecture"] = "mlp-tanh-three-head-v2"',
+        '["hidden_sizes"] = { 192, 96 }',
+        '["target_action_size"] = 9',
+        '["hidden_weight"] =',
+        '["target_weight"] =',
+    ):
+        assert token in weights
 
     assert "kGameplaySimulationTickIntervalMs = 10" in runtime_tick
     assert "local_player_simulation_tick_count" in tick_state
@@ -426,9 +496,14 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     for token in (
         "validate_weights",
         "masked_softmax",
+        "parameters.hidden_weight",
         "movement_action = movement_index - 1",
+        "target_action = target_index - 1",
         "cast_action = cast_index - 1",
         "math.log(movement_probability)",
+        "math.log(target_probability)",
+        "cast_mask_builder(target_index - 1)",
+        "policy v1 artifacts are incompatible",
         "function Runtime:load(candidate)",
     ):
         assert token in policy
@@ -450,6 +525,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "register_owned_launch",
         "stop_owned_process_ids",
         "MAX_ROLLOUTS_PER_RESPONSE = 256",
+        "POLICY_LOAD_CHUNK_BYTES = 512 * 1024",
         "RUN_READY_STABILITY_SECONDS = 0.35",
         "def drain_rollouts(",
         "def load_policy(",
@@ -473,6 +549,15 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         'last.get("loading_released") == "true"',
         'last.get("loading_released") == "false"',
         "if transport_enabled",
+        "target_mask: list[bool]",
+        "target_action: int",
+        "if len(fields) != 16:",
+        "trajectory-v1 frames are incompatible",
+        "record.target_mask",
+        "record.target_action",
+        "__sdmod_ml_policy_staging",
+        "policy staging request exceeds the loader pipe limit",
+        "load_parameters(candidate)",
     ):
         assert token in bridge
     assert "PinRunLifecycleManualEnemyTestState();" in gameplay_pump
@@ -514,6 +599,11 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "prepare_rollout_batch(",
         "generalized_advantage_estimate(",
         "ppo_epochs(",
+        "batch[\"target_masks\"]",
+        "batch[\"target_actions\"]",
+        "movement_entropy_coefficient",
+        "target_entropy_coefficient",
+        "cast_entropy_coefficient",
         "_atomic_checkpoint(",
         "session.load_policy(policy)",
         '"learned policy had no accepted live movement"',
@@ -529,6 +619,6 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         assert token in _read("tools/verify_ml_bot_live.py")
 
     return (
-        "The bot keeps its simulation clock, native action routing, retained "
-        "v1 rejection artifact, and exact-process training bridge contracts"
+        "The bot keeps its simulation clock, strict v2 runtime, native action "
+        "routing, historical-v1 rejection, and exact-process training bridge"
     )

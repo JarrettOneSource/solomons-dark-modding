@@ -600,13 +600,6 @@ local function think_with_policy(
     context,
     frame)
   local shared = context.shared
-  if shared.policy_runtime == nil then
-    context.debug.mode = "learned_unavailable"
-    context.debug.last_error =
-      "ML policy v2 weights are unavailable until Phase 4"
-    return nil
-  end
-
   local capture = shared.policy_observation.capture(
     shared.policy_observation_builder,
     context,
