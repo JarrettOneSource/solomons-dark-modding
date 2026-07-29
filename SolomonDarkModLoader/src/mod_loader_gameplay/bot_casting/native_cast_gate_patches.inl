@@ -9,8 +9,23 @@ struct NativeCastGatePatch {
     std::size_t byte_count = 6;
 };
 
-std::array<NativeCastGatePatch, 11> g_native_cast_gate_patches = {};
-NativeCastGatePatch g_scoped_frost_jet_damage_slot_gate_patch = {};
+std::array<NativeCastGatePatch, 9> g_native_cast_gate_patches = {};
+
+enum class NativePrimarySlotGatePolicy : std::uint8_t {
+    ParticipantPresentation = 0,
+    HostOwnedLuaDamage = 1,
+};
+
+struct NativePrimarySlotGatePatch {
+    NativeCastGatePatch patch;
+    std::int32_t primary_entry_index = -1;
+    NativePrimarySlotGatePolicy policy =
+        NativePrimarySlotGatePolicy::ParticipantPresentation;
+    std::uint32_t scope_depth = 0;
+};
+
+std::array<NativePrimarySlotGatePatch, 5>
+    g_native_primary_slot_gate_patches = {};
 
 bool BytesEqual(
     const std::array<std::uint8_t, 6>& left,
@@ -144,12 +159,167 @@ void RestoreNativeCastGatePatch(NativeCastGatePatch* patch) {
 }
 
 void RestoreNativeCastGatePatches() {
-    RestoreNativeCastGatePatch(
-        &g_scoped_frost_jet_damage_slot_gate_patch);
+    for (auto& primary_patch :
+         g_native_primary_slot_gate_patches) {
+        primary_patch.scope_depth = 0;
+        RestoreNativeCastGatePatch(&primary_patch.patch);
+    }
     for (auto& patch : g_native_cast_gate_patches) {
         RestoreNativeCastGatePatch(&patch);
     }
 }
+
+bool AcquireNativePrimarySlotGatePatch(
+    NativePrimarySlotGatePatch* primary_patch,
+    std::string* error_message) {
+    if (primary_patch == nullptr) {
+        if (error_message != nullptr) {
+            *error_message = "native primary slot gate patch is null";
+        }
+        return false;
+    }
+    if (primary_patch->scope_depth == 0) {
+        if (!ApplyNativeCastGatePatch(
+                &primary_patch->patch,
+                error_message)) {
+            return false;
+        }
+    } else if (!primary_patch->patch.installed) {
+        if (error_message != nullptr) {
+            *error_message =
+                std::string("native primary slot gate lost while scoped: ") +
+                primary_patch->patch.name;
+        }
+        return false;
+    }
+    ++primary_patch->scope_depth;
+    return true;
+}
+
+void ReleaseNativePrimarySlotGatePatch(
+    NativePrimarySlotGatePatch* primary_patch) {
+    if (primary_patch == nullptr ||
+        primary_patch->scope_depth == 0) {
+        return;
+    }
+    --primary_patch->scope_depth;
+    if (primary_patch->scope_depth == 0) {
+        RestoreNativeCastGatePatch(&primary_patch->patch);
+    }
+}
+
+bool ValidateNativePrimarySlotGatePatches(
+    std::string* error_message) {
+    for (auto& primary_patch :
+         g_native_primary_slot_gate_patches) {
+        std::string patch_error;
+        if (!AcquireNativePrimarySlotGatePatch(
+                &primary_patch,
+                &patch_error)) {
+            for (auto& restore_patch :
+                 g_native_primary_slot_gate_patches) {
+                restore_patch.scope_depth = 0;
+                RestoreNativeCastGatePatch(
+                    &restore_patch.patch);
+            }
+            if (error_message != nullptr) {
+                *error_message = patch_error;
+            }
+            return false;
+        }
+        ReleaseNativePrimarySlotGatePatch(&primary_patch);
+    }
+    return true;
+}
+
+class ScopedNativePrimarySlotGatePatches {
+public:
+    explicit ScopedNativePrimarySlotGatePatches(
+        uintptr_t actor_address) {
+        if (actor_address == 0) {
+            return;
+        }
+
+        std::lock_guard<std::recursive_mutex> lock(
+            g_participant_entities_mutex);
+        const auto* binding =
+            FindParticipantEntityForActor(actor_address);
+        if (binding == nullptr ||
+            !binding->ongoing_cast.active ||
+            !binding->ongoing_cast.remote_input_controlled) {
+            return;
+        }
+
+        const auto primary_entry_index =
+            binding->ongoing_cast.selection_state_target;
+        for (auto& primary_patch :
+             g_native_primary_slot_gate_patches) {
+            if (primary_patch.primary_entry_index !=
+                primary_entry_index) {
+                continue;
+            }
+
+            const bool authorized =
+                primary_patch.policy ==
+                    NativePrimarySlotGatePolicy::
+                        ParticipantPresentation ||
+                (multiplayer::IsLocalTransportHost() &&
+                 binding->controller_kind ==
+                     multiplayer::ParticipantControllerKind::
+                         LuaBrain);
+            if (!authorized) {
+                continue;
+            }
+
+            std::string patch_error;
+            if (!AcquireNativePrimarySlotGatePatch(
+                    &primary_patch,
+                    &patch_error)) {
+                error_message_ =
+                    std::string(primary_patch.patch.name) +
+                    ": " + patch_error;
+                ready_ = false;
+                ReleaseAcquired();
+                return;
+            }
+            acquired_[acquired_count_++] =
+                &primary_patch;
+        }
+    }
+
+    ~ScopedNativePrimarySlotGatePatches() {
+        ReleaseAcquired();
+    }
+
+    ScopedNativePrimarySlotGatePatches(
+        const ScopedNativePrimarySlotGatePatches&) = delete;
+    ScopedNativePrimarySlotGatePatches& operator=(
+        const ScopedNativePrimarySlotGatePatches&) = delete;
+
+    bool ready() const {
+        return ready_;
+    }
+
+    const std::string& error_message() const {
+        return error_message_;
+    }
+
+private:
+    void ReleaseAcquired() {
+        while (acquired_count_ > 0) {
+            --acquired_count_;
+            ReleaseNativePrimarySlotGatePatch(
+                acquired_[acquired_count_]);
+            acquired_[acquired_count_] = nullptr;
+        }
+    }
+
+    bool ready_ = true;
+    std::string error_message_;
+    std::array<NativePrimarySlotGatePatch*, 5>
+        acquired_ = {};
+    std::size_t acquired_count_ = 0;
+};
 
 bool InstallNativeCastGatePatches(std::string* error_message) {
     const auto nops = MakeNativeGateReplacementBytes();
@@ -178,20 +348,6 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
         {
             "spell_cast_008_ether_projectile_slot_gate",
             kSpellCast008ProjectileSlotGateBranch,
-            0,
-            {},
-            nops,
-        },
-        {
-            "spell_cast_010_fire_slot_gate",
-            kSpellCast010SlotGateBranch,
-            0,
-            {},
-            nops,
-        },
-        {
-            "spell_cast_028_slot_gate",
-            kSpellCast028SlotGateBranch,
             0,
             {},
             nops,
@@ -261,37 +417,92 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
         }
     }
 
-    g_scoped_frost_jet_damage_slot_gate_patch = {
-        "spell_cast_020_damage_slot_gate",
-        kSpellCast020DamageSlotGateBranch,
-        0,
-        {},
-        nops,
-    };
-    std::string frost_jet_gate_error;
-    if (!ApplyNativeCastGatePatch(
-            &g_scoped_frost_jet_damage_slot_gate_patch,
-            &frost_jet_gate_error)) {
+    g_native_primary_slot_gate_patches = {{
+        {
+            {
+                "spell_cast_010_fire_slot_gate",
+                kSpellCast010SlotGateBranch,
+                0,
+                {},
+                nops,
+            },
+            0x10,
+            NativePrimarySlotGatePolicy::
+                ParticipantPresentation,
+        },
+        {
+            {
+                "spell_cast_018_first_damage_slot_gate",
+                kSpellCast018FirstDamageSlotGateBranch,
+                0,
+                {},
+                nops,
+            },
+            0x18,
+            NativePrimarySlotGatePolicy::HostOwnedLuaDamage,
+        },
+        {
+            {
+                "spell_cast_018_chain_damage_slot_gate",
+                kSpellCast018ChainDamageSlotGateBranch,
+                0,
+                {},
+                nops,
+            },
+            0x18,
+            NativePrimarySlotGatePolicy::HostOwnedLuaDamage,
+        },
+        {
+            {
+                "spell_cast_020_water_damage_slot_gate",
+                kSpellCast020DamageSlotGateBranch,
+                0,
+                {},
+                nops,
+            },
+            0x20,
+            NativePrimarySlotGatePolicy::HostOwnedLuaDamage,
+        },
+        {
+            {
+                "spell_cast_028_earth_slot_gate",
+                kSpellCast028SlotGateBranch,
+                0,
+                {},
+                nops,
+            },
+            0x28,
+            NativePrimarySlotGatePolicy::
+                ParticipantPresentation,
+        },
+    }};
+    std::string primary_gate_error;
+    if (!ValidateNativePrimarySlotGatePatches(
+            &primary_gate_error)) {
         RestoreNativeCastGatePatches();
         if (error_message != nullptr) {
-            *error_message = frost_jet_gate_error;
+            *error_message = primary_gate_error;
         }
         return false;
     }
-    RestoreNativeCastGatePatch(
-        &g_scoped_frost_jet_damage_slot_gate_patch);
 
     Log(
         "Gameplay input injection: native actor cast/mana gates unlocked. mana_delta=" +
         HexString(kPlayerActorApplyManaDeltaLocalActorGateBranch) +
         " cleanup=" +
         HexString(kCastCleanupSlotGateBranch) +
-        " scoped_frost_jet_damage=" +
-        HexString(kSpellCast020DamageSlotGateBranch) +
         " spell_008=" + HexString(kSpellCast008SlotGateBranch) +
         " spell_008_projectile=" + HexString(kSpellCast008ProjectileSlotGateBranch) +
-        " spell_010=" + HexString(kSpellCast010SlotGateBranch) +
-        " spell_028=" + HexString(kSpellCast028SlotGateBranch) +
+        " scoped_primary_fire=" +
+            HexString(kSpellCast010SlotGateBranch) +
+        " scoped_primary_air_first=" +
+            HexString(kSpellCast018FirstDamageSlotGateBranch) +
+        " scoped_primary_air_chain=" +
+            HexString(kSpellCast018ChainDamageSlotGateBranch) +
+        " scoped_primary_water=" +
+            HexString(kSpellCast020DamageSlotGateBranch) +
+        " scoped_primary_earth=" +
+            HexString(kSpellCast028SlotGateBranch) +
         " spell_3ee=" + HexString(kSpellCast3EESlotGateBranch) +
         " spell_3f0=" + HexString(kSpellCast3F0SlotGateBranch) +
         " fireball_damage=" +

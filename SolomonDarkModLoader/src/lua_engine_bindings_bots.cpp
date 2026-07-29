@@ -336,19 +336,23 @@ int LuaBotsGetNameplate(lua_State* state) {
 
     std::string display_name;
     std::uint64_t participant_id = 0;
+    float health_ratio = 0.0f;
     if (!TryGetGameplayHudParticipantDisplayNameForActor(
             static_cast<uintptr_t>(actor_address_value),
             &display_name,
-            &participant_id)) {
+            &participant_id,
+            &health_ratio)) {
         lua_pushnil(state);
         return 1;
     }
 
-    lua_createtable(state, 0, 2);
+    lua_createtable(state, 0, 3);
     lua_pushinteger(state, static_cast<lua_Integer>(participant_id));
     lua_setfield(state, -2, "id");
     lua_pushstring(state, display_name.c_str());
     lua_setfield(state, -2, "name");
+    lua_pushnumber(state, static_cast<lua_Number>(health_ratio));
+    lua_setfield(state, -2, "health_ratio");
     return 1;
 }
 

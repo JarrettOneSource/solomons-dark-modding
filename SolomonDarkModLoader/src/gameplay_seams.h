@@ -171,6 +171,8 @@ extern uintptr_t kCastCleanupSlotGateBranch;
 extern uintptr_t kSpellCast008SlotGateBranch;
 extern uintptr_t kSpellCast008ProjectileSlotGateBranch;
 extern uintptr_t kSpellCast010SlotGateBranch;
+extern uintptr_t kSpellCast018FirstDamageSlotGateBranch;
+extern uintptr_t kSpellCast018ChainDamageSlotGateBranch;
 extern uintptr_t kSpellCast020DamageSlotGateBranch;
 extern uintptr_t kSpellCast028SlotGateBranch;
 extern uintptr_t kSpellCast3EESlotGateBranch;

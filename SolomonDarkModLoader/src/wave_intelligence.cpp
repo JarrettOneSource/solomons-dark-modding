@@ -41,6 +41,7 @@ struct WaveIntelligenceState {
     std::map<std::uintptr_t, TrackedWaveEnemy> enemies;
     std::int32_t current_wave = 0;
     std::int32_t next_wave = 1;
+    std::int32_t last_completed_wave = 0;
     bool have_replicated_summary = false;
     WaveSummary replicated_summary;
 };
@@ -507,6 +508,9 @@ WaveSummaryUpdate MakeUpdate(LiveWave* wave, bool started) {
         !wave->completion_reported) {
         wave->completion_reported = true;
         update.completed_wave = wave->summary.wave;
+        g_wave_state.last_completed_wave = (std::max)(
+            g_wave_state.last_completed_wave,
+            update.completed_wave);
     }
     return update;
 }
@@ -535,6 +539,7 @@ bool InitializeWaveIntelligence(
     g_wave_state.enemies.clear();
     g_wave_state.current_wave = 0;
     g_wave_state.next_wave = 1;
+    g_wave_state.last_completed_wave = 0;
     g_wave_state.have_replicated_summary = false;
     g_wave_state.replicated_summary = WaveSummary{};
     Log(
@@ -554,6 +559,7 @@ void ShutdownWaveIntelligence() {
     g_wave_state.enemies.clear();
     g_wave_state.current_wave = 0;
     g_wave_state.next_wave = 1;
+    g_wave_state.last_completed_wave = 0;
     g_wave_state.have_replicated_summary = false;
     g_wave_state.replicated_summary = WaveSummary{};
 }
@@ -570,6 +576,7 @@ void ResetWaveIntelligenceRun() {
     g_wave_state.enemies.clear();
     g_wave_state.current_wave = 0;
     g_wave_state.next_wave = 1;
+    g_wave_state.last_completed_wave = 0;
     g_wave_state.have_replicated_summary = false;
     g_wave_state.replicated_summary = WaveSummary{};
 }
@@ -586,6 +593,13 @@ WaveSummary SnapshotWaveSummary() {
     return found != g_wave_state.live_waves.end()
         ? found->second.summary
         : IdleSummary();
+}
+
+std::int32_t SnapshotLastCompletedWave() {
+    std::scoped_lock lock(g_wave_state.mutex);
+    return g_wave_state.initialized
+        ? g_wave_state.last_completed_wave
+        : 0;
 }
 
 std::vector<WaveScheduleEntry> GetUpcomingWaveSchedule(std::size_t count) {
@@ -742,6 +756,9 @@ WaveSummaryUpdate ApplyReplicatedWaveSummary(const WaveSummary& summary) {
         previous.phase != WavePhase::Completed &&
         summary.phase == WavePhase::Completed) {
         update.completed_wave = summary.wave;
+        g_wave_state.last_completed_wave = (std::max)(
+            g_wave_state.last_completed_wave,
+            update.completed_wave);
     }
     return update;
 }

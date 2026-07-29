@@ -366,26 +366,15 @@ void ClearQueuedGameplayMouseRight() {
         std::to_string(cleared_raw_mouse_right ? 1 : 0));
 }
 
-bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
+bool ClearWizardActorGameplayCastState(
+    uintptr_t actor_address,
+    std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
-
-    ClearQueuedGameplayMouseLeft();
-    ClearQueuedGameplayMouseRight();
-
-    uintptr_t gameplay_address = 0;
-    if (!TryResolveCurrentGameplayScene(&gameplay_address) || gameplay_address == 0) {
+    if (actor_address == 0) {
         if (error_message != nullptr) {
-            *error_message = "Gameplay scene is not active.";
-        }
-        return false;
-    }
-
-    uintptr_t actor_address = 0;
-    if (!TryResolvePlayerActorForSlot(gameplay_address, 0, &actor_address) || actor_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Local player actor is not available.";
+            *error_message = "Wizard actor is not available.";
         }
         return false;
     }
@@ -460,15 +449,50 @@ bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
     }
 
     Log(
-        "Cleared local player gameplay cast state. gameplay=" + HexString(gameplay_address) +
-        " actor=" + HexString(actor_address) +
+        "Cleared wizard actor gameplay cast state. actor=" +
+        HexString(actor_address) +
         " selection=" + HexString(selection_pointer) +
         " wrote=" + std::to_string(wrote ? 1 : 0));
 
     if (!wrote && error_message != nullptr) {
-        *error_message = "One or more local player cast-state fields could not be cleared.";
+        *error_message =
+            "One or more wizard cast-state fields could not be cleared.";
     }
     return wrote;
+}
+
+bool ClearLocalPlayerGameplayCastState(std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    ClearQueuedGameplayMouseLeft();
+    ClearQueuedGameplayMouseRight();
+
+    uintptr_t gameplay_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) ||
+        gameplay_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Gameplay scene is not active.";
+        }
+        return false;
+    }
+
+    uintptr_t actor_address = 0;
+    if (!TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &actor_address) ||
+        actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message = "Local player actor is not available.";
+        }
+        return false;
+    }
+
+    return ClearWizardActorGameplayCastState(
+        actor_address,
+        error_message);
 }
 
 bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_message) {

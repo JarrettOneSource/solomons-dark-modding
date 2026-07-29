@@ -56,11 +56,11 @@ class BotMatchRunnerTests(unittest.TestCase):
         )
         self.assertEqual(
             (config.local_port, config.unused_remote_port),
-            (50511, 50512),
+            (50611, 50612),
         )
         self.assertEqual(
             config.evidence_root,
-            Path("/mnt/d/codex-evidence/botmatch-20260728"),
+            Path("/mnt/d/codex-evidence/botcombat-20260729"),
         )
         self.assertEqual(len(config.bots), 3)
         self.assertEqual(
@@ -77,6 +77,16 @@ class BotMatchRunnerTests(unittest.TestCase):
         self.assertEqual(config.gather_search_step, 65.0)
         self.assertEqual(config.gather_search_limit, 260.0)
         self.assertEqual(config.run_count, 3)
+
+    def test_wave_capture_pattern_has_no_fixed_wave_ceiling(self) -> None:
+        source = bot_match.controller_source(
+            r"D:\evidence\wave-%02d.bmp"
+        )
+        self.assertIn(
+            "string.format(active.wave_capture_pattern, wave)",
+            source,
+        )
+        self.assertNotIn("wave_capture_paths", source)
 
     def test_gate_selection_uses_live_openable_segments_on_route(
         self,
@@ -134,6 +144,37 @@ class BotMatchRunnerTests(unittest.TestCase):
                 (95.0, 205.0),
             ],
         )
+
+    def test_primary_matrix_requires_applied_damage_from_all_four(
+        self,
+    ) -> None:
+        runner = object.__new__(bot_match.BotMatchRun)
+        runner.enemy_damage = [
+            {
+                "sourceParticipantId": participant_id,
+                "damage": 1.0,
+            }
+            for participant_id in (1, 2, 3, 4)
+        ]
+        runner.player_damage = []
+        runner.death_transitions = []
+        runner.respawn_transitions = []
+        runner.fighter_names_by_id = {
+            1: "Aster",
+            2: "Ember",
+            3: "Brook",
+            4: "Gale",
+        }
+        self.assertTrue(runner.matrix_damage_status()["complete"])
+        runner.assert_matrix_damage()
+
+        runner.enemy_damage.pop()
+        self.assertFalse(runner.matrix_damage_status()["complete"])
+        with self.assertRaisesRegex(
+            bot_match.BotMatchFailure,
+            "authoritative enemy-HP damage edge",
+        ):
+            runner.assert_matrix_damage()
 
     def test_gate_formation_is_collision_spaced_and_stays_behind_front(
         self,
@@ -912,6 +953,42 @@ class BotMatchRunnerTests(unittest.TestCase):
             },
         )
         self.assertIsNone(runner.lethal_damage_cause(2))
+
+    def test_native_run_end_cannot_register_a_fractional_hp_respawn(
+        self,
+    ) -> None:
+        runner = object.__new__(bot_match.BotMatchRun)
+        runner.furthest_wave = 0
+        runner.wave_summaries = {}
+        runner.wave_plans = {}
+        runner.completed_waves = {}
+        runner.last_alive = {1: False}
+        runner.death_transitions = []
+        runner.respawn_transitions = []
+        runner.last_death_damage_sequence = {}
+        runner.player_damage = []
+        runner.fighter_position_record = lambda _snapshot: {
+            "slot0": {
+                "participantId": 1,
+                "name": "Aster",
+                "hp": 0.08,
+            }
+        }
+        runner.update_match_observations(
+            {
+                "sampledAt": "2026-07-29T00:00:00+00:00",
+                "wave": 0,
+                "waveSummary": {},
+                "enemies": [],
+                "controller": {
+                    "runEnded": True,
+                    "wavePlans": [],
+                    "completedWaves": [],
+                },
+            }
+        )
+        self.assertEqual(runner.respawn_transitions, [])
+        self.assertFalse(runner.last_alive[1])
 
     def test_smoke_acceptance_requires_four_fighters_and_bot_hp_edges(
         self,

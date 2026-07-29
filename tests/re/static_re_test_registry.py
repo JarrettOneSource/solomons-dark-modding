@@ -252,7 +252,7 @@ from static_re_multiplayer_combat_contracts import (
     test_bot_level_sync_uses_native_level_up,
     test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana,
     test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_release_policy,
-    test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped,
+    test_primary_slot_gate_registry_is_authoritative_and_cast_scoped,
     test_hub_start_testrun_uses_gameplay_region_switch,
     test_hub_start_testrun_waits_for_app_tick_pump,
     test_lightning_chaining_verifier_uses_native_dispatcher_loop,
@@ -279,6 +279,11 @@ from static_re_native_actor_contracts import (
 )
 from static_re_all_bot_match_contracts import (
     test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
+)
+from static_re_bot_combat_parity_contracts import (
+    test_botcombat_live_harnesses_require_applied_damage_and_peer_respawn,
+    test_four_element_primary_slot_gates_share_one_audited_registry,
+    test_wave_respawn_applies_same_actor_contract_to_synthetic_participants,
 )
 from static_re_enemy_target_acquisition_contracts import (
     test_enemy_retarget_is_authoritative_nearest_and_event_driven,
@@ -1134,7 +1139,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Lightning Chaining verifier uses native dispatcher loop", test_lightning_chaining_verifier_uses_native_dispatcher_loop),
     ("primary selection mapping is native-backed", test_primary_selection_mapping_is_native_backed_not_static_table),
     ("primary attack window uses live native selection range", test_primary_attack_window_uses_live_native_selection_range),
-    ("Frost Jet synthetic damage gate is authoritative and cast scoped", test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped),
+    ("Elemental primary slot-gate registry is authoritative and cast scoped", test_primary_slot_gate_registry_is_authoritative_and_cast_scoped),
     ("bot level sync uses native level_up", test_bot_level_sync_uses_native_level_up),
     ("native stat refresh preserves live vitals", test_native_stat_refresh_preserves_live_vitals),
     ("bot skill-upgrade combat probe checks native damage and mana", test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana),
@@ -1153,6 +1158,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "All-bot match uses native slots, real trigger, and HP edges",
         test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
+    ),
+    (
+        "Four elemental primary slot gates share one audited registry",
+        test_four_element_primary_slot_gates_share_one_audited_registry,
+    ),
+    (
+        "Wave respawn applies the same-actor contract to synthetic participants",
+        test_wave_respawn_applies_same_actor_contract_to_synthetic_participants,
+    ),
+    (
+        "Botcombat live harnesses require applied damage and peer respawn",
+        test_botcombat_live_harnesses_require_applied_damage_and_peer_respawn,
     ),
     (
         "Native enemy target acquisition is recovered and layout-backed",

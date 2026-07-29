@@ -63,6 +63,7 @@ bool IsWaveIntelligenceInitialized();
 void ResetWaveIntelligenceRun();
 
 WaveSummary SnapshotWaveSummary();
+std::int32_t SnapshotLastCompletedWave();
 std::vector<WaveScheduleEntry> GetUpcomingWaveSchedule(std::size_t count);
 
 WaveSummaryUpdate ObserveAuthorityWaveSpawner(

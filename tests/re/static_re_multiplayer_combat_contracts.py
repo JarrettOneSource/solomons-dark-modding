@@ -979,7 +979,7 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
     )
 
 
-def test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped() -> str:
+def test_primary_slot_gate_registry_is_authoritative_and_cast_scoped() -> str:
     binary_layout_text = read_text(BINARY_LAYOUT)
     cast_gate_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/"
@@ -992,17 +992,25 @@ def test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped() -> s
         "gameplay_hooks/player_cast_hooks_effect_and_dispatch.inl")
 
     required_tokens = (
+        "spell_cast_010_slot_gate_branch=0x0053E4E8",
+        "spell_cast_018_first_damage_slot_gate_branch=0x0053FCD8",
+        "spell_cast_018_chain_damage_slot_gate_branch=0x00540767",
         "spell_cast_020_damage_slot_gate_branch=0x0054423A",
-        "g_scoped_frost_jet_damage_slot_gate_patch",
-        "IsAuthoritativeHostLuaBrainFrostJetCast",
+        "spell_cast_028_slot_gate_branch=0x00544C92",
+        "g_native_primary_slot_gate_patches",
+        "NativePrimarySlotGatePolicy::HostOwnedLuaDamage",
+        "NativePrimarySlotGatePolicy::",
+        "ParticipantPresentation",
         "multiplayer::IsLocalTransportHost()",
         "multiplayer::ParticipantControllerKind::LuaBrain",
         "ongoing_cast.remote_input_controlled",
-        "ongoing_cast.selection_state_target ==",
-        "kFrostJetPrimaryEntryIndex",
-        "ApplyNativeCastGatePatch(",
-        "original(self);",
-        "RestoreNativeCastGatePatch(",
+        "ongoing_cast.selection_state_target",
+        "AcquireNativePrimarySlotGatePatch(",
+        "ReleaseNativePrimarySlotGatePatch(",
+        "ValidateNativePrimarySlotGatePatches(",
+        "ScopedNativePrimarySlotGatePatches primary_slot_gates(",
+        "primary_slot_gates.ready()",
+        "primary_slot_gates.error_message()",
     )
     evidence_text = "\n".join((
         binary_layout_text,
@@ -1013,34 +1021,71 @@ def test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped() -> s
     missing = [token for token in required_tokens if token not in evidence_text]
     if missing:
         raise StaticReTestFailure(
-            "Frost Jet synthetic damage gate is missing scoped-authority token(s): " +
+            "primary slot gate registry is missing scoped-authority token(s): " +
             ", ".join(missing))
 
-    scoped_gate_declaration = cast_gate_text.find(
-        "NativeCastGatePatch g_scoped_frost_jet_damage_slot_gate_patch")
-    installed_gate_array = cast_gate_text.find(
-        "std::array<NativeCastGatePatch, 11> g_native_cast_gate_patches")
-    if scoped_gate_declaration < 0 or installed_gate_array < 0:
+    persistent_start = cast_gate_text.find(
+        "g_native_cast_gate_patches = {{")
+    persistent_end = cast_gate_text.find(
+        "for (auto& patch : g_native_cast_gate_patches)",
+        persistent_start)
+    if persistent_start < 0 or persistent_end < 0:
         raise StaticReTestFailure(
-            "Frost Jet damage gate must remain separate from the persistent cast-gate array")
+            "persistent cast-gate array bounds were not found")
+    persistent_section = cast_gate_text[
+        persistent_start:persistent_end
+    ]
+    for forbidden in (
+        '"spell_cast_010_fire_slot_gate"',
+        '"spell_cast_018_first_damage_slot_gate"',
+        '"spell_cast_018_chain_damage_slot_gate"',
+        '"spell_cast_020_water_damage_slot_gate"',
+        '"spell_cast_028_earth_slot_gate"',
+    ):
+        if forbidden in persistent_section:
+            raise StaticReTestFailure(
+                f"primary gate is still permanently open: {forbidden}")
 
-    apply_index = spell_dispatch_text.find(
-        "ApplyNativeCastGatePatch(\n"
-        "                                &g_scoped_frost_jet_damage_slot_gate_patch")
-    dispatch_index = spell_dispatch_text.find(
-        "                    original(self);",
-        apply_index)
-    restore_index = spell_dispatch_text.find(
-        "RestoreNativeCastGatePatch(\n"
-        "                            &g_scoped_frost_jet_damage_slot_gate_patch",
-        dispatch_index)
-    if not 0 <= apply_index < dispatch_index < restore_index:
+    for hook_text, hook_name in (
+        (player_cast_text, "HookPurePrimaryAttackDispatch"),
+        (spell_dispatch_text, "HookSpellCastDispatcher"),
+    ):
+        hook_start = hook_text.find(f"void __fastcall {hook_name}(")
+        scope = hook_text.find(
+            "ScopedNativePrimarySlotGatePatches primary_slot_gates(",
+            hook_start)
+        ready = hook_text.find("primary_slot_gates.ready()", scope)
+        dispatch = hook_text.find("original(self);", ready)
+        if not 0 <= hook_start < scope < ready < dispatch:
+            raise StaticReTestFailure(
+                f"{hook_name} does not validate its scoped primary gates "
+                "before native dispatch")
+
+    for forbidden in (
+        "g_scoped_frost_jet_damage_slot_gate_patch",
+        "IsAuthoritativeHostLuaBrainFrostJetCast",
+    ):
+        if forbidden in evidence_text:
+            raise StaticReTestFailure(
+                f"single-spell slot-gate path remains: {forbidden}")
+
+    registry_start = cast_gate_text.find(
+        "g_native_primary_slot_gate_patches = {{")
+    registry_end = cast_gate_text.find(
+        "std::string primary_gate_error",
+        registry_start)
+    if registry_start < 0 or registry_end < 0:
         raise StaticReTestFailure(
-            "Frost Jet damage slot gate must open only around the synchronous native cast")
+            "primary slot-gate registry initialization was not found")
+    if cast_gate_text[registry_start:registry_end].count(
+            "NativePrimarySlotGatePolicy::") != 5:
+        raise StaticReTestFailure(
+            "all five audited elemental primary gates must have an "
+            "explicit authority policy")
 
     return (
-        "Frost Jet slot-zero damage gate opens only for an authoritative host "
-        "Lua-brain cast and is restored immediately after native dispatch"
+        "all elemental primary slot gates are opcode-validated at startup "
+        "and opened only around matching authority-scoped native dispatch"
     )
 
 

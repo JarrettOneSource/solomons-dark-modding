@@ -1163,8 +1163,7 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         )
 
     for token in (
-        "WavePhase::Completed",
-        "SnapshotWaveSummary()",
+        "SnapshotLastCompletedWave()",
         "CaptureHostWaveRespawnSpawnIfNeeded",
         "world.player_spawn_valid",
         "world.player_spawn_x",
@@ -1177,6 +1176,8 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
 
     assert "bool TryRespawnLocalPlayerAt(" in gameplay_header
     for token in (
+        "struct WizardRespawnTarget",
+        "TryRespawnWizardActorAt(",
         "kProgressionHpOffset",
         "kProgressionMpOffset",
         "kActorPositionXOffset",
@@ -1185,15 +1186,19 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         "kActorRenderSortBiasOffset",
         "ClearLiveWizardActorAnimationDriveState(",
         "RestoreWizardActorAliveRegistrationState(",
-        "ClearLocalPlayerGameplayCastState(",
+        "ClearWizardActorGameplayCastState(",
         "RebindSceneActorCell(",
-        "TryGetPlayerState(&verified)",
+        "verified_hp",
+        "verified_mp",
     ):
-        assert token in gameplay_respawn, f"local respawn primitive lacks: {token}"
+        assert token in gameplay_respawn, (
+            f"same-actor respawn primitive lacks: {token}"
+        )
 
     return (
         "wave completion publishes one authenticated host epoch over fast and "
-        "reliable packets, and each process revives its own player at the spawn"
+        "reliable packets, and revives local and host-owned synthetic players "
+        "through one same-actor native contract"
     )
 
 

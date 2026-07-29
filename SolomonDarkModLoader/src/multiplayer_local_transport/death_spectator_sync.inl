@@ -176,6 +176,29 @@ bool TryApplyWaveRespawnCommand(
     }
 
     std::string respawn_error;
+    if (g_local_transport.is_host &&
+        !TryRespawnHostOwnedSyntheticParticipantsAt(
+            command.epoch,
+            command.wave,
+            command.run_nonce,
+            command.world_x,
+            command.world_y,
+            &respawn_error)) {
+        if (g_last_wave_respawn_failure_log_ms == 0 ||
+            now_ms >=
+                g_last_wave_respawn_failure_log_ms + 1000) {
+            g_last_wave_respawn_failure_log_ms = now_ms;
+            Log(
+                "Multiplayer wave respawn is pending host "
+                "synthetic convergence. source=host_synthetic_respawn "
+                "epoch=" +
+                std::to_string(command.epoch) +
+                " wave=" + std::to_string(command.wave) +
+                " error=" + respawn_error);
+        }
+        return false;
+    }
+
     if (!TryRespawnLocalPlayerAt(
             command.world_x,
             command.world_y,
@@ -290,11 +313,10 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
         return;
     }
 
-    const auto summary = SnapshotWaveSummary();
-    if (!summary.valid ||
-        summary.phase != WavePhase::Completed ||
-        summary.wave <= 0 ||
-        summary.wave == g_host_wave_respawn.last_completed_wave) {
+    const auto completed_wave = SnapshotLastCompletedWave();
+    if (completed_wave <= 0 ||
+        completed_wave ==
+            g_host_wave_respawn.last_completed_wave) {
         return;
     }
 
@@ -303,10 +325,10 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
         epoch = g_host_wave_respawn.next_epoch++;
     }
     RetirePreRespawnHostParticipantVitalsCorrections();
-    g_host_wave_respawn.last_completed_wave = summary.wave;
+    g_host_wave_respawn.last_completed_wave = completed_wave;
     g_host_wave_respawn.command = WaveRespawnCommand{
         epoch,
-        summary.wave,
+        completed_wave,
         g_host_wave_respawn.run_nonce,
         g_host_wave_respawn.spawn_x,
         g_host_wave_respawn.spawn_y,
@@ -314,7 +336,7 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
     Log(
         "Multiplayer host published wave respawn. epoch=" +
         std::to_string(epoch) +
-        " wave=" + std::to_string(summary.wave));
+        " wave=" + std::to_string(completed_wave));
     (void)TryApplyWaveRespawnCommand(
         g_host_wave_respawn.command,
         now_ms,
