@@ -225,9 +225,9 @@ bool ProcessPendingBotCast(ParticipantEntityBinding* binding, std::string* error
             ReapplyOngoingCastSelectionState(binding, actor_address, ongoing, true);
         }
         if (ongoing.have_aim_heading) {
-            ApplyWizardActorFacingState(actor_address, ongoing.aim_heading);
             binding->facing_heading_value = ongoing.aim_heading;
             binding->facing_heading_valid = true;
+            ApplyWizardBindingFacingState(binding, actor_address);
         }
         if (ongoing.have_aim_target) {
             (void)memory.TryWriteField(actor_address, kActorAimTargetXOffset, ongoing.aim_target_x);

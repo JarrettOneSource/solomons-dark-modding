@@ -1535,6 +1535,10 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     badguy_damage_hook_text = read_text(
         ROOT
         / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "packet_enemy_damage_suppression.inl"
+    ) + "\n" + read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "badguy_damage_hook.inl"
     )
     service_loop_text = read_text(MULTIPLAYER_SERVICE_LOOP)

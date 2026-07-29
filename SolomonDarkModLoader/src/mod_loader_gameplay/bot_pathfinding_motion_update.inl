@@ -104,6 +104,8 @@ bool TryTeleportStuckWizardBot(
         "[bots] stuck teleport. bot_id=" +
         std::to_string(binding->bot_id) +
         " actor=" + HexString(binding->actor_address) +
+        " origin=(" + std::to_string(actor_x) +
+        ", " + std::to_string(actor_y) + ")" +
         " target=(" + std::to_string(requested_target_x) +
         ", " + std::to_string(requested_target_y) + ")" +
         " landing=(" + std::to_string(landing_x) +
@@ -142,6 +144,14 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
     const auto target_delta_y = binding->target_y - actor_y;
     const auto target_distance =
         std::sqrt(target_delta_x * target_delta_x + target_delta_y * target_delta_y);
+    if (target_distance <= kWizardBotPathFinalArrivalThreshold) {
+        StopBotPathMotion(binding, false);
+        (void)multiplayer::StopBot(binding->bot_id);
+        ResetBotStuckProgress(&binding->stuck_progress);
+        binding->stuck_waypoint_anchor_valid = false;
+        binding->stuck_waypoint_progress_pending = false;
+        return true;
+    }
     if (TryTeleportStuckWizardBot(
             binding,
             now_ms,
@@ -208,14 +218,6 @@ bool UpdateWizardBotPathMotion(ParticipantEntityBinding* binding, std::uint64_t 
             binding->target_y,
             actor_radius,
             nullptr);
-    if (target_distance <= kWizardBotPathFinalArrivalThreshold && !target_blocked_by_participant) {
-        StopBotPathMotion(binding, false);
-        (void)multiplayer::StopBot(binding->bot_id);
-        ResetBotStuckProgress(&binding->stuck_progress);
-        binding->stuck_waypoint_anchor_valid = false;
-        binding->stuck_waypoint_progress_pending = false;
-        return true;
-    }
 
     while (binding->path_waypoint_index < binding->path_waypoints.size()) {
         const auto& waypoint = binding->path_waypoints[binding->path_waypoint_index];

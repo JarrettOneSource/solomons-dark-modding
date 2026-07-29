@@ -495,6 +495,15 @@ function brain.think(context, now_ms, authority)
   end
 
   context.debug.active = true
+  if type(wave) ~= "table" or
+      (tonumber(wave.wave) or 0) <= 0 then
+    context.debug.mode = "prewave"
+    context.fleeing = false
+    context.last_position_x = nil
+    context.last_position_y = nil
+    return
+  end
+
   context.debug.think_count = context.debug.think_count + 1
   track_path_distance(context, bot_x, bot_y)
   update_arena(context, now_ms, bot_x, bot_y)

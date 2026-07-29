@@ -204,6 +204,8 @@ void ObserveLocalReplicatedEnemyDamageAfterNativeCall(
         true);
 }
 
+#include "match_enemy_damage_observation.inl"
+
 struct EarthBoulderDamageCapture {
     bool eligible = false;
     bool terms_valid = false;
@@ -551,34 +553,7 @@ bool IsAuthorizedHostSyntheticFireballDamage(
     return true;
 }
 
-bool ShouldSuppressPacketDrivenRemoteReplicatedEnemyDamage(
-    uintptr_t target_actor_address,
-    uintptr_t source_actor_address) {
-    if (!multiplayer::IsLocalTransportEnabled() ||
-        target_actor_address == 0 ||
-        source_actor_address == 0 ||
-        multiplayer::GetLocalRunEnemyNetworkActorId(
-            target_actor_address) == 0) {
-        return false;
-    }
-    const auto source_participant_id =
-        ResolveDamageSourceParticipantId(source_actor_address);
-    const auto local_participant_id =
-        multiplayer::GetLocalTransportParticipantId();
-    if (source_participant_id == 0 ||
-        local_participant_id == 0 ||
-        source_participant_id == local_participant_id) {
-        return false;
-    }
-    std::lock_guard<std::recursive_mutex> lock(
-        g_participant_entities_mutex);
-    const auto* binding =
-        FindParticipantEntity(source_participant_id);
-    if (!IsPacketDrivenRemoteParticipantBinding(binding)) {
-        return false;
-    }
-    return true;
-}
+#include "packet_enemy_damage_suppression.inl"
 
 std::uint8_t __fastcall HookBadguyDamage(
     void* self,
@@ -639,11 +614,14 @@ std::uint8_t __fastcall HookBadguyDamage(
     const auto local_damage_capture =
         CaptureLocalReplicatedEnemyDamageBeforeNativeCall(actor_address);
     const auto call_original = [&]() {
+        const auto enemy_damage_capture =
+            CaptureEnemyDamageBeforeNativeCall(actor_address);
         const auto earth_boulder_damage_capture =
             CaptureEarthBoulderDamageBeforeNativeCall(actor_address);
         const auto result = original(self);
         ObserveEarthBoulderDamageAfterNativeCall(
             earth_boulder_damage_capture);
+        ObserveEnemyDamageAfterNativeCall(enemy_damage_capture);
         ObserveLocalReplicatedEnemyDamageAfterNativeCall(
             actor_address,
             local_damage_capture);

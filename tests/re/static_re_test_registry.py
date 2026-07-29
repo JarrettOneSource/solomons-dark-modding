@@ -271,10 +271,14 @@ from static_re_native_actor_contracts import (
     test_default_ally_hp_native_constructor_evidence_is_recorded,
     test_default_ally_hp_spawn_paths_preserve_native_defaults,
     test_enemy_spawn_scaling_native_wave_seam_is_documented,
+    test_openable_obstacle_path_policy_uses_native_collision_classes,
     test_participant_transform_updates_preserve_exact_hub_sync,
     test_pathfinding_movement_layout_is_named_and_documented,
     test_player_gamenpc_movement_seed_layout_is_named_and_documented,
     test_synthetic_source_profile_blocker_is_documented,
+)
+from static_re_all_bot_match_contracts import (
+    test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
 )
 from static_re_enemy_target_acquisition_contracts import (
     test_enemy_retarget_is_authoritative_nearest_and_event_driven,
@@ -1142,6 +1146,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Participant transform updates preserve exact hub sync", test_participant_transform_updates_preserve_exact_hub_sync),
     ("Enemy spawn scaling native wave seam is documented", test_enemy_spawn_scaling_native_wave_seam_is_documented),
     ("Pathfinding movement layout is named and documented", test_pathfinding_movement_layout_is_named_and_documented),
+    (
+        "Openable obstacle path policy uses native collision classes",
+        test_openable_obstacle_path_policy_uses_native_collision_classes,
+    ),
+    (
+        "All-bot match uses native slots, real trigger, and HP edges",
+        test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
+    ),
     (
         "Native enemy target acquisition is recovered and layout-backed",
         test_native_enemy_target_acquisition_is_recovered_and_layout_backed,

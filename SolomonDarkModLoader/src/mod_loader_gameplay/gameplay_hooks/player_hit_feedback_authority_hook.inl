@@ -186,9 +186,13 @@ std::uint32_t __fastcall HookPlayerActorDamageResolver(
     const auto actor_address =
         reinterpret_cast<uintptr_t>(self);
     RemoteParticipantHitFeedbackCapture hit_feedback;
+    PlayerDamageCapture damage;
     const bool owns_event_boundary =
         g_player_damage_resolver_depth == 0;
     g_player_damage_resolver_depth += 1;
+    if (owns_event_boundary) {
+        damage = CapturePlayerDamageBeforeNativeCall(actor_address);
+    }
     if (owns_event_boundary &&
         !TryPrepareRemoteParticipantHitFeedback(
             actor_address,
@@ -200,6 +204,9 @@ std::uint32_t __fastcall HookPlayerActorDamageResolver(
 
     const auto result = original(self);
     g_player_damage_resolver_depth -= 1;
+    if (owns_event_boundary) {
+        ObservePlayerDamageAfterNativeCall(damage);
+    }
     if (!owns_event_boundary ||
         !hit_feedback.applicable) {
         return result;

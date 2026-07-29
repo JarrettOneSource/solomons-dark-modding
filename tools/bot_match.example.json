@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "paths": {
+    "evidenceRoot": "/mnt/d/codex-evidence/botmatch-20260728",
+    "runtimeRoot": "/mnt/d/codex-evidence/botmatch-20260728/runtime",
+    "gameDirectory": "/mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/SolomonDarkAbandonware",
+    "launcherPath": "dist/launcher/SolomonDarkModLauncher.exe"
+  },
+  "network": {
+    "localPort": 50511,
+    "unusedRemotePort": 50512,
+    "participantId": "0x200000000000B001"
+  },
+  "player": {
+    "name": "Aster",
+    "element": "fire",
+    "discipline": "mind"
+  },
+  "bots": [
+    {
+      "name": "Ember",
+      "element": "fire",
+      "discipline": "arcane",
+      "behavior": "skirmisher"
+    },
+    {
+      "name": "Brook",
+      "element": "water",
+      "discipline": "mind",
+      "behavior": "striker"
+    },
+    {
+      "name": "Gale",
+      "element": "air",
+      "discipline": "body",
+      "behavior": "skirmisher"
+    }
+  ],
+  "navigation": {
+    "gateFormationSpacing": 65,
+    "gateApproachDistance": 100,
+    "gateExitDistance": 110,
+    "gateArrivalRadius": 45,
+    "gateParkingArrivalRadius": 12,
+    "gateAlignmentLateralTolerance": 35,
+    "gatherDistance": 400,
+    "gatherSearchStep": 65,
+    "gatherSearchLimit": 260,
+    "gatherSpacing": 65,
+    "gatherArrivalRadius": 50,
+    "triggerSpacing": 60,
+    "routeTimeoutSeconds": 120,
+    "triggerTimeoutSeconds": 90
+  },
+  "match": {
+    "runCount": 3,
+    "fullTimeoutSeconds": 900,
+    "stallTimeoutSeconds": 120,
+    "monitorIntervalSeconds": 0.5
+  }
+}

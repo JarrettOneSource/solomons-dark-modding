@@ -75,6 +75,7 @@ extern uintptr_t kStatBookComputeCost;
 extern uintptr_t kWorldCellGridRebindActor;
 extern uintptr_t kMovementCollisionTestCirclePlacement;
 extern uintptr_t kMovementCollisionTestCirclePlacementExtended;
+extern uintptr_t kGameplayPathOpenableSegmentBuilder;
 extern uintptr_t kMovementCollisionQueryType2HazardsCrash;
 extern uintptr_t kMovementCollisionQueryType2HazardsRecover;
 extern uintptr_t kMovementCollisionIteratePrimaryCrash;

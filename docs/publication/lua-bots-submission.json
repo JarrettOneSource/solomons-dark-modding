@@ -8,10 +8,10 @@
     "summary": "Bot teammates that play like real players.",
     "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they fight, die, and respawn like human players. Name each bot and choose its element and how it fights in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. Requires v0.1.0-beta.22 or newer.",
     "tags": "",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "files": {
-    "file": "/mnt/d/codex-evidence/botcast-20260729/package/lua-bots-1.0.2.zip",
+    "file": "/mnt/d/codex-evidence/botmatch-20260728/package/lua-bots-1.0.3.zip",
     "screenshots": []
   }
 }

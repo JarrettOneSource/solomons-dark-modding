@@ -111,6 +111,8 @@
     <ClInclude Include="include\memory_access.h" />
     <ClInclude Include="include\mod_loader.h" />
     <ClInclude Include="include\mod_settings.h" />
+    <ClInclude Include="include\mod_loader_bot_match_state.inl" />
+    <ClInclude Include="include\mod_loader_damage_observation_state.inl" />
     <ClInclude Include="include\mod_loader_hub_state.inl" />
     <ClInclude Include="include\mod_loader_native_minion_state.inl" />
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
@@ -416,6 +418,9 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_hit_feedback_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_enemy_damage_observation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_player_damage_observation.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\packet_enemy_damage_suppression.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\poison_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\webbed_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_cast_hooks_effect_and_dispatch.inl" />
@@ -440,6 +445,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_bot_spawn_placement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_resource_and_damage_observations.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_lua_enemy_ai.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_combat_control_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_gameplay_action_queues.inl" />

@@ -1,3 +1,13 @@
+struct PlayerDamageCapture {
+    bool eligible = false;
+    SDModPlayerDamageObservation observation;
+};
+
+PlayerDamageCapture CapturePlayerDamageBeforeNativeCall(
+    uintptr_t target_actor_address);
+void ObservePlayerDamageAfterNativeCall(
+    const PlayerDamageCapture& capture);
+
 #include "player_hit_feedback_authority_hook.inl"
 
 struct RemoteMagicShieldDamageAuthority {
@@ -510,6 +520,8 @@ bool PublishRemoteMagicShieldDamageAuthority(
         hit_flash);
     return true;
 }
+
+#include "match_player_damage_observation.inl"
 
 std::uint32_t __fastcall HookPlayerActorMagicDamage(
     void* self,

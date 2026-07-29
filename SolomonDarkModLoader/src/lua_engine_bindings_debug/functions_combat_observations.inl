@@ -222,6 +222,144 @@ int LuaDebugTakeEarthBoulderDamageObservations(lua_State* state) {
     return 1;
 }
 
+// sd.debug.reset_enemy_damage_observations() -> boolean
+int LuaDebugResetEnemyDamageObservations(lua_State* state) {
+    ResetEnemyDamageObservations();
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// sd.debug.take_enemy_damage_observations() -> array
+int LuaDebugTakeEnemyDamageObservations(lua_State* state) {
+    std::vector<SDModEnemyDamageObservation> observations;
+    (void)TakeEnemyDamageObservations(&observations);
+
+    lua_createtable(state, static_cast<int>(observations.size()), 0);
+    for (std::size_t index = 0; index < observations.size(); ++index) {
+        const auto& observation = observations[index];
+        lua_createtable(state, 0, 18);
+        const auto set_integer =
+            [&](const char* name, lua_Integer value) {
+                lua_pushinteger(state, value);
+                lua_setfield(state, -2, name);
+            };
+        const auto set_float =
+            [&](const char* name, float value) {
+                lua_pushnumber(state, static_cast<lua_Number>(value));
+                lua_setfield(state, -2, name);
+            };
+        set_integer("sequence", static_cast<lua_Integer>(observation.sequence));
+        set_integer(
+            "monotonic_ms",
+            static_cast<lua_Integer>(observation.monotonic_ms));
+        set_integer(
+            "source_participant_id",
+            static_cast<lua_Integer>(observation.source_participant_id));
+        set_integer(
+            "source_actor_address",
+            static_cast<lua_Integer>(observation.source_actor_address));
+        set_integer(
+            "source_owner_actor_address",
+            static_cast<lua_Integer>(
+                observation.source_owner_actor_address));
+        set_integer(
+            "target_actor_address",
+            static_cast<lua_Integer>(observation.target_actor_address));
+        set_integer(
+            "target_network_actor_id",
+            static_cast<lua_Integer>(
+                observation.target_network_actor_id));
+        set_integer(
+            "source_native_type_id",
+            static_cast<lua_Integer>(
+                observation.source_native_type_id));
+        set_integer(
+            "source_owner_native_type_id",
+            static_cast<lua_Integer>(
+                observation.source_owner_native_type_id));
+        set_integer(
+            "target_native_type_id",
+            static_cast<lua_Integer>(
+                observation.target_native_type_id));
+        set_integer(
+            "source_gameplay_slot",
+            static_cast<lua_Integer>(
+                observation.source_gameplay_slot));
+        set_float("target_hp_before", observation.target_hp_before);
+        set_float("target_hp_after", observation.target_hp_after);
+        set_float("target_max_hp", observation.target_max_hp);
+        set_float("hp_delta", observation.hp_delta);
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    return 1;
+}
+
+// sd.debug.reset_player_damage_observations() -> boolean
+int LuaDebugResetPlayerDamageObservations(lua_State* state) {
+    ResetPlayerDamageObservations();
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// sd.debug.take_player_damage_observations() -> array
+int LuaDebugTakePlayerDamageObservations(lua_State* state) {
+    std::vector<SDModPlayerDamageObservation> observations;
+    (void)TakePlayerDamageObservations(&observations);
+
+    lua_createtable(state, static_cast<int>(observations.size()), 0);
+    for (std::size_t index = 0; index < observations.size(); ++index) {
+        const auto& observation = observations[index];
+        lua_createtable(state, 0, 16);
+        const auto set_integer =
+            [&](const char* name, lua_Integer value) {
+                lua_pushinteger(state, value);
+                lua_setfield(state, -2, name);
+            };
+        const auto set_float =
+            [&](const char* name, float value) {
+                lua_pushnumber(state, static_cast<lua_Number>(value));
+                lua_setfield(state, -2, name);
+            };
+        set_integer("sequence", static_cast<lua_Integer>(observation.sequence));
+        set_integer(
+            "monotonic_ms",
+            static_cast<lua_Integer>(observation.monotonic_ms));
+        set_integer(
+            "target_participant_id",
+            static_cast<lua_Integer>(observation.target_participant_id));
+        set_integer(
+            "target_actor_address",
+            static_cast<lua_Integer>(observation.target_actor_address));
+        set_integer(
+            "source_actor_address",
+            static_cast<lua_Integer>(observation.source_actor_address));
+        set_integer(
+            "target_native_type_id",
+            static_cast<lua_Integer>(
+                observation.target_native_type_id));
+        set_integer(
+            "source_native_type_id",
+            static_cast<lua_Integer>(
+                observation.source_native_type_id));
+        set_integer(
+            "target_gameplay_slot",
+            static_cast<lua_Integer>(
+                observation.target_gameplay_slot));
+        set_float("target_hp_before", observation.target_hp_before);
+        set_float("target_hp_after", observation.target_hp_after);
+        set_float("target_max_hp", observation.target_max_hp);
+        set_float("hp_delta", observation.hp_delta);
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    return 1;
+}
+
 // sd.debug.get_actor_modifiers(actor_address) -> array|nil
 int LuaDebugGetActorModifiers(lua_State* state) {
     const auto actor_address =
