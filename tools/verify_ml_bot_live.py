@@ -826,6 +826,9 @@ def _verify_offline_solo_ally_zero(
         seed_round_trip = session.set_run_seed(args.seed)
         session.enable_god_mode()
         session.start_test_run(timeout=args.startup_timeout)
+        session.prepare_training_combat(
+            timeout=args.startup_timeout
+        )
         session.write_composition(solo)
         session.wait_for_composition(
             expected_bot_count=1,

@@ -765,6 +765,24 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         "policy secondary accepted",
     ):
         assert token in live, f"Phase-5 live verifier lacks {token}"
+    offline_solo = live.split(
+        "def _verify_offline_solo_ally_zero(", 1
+    )[1].split("def verify(", 1)[0]
+    _require_in_order(
+        offline_solo,
+        "session.start_test_run(",
+        "session.prepare_training_combat(",
+        "session.write_composition(solo)",
+    )
+    for token in (
+        'context.row.behavior == "learned"',
+        "pcall(sd.gameplay.get_manual_enemy_spawner_state)",
+        "manual_state.manual_mode == true",
+        "not manual_policy_run",
+    ):
+        assert token in brain, (
+            f"manual learned-policy pre-wave integration lacks {token}"
+        )
     for token in (
         "policy.version",
         "mlp-tanh-three-head-v2",

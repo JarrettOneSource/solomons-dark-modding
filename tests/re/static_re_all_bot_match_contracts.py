@@ -217,6 +217,7 @@ def test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges() -> str:
         (
             'context.debug.mode = "prewave"',
             "(tonumber(wave.wave) or 0) <= 0",
+            "not manual_policy_run",
         ),
     )
     arrival = motion.index(

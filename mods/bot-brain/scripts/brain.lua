@@ -1033,8 +1033,18 @@ function brain.think(
   end
 
   context.debug.active = true
-  if type(wave) ~= "table" or
-      (tonumber(wave.wave) or 0) <= 0 then
+  local prewave =
+    type(wave) ~= "table" or
+    (tonumber(wave.wave) or 0) <= 0
+  local manual_policy_run = false
+  if prewave and context.row.behavior == "learned" then
+    local manual_ok, manual_state =
+      pcall(sd.gameplay.get_manual_enemy_spawner_state)
+    manual_policy_run =
+      manual_ok and type(manual_state) == "table" and
+      manual_state.manual_mode == true
+  end
+  if prewave and not manual_policy_run then
     context.debug.mode = "prewave"
     context.fleeing = false
     context.last_position_x = nil
