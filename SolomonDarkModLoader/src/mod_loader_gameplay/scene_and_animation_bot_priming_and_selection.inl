@@ -400,105 +400,6 @@ bool TryResolveProfilePrimaryCastDescriptor(
         descriptor);
 }
 
-struct PrimaryBuildProgressionFlagSnapshot {
-    uintptr_t entry_address = 0;
-    std::uint16_t active = 0;
-    std::uint16_t visible = 0;
-};
-
-bool CapturePrimaryBuildProgressionFlags(
-    uintptr_t progression_address,
-    std::vector<PrimaryBuildProgressionFlagSnapshot>* snapshots) {
-    if (progression_address == 0 || snapshots == nullptr) {
-        return false;
-    }
-    snapshots->clear();
-
-    auto& memory = ProcessMemory::Instance();
-    uintptr_t table_address = 0;
-    std::int32_t entry_count = 0;
-    if (!memory.TryReadField(
-            progression_address,
-            kStandaloneWizardProgressionTableBaseOffset,
-            &table_address) ||
-        !memory.TryReadField(
-            progression_address,
-            kStandaloneWizardProgressionTableCountOffset,
-            &entry_count) ||
-        table_address == 0 ||
-        entry_count <= 0 ||
-        entry_count > 256) {
-        return false;
-    }
-
-    snapshots->reserve(static_cast<std::size_t>(entry_count));
-    for (std::int32_t index = 0; index < entry_count; ++index) {
-        PrimaryBuildProgressionFlagSnapshot snapshot;
-        snapshot.entry_address =
-            table_address +
-            static_cast<std::size_t>(index) *
-                kStandaloneWizardProgressionEntryStride;
-        if (!memory.TryReadField(
-                snapshot.entry_address,
-                kStandaloneWizardProgressionActiveFlagOffset,
-                &snapshot.active) ||
-            !memory.TryReadField(
-                snapshot.entry_address,
-                kStandaloneWizardProgressionVisibleFlagOffset,
-                &snapshot.visible)) {
-            snapshots->clear();
-            return false;
-        }
-        snapshots->push_back(snapshot);
-    }
-    return true;
-}
-
-bool RestorePrimaryBuildProgressionFlags(
-    const std::vector<PrimaryBuildProgressionFlagSnapshot>& snapshots,
-    int* restored_entry_count) {
-    if (restored_entry_count != nullptr) {
-        *restored_entry_count = 0;
-    }
-    auto& memory = ProcessMemory::Instance();
-    bool complete = true;
-    int restored = 0;
-    for (const auto& snapshot : snapshots) {
-        std::uint16_t active = 0;
-        std::uint16_t visible = 0;
-        if (!memory.TryReadField(
-                snapshot.entry_address,
-                kStandaloneWizardProgressionActiveFlagOffset,
-                &active) ||
-            !memory.TryReadField(
-                snapshot.entry_address,
-                kStandaloneWizardProgressionVisibleFlagOffset,
-                &visible)) {
-            complete = false;
-            continue;
-        }
-        if (active == snapshot.active && visible == snapshot.visible) {
-            continue;
-        }
-        const bool active_written = memory.TryWriteField(
-            snapshot.entry_address,
-            kStandaloneWizardProgressionActiveFlagOffset,
-            snapshot.active);
-        const bool visible_written = memory.TryWriteField(
-            snapshot.entry_address,
-            kStandaloneWizardProgressionVisibleFlagOffset,
-            snapshot.visible);
-        complete = complete && active_written && visible_written;
-        if (active_written && visible_written) {
-            ++restored;
-        }
-    }
-    if (restored_entry_count != nullptr) {
-        *restored_entry_count = restored;
-    }
-    return complete;
-}
-
 bool ApplyProfilePrimaryLoadoutToSkillsWizard(
     uintptr_t progression_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
@@ -549,60 +450,27 @@ bool ApplyProfilePrimaryLoadoutToSkillsWizard(
         " combo_entry=" + std::to_string(descriptor.combo_entry_index) +
         " spell_id=" + std::to_string(descriptor.build_skill_id));
 
-    auto& memory = ProcessMemory::Instance();
-    const auto build_primary_spell_address =
-        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
-    if (build_primary_spell_address == 0) {
-        if (error_message != nullptr) {
-            *error_message = "Unable to resolve Skills_Wizard primary spell builder.";
-        }
-        return false;
-    }
-
     // Skills_Wizard::BuildPrimarySpell also rewrites selected progression
     // flags as a character-creation side effect. During runtime rebuilds that
     // can silently collapse a leveled primary (for example Fireball active=2)
     // back to its base active=1. The multiplayer/native progression book is
-    // the owner here, so bracket the builder and restore its exact flags before
-    // the caller's native stat refresh.
-    std::vector<PrimaryBuildProgressionFlagSnapshot> progression_flags;
-    const bool have_progression_flags = CapturePrimaryBuildProgressionFlags(
-        progression_address,
-        &progression_flags);
+    // the owner here, so the shared native reader restores its exact flags
+    // before the caller's native stat refresh.
 
     std::uint32_t native_spell_id = 0;
-    DWORD exception_code = 0;
-    if (!CallSkillsWizardBuildPrimarySpellSafe(
-            build_primary_spell_address,
+    std::uint32_t exception_code = 0;
+    std::string build_error;
+    if (!TryBuildNativePrimarySpellPreservingProgressionFlags(
             progression_address,
-            EncodeSkillsWizardSelectionArg(descriptor.primary_entry_index),
-            EncodeSkillsWizardSelectionArg(descriptor.combo_entry_index),
+            descriptor.primary_entry_index,
+            descriptor.combo_entry_index,
             &native_spell_id,
-            &exception_code)) {
+            &exception_code,
+            &build_error)) {
         if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary spell builder failed with 0x" +
-                HexString(exception_code) + ".";
+            *error_message = build_error;
         }
         return false;
-    }
-    int restored_progression_entry_count = 0;
-    if (have_progression_flags &&
-        !RestorePrimaryBuildProgressionFlags(
-            progression_flags,
-            &restored_progression_entry_count)) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Skills_Wizard primary spell builder progression flags could not be restored.";
-        }
-        return false;
-    }
-    if (restored_progression_entry_count > 0) {
-        Log(
-            "[bots] skills_wizard_loadout restored progression flags after native build. progression=" +
-            HexString(progression_address) +
-            " restored_entries=" +
-            std::to_string(restored_progression_entry_count));
     }
     if (resolved_skill_id != nullptr && native_spell_id > 0) {
         *resolved_skill_id = static_cast<int>(native_spell_id);

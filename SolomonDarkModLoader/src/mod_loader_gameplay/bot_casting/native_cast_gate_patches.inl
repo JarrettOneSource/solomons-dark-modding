@@ -10,6 +10,7 @@ struct NativeCastGatePatch {
 };
 
 std::array<NativeCastGatePatch, 11> g_native_cast_gate_patches = {};
+NativeCastGatePatch g_scoped_frost_jet_damage_slot_gate_patch = {};
 
 bool BytesEqual(
     const std::array<std::uint8_t, 6>& left,
@@ -143,6 +144,8 @@ void RestoreNativeCastGatePatch(NativeCastGatePatch* patch) {
 }
 
 void RestoreNativeCastGatePatches() {
+    RestoreNativeCastGatePatch(
+        &g_scoped_frost_jet_damage_slot_gate_patch);
     for (auto& patch : g_native_cast_gate_patches) {
         RestoreNativeCastGatePatch(&patch);
     }
@@ -258,11 +261,33 @@ bool InstallNativeCastGatePatches(std::string* error_message) {
         }
     }
 
+    g_scoped_frost_jet_damage_slot_gate_patch = {
+        "spell_cast_020_damage_slot_gate",
+        kSpellCast020DamageSlotGateBranch,
+        0,
+        {},
+        nops,
+    };
+    std::string frost_jet_gate_error;
+    if (!ApplyNativeCastGatePatch(
+            &g_scoped_frost_jet_damage_slot_gate_patch,
+            &frost_jet_gate_error)) {
+        RestoreNativeCastGatePatches();
+        if (error_message != nullptr) {
+            *error_message = frost_jet_gate_error;
+        }
+        return false;
+    }
+    RestoreNativeCastGatePatch(
+        &g_scoped_frost_jet_damage_slot_gate_patch);
+
     Log(
         "Gameplay input injection: native actor cast/mana gates unlocked. mana_delta=" +
         HexString(kPlayerActorApplyManaDeltaLocalActorGateBranch) +
         " cleanup=" +
         HexString(kCastCleanupSlotGateBranch) +
+        " scoped_frost_jet_damage=" +
+        HexString(kSpellCast020DamageSlotGateBranch) +
         " spell_008=" + HexString(kSpellCast008SlotGateBranch) +
         " spell_008_projectile=" + HexString(kSpellCast008ProjectileSlotGateBranch) +
         " spell_010=" + HexString(kSpellCast010SlotGateBranch) +

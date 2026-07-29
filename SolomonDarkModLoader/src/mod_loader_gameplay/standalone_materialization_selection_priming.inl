@@ -11,6 +11,102 @@ int NativeSkillRowForDiscipline(
     return -1;
 }
 
+bool ActivateProfilePrimaryRows(
+    uintptr_t progression_address,
+    const multiplayer::MultiplayerCharacterProfile& character_profile,
+    std::string* error_message) {
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionForProfile(
+            character_profile,
+            &selection)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Bot primary loadout does not resolve to native progression rows.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t table_address = 0;
+    std::int32_t entry_count = 0;
+    const auto apply_choice_address =
+        memory.ResolveGameAddressOrZero(
+            kPlayerAppearanceApplyChoice);
+    if (progression_address == 0 ||
+        apply_choice_address == 0 ||
+        !memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &table_address) ||
+        !memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &entry_count) ||
+        table_address == 0 ||
+        entry_count <= 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Bot primary loadout activation requires a live native progression table.";
+        }
+        return false;
+    }
+
+    const auto activate_row = [&](int entry_index) {
+        if (entry_index < 0 || entry_index >= entry_count) {
+            return false;
+        }
+        const auto entry_address =
+            table_address +
+            static_cast<std::size_t>(entry_index) *
+                kStandaloneWizardProgressionEntryStride;
+        std::uint16_t active = 0;
+        if (!memory.TryReadField(
+                entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &active)) {
+            return false;
+        }
+        if (active == 0) {
+            DWORD exception_code = 0;
+            if (!CallPlayerAppearanceApplyChoiceSafe(
+                    apply_choice_address,
+                    progression_address,
+                    entry_index,
+                    false,
+                    &exception_code)) {
+                if (error_message != nullptr) {
+                    *error_message =
+                        "Native primary-row activation failed for row " +
+                        std::to_string(entry_index) +
+                        " with 0x" +
+                        HexString(exception_code) + ".";
+                }
+                return false;
+            }
+            if (!memory.TryReadField(
+                    entry_address,
+                    kStandaloneWizardProgressionActiveFlagOffset,
+                    &active)) {
+                return false;
+            }
+        }
+        return active > 0;
+    };
+
+    if (!activate_row(selection.primary_entry_index) ||
+        (selection.combo_entry_index !=
+             selection.primary_entry_index &&
+         !activate_row(selection.combo_entry_index))) {
+        if (error_message != nullptr &&
+            error_message->empty()) {
+            *error_message =
+                "Native primary-row activation did not produce an active loadout.";
+        }
+        return false;
+    }
+    return true;
+}
+
 bool PrimeGameplaySlotBotSelectionState(
     uintptr_t actor_address,
     uintptr_t progression_address,
@@ -119,6 +215,12 @@ bool PrimeGameplaySlotBotSelectionState(
     if (!PrimeGameplaySlotBotBaseBookState(
             progression_address,
             discipline_skill_row,
+            error_message)) {
+        return false;
+    }
+    if (!ActivateProfilePrimaryRows(
+            progression_address,
+            character_profile,
             error_message)) {
         return false;
     }

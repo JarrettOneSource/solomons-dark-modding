@@ -461,8 +461,10 @@ def test_replicated_manual_run_enemy_materialization_is_client_bounded() -> str:
 
 def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:
     casting_text = read_text(CASTING_API)
+    pending_text = read_text(PENDING_CAST_PREPARATION)
     scene_text = read_text(SCENE_SELECTION)
     native_spell_stats_text = read_native_spell_stats_source()
+    native_spell_stats_header_text = read_text(NATIVE_SPELL_STATS_HEADER)
 
     resolver_match = re.search(
         r"BotManaCost\s+ResolveBotCastManaCost\([^{}]*\)\s*\{(?P<body>.*?)\n\}",
@@ -473,21 +475,52 @@ def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:
         raise StaticReTestFailure("could not find ResolveBotCastManaCost body")
     resolver_body = resolver_match.group("body")
     required_tokens = (
-        "TryResolveNativePrimarySelectionFromSkillId",
-        "if (!selection_resolved)",
+        "resolved_primary_entry",
+        "resolved_primary_combo_entry",
         "TryResolveNativePrimarySelectionFromPair",
+        "TryResolveNativePrimarySelectionFromSkillId",
     )
     missing = [token for token in required_tokens if token not in resolver_body]
     if missing:
         raise StaticReTestFailure(
-            "primary mana resolver does not accept native dispatcher entry ids: " +
+            "primary mana resolver does not preserve its resolved selection pair: " +
             ", ".join(missing))
-    if not re.search(
-        r"TryResolveNativePrimarySelectionFromPair\(\s*skill_id,\s*skill_id,",
-        resolver_body,
-    ):
+    pair_resolution = resolver_body.find(
+        "TryResolveNativePrimarySelectionFromPair")
+    skill_scan = resolver_body.find(
+        "TryResolveNativePrimarySelectionFromSkillId")
+    if pair_resolution < 0 or skill_scan < 0 or pair_resolution > skill_scan:
         raise StaticReTestFailure(
-            "primary mana resolver does not validate a dispatcher entry as a primary pair")
+            "primary mana resolver scans a build id before using the "
+            "already-resolved profile pair")
+
+    pending_call = re.search(
+        r"ResolveBotCastManaCost\((?P<args>.*?)\);",
+        pending_text,
+        re.S,
+    )
+    if pending_call is None:
+        raise StaticReTestFailure(
+            "pending bot cast preparation does not call the mana resolver")
+    for token in (
+        "primary_descriptor.primary_entry_index",
+        "primary_descriptor.combo_entry_index",
+    ):
+        if token not in pending_call.group("args"):
+            raise StaticReTestFailure(
+                "pending bot cast preparation drops its resolved profile "
+                f"selection: {token}")
+
+    preserving_builder_token = (
+        "TryBuildNativePrimarySpellPreservingProgressionFlags")
+    if preserving_builder_token not in native_spell_stats_header_text:
+        raise StaticReTestFailure(
+            "native spell stats does not expose the progression-preserving "
+            "Skills_Wizard builder")
+    if native_spell_stats_text.count(preserving_builder_token) < 4:
+        raise StaticReTestFailure(
+            "native primary selection/stat reads do not consistently use the "
+            "progression-preserving Skills_Wizard builder")
 
     descriptor_tokens = (
         "case 0x18:",
@@ -516,7 +549,10 @@ def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:
             "native dispatcher entry ids still look like pure-projectile mana selections: " +
             ", ".join(missing_dispatcher_mana_tokens))
 
-    return "primary mana resolver accepts native dispatcher ids through validated primary pairs"
+    return (
+        "primary bot mana keeps the resolved native entry pair and every "
+        "Skills_Wizard read restores progression flags"
+    )
 
 
 def test_native_primary_output_layout_is_stat_ordered() -> str:
@@ -766,7 +802,8 @@ def test_lightning_chaining_verifier_uses_native_dispatcher_loop() -> str:
 
     resolved_build_id_tokens = (
         "kProgressionCurrentSpellIdOffset,\n                    ongoing.skill_id",
-        "request.secondary_slot,\n            ongoing.skill_id);",
+        "request.secondary_slot,\n            ongoing.skill_id,\n"
+        "            have_primary_descriptor",
     )
     missing_build_id = [
         token for token in resolved_build_id_tokens if token not in pending_cast_text
@@ -839,9 +876,17 @@ def test_primary_selection_mapping_is_native_backed_not_static_table() -> str:
 
 def test_primary_attack_window_uses_live_native_selection_range() -> str:
     lua_bots_binding_text = read_text(LUA_ENGINE_BOTS_BINDING)
+    native_spell_stats_text = read_native_spell_stats_source()
+    native_spell_stats_header_text = read_text(NATIVE_SPELL_STATS_HEADER)
+    binary_layout_text = read_text(BINARY_LAYOUT)
     doc_text = read_text(LUA_BOT_CONSTANTS_RE_DOC)
     plan_text = read_text(NATIVE_SEAM_PLAN)
-    targeting_test_text = read_text(ROOT / "tools/test_lua_bots_targeting.lua")
+    design_text = read_text(
+        ROOT / "docs/design/bot-cast-in-range-2026-07-29.md")
+    brain_range_test_text = read_text(
+        ROOT / "tools/test_bot_brain_cast_range.lua")
+    applied_damage_harness_text = read_text(
+        ROOT / "tools/verify_bot_cast_in_range.py")
 
     forbidden_tokens = (
         "kProjectilePrimaryEngagementRange",
@@ -856,8 +901,14 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         "max_range = 360.0",
         "max_range = 205.0",
         "min_range = 96.0",
+        "kWaterPrimaryControlBrainRangeGlobal",
+        "native_water_control_brain_range",
     )
-    combined_text = "\n".join((lua_bots_binding_text, targeting_test_text))
+    combined_text = "\n".join((
+        lua_bots_binding_text,
+        native_spell_stats_text,
+        brain_range_test_text,
+    ))
     present = [token for token in forbidden_tokens if token in combined_text]
     if present:
         raise StaticReTestFailure(
@@ -865,18 +916,48 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
             ", ".join(present))
 
     required_tokens = (
+        "TryResolveNativeFrostJetQueryRange",
+        "native_frost_jet_query_range",
+        "kActorSpellConfig290Offset",
+        "kFrostJetRangeWidenDivisorGlobal",
+        "kFrostJetRangeWidenScaleGlobal",
+        "kFrostJetRangeBaseGlobal",
+        "kFrostJetRangeTailGlobal",
+        "frost_jet_range_widen_divisor=0x00784750",
+        "frost_jet_range_widen_scale=0x007DE810",
+        "frost_jet_range_base=0x007DE888",
+        "frost_jet_range_tail=0x007DE960",
+        "static_cast<double>(widen_range)",
+        "widen_divisor",
+        "widen_scale",
+        "base_range",
+        "tail_range",
         "ReadNativePrimarySelectionPursuitRange",
         "kActorAnimationSelectionStateOffset",
         "kActorControlBrainPursuitRangeOffset",
         "native_selection_pursuit_range",
+        "target center",
+        "damage_edge_count",
+        "per-cast target-distance",
         "FUN_0052C910",
-        "actor_control_brain_pursuit_range",
+        "FUN_00543860",
+        "FUN_00641B10",
     )
-    evidence_text = "\n".join((lua_bots_binding_text, doc_text, plan_text))
+    evidence_text = "\n".join((
+        lua_bots_binding_text,
+        native_spell_stats_text,
+        native_spell_stats_header_text,
+        binary_layout_text,
+        doc_text,
+        plan_text,
+        design_text,
+        brain_range_test_text,
+        applied_damage_harness_text,
+    ))
     missing = [token for token in required_tokens if token not in evidence_text]
     if missing:
         raise StaticReTestFailure(
-            "primary attack window is missing live native selection-range token(s): " +
+            "primary attack window is missing native spell/query-range token(s): " +
             ", ".join(missing))
 
     drive_text = read_text(SCENE_ANIMATION_DRIVE_PROFILES)
@@ -888,7 +969,75 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         raise StaticReTestFailure(
             "control-brain reset still clears the native primary pursuit range used by Lua attack windows")
 
-    return "primary attack window reads the live native selection pursuit range"
+    return (
+        "primary attack window reads Frost Jet's upgrade-dependent native "
+        "damage-query range and native per-selection range for other primaries"
+    )
+
+
+def test_frost_jet_synthetic_damage_gate_is_authoritative_and_cast_scoped() -> str:
+    binary_layout_text = read_text(BINARY_LAYOUT)
+    cast_gate_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_casting/native_cast_gate_patches.inl")
+    player_cast_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "gameplay_hooks/player_cast_hooks.inl")
+    spell_dispatch_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "gameplay_hooks/player_cast_hooks_effect_and_dispatch.inl")
+
+    required_tokens = (
+        "spell_cast_020_damage_slot_gate_branch=0x0054423A",
+        "g_scoped_frost_jet_damage_slot_gate_patch",
+        "IsAuthoritativeHostLuaBrainFrostJetCast",
+        "multiplayer::IsLocalTransportHost()",
+        "multiplayer::ParticipantControllerKind::LuaBrain",
+        "ongoing_cast.remote_input_controlled",
+        "ongoing_cast.selection_state_target ==",
+        "kFrostJetPrimaryEntryIndex",
+        "ApplyNativeCastGatePatch(",
+        "original(self);",
+        "RestoreNativeCastGatePatch(",
+    )
+    evidence_text = "\n".join((
+        binary_layout_text,
+        cast_gate_text,
+        player_cast_text,
+        spell_dispatch_text,
+    ))
+    missing = [token for token in required_tokens if token not in evidence_text]
+    if missing:
+        raise StaticReTestFailure(
+            "Frost Jet synthetic damage gate is missing scoped-authority token(s): " +
+            ", ".join(missing))
+
+    scoped_gate_declaration = cast_gate_text.find(
+        "NativeCastGatePatch g_scoped_frost_jet_damage_slot_gate_patch")
+    installed_gate_array = cast_gate_text.find(
+        "std::array<NativeCastGatePatch, 11> g_native_cast_gate_patches")
+    if scoped_gate_declaration < 0 or installed_gate_array < 0:
+        raise StaticReTestFailure(
+            "Frost Jet damage gate must remain separate from the persistent cast-gate array")
+
+    apply_index = spell_dispatch_text.find(
+        "ApplyNativeCastGatePatch(\n"
+        "                                &g_scoped_frost_jet_damage_slot_gate_patch")
+    dispatch_index = spell_dispatch_text.find(
+        "                    original(self);",
+        apply_index)
+    restore_index = spell_dispatch_text.find(
+        "RestoreNativeCastGatePatch(\n"
+        "                            &g_scoped_frost_jet_damage_slot_gate_patch",
+        dispatch_index)
+    if not 0 <= apply_index < dispatch_index < restore_index:
+        raise StaticReTestFailure(
+            "Frost Jet damage slot gate must open only around the synchronous native cast")
+
+    return (
+        "Frost Jet slot-zero damage gate opens only for an authoritative host "
+        "Lua-brain cast and is restored immediately after native dispatch"
+    )
 
 
 def test_bot_level_sync_uses_native_level_up() -> str:

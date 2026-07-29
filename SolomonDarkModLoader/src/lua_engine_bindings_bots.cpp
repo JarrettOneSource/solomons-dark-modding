@@ -20,37 +20,8 @@ struct PrimaryAttackWindow {
     const char* source = "unresolved";
 };
 
-bool TryReadResolvedGameFloat(uintptr_t absolute_address, float* value) {
-    if (value != nullptr) {
-        *value = 0.0f;
-    }
-    if (absolute_address == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    const auto resolved_address = memory.ResolveGameAddressOrZero(absolute_address);
-    if (resolved_address == 0 ||
-        !memory.IsReadableRange(resolved_address, sizeof(float))) {
-        return false;
-    }
-
-    float candidate = 0.0f;
-    if (!memory.TryReadValue(resolved_address, &candidate) ||
-        !std::isfinite(candidate) ||
-        candidate <= 0.0f) {
-        return false;
-    }
-
-    if (value != nullptr) {
-        *value = candidate;
-    }
-    return true;
-}
-
 bool ReadNativePrimarySelectionPursuitRange(
     uintptr_t actor_address,
-    int element_id,
     float* range,
     const char** source) {
     if (range != nullptr) {
@@ -58,19 +29,6 @@ bool ReadNativePrimarySelectionPursuitRange(
     }
     if (source != nullptr) {
         *source = "unresolved";
-    }
-
-    if (element_id == 1) {
-        float water_range = 0.0f;
-        if (TryReadResolvedGameFloat(kWaterPrimaryControlBrainRangeGlobal, &water_range)) {
-            if (range != nullptr) {
-                *range = water_range;
-            }
-            if (source != nullptr) {
-                *source = "native_water_control_brain_range";
-            }
-            return true;
-        }
     }
 
     if (actor_address == 0 ||
@@ -109,11 +67,50 @@ bool ReadNativePrimarySelectionPursuitRange(
     return true;
 }
 
-PrimaryAttackWindow ResolvePrimaryAttackWindow(int element_id, uintptr_t actor_address) {
+PrimaryAttackWindow ResolvePrimaryAttackWindow(
+    const multiplayer::BotSnapshot* snapshot,
+    int element_id,
+    uintptr_t actor_address) {
     PrimaryAttackWindow window{};
+    if (snapshot == nullptr ||
+        (element_id >= 0 &&
+         element_id != snapshot->character_profile.element_id)) {
+        return window;
+    }
+
+    NativePrimarySpellSelection selection{};
+    if (!TryResolveNativePrimarySelectionForProfile(
+            snapshot->character_profile,
+            &selection)) {
+        return window;
+    }
+
+    const auto water_primary_entry =
+        ResolveNativePrimaryEntryForElement(1);
+    const bool frost_jet =
+        selection.primary_entry_index == water_primary_entry &&
+        selection.combo_entry_index == water_primary_entry;
+    if (frost_jet) {
+        float effective_range = 0.0f;
+        if (!TryResolveNativeFrostJetQueryRange(
+                actor_address,
+                &effective_range,
+                nullptr)) {
+            return window;
+        }
+        window.resolved = true;
+        window.native_backed = true;
+        window.max_range = effective_range;
+        window.source = "native_frost_jet_query_range";
+        return window;
+    }
+
     float max_range = 0.0f;
     const char* source = "unresolved";
-    if (!ReadNativePrimarySelectionPursuitRange(actor_address, element_id, &max_range, &source)) {
+    if (!ReadNativePrimarySelectionPursuitRange(
+            actor_address,
+            &max_range,
+            &source)) {
         return window;
     }
 
@@ -551,14 +548,20 @@ int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
 
     uintptr_t actor_address = 0;
     multiplayer::BotSnapshot snapshot;
-    if (multiplayer::ReadBotSnapshot(bot_id, &snapshot) && snapshot.available) {
+    const bool have_snapshot =
+        multiplayer::ReadBotSnapshot(bot_id, &snapshot) &&
+        snapshot.available;
+    if (have_snapshot) {
         if (element_id < 0) {
             element_id = snapshot.character_profile.element_id;
         }
         actor_address = snapshot.actor_address;
     }
 
-    const auto window = ResolvePrimaryAttackWindow(element_id, actor_address);
+    const auto window = ResolvePrimaryAttackWindow(
+        have_snapshot ? &snapshot : nullptr,
+        element_id,
+        actor_address);
     if (!window.resolved) {
         lua_pushnil(state);
         return 1;

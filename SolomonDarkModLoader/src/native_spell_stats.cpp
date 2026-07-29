@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <vector>
 
 namespace sdmod {
 namespace {
@@ -35,6 +36,94 @@ int CaptureNativeSpellStatsSehCode(EXCEPTION_POINTERS* exception_info, DWORD* ex
         *exception_code = exception_info->ExceptionRecord->ExceptionCode;
     }
     return EXCEPTION_EXECUTE_HANDLER;
+}
+
+struct PrimaryBuildProgressionFlagSnapshot {
+    uintptr_t entry_address = 0;
+    std::uint16_t active = 0;
+    std::uint16_t visible = 0;
+};
+
+bool CapturePrimaryBuildProgressionFlags(
+    uintptr_t progression_address,
+    std::vector<PrimaryBuildProgressionFlagSnapshot>* snapshots) {
+    if (progression_address == 0 || snapshots == nullptr) {
+        return false;
+    }
+    snapshots->clear();
+
+    auto& memory = ProcessMemory::Instance();
+    uintptr_t table_address = 0;
+    std::int32_t entry_count = 0;
+    if (!memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableBaseOffset,
+            &table_address) ||
+        !memory.TryReadField(
+            progression_address,
+            kStandaloneWizardProgressionTableCountOffset,
+            &entry_count) ||
+        table_address == 0 ||
+        entry_count <= 0 ||
+        entry_count > 256) {
+        return false;
+    }
+
+    snapshots->reserve(static_cast<std::size_t>(entry_count));
+    for (std::int32_t index = 0; index < entry_count; ++index) {
+        PrimaryBuildProgressionFlagSnapshot snapshot;
+        snapshot.entry_address =
+            table_address +
+            static_cast<std::size_t>(index) *
+                kStandaloneWizardProgressionEntryStride;
+        if (!memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &snapshot.active) ||
+            !memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionVisibleFlagOffset,
+                &snapshot.visible)) {
+            snapshots->clear();
+            return false;
+        }
+        snapshots->push_back(snapshot);
+    }
+    return true;
+}
+
+bool RestorePrimaryBuildProgressionFlags(
+    const std::vector<PrimaryBuildProgressionFlagSnapshot>& snapshots) {
+    auto& memory = ProcessMemory::Instance();
+    bool complete = true;
+    for (const auto& snapshot : snapshots) {
+        std::uint16_t active = 0;
+        std::uint16_t visible = 0;
+        if (!memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionActiveFlagOffset,
+                &active) ||
+            !memory.TryReadField(
+                snapshot.entry_address,
+                kStandaloneWizardProgressionVisibleFlagOffset,
+                &visible)) {
+            complete = false;
+            continue;
+        }
+        if (active == snapshot.active && visible == snapshot.visible) {
+            continue;
+        }
+        const bool active_written = memory.TryWriteField(
+            snapshot.entry_address,
+            kStandaloneWizardProgressionActiveFlagOffset,
+            snapshot.active);
+        const bool visible_written = memory.TryWriteField(
+            snapshot.entry_address,
+            kStandaloneWizardProgressionVisibleFlagOffset,
+            snapshot.visible);
+        complete = active_written && visible_written && complete;
+    }
+    return complete;
 }
 
 bool CallSkillsWizardBuildPrimarySpellSafe(
@@ -288,6 +377,33 @@ bool TryReadNativePrimaryManaOutputScale(float* output_scale, std::string* error
     return true;
 }
 
+bool TryReadNativePositiveDouble(
+    uintptr_t absolute_address,
+    double* value) {
+    if (value != nullptr) {
+        *value = 0.0;
+    }
+    auto& memory = ProcessMemory::Instance();
+    const auto resolved_address =
+        memory.ResolveGameAddressOrZero(absolute_address);
+    double native_value = 0.0;
+    if (resolved_address == 0 ||
+        !memory.IsReadableRange(
+            resolved_address,
+            sizeof(native_value)) ||
+        !memory.TryReadValue(
+            resolved_address,
+            &native_value) ||
+        !std::isfinite(native_value) ||
+        native_value <= 0.0) {
+        return false;
+    }
+    if (value != nullptr) {
+        *value = native_value;
+    }
+    return true;
+}
+
 bool TryReadNativePrimaryStatOutputs(
     uintptr_t progression_runtime_address,
     std::size_t minimum_output_count,
@@ -411,6 +527,157 @@ int ResolveNativePrimaryEntryForElement(int element_id) {
 
 std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value) {
     return static_cast<std::uint32_t>(selection_value);
+}
+
+bool TryBuildNativePrimarySpellPreservingProgressionFlags(
+    uintptr_t progression_runtime_address,
+    int primary_entry_index,
+    int combo_entry_index,
+    std::uint32_t* output_spell_id,
+    std::uint32_t* builder_seh_code,
+    std::string* error_message) {
+    if (output_spell_id != nullptr) {
+        *output_spell_id = 0;
+    }
+    if (builder_seh_code != nullptr) {
+        *builder_seh_code = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (progression_runtime_address == 0 ||
+        !IsNativePrimaryEntryIndex(primary_entry_index) ||
+        !IsNativePrimaryEntryIndex(combo_entry_index)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native primary build requires live progression and valid entries";
+        }
+        return false;
+    }
+
+    std::vector<PrimaryBuildProgressionFlagSnapshot> progression_flags;
+    if (!CapturePrimaryBuildProgressionFlags(
+            progression_runtime_address,
+            &progression_flags)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native primary build could not snapshot progression flags";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto build_primary_spell_address =
+        memory.ResolveGameAddressOrZero(kSkillsWizardBuildPrimarySpell);
+    DWORD exception_code = 0;
+    const bool build_succeeded =
+        build_primary_spell_address != 0 &&
+        CallSkillsWizardBuildPrimarySpellSafe(
+            build_primary_spell_address,
+            progression_runtime_address,
+            EncodeSkillsWizardSelectionArg(primary_entry_index),
+            EncodeSkillsWizardSelectionArg(combo_entry_index),
+            output_spell_id,
+            &exception_code);
+    const bool restore_succeeded =
+        RestorePrimaryBuildProgressionFlags(progression_flags);
+    if (builder_seh_code != nullptr) {
+        *builder_seh_code = exception_code;
+    }
+    if (!build_succeeded || !restore_succeeded) {
+        if (error_message != nullptr) {
+            if (!restore_succeeded) {
+                *error_message =
+                    "native primary build could not restore progression flags";
+            } else if (build_primary_spell_address == 0) {
+                *error_message =
+                    "unable to resolve Skills_Wizard primary spell builder";
+            } else {
+                *error_message =
+                    "Skills_Wizard primary spell builder failed with 0x" +
+                    std::to_string(exception_code);
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
+bool TryResolveNativeFrostJetQueryRange(
+    uintptr_t actor_address,
+    float* effective_range,
+    std::string* error_message) {
+    if (effective_range != nullptr) {
+        *effective_range = 0.0f;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (actor_address == 0 || kActorSpellConfig290Offset == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native Frost Jet range requires a live actor and spell-config offset";
+        }
+        return false;
+    }
+
+    float widen_range = 0.0f;
+    auto& memory = ProcessMemory::Instance();
+    if (!memory.TryReadField(
+            actor_address,
+            kActorSpellConfig290Offset,
+            &widen_range) ||
+        !std::isfinite(widen_range) ||
+        widen_range < 0.0f) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native Frost Jet widened range is unreadable or invalid";
+        }
+        return false;
+    }
+    double widen_divisor = 0.0;
+    double widen_scale = 0.0;
+    double base_range = 0.0;
+    double tail_range = 0.0;
+    if (!TryReadNativePositiveDouble(
+            kFrostJetRangeWidenDivisorGlobal,
+            &widen_divisor) ||
+        !TryReadNativePositiveDouble(
+            kFrostJetRangeWidenScaleGlobal,
+            &widen_scale) ||
+        !TryReadNativePositiveDouble(
+            kFrostJetRangeBaseGlobal,
+            &base_range) ||
+        !TryReadNativePositiveDouble(
+            kFrostJetRangeTailGlobal,
+            &tail_range)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native Frost Jet range scalars are unreadable";
+        }
+        return false;
+    }
+
+    // PlayerActorTick writes the rank-resolved mWiden contribution to
+    // actor+0x290. FUN_00543860 transforms it through the four retail
+    // scalars below and passes that result as FUN_00641B10's radial range.
+    const auto resolved_range =
+        static_cast<double>(widen_range) /
+            widen_divisor *
+            widen_scale +
+        base_range +
+        tail_range;
+    if (!std::isfinite(resolved_range) || resolved_range <= 0.0f) {
+        if (error_message != nullptr) {
+            *error_message =
+                "native Frost Jet query range is invalid";
+        }
+        return false;
+    }
+    if (effective_range != nullptr) {
+        *effective_range = static_cast<float>(resolved_range);
+    }
+    return true;
 }
 
 #include "native_spell_stats/primary_and_secondary_resolution.inl"

@@ -446,7 +446,37 @@ void __fastcall HookSpellCastDispatcher(void* self, void* /*unused_edx*/) {
                 pure_primary_bot_owner_context,
                 [&] {
                     (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
+                    bool frost_jet_damage_gate_open = false;
+                    if (IsAuthoritativeHostLuaBrainFrostJetCast(
+                            actor_address)) {
+                        std::string gate_error;
+                        frost_jet_damage_gate_open =
+                            ApplyNativeCastGatePatch(
+                                &g_scoped_frost_jet_damage_slot_gate_patch,
+                                &gate_error);
+                        if (!frost_jet_damage_gate_open) {
+                            static std::uint64_t
+                                s_last_frost_jet_damage_gate_failure_log_ms = 0;
+                            const auto now_ms =
+                                static_cast<std::uint64_t>(GetTickCount64());
+                            if (now_ms -
+                                    s_last_frost_jet_damage_gate_failure_log_ms >=
+                                1000) {
+                                s_last_frost_jet_damage_gate_failure_log_ms =
+                                    now_ms;
+                                Log(
+                                    "[bots] authoritative Frost Jet damage "
+                                    "gate failed. actor=" +
+                                    HexString(actor_address) +
+                                    " error=" + gate_error);
+                            }
+                        }
+                    }
                     original(self);
+                    if (frost_jet_damage_gate_open) {
+                        RestoreNativeCastGatePatch(
+                            &g_scoped_frost_jet_damage_slot_gate_patch);
+                    }
                     (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
                 },
                 &player_actor_owner_context);

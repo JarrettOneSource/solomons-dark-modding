@@ -543,6 +543,27 @@ bool HasNativeRemotePerCastProjectileEmission(
     return true;
 }
 
+bool IsAuthoritativeHostLuaBrainFrostJetCast(
+    uintptr_t actor_address) {
+    constexpr std::int32_t kFrostJetPrimaryEntryIndex = 0x20;
+    if (!multiplayer::IsLocalTransportHost() ||
+        actor_address == 0) {
+        return false;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(
+        g_participant_entities_mutex);
+    const auto* binding =
+        FindParticipantEntityForActor(actor_address);
+    return binding != nullptr &&
+           binding->controller_kind ==
+               multiplayer::ParticipantControllerKind::LuaBrain &&
+           binding->ongoing_cast.remote_input_controlled &&
+           binding->ongoing_cast.active &&
+           binding->ongoing_cast.selection_state_target ==
+               kFrostJetPrimaryEntryIndex;
+}
+
 void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) {
     const auto original = GetX86HookTrampoline<PlayerActorNoArgMethodFn>(
         g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook);

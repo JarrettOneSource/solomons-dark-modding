@@ -126,9 +126,8 @@ function steering.nearest_cast_target(
     local dx = enemy.x - bot_x
     local dy = enemy.y - bot_y
     local distance = math.sqrt((dx * dx) + (dy * dy))
-    local contact_distance = math.max(distance - (enemy.radius or 0.0), 0.0)
-    if contact_distance >= minimum_range and
-        contact_distance <= maximum_range and
+    if distance >= minimum_range and
+        distance <= maximum_range and
         distance < best_distance then
       best = enemy
       best_distance = distance
