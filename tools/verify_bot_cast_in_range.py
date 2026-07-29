@@ -625,7 +625,7 @@ def parse_authorized_fireball_damage(
     loader_log: str,
 ) -> list[dict[str, int]]:
     pattern = re.compile(
-        r"host synthetic Fireball native damage authorized\. "
+        r"authority synthetic Fireball native damage authorized\. "
         r"monotonic_ms=(?P<now_ms>\d+) "
         r"participant_id=(?P<participant_id>\d+) "
         r"projectile_actor=0x[0-9A-Fa-f]+ "

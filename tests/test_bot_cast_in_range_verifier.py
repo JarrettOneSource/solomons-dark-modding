@@ -178,7 +178,7 @@ class BotCastInRangeVerifierTests(unittest.TestCase):
         self,
     ) -> None:
         loader_log = (
-            "[bots] host synthetic Fireball native damage "
+            "[bots] authority synthetic Fireball native damage "
             "authorized. monotonic_ms=1250 "
             "participant_id=101 projectile_actor=0x123 "
             "target_actor=0x456 "
