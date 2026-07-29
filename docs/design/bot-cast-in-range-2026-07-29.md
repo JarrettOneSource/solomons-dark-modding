@@ -161,7 +161,8 @@ hide behind a parser-only test.
 Headless retail decompilation establishes the Water damage-query path:
 
 1. `PlayerActorTick` writes the rank-resolved `mWiden` contribution to actor
-   `+0x290` immediately before dispatch.
+   `+0x290` immediately before dispatch. That cache is not initialized before
+   the first Frost Jet dispatch.
 2. `FUN_00543860` computes
    `(actor+0x290 / *0x00784750 * *0x007DE810) +
    *0x007DE888 + *0x007DE960`.
@@ -169,6 +170,11 @@ Headless retail decompilation establishes the Water damage-query path:
    an actual radial range of 205 while `mWiden` upgrades extend it.
 4. `FUN_00641B10` receives that result as its radial query argument and
    selects actors eligible for Frost Jet damage/effects.
+
+The attack-window API resolves `mWiden` from the participant's live native
+progression StatBook before applying the recovered query formula. This avoids
+reading the pre-dispatch actor cache while preserving progression-dependent
+range.
 
 The instruction, decompile, and numeric dumps are retained under
 `/mnt/d/codex-evidence/botcast-20260729/investigation/`. The key point is
@@ -220,6 +226,12 @@ entire 205-unit window. Every cast was inside its own live native range. The
 old roster key migrated to `behavior=skirmisher, discipline=arcane`, then the
 migrated bot applied damage. Both peers materialized the bot in the run and
 all four exact staged PIDs exited normally without forced termination.
+
+Release acceptance later reproduced the same source with actor `+0x290`
+containing an uninitialized negative float before the first cast. The window
+correctly remained unresolved, but the bot could never choose an in-range
+target. The release fix moved the `mWiden` input to the live native progression
+StatBook described above; the actor cache remains dispatch-owned.
 
 No website publication is part of this design. The resulting `lua-bots`
 v1.0.2 package and listing update are evidence-only owner-gated artifacts.

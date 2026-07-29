@@ -65,7 +65,7 @@ bool TryResolveWizardBotNativeMovementEnvelope(
 
         float rush_speed_percent = 0.0f;
         int rush_rank = 0;
-        if (!TryReadProgressionRankedNumericStat(
+        if (!TryReadNativeProgressionRankedNumericStat(
                 progression_address,
                 kRushProgressionEntryIndex,
                 "mValue",

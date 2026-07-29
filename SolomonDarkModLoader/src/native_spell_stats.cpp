@@ -491,6 +491,8 @@ bool TryReadNativePrimaryStatOutputs(
 
 }  // namespace
 
+#include "native_spell_stats/ranked_numeric_properties.inl"
+
 bool TryResolveNativePrimaryEntryForElement(int element_id, int* primary_entry) {
     if (primary_entry == nullptr) {
         return false;
@@ -604,7 +606,7 @@ bool TryBuildNativePrimarySpellPreservingProgressionFlags(
 }
 
 bool TryResolveNativeFrostJetQueryRange(
-    uintptr_t actor_address,
+    uintptr_t progression_runtime_address,
     float* effective_range,
     std::string* error_message) {
     if (effective_range != nullptr) {
@@ -613,25 +615,25 @@ bool TryResolveNativeFrostJetQueryRange(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (actor_address == 0 || kActorSpellConfig290Offset == 0) {
+    if (progression_runtime_address == 0) {
         if (error_message != nullptr) {
             *error_message =
-                "native Frost Jet range requires a live actor and spell-config offset";
+                "native Frost Jet range requires live progression";
         }
         return false;
     }
 
+    constexpr int kFrostJetWidenProgressionEntry = 0x22;
     float widen_range = 0.0f;
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.TryReadField(
-            actor_address,
-            kActorSpellConfig290Offset,
+    if (!TryReadNativeProgressionRankedNumericStat(
+            progression_runtime_address,
+            kFrostJetWidenProgressionEntry,
+            "mWiden",
             &widen_range) ||
-        !std::isfinite(widen_range) ||
         widen_range < 0.0f) {
         if (error_message != nullptr) {
             *error_message =
-                "native Frost Jet widened range is unreadable or invalid";
+                "native Frost Jet mWiden progression value is unreadable or invalid";
         }
         return false;
     }
@@ -658,9 +660,10 @@ bool TryResolveNativeFrostJetQueryRange(
         return false;
     }
 
-    // PlayerActorTick writes the rank-resolved mWiden contribution to
-    // actor+0x290. FUN_00543860 transforms it through the four retail
-    // scalars below and passes that result as FUN_00641B10's radial range.
+    // FUN_00543860 transforms the rank-resolved mWiden value through the
+    // four retail scalars below and passes the result as FUN_00641B10's
+    // radial range. Read the StatBook directly because actor+0x290 is only
+    // initialized by PlayerActorTick immediately before a Frost Jet dispatch.
     const auto resolved_range =
         static_cast<double>(widen_range) /
             widen_divisor *

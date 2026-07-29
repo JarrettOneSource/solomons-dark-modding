@@ -1,3 +1,5 @@
+namespace {
+
 bool TryReadNativeStringEquals(
     uintptr_t string_object_address,
     std::string_view expected) {
@@ -30,12 +32,14 @@ bool TryReadNativeStringEquals(
            actual == expected;
 }
 
-bool TryReadProgressionRankedNumericStat(
+}  // namespace
+
+bool TryReadNativeProgressionRankedNumericStat(
     uintptr_t progression_address,
     int entry_index,
     std::string_view property_name,
     float* value,
-    int* active_rank = nullptr) {
+    int* active_rank) {
     if (value == nullptr) {
         return false;
     }

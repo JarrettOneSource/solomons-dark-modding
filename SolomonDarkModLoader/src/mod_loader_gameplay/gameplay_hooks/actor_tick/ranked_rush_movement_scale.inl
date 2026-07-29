@@ -11,7 +11,7 @@ public:
         int rush_rank = 0;
         if (!TryResolveActorProgressionRuntime(actor_address_, &progression_address) ||
             progression_address == 0 ||
-            !TryReadProgressionRankedNumericStat(
+            !TryReadNativeProgressionRankedNumericStat(
                 progression_address,
                 kRushProgressionEntryIndex,
                 "mValue",
@@ -32,7 +32,7 @@ public:
              concentration_entry_b == kRushProgressionEntryIndex)) {
             float concentration_speed_percent = 0.0f;
             int concentration_rank = 0;
-            if (!TryReadProgressionRankedNumericStat(
+            if (!TryReadNativeProgressionRankedNumericStat(
                     progression_address,
                     kRushProgressionEntryIndex,
                     "mConcentration",

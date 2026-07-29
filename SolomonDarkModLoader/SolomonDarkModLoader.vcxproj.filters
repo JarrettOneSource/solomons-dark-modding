@@ -878,9 +878,6 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl">
       <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\native_ranked_stat_values.inl">
-      <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
-    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl">
       <Filter>Header Files\Gameplay\Bot Movement Tick</Filter>
     </ClInclude>
@@ -1563,6 +1560,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\native_spell_stats\ranked_numeric_properties.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\runtime_debug\hde32_impl.inl">

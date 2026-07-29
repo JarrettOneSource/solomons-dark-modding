@@ -903,6 +903,7 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         "min_range = 96.0",
         "kWaterPrimaryControlBrainRangeGlobal",
         "native_water_control_brain_range",
+        "kActorSpellConfig290Offset",
     )
     combined_text = "\n".join((
         lua_bots_binding_text,
@@ -917,8 +918,11 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
 
     required_tokens = (
         "TryResolveNativeFrostJetQueryRange",
+        "TryReadNativeProgressionRankedNumericStat",
         "native_frost_jet_query_range",
-        "kActorSpellConfig290Offset",
+        "progression_runtime_state_address",
+        "kFrostJetWidenProgressionEntry",
+        '"mWiden"',
         "kFrostJetRangeWidenDivisorGlobal",
         "kFrostJetRangeWidenScaleGlobal",
         "kFrostJetRangeBaseGlobal",

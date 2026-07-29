@@ -338,7 +338,6 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\player_family_locomotion.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\participant_scene_binding_ticks.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\native_ranked_stat_values.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement_tick\wizard_bot_movement_step.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_spawn_placement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_registry_and_movement_participant_lifecycle.inl" />
@@ -568,6 +567,7 @@
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl" />
+    <ClInclude Include="src\native_spell_stats\ranked_numeric_properties.inl" />
     <ClInclude Include="src\runtime_debug\hde32_impl.inl" />
     <ClInclude Include="src\run_lifecycle\combat_prelude_and_sources.inl" />
     <ClInclude Include="src\run_lifecycle\enemy_tracking_and_reset.inl" />

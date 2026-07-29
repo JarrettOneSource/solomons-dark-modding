@@ -93,7 +93,7 @@ PrimaryAttackWindow ResolvePrimaryAttackWindow(
     if (frost_jet) {
         float effective_range = 0.0f;
         if (!TryResolveNativeFrostJetQueryRange(
-                actor_address,
+                snapshot->progression_runtime_state_address,
                 &effective_range,
                 nullptr)) {
             return window;

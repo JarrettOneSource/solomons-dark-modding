@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace sdmod {
 
@@ -54,8 +55,14 @@ bool TryBuildNativePrimarySpellPreservingProgressionFlags(
     std::uint32_t* output_spell_id,
     std::uint32_t* builder_seh_code = nullptr,
     std::string* error_message = nullptr);
+bool TryReadNativeProgressionRankedNumericStat(
+    uintptr_t progression_runtime_address,
+    int entry_index,
+    std::string_view property_name,
+    float* value,
+    int* active_rank = nullptr);
 bool TryResolveNativeFrostJetQueryRange(
-    uintptr_t actor_address,
+    uintptr_t progression_runtime_address,
     float* effective_range,
     std::string* error_message = nullptr);
 bool TryResolveNativePrimarySelectionFromPair(

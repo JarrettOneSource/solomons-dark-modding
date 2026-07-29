@@ -54,9 +54,12 @@ attack windows. Ghidra artifacts
 `runtime/ghidra_actor_spell_config_writer_context.txt` show the primary
 dispatcher (`FUN_00548B00`) filling the live actor spell-config block before the
 water handler feeds the native cone query `FUN_00641B10`. For Frost Jet,
-`FUN_00543860` consumes the progression-derived `mWiden` output at actor
-`+0x290` and computes the radial query range as
+`FUN_00543860` consumes the progression-derived `mWiden` output cached at
+actor `+0x290` immediately before dispatch and computes the radial query range as
 `(mWiden / *0x00784750 * *0x007DE810) + *0x007DE888 + *0x007DE960`.
+Before the first Frost Jet dispatch, that actor cache is not initialized.
+The semantic query therefore resolves `mWiden` from the participant's live
+native progression StatBook and applies the same recovered formula.
 The four layout-backed globals are exposed as
 `kFrostJetRangeWidenDivisorGlobal`, `kFrostJetRangeWidenScaleGlobal`,
 `kFrostJetRangeBaseGlobal`, and `kFrostJetRangeTailGlobal`. The resulting
