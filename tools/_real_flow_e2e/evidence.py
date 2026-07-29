@@ -385,6 +385,13 @@ def packet_accounting(path: Path) -> dict[str, Any]:
     steam_send_result_codes: Counter[int] = Counter()
     steam_send_attempts = 0
     steam_send_accepted = 0
+    steam_route_samples = 0
+    steam_route_connected_samples = 0
+    steam_route_relay_samples = 0
+    steam_route_queue_times: list[int] = []
+    steam_route_max_pending_unreliable = 0
+    steam_route_max_pending_reliable = 0
+    steam_route_max_unacked_reliable = 0
     fragment_by_kind: dict[int, dict[str, int]] = defaultdict(
         lambda: {
             "fragments": 0,
@@ -404,6 +411,29 @@ def packet_accounting(path: Path) -> dict[str, Any]:
             steam_send_attempts += 1
             steam_send_accepted += int(row.get("accepted") is True)
             steam_send_result_codes[int(row.get("result_code", 0))] += 1
+        if event == "steam_route_status":
+            steam_route_samples += 1
+            steam_route_connected_samples += int(
+                int(row.get("connection_state", 0)) == 3
+            )
+            steam_route_relay_samples += int(
+                row.get("using_relay") is True
+            )
+            steam_route_queue_times.append(
+                max(0, int(row.get("queue_time_microseconds", 0)))
+            )
+            steam_route_max_pending_unreliable = max(
+                steam_route_max_pending_unreliable,
+                int(row.get("pending_unreliable_bytes", 0)),
+            )
+            steam_route_max_pending_reliable = max(
+                steam_route_max_pending_reliable,
+                int(row.get("pending_reliable_bytes", 0)),
+            )
+            steam_route_max_unacked_reliable = max(
+                steam_route_max_unacked_reliable,
+                int(row.get("unacked_reliable_bytes", 0)),
+            )
         if "kind" in row:
             kind = int(row["kind"])
             by_event_kind[event][kind] += 1
@@ -436,6 +466,12 @@ def packet_accounting(path: Path) -> dict[str, Any]:
             for key, value in sorted(counter.items())
         }
 
+    sorted_route_queue_times = sorted(steam_route_queue_times)
+    route_p95_index = (
+        (len(sorted_route_queue_times) * 95 + 99) // 100 - 1
+        if sorted_route_queue_times
+        else 0
+    )
     sequence_summary: dict[str, dict[str, Any]] = {}
     for event, kinds in sorted(sequences.items()):
         sequence_summary[event] = {}
@@ -472,11 +508,73 @@ def packet_accounting(path: Path) -> dict[str, Any]:
             "rejected": steam_send_attempts - steam_send_accepted,
             "resultCodes": integer_map(steam_send_result_codes),
         },
+        "steamRouteStatus": {
+            "samples": steam_route_samples,
+            "connectedSamples": steam_route_connected_samples,
+            "relaySamples": steam_route_relay_samples,
+            "maximumQueueTimeMicroseconds": (
+                max(sorted_route_queue_times)
+                if sorted_route_queue_times
+                else 0
+            ),
+            "p95QueueTimeMicroseconds": (
+                sorted_route_queue_times[route_p95_index]
+                if sorted_route_queue_times
+                else 0
+            ),
+            "maximumPendingUnreliableBytes":
+                steam_route_max_pending_unreliable,
+            "maximumPendingReliableBytes":
+                steam_route_max_pending_reliable,
+            "maximumUnackedReliableBytes":
+                steam_route_max_unacked_reliable,
+        },
         "fragmentByKind": {
             str(kind): values
             for kind, values in sorted(fragment_by_kind.items())
         },
         "sequences": sequence_summary,
+    }
+
+
+def steam_transport_assertion(
+    accounting: dict[str, Any],
+    *,
+    role: str,
+) -> dict[str, Any]:
+    send_results = accounting["steamSendResults"]
+    route_status = accounting["steamRouteStatus"]
+    if int(send_results["attempts"]) == 0:
+        raise EvidenceError(
+            f"{role} did not record any actual Steam API send attempts"
+        )
+    result_25_count = int(
+        send_results["resultCodes"].get("25", 0)
+    )
+    if result_25_count != 0:
+        raise EvidenceError(
+            f"{role} hit Steam result-25 backpressure "
+            f"{result_25_count} time(s)"
+        )
+    if int(route_status["samples"]) == 0 or int(
+        route_status["connectedSamples"]
+    ) == 0:
+        raise EvidenceError(
+            f"{role} did not record a connected Steam route sample"
+        )
+    return {
+        "result25Count": result_25_count,
+        "routeSamples": int(route_status["samples"]),
+        "connectedRouteSamples": int(
+            route_status["connectedSamples"]
+        ),
+        "relaySamples": int(route_status["relaySamples"]),
+        "maximumQueueTimeMicroseconds": int(
+            route_status["maximumQueueTimeMicroseconds"]
+        ),
+        "p95QueueTimeMicroseconds": int(
+            route_status["p95QueueTimeMicroseconds"]
+        ),
     }
 
 

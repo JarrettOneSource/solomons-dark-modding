@@ -313,9 +313,13 @@ bool RegisterSteamGameplayPeer(
         (g_local_transport.is_host && authoritative_host)) {
         return false;
     }
-    return QueueSteamGameplayPeerConnected(
+    const bool queued = QueueSteamGameplayPeerConnected(
         steam_id,
         authoritative_host);
+    if (queued) {
+        SetSteamGameplayPeerSendEnabled(steam_id, true);
+    }
+    return queued;
 }
 
 bool ApplySteamGameplayPeerConnected(
@@ -356,6 +360,7 @@ void UnregisterSteamGameplayPeer(std::uint64_t steam_id) {
         steam_id == g_local_transport.local_peer_id) {
         return;
     }
+    SetSteamGameplayPeerSendEnabled(steam_id, false);
     QueueSteamGameplayPeerDisconnected(steam_id);
 }
 

@@ -1,16 +1,14 @@
 #include "multiplayer_steam_gameplay_queue.h"
 
 #include "logger.h"
-#include "multiplayer_runtime_protocol.h"
-#include "network_telemetry.h"
 
 #include <Windows.h>
 
 #include <algorithm>
-#include <cstring>
 #include <deque>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -23,6 +21,8 @@ constexpr std::uint64_t kSendFailureLogIntervalMs = 1000;
 std::mutex g_queue_mutex;
 std::deque<SteamGameplayInboundEvent> g_inbound_events;
 SteamGameplayOutboundQueuePolicy g_outbound_queue;
+std::unordered_set<std::uint64_t>
+    g_send_enabled_peers;
 std::uint64_t g_dropped_inbound_packets = 0;
 std::uint64_t g_last_send_failure_log_ms = 0;
 
@@ -52,8 +52,24 @@ void ResetSteamGameplayQueues() {
     std::scoped_lock lock(g_queue_mutex);
     g_inbound_events.clear();
     g_outbound_queue.Reset();
+    g_send_enabled_peers.clear();
     g_dropped_inbound_packets = 0;
     g_last_send_failure_log_ms = 0;
+}
+
+void SetSteamGameplayPeerSendEnabled(
+    std::uint64_t remote_steam_id,
+    bool enabled) {
+    if (remote_steam_id == 0) {
+        return;
+    }
+    std::scoped_lock lock(g_queue_mutex);
+    if (enabled) {
+        g_send_enabled_peers.insert(remote_steam_id);
+        return;
+    }
+    g_send_enabled_peers.erase(remote_steam_id);
+    g_outbound_queue.ResetPeer(remote_steam_id);
 }
 
 void ResetSteamGameplayPeerSendQueue(
@@ -141,6 +157,10 @@ bool QueueSteamGameplayPacketSend(
         return false;
     }
     std::scoped_lock lock(g_queue_mutex);
+    if (g_send_enabled_peers.find(remote_steam_id) ==
+        g_send_enabled_peers.end()) {
+        return false;
+    }
     return g_outbound_queue.Queue(
         remote_steam_id,
         data,
@@ -163,36 +183,31 @@ void ServiceSteamGameplaySendQueue() {
                std::size_t size,
                SteamNetworkSendMode mode,
                std::int32_t* result_code) {
-                const bool telemetry_enabled =
-                    IsNetworkTelemetryEnabled();
-                PacketHeader header{};
-                if (telemetry_enabled &&
-                    data != nullptr &&
-                    size >= sizeof(header)) {
-                    std::memcpy(&header, data, sizeof(header));
-                }
-                const auto started_us = telemetry_enabled
-                    ? NetworkTelemetryNowMicroseconds()
-                    : 0;
-                const bool accepted = SteamSendNetworkMessage(
+                return SteamSendNetworkMessage(
                     remote_steam_id,
                     data,
                     size,
                     mode,
                     result_code);
-                RecordNetworkSteamSendResult(
-                    header.kind,
-                    header.sequence,
-                    size,
-                    remote_steam_id,
-                    mode == SteamNetworkSendMode::ReliableNoNagle,
-                    accepted,
-                    result_code != nullptr ? *result_code : 0,
-                    telemetry_enabled
-                        ? NetworkTelemetryNowMicroseconds() -
-                            started_us
-                        : 0);
-                return accepted;
+            },
+            [](std::uint64_t remote_steam_id) {
+                const auto status =
+                    SteamGetNetworkSessionStatus(
+                        remote_steam_id);
+                SteamGameplayRouteQueueStatus queue_status;
+                queue_status.connected =
+                    status.connection_state == 3;
+                queue_status.send_rate_bytes_per_second =
+                    status.send_rate_bytes_per_second;
+                queue_status.pending_unreliable_bytes =
+                    status.pending_unreliable_bytes;
+                queue_status.pending_reliable_bytes =
+                    status.pending_reliable_bytes;
+                queue_status.unacked_reliable_bytes =
+                    status.unacked_reliable_bytes;
+                queue_status.queue_time_microseconds =
+                    status.queue_time_microseconds;
+                return queue_status;
             });
         stats = g_outbound_queue.SnapshotStats();
         if (stats.send_failures != before) {

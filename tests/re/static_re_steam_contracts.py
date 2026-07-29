@@ -215,6 +215,9 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
     telemetry_source = read_text(
         ROOT / "SolomonDarkModLoader/src/network_telemetry.cpp"
     )
+    steam_bridge = read_text(
+        ROOT / "SolomonDarkModLoader/src/steam_api_bridge.cpp"
+    )
     service_loop = read_text(
         ROOT / "SolomonDarkModLoader/src/multiplayer_service_loop.cpp"
     )
@@ -225,7 +228,14 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
             "state_and_helpers.inl",
             "SolomonDarkModLoader/src/multiplayer_steam_session/"
             "public_lifecycle.inl",
+            "SolomonDarkModLoader/src/multiplayer_steam_session/"
+            "network_messages.inl",
         )
+    )
+    peer_lifecycle = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
     )
     outgoing = read_text(
         ROOT
@@ -239,28 +249,46 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
     required = (
         (policy_header, "kResultLimitExceeded = 25"),
         (policy_header, "kLimitRetryIntervalMs = 250"),
+        (policy_header, "kQueueTimeHighWaterMicroseconds"),
+        (policy_header, "kQueueTimeLowWaterMicroseconds"),
+        (policy_header, "kMaximumRememberedLogicalEvents"),
         (
             policy_header,
             "kSustainedBackpressureReportIntervalMs = 2000",
         ),
         (policy_source, "std::deque<OutboundPacket> deferred;"),
         (policy_source, "deferred.push_back(std::move(packet));"),
-        (policy_source, "CoalesceDisposablePackets("),
+        (policy_source, "Retention::LatestGeneration"),
+        (policy_source, "Retention::DistinctLogicalEvent"),
+        (policy_source, "RememberAcceptedLogicalEvent(packet)"),
+        (policy_source, "EvictReplaceableUnit("),
+        (policy_source, "IsPacketSequenceNewer("),
         (policy_source, "pressure.sustained_reported = true"),
+        (queue_source, "SetSteamGameplayPeerSendEnabled("),
+        (queue_source, "g_send_enabled_peers"),
+        (queue_source, "SteamGetNetworkSessionStatus("),
         (queue_source, "Steam gameplay send sustained backpressure."),
-        (queue_source, "RecordNetworkSteamSendResult("),
+        (steam_bridge, "RecordNetworkSteamSendResult("),
+        (steam_bridge, "pending_unreliable_bytes"),
+        (steam_bridge, "queue_time_microseconds"),
         (telemetry_source, 'EnqueueEvent("steam_send_result"'),
+        (telemetry_source, 'EnqueueEvent("steam_route_status"'),
         (service_loop, "ServiceSteamGameplaySendQueue();"),
         (session, "ResetSteamGameplayPeerSendQueue(steam_id)"),
+        (session, "RecordNetworkSteamRouteStatus("),
+        (peer_lifecycle, "SetSteamGameplayPeerSendEnabled(steam_id, true)"),
+        (peer_lifecycle, "SetSteamGameplayPeerSendEnabled(steam_id, false)"),
         (outgoing, "BuildWorldMotionSnapshotForIdentity("),
         (outgoing, "needs_initial_identity"),
         (outgoing, "identity_timeline_changed"),
         (native_test, "ReliablePacketsSurviveTemporaryLimitExceeded"),
-        (native_test, "DisposableTrafficCoalescesWithoutBlockingOtherPeers"),
-        (
-            native_test,
-            "SustainedLimitExceededRetainsReliableUntilBufferClears",
-        ),
+        (native_test, "ProactiveRoutePacingKeepsOnlyFreshState"),
+        (native_test, "RoutePressureDoesNotBlockAnotherPeer"),
+        (native_test, "LatestWorldGenerationSupersedesStaleFragments"),
+        (native_test, "CapacityEvictsWholeReplaceableGeneration"),
+        (native_test, "ReliableRecoveryRetriesAreDeduplicatedAfterAcceptance"),
+        (native_test, "OrderedReliablePacketsRemainOrdered"),
+        (native_test, "ResetPeerDropsOnlyTheTargetPeer"),
     )
     missing = [token for text, token in required if token not in text]
     if missing:
@@ -273,6 +301,7 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         (service_loop, "RecoverSteamSessionFromGameplayCongestion("),
         (session, '"gameplay_send_congestion"'),
         (session, "void RecoverSteamSessionFromGameplayCongestion("),
+        (queue_source, "SteamCloseNetworkSession("),
     )
     present = [token for text, token in forbidden if token in text]
     if present:
@@ -287,10 +316,10 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         )
 
     return (
-        "Steam result-25 backpressure retains reliable packets, coalesces "
-        "disposable state, records actual Steam API results, preserves peer "
-        "fairness, and keeps retrying the authenticated session until "
-        "Steam's send buffer clears"
+        "Steam send pacing stops before result 25, keeps only current "
+        "checkpoint generations, deduplicates accepted recovery retries, "
+        "preserves ordered events and peer fairness, records actual API and "
+        "route state, and never resets an authenticated session for pressure"
     )
 
 

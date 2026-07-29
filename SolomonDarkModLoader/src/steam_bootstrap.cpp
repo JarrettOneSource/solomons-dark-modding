@@ -67,7 +67,15 @@ SteamPeerNetworkStatus BuildPeerNetworkStatus(
     if (realtime_status != nullptr) {
         status.connection_state = realtime_status->state;
         status.ping_ms = realtime_status->ping_ms;
+        status.send_rate_bytes_per_second =
+            realtime_status->send_rate_bytes_per_second;
+        status.pending_unreliable_bytes =
+            realtime_status->pending_unreliable_bytes;
         status.pending_reliable_bytes = realtime_status->pending_reliable_bytes;
+        status.unacked_reliable_bytes =
+            realtime_status->unacked_reliable_bytes;
+        status.queue_time_microseconds =
+            realtime_status->queue_time_microseconds;
     }
     return status;
 }

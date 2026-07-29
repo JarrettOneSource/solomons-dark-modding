@@ -153,6 +153,7 @@
     <ClInclude Include="src\multiplayer_runtime_participant_sampling.inl" />
     <ClInclude Include="include\multiplayer_steam_gameplay_queue.h" />
     <ClInclude Include="include\multiplayer_steam_gameplay_queue_policy.h" />
+    <ClInclude Include="src\multiplayer_steam_gameplay_packet_identity.inl" />
     <ClInclude Include="include\multiplayer_steam_session.h" />
     <ClInclude Include="include\native_enemy_lifecycle.h" />
     <ClInclude Include="include\native_enemy_types.h" />

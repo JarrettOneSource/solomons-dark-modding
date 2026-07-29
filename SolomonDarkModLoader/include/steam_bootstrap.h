@@ -44,7 +44,11 @@ struct SteamPeerNetworkStatus {
     std::int32_t connection_state = 0;
     std::int32_t end_reason = 0;
     std::int32_t ping_ms = 0;
+    std::int32_t send_rate_bytes_per_second = 0;
+    std::int32_t pending_unreliable_bytes = 0;
     std::int32_t pending_reliable_bytes = 0;
+    std::int32_t unacked_reliable_bytes = 0;
+    std::int64_t queue_time_microseconds = 0;
     bool using_relay = false;
     std::string debug_text;
     std::string connection_description;

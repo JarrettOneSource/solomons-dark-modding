@@ -32,6 +32,7 @@ from tools._real_flow_e2e.evidence import (  # noqa: E402
     packet_accounting,
     paired_windows_capture,
     rendered_enemy_assertion,
+    steam_transport_assertion,
     write_json,
     write_manifest,
 )
@@ -238,6 +239,8 @@ def _assert_client_enemy_materialization(
 def _copy_and_account(
     peer: Any,
     output_directory: Path,
+    *,
+    require_steam_transport: bool = False,
 ) -> dict[str, Any]:
     remote_copy = getattr(peer, "copy_runtime_artifacts", None)
     if callable(remote_copy):
@@ -256,7 +259,16 @@ def _copy_and_account(
             f"{peer.config.role} telemetry did not start exactly once: "
             f"{accounting['events']}"
         )
-    return {"copied": copied, "packetAccounting": accounting}
+    result = {
+        "copied": copied,
+        "packetAccounting": accounting,
+    }
+    if require_steam_transport:
+        result["steamTransport"] = steam_transport_assertion(
+            accounting,
+            role=peer.config.role,
+        )
+    return result
 
 
 def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
@@ -590,10 +602,12 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 "host": _copy_and_account(
                     host,
                     config.evidence_root / "runtime",
+                    require_steam_transport=is_ws20,
                 ),
                 "clientB": _copy_and_account(
                     client,
                     config.evidence_root / "runtime",
+                    require_steam_transport=is_ws20,
                 ),
             }
         except BaseException as exc:

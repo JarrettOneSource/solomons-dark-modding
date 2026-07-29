@@ -8,6 +8,7 @@
 #include "multiplayer_runtime_state.h"
 #include "multiplayer_session_teardown.h"
 #include "multiplayer_steam_gameplay_queue.h"
+#include "network_telemetry.h"
 #include "startup_status.h"
 #include "steam_bootstrap.h"
 

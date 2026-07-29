@@ -1,8 +1,11 @@
 #include "steam_bootstrap.h"
 
+#include "multiplayer_runtime_protocol.h"
+#include "network_telemetry.h"
 #include "steam_bootstrap_internal.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -345,30 +348,65 @@ bool SteamSendNetworkMessage(
         size > (std::numeric_limits<std::uint32_t>::max)()) {
         return false;
     }
-    std::scoped_lock lock(detail::SteamBootstrapMutex());
-    auto& state = detail::MutableSteamBootstrapState();
-    auto* networking = NetworkingMessages(state);
-    steamabi::NetworkingIdentity identity{};
-    if (networking == nullptr || !BuildIdentity(state, remote_steam_id, &identity)) {
-        return false;
+
+    const bool telemetry_enabled = IsNetworkTelemetryEnabled();
+    multiplayer::PacketHeader header{};
+    if (telemetry_enabled && size >= sizeof(header)) {
+        std::memcpy(&header, data, sizeof(header));
+        if (!multiplayer::IsValidPacketHeader(header)) {
+            header = multiplayer::PacketHeader{};
+        }
     }
+    const auto started_us = telemetry_enabled
+        ? NetworkTelemetryNowMicroseconds()
+        : 0;
+
     int flags = steamabi::kNetworkingSendUnreliableNoNagle;
     if (mode == SteamNetworkSendMode::UnreliableNoDelay) {
         flags = steamabi::kNetworkingSendUnreliableNoDelay;
     } else if (mode == SteamNetworkSendMode::ReliableNoNagle) {
         flags = steamabi::kNetworkingSendReliableNoNagle;
     }
-    const auto result = state.networking_messages_send(
-        networking,
-        &identity,
-        data,
-        static_cast<std::uint32_t>(size),
-        flags,
-        0);
+
+    std::int32_t result = 0;
+    bool called_steam = false;
+    {
+        std::scoped_lock lock(detail::SteamBootstrapMutex());
+        auto& state = detail::MutableSteamBootstrapState();
+        auto* networking = NetworkingMessages(state);
+        steamabi::NetworkingIdentity identity{};
+        if (networking != nullptr &&
+            BuildIdentity(state, remote_steam_id, &identity)) {
+            result = state.networking_messages_send(
+                networking,
+                &identity,
+                data,
+                static_cast<std::uint32_t>(size),
+                flags,
+                0);
+            called_steam = true;
+        }
+    }
     if (result_code != nullptr) {
         *result_code = result;
     }
-    return result == steamabi::kResultOk;
+    const bool accepted =
+        called_steam && result == steamabi::kResultOk;
+    if (called_steam) {
+        RecordNetworkSteamSendResult(
+            header.kind,
+            header.sequence,
+            size,
+            remote_steam_id,
+            mode == SteamNetworkSendMode::ReliableNoNagle,
+            accepted,
+            result,
+            telemetry_enabled
+                ? NetworkTelemetryNowMicroseconds() -
+                    started_us
+                : 0);
+    }
+    return accepted;
 }
 
 std::vector<SteamNetworkMessage> SteamReceiveNetworkMessages(
@@ -454,7 +492,15 @@ SteamPeerNetworkStatus SteamGetNetworkSessionStatus(std::uint64_t remote_steam_i
         &realtime);
     status.end_reason = info.end_reason;
     status.ping_ms = realtime.ping_ms;
+    status.send_rate_bytes_per_second =
+        realtime.send_rate_bytes_per_second;
+    status.pending_unreliable_bytes =
+        realtime.pending_unreliable_bytes;
     status.pending_reliable_bytes = realtime.pending_reliable_bytes;
+    status.unacked_reliable_bytes =
+        realtime.unacked_reliable_bytes;
+    status.queue_time_microseconds =
+        realtime.queue_time_microseconds;
     status.using_relay = (info.flags & steamabi::kNetworkConnectionInfoRelayed) != 0;
     status.debug_text = CopyBoundedText(info.end_debug, sizeof(info.end_debug));
     status.connection_description =

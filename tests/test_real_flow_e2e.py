@@ -12,6 +12,7 @@ from tools._real_flow_e2e.evidence import (
     EvidenceError,
     packet_accounting,
     rendered_enemy_assertion,
+    steam_transport_assertion,
     write_manifest,
 )
 from tools._real_flow_e2e.runtime import (
@@ -367,6 +368,24 @@ class RealFlowE2ETests(unittest.TestCase):
                     "accepted": True,
                     "result_code": 1,
                 },
+                {
+                    "event": "steam_route_status",
+                    "connection_state": 3,
+                    "pending_unreliable_bytes": 200,
+                    "pending_reliable_bytes": 500,
+                    "unacked_reliable_bytes": 300,
+                    "queue_time_microseconds": 220000,
+                    "using_relay": True,
+                },
+                {
+                    "event": "steam_route_status",
+                    "connection_state": 3,
+                    "pending_unreliable_bytes": 0,
+                    "pending_reliable_bytes": 0,
+                    "unacked_reliable_bytes": 0,
+                    "queue_time_microseconds": 1000,
+                    "using_relay": False,
+                },
             ]
             telemetry.write_text(
                 "".join(json.dumps(row) + "\n" for row in rows),
@@ -385,6 +404,66 @@ class RealFlowE2ETests(unittest.TestCase):
                 },
             )
             self.assertEqual(result["rejectedByKind"], {"5": 1})
+            self.assertEqual(
+                result["steamRouteStatus"],
+                {
+                    "samples": 2,
+                    "connectedSamples": 2,
+                    "relaySamples": 1,
+                    "maximumQueueTimeMicroseconds": 220000,
+                    "p95QueueTimeMicroseconds": 220000,
+                    "maximumPendingUnreliableBytes": 200,
+                    "maximumPendingReliableBytes": 500,
+                    "maximumUnackedReliableBytes": 300,
+                },
+            )
+
+    def test_steam_transport_assertion_requires_route_and_no_result_25(
+        self,
+    ) -> None:
+        healthy = {
+            "steamSendResults": {
+                "attempts": 4,
+                "accepted": 4,
+                "rejected": 0,
+                "resultCodes": {"1": 4},
+            },
+            "steamRouteStatus": {
+                "samples": 3,
+                "connectedSamples": 3,
+                "relaySamples": 3,
+                "maximumQueueTimeMicroseconds": 220000,
+                "p95QueueTimeMicroseconds": 180000,
+            },
+        }
+        self.assertEqual(
+            steam_transport_assertion(healthy, role="host"),
+            {
+                "result25Count": 0,
+                "routeSamples": 3,
+                "connectedRouteSamples": 3,
+                "relaySamples": 3,
+                "maximumQueueTimeMicroseconds": 220000,
+                "p95QueueTimeMicroseconds": 180000,
+            },
+        )
+
+        saturated = json.loads(json.dumps(healthy))
+        saturated["steamSendResults"]["resultCodes"]["25"] = 1
+        with self.assertRaisesRegex(
+            EvidenceError,
+            "result-25 backpressure",
+        ):
+            steam_transport_assertion(saturated, role="client B")
+
+        missing_route = json.loads(json.dumps(healthy))
+        missing_route["steamRouteStatus"]["samples"] = 0
+        missing_route["steamRouteStatus"]["connectedSamples"] = 0
+        with self.assertRaisesRegex(
+            EvidenceError,
+            "connected Steam route",
+        ):
+            steam_transport_assertion(missing_route, role="host")
 
     def test_runtime_state_includes_steam_send_failure_counters(
         self,

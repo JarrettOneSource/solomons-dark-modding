@@ -27,6 +27,9 @@ struct SteamGameplayInboundEvent {
 
 void ResetSteamGameplayQueues();
 void ResetSteamGameplayPeerSendQueue(std::uint64_t remote_steam_id);
+void SetSteamGameplayPeerSendEnabled(
+    std::uint64_t remote_steam_id,
+    bool enabled);
 
 bool QueueSteamGameplayPeerConnected(
     std::uint64_t steam_id,

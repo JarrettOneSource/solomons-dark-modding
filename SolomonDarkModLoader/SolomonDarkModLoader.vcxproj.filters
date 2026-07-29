@@ -338,6 +338,9 @@
     <ClInclude Include="include\multiplayer_steam_gameplay_queue_policy.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_steam_gameplay_packet_identity.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\multiplayer_steam_session.h">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

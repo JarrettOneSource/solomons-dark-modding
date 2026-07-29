@@ -119,7 +119,7 @@ function Write-ResponseHeader {
     )
 
     $responseHeader = [System.BitConverter]::GetBytes($ResponseLength)
-    $Stream.Write($responseHeader, 0, $responseHeader.Length)
+    $stream.Write($responseHeader, 0, $responseHeader.Length)
     if ($IncludeExecutionUtcNanoseconds) {
         $timestamp = [System.BitConverter]::GetBytes(
             $ExecutionUtcNanoseconds)

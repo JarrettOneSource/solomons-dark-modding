@@ -51,6 +51,16 @@ void RecordNetworkSteamSendResult(
     bool accepted,
     std::int32_t result_code,
     std::uint64_t duration_microseconds);
+void RecordNetworkSteamRouteStatus(
+    std::uint64_t endpoint_id,
+    std::int32_t connection_state,
+    std::int32_t ping_ms,
+    std::int32_t send_rate_bytes_per_second,
+    std::int32_t pending_unreliable_bytes,
+    std::int32_t pending_reliable_bytes,
+    std::int32_t unacked_reliable_bytes,
+    std::int64_t queue_time_microseconds,
+    bool using_relay);
 void RecordNetworkPacketReceive(
     std::uint16_t kind,
     std::uint32_t sequence,

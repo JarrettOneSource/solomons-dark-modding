@@ -301,6 +301,16 @@ void RefreshRouteStatus(std::uint64_t now_ms) {
             continue;
         }
         peer.network_status = SteamGetNetworkSessionStatus(steam_id);
+        RecordNetworkSteamRouteStatus(
+            steam_id,
+            peer.network_status.connection_state,
+            peer.network_status.ping_ms,
+            peer.network_status.send_rate_bytes_per_second,
+            peer.network_status.pending_unreliable_bytes,
+            peer.network_status.pending_reliable_bytes,
+            peer.network_status.unacked_reliable_bytes,
+            peer.network_status.queue_time_microseconds,
+            peer.network_status.using_relay);
     }
     g_session.last_route_status_ms = now_ms;
 }

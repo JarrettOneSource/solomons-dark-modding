@@ -435,6 +435,41 @@ void RecordNetworkSteamSendResult(
     EnqueueEvent("steam_send_result", fields.str());
 }
 
+void RecordNetworkSteamRouteStatus(
+    std::uint64_t endpoint_id,
+    std::int32_t connection_state,
+    std::int32_t ping_ms,
+    std::int32_t send_rate_bytes_per_second,
+    std::int32_t pending_unreliable_bytes,
+    std::int32_t pending_reliable_bytes,
+    std::int32_t unacked_reliable_bytes,
+    std::int64_t queue_time_microseconds,
+    bool using_relay) {
+    if (!IsNetworkTelemetryEnabled()) {
+        return;
+    }
+
+    std::ostringstream fields;
+    fields << ",\"endpoint_id\":" << endpoint_id
+           << ",\"endpoint_ipv4\":"
+           << EndpointIpv4Identifier(endpoint_id)
+           << ",\"connection_state\":" << connection_state
+           << ",\"ping_ms\":" << ping_ms
+           << ",\"send_rate_bytes_per_second\":"
+           << send_rate_bytes_per_second
+           << ",\"pending_unreliable_bytes\":"
+           << pending_unreliable_bytes
+           << ",\"pending_reliable_bytes\":"
+           << pending_reliable_bytes
+           << ",\"unacked_reliable_bytes\":"
+           << unacked_reliable_bytes
+           << ",\"queue_time_microseconds\":"
+           << queue_time_microseconds
+           << ",\"using_relay\":"
+           << (using_relay ? "true" : "false");
+    EnqueueEvent("steam_route_status", fields.str());
+}
+
 void RecordNetworkPacketReceive(
     std::uint16_t kind,
     std::uint32_t sequence,
