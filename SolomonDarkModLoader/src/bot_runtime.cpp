@@ -107,12 +107,36 @@ struct PendingBotSkillChoice {
     std::int32_t level = 0;
     std::int32_t experience = 0;
     std::vector<BotSkillChoiceOption> options;
+    std::int32_t pending_weld_build_id = -1;
+    bool pending_weld_build_id_resolved = false;
 };
 
 struct BotManaReserveState {
     std::uint64_t bot_id = 0;
     bool active = false;
     float last_ratio = 1.0f;
+};
+
+struct BotLoadoutRevisionTuple {
+    std::uint32_t loadout_revision = 0;
+    std::uint32_t spellbook_revision = 0;
+    std::uint32_t statbook_revision = 0;
+    std::uint32_t derived_stat_revision = 0;
+};
+
+struct CachedParticipantLoadoutDetails {
+    std::uint64_t participant_id = 0;
+    BotLoadoutRevisionTuple revisions;
+    uintptr_t progression_runtime_address = 0;
+    uintptr_t actor_address = 0;
+    std::int32_t active_weld_build_id = -1;
+    BotLoadoutDetails details;
+};
+
+struct ActiveBotWeldBuild {
+    std::uint64_t participant_id = 0;
+    std::uint64_t applied_generation = 0;
+    std::int32_t build_id = -1;
 };
 
 std::mutex g_bot_runtime_mutex;
@@ -130,6 +154,8 @@ std::vector<PendingBotMovementIntent> g_bot_movement_intents;
 std::vector<PendingBotDestroy> g_pending_destroys;
 std::vector<PendingBotSkillChoice> g_pending_skill_choices;
 std::vector<BotManaReserveState> g_bot_mana_reserves;
+std::vector<CachedParticipantLoadoutDetails> g_loadout_details_cache;
+std::vector<ActiveBotWeldBuild> g_active_bot_weld_builds;
 
 constexpr float kBotArrivalThreshold = 0.5f;
 constexpr float kBotManaReadinessEpsilon = 0.001f;

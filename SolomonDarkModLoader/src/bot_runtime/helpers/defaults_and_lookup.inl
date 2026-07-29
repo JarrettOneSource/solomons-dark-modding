@@ -155,6 +155,84 @@ const PendingBotSkillChoice* FindPendingSkillChoiceConst(std::uint64_t bot_id) {
     return it == g_pending_skill_choices.end() ? nullptr : &(*it);
 }
 
+bool BotLoadoutRevisionTuplesEqual(
+    const BotLoadoutRevisionTuple& left,
+    const BotLoadoutRevisionTuple& right) {
+    return left.loadout_revision == right.loadout_revision &&
+           left.spellbook_revision == right.spellbook_revision &&
+           left.statbook_revision == right.statbook_revision &&
+           left.derived_stat_revision == right.derived_stat_revision;
+}
+
+CachedParticipantLoadoutDetails* FindCachedParticipantLoadoutDetails(
+    std::uint64_t participant_id) {
+    const auto it = std::find_if(
+        g_loadout_details_cache.begin(),
+        g_loadout_details_cache.end(),
+        [&](const CachedParticipantLoadoutDetails& cached) {
+            return cached.participant_id == participant_id;
+        });
+    return it == g_loadout_details_cache.end() ? nullptr : &(*it);
+}
+
+ActiveBotWeldBuild* FindActiveBotWeldBuild(
+    std::uint64_t participant_id) {
+    const auto it = std::find_if(
+        g_active_bot_weld_builds.begin(),
+        g_active_bot_weld_builds.end(),
+        [&](const ActiveBotWeldBuild& active) {
+            return active.participant_id == participant_id;
+        });
+    return it == g_active_bot_weld_builds.end() ? nullptr : &(*it);
+}
+
+void InvalidateParticipantLoadoutDetailsLocked(
+    std::uint64_t participant_id) {
+    g_loadout_details_cache.erase(
+        std::remove_if(
+            g_loadout_details_cache.begin(),
+            g_loadout_details_cache.end(),
+            [&](const CachedParticipantLoadoutDetails& cached) {
+                return cached.participant_id == participant_id;
+            }),
+        g_loadout_details_cache.end());
+}
+
+void RemoveParticipantLoadoutStateLocked(
+    std::uint64_t participant_id) {
+    InvalidateParticipantLoadoutDetailsLocked(participant_id);
+    g_active_bot_weld_builds.erase(
+        std::remove_if(
+            g_active_bot_weld_builds.begin(),
+            g_active_bot_weld_builds.end(),
+            [&](const ActiveBotWeldBuild& active) {
+                return active.participant_id == participant_id;
+            }),
+        g_active_bot_weld_builds.end());
+}
+
+bool PromoteActiveBotWeldBuildLocked(
+    std::uint64_t participant_id,
+    std::uint64_t generation,
+    std::int32_t build_id) {
+    if (participant_id == 0 ||
+        generation == 0 ||
+        !IsNativeWeldBuildId(build_id)) {
+        return false;
+    }
+
+    auto* active = FindActiveBotWeldBuild(participant_id);
+    if (active == nullptr) {
+        g_active_bot_weld_builds.push_back(ActiveBotWeldBuild{});
+        active = &g_active_bot_weld_builds.back();
+    }
+    active->participant_id = participant_id;
+    active->applied_generation = generation;
+    active->build_id = build_id;
+    InvalidateParticipantLoadoutDetailsLocked(participant_id);
+    return true;
+}
+
 BotManaReserveState* FindBotManaReserveState(std::uint64_t bot_id) {
     const auto it = std::find_if(
         g_bot_mana_reserves.begin(),

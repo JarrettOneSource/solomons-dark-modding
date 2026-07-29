@@ -72,6 +72,13 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
         }
     }
 
+    if (selected_option.option_id ==
+            NativeSpecialChoiceActivationId() &&
+        !pending_choice.pending_weld_build_id_resolved) {
+        return fail(
+            "bot spell welding choice has no generation-captured build");
+    }
+
     SDModParticipantGameplayState gameplay_state;
     if (!TryGetParticipantGameplayState(request.bot_id, &gameplay_state) ||
         !gameplay_state.available ||
@@ -80,10 +87,14 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
     }
 
     DWORD apply_exception = 0;
+    bool special_choice_activated = false;
     if (!ApplyNativeSkillChoiceToProgression(
             gameplay_state.progression_runtime_state_address,
             selected_option,
             false,
+            pending_choice.pending_weld_build_id_resolved,
+            pending_choice.pending_weld_build_id,
+            &special_choice_activated,
             &apply_exception)) {
         return fail(
             "native bot skill choice apply failed exception=0x" +
@@ -109,8 +120,19 @@ bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_mes
 
     {
         std::scoped_lock lock(g_bot_runtime_mutex);
+        InvalidateParticipantLoadoutDetailsLocked(
+            request.bot_id);
         const auto* existing = FindPendingSkillChoiceConst(request.bot_id);
         if (existing != nullptr && existing->generation == pending_choice.generation) {
+            if (selected_option.option_id ==
+                    NativeSpecialChoiceActivationId() &&
+                special_choice_activated &&
+                pending_choice.pending_weld_build_id_resolved) {
+                (void)PromoteActiveBotWeldBuildLocked(
+                    request.bot_id,
+                    pending_choice.generation,
+                    pending_choice.pending_weld_build_id);
+            }
             RemovePendingSkillChoice(request.bot_id);
         }
     }

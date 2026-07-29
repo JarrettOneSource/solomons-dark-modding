@@ -84,5 +84,9 @@ bool UpdateBot(const BotUpdateRequest& request) {
         }
     }
 
+    if (updated && request.has_character_profile) {
+        RemoveParticipantLoadoutStateLocked(request.bot_id);
+    }
+
     return updated;
 }

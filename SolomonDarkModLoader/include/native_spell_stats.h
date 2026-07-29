@@ -45,6 +45,26 @@ struct NativeSecondarySpellManaStats {
     std::uint32_t resolver_seh_code = 0;
 };
 
+struct NativeObservedPrimarySpellStats {
+    bool resolved = false;
+    NativePrimarySpellSelection selection;
+    int current_spell_id = -1;
+    int progression_level = 1;
+    float mana_cost = 0.0f;
+    bool mana_cost_available = false;
+    float mana_spend_cost = 0.0f;
+    bool mana_spend_cost_available = false;
+    float mana_output_scale = 1.0f;
+    bool mana_output_scaled = false;
+};
+
+struct NativeSecondaryCooldownState {
+    bool resolved = false;
+    int entry_index = -1;
+    float cooldown_seconds = 0.0f;
+    float remaining_seconds = 0.0f;
+};
+
 bool TryResolveNativePrimaryEntryForElement(int element_id, int* primary_entry);
 int ResolveNativePrimaryEntryForElement(int element_id);
 std::uint32_t EncodeSkillsWizardSelectionArg(int selection_value);
@@ -69,6 +89,24 @@ bool TryResolveNativePrimarySelectionFromPair(
     int primary_entry_index,
     int combo_entry_index,
     NativePrimarySpellSelection* selection);
+bool TryResolveNativePrimarySelectionFromBuildId(
+    int build_skill_id,
+    NativePrimarySpellSelection* selection);
+bool TryResolveNativePrimaryBuildIdFromPair(
+    int primary_entry_index,
+    int combo_entry_index,
+    int* normalized_build_id);
+bool TryNormalizeNativePrimaryBuildId(
+    int native_build_id,
+    int* normalized_build_id);
+bool IsNativeWeldBuildId(int build_id);
+bool TryReadNativePendingWeldBuildId(
+    uintptr_t progression_runtime_address,
+    int* weld_build_id);
+bool TryReadNativeCurrentPrimarySelection(
+    uintptr_t progression_runtime_address,
+    NativePrimarySpellSelection* selection,
+    int* normalized_build_id);
 bool TryResolveNativePrimarySelectionFromSkillId(
     uintptr_t progression_runtime_address,
     int skill_id,
@@ -88,10 +126,25 @@ bool TryResolveNativePrimarySpellStats(
     const NativePrimarySpellSelection& selection,
     NativePrimarySpellStats* stats,
     std::string* error_message = nullptr);
+bool TryResolveNativePrimarySpellStatsPreservingSelection(
+    uintptr_t progression_runtime_address,
+    const NativePrimarySpellSelection& selection,
+    NativePrimarySpellStats* stats,
+    std::string* error_message = nullptr);
+bool TryReadNativePrimarySpellStatsFromCurrentOutput(
+    uintptr_t progression_runtime_address,
+    const NativePrimarySpellSelection& selection,
+    NativeObservedPrimarySpellStats* stats,
+    std::string* error_message = nullptr);
 bool TryResolveNativeSecondarySpellManaStats(
     uintptr_t progression_runtime_address,
     int entry_index,
     NativeSecondarySpellManaStats* stats,
+    std::string* error_message = nullptr);
+bool TryReadNativeSecondaryCooldownState(
+    uintptr_t progression_runtime_address,
+    int entry_index,
+    NativeSecondaryCooldownState* state,
     std::string* error_message = nullptr);
 
 }  // namespace sdmod

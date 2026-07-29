@@ -8,6 +8,182 @@ import re
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
+def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> str:
+    binding = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
+    )
+    runtime = _read(
+        "SolomonDarkModLoader/src/bot_runtime.cpp"
+    )
+    helper = _read(
+        "SolomonDarkModLoader/src/bot_runtime/helpers/"
+        "loadout_details.inl"
+    )
+    api = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "loadout_details_api.inl"
+    )
+    skill_choices = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "skill_choices_api.inl"
+    )
+    skill_apply = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "bot_skill_choice_api.inl"
+    )
+    native = _read(
+        "SolomonDarkModLoader/src/native_spell_stats/"
+        "primary_and_secondary_resolution.inl"
+    )
+    live_probe = _read(
+        "tests/re/run_live_native_spell_stats_probe.py"
+    )
+    layout = _read("config/binary-layout.ini")
+    docs = _read("docs/lua-bots.md")
+
+    assert (
+        'RegisterFunction(state, &LuaBotsGetLoadoutDetails, '
+        '"get_loadout_details")'
+    ) in binding
+    _require_in_order(
+        api,
+        "BotLoadoutRevisionTuplesEqual(",
+        "cached->progression_runtime_address ==",
+        "cached->actor_address == actor_address",
+        "*details = cached->details",
+        "OverlayLiveSecondaryCooldowns(",
+        "pending_weld_build_id_resolved",
+    )
+    for token in (
+        "loadout_revision",
+        "spellbook_revision",
+        "statbook_revision",
+        "derived_stat_revision",
+        "g_loadout_details_cache",
+        "g_active_bot_weld_builds",
+    ):
+        assert token in runtime + api, (
+            f"loadout revision cache lacks {token}"
+        )
+
+    assert "TryReadNativePrimarySpellStatsFromCurrentOutput(" in helper
+    assert "TryReadNativeCurrentPrimarySelection(" in helper
+    assert (
+        "TryResolveNativePrimarySpellStatsPreservingSelection("
+    ) in helper
+    assert "CallSkillsWizardBuildPrimarySpellSafe(" not in helper + api
+    assert "kSkillsWizardBuildPrimarySpell" not in helper + api
+    _require_in_order(
+        helper,
+        "TryReadNativePrimarySpellStatsFromCurrentOutput(",
+        "TryResolveNativePrimarySpellStatsPreservingSelection(",
+    )
+    _require_in_order(
+        native,
+        "bool TryResolveNativePrimarySpellStatsPreservingSelection(",
+        "previous_current_spell_id",
+        "TryResolveNativePrimarySpellStats(",
+        "RestoreProgressionCurrentSpellIdIfNeeded(",
+        "restored_current_spell_id != previous_current_spell_id",
+    )
+    _require_in_order(
+        helper,
+        "const bool frost_jet =",
+        "TryResolveNativeFrostJetQueryRange(",
+        'range_source = "native_frost_jet_query_range"',
+        "TryReadPrimarySelectionPursuitRange(",
+    )
+
+    for token in (
+        "standalone_wizard_progression_cooldown_current=0x64",
+        "standalone_wizard_progression_cooldown_cap=0x68",
+    ):
+        assert token in layout
+    for token in (
+        "kPhasingEntryIndex = 15",
+        "kTeleportEntryIndex = 48",
+        "kNativeCooldownTicksPerSecond = 100.0f",
+        "current_ticks / kNativeCooldownTicksPerSecond",
+        "cap_ticks / kNativeCooldownTicksPerSecond",
+    ):
+        assert token in native, (
+            f"validated secondary cooldown read lacks {token}"
+        )
+
+    _require_in_order(
+        skill_choices,
+        "weld_option_present",
+        "TryReadNativePendingWeldBuildId(",
+        "pending_choice->generation =",
+        "pending_choice->pending_weld_build_id =",
+    )
+    _require_in_order(
+        skill_apply,
+        "selected_option.option_id ==",
+        "!pending_choice.pending_weld_build_id_resolved",
+        "bot spell welding choice has no generation-captured build",
+        "pending_choice.pending_weld_build_id_resolved",
+        "special_choice_activated",
+        "existing->generation == pending_choice.generation",
+        "PromoteActiveBotWeldBuildLocked(",
+        "RemovePendingSkillChoice(",
+    )
+
+    push_block = binding.split(
+        "void PushBotLoadoutDetails(", 1
+    )[1].split("int LuaBotsGetLoadoutDetails(", 1)[0]
+    for forbidden in (
+        '"address"',
+        '"pointer"',
+        '"ptr"',
+        '"seh"',
+        '"exception"',
+        '"output_values"',
+    ):
+        assert forbidden not in push_block, (
+            f"loadout Lua result exposes native detail {forbidden}"
+        )
+    for token in (
+        "`sd.bots.get_loadout_details(participant_id)`",
+        "`loadout_revision`, `spellbook_revision`, `statbook_revision`,",
+        "never invokes that mutating",
+        "100 ticks per second",
+        "`cooldown_resolved = false`",
+    ):
+        assert token in docs
+
+    for token in (
+        'environment["SDMOD_DISABLE_AUDIO"] = "1"',
+        "register_owned_launch(result)",
+        "stop_owned_process_ids(process_ids)",
+        "sample.lua.bots",
+        "schema_and_primary_mutation_probe",
+        "cooldown_transition_probe",
+        "roll_weld_offer",
+        "apply_captured_weld",
+        "refresh_profile_and_reconstruct_weld",
+    ):
+        assert token in live_probe, (
+            f"Phase 2 live loadout acceptance lacks {token}"
+        )
+    acceptance_probe = live_probe.split(
+        "class OwnedSoloSession:", 1
+    )[1]
+    for forbidden in (
+        "csp.stop_game",
+        "stop_owned_game_processes(",
+        "kill_existing=True",
+    ):
+        assert forbidden not in acceptance_probe, (
+            f"Phase 2 live loadout acceptance has unsafe cleanup {forbidden}"
+        )
+
+    return (
+        "Bot loadout details are revision-cached, dynamically overlay the "
+        "proven cooldown/weld state, and never expose native state"
+    )
+
+
 def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     main = _read("mods/bot-brain/scripts/main.lua")

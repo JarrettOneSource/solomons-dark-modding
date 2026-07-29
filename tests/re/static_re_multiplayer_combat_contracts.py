@@ -883,6 +883,8 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
     native_spell_stats_text = read_native_spell_stats_source()
     native_spell_stats_header_text = read_text(NATIVE_SPELL_STATS_HEADER)
     binary_layout_text = read_text(BINARY_LAYOUT)
+    loadout_details_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/loadout_details.inl")
     doc_text = read_text(LUA_BOT_CONSTANTS_RE_DOC)
     plan_text = read_text(NATIVE_SEAM_PLAN)
     design_text = read_text(
@@ -940,7 +942,7 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         "widen_scale",
         "base_range",
         "tail_range",
-        "ReadNativePrimarySelectionPursuitRange",
+        "TryReadPrimarySelectionPursuitRange",
         "kActorAnimationSelectionStateOffset",
         "kActorControlBrainPursuitRangeOffset",
         "native_selection_pursuit_range",
@@ -950,9 +952,13 @@ def test_primary_attack_window_uses_live_native_selection_range() -> str:
         "FUN_0052C910",
         "FUN_00543860",
         "FUN_00641B10",
+        "actor_control_brain_pursuit_range",
+        "ReadParticipantLoadoutDetails",
+        "details.primary.range_resolved",
     )
     evidence_text = "\n".join((
         lua_bots_binding_text,
+        loadout_details_text,
         native_spell_stats_text,
         native_spell_stats_header_text,
         binary_layout_text,

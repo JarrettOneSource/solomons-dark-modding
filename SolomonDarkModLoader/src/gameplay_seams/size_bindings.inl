@@ -11,6 +11,8 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_entry_effective_rank", kStandaloneWizardProgressionEntryEffectiveRankOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_entry_category", kStandaloneWizardProgressionEntryCategoryOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_entry_statbook", kStandaloneWizardProgressionEntryStatbookOffset),
+        SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_cooldown_current", kStandaloneWizardProgressionCooldownCurrentOffset),
+        SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_cooldown_cap", kStandaloneWizardProgressionCooldownCapOffset),
         SDMOD_SIZE("gameplay.offsets", "standalone_wizard_progression_refresh_mode", kStandaloneWizardProgressionRefreshModeOffset),
         SDMOD_SIZE("gameplay.offsets", "player_progression_appearance_primary_a", kPlayerProgressionAppearancePrimaryAOffset),
         SDMOD_SIZE("gameplay.offsets", "player_progression_discipline_skill_row", kPlayerProgressionDisciplineSkillRowOffset),

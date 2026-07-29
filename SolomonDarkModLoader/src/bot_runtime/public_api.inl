@@ -4,5 +4,6 @@
 #include "public_api/tick_service_api.inl"
 #include "public_api/casting_api.inl"
 #include "public_api/snapshots_api.inl"
+#include "public_api/loadout_details_api.inl"
 #include "public_api/skill_choices_api.inl"
 #include "public_api/scene_intents_api.inl"

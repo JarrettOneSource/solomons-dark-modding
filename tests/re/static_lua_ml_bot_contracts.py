@@ -7,6 +7,77 @@ import json
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
+def test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete() -> str:
+    header = _read(
+        "SolomonDarkModLoader/include/bot_runtime.h"
+    )
+    binding = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
+    )
+    api = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "loadout_details_api.inl"
+    )
+
+    for token in (
+        "struct BotPrimaryLoadoutDetails",
+        "entry_id",
+        "combo_entry_id",
+        "build_id_resolved",
+        "mana_cost_resolved",
+        "mana_charge_kind",
+        "range_resolved",
+        "range_source",
+        "struct BotSecondaryLoadoutDetails",
+        "cooldown_seconds",
+        "cooldown_remaining_seconds",
+        "cooldown_resolved",
+        "pending_weld_build_id_resolved",
+        "kSecondaryLoadoutSlotCount> secondaries",
+    ):
+        assert token in header, (
+            f"ML v2 native loadout record lacks {token}"
+        )
+    for field in (
+        "participant_id",
+        "primary",
+        "secondaries",
+        "entry_id",
+        "combo_entry_id",
+        "build_id",
+        "build_id_resolved",
+        "mana_cost",
+        "mana_cost_resolved",
+        "mana_charge_kind",
+        "range_min",
+        "range_max",
+        "range_resolved",
+        "range_source",
+        "slot",
+        "cooldown_seconds",
+        "cooldown_remaining_seconds",
+        "cooldown_resolved",
+        "pending_weld_build_id",
+        "pending_weld_build_id_resolved",
+    ):
+        assert f'"{field}"' in binding, (
+            f"sd.bots.get_loadout_details omits {field}"
+        )
+
+    assert "details.secondaries.size()" in binding
+    assert "OverlayLiveSecondaryCooldowns(" in api
+    assert "FindPendingSkillChoiceConst(" in api
+    assert (
+        "ReadParticipantLoadoutDetails(\n"
+        "            bot_id,"
+    ) in binding
+
+    return (
+        "The v2 ML seam publishes one fixed, semantic loadout schema with "
+        "explicit resolution for primary, eight secondaries, and pending weld"
+    )
+
+
 def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     model = json.loads(_read("models/bot-brain/policy-v1.json"))

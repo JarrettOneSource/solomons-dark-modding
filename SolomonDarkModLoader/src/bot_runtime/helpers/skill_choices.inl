@@ -369,7 +369,11 @@ bool CallNativeLevelUpSafe(uintptr_t progression_address, DWORD* exception_code)
     }
 }
 
-bool ApplyNativeSpecialChoice(uintptr_t progression_address, DWORD* exception_code) {
+bool ApplyNativeSpecialChoice(
+    uintptr_t progression_address,
+    bool special_argument_resolved,
+    int captured_special_argument,
+    DWORD* exception_code) {
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
@@ -397,8 +401,19 @@ bool ApplyNativeSpecialChoice(uintptr_t progression_address, DWORD* exception_co
         return false;
     }
 
-    std::int32_t special_argument = 0;
-    if (!memory.TryReadField(progression_address, kProgressionSpecialChoiceArgumentOffset, &special_argument)) {
+    std::int32_t special_argument = captured_special_argument;
+    if (special_argument_resolved) {
+        if (!IsNativeWeldBuildId(special_argument) ||
+            !memory.TryWriteField(
+                progression_address,
+                kProgressionSpecialChoiceArgumentOffset,
+                special_argument)) {
+            return false;
+        }
+    } else if (!memory.TryReadField(
+                   progression_address,
+                   kProgressionSpecialChoiceArgumentOffset,
+                   &special_argument)) {
         return false;
     }
     return CallNativeProgressionIntArg(
@@ -412,7 +427,13 @@ bool ApplyNativeSkillChoiceToProgression(
     uintptr_t progression_address,
     const BotSkillChoiceOption& option,
     bool publish_local_gameplay_side_effects,
+    bool special_argument_resolved,
+    int captured_special_argument,
+    bool* special_choice_activated,
     DWORD* exception_code) {
+    if (special_choice_activated != nullptr) {
+        *special_choice_activated = false;
+    }
     if (exception_code != nullptr) {
         *exception_code = 0;
     }
@@ -471,6 +492,17 @@ bool ApplyNativeSkillChoiceToProgression(
     const bool effective_local_gameplay_side_effects =
         publish_local_gameplay_side_effects;
 
+    const auto special_choice_id = NativeSpecialChoiceActivationId();
+    if (option.option_id == special_choice_id &&
+        special_argument_resolved &&
+        (!IsNativeWeldBuildId(captured_special_argument) ||
+         !ProcessMemory::Instance().TryWriteField(
+             progression_address,
+             kProgressionSpecialChoiceArgumentOffset,
+             captured_special_argument))) {
+        return false;
+    }
+
     const auto apply_count = std::clamp(option.apply_count, 1, 2);
     for (int apply_index = 0; apply_index < apply_count; ++apply_index) {
         // The third native argument publishes one-shot local gameplay side
@@ -500,15 +532,20 @@ bool ApplyNativeSkillChoiceToProgression(
             &visible_after_choice,
             &category_after_choice);
 
-    const auto special_choice_id = NativeSpecialChoiceActivationId();
     if (option.option_id == special_choice_id) {
         DWORD special_exception = 0;
-        if (!ApplyNativeSpecialChoice(progression_address, &special_exception)) {
+        if (!ApplyNativeSpecialChoice(
+                progression_address,
+                special_argument_resolved,
+                captured_special_argument,
+                &special_exception)) {
             Log(
                 "[bots] native special skill choice post-apply path failed progression=" +
                 HexString(progression_address) +
                 " choice_id=" + std::to_string(special_choice_id) +
                 " exception=0x" + HexString(special_exception));
+        } else if (special_choice_activated != nullptr) {
+            *special_choice_activated = true;
         }
     }
 

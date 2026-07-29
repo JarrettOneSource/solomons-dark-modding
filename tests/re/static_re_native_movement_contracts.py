@@ -431,6 +431,8 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
     pure_primary_probe_text = read_text(PURE_PRIMARY_STARTUP_LIVE_PROBE)
     lua_combat_text = read_text(ROOT / "mods/lua_bots/scripts/lib/lua_bots/combat.lua")
     lua_bots_binding_text = read_text(ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp")
+    loadout_details_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/bot_runtime/helpers/loadout_details.inl")
     live_probe_text = read_text(ROOT / "tests/re/run_live_cast_shim_snapshot_probe.py")
 
     required_doc_tokens = (
@@ -797,9 +799,10 @@ def test_cast_state_native_contracts_are_documented_and_layout_backed() -> str:
         (lua_debug_text, "lua_debug", "LuaDebugLayoutOffset"),
         (lua_debug_text, "lua_debug", "layout_offset"),
         (lua_bots_binding_text, "lua_bots", "get_primary_attack_window"),
-        (lua_bots_binding_text, "lua_bots", "kActorAnimationSelectionStateOffset"),
-        (lua_bots_binding_text, "lua_bots", "kActorControlBrainPursuitRangeOffset"),
-        (lua_bots_binding_text, "lua_bots", "TryResolveNativeFrostJetQueryRange"),
+        (lua_bots_binding_text, "lua_bots", "ReadParticipantLoadoutDetails"),
+        (loadout_details_text, "loadout_details", "kActorAnimationSelectionStateOffset"),
+        (loadout_details_text, "loadout_details", "kActorControlBrainPursuitRangeOffset"),
+        (loadout_details_text, "loadout_details", "TryResolveNativeFrostJetQueryRange"),
         (cast_state_probe_text, "cast_state_probe", "read_runtime_layout_offset(\"actor_spell_config_298\")"),
         (player_watch_text, "player_watch", "ACTOR_ACTIVE_CAST_GROUP_OFFSET"),
         (slot_watch_text, "slot_watch", "ACTOR_ANIMATION_SELECTION_STATE_OFFSET"),

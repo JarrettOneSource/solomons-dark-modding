@@ -27,10 +27,12 @@ from static_lua_bot_players_contracts import (
     test_lua_bots_are_synthetic_remote_participants,
 )
 from static_lua_bot_brain_contracts import (
+    test_bot_loadout_details_are_cached_address_free_and_observation_safe,
     test_lua_bot_brain_late_join_waits_for_complete_host_settings,
     test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
 )
 from static_lua_ml_bot_contracts import (
+    test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
     test_ml_bot_is_simulation_timed_local_and_native_action_routed,
 )
 from static_lua_draw_contracts import (
@@ -570,8 +572,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
     ),
     (
+        "Lua bot loadout details are cached and observation-safe",
+        test_bot_loadout_details_are_cached_address_free_and_observation_safe,
+    ),
+    (
         "Learned Lua bot is simulation-timed and native action-routed",
         test_ml_bot_is_simulation_timed_local_and_native_action_routed,
+    ),
+    (
+        "ML bot v2 native loadout schema is semantic and complete",
+        test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
     ),
     (
         "Lua bot brain late join waits for complete host settings",

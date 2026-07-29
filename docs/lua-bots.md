@@ -101,6 +101,86 @@ integer.
 `sd.bots.list()` returns handles for active synthetic participants in
 participant-ID order.
 
+## Semantic loadout details
+
+`sd.bots.get_loadout_details(participant_id)` returns the active native spell
+semantics needed by a bot brain without exposing process addresses:
+
+```lua
+{
+  participant_id = 4097,
+  primary = {
+    entry_id = 8,
+    combo_entry_id = 16,
+    build_id = 1000,
+    build_id_resolved = true,
+    mana_cost = 23.383497,
+    mana_cost_resolved = true,
+    mana_charge_kind = "per_cast", -- "per_second" or "none" when unresolved
+    range_min = 0.0,
+    range_max = 326.381989,
+    range_resolved = true,
+    range_source = "native_selection_pursuit_range",
+  },
+  secondaries = {
+    {
+      slot = 1,
+      entry_id = 15,
+      mana_cost = 75.0,
+      mana_cost_resolved = true,
+      cooldown_seconds = 1.0,
+      cooldown_remaining_seconds = 0.0,
+      cooldown_resolved = true,
+    },
+    -- exactly eight rows in slot order
+  },
+  pending_weld_build_id = 0,
+  pending_weld_build_id_resolved = false,
+}
+```
+
+The numeric values above are one live level-4 example; effective costs vary
+with the participant's native progression and stat modifiers.
+
+Unknown participant IDs return `nil`. Empty secondary slots have
+`entry_id = -1`; all numeric semantic fields remain present, and every value
+that can fail native resolution has a corresponding `*_resolved` flag.
+Callers must not infer resolution from a zero value.
+
+Base primary build IDs are normalized to their entry IDs
+(`8`, `16`, `24`, `32`, or `40`). Welds retain native build IDs
+`1000` through `1009`. A pending Spell Welding offer exposes its
+generation-captured build only through `pending_weld_build_id`; the active
+primary does not change until option `52` is successfully applied. Existing
+loaded welds are reconstructed from the live current-primary state.
+If the offer-time build cannot be resolved, bot application of option `52`
+fails instead of reading a later, generation-ambiguous `+0x844` value.
+
+Primary and secondary mana values are effective native spend costs. The
+primary's charge kind is `per_cast` or `per_second`. Primary observation reads
+the already-materialized native stat vector when it is valid. On a revision
+cache miss with a stale vector, it may invoke the native primary builder once
+while preserving the active spell selection; it never invokes that mutating
+builder on each 100 ms observation. Static values are cached by the
+participant's `loadout_revision`, `spellbook_revision`, `statbook_revision`,
+and `derived_stat_revision` tuple. Profile changes, participant lifecycle
+changes, skill application, and successful weld promotion invalidate the
+cache.
+
+Per-secondary cooldown state is proven only for Phasing (`15`) and Teleport
+(`48`). Their native float counters use 100 ticks per second and are converted
+to seconds by this API. Every other secondary reports
+`cooldown_resolved = false`; bot policy should then use the participant's
+global `cast_ready` state as its readiness fallback. Cooldown counters and the
+pending weld are overlaid live rather than frozen in the revision cache.
+
+`sd.bots.get_primary_attack_window(participant_id[, element_id])` remains
+available for older brains and delegates to the same primary range producer.
+The optional `element_id` argument is accepted for compatibility; the active
+build is authoritative. Frost Jet uses its progression-dependent native
+damage-query range. Other primaries, including Water-containing welds, use
+their actor selection's live pursuit range.
+
 ## Brain tick
 
 Bot brains use the existing runtime event service. Do not create a native

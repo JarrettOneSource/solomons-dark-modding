@@ -1,6 +1,4 @@
 #include "lua_engine_bindings_internal.h"
-#include "gameplay_seams.h"
-#include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "native_spell_stats.h"
@@ -11,115 +9,6 @@
 
 namespace sdmod::detail {
 namespace {
-
-struct PrimaryAttackWindow {
-    bool resolved = false;
-    bool native_backed = false;
-    float min_range = 0.0f;
-    float max_range = 0.0f;
-    const char* source = "unresolved";
-};
-
-bool ReadNativePrimarySelectionPursuitRange(
-    uintptr_t actor_address,
-    float* range,
-    const char** source) {
-    if (range != nullptr) {
-        *range = 0.0f;
-    }
-    if (source != nullptr) {
-        *source = "unresolved";
-    }
-
-    if (actor_address == 0 ||
-        kActorAnimationSelectionStateOffset == 0 ||
-        kActorControlBrainPursuitRangeOffset == 0) {
-        return false;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.IsReadableRange(actor_address + kActorAnimationSelectionStateOffset, sizeof(uintptr_t))) {
-        return false;
-    }
-
-    uintptr_t selection_state = 0;
-    if (!memory.TryReadField(actor_address, kActorAnimationSelectionStateOffset, &selection_state)) {
-        return false;
-    }
-    if (selection_state == 0 ||
-        !memory.IsReadableRange(selection_state + kActorControlBrainPursuitRangeOffset, sizeof(float))) {
-        return false;
-    }
-
-    float pursuit_range = 0.0f;
-    if (!memory.TryReadValue(selection_state + kActorControlBrainPursuitRangeOffset, &pursuit_range) ||
-        !std::isfinite(pursuit_range) ||
-        pursuit_range <= 0.0f) {
-        return false;
-    }
-
-    if (range != nullptr) {
-        *range = pursuit_range;
-    }
-    if (source != nullptr) {
-        *source = "native_selection_pursuit_range";
-    }
-    return true;
-}
-
-PrimaryAttackWindow ResolvePrimaryAttackWindow(
-    const multiplayer::BotSnapshot* snapshot,
-    int element_id,
-    uintptr_t actor_address) {
-    PrimaryAttackWindow window{};
-    if (snapshot == nullptr ||
-        (element_id >= 0 &&
-         element_id != snapshot->character_profile.element_id)) {
-        return window;
-    }
-
-    NativePrimarySpellSelection selection{};
-    if (!TryResolveNativePrimarySelectionForProfile(
-            snapshot->character_profile,
-            &selection)) {
-        return window;
-    }
-
-    const auto water_primary_entry =
-        ResolveNativePrimaryEntryForElement(1);
-    const bool frost_jet =
-        selection.primary_entry_index == water_primary_entry &&
-        selection.combo_entry_index == water_primary_entry;
-    if (frost_jet) {
-        float effective_range = 0.0f;
-        if (!TryResolveNativeFrostJetQueryRange(
-                snapshot->progression_runtime_state_address,
-                &effective_range,
-                nullptr)) {
-            return window;
-        }
-        window.resolved = true;
-        window.native_backed = true;
-        window.max_range = effective_range;
-        window.source = "native_frost_jet_query_range";
-        return window;
-    }
-
-    float max_range = 0.0f;
-    const char* source = "unresolved";
-    if (!ReadNativePrimarySelectionPursuitRange(
-            actor_address,
-            &max_range,
-            &source)) {
-        return window;
-    }
-
-    window.resolved = true;
-    window.native_backed = true;
-    window.max_range = max_range;
-    window.source = source;
-    return window;
-}
 
 #include "lua_engine_bindings_bots/participant_handle_bindings.inl"
 
@@ -535,6 +424,152 @@ int LuaBotsResolvePrimaryEntry(lua_State* state) {
     return 1;
 }
 
+void PushBotLoadoutDetails(
+    lua_State* state,
+    const multiplayer::BotLoadoutDetails& details) {
+    lua_createtable(state, 0, 4);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(details.participant_id));
+    lua_setfield(state, -2, "participant_id");
+
+    lua_createtable(state, 0, 11);
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(details.primary.entry_id));
+    lua_setfield(state, -2, "entry_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            details.primary.combo_entry_id));
+    lua_setfield(state, -2, "combo_entry_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(details.primary.build_id));
+    lua_setfield(state, -2, "build_id");
+    lua_pushboolean(
+        state,
+        details.primary.build_id_resolved ? 1 : 0);
+    lua_setfield(state, -2, "build_id_resolved");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(details.primary.mana_cost));
+    lua_setfield(state, -2, "mana_cost");
+    lua_pushboolean(
+        state,
+        details.primary.mana_cost_resolved ? 1 : 0);
+    lua_setfield(state, -2, "mana_cost_resolved");
+    lua_pushstring(
+        state,
+        multiplayer::BotManaChargeKindLabel(
+            details.primary.mana_charge_kind));
+    lua_setfield(state, -2, "mana_charge_kind");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(details.primary.range_min));
+    lua_setfield(state, -2, "range_min");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(details.primary.range_max));
+    lua_setfield(state, -2, "range_max");
+    lua_pushboolean(
+        state,
+        details.primary.range_resolved ? 1 : 0);
+    lua_setfield(state, -2, "range_resolved");
+    lua_pushlstring(
+        state,
+        details.primary.range_source.data(),
+        details.primary.range_source.size());
+    lua_setfield(state, -2, "range_source");
+    lua_setfield(state, -2, "primary");
+
+    lua_createtable(
+        state,
+        static_cast<int>(details.secondaries.size()),
+        0);
+    for (std::size_t index = 0;
+         index < details.secondaries.size();
+         ++index) {
+        const auto& row = details.secondaries[index];
+        lua_createtable(state, 0, 7);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(row.slot));
+        lua_setfield(state, -2, "slot");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(row.entry_id));
+        lua_setfield(state, -2, "entry_id");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(row.mana_cost));
+        lua_setfield(state, -2, "mana_cost");
+        lua_pushboolean(
+            state,
+            row.mana_cost_resolved ? 1 : 0);
+        lua_setfield(state, -2, "mana_cost_resolved");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(row.cooldown_seconds));
+        lua_setfield(state, -2, "cooldown_seconds");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(
+                row.cooldown_remaining_seconds));
+        lua_setfield(
+            state,
+            -2,
+            "cooldown_remaining_seconds");
+        lua_pushboolean(
+            state,
+            row.cooldown_resolved ? 1 : 0);
+        lua_setfield(state, -2, "cooldown_resolved");
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "secondaries");
+
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            details.pending_weld_build_id));
+    lua_setfield(state, -2, "pending_weld_build_id");
+    lua_pushboolean(
+        state,
+        details.pending_weld_build_id_resolved ? 1 : 0);
+    lua_setfield(
+        state,
+        -2,
+        "pending_weld_build_id_resolved");
+}
+
+int LuaBotsGetLoadoutDetails(lua_State* state) {
+    std::uint64_t participant_id = 0;
+    std::string error_message;
+    if (!ParseBotIdArgument(
+            state,
+            1,
+            &participant_id,
+            &error_message)) {
+        return luaL_error(
+            state,
+            "%s",
+            error_message.c_str());
+    }
+
+    multiplayer::BotLoadoutDetails details;
+    if (!multiplayer::ReadParticipantLoadoutDetails(
+            participant_id,
+            &details)) {
+        lua_pushnil(state);
+        return 1;
+    }
+    PushBotLoadoutDetails(state, details);
+    return 1;
+}
+
 int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
     std::uint64_t bot_id = 0;
     std::string error_message;
@@ -542,43 +577,36 @@ int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
         return luaL_error(state, "%s", error_message.c_str());
     }
 
-    int element_id = -1;
     if (lua_gettop(state) >= 2 && !lua_isnil(state, 2)) {
         if (!lua_isinteger(state, 2) && !lua_isnumber(state, 2)) {
             return luaL_error(state, "sd.bots.get_primary_attack_window element_id must be an integer");
         }
-        element_id = static_cast<int>(lua_tointeger(state, 2));
     }
 
-    uintptr_t actor_address = 0;
-    multiplayer::BotSnapshot snapshot;
-    const bool have_snapshot =
-        multiplayer::ReadBotSnapshot(bot_id, &snapshot) &&
-        snapshot.available;
-    if (have_snapshot) {
-        if (element_id < 0) {
-            element_id = snapshot.character_profile.element_id;
-        }
-        actor_address = snapshot.actor_address;
-    }
-
-    const auto window = ResolvePrimaryAttackWindow(
-        have_snapshot ? &snapshot : nullptr,
-        element_id,
-        actor_address);
-    if (!window.resolved) {
+    multiplayer::BotLoadoutDetails details;
+    if (!multiplayer::ReadParticipantLoadoutDetails(
+            bot_id,
+            &details) ||
+        !details.primary.range_resolved) {
         lua_pushnil(state);
         return 1;
     }
 
     lua_createtable(state, 0, 4);
-    lua_pushnumber(state, static_cast<lua_Number>(window.min_range));
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(details.primary.range_min));
     lua_setfield(state, -2, "min_range");
-    lua_pushnumber(state, static_cast<lua_Number>(window.max_range));
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(details.primary.range_max));
     lua_setfield(state, -2, "max_range");
-    lua_pushboolean(state, window.native_backed ? 1 : 0);
+    lua_pushboolean(state, 1);
     lua_setfield(state, -2, "native_backed");
-    lua_pushstring(state, window.source);
+    lua_pushlstring(
+        state,
+        details.primary.range_source.data(),
+        details.primary.range_source.size());
     lua_setfield(state, -2, "source");
     return 1;
 }
@@ -586,7 +614,7 @@ int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 21);
+    lua_createtable(state, 0, 22);
     RegisterFunction(state, &LuaBotsSpawn, "spawn");
     RegisterFunction(state, &LuaBotsList, "list");
     RegisterFunction(state, &LuaBotsCreate, "create");
@@ -607,6 +635,7 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsChooseSkill, "choose_skill");
     RegisterFunction(state, &LuaBotsDebugSyncLevelUp, "debug_sync_level_up");
     RegisterFunction(state, &LuaBotsResolvePrimaryEntry, "resolve_primary_entry");
+    RegisterFunction(state, &LuaBotsGetLoadoutDetails, "get_loadout_details");
     RegisterFunction(state, &LuaBotsGetPrimaryAttackWindow, "get_primary_attack_window");
     lua_setfield(state, -2, "bots");
 }

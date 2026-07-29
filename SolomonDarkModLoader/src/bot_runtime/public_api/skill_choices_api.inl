@@ -75,6 +75,11 @@ void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintpt
                 " exception=0x" + HexString(sync_exception));
             continue;
         }
+        {
+            std::scoped_lock lock(g_bot_runtime_mutex);
+            InvalidateParticipantLoadoutDetailsLocked(
+                target.bot_id);
+        }
 
         std::vector<BotSkillChoiceOption> options;
         DWORD roll_exception = 0;
@@ -97,6 +102,21 @@ void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintpt
             continue;
         }
 
+        const bool weld_option_present =
+            std::any_of(
+                options.begin(),
+                options.end(),
+                [&](const BotSkillChoiceOption& option) {
+                    return option.option_id ==
+                        NativeSpecialChoiceActivationId();
+                });
+        std::int32_t pending_weld_build_id = -1;
+        const bool pending_weld_build_id_resolved =
+            weld_option_present &&
+            TryReadNativePendingWeldBuildId(
+                target.progression_address,
+                &pending_weld_build_id);
+
         std::scoped_lock lock(g_bot_runtime_mutex);
         auto* pending_choice = FindPendingSkillChoice(target.bot_id);
         if (pending_choice == nullptr) {
@@ -109,6 +129,12 @@ void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintpt
         pending_choice->level = level;
         pending_choice->experience = experience;
         pending_choice->options = options;
+        pending_choice->pending_weld_build_id =
+            pending_weld_build_id;
+        pending_choice->pending_weld_build_id_resolved =
+            pending_weld_build_id_resolved;
+        InvalidateParticipantLoadoutDetailsLocked(
+            target.bot_id);
 
         Log(
             "[bots] native skill choices pending. bot_id=" +
@@ -122,6 +148,10 @@ void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintpt
             " xp=" + std::to_string(experience) +
             " requested_choice_count=" + std::to_string(requested_choice_count) +
             " option_count=" + std::to_string(options.size()) +
+            " pending_weld_build_id=" +
+                (pending_weld_build_id_resolved
+                     ? std::to_string(pending_weld_build_id)
+                     : std::string("unresolved")) +
             " options=[" + FormatSkillChoiceOptionsForLog(options) + "]");
     }
 }
@@ -144,6 +174,11 @@ void UpdateParticipantLevelProfileState(
             participant->runtime.experience_next = next_experience;
         }
     });
+    {
+        std::scoped_lock lock(g_bot_runtime_mutex);
+        InvalidateParticipantLoadoutDetailsLocked(
+            participant_id);
+    }
 }
 
 struct LocalSharedLevelUpVitalsSnapshot {
@@ -622,6 +657,9 @@ bool ApplyParticipantSkillChoiceOption(
                     gameplay_state.progression_runtime_state_address,
                     option,
                     false,
+                    false,
+                    -1,
+                    nullptr,
                     &apply_exception);
             },
             &concentration_error)) {
@@ -649,6 +687,11 @@ bool ApplyParticipantSkillChoiceOption(
         return fail("participant native skill choice next-xp read failed");
     }
     UpdateParticipantLevelProfileState(participant_id, level, experience, next_experience);
+    {
+        std::scoped_lock lock(g_bot_runtime_mutex);
+        InvalidateParticipantLoadoutDetailsLocked(
+            participant_id);
+    }
     return true;
 }
 

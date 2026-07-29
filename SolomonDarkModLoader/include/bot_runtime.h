@@ -37,6 +37,41 @@ struct BotManaCost {
     std::int32_t skill_id = 0;
 };
 
+struct BotPrimaryLoadoutDetails {
+    std::int32_t entry_id = -1;
+    std::int32_t combo_entry_id = -1;
+    std::int32_t build_id = 0;
+    bool build_id_resolved = false;
+    float mana_cost = 0.0f;
+    bool mana_cost_resolved = false;
+    BotManaChargeKind mana_charge_kind = BotManaChargeKind::None;
+    float range_min = 0.0f;
+    float range_max = 0.0f;
+    bool range_resolved = false;
+    std::string range_source = "unresolved";
+};
+
+struct BotSecondaryLoadoutDetails {
+    std::int32_t slot = 0;
+    std::int32_t entry_id = -1;
+    float mana_cost = 0.0f;
+    bool mana_cost_resolved = false;
+    float cooldown_seconds = 0.0f;
+    float cooldown_remaining_seconds = 0.0f;
+    bool cooldown_resolved = false;
+};
+
+struct BotLoadoutDetails {
+    bool available = false;
+    std::uint64_t participant_id = 0;
+    BotPrimaryLoadoutDetails primary;
+    std::array<
+        BotSecondaryLoadoutDetails,
+        kSecondaryLoadoutSlotCount> secondaries;
+    std::int32_t pending_weld_build_id = 0;
+    bool pending_weld_build_id_resolved = false;
+};
+
 constexpr float kBotManaReserveEnterRatio = 0.10f;
 constexpr float kBotManaReserveExitRatio = 0.80f;
 
@@ -325,6 +360,9 @@ std::uint32_t GetBotCount();
 bool ReadBotSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot);
 bool ReadBotSnapshotByIndex(std::uint32_t index, BotSnapshot* snapshot);
 bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot);
+bool ReadParticipantLoadoutDetails(
+    std::uint64_t participant_id,
+    BotLoadoutDetails* details);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);

@@ -36,6 +36,11 @@ bool RefreshParticipantNativeProgression(
                 : "participant native progression refresh Concentrate isolation failed: " +
                       concentration_error);
     }
+    {
+        std::scoped_lock lock(g_bot_runtime_mutex);
+        InvalidateParticipantLoadoutDetailsLocked(
+            participant_id);
+    }
     return true;
 }
 
@@ -65,6 +70,9 @@ bool ApplyLocalPlayerSkillChoiceOption(
             player_state.progression_address,
             option,
             true,
+            false,
+            -1,
+            nullptr,
             &apply_exception)) {
         return fail(
             "local native skill choice apply failed exception=0x" +
@@ -87,6 +95,11 @@ bool ApplyLocalPlayerSkillChoiceOption(
         return fail("local native skill choice next-xp read failed");
     }
     UpdateParticipantLevelProfileState(kLocalParticipantId, level, experience, next_experience);
+    {
+        std::scoped_lock lock(g_bot_runtime_mutex);
+        InvalidateParticipantLoadoutDetailsLocked(
+            kLocalParticipantId);
+    }
     return true;
 }
 
