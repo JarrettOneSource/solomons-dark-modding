@@ -1,12 +1,8 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.23
+# Solomon Dark Multiplayer Beta v0.1.0-beta.24
 
-- FIXED — Internet multiplayer no longer suffers client-side hard lag spikes from app-thread socket starvation and freeze-then-64-packet catch-up bursts. A dedicated bounded receiver queue now feeds a paced 16-packet/2ms apply budget.
-- FIXED — Universal 1,200-byte packet framing and reassembly lets large packets survive real internet MTUs. A bounded cumulative-ACK hit-feedback window prevents retransmission amplification, and asynchronous logging removes synchronous flush stalls of up to 180ms. Set `SDMOD_NETWORK_TELEMETRY=1` to write `.sdmod/logs/network-telemetry.jsonl`.
-- FIXED — Synthetic gameplay-slot participants now activate their equipped primary and combo progression rows through the stock choice path.
-- FIXED — The equipped spell's native effective range, including progression-dependent range, is now exposed through the bot API.
-- FIXED — Frost Jet range queries now resolve `mWiden` from live native progression before the first cast instead of reading a dispatch-only actor cache.
-- FIXED — The native Frost Jet damage-context branch no longer skips authoritative damage for nonzero gameplay slots.
-- FIXED — Bot framework navigation now recognizes native openable and pushable obstacle classes while preserving fixed-scenery collision, with read-only applied-damage telemetry for unattended validation.
+- FIXED — Framework pathfinding now identifies genuinely openable native obstacles by collision-builder class and live record ownership. Swinging gates can be planned through and pushed open on contact, while fixed grates, fences, walls, fenceposts, and scenery that share the same collision mask remain blocked.
+- FIXED — A clear straight approach to a hinged obstacle now stays direct instead of being forced through artificial grid corners.
+- FIXED — The Lua framework now exposes authoritative per-fighter damage-dealt and damage-taken observations, read-only navigation and scenery inspection helpers, and match-state getters.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
