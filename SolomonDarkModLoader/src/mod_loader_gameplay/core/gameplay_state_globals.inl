@@ -28,6 +28,17 @@ bool g_earth_boulder_damage_observation_armed = false;
 std::uint64_t g_next_earth_boulder_damage_observation_sequence = 1;
 std::vector<SDModEarthBoulderDamageObservation>
     g_earth_boulder_damage_observations;
+constexpr std::size_t kMaximumMatchDamageObservations = 4096;
+std::mutex g_enemy_damage_observation_mutex;
+bool g_enemy_damage_observation_armed = false;
+std::uint64_t g_next_enemy_damage_observation_sequence = 1;
+std::vector<SDModEnemyDamageObservation>
+    g_enemy_damage_observations;
+std::mutex g_player_damage_observation_mutex;
+bool g_player_damage_observation_armed = false;
+std::uint64_t g_next_player_damage_observation_sequence = 1;
+std::vector<SDModPlayerDamageObservation>
+    g_player_damage_observations;
 
 ObservedActorAnimationDriveProfile g_observed_idle_animation_profile;
 ObservedActorAnimationDriveProfile g_observed_moving_animation_profile;

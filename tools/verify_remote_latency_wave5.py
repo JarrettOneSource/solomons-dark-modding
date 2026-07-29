@@ -2213,6 +2213,12 @@ def close_local_launch_wrapper(
 ) -> None:
     key = (str(session_directory), peer.instance)
     process = _LOCAL_LAUNCH_WRAPPERS.pop(key, None)
+    close_local_process_wrapper(process)
+
+
+def close_local_process_wrapper(
+    process: subprocess.Popen[str] | None,
+) -> None:
     if process is None:
         return
     try:
@@ -2224,6 +2230,59 @@ def close_local_launch_wrapper(
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+
+def launch_local_process_with_ledger(
+    command: list[str],
+    *,
+    ledger: Path,
+    launch_log: Path,
+    timeout: float = 120,
+) -> tuple[dict[str, Any], subprocess.Popen[str]]:
+    stream = launch_log.open(
+        "x",
+        encoding="utf-8",
+        newline="\n",
+    )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        stream.close()
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            if ledger.is_file():
+                try:
+                    return (
+                        json.loads(ledger.read_text(encoding="utf-8")),
+                        process,
+                    )
+                except json.JSONDecodeError:
+                    pass
+            return_code = process.poll()
+            if return_code is not None:
+                raise VerificationFailure(
+                    "Local launcher exited before writing its exact "
+                    f"process ledger (exit {return_code}): "
+                    f"{launch_log.read_text(
+                        encoding='utf-8', errors='replace')!r}"
+                )
+            time.sleep(0.1)
+        raise VerificationFailure(
+            "Local launcher did not write its exact process ledger "
+            f"within {timeout:.0f} seconds: "
+            f"{launch_log.read_text(
+                encoding='utf-8', errors='replace')!r}"
+        )
+    except Exception:
+        close_local_process_wrapper(process)
+        raise
 
 
 def settings_path(config: HarnessConfig, role: Role) -> Path:
@@ -2283,46 +2342,14 @@ def launch_local_peer(
     launch_log = (
         session_directory / f"{peer.role}-local-launch.log"
     )
-    stream = launch_log.open(
-        "x",
-        encoding="utf-8",
-        newline="\n",
+    payload, process = launch_local_process_with_ledger(
+        command,
+        ledger=ledger,
+        launch_log=launch_log,
     )
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=ROOT,
-            stdout=stream,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-    finally:
-        stream.close()
     key = (str(session_directory), peer.instance)
     _LOCAL_LAUNCH_WRAPPERS[key] = process
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        if ledger.is_file():
-            try:
-                return json.loads(
-                    ledger.read_text(encoding="utf-8")
-                )
-            except json.JSONDecodeError:
-                pass
-        return_code = process.poll()
-        if return_code is not None:
-            raise VerificationFailure(
-                "Local launcher exited before writing its exact "
-                f"process ledger (exit {return_code}): "
-                f"{launch_log.read_text(
-                    encoding='utf-8', errors='replace')!r}"
-            )
-        time.sleep(0.1)
-    raise VerificationFailure(
-        "Local launcher did not write its exact process ledger "
-        f"within 120 seconds: {launch_log.read_text(
-            encoding='utf-8', errors='replace')!r}"
-    )
+    return payload
 
 
 def launch_remote_peer(
@@ -2962,6 +2989,14 @@ def wait_run_roster(
         }
 
 
+def is_transient_scene_churn(message: str) -> bool:
+    text = message.casefold()
+    return "scene" in text and any(
+        token in text
+        for token in ("churn", "settling", "not stable")
+    )
+
+
 def start_testrun(config: HarnessConfig, host: Peer) -> dict[str, str]:
     code = r"""
 local invoked, ok, result = pcall(sd.hub.start_testrun)
@@ -2974,7 +3009,7 @@ print("result=" .. tostring(
         last = parse_key_values(lua(config, host, code))
         if last.get("ok") == "true":
             return last
-        if "settling" not in last.get("result", "").casefold():
+        if not is_transient_scene_churn(last.get("result", "")):
             raise VerificationFailure(
                 f"Host could not enter the retail test run: {last}"
             )

@@ -153,6 +153,74 @@ int LuaHubStartTestrun(lua_State* state) {
     return 1;
 }
 
+void PushSolomonDigState(
+    lua_State* state,
+    const SDModSolomonDigState& solomon) {
+    lua_createtable(state, 0, 8);
+    lua_pushboolean(state, solomon.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(solomon.actor_address));
+    lua_setfield(state, -2, "actor_address");
+    lua_pushnumber(state, static_cast<lua_Number>(solomon.x));
+    lua_setfield(state, -2, "x");
+    lua_pushnumber(state, static_cast<lua_Number>(solomon.y));
+    lua_setfield(state, -2, "y");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(solomon.interaction_state));
+    lua_setfield(state, -2, "interaction_state");
+    lua_pushboolean(state, solomon.participant_acquired ? 1 : 0);
+    lua_setfield(state, -2, "participant_acquired");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(solomon.target_gameplay_slot));
+    lua_setfield(state, -2, "target_gameplay_slot");
+}
+
+int LuaHubGetSolomonDigState(lua_State* state) {
+    SDModSolomonDigState solomon;
+    if (!TryGetSolomonDigState(&solomon)) {
+        return luaL_error(
+            state,
+            "sd.hub.get_solomon_dig_state failed: "
+            "the live Solomon Dig actor is unavailable.");
+    }
+    PushSolomonDigState(state, solomon);
+    return 1;
+}
+
+int LuaHubTriggerSolomonDig(lua_State* state) {
+    if (multiplayer::IsLocalTransportClient()) {
+        return luaL_error(
+            state,
+            "sd.hub.trigger_solomon_dig is host-only while connected "
+            "to a multiplayer session.");
+    }
+
+    SDModSolomonDigState solomon;
+    if (!TryGetSolomonDigState(&solomon)) {
+        return luaL_error(
+            state,
+            "sd.hub.trigger_solomon_dig failed: "
+            "the live Solomon Dig actor is unavailable.");
+    }
+
+    // Do not write Solomon state or invoke the wave starter. This acknowledges
+    // only the stock proximity/conversation transition after the native actor
+    // has acquired a real gameplay slot.
+    const bool native_conversation_triggered =
+        solomon.valid &&
+        solomon.participant_acquired &&
+        solomon.target_gameplay_slot >= 0 &&
+        solomon.target_gameplay_slot < 4 &&
+        solomon.interaction_state >= 1;
+    lua_pushboolean(state, native_conversation_triggered ? 1 : 0);
+    PushSolomonDigState(state, solomon);
+    return 2;
+}
+
 int LuaHubOpenService(lua_State* state) {
     const auto* service_name = luaL_checkstring(state, 1);
     std::string error_message;
@@ -458,8 +526,16 @@ void RegisterLuaInputBindings(lua_State* state) {
 }
 
 void RegisterLuaHubBindings(lua_State* state) {
-    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 5);
     RegisterFunction(state, &LuaHubStartTestrun, "start_testrun");
+    RegisterFunction(
+        state,
+        &LuaHubGetSolomonDigState,
+        "get_solomon_dig_state");
+    RegisterFunction(
+        state,
+        &LuaHubTriggerSolomonDig,
+        "trigger_solomon_dig");
     RegisterFunction(state, &LuaHubOpenService, "open_service");
     RegisterFunction(state, &LuaHubGetSurfaceState, "get_surface_state");
     lua_setfield(state, -2, "hub");

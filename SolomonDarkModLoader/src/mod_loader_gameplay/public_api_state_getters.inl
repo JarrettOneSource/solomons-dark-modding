@@ -1283,3 +1283,64 @@ bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors) {
                false,
                actors);
 }
+
+bool TryGetSolomonDigState(SDModSolomonDigState* state) {
+    if (state == nullptr) {
+        return false;
+    }
+    *state = SDModSolomonDigState{};
+
+    SDModSceneState scene;
+    if (!TryGetSceneState(&scene) ||
+        (!scene.valid ||
+         (scene.kind != "run" && scene.name != "testrun"))) {
+        return false;
+    }
+
+    constexpr std::uint32_t kSolomonDigPublicNativeTypeId = 0x1391;
+    std::vector<SDModSceneActorState> actors;
+    if (!TryListSceneActors(&actors)) {
+        return false;
+    }
+    const auto actor = std::find_if(
+        actors.begin(),
+        actors.end(),
+        [](const SDModSceneActorState& candidate) {
+            return candidate.object_type_id ==
+                kSolomonDigPublicNativeTypeId;
+        });
+    if (actor == actors.end() || actor->actor_address == 0) {
+        return false;
+    }
+
+    std::int32_t interaction_state = -1;
+    std::uint8_t participant_acquired = 0;
+    std::int32_t target_gameplay_slot = -1;
+    auto& memory = ProcessMemory::Instance();
+    if (kSolomonDigInteractionStateOffset == 0 ||
+        kSolomonDigParticipantAcquiredOffset == 0 ||
+        kSolomonDigTargetGameplaySlotOffset == 0 ||
+        !memory.TryReadField(
+            actor->actor_address,
+            kSolomonDigInteractionStateOffset,
+            &interaction_state) ||
+        !memory.TryReadField(
+            actor->actor_address,
+            kSolomonDigParticipantAcquiredOffset,
+            &participant_acquired) ||
+        !memory.TryReadField(
+            actor->actor_address,
+            kSolomonDigTargetGameplaySlotOffset,
+            &target_gameplay_slot)) {
+        return false;
+    }
+
+    state->valid = true;
+    state->actor_address = actor->actor_address;
+    state->x = actor->x;
+    state->y = actor->y;
+    state->interaction_state = interaction_state;
+    state->participant_acquired = participant_acquired != 0;
+    state->target_gameplay_slot = target_gameplay_slot;
+    return true;
+}

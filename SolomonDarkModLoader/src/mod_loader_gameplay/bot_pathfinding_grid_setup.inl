@@ -8,6 +8,7 @@ struct GameplayPathCircleObstacle {
 };
 
 struct GameplayPathSegmentObstacle {
+    uintptr_t object_address = 0;
     uintptr_t record_address = 0;
     float start_x = 0.0f;
     float start_y = 0.0f;
@@ -151,6 +152,7 @@ void CaptureGameplayPathSegmentObstaclePolicy(
             if (TryReadGameplayPathSegmentObstacle(
                     segment_record_address,
                     &obstacle)) {
+                obstacle.object_address = object_address;
                 snapshot->openable_segment_obstacles.push_back(
                     obstacle);
             }

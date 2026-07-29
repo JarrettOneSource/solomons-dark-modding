@@ -1,6 +1,6 @@
 # All-bot match foundation
 
-Status: implementation and acceptance in progress.
+Status: implementation and live acceptance complete.
 
 This wave establishes a repeatable four-fighter bot match, fixes the native
 fence-gate pathfinding class, and measures the current progression wall. It
@@ -205,19 +205,125 @@ The runner never calls `sd.gameplay.start_waves`. It never writes a fighter
 position to cross the Gate, and it rejects any run containing a
 stuck-failsafe teleport.
 
+The four-fighter gate approach is a collision-spaced staging region, not four
+exact parking points. Live failure evidence showed why that distinction
+matters. Native wizard actors have radius 25, and the planner blocks a point
+within the sum of two wizard radii plus 0.5. In one failed approach, an early
+stopped fighter sat 30.5 units from Ember's nominal target; Ember consequently
+stopped 60.7 units short. A second trace left otherwise safely gathered
+fighters 34.2–42.9 units from their nominal points because native A* ended at
+collision-safe cells.
+
+The accepted approach band therefore includes one additional
+collision-spaced row behind the nominal rear row while retaining a strict
+gate-facing bound. The next stage aligns and moves fighters one at a time.
+`gate-regression-28` proved all four fighters physically crossed: final signed
+dig-side progress was 103.52–233.32 against a required 65, and the loader log
+contained zero stuck-failsafe teleports.
+
+Wave screenshots are armed directly from `wave.started`, rather than inferred
+from the monitor's next 0.5-second sample. The monitor consumes every armed
+file, including wave numbers skipped between samples. A blank or
+low-information transition frame remains rejected and is retained as
+diagnostic evidence; the runner retries the live backbuffer until a frame
+passes the unchanged validator. Run 3 exercised this path at run end: the
+first frame was 96.89% one color and was rejected, while the second contained
+14,278 colors and was accepted.
+
 ## Acceptance runs
 
-This section is populated from three fresh full-match results after the live
-gate and wave-1 smoke gates pass.
+All values below come from applied native damage edges. `Furthest wave` means
+the highest wave that started; it does not claim that wave was cleared.
 
 | Run | Furthest wave | End condition | Damage limiter | Survivability limiter | Evidence |
 | --- | ---: | --- | --- | --- | --- |
-| 1 | Pending | Pending | Pending | Pending | Pending |
-| 2 | Pending | Pending | Pending | Pending | Pending |
-| 3 | Pending | Pending | Pending | Pending | Pending |
+| 1 | 35 | No wave or applied-damage progress for 120 seconds | 417.400 total damage. Gale accepted 894 casts but produced 0 damage edges. The end snapshot retained 58 Skeletons and 4 Skeleton Archers. | Aster died 4 times and respawned 3; Ember died on wave 28; Brook died on wave 34; Gale survived at 40.775/50 but could not damage anything. | `runs/baseline-final-24/run-01/result.json` |
+| 2 | 21 | Native `run.ended` after 490.001 seconds | 182.150 total damage. Gale accepted 281 casts but again produced 0 damage edges. The end snapshot retained 29 Skeletons and 2 Skeleton Archers. | Aster died twice and was observed respawning twice. Ember died on wave 11, Gale on wave 21, and Brook at native run end; no synthetic fighter respawned. Aster had only 0.091/50 HP when the native run ended. | `runs/baseline-final-25/run-01/result.json` |
+| 3 | 12 | No wave or applied-damage progress for 120 seconds | 53.850 total damage. Gale was the only living attacker, with 291 accepted casts and 0 damage edges. The end snapshot retained 34 Skeletons. | Aster died twice and respawned once; Brook and Ember both died on wave 12; Gale survived at 34.625/50. | `runs/baseline-final-29/run-01/result.json` |
+
+Run 1's wave-35 plan contained 2 Skeletons, 1 Skeleton Archer, 2 Skeleton
+Mages, 1 Imp, 1 Zombie, and 1 Coffin. The live wave summary instead had eight
+spawned Skeleton-family actors alive and zero kills; accumulated live-world
+state was the 62-enemy backlog above. Every recorded lethal edge in the run
+was from a type-1001 Skeleton: Aster on waves 9, 17, 26, and 28; Ember on wave
+28; and Brook on wave 34.
+
+Run 2's wave-21 plan contained two Skeletons (and a zero-count Skeleton Mage
+row). One Skeleton spawned and was killed before the native run ended, but 31
+older live enemies remained. Every lethal edge was again type 1001: Aster on
+waves 2 and 10, Ember on wave 11, Gale on wave 21, and Brook at the native
+end transition.
+
+Run 3's wave-12 plan contained five Skeletons and one Skeleton Archer. At the
+wall, five current-wave Skeletons were alive, the Archer remained to spawn,
+and the accumulated world held 34 live Skeletons. Skeleton edges killed Aster
+on waves 2 and 9 and killed Brook and Ember on wave 12.
+
+Across the three runs:
+
+- furthest waves were 35, 21, and 12 (mean 22.67);
+- applied damage was 653.400 dealt and 874.723 taken;
+- Aster dealt 134 damage, died 8 times, and respawned 6 times;
+- Ember dealt 222 damage over 209 accepted casts, died 3 times, and never
+  respawned;
+- Brook dealt 297.400 damage over 958 accepted casts and 11,896 damage
+  ticks, died 3 times, and never respawned; and
+- Gale accepted 1,466 casts but dealt exactly 0 damage over 0 applied edges,
+  died once, and never respawned.
+
+### Screenshot audit
+
+Each accepted result contains `hubGather`, `gateTransit`, `digTrigger`, and
+`runEnd`. Wave-plan and validated wave-screenshot counts match exactly:
+35/35, 21/21, and 12/12. The actual images were inspected, including combat,
+death-tint, and spectator frames; none of the accepted images is blank.
+
+The contact sheets are beside each run's screenshots as
+`wave-contact-sheet.png` and `milestone-contact-sheet.png`. Run 2's gather
+frame has bodies partly hidden by foreground foliage, but fighter labels,
+health bars, and the corresponding four-position arrival record remain
+visible. Run 3 retains its rejected run-end transition BMP next to the
+accepted retry.
 
 ## Progression wall
 
-This section is intentionally evidence-gated. The ranked, quantified wall is
-written only after all three match runs so later skill and inventory waves are
-scoped from observed failures rather than assumptions.
+Ranked by immediate effect on current progression:
+
+1. **The Air primary is a zero-damage slot.** Gale accepted 1,466 casts across
+   the three runs and produced 0 applied damage edges. Gale was the final
+   survivor in both no-progress endings, so those runs could not finish
+   another enemy despite continued accepted casts. The next combat wave must
+   determine whether Air's equipped primary needs a delivery fix or whether
+   the bot must select a different damaging loadout; accepted-cast counts
+   cannot be used as success.
+2. **Synthetic death is permanent for the match.** The three synthetic
+   fighters recorded 7 deaths and 0 respawns. By contrast, automated slot 0
+   recorded 8 deaths and 6 respawns. Run 2 ended natively after all three
+   synthetic fighters died; runs 1 and 3 lost the two functioning synthetic
+   damage dealers and stalled with zero-damage Gale. A later wave needs an
+   explicit synthetic respawn/life-cycle contract before build choices can
+   produce durable progression.
+3. **There is no sustain or inventory behavior.** The Lua brain has no
+   inventory or consumable call. It entered flee mode 7 times in the accepted
+   logs and recovered to normal mode 0 times. Because primary casting is
+   disabled while fleeing, falling below the configured HP threshold removes
+   offense without creating a healing path. Potion selection, timing, and
+   stock-aware retreat/recovery should be scoped together.
+4. **Progression choices never take effect.** The three synthetic fighters
+   reported 0 accepted skill choices in all 9 fighter-runs. The current brain
+   contains a small fixed priority list, but no live run consumed a pending
+   choice; automated slot 0 has no skill-choice driver at all. The next skill
+   wave must first prove that choice generations reach all four fighters,
+   then rank choices by build and current wall rather than expanding the
+   existing hard-coded list blindly.
+5. **Offense is fixed to one nearest-target primary and falls behind spawn
+   pressure.** The brain only calls `cast(0)` against the nearest in-range
+   target. Brook's Frost primary generated 11,896 small applied ticks for
+   297.400 total damage, Ember produced 222, Aster produced 134, and Gale
+   produced 0. The final live backlogs were 62, 31, and 34 enemies. Later
+   combat work should measure focus fire, secondary/combo choices, and
+   damage-per-second against spawn pressure, not merely add more accepted
+   cast attempts.
+
+These are measurements and follow-up scopes, not implementations in this
+foundation wave.

@@ -295,12 +295,33 @@ void ApplyWizardActorFacingState(uintptr_t actor_address, float heading_degrees)
         heading);
 }
 
+float ResolveWizardBindingNativeFacingHeading(
+    const ParticipantEntityBinding& binding) {
+    const auto& cast = binding.ongoing_cast;
+    if (cast.active &&
+        cast.have_aim_heading &&
+        std::isfinite(cast.aim_heading) &&
+        cast.selection_state_target ==
+            ResolveNativePrimaryEntryForElement(0) &&
+        !cast.remote_per_cast_projectile_observed) {
+        // Fire's projectile allocator samples actor+0x6C using
+        // (cos(angle), -sin(angle)). The presentation heading convention
+        // therefore needs this conversion until the projectile is born.
+        return NormalizeWizardActorHeadingForWrite(
+            90.0f - cast.aim_heading);
+    }
+    return NormalizeWizardActorHeadingForWrite(
+        binding.facing_heading_value);
+}
+
 bool ApplyWizardBindingFacingState(const ParticipantEntityBinding* binding, uintptr_t actor_address) {
     if (binding == nullptr || actor_address == 0 || !binding->facing_heading_valid) {
         return false;
     }
 
-    ApplyWizardActorFacingState(actor_address, binding->facing_heading_value);
+    ApplyWizardActorFacingState(
+        actor_address,
+        ResolveWizardBindingNativeFacingHeading(*binding));
     return true;
 }
 

@@ -39,6 +39,43 @@ bool TryReadLuaFiniteFloatField(uintptr_t base_address, size_t offset, float* va
     return std::isfinite(*value);
 }
 
+// sd.debug.list_openable_path_obstacles() -> array|nil
+int LuaDebugListOpenablePathObstacles(lua_State* state) {
+    std::vector<SDModGameplayOpenableObstacleState> obstacles;
+    if (!TryListGameplayOpenableObstacles(&obstacles)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, static_cast<int>(obstacles.size()), 0);
+    for (std::size_t index = 0; index < obstacles.size(); ++index) {
+        const auto& obstacle = obstacles[index];
+        lua_createtable(state, 0, 6);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(obstacle.object_address));
+        lua_setfield(state, -2, "object_address");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                obstacle.collision_record_address));
+        lua_setfield(state, -2, "collision_record_address");
+        lua_pushnumber(state, static_cast<lua_Number>(obstacle.start_x));
+        lua_setfield(state, -2, "start_x");
+        lua_pushnumber(state, static_cast<lua_Number>(obstacle.start_y));
+        lua_setfield(state, -2, "start_y");
+        lua_pushnumber(state, static_cast<lua_Number>(obstacle.end_x));
+        lua_setfield(state, -2, "end_x");
+        lua_pushnumber(state, static_cast<lua_Number>(obstacle.end_y));
+        lua_setfield(state, -2, "end_y");
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    return 1;
+}
+
 // sd.debug.get_nav_grid([subdivisions]) -> table|nil
 // Returns the latest nav-grid snapshot produced on the gameplay thread, or nil
 // if no snapshot has been built yet. Also submits a rebuild request so the next

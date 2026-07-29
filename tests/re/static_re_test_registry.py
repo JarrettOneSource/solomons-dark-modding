@@ -277,6 +277,9 @@ from static_re_native_actor_contracts import (
     test_player_gamenpc_movement_seed_layout_is_named_and_documented,
     test_synthetic_source_profile_blocker_is_documented,
 )
+from static_re_all_bot_match_contracts import (
+    test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
+)
 from static_re_enemy_target_acquisition_contracts import (
     test_enemy_retarget_is_authoritative_nearest_and_event_driven,
     test_enemy_retarget_acceptance_gate_is_wired,
@@ -1146,6 +1149,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Openable obstacle path policy uses native collision classes",
         test_openable_obstacle_path_policy_uses_native_collision_classes,
+    ),
+    (
+        "All-bot match uses native slots, real trigger, and HP edges",
+        test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
     ),
     (
         "Native enemy target acquisition is recovered and layout-backed",

@@ -97,6 +97,12 @@ bool TakeLocalPlayerManaDeltaObservation(
 void ResetEarthBoulderDamageObservations();
 bool TakeEarthBoulderDamageObservations(
     std::vector<SDModEarthBoulderDamageObservation>* observations);
+void ResetEnemyDamageObservations();
+bool TakeEnemyDamageObservations(
+    std::vector<SDModEnemyDamageObservation>* observations);
+void ResetPlayerDamageObservations();
+bool TakePlayerDamageObservations(
+    std::vector<SDModPlayerDamageObservation>* observations);
 bool TryGetPlayerInventoryState(SDModInventoryState* state);
 bool QueuePlayerInventoryItemEquip(
     std::uint32_t recipe_uid,
@@ -126,6 +132,9 @@ bool TryGetSceneState(SDModSceneState* state);
 bool TryGetSharedHubSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
 bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors);
+bool TryGetSolomonDigState(SDModSolomonDigState* state);
+bool TryListGameplayOpenableObstacles(
+    std::vector<SDModGameplayOpenableObstacleState>* obstacles);
 bool TryCaptureNativeMinionState(
     uintptr_t actor_address,
     SDModNativeMinionState* state);

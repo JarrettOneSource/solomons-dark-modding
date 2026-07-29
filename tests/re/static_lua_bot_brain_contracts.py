@@ -47,7 +47,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
-    assert manifest["version"] == "1.0.2"
+    assert manifest["version"] == "1.0.3"
     assert manifest["summary"] == (
         "Bot teammates that play like real players."
     )

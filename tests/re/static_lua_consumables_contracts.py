@@ -62,6 +62,10 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     gameplay_actions = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_debug_and_spawn.inl"
     )
+    gameplay_actions += _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_resource_and_damage_observations.inl"
+    )
     gameplay_bindings = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
     )

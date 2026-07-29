@@ -143,6 +143,10 @@ void RegisterLuaDebugBindings(lua_State* state) {
         &LuaDebugGetNativeStaffEffectProbeResult,
         "get_native_staff_effect_probe_result");
     RegisterFunction(state, &LuaDebugCallThiscallOutF32x4U32, "call_thiscall_out_f32x4_u32");
+    RegisterFunction(
+        state,
+        &LuaDebugListOpenablePathObstacles,
+        "list_openable_path_obstacles");
     RegisterFunction(state, &LuaDebugGetNavGrid, "get_nav_grid");
     RegisterFunction(state, &LuaDebugTestNavSegment, "test_nav_segment");
     RegisterFunction(
@@ -179,6 +183,22 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugTakeEarthBoulderDamageObservations,
         "take_earth_boulder_damage_observations");
+    RegisterFunction(
+        state,
+        &LuaDebugResetEnemyDamageObservations,
+        "reset_enemy_damage_observations");
+    RegisterFunction(
+        state,
+        &LuaDebugTakeEnemyDamageObservations,
+        "take_enemy_damage_observations");
+    RegisterFunction(
+        state,
+        &LuaDebugResetPlayerDamageObservations,
+        "reset_player_damage_observations");
+    RegisterFunction(
+        state,
+        &LuaDebugTakePlayerDamageObservations,
+        "take_player_damage_observations");
     RegisterFunction(state, &LuaDebugGetActorModifiers, "get_actor_modifiers");
     RegisterFunction(
         state,

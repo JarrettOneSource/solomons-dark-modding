@@ -6,6 +6,7 @@
 - FIXED — The equipped spell's native effective range, including progression-dependent range, is now exposed through the bot API.
 - FIXED — Frost Jet range queries now resolve `mWiden` from live native progression before the first cast instead of reading a dispatch-only actor cache.
 - FIXED — The native Frost Jet damage-context branch no longer skips authoritative damage for nonzero gameplay slots.
+- FIXED — Bot framework navigation now recognizes native openable and pushable obstacle classes while preserving fixed-scenery collision, with read-only applied-damage telemetry for unattended validation.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
