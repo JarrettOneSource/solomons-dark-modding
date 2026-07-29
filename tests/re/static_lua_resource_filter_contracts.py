@@ -14,7 +14,18 @@ def test_lua_resource_filters_are_native_ordered_and_authoritative() -> str:
         "enemy_death_reward_level_up_hooks.inl"
     )
     targets = _read("SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl")
-    install = _read("SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl")
+    install = "\n".join(
+        (
+            _read(
+                "SolomonDarkModLoader/src/run_lifecycle/"
+                "public_api_and_install.inl"
+            ),
+            _read(
+                "SolomonDarkModLoader/src/run_lifecycle/"
+                "hook_installation.inl"
+            ),
+        )
+    )
     layout = _read("config/binary-layout.ini")
     gold_pickup = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
