@@ -257,7 +257,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     lifecycle_targets = _read(
         "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl"
     )
-    lifecycle_install = _read(
+    lifecycle_install = read_source_unit(
         "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
     )
     gameplay_seams = _read(

@@ -1063,7 +1063,7 @@ def test_client_run_switch_requires_fresh_authenticated_host_intent() -> str:
     lifecycle_state_text = read_text(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl"
     )
-    lifecycle_install_text = read_text(
+    lifecycle_install_text = read_source_unit(
         ROOT / "SolomonDarkModLoader/src/run_lifecycle/public_api_and_install.inl"
     )
     seam_binding_text = read_text(

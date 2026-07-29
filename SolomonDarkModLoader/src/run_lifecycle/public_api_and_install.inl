@@ -620,4 +620,4 @@ bool IsRunLifecycleManualEnemySpawnerTestModeEnabled() {
     return g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire);
 }
 
-#include "run_lifecycle/hook_installation.inl"
+#include "hook_installation.inl"
