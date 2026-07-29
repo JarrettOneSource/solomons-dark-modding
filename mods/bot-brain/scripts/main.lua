@@ -58,22 +58,60 @@ local policy_weights =
   assert(require_mod("scripts/policy_weights.lua"))
 local policy_module =
   assert(require_mod("scripts/policy.lua"))
+local policy_geometry_module =
+  assert(require_mod("scripts/policy_geometry.lua"))
+local policy_spell_descriptors_module =
+  assert(require_mod(
+    "scripts/policy_spell_descriptors.lua"))
 local policy_observation =
   assert(require_mod("scripts/policy_observation.lua"))
 local policy_training_module =
   assert(require_mod("scripts/policy_training.lua"))
 
-local policy_runtime =
-  policy_module.new(policy_spec, policy_weights, 20260729)
+local policy_runtime = nil
+local policy_runtime_unavailable_reason = ""
+if policy_weights.version == policy_spec.model_version and
+    policy_weights.observation_version ==
+      policy_spec.observation_version and
+    policy_weights.architecture ==
+      policy_spec.architecture then
+  policy_runtime =
+    policy_module.new(policy_spec, policy_weights, 20260729)
+else
+  policy_runtime_unavailable_reason =
+    "ML policy v2 weights are unavailable until Phase 4"
+end
+local policy_geometry =
+  policy_geometry_module.new(policy_spec)
+local policy_spell_descriptors =
+  policy_spell_descriptors_module.new(policy_spec)
 local policy_observation_builder =
-  policy_observation.new(policy_spec)
+  policy_observation.new(
+    policy_spec,
+    {
+      geometry = policy_geometry,
+      spell_descriptors = policy_spell_descriptors,
+    })
 local policy_training =
   policy_training_module.new(policy_spec, policy_runtime)
+
+local function policy_status()
+  if policy_runtime ~= nil then
+    return policy_runtime:status()
+  end
+  return {
+    available = false,
+    format = policy_spec.model_format,
+    version = policy_spec.model_version,
+    architecture = policy_spec.architecture,
+    observation_size = #policy_spec.observation_names,
+    reason = policy_runtime_unavailable_reason,
+  }
+end
 
 local shared = {
   think_interval_ms = 250,
   spawn_retry_ms = 1000,
-  nav_refresh_ms = 2000,
   attack_window_refresh_ms = 2000,
   cast_hold_ms = 80,
   approach_move_interval_ms = 1000,
@@ -90,10 +128,15 @@ local shared = {
   policy_interval_ms = 100,
   manager_interval_ms = 100,
   policy_move_lookahead = 110.0,
+  policy_spec = policy_spec,
   policy_runtime = policy_runtime,
+  policy_geometry = policy_geometry,
+  policy_spell_descriptors =
+    policy_spell_descriptors,
   policy_observation = policy_observation,
   policy_observation_builder = policy_observation_builder,
   policy_training = policy_training,
+  weld_preference = "auto",
 }
 
 shared.threat_radius = sd.settings.get("kite_radius")
@@ -102,6 +145,8 @@ shared.think_profile = sd.settings.get("think_profile")
 shared.think_interval_ms =
   shared.think_profile == "relaxed" and 400 or 250
 shared.focus_bot_key = sd.settings.get("focus_bot_key")
+shared.weld_preference =
+  sd.settings.get("policy_weld_preference")
 
 local debug = {
   authority = false,
@@ -121,6 +166,7 @@ local debug = {
   offense_enabled = shared.offense_enabled,
   think_profile = shared.think_profile,
   focus_bot_key = shared.focus_bot_key,
+  weld_preference = shared.weld_preference,
   focus_active = false,
   settings_change_count = 0,
   last_settings_change_key = "",
@@ -133,7 +179,7 @@ local debug = {
   clock_source = "wall",
   clock_now_ms = 0,
   simulation_tick_count = 0,
-  policy = policy_runtime:status(),
+  policy = policy_status(),
   policy_training = policy_training:status(),
 }
 rawset(_G, "bot_brain_debug", debug)
@@ -257,6 +303,9 @@ sd.settings.on_changed(function(key, new_value, old_value)
   elseif key == "focus_bot_key" then
     shared.focus_bot_key = new_value
     debug.focus_bot_key = new_value
+  elseif key == "policy_weld_preference" then
+    shared.weld_preference = new_value
+    debug.weld_preference = new_value
   elseif key == "roster" then
     debug.last_roster_new_size = #new_value
     debug.last_roster_new_value = new_value
@@ -294,12 +343,14 @@ sd.settings.on_action("respawn_bot", function()
 end)
 
 sd.events.on("run.started", function()
+  policy_geometry:reset(nil)
   policy_training:begin_episode()
   manager:reset_run(true)
   log(nil, "run started")
 end)
 
 sd.events.on("run.ended", function()
+  policy_geometry:reset(nil)
   manager:reset_run(false)
   log(nil, "run ended")
 end)
@@ -324,6 +375,6 @@ sd.events.on("runtime.tick", function(event)
     now_ms,
     authority,
     tonumber(event.tick_count) or 0)
-  debug.policy = policy_runtime:status()
+  debug.policy = policy_status()
   debug.policy_training = policy_training:status()
 end)

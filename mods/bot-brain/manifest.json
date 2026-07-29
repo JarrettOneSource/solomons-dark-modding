@@ -15,8 +15,10 @@
       "settings.self",
       "settings.list",
       "state.replicated.read",
+      "state.replicated.write",
       "nav.read",
       "waves.read",
+      "spells.read",
       "camera.local.focus",
       "bots.runtime",
       "bots.state.read",
@@ -51,13 +53,36 @@
         "group": "Combat"
       },
       {
+        "key": "policy_weld_preference",
+        "type": "choice",
+        "label": "Learned bot welding",
+        "description": "Controls deterministic Spell Welding choices while the combat policy owns movement, targets, and casts.",
+        "default": "auto",
+        "scope": "host",
+        "group": "Combat",
+        "choices": [
+          {
+            "value": "auto",
+            "label": "Auto — weld after two primaries"
+          },
+          {
+            "value": "prefer",
+            "label": "Prefer eligible welds"
+          },
+          {
+            "value": "avoid",
+            "label": "Avoid welding"
+          }
+        ]
+      },
+      {
         "key": "roster",
         "type": "list",
         "label": "Bot roster",
         "scope": "host",
         "group": "Bots",
         "min_items": 0,
-        "max_items": 4,
+        "max_items": 32,
         "item_label": "{name} · {element} · {discipline} · {behavior}",
         "item": {
           "fields": [

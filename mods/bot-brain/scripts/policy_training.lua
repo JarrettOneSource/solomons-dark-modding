@@ -130,8 +130,10 @@ function Controller:record(
     simulation_tick = simulation_tick or 0,
     observation = copy_array(capture.values),
     movement_mask = copy_mask(capture.movement_mask),
+    target_mask = copy_mask(capture.target_mask),
     cast_mask = copy_mask(capture.cast_mask),
     movement_action = decision.movement_action,
+    target_action = decision.target_action,
     cast_action = decision.cast_action,
     old_log_probability = decision.log_probability,
     old_value = decision.value,
@@ -164,6 +166,10 @@ function Controller:begin_episode()
 end
 
 function Controller:enable(options)
+  if self.runtime == nil then
+    error(
+      "ML policy v2 weights are unavailable until Phase 4")
+  end
   options = type(options) == "table" and options or {}
   local capacity = math.floor(
     tonumber(options.capacity) or self.capacity)
@@ -209,6 +215,10 @@ function Controller:drain(max_records)
 end
 
 function Controller:load_parameters(candidate)
+  if self.runtime == nil then
+    error(
+      "ML policy v2 weights are unavailable until Phase 4")
+  end
   local generation = self.runtime:load(candidate)
   return {
     generation = generation,
@@ -217,6 +227,16 @@ function Controller:load_parameters(candidate)
 end
 
 function Controller:status()
+  local policy_status
+  if self.runtime ~= nil then
+    policy_status = self.runtime:status()
+  else
+    policy_status = {
+      available = false,
+      version = self.spec.model_version,
+      architecture = self.spec.architecture,
+    }
+  end
   return {
     enabled = self.enabled,
     episode_id = self.episode_id,
@@ -224,14 +244,14 @@ function Controller:status()
     buffered = self:buffer_size(),
     dropped = self.dropped,
     recorded = self.recorded,
-    policy = self.runtime:status(),
+    policy = policy_status,
   }
 end
 
 function training.new(spec, runtime)
   local controller = setmetatable({
     spec = assert(spec),
-    runtime = assert(runtime),
+    runtime = runtime,
     enabled = false,
     episode_id = 0,
     capacity = 8192,

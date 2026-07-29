@@ -272,6 +272,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     assert set(entries) == {
         "kite_radius",
         "offense_enabled",
+        "policy_weld_preference",
         "roster",
         "think_profile",
         "focus_bot_key",
@@ -279,7 +280,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     }
     assert entries["kite_radius"]["default"] == 340
     assert entries["roster"]["type"] == "list"
-    assert entries["roster"]["max_items"] == 4
+    assert entries["roster"]["max_items"] == 32
     assert "persona_name" not in entries
     assert entries["respawn_bot"]["confirm"] is True
     for token in (
@@ -309,7 +310,8 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "stop_exact_game_processes(launch)",
         "guardian_ward_distance",
         "flee_threshold",
-        "entry_error.roster",
+        '"brain.bot.3.last_error"',
+        '"lobby full"',
         "EXHAUSTED_ROSTER",
         "__settings_reload",
     ):

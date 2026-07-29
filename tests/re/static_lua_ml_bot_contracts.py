@@ -8,9 +8,7 @@ from static_multiplayer_contract_support import _read, _require_in_order
 
 
 def test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete() -> str:
-    header = _read(
-        "SolomonDarkModLoader/include/bot_runtime.h"
-    )
+    header = _read("SolomonDarkModLoader/include/bot_runtime.h")
     binding = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_bots.cpp"
     )
@@ -35,9 +33,7 @@ def test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete() -> str:
         "pending_weld_build_id_resolved",
         "kSecondaryLoadoutSlotCount> secondaries",
     ):
-        assert token in header, (
-            f"ML v2 native loadout record lacks {token}"
-        )
+        assert token in header, f"ML v2 native loadout record lacks {token}"
     for field in (
         "participant_id",
         "primary",
@@ -71,17 +67,250 @@ def test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete() -> str:
         "ReadParticipantLoadoutDetails(\n"
         "            bot_id,"
     ) in binding
-
     return (
-        "The v2 ML seam publishes one fixed, semantic loadout schema with "
-        "explicit resolution for primary, eight secondaries, and pending weld"
+        "The v2 ML seam publishes one semantic loadout schema with explicit "
+        "resolution for primary, eight secondaries, and pending weld"
+    )
+
+
+def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
+    manifest = json.loads(_read("mods/bot-brain/manifest.json"))
+    spec = _read("mods/bot-brain/scripts/policy_spec.lua")
+    geometry = _read(
+        "mods/bot-brain/scripts/policy_geometry.lua"
+    )
+    descriptors = _read(
+        "mods/bot-brain/scripts/policy_spell_descriptors.lua"
+    )
+    observation = _read(
+        "mods/bot-brain/scripts/policy_observation.lua"
+    )
+    brain = _read("mods/bot-brain/scripts/brain.lua")
+    main = _read("mods/bot-brain/scripts/main.lua")
+    training = _read(
+        "mods/bot-brain/scripts/policy_training.lua"
+    )
+    fixture = _read(
+        "tests/lua/ml_bot_policy_v2_phase3.lua"
+    )
+
+    assert manifest["version"] == "1.1.0"
+    capabilities = set(
+        manifest["runtime"]["requiredCapabilities"]
+    )
+    assert {
+        "state.replicated.read",
+        "state.replicated.write",
+        "nav.read",
+        "spells.read",
+        "bots.state.read",
+        "bots.move",
+        "bots.stop",
+        "bots.cast",
+    } <= capabilities
+    settings = {
+        entry["key"]: entry
+        for entry in manifest["settings"]["entries"]
+    }
+    weld = settings["policy_weld_preference"]
+    assert weld["default"] == "auto"
+    assert {
+        choice["value"] for choice in weld["choices"]
+    } == {"prefer", "avoid", "auto"}
+    # The loader's current list-schema ceiling is configuration, not a Lua
+    # participant-count assumption.
+    assert settings["roster"]["max_items"] == 32
+
+    for token in (
+        "model_version = 2",
+        "observation_version = 2",
+        "trajectory_version = 2",
+        'architecture = "mlp-tanh-three-head-v2"',
+        "hidden_sizes = {192, 96}",
+        "#observation_names == 395",
+        "secondary_slot_count = 8",
+        "enemy_slot_count = 8",
+        "pickup_slot_count = 4",
+        "ally_slot_count = 4",
+        "mana_scale = 2000.0",
+        "hp_scale = 1000.0",
+        "velocity_scale = 1000.0",
+        "cooldown_scale = 60.0",
+        '"keep_current"',
+        '"enemy_8"',
+        '"secondary_8"',
+        '"ally_count_scaled"',
+        '"secondary_recharge_multiplier_scaled"',
+    ):
+        assert token in spec, f"phase-3 policy spec lacks {token}"
+
+    assert "sd.nav.test_segment" not in geometry
+    assert "grid.refresh_pending == false" in geometry
+    assert "self.spec.nav_refresh_ms" in geometry
+    assert "self.spec.nav_subdivisions" in geometry
+    assert "self.grid_build_count = self.grid_build_count + 1" in geometry
+    assert "function Cache:walkable_at(world_x, world_y)" in geometry
+    assert "function Cache:features(world_x, world_y)" in geometry
+    assert "sd.nav.get_grid(subdivisions)" in geometry
+
+    for token in (
+        "sd.bots.get_loadout_details",
+        "sd.bots.get_skill_choices",
+        "sd.spells.list",
+        "WELD_PAIRS",
+        "pending_weld_build_id_resolved",
+        "mana_cost_resolved",
+        "cooldown_resolved",
+        "range_resolved",
+        "snapshot.cast_ready == true",
+        "entry.entry_index",
+        "entry_id == 52",
+    ):
+        assert token in descriptors, (
+            f"phase-3 spell descriptors lack {token}"
+        )
+
+    _require_in_order(
+        observation,
+        "-- Block A: self.",
+        "-- Block B: active primary.",
+        "-- Block C: secondary slots.",
+        "-- Block D: nearest enemies.",
+        "-- Block E: persisted selected target.",
+        "-- Block F: cached local geometry.",
+        "-- Block G: replicated loot.",
+        "-- Block I: nearest in-run participants other than self.",
+        "-- Block H: aggregates, config, history, weld, and multipliers.",
+    )
+    for token in (
+        "builder.geometry:refresh(now_ms, frame.scene_key)",
+        "memory.enemy_position_history[actor_id]",
+        "memory.target_actor_id",
+        "participant.in_run == true",
+        '"Native"',
+        "participant.movement_intent_x",
+        "participant.movement_intent_y",
+        "resource_kind == 0",
+        "resource_kind == 1",
+        "participant_is_owner(",
+        "function observation.select_target(",
+        "function observation.build_cast_mask(",
+        "capture.target_mask[mask_index] ~= true",
+        "primary.range_resolved ~= true or",
+        "secondary.range_resolved ~= true or",
+        "secondary.affordable == true",
+        "secondary.ready == true",
+        "builder.test_segment",
+    ):
+        assert token in observation, (
+            f"phase-3 observation contract lacks {token}"
+        )
+    assert "for _, participant in ipairs(multiplayer.participants or {})" in (
+        observation
+    )
+    for forbidden in (
+        "participant_count <= 4",
+        "participant_count < 4",
+        "math.min(#multiplayer.participants, 4)",
+    ):
+        assert forbidden not in observation
+
+    _require_in_order(
+        brain,
+        "shared.policy_observation.capture(",
+        "shared.policy_runtime:forward(",
+        "capture.target_mask,",
+        "shared.policy_observation.select_target(",
+        "shared.policy_observation.build_cast_mask(",
+        "issue_policy_cast(",
+    )
+    for token in (
+        "details.pending_weld_build_id_resolved ~= true",
+        'preference == "avoid"',
+        'preference == "prefer"',
+        'preference == "auto"',
+        "learned[components[1]] ~= true",
+        "request_nearby_pickup(",
+        "capture.loot_host_owned ~= true",
+        "pickup.pickup_range_multiplier",
+        "sd.world.request_loot_pickup",
+        "selected_target",
+        "enemies = all_enemies",
+    ):
+        assert token in brain, f"phase-3 brain lacks {token}"
+
+    for script in (
+        "policy_geometry.lua",
+        "policy_spell_descriptors.lua",
+        "policy_observation.lua",
+        "policy_training.lua",
+    ):
+        assert f'"scripts/{script}"' in main
+    assert "policy_weights.version == policy_spec.model_version" in main
+    assert (
+        '"ML policy v2 weights are unavailable until Phase 4"'
+        in main
+    )
+    assert "policy_geometry:reset(nil)" in main
+
+    _require_in_order(
+        training,
+        "self:finish_pending(context, capture.metrics, false)",
+        "context.policy_pending = {",
+    )
+    for token in (
+        "trajectory_version = self.spec.trajectory_version",
+        "target_mask = copy_mask(capture.target_mask)",
+        "target_action = decision.target_action",
+        "cast_mask = copy_mask(capture.cast_mask)",
+        "old_log_probability = decision.log_probability",
+        "old_value = decision.value",
+    ):
+        assert token in training, (
+            f"trajectory v2 writer lacks {token}"
+        )
+    # Reward coefficients stay byte-for-byte represented as the audited v1
+    # formula; Phase 3 adds no target-shaped term.
+    for token in (
+        "local reward = 0.002",
+        "reward = reward + hp_delta * 1.25",
+        "(previous_ratio - current_ratio) * 0.65",
+        "math.min(wave_delta, 1) * 1.5",
+        "reward = reward - 2.0",
+        "math.max(-4.0, math.min(4.0, reward))",
+    ):
+        assert token in training
+    assert "target" not in training[
+        training.index("function Controller:reward("):
+        training.index("function Controller:finish_pending(")
+    ]
+
+    for token in (
+        "observation_count=395",
+        "exact_order=true",
+        "target_conditioned_masks=true",
+        "actor_id_persistence=true",
+        "ally_transition=true",
+        "weld_transition=true",
+        "pickup_transition=true",
+        "guardian_far_return=true",
+        "nav_grid_builds=",
+        "trajectory_v2=true",
+    ):
+        assert token in fixture
+    return (
+        "Phase 3 pins 395 ordered observations, cached geometry, dynamic "
+        "spell descriptors, actor-ID targeting, allies, assists, and "
+        "trajectory v2 without changing the reward"
     )
 
 
 def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     model = json.loads(_read("models/bot-brain/policy-v1.json"))
-    runtime_tick = _read("SolomonDarkModLoader/include/runtime_tick_service.h")
+    runtime_tick = _read(
+        "SolomonDarkModLoader/include/runtime_tick_service.h"
+    )
     tick_state = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
         "runtime_request_state.inl"
@@ -94,10 +323,6 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     roster = _read("mods/bot-brain/scripts/roster.lua")
     brain = _read("mods/bot-brain/scripts/brain.lua")
     policy = _read("mods/bot-brain/scripts/policy.lua")
-    policy_spec = _read("mods/bot-brain/scripts/policy_spec.lua")
-    observation = _read(
-        "mods/bot-brain/scripts/policy_observation.lua"
-    )
     training = _read("mods/bot-brain/scripts/policy_training.lua")
     solo_launcher = _read("scripts/Launch-LocalSoloSession.ps1")
     gameplay_bindings = _read(
@@ -131,6 +356,8 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     assert learned["label"] == "Learned — ML movement and casting"
     assert "no Python, GPU, or network service" in manifest["description"]
 
+    # Phase 3 intentionally retains the v1 artifact so main.lua can reject it
+    # explicitly; Phase 4 replaces both runtime and weights.
     assert model["format"] == "solomon-dark-bot-policy"
     assert model["version"] == 1
     assert model["observation_version"] == 1
@@ -153,7 +380,15 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "simulation_tick_count,",
         "PumpLuaWorkOnGameplayThread(lua_tick_context)",
     )
-
+    for token in (
+        "policy_interval_ms = 100",
+        "manager_interval_ms = 100",
+        "(tick_count - state.last_simulation_tick_count) *",
+        "tick_interval_ms",
+        'debug.clock_source = "simulation"',
+        "policy_training:begin_episode()",
+    ):
+        assert token in main
     for script in (
         "policy_spec.lua",
         "policy_weights.lua",
@@ -163,23 +398,14 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     ):
         assert f'require_mod("scripts/{script}")' in main
     for token in (
-        "policy_interval_ms = 100",
-        "manager_interval_ms = 100",
-        "(tick_count - state.last_simulation_tick_count) *",
-        "tick_interval_ms",
-        'debug.clock_source = "simulation"',
-        "policy_training:begin_episode()",
-    ):
-        assert token in main, f"learned bot clock lacks: {token}"
-    for token in (
         "function Manager:tick(now_ms, authority, simulation_tick)",
         "simulation_tick)",
     ):
-        assert token in roster, f"roster tick forwarding lacks: {token}"
+        assert token in roster
 
     _require_in_order(
         brain,
-        "choose_pending_skill(context)",
+        "choose_pending_skill(context, skill_choices)",
         'if context.row.behavior == "learned" then',
         "think_with_policy(",
     )
@@ -191,9 +417,11 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "context.bot:stop()",
         "context.bot:cast(",
         "action.skill_slot,",
+        "sd.bots.choose_skill",
+        "sd.world.request_loot_pickup",
         "shared.policy_training:record(",
     ):
-        assert token in brain, f"learned native action route lacks: {token}"
+        assert token in brain
 
     for token in (
         "validate_weights",
@@ -203,38 +431,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "math.log(movement_probability)",
         "function Runtime:load(candidate)",
     ):
-        assert token in policy, f"Lua inference lacks: {token}"
-    for token in (
-        '"inventory_distinct_scaled"',
-        '"potion_stack_scaled"',
-        '"hat_equipped"',
-        '"robe_equipped"',
-        '"weapon_equipped"',
-        '"ring_count_scaled"',
-        '"amulet_equipped"',
-        '"secondary_8_available"',
-        '"previous_cast_secondary"',
-    ):
-        assert token in policy_spec, f"policy contract lacks: {token}"
-    for token in (
-        "participant.owned_progression",
-        "owned.inventory_items",
-        "owned.equipment",
-        "owned.progression_book_entries",
-        "owned.ability_loadout",
-        "owned.derived_stats",
-        "movement_mask",
-        "cast_mask",
-        "sd.nav.test_segment",
-        "snapshot.cast_ready",
-    ):
-        assert token in observation, f"observation/masking lacks: {token}"
-
-    _require_in_order(
-        training,
-        "self:finish_pending(context, capture.metrics, false)",
-        "context.policy_pending = {",
-    )
+        assert token in policy
     for token in (
         "local function copy_metrics(value)",
         "trajectory_version = self.spec.trajectory_version",
@@ -243,7 +440,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "function Controller:drain(max_records)",
         "function Controller:load_parameters(candidate)",
     ):
-        assert token in training, f"trajectory bridge lacks: {token}"
+        assert token in training
 
     assert "[switch]$Headless" in solo_launcher
     assert "[switch]$DisableMultiplayerTransport" in solo_launcher
@@ -277,7 +474,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         'last.get("loading_released") == "false"',
         "if transport_enabled",
     ):
-        assert token in bridge, f"live session bridge lacks: {token}"
+        assert token in bridge
     assert "PinRunLifecycleManualEnemyTestState();" in gameplay_pump
     for workflow in (trainer, _read("tools/verify_ml_bot_live.py")):
         _require_in_order(
@@ -322,19 +519,16 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         '"learned policy had no accepted live movement"',
         '"learned policy had no accepted live attacks"',
     ):
-        assert token in trainer, f"live PPO workflow lacks: {token}"
+        assert token in trainer
     for token in (
         "MINIMUM_LIVE_DISPLACEMENT = 1.0",
         "MINIMUM_ACCEPTANCE_TICKS = 25",
         "maximum_distance >= MINIMUM_LIVE_DISPLACEMENT",
         "tick - first_tick >= MINIMUM_ACCEPTANCE_TICKS",
     ):
-        assert token in _read("tools/verify_ml_bot_live.py"), (
-            f"live movement proof lacks: {token}"
-        )
+        assert token in _read("tools/verify_ml_bot_live.py")
 
     return (
-        "The learned bot uses the real 10 ms simulation counter, observes "
-        "combat/loadout state, masks semantic actions, drives native bot "
-        "movement and casts, and trains through an exact-process bridge"
+        "The bot keeps its simulation clock, native action routing, retained "
+        "v1 rejection artifact, and exact-process training bridge contracts"
     )

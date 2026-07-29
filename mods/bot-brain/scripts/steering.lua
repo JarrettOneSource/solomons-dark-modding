@@ -310,4 +310,34 @@ function steering.movement_candidates(
   return candidates
 end
 
+function steering.constrain_to_guardian_leash(
+    bot_x,
+    bot_y,
+    target,
+    ward,
+    leash_radius)
+  local offset_x = target.x - ward.x
+  local offset_y = target.y - ward.y
+  local unit_x, unit_y = normalize(offset_x, offset_y)
+  local target_distance =
+    math.sqrt((offset_x * offset_x) + (offset_y * offset_y))
+  local movement_radius =
+    math.max((tonumber(leash_radius) or 0.0) - 30.0, 1.0)
+  local current_x = (tonumber(bot_x) or ward.x) - ward.x
+  local current_y = (tonumber(bot_y) or ward.y) - ward.y
+  local current_distance =
+    math.sqrt((current_x * current_x) + (current_y * current_y))
+  if current_distance > movement_radius and
+      target_distance < current_distance then
+    return target
+  end
+  if target_distance <= movement_radius then
+    return target
+  end
+  return {
+    x = ward.x + unit_x * movement_radius,
+    y = ward.y + unit_y * movement_radius,
+  }
+end
+
 return steering

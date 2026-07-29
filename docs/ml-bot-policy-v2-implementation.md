@@ -706,14 +706,16 @@ The literal reading of the approved blocks gives:
 | E — selected target | 10 |
 | F — 8 rays + 48 patch cells | 56 |
 | G — 4 pickups x 8 + count | 33 |
-| H — aggregates/config/history/weld flags | 41 |
-| **Total** | **350** |
+| I — 4 allies x 10 + count | 41 |
+| H — aggregates/config/history/weld flags/multipliers | 45 |
+| **Total** | **395** |
 
-The total is 350, not the contract's nonbinding “approximately 300.” The
-health/mana orb split increases each pickup row from seven to eight. Block H
-retains only the categories explicitly named by v2; the old inventory,
-equipment, progression, `primary_available`, and eight bare secondary
-availability values are not silently retained.
+The adjudicated total is 395. Block I is placed after pickups and before
+Block H. The health/mana orb split increases each pickup row from seven to
+eight, and the four progression-derived combat multipliers are appended to
+Block H. Block H otherwise retains only the categories explicitly named by
+v2; the old inventory, equipment, progression, `primary_available`, and eight
+bare secondary availability values are not silently retained.
 
 The definitive order and names are:
 
@@ -1027,53 +1029,98 @@ The definitive order and names are:
 307 pickup_4_type_mana_orb
 308 pickup_4_type_item_carrier
 309 pickup_count_scaled
-310 enemy_count_scaled
-311 threat_count_scaled
-312 nearest_enemy_dx
-313 nearest_enemy_dy
-314 nearest_enemy_distance_scaled
-315 nearest_threat_dx
-316 nearest_threat_dy
-317 nearest_threat_distance_scaled
-318 escape_dx
-319 escape_dy
-320 suggested_move_dx
-321 suggested_move_dy
-322 arena_center_dx
-323 arena_center_dy
-324 arena_center_distance_scaled
-325 arena_x_normalized
-326 arena_y_normalized
-327 edge_pressure
-328 element_fire
-329 element_water
-330 element_earth
-331 element_air
-332 element_ether
-333 discipline_mind
-334 discipline_body
-335 discipline_arcane
-336 hp_delta
-337 mana_delta
-338 target_hp_delta
-339 enemy_count_delta
-340 previous_move_dx
-341 previous_move_dy
-342 previous_cast_primary
-343 previous_cast_secondary
-344 time_since_damage_scaled
-345 time_since_cast_scaled
-346 time_since_move_scaled
-347 previous_target_action_scaled
-348 previous_target_switched
-349 has_spell_welding_skill
-350 weld_offer_pending
+310 ally_1_present
+311 ally_1_dx
+312 ally_1_dy
+313 ally_1_distance_scaled
+314 ally_1_hp_ratio
+315 ally_1_mana_ratio
+316 ally_1_alive
+317 ally_1_is_human
+318 ally_1_intent_dx
+319 ally_1_intent_dy
+320 ally_2_present
+321 ally_2_dx
+322 ally_2_dy
+323 ally_2_distance_scaled
+324 ally_2_hp_ratio
+325 ally_2_mana_ratio
+326 ally_2_alive
+327 ally_2_is_human
+328 ally_2_intent_dx
+329 ally_2_intent_dy
+330 ally_3_present
+331 ally_3_dx
+332 ally_3_dy
+333 ally_3_distance_scaled
+334 ally_3_hp_ratio
+335 ally_3_mana_ratio
+336 ally_3_alive
+337 ally_3_is_human
+338 ally_3_intent_dx
+339 ally_3_intent_dy
+340 ally_4_present
+341 ally_4_dx
+342 ally_4_dy
+343 ally_4_distance_scaled
+344 ally_4_hp_ratio
+345 ally_4_mana_ratio
+346 ally_4_alive
+347 ally_4_is_human
+348 ally_4_intent_dx
+349 ally_4_intent_dy
+350 ally_count_scaled
+351 enemy_count_scaled
+352 threat_count_scaled
+353 nearest_enemy_dx
+354 nearest_enemy_dy
+355 nearest_enemy_distance_scaled
+356 nearest_threat_dx
+357 nearest_threat_dy
+358 nearest_threat_distance_scaled
+359 escape_dx
+360 escape_dy
+361 suggested_move_dx
+362 suggested_move_dy
+363 arena_center_dx
+364 arena_center_dy
+365 arena_center_distance_scaled
+366 arena_x_normalized
+367 arena_y_normalized
+368 edge_pressure
+369 element_fire
+370 element_water
+371 element_earth
+372 element_air
+373 element_ether
+374 discipline_mind
+375 discipline_body
+376 discipline_arcane
+377 hp_delta
+378 mana_delta
+379 target_hp_delta
+380 enemy_count_delta
+381 previous_move_dx
+382 previous_move_dy
+383 previous_cast_primary
+384 previous_cast_secondary
+385 time_since_damage_scaled
+386 time_since_cast_scaled
+387 time_since_move_scaled
+388 previous_target_action_scaled
+389 previous_target_switched
+390 has_spell_welding_skill
+391 weld_offer_pending
+392 offensive_damage_multiplier_scaled
+393 offensive_mana_multiplier_scaled
+394 cast_speed_multiplier_scaled
+395 secondary_recharge_multiplier_scaled
 ```
 
 Ordering rules behind the literal list:
 
-- enemies and pickups are nearest-first with a deterministic actor/drop-ID
-  tiebreak;
+- enemies, pickups, and allies are nearest-first with deterministic
+  actor/drop/participant-ID tiebreaks;
 - patch rows are world-Y north-to-south and columns world-X west-to-east,
   row-major, with row 4/column 4 omitted;
 - clearance direction order exactly matches movement actions 2-9;
@@ -1081,7 +1128,11 @@ Ordering rules behind the literal list:
   active build, while the legacy-named
   `primary_min_range_scaled`/`primary_max_range_scaled` remain in the retained
   target block. They currently carry the same live window but remain separate
-  contract positions.
+  contract positions;
+- `primary_build_index_scaled` maps base primaries in native skill-band order
+  (Ether, Fire, Air, Water, Earth) to `0.0, 0.2, 0.4, 0.6, 0.8`; weld builds
+  map exactly as `(build_id - 1000) / 10`, from `0.0` through `0.9`. The
+  primary element multi-hot disambiguates the deliberate numeric overlap.
 
 ## D. File-by-file Phase 2-5 plan
 
@@ -1135,7 +1186,7 @@ guessed.
 ### Phase 3 — Lua observation, masks, and brain
 
 - `mods/bot-brain/scripts/policy_spec.lua`
-  - Replace v1 with the exact 350-name list; set all versions to 2; define
+  - Replace v1 with the exact 395-name list; set all versions to 2; define
     hidden sizes 192/96, 9 target actions, fixed scales, ray/patch constants,
     and v2 trajectory fields.
 - New `mods/bot-brain/scripts/policy_geometry.lua`
@@ -1147,10 +1198,12 @@ guessed.
     custom-spell config. Compute element/band, affordability, range relation,
     fallback readiness, skill-52 ownership, and weld flags in Lua.
 - `mods/bot-brain/scripts/policy_observation.lua`
-  - Build Blocks A-H in the exact order; keep per-participant history; track
-    enemy velocities by `network_actor_id`; sort/pad eight enemies and four
-    loot rows; split orb subtypes; expose a movement mask, target mask, and a
-    function that builds the cast mask for a selected target.
+  - Build Blocks A-G, I, and H in the exact order; keep per-participant
+    history; track enemy velocities by `network_actor_id`; sort/pad eight
+    enemies, four loot rows, and four nearest ally rows; count the full
+    configured participant set without a Lua cap; split orb subtypes; expose a
+    movement mask, target mask, and a function that builds the cast mask for a
+    selected target.
 - `mods/bot-brain/scripts/steering.lua`
   - Keep replicated enemy acquisition and advisory aggregate/escape features,
     but stop making the learned policy's authoritative target choice.
@@ -1164,15 +1217,17 @@ guessed.
 - `mods/bot-brain/manifest.json`
   - Add the `policy.weld_preference` enum (`prefer`, `avoid`, `auto`) and any
     already-existing capability declaration needed by the verified loot API;
-    do not add debug capability.
+    do not add debug capability. The loader manifest grammar does not permit
+    dots in setting keys, so the concrete key is
+    `policy_weld_preference`.
 - `mods/bot-brain/scripts/policy_training.lua`
   - Record target mask/action and the target-conditioned cast mask/action in
     trajectory v2; update target history. Leave the audited reward formula
     unchanged.
 
-Phase 3 exit gate: deterministic Lua fixtures prove 350 finite values, exact
-ordering, mask legality, actor-ID target persistence, weld/pickup transitions,
-and zero per-observation nav-grid rebuilds.
+Phase 3 exit gate: deterministic Lua fixtures prove 395 finite values, exact
+ordering, mask legality, actor-ID target persistence, weld/pickup/ally
+transitions, and zero per-observation nav-grid rebuilds.
 
 ### Phase 4 — policy runtime and trainer
 
@@ -1188,7 +1243,7 @@ and zero per-observation nav-grid rebuilds.
     source control unless the owner requests its removal; runtime loading must
     reject it.
 - `tools/ml_bot/spec.py`
-  - Mirror the exact 350-name/action/version/architecture contract and expose
+  - Mirror the exact 395-name/action/version/architecture contract and expose
     both hidden sizes and all four output groups.
 - `tools/ml_bot/model.py`
   - Implement the two-layer, three-head model, composite selected-action
@@ -1221,7 +1276,7 @@ round-trip identically.
   - Require live secondary casting at range, policy-selected targets, movement
     toward a pickup, seed/log evidence, v2 hot reload, and no v1 acceptance.
 - `tests/lua/ml_bot_policy_contract.lua`
-  - Replace v1 fixtures with exact 350-value and three-head fixtures.
+  - Replace v1 fixtures with exact 395-value and three-head fixtures.
 - `tests/test_ml_bot_policy.py`
   - Cover v2 serialization, two hidden layers, masks, composite log-prob,
     per-head entropy, PPO finiteness, and version rejection.
@@ -1252,52 +1307,27 @@ at least two fresh seeds (and two layouts when supplied), remains finite,
 exports/hot-loads v2, and the live behavior checks in the approved contract
 all pass.
 
-## E. Risks and owner decisions
+## E. Adjudicated outcomes
 
-1. **350 versus retained v1 inventory/progression fields.** This plan follows
-   the literal v2 block text and produces 350. Retaining the 19 old inventory,
-   equipment, progression, and derived-stat fields plus `primary_available`
-   would produce 370. The eight bare secondary fields are replaced by Block C,
-   not retained. Owner decision: approve 350 (recommended) or explicitly amend
-   the contract.
+The eight former owner questions are resolved by
+`docs/ml-bot-policy-v2.md`'s 2026-07-29 Adjudications:
 
-2. **Fixed normalization constants are not all specified.** Range (1000),
-   enemy radius (100), patch spacing (about 60), ray cap (about 480), and
-   pickup distance (1000) are stated, but `HP_SCALE`, `MANA_SCALE`,
-   `VEL_SCALE`, and `COOLDOWN_SCALE` are not. Owner must approve the catalog/RE
-   maxima selected in Phase 3 before observation v2 is frozen.
-
-3. **Most native secondaries have no proven range or independent cooldown.**
-   The honest implementation is range 0/skip range mask, cooldown 0, and global
-   readiness except for Phasing 15 and Teleport 48. Owner decision: accept that
-   v2 limitation (recommended) or pause Phase 2 for a broader secondary-spell
-   RE project.
-
-4. **`+0x844` is both offer-time and current/activation state.** The roll writes
-   it before the user accepts option 52. The proposed generation-scoped capture
-   distinguishes pending offer from active build, but loaded-save and
-   post-refresh cases require a live probe. Owner decision if ambiguity
-   remains: allow `build_id_resolved=false` during a pending weld, or require
-   additional RE before v2 can run.
-
-5. **The nav snapshot is not truly static.** It can include participant
-   obstacles present when the snapshot is built. Owner decision: accept a
-   scene-cached initial snapshot using its player-sized placement semantics
-   (recommended), or authorize a new static-only native grid mode. The latter
-   adds another native seam and changes the minimal-seam conclusion.
-
-6. **Reliable seed rotation currently costs one process per environment
-   episode.** This is slower but respects stock teardown and is recoverable.
-   Owner decision: accept that initial throughput cost (recommended), or fund
-   reliable stock Leave Game automation before training.
-
-7. **There is no approved layout corpus.** Seed rotation works today, but
-   multi-layout cycling needs a list of `.boneyard` fixtures whose training use
-   is approved. Owner must provide/approve that corpus; until then Phase 5 can
-   prove fresh native seeds on the stock layout but not multiple override
-   files.
-
-8. **Bootstrap policy.** V1's semantic expert is target-biased and must be
-   rewritten or removed. Owner decision: retain a target-aware synthetic
-   bootstrap for smoke/initialization, or start PPO from random v2 weights.
-   In either case, no v1 weights migrate.
+1. The final layout is 395 values: the audited 350, four derived combat
+   multipliers, and Block I's 41 ally values. Inventory/equipment summaries
+   and `primary_available` remain dropped.
+2. Phase 3 freezes clean round scales from catalog/RE evidence. The chosen
+   constants are `MANA_SCALE=2000`, `HP_SCALE=1000`, `VEL_SCALE=1000`, and
+   `COOLDOWN_SCALE=60`; evidence is recorded beside them in
+   `policy_spec.lua`.
+3. Native secondary coverage remains intentionally partial: unknown range
+   skips the range mask, and unknown cooldown uses global readiness.
+4. Weld `+0x844` uses generation-scoped capture with
+   `build_id_resolved=false` allowed during an unresolved pending offer.
+5. Navigation uses a per-scene cache refreshed about every two seconds and
+   adopts only `refresh_pending=false` snapshots. No static-grid seam is
+   added.
+6. Phase 5 uses one disposable solo session per environment episode.
+7. Fresh native seeds on the stock layout gate Phase 5; an approved
+   multi-layout corpus remains non-blocking.
+8. Bootstrap remains, but Phase 4 rewrites it target-first and reuses no v1
+   weights, trajectories, or expert data.

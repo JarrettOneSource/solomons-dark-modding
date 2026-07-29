@@ -512,14 +512,15 @@ def _stage_crash_artifacts(started_at: float) -> list[str]:
 def _require_owned_stage_paths(launch: dict[str, object]) -> None:
     for role in ("host", "client"):
         raw = str(launch.get(f"{role}ExecutablePath") or "")
-        normalized = raw.replace("/", "\\").casefold()
-        expected = (
-            f"\\sd-mod-settings-v2-20260727\\runtime\\instances\\"
-            f"{INSTANCE_PREFIX}-{role}\\stage\\solomondark.exe"
+        expected = local_sync.path_for_powershell(
+            _stage_root(role) / "SolomonDark.exe"
         )
-        if not normalized.endswith(expected.casefold()):
+        if raw.replace("/", "\\").casefold() != (
+            expected.replace("/", "\\").casefold()
+        ):
             raise ModSettingsLifecycleFailure(
-                f"{role} executable escaped the exact verifier stage: {raw}"
+                f"{role} executable escaped the exact verifier stage: "
+                f"expected={expected} actual={raw}"
             )
 
 
@@ -583,7 +584,7 @@ def verify_lifecycle(
             client_port=CLIENT_PORT,
             temporary_host_profile=True,
             kill_existing=False,
-            god_mode=True,
+            god_mode=False,
             tile_windows=False,
             allow_focus_steal=False,
             exact_mod_id=EXACT_MOD_ID,
@@ -793,15 +794,13 @@ def verify_lifecycle(
         )
         exhausted_reload = _reload(HOST_PIPE)
         result["slotExhaustionReload"] = exhausted_reload
-        entry_error = exhausted_reload.get("entry_error.roster", "")
         if (
-            exhausted_reload.get("ok") != "false"
+            exhausted_reload.get("ok") != "true"
             or exhausted_reload.get("changed") != "roster"
-            or not entry_error
-            or "roster entry 3" not in entry_error.lower()
+            or exhausted_reload.get("error", "") != ""
         ):
             raise ModSettingsLifecycleFailure(
-                "slot exhaustion did not return a roster entry error: "
+                "capacity-valid roster reload failed before reconciliation: "
                 f"{exhausted_reload}"
             )
 
@@ -826,14 +825,12 @@ def verify_lifecycle(
                     views["host"],
                     "brain.bot.3.participant_id",
                 ) == 0
-                and bool(
-                    views["host"].get(
-                        "brain.bot.3.last_error",
-                    )
-                )
+                and views["host"].get(
+                    "brain.bot.3.last_error",
+                ) == "lobby full"
             ),
             timeout=20.0,
-            label="slot-exhaustion survival and replication",
+            label="configured-capacity refusal and roster survival",
         )
         result["slotExhaustionSurvived"] = survived
         crashes = _stage_crash_artifacts(started_at)

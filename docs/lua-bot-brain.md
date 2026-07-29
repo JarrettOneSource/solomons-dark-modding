@@ -1,17 +1,21 @@
 # Autonomous Lua bot-brain roster
 
 `mods/bot-brain/` is the opt-in reference brain for host-owned synthetic
-participants. Its host-scoped `roster` list contains zero to four ordered rows:
-name, element (`fire`, `water`, `earth`, `air`, or `ether`), native Discipline
+participants. Its host-scoped `roster` list contains ordered rows with name,
+element (`fire`, `water`, `earth`, `air`, or `ether`), native Discipline
 (Mind, Body, or Arcane; stored as `mind`, `body`, or `arcane`), and Behavior
-(`skirmisher`, `guardian`, `striker`, or `learned`). The mod is disabled by
-default, so an ordinary game never gains an unsolicited participant.
+(`skirmisher`, `guardian`, `striker`, or `learned`). The current launcher
+schema accepts up to 32 rows; the session's configured participant capacity,
+not Lua, decides how many can become active. The mod is disabled by default,
+so an ordinary game never gains an unsolicited participant.
 
 The default roster contains one Arcane fire skirmisher named `Ember`. The
 earlier `persona_name` scalar is gone; names belong to rows. The other launcher
 controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
 cadence for scripted rows, local focus key, and the confirmed host-only roster
-respawn action. Learned rows decide every 100 ms of simulation time.
+respawn action. `policy_weld_preference` controls whether the shared skill
+manager prefers, avoids, or automatically accepts Spell Welding. Learned rows
+decide every 100 ms of simulation time once matching v2 weights are installed.
 
 ## Ordered reconciliation
 
@@ -30,13 +34,13 @@ value once under `behavior`, adds native `discipline: "arcane"`, and persists
 the result atomically. Runtime Lua reads only the new keys; there is no lasting
 legacy alias.
 
-Retirement uses the reliable participant tombstone path. Solomon Dark has four
-native player/progression slots, so humans and bots share one four-participant
-lobby capacity. If a row cannot claim an open seat, the context remains desired
-and retries on later authority ticks. Expected capacity refusals are summarized
-in `bot_brain_debug.status` (for example,
-`2 of 4 bots active — lobby full`) instead of becoming reconciliation errors.
-A rejection never crashes the mod or game.
+Retirement uses the reliable participant tombstone path. Humans and bots share
+the configured multiplayer participant capacity. Roster reconciliation
+iterates every configured row without a hard-coded player cap. If a row cannot
+claim an open seat, the context remains desired and retries on later authority
+ticks. Expected capacity refusals are summarized in `bot_brain_debug.status`
+instead of becoming reconciliation errors. A rejection never crashes the mod
+or game.
 
 The brain never creates a standalone actor, writes an actor transform, or
 drives a second native AI loop. All contexts run from `runtime.tick`, and
@@ -47,12 +51,15 @@ State, Frame, Cast, and retirement traffic.
 ## Shared native movement and offense
 
 Every Behavior samples `sd.world.get_replicated_actors()` and keeps live
-`tracked_enemy` rows. Candidate destinations come from short steering
-lookaheads clamped to the current arena. Every candidate must pass
-`sd.nav.test_segment` before `bot:move_to`; the brain contains no Lua grid
-fallback or transform write. The loader may apply its authority-owned,
-native-placement-validated stuck recovery only after a full 30-second
-no-progress window.
+`tracked_enemy` rows. Scripted candidate destinations come from short steering
+lookaheads clamped to the current arena and must pass `sd.nav.test_segment`
+before `bot:move_to`. The learned observation uses a per-scene
+`sd.nav.get_grid(4)` cache, adopts only completed snapshots about every two
+seconds, and computes its 48 walkability samples and eight clearance rays in
+Lua. `sd.nav.test_segment` remains authoritative only for the learned movement
+mask. Neither path writes a transform. The loader may apply its
+authority-owned, native-placement-validated stuck recovery only after a full
+30-second no-progress window.
 
 Each bot asks `sd.bots.get_primary_attack_window(participant_id)` for its own
 live class primary. A cast uses
@@ -107,26 +114,30 @@ lookup, replicated slot-0 cast ingress, and wave-transition movement.
 
 ### Learned
 
-Learned uses the bundled version 1 actor-critic to select idle/eight-way
-movement and no-cast/primary/eight-secondary attacks. It does not merely choose
-a scripted profile: every 100 ms it captures the bot's live state, applies
-navigation and cast masks, runs the Lua neural network, then calls
-`bot:move_to`, `bot:stop`, or `bot:cast` with the selected action. The native
-participant rail still owns collision, mana, cooldown, spell dispatch, damage,
-death, and replication.
+Phase 3 installs the version 2 observation and action boundary. Every 100 ms it
+can capture exactly 395 ordered finite values: self state; dynamic primary and
+eight-secondary descriptors; eight enemies with actor-ID velocity history;
+the persisted target; cached local geometry; four pickups; the four nearest
+in-run allies plus a cap-independent ally count; and aggregate, history, weld,
+and combat-multiplier values. Target selection is a separate nine-action head.
+The cast mask is rebuilt against the target selected on that same decision, so
+secondary range/readiness is not constrained by the primary attack window.
 
-The model observes combat geometry and vitals together with status, native
-Discipline, element, inventory and potion counts, equipped slots, gold,
-spellbook progression, loaded-secondary-slot availability, derived combat
-multipliers, prior actions, and one-step temporal deltas. The existing native
-skill-choice flow still runs before the learned decision.
+No v2 weights exist until Phase 4. A row configured as `learned` therefore
+reports a clear unavailable-policy error instead of loading the incompatible
+bundled v1 weights. Once matching weights are installed, inference remains
+local Lua only: it does not start Python, require a GPU, or contact a model
+service, and all movement and casts still use the native participant rails.
 
-Player inference is local Lua only. It does not start Python, require a GPU, or
-contact a model service. The current native bot API has no owner-safe
-per-bot consume/equip mutation, so version 1 observes those states but does not
-pretend it can use or equip items. See [`ml-bot.md`](ml-bot.md) for player
-setup, live PPO training, checkpoint replacement, and the versioned action
-boundary.
+The shared skill manager sees learned primary progression, pending weld build
+IDs, and Spell Welding option 52. In `auto` mode it accepts a weld only after
+both component primaries are learned; `prefer` and `avoid` provide explicit
+owner control. Learned rows also make rate-limited pickup requests only for
+host-owned replicated drops inside the drop's native pickup radius. The
+current native bot API still has no owner-safe per-bot consume/equip mutation,
+so inventory actions remain out of scope. See [`ml-bot.md`](ml-bot.md) for
+player setup, live PPO training, checkpoint replacement, and the versioned
+action boundary.
 
 ## Diagnostics and acceptance
 
@@ -139,9 +150,9 @@ diagnostic readers and the longevity verifier. The root also reports desired,
 active, and
 capacity-refused counts plus the aggregate status string. Learned rows also
 report policy generation, decision count, selected actions/probabilities,
-value estimate, inventory/loadout counts, and whether the scheduler is using
-the simulation or fallback wall clock. This is acceptance telemetry, not a
-gameplay control API.
+value estimate, target action and persisted actor ID, pickup requests,
+inventory/loadout counts, and whether the scheduler is using the simulation or
+fallback wall clock. This is acceptance telemetry, not a gameplay control API.
 
 The retail host/client combat gate uses the launcher-configured roster and
 stock wave schedule. Cast acceptance is diagnostic only; success requires

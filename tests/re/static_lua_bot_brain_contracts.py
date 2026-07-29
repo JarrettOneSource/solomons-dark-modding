@@ -270,7 +270,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     assert roster_entry["type"] == "list"
     assert roster_entry["scope"] == "host"
     assert roster_entry["min_items"] == 0
-    assert roster_entry["max_items"] == 4
+    assert roster_entry["max_items"] == 32
     fields = {
         field["key"]: field
         for field in roster_entry["item"]["fields"]
@@ -397,7 +397,6 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         "engage_radius = 240.0",
         'controller_kind or "") == "Native"',
         "ward_distance < previous - 0.5",
-        "movement_radius",
         "sd.nav.test_segment",
         "context.bot:move_to(target.x, target.y)",
         "context.bot:cast(",
@@ -556,6 +555,8 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         "local tangent_x, tangent_y",
         "path_traversable == true",
         "movement_candidates",
+        "constrain_to_guardian_leash",
+        "current_distance > movement_radius",
         "nearest_cast_target",
         "nearest_enemy",
         "approach_direction",
@@ -577,7 +578,7 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         )
 
     for token in (
-        "zero to four ordered rows",
+        "schema accepts up to 32 rows",
         "a changed name",
         "Behavior",
         "Mind",

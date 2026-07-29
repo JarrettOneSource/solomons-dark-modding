@@ -41,29 +41,37 @@ local function normalize(x, y)
   return x / length, y / length
 end
 
-local function current_scene_is_run()
+local function current_run_scene()
   local ok, scene = pcall(sd.world.get_scene)
   if not ok or type(scene) ~= "table" then
-    return false
+    return false, ""
   end
   local name = tostring(scene.name or "")
   local kind = tostring(scene.kind or "")
-  return name == "testrun" or kind == "run"
+  local is_run = name == "testrun" or kind == "run"
+  return is_run, kind .. ":" .. name
 end
 
-local function update_arena(context, now_ms, bot_x, bot_y)
+local function update_arena(
+    context,
+    now_ms,
+    bot_x,
+    bot_y,
+    scene_key)
   local shared = context.shared
+  shared.policy_geometry:refresh(now_ms, scene_key)
+  local geometry_revision =
+    shared.policy_geometry.revision
   if context.arena ~= nil and
-      now_ms - context.last_nav_refresh_ms < shared.nav_refresh_ms then
+      context.arena_geometry_revision == geometry_revision then
     return context.arena
   end
-  context.last_nav_refresh_ms = now_ms
-  local ok, grid = pcall(sd.nav.get_grid, 1)
-  if not ok then
-    grid = nil
-  end
   context.arena =
-    context.steering.arena_from_grid(grid, bot_x, bot_y)
+    context.steering.arena_from_grid(
+      shared.policy_geometry.grid,
+      bot_x,
+      bot_y)
+  context.arena_geometry_revision = geometry_revision
   context.debug.arena_grid_backed = context.arena.grid_backed
   return context.arena
 end
@@ -89,7 +97,7 @@ local function update_attack_window(context, now_ms)
   return context.attack_window
 end
 
-local function choose_pending_skill(context)
+local function read_skill_choices(context)
   local ok, choices = pcall(
     sd.bots.get_skill_choices,
     context.participant_id)
@@ -97,9 +105,73 @@ local function choose_pending_skill(context)
       choices.pending ~= true or
       type(choices.options) ~= "table" or
       #choices.options == 0 then
+    return type(choices) == "table" and choices or {}
+  end
+  return choices
+end
+
+local function learned_primary_state(context)
+  local learned = {}
+  local learned_count = 0
+  local ok, multiplayer =
+    pcall(sd.runtime.get_multiplayer_state)
+  if ok and type(multiplayer) == "table" then
+    for _, participant in
+        ipairs(multiplayer.participants or {}) do
+      if tonumber(participant.participant_id) ==
+          context.participant_id then
+        local owned =
+          type(participant.owned_progression) == "table" and
+            participant.owned_progression or {}
+        for _, entry in
+            ipairs(owned.progression_book_entries or {}) do
+          local entry_id = tonumber(entry.entry_index)
+          if tonumber(entry.active) ~= nil and
+              tonumber(entry.active) > 0 and
+              context.shared.policy_spell_descriptors:
+                is_base_primary(entry_id) and
+              learned[entry_id] ~= true then
+            learned[entry_id] = true
+            learned_count = learned_count + 1
+          end
+        end
+        break
+      end
+    end
+  end
+  return learned, learned_count
+end
+
+local function weld_offer_eligible(
+    context,
+    details,
+    learned,
+    learned_count)
+  local preference = context.shared.weld_preference
+  if preference == "avoid" or
+      type(details) ~= "table" or
+      details.pending_weld_build_id_resolved ~= true then
+    return false
+  end
+  local components =
+    context.shared.policy_spell_descriptors:
+      weld_components(details.pending_weld_build_id)
+  if type(components) ~= "table" or
+      learned[components[1]] ~= true or
+      learned[components[2]] ~= true then
+    return false
+  end
+  return preference == "prefer" or
+    (preference == "auto" and learned_count >= 2)
+end
+
+local function choose_pending_skill(context, choices)
+  if type(choices) ~= "table" or
+      choices.pending ~= true or
+      type(choices.options) ~= "table" or
+      #choices.options == 0 then
     return
   end
-
   local generation = tonumber(choices.generation)
   if generation == nil or
       generation == context.last_skill_choice_generation then
@@ -123,6 +195,20 @@ local function choose_pending_skill(context)
   local priority = {
     [64] = 30, -- Health Up
   }
+  local learned, learned_count =
+    learned_primary_state(context)
+  local details_ok, details = pcall(
+    sd.bots.get_loadout_details,
+    context.participant_id)
+  if not details_ok then
+    details = {}
+  end
+  local weld_eligible =
+    weld_offer_eligible(
+      context,
+      details,
+      learned,
+      learned_count)
   local band = element_bands[context.row.element]
   if band ~= nil then
     for option_id = band[1], band[2] do
@@ -135,7 +221,13 @@ local function choose_pending_skill(context)
   for index, option in ipairs(choices.options) do
     local option_id = tonumber(option.id)
     local option_priority = priority[option_id]
-    if option_priority == nil and
+    if option_id == 52 then
+      option_priority = weld_eligible and 0 or math.huge
+    elseif option_priority == nil and
+        primary_entries[option_id] == true and
+        learned[option_id] ~= true then
+      option_priority = 50 + index
+    elseif option_priority == nil and
         primary_entries[option_id] ~= true then
       option_priority = 100 + index
     end
@@ -147,7 +239,7 @@ local function choose_pending_skill(context)
   end
   if selected_index == nil then
     context.debug.last_error =
-      "skill choices contained only conflicting elemental primaries"
+      "skill choices contained no eligible deterministic option"
     return
   end
   local apply_ok, accepted = pcall(
@@ -253,24 +345,21 @@ local function guardian_idle_direction(context, bot_x, bot_y, ward)
       math.max(ward_distance, 1.0) * inward_weight)
 end
 
-local function constrain_to_guardian_leash(context, target, ward)
+local function constrain_to_guardian_leash(
+    context,
+    bot_x,
+    bot_y,
+    target,
+    ward)
   if context.row.behavior ~= "guardian" or ward == nil then
     return target
   end
-  local offset_x = target.x - ward.x
-  local offset_y = target.y - ward.y
-  local unit_x, unit_y = normalize(offset_x, offset_y)
-  local target_distance =
-    math.sqrt((offset_x * offset_x) + (offset_y * offset_y))
-  local movement_radius =
-    math.max(context.profile.leash_radius - 30.0, 1.0)
-  if target_distance <= movement_radius then
-    return target
-  end
-  return {
-    x = ward.x + unit_x * movement_radius,
-    y = ward.y + unit_y * movement_radius,
-  }
+  return context.steering.constrain_to_guardian_leash(
+    bot_x,
+    bot_y,
+    target,
+    ward,
+    context.profile.leash_radius)
 end
 
 local function issue_movement(
@@ -300,7 +389,12 @@ local function issue_movement(
     lookahead)
   for _, raw_target in ipairs(candidates) do
     local target =
-      constrain_to_guardian_leash(context, raw_target, ward)
+      constrain_to_guardian_leash(
+        context,
+        bot_x,
+        bot_y,
+        raw_target,
+        ward)
     local nav_ok, traversable = pcall(
       sd.nav.test_segment,
       bot_x,
@@ -454,18 +548,87 @@ local function issue_policy_cast(
   end
 end
 
+local function request_nearby_pickup(
+    context,
+    capture,
+    now_ms)
+  if capture.loot_host_owned ~= true or
+      capture.loadout.pickup_range <= 0.0 then
+    return
+  end
+
+  local memory = context.policy_memory
+  local interval =
+    context.shared.policy_spec.pickup_request_interval_ms
+  if memory.last_pickup_request_ms ~= nil and
+      now_ms - memory.last_pickup_request_ms < interval then
+    return
+  end
+
+  for _, pickup in ipairs(capture.pickups) do
+    local pickup_id = tonumber(pickup.network_drop_id) or 0
+    local native_range =
+      capture.loadout.pickup_range *
+      pickup.pickup_range_multiplier
+    local previous = memory.pickup_request_ms[pickup_id]
+    if pickup_id > 0 and pickup.distance <= native_range and
+        (previous == nil or now_ms - previous >= interval) then
+      memory.last_pickup_request_ms = now_ms
+      memory.pickup_request_ms[pickup_id] = now_ms
+      context.debug.pickup_request_issued =
+        context.debug.pickup_request_issued + 1
+      local ok, accepted, sequence_or_error = pcall(
+        sd.world.request_loot_pickup,
+        pickup_id)
+      if ok and accepted == true then
+        context.debug.pickup_request_accepted =
+          context.debug.pickup_request_accepted + 1
+        context.debug.last_pickup_request_sequence =
+          tonumber(sequence_or_error) or 0
+      else
+        context.debug.last_pickup_error =
+          tostring(
+            ok and sequence_or_error or accepted or
+            "pickup request rejected")
+      end
+      return
+    end
+  end
+end
+
 local function think_with_policy(
     context,
     frame)
   local shared = context.shared
+  if shared.policy_runtime == nil then
+    context.debug.mode = "learned_unavailable"
+    context.debug.last_error =
+      "ML policy v2 weights are unavailable until Phase 4"
+    return nil
+  end
+
   local capture = shared.policy_observation.capture(
     shared.policy_observation_builder,
     context,
     frame)
+  local selected_target = nil
+  local target_switched = false
   local decision = shared.policy_runtime:forward(
     capture.values,
     capture.movement_mask,
-    capture.cast_mask,
+    capture.target_mask,
+    function(target_action)
+      selected_target, target_switched =
+        shared.policy_observation.select_target(
+          shared.policy_observation_builder,
+          context,
+          capture,
+          target_action)
+      return shared.policy_observation.build_cast_mask(
+        shared.policy_observation_builder,
+        capture,
+        selected_target)
+    end,
     shared.policy_training.enabled == true)
   context.debug.mode = "learned"
   context.debug.policy_generation = decision.generation
@@ -474,14 +637,22 @@ local function think_with_policy(
   context.debug.policy_value = decision.value
   context.debug.policy_log_probability =
     decision.log_probability
-  context.debug.inventory_distinct_count =
-    capture.progression.inventory_distinct_count
-  context.debug.inventory_stack_count =
-    capture.progression.inventory_stack_count
-  context.debug.potion_stack_count =
-    capture.progression.potion_stack_count
   context.debug.secondary_slot_count =
-    capture.progression.secondary_count
+    #capture.loadout.secondaries
+  context.debug.policy_target_action =
+    decision.target_action
+  context.debug.policy_target_name =
+    decision.target.name
+  context.debug.policy_target_probability =
+    decision.target_probability
+  context.debug.policy_target_switched =
+    target_switched
+  context.debug.target_network_actor_id =
+    selected_target and
+      selected_target.network_actor_id or 0
+  context.debug.target_distance =
+    selected_target and
+      selected_target.distance or 0.0
 
   issue_policy_movement(
     context,
@@ -491,7 +662,11 @@ local function think_with_policy(
   issue_policy_cast(
     context,
     decision,
-    frame.target,
+    selected_target,
+    frame.now_ms)
+  request_nearby_pickup(
+    context,
+    capture,
     frame.now_ms)
   shared.policy_training:record(
     context,
@@ -499,6 +674,7 @@ local function think_with_policy(
     decision,
     frame.simulation_tick)
   context.last_policy_metrics = capture.metrics
+  return selected_target
 end
 
 local function update_wave_debug(context)
@@ -534,7 +710,6 @@ function brain.new(row, roster_index, shared, steering)
     bot = nil,
     participant_id = 0,
     last_spawn_attempt_ms = -shared.spawn_retry_ms,
-    last_nav_refresh_ms = -shared.nav_refresh_ms,
     last_attack_window_refresh_ms =
       -shared.attack_window_refresh_ms,
     last_cast_attempt_ms = -profile.cast_interval_ms,
@@ -546,6 +721,7 @@ function brain.new(row, roster_index, shared, steering)
     last_position_x = nil,
     last_position_y = nil,
     arena = nil,
+    arena_geometry_revision = -1,
     attack_window = nil,
     fleeing = false,
     death_latched = false,
@@ -553,12 +729,8 @@ function brain.new(row, roster_index, shared, steering)
     ward_enemy_distances = {},
     policy_pending = nil,
     last_policy_metrics = nil,
-    policy_memory = {
-      previous_move_action = 0,
-      previous_move_x = 0.0,
-      previous_move_y = 0.0,
-      previous_cast_action = 0,
-    },
+    policy_memory =
+      shared.policy_observation.new_memory(),
     debug = {
       roster_index = roster_index,
       name = row.name,
@@ -604,6 +776,10 @@ function brain.new(row, roster_index, shared, steering)
       policy_cast_action = 0,
       policy_cast_name = "none",
       policy_cast_probability = 0.0,
+      policy_target_action = 0,
+      policy_target_name = "keep_current",
+      policy_target_probability = 0.0,
+      policy_target_switched = false,
       policy_value = 0.0,
       policy_log_probability = 0.0,
       policy_stop_issued = 0,
@@ -612,6 +788,11 @@ function brain.new(row, roster_index, shared, steering)
       inventory_stack_count = 0,
       potion_stack_count = 0,
       secondary_slot_count = 0,
+      pickup_request_issued = 0,
+      pickup_request_accepted = 0,
+      last_pickup_request_sequence = 0,
+      last_pickup_error = "",
+      weld_preference = shared.weld_preference,
       last_error = "",
     },
   }
@@ -633,12 +814,11 @@ function brain.reset_run(context, started)
     -context.shared.approach_move_interval_ms
   context.ward_enemy_distances = {}
   context.last_policy_metrics = nil
-  context.policy_memory = {
-    previous_move_action = 0,
-    previous_move_x = 0.0,
-    previous_move_y = 0.0,
-    previous_cast_action = 0,
-  }
+  context.policy_memory =
+    context.shared.policy_observation.new_memory()
+  context.arena = nil
+  context.arena_geometry_revision = -1
+  context.attack_window = nil
   if not started then
     context.debug.active = false
     context.debug.mode = "hub"
@@ -672,8 +852,10 @@ function brain.think(
   context.last_think_ms = now_ms
 
   local wave = update_wave_debug(context)
-  choose_pending_skill(context)
-  if not current_scene_is_run() then
+  local skill_choices = read_skill_choices(context)
+  choose_pending_skill(context, skill_choices)
+  local is_run, scene_key = current_run_scene()
+  if not is_run then
     context.debug.active = false
     context.debug.mode = "hub"
     context.last_position_x = nil
@@ -738,7 +920,12 @@ function brain.think(
 
   context.debug.think_count = context.debug.think_count + 1
   track_path_distance(context, bot_x, bot_y)
-  update_arena(context, now_ms, bot_x, bot_y)
+  update_arena(
+    context,
+    now_ms,
+    bot_x,
+    bot_y,
+    scene_key)
 
   local hp_ratio = hp / max_hp
   if context.fleeing then
@@ -903,17 +1090,7 @@ function brain.think(
         hp = hp,
         max_hp = max_hp,
         wave = wave,
-        enemies = enemies,
-        target = target,
-        target_distance = target_distance,
-        target_in_primary_range = target ~= nil,
-        primary_min_range =
-          type(attack_window) == "table" and
-          tonumber(attack_window.min_range) or 0.0,
-        primary_max_range = effective_attack_range,
-        primary_available =
-          type(attack_window) == "table" and
-          effective_attack_range > 0.0,
+        enemies = all_enemies,
         threat_count = threat_count,
         threat_radius = threat_radius,
         edge_pressure = edge_pressure,
@@ -924,12 +1101,9 @@ function brain.think(
           context.shared.policy_move_lookahead,
         offense_enabled =
           context.shared.offense_enabled,
+        scene_key = scene_key,
+        skill_choices = skill_choices,
       })
-    context.debug.target_network_actor_id =
-      target and target.network_actor_id or 0
-    context.debug.target_distance =
-      target_distance < math.huge and
-        target_distance or 0.0
     return
   end
   issue_movement(
@@ -951,5 +1125,7 @@ function brain.think(
 end
 
 brain.profiles = PROFILES
+brain.choose_pending_skill = choose_pending_skill
+brain.request_nearby_pickup = request_nearby_pickup
 
 return brain

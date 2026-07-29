@@ -1,7 +1,5 @@
 local observation = {}
 
-local POTION_TYPE_ID = 0x1B59
-
 local function finite_number(value)
   return type(value) == "number" and value == value and
     value > -math.huge and value < math.huge
@@ -20,6 +18,7 @@ local function clamp(value, minimum, maximum)
 end
 
 local function scaled(value, divisor)
+  divisor = math.max(number(divisor, 1.0), 0.000001)
   return clamp(number(value) / divisor, -1.0, 1.0)
 end
 
@@ -41,17 +40,47 @@ local function normalize(x, y)
   return x / length, y / length, length
 end
 
-local function item_equipped(item)
-  return type(item) == "table" and
-    number(item.type_id) > 0
+local function elapsed_scaled(now_ms, previous_ms, scale_ms)
+  if previous_ms == nil then
+    return 1.0
+  end
+  return clamp(
+    (number(now_ms) - number(previous_ms)) / scale_ms,
+    0.0,
+    1.0)
 end
 
-local function find_participant(participant_id)
-  local ok, multiplayer = pcall(
-    sd.runtime.get_multiplayer_state)
-  if not ok or type(multiplayer) ~= "table" then
-    return nil
+local function default_snapshot(participant_id)
+  local ok, snapshot = pcall(
+    sd.bots.get_participant_state,
+    participant_id)
+  if ok and type(snapshot) == "table" then
+    return snapshot
   end
+  return {}
+end
+
+local function default_multiplayer_state()
+  local ok, state = pcall(sd.runtime.get_multiplayer_state)
+  if ok and type(state) == "table" then
+    return state
+  end
+  return {}
+end
+
+local function default_loot()
+  local ok, loot = pcall(sd.world.get_replicated_loot)
+  if ok and type(loot) == "table" then
+    return loot
+  end
+  return {}
+end
+
+local function default_test_segment(from_x, from_y, to_x, to_y)
+  return sd.nav.test_segment(from_x, from_y, to_x, to_y)
+end
+
+local function find_participant(multiplayer, participant_id)
   for _, participant in ipairs(multiplayer.participants or {}) do
     if number(participant.participant_id) == participant_id then
       return participant
@@ -60,197 +89,20 @@ local function find_participant(participant_id)
   return nil
 end
 
-local function nearest_enemy(
-    bot_x,
-    bot_y,
-    enemies,
-    maximum_distance)
-  local nearest = nil
-  local nearest_distance = math.huge
-  for _, enemy in ipairs(enemies or {}) do
-    local dx = number(enemy.x) - bot_x
-    local dy = number(enemy.y) - bot_y
-    local distance = math.sqrt(dx * dx + dy * dy)
-    if distance < nearest_distance and
-        (maximum_distance == nil or
-         distance <= maximum_distance) then
-      nearest = enemy
-      nearest_distance = distance
+local function participant_is_owner(
+    multiplayer,
+    participant_id)
+  for _, participant in ipairs(multiplayer.participants or {}) do
+    if number(participant.participant_id) == participant_id then
+      return participant.is_owner == true
     end
   end
-  return nearest, nearest_distance
-end
-
-local function progression_summary(participant)
-  local owned =
-    type(participant) == "table" and
-    participant.owned_progression or nil
-  if type(owned) ~= "table" then
-    owned = {}
-  end
-  local items = type(owned.inventory_items) == "table" and
-    owned.inventory_items or {}
-  local inventory_stack_count = 0
-  local potion_stack_count = 0
-  for _, item in ipairs(items) do
-    local stack_count = math.max(number(item.stack_count, 1), 0)
-    inventory_stack_count =
-      inventory_stack_count + stack_count
-    if number(item.type_id) == POTION_TYPE_ID then
-      potion_stack_count =
-        potion_stack_count + stack_count
-    end
-  end
-
-  local equipment = owned.equipment
-  if type(equipment) ~= "table" and
-      type(participant) == "table" then
-    equipment = participant.equipment
-  end
-  if type(equipment) ~= "table" then
-    equipment = {}
-  end
-  local ring_count = 0
-  for _, ring in ipairs(equipment.rings or {}) do
-    if item_equipped(ring) then
-      ring_count = ring_count + 1
-    end
-  end
-
-  local progression_entries =
-    type(owned.progression_book_entries) == "table" and
-    owned.progression_book_entries or {}
-  local active_count = 0
-  local visible_count = 0
-  for _, entry in ipairs(progression_entries) do
-    if number(entry.active) > 0 then
-      active_count = active_count + 1
-    end
-    if number(entry.visible) > 0 then
-      visible_count = visible_count + 1
-    end
-  end
-
-  local loadout = type(owned.ability_loadout) == "table" and
-    owned.ability_loadout or {}
-  local secondary_available = {}
-  local secondary_count = 0
-  for slot = 1, 8 do
-    local entry_index = number(
-      type(loadout.secondary_entry_indices) == "table" and
-        loadout.secondary_entry_indices[slot],
-      -1)
-    secondary_available[slot] = entry_index >= 0
-    if secondary_available[slot] then
-      secondary_count = secondary_count + 1
-    end
-  end
-  local derived = type(owned.derived_stats) == "table" and
-    owned.derived_stats or {}
-  return {
-    owned = owned,
-    inventory_distinct_count = #items,
-    inventory_stack_count = inventory_stack_count,
-    potion_stack_count = potion_stack_count,
-    equipment_valid = equipment.valid == true,
-    hat_equipped = item_equipped(equipment.hat),
-    robe_equipped = item_equipped(equipment.robe),
-    weapon_equipped = item_equipped(equipment.weapon),
-    ring_count = ring_count,
-    amulet_equipped = item_equipped(equipment.amulet),
-    gold = number(owned.gold),
-    progression_active_count = active_count,
-    progression_visible_count = visible_count,
-    secondary_available = secondary_available,
-    secondary_count = secondary_count,
-    inventory_truncated = owned.inventory_truncated == true,
-    progression_truncated =
-      owned.progression_book_truncated == true,
-    offensive_damage_multiplier =
-      number(derived.offensive_damage_multiplier, 1.0),
-    offensive_mana_multiplier =
-      number(derived.offensive_mana_multiplier, 1.0),
-    cast_speed_multiplier =
-      number(derived.cast_speed_multiplier, 1.0),
-    secondary_recharge_multiplier =
-      number(derived.secondary_recharge_multiplier, 1.0),
-  }
-end
-
-local function build_movement_mask(
-    spec,
-    bot_x,
-    bot_y,
-    lookahead)
-  local mask = {}
-  local targets = {}
-  for index, action in ipairs(spec.movement_actions) do
-    if index == 1 then
-      mask[index] = true
-      targets[index] = { x = bot_x, y = bot_y }
-    else
-      local target_x = bot_x + action.x * lookahead
-      local target_y = bot_y + action.y * lookahead
-      local ok, traversable = pcall(
-        sd.nav.test_segment,
-        bot_x,
-        bot_y,
-        target_x,
-        target_y)
-      mask[index] = ok and traversable == true
-      targets[index] = { x = target_x, y = target_y }
-    end
-  end
-  return mask, targets
-end
-
-local function build_cast_mask(
-    spec,
-    frame,
-    snapshot,
-    progression)
-  local mask = {}
-  for index = 1, #spec.cast_actions do
-    mask[index] = false
-  end
-  mask[1] = true
-  local can_cast =
-    frame.offense_enabled == true and
-    type(frame.target) == "table" and
-    frame.target_in_primary_range == true and
-    type(snapshot) == "table" and
-    snapshot.cast_ready == true and
-    snapshot.cast_active ~= true and
-    snapshot.cast_pending ~= true
-  if not can_cast then
-    return mask
-  end
-  mask[2] = frame.primary_available == true
-  for slot = 1, 8 do
-    mask[slot + 2] =
-      progression.secondary_available[slot] == true
-  end
-  return mask
-end
-
-local function set(values, indexes, name, value)
-  values[indexes[name]] = number(value)
-end
-
-local function set_boolean(values, indexes, name, value)
-  values[indexes[name]] = value == true and 1.0 or 0.0
-end
-
-local function elapsed_scaled(now_ms, previous_ms)
-  if previous_ms == nil then
-    return 1.0
-  end
-  return clamp((now_ms - previous_ms) / 5000.0, 0.0, 1.0)
+  return false
 end
 
 local function enemy_health(enemies)
   local result = {}
-  for _, enemy in ipairs(enemies or {}) do
+  for _, enemy in ipairs(enemies) do
     local actor_id = number(enemy.network_actor_id)
     if actor_id > 0 then
       result[actor_id] = ratio(enemy.hp, enemy.max_hp)
@@ -259,435 +111,1057 @@ local function enemy_health(enemies)
   return result
 end
 
-function observation.new(spec)
+local function new_memory()
+  return {
+    previous_move_action = 0,
+    previous_move_x = 0.0,
+    previous_move_y = 0.0,
+    previous_cast_action = 0,
+    previous_target_action = 0,
+    previous_target_switched = false,
+    target_actor_id = nil,
+    enemy_position_history = {},
+    pickup_request_ms = {},
+  }
+end
+
+local function ensure_memory(context)
+  if type(context.policy_memory) ~= "table" then
+    context.policy_memory = new_memory()
+  end
+  local memory = context.policy_memory
+  if type(memory.enemy_position_history) ~= "table" then
+    memory.enemy_position_history = {}
+  end
+  if type(memory.pickup_request_ms) ~= "table" then
+    memory.pickup_request_ms = {}
+  end
+  return memory
+end
+
+local function sort_enemies(
+    enemies,
+    bot_x,
+    bot_y,
+    now_ms,
+    memory,
+    spell_descriptors,
+    primary,
+    velocity_scale)
+  local rows = {}
+  local next_history = {}
+  for source_index, enemy in ipairs(enemies or {}) do
+    local x = number(enemy.x)
+    local y = number(enemy.y)
+    local hp = number(enemy.hp)
+    local max_hp = number(enemy.max_hp)
+    local actor_id = number(enemy.network_actor_id)
+    if actor_id > 0 and max_hp > 0.0 and hp > 0.0 then
+      local dx = x - bot_x
+      local dy = y - bot_y
+      local unit_x, unit_y, distance =
+        normalize(dx, dy)
+      local velocity_x = 0.0
+      local velocity_y = 0.0
+      local previous =
+        memory.enemy_position_history[actor_id]
+      if type(previous) == "table" then
+        local elapsed_ms = now_ms - number(previous.now_ms)
+        if elapsed_ms > 0.0 then
+          velocity_x =
+            (x - number(previous.x)) * 1000.0 / elapsed_ms
+          velocity_y =
+            (y - number(previous.y)) * 1000.0 / elapsed_ms
+        end
+      end
+      next_history[actor_id] = {
+        x = x,
+        y = y,
+        now_ms = now_ms,
+      }
+      local in_primary_range, contact_distance =
+        spell_descriptors:primary_in_range(
+          primary,
+          bot_x,
+          bot_y,
+          enemy)
+      rows[#rows + 1] = {
+        network_actor_id = actor_id,
+        source_index = source_index,
+        x = x,
+        y = y,
+        radius = math.max(number(enemy.radius), 0.0),
+        hp = hp,
+        max_hp = max_hp,
+        alive = true,
+        dx = unit_x,
+        dy = unit_y,
+        distance = distance,
+        contact_distance = contact_distance,
+        velocity_dx = scaled(velocity_x, velocity_scale),
+        velocity_dy = scaled(velocity_y, velocity_scale),
+        in_primary_range = in_primary_range,
+      }
+    end
+  end
+  table.sort(rows, function(left, right)
+    if math.abs(left.distance - right.distance) > 0.000001 then
+      return left.distance < right.distance
+    end
+    if left.network_actor_id ~= right.network_actor_id then
+      return left.network_actor_id < right.network_actor_id
+    end
+    return left.source_index < right.source_index
+  end)
+  memory.enemy_position_history = next_history
+  return rows
+end
+
+local function find_enemy_by_id(enemies, actor_id)
+  if actor_id == nil or actor_id <= 0 then
+    return nil
+  end
+  for _, enemy in ipairs(enemies) do
+    if enemy.network_actor_id == actor_id then
+      return enemy
+    end
+  end
+  return nil
+end
+
+local function sort_allies(
+    multiplayer,
+    participant_id,
+    bot_x,
+    bot_y)
+  local allies = {}
+  for source_index, participant in
+      ipairs(multiplayer.participants or {}) do
+    local id = number(participant.participant_id)
+    local x = tonumber(participant.x)
+    local y = tonumber(participant.y)
+    if id ~= participant_id and
+        participant.in_run == true and
+        finite_number(x) and finite_number(y) then
+      local dx = x - bot_x
+      local dy = y - bot_y
+      local unit_x, unit_y, distance =
+        normalize(dx, dy)
+      local intent_x, intent_y = normalize(
+        participant.movement_intent_x,
+        participant.movement_intent_y)
+      allies[#allies + 1] = {
+        participant_id = id,
+        source_index = source_index,
+        dx = unit_x,
+        dy = unit_y,
+        distance = distance,
+        hp_ratio = ratio(
+          participant.life_current,
+          participant.life_max),
+        mana_ratio = ratio(
+          participant.mana_current,
+          participant.mana_max),
+        alive = number(participant.life_current) > 0.0,
+        is_human =
+          tostring(participant.controller_kind or "") ==
+            "Native",
+        intent_dx = intent_x,
+        intent_dy = intent_y,
+      }
+    end
+  end
+  table.sort(allies, function(left, right)
+    if math.abs(left.distance - right.distance) > 0.000001 then
+      return left.distance < right.distance
+    end
+    if left.participant_id ~= right.participant_id then
+      return left.participant_id < right.participant_id
+    end
+    return left.source_index < right.source_index
+  end)
+  return allies
+end
+
+local PICKUP_RANGE_MULTIPLIERS = {
+  Gold = 30.0,
+  Item = 30.0,
+  Potion = 30.0,
+  Orb = 60.0,
+}
+
+local function sort_pickups(loot, bot_x, bot_y)
+  local pickups = {}
+  for source_index, drop in ipairs(loot.drops or {}) do
+    local kind = tostring(drop.kind or "")
+    local multiplier = PICKUP_RANGE_MULTIPLIERS[kind]
+    local x = tonumber(drop.x)
+    local y = tonumber(drop.y)
+    if drop.active == true and multiplier ~= nil and
+        finite_number(x) and finite_number(y) then
+      local dx = x - bot_x
+      local dy = y - bot_y
+      local unit_x, unit_y, distance =
+        normalize(dx, dy)
+      local resource_kind = number(drop.resource_kind, -1)
+      pickups[#pickups + 1] = {
+        network_drop_id = number(drop.network_drop_id),
+        source_index = source_index,
+        x = x,
+        y = y,
+        dx = unit_x,
+        dy = unit_y,
+        distance = distance,
+        kind = kind,
+        type_gold = kind == "Gold",
+        type_health_orb =
+          kind == "Orb" and resource_kind == 0,
+        type_mana_orb =
+          kind == "Orb" and resource_kind == 1,
+        type_item_carrier =
+          kind == "Item" or kind == "Potion",
+        pickup_range_multiplier = multiplier,
+      }
+    end
+  end
+  table.sort(pickups, function(left, right)
+    if math.abs(left.distance - right.distance) > 0.000001 then
+      return left.distance < right.distance
+    end
+    if left.network_drop_id ~= right.network_drop_id then
+      return left.network_drop_id < right.network_drop_id
+    end
+    return left.source_index < right.source_index
+  end)
+  return pickups
+end
+
+local function nearest_within(enemies, maximum_distance)
+  for _, enemy in ipairs(enemies) do
+    if maximum_distance == nil or
+        enemy.distance <= maximum_distance then
+      return enemy
+    end
+  end
+  return nil
+end
+
+local function count_within(enemies, maximum_distance)
+  local result = 0
+  for _, enemy in ipairs(enemies) do
+    if enemy.distance <= maximum_distance then
+      result = result + 1
+    end
+  end
+  return result
+end
+
+local function build_movement_mask(
+    builder,
+    bot_x,
+    bot_y,
+    lookahead)
+  local mask = {}
+  local targets = {}
+  for index, action in ipairs(builder.spec.movement_actions) do
+    local target_x = bot_x + action.x * lookahead
+    local target_y = bot_y + action.y * lookahead
+    targets[index] = {x = target_x, y = target_y}
+    if index == 1 then
+      mask[index] = true
+    else
+      local ok, traversable = pcall(
+        builder.test_segment,
+        bot_x,
+        bot_y,
+        target_x,
+        target_y)
+      mask[index] = ok and traversable == true
+    end
+  end
+  return mask, targets
+end
+
+local function build_target_mask(spec, enemy_slots, current_target)
+  local mask = {}
+  local has_enemy = #enemy_slots > 0
+  mask[1] = current_target ~= nil or not has_enemy
+  for slot = 1, spec.enemy_slot_count do
+    local enemy = enemy_slots[slot]
+    mask[slot + 1] =
+      type(enemy) == "table" and enemy.alive == true
+  end
+  return mask
+end
+
+local function push(values, spec, name, value)
+  local index = #values + 1
+  local expected = spec.observation_names[index]
+  if expected ~= name then
+    error(
+      "policy observation order mismatch at " ..
+      tostring(index) .. ": expected " ..
+      tostring(expected) .. ", got " .. tostring(name))
+  end
+  values[index] = number(value)
+end
+
+local function push_boolean(values, spec, name, value)
+  push(values, spec, name, value == true and 1.0 or 0.0)
+end
+
+local function push_elements(values, spec, prefix, elements)
+  for _, name in ipairs(
+      {"fire", "water", "earth", "air", "ether"}) do
+    push_boolean(
+      values,
+      spec,
+      prefix .. name,
+      elements[name])
+  end
+end
+
+function observation.new(spec, dependencies)
+  dependencies = type(dependencies) == "table" and
+    dependencies or {}
   local indexes = {}
   for index, name in ipairs(spec.observation_names) do
+    if indexes[name] ~= nil then
+      error("duplicate policy observation name " .. name)
+    end
     indexes[name] = index
   end
   return {
-    spec = spec,
+    spec = assert(spec),
     indexes = indexes,
+    geometry = assert(dependencies.geometry),
+    spell_descriptors =
+      assert(dependencies.spell_descriptors),
+    get_snapshot =
+      dependencies.get_snapshot or default_snapshot,
+    get_multiplayer_state =
+      dependencies.get_multiplayer_state or
+        default_multiplayer_state,
+    get_loot = dependencies.get_loot or default_loot,
+    test_segment =
+      dependencies.test_segment or default_test_segment,
   }
 end
 
 function observation.capture(builder, context, frame)
   local spec = builder.spec
-  local indexes = builder.indexes
-  local values = {}
-  for index = 1, #spec.observation_names do
-    values[index] = 0.0
-  end
-
-  local snapshot_ok, snapshot = pcall(
-    sd.bots.get_participant_state,
-    context.participant_id)
-  if not snapshot_ok or type(snapshot) ~= "table" then
-    snapshot = {}
-  end
-  local participant = find_participant(context.participant_id)
-  local progression = progression_summary(participant)
+  local memory = ensure_memory(context)
   local bot_x = number(frame.bot_x)
   local bot_y = number(frame.bot_y)
-  local hp_ratio = ratio(frame.hp, frame.max_hp)
-  local mana_ratio = ratio(snapshot.mp, snapshot.max_mp)
-  local wave_number =
-    number(type(frame.wave) == "table" and frame.wave.wave)
-  local level =
-    number(type(participant) == "table" and participant.level)
-  if level <= 0 then
-    level = number(snapshot.skill_choice_level)
+  local now_ms = number(frame.now_ms)
+  builder.geometry:refresh(now_ms, frame.scene_key)
+
+  local snapshot = builder.get_snapshot(
+    context.participant_id)
+  snapshot = type(snapshot) == "table" and snapshot or {}
+  local multiplayer = builder.get_multiplayer_state()
+  multiplayer =
+    type(multiplayer) == "table" and multiplayer or {}
+  local participant = find_participant(
+    multiplayer,
+    context.participant_id)
+  local loadout = builder.spell_descriptors:capture(
+    context.participant_id,
+    snapshot,
+    participant,
+    frame.skill_choices)
+  local primary = loadout.primary
+  local enemies = sort_enemies(
+    frame.enemies,
+    bot_x,
+    bot_y,
+    now_ms,
+    memory,
+    builder.spell_descriptors,
+    primary,
+    spec.velocity_scale)
+
+  local persisted_id = number(memory.target_actor_id)
+  local current_target =
+    find_enemy_by_id(enemies, persisted_id)
+  if current_target == nil then
+    memory.target_actor_id = nil
+  end
+  local enemy_slots = {}
+  for slot = 1, spec.enemy_slot_count do
+    enemy_slots[slot] = enemies[slot]
   end
 
-  set(values, indexes, "self_hp_ratio", hp_ratio)
-  set(values, indexes, "self_mana_ratio", mana_ratio)
-  set(values, indexes, "self_level_scaled", scaled(level, 20.0))
-  set(values, indexes, "wave_scaled", scaled(wave_number, 20.0))
-  set(
+  local allies = sort_allies(
+    multiplayer,
+    context.participant_id,
+    bot_x,
+    bot_y)
+  local loot = builder.get_loot()
+  loot = type(loot) == "table" and loot or {}
+  local pickups = sort_pickups(loot, bot_x, bot_y)
+  local loot_host_owned = participant_is_owner(
+    multiplayer,
+    number(loot.authority_participant_id))
+
+  local hp_current = number(frame.hp, number(snapshot.hp))
+  local hp_max = number(frame.max_hp, number(snapshot.max_hp))
+  local hp_ratio = ratio(hp_current, hp_max)
+  local mana_current = number(
+    snapshot.mp,
+    type(participant) == "table" and
+      participant.mana_current or 0.0)
+  local mana_max = number(
+    snapshot.max_mp,
+    type(participant) == "table" and
+      participant.mana_max or 0.0)
+  local mana_ratio = ratio(mana_current, mana_max)
+  local level = number(
+    type(participant) == "table" and
+      participant.level or snapshot.skill_choice_level)
+  local wave_number = number(
+    type(frame.wave) == "table" and frame.wave.wave)
+  local values = {}
+
+  -- Block A: self.
+  push(values, spec, "self_hp_ratio", hp_ratio)
+  push(values, spec, "self_mana_ratio", mana_ratio)
+  push(
     values,
-    indexes,
+    spec,
+    "self_level_scaled",
+    scaled(level, spec.level_scale))
+  push(
+    values,
+    spec,
+    "wave_scaled",
+    scaled(wave_number, spec.wave_scale))
+  push(
+    values,
+    spec,
     "self_move_speed_scaled",
     scaled(
       type(participant) == "table" and
         participant.move_speed or 0.0,
-      500.0))
-  set_boolean(values, indexes, "self_moving", snapshot.moving)
-  set_boolean(values, indexes, "self_cast_active", snapshot.cast_active)
-  set_boolean(values, indexes, "self_cast_ready", snapshot.cast_ready)
-  set_boolean(
+      spec.velocity_scale))
+  push_boolean(values, spec, "self_moving", snapshot.moving)
+  push_boolean(
     values,
-    indexes,
+    spec,
+    "self_cast_active",
+    snapshot.cast_active)
+  push_boolean(
+    values,
+    spec,
+    "self_cast_ready",
+    snapshot.cast_ready)
+  push_boolean(
+    values,
+    spec,
     "self_poisoned",
     number(snapshot.native_poison_remaining_ticks) > 0 or
       number(snapshot.replicated_poison_remaining_ticks) > 0)
-  set_boolean(
+  push_boolean(
     values,
-    indexes,
+    spec,
     "self_webbed",
     number(snapshot.native_webbed_remaining_ticks) > 0)
-  set_boolean(
+  push_boolean(
     values,
-    indexes,
+    spec,
     "self_damage_x4",
     number(snapshot.native_damage_x4_remaining_ticks) > 0 or
       number(snapshot.replicated_damage_x4_remaining_ticks) > 0)
-  set_boolean(
+  push_boolean(
     values,
-    indexes,
+    spec,
     "self_status_active",
     number(snapshot.native_persistent_status_flags) ~= 0 or
       number(snapshot.native_transient_status_flags) ~= 0)
+  push(
+    values,
+    spec,
+    "self_mana_current_scaled",
+    scaled(mana_current, spec.mana_scale))
+  push(
+    values,
+    spec,
+    "self_mana_max_scaled",
+    scaled(mana_max, spec.mana_scale))
+  push(
+    values,
+    spec,
+    "self_hp_max_scaled",
+    scaled(hp_max, spec.hp_scale))
 
-  local target = frame.target
-  local target_distance = number(frame.target_distance, math.huge)
-  local target_radius =
-    type(target) == "table" and
-    math.max(number(target.radius), 0.0) or 0.0
-  local target_dx, target_dy = 0.0, 0.0
-  if type(target) == "table" then
-    target_dx, target_dy = normalize(
-      number(target.x) - bot_x,
-      number(target.y) - bot_y)
-  end
-  set_boolean(
+  -- Block B: active primary.
+  push_elements(
     values,
-    indexes,
-    "target_present",
-    type(target) == "table")
-  set(values, indexes, "target_dx", target_dx)
-  set(values, indexes, "target_dy", target_dy)
-  set(
+    spec,
+    "primary_element_",
+    primary.elements)
+  push_boolean(values, spec, "primary_welded", primary.welded)
+  push(
     values,
-    indexes,
-    "target_distance_scaled",
-    target_distance < math.huge and
-      scaled(target_distance, 1000.0) or 0.0)
-  set(
+    spec,
+    "primary_build_index_scaled",
+    primary.build_index_scaled)
+  push(
     values,
-    indexes,
-    "target_contact_distance_scaled",
-    target_distance < math.huge and
+    spec,
+    "primary_mana_cost_scaled",
+    scaled(primary.mana_cost, spec.mana_scale))
+  push(
+    values,
+    spec,
+    "primary_range_min_scaled",
+    scaled(primary.range_min, spec.range_scale))
+  push(
+    values,
+    spec,
+    "primary_range_max_scaled",
+    scaled(primary.range_max, spec.range_scale))
+  push_boolean(
+    values,
+    spec,
+    "primary_affordable",
+    primary.affordable)
+
+  -- Block C: secondary slots.
+  for slot = 1, spec.secondary_slot_count do
+    local secondary = loadout.secondaries[slot]
+    local prefix = "secondary_" .. tostring(slot) .. "_"
+    local in_range =
+      builder.spell_descriptors:secondary_in_range(
+        secondary,
+        bot_x,
+        bot_y,
+        current_target)
+    secondary.in_range_of_target = in_range
+    push_boolean(
+      values,
+      spec,
+      prefix .. "occupied",
+      secondary.occupied)
+    push_elements(
+      values,
+      spec,
+      prefix .. "element_",
+      secondary.elements)
+    push(
+      values,
+      spec,
+      prefix .. "band_index_scaled",
+      secondary.band_index_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "mana_cost_scaled",
+      scaled(secondary.mana_cost, spec.mana_scale))
+    push(
+      values,
+      spec,
+      prefix .. "range_scaled",
+      scaled(secondary.range_max, spec.range_scale))
+    push(
+      values,
+      spec,
+      prefix .. "cooldown_scaled",
       scaled(
-        math.max(target_distance - target_radius, 0.0),
-        1000.0) or 0.0)
-  set(
-    values,
-    indexes,
-    "target_hp_ratio",
-    type(target) == "table" and
-      ratio(target.hp, target.max_hp) or 0.0)
-  set(
-    values,
-    indexes,
-    "target_radius_scaled",
-    scaled(target_radius, 100.0))
-  set_boolean(
-    values,
-    indexes,
-    "target_in_primary_range",
-    frame.target_in_primary_range)
-  set(
-    values,
-    indexes,
-    "primary_min_range_scaled",
-    scaled(frame.primary_min_range, 1000.0))
-  set(
-    values,
-    indexes,
-    "primary_max_range_scaled",
-    scaled(frame.primary_max_range, 1000.0))
+        secondary.cooldown_seconds,
+        spec.cooldown_scale))
+    push_boolean(
+      values,
+      spec,
+      prefix .. "ready",
+      secondary.ready)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "affordable",
+      secondary.affordable)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "in_range_of_target",
+      in_range)
+  end
 
-  local enemies = frame.enemies or {}
-  local nearest, nearest_distance =
-    nearest_enemy(bot_x, bot_y, enemies)
-  local nearest_threat, nearest_threat_distance =
-    nearest_enemy(
-      bot_x,
-      bot_y,
-      enemies,
-      number(frame.threat_radius))
-  local nearest_dx, nearest_dy = 0.0, 0.0
-  if nearest ~= nil then
-    nearest_dx, nearest_dy = normalize(
-      nearest.x - bot_x,
-      nearest.y - bot_y)
+  -- Block D: nearest enemies.
+  for slot = 1, spec.enemy_slot_count do
+    local enemy = enemy_slots[slot]
+    local prefix = "enemy_" .. tostring(slot) .. "_"
+    push_boolean(values, spec, prefix .. "present", enemy ~= nil)
+    push(values, spec, prefix .. "dx", enemy and enemy.dx or 0.0)
+    push(values, spec, prefix .. "dy", enemy and enemy.dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "distance_scaled",
+      enemy and scaled(enemy.distance, spec.range_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "hp_ratio",
+      enemy and ratio(enemy.hp, enemy.max_hp) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "radius_scaled",
+      enemy and scaled(enemy.radius, spec.radius_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "velocity_dx",
+      enemy and enemy.velocity_dx or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "velocity_dy",
+      enemy and enemy.velocity_dy or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "in_primary_range",
+      enemy ~= nil and enemy.in_primary_range)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "is_current_target",
+      enemy ~= nil and current_target ~= nil and
+        enemy.network_actor_id ==
+          current_target.network_actor_id)
   end
-  local threat_dx, threat_dy = 0.0, 0.0
-  if nearest_threat ~= nil then
-    threat_dx, threat_dy = normalize(
-      nearest_threat.x - bot_x,
-      nearest_threat.y - bot_y)
-  end
-  set(
+
+  -- Block E: persisted selected target.
+  push_boolean(
     values,
-    indexes,
+    spec,
+    "target_present",
+    current_target ~= nil)
+  push(
+    values,
+    spec,
+    "target_dx",
+    current_target and current_target.dx or 0.0)
+  push(
+    values,
+    spec,
+    "target_dy",
+    current_target and current_target.dy or 0.0)
+  push(
+    values,
+    spec,
+    "target_distance_scaled",
+    current_target and
+      scaled(current_target.distance, spec.range_scale) or 0.0)
+  push(
+    values,
+    spec,
+    "target_contact_distance_scaled",
+    current_target and
+      scaled(
+        current_target.contact_distance,
+        spec.range_scale) or 0.0)
+  push(
+    values,
+    spec,
+    "target_hp_ratio",
+    current_target and
+      ratio(current_target.hp, current_target.max_hp) or 0.0)
+  push(
+    values,
+    spec,
+    "target_radius_scaled",
+    current_target and
+      scaled(current_target.radius, spec.radius_scale) or 0.0)
+  push_boolean(
+    values,
+    spec,
+    "target_in_primary_range",
+    current_target ~= nil and
+      current_target.in_primary_range)
+  push(
+    values,
+    spec,
+    "primary_min_range_scaled",
+    scaled(primary.range_min, spec.range_scale))
+  push(
+    values,
+    spec,
+    "primary_max_range_scaled",
+    scaled(primary.range_max, spec.range_scale))
+
+  -- Block F: cached local geometry.
+  local clearances, patch =
+    builder.geometry:features(bot_x, bot_y)
+  if #clearances ~= 8 or #patch ~= 48 then
+    error("policy geometry must produce 8 rays and 48 patch values")
+  end
+  local direction_names = {
+    "east",
+    "southeast",
+    "south",
+    "southwest",
+    "west",
+    "northwest",
+    "north",
+    "northeast",
+  }
+  for index, name in ipairs(direction_names) do
+    push(
+      values,
+      spec,
+      "clearance_" .. name .. "_scaled",
+      clearances[index])
+  end
+  local patch_index = 1
+  for row = 1, 7 do
+    for column = 1, 7 do
+      if row ~= 4 or column ~= 4 then
+        push(
+          values,
+          spec,
+          "walkability_patch_row_" .. tostring(row) ..
+            "_col_" .. tostring(column),
+          patch[patch_index])
+        patch_index = patch_index + 1
+      end
+    end
+  end
+
+  -- Block G: replicated loot.
+  for slot = 1, spec.pickup_slot_count do
+    local pickup = pickups[slot]
+    local prefix = "pickup_" .. tostring(slot) .. "_"
+    push_boolean(values, spec, prefix .. "present", pickup ~= nil)
+    push(values, spec, prefix .. "dx", pickup and pickup.dx or 0.0)
+    push(values, spec, prefix .. "dy", pickup and pickup.dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "distance_scaled",
+      pickup and scaled(pickup.distance, spec.range_scale) or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "type_gold",
+      pickup ~= nil and pickup.type_gold)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "type_health_orb",
+      pickup ~= nil and pickup.type_health_orb)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "type_mana_orb",
+      pickup ~= nil and pickup.type_mana_orb)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "type_item_carrier",
+      pickup ~= nil and pickup.type_item_carrier)
+  end
+  push(
+    values,
+    spec,
+    "pickup_count_scaled",
+    scaled(#pickups, spec.pickup_count_scale))
+
+  -- Block I: nearest in-run participants other than self.
+  for slot = 1, spec.ally_slot_count do
+    local ally = allies[slot]
+    local prefix = "ally_" .. tostring(slot) .. "_"
+    push_boolean(values, spec, prefix .. "present", ally ~= nil)
+    push(values, spec, prefix .. "dx", ally and ally.dx or 0.0)
+    push(values, spec, prefix .. "dy", ally and ally.dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "distance_scaled",
+      ally and scaled(ally.distance, spec.range_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "hp_ratio",
+      ally and ally.hp_ratio or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "mana_ratio",
+      ally and ally.mana_ratio or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "alive",
+      ally ~= nil and ally.alive)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "is_human",
+      ally ~= nil and ally.is_human)
+    push(
+      values,
+      spec,
+      prefix .. "intent_dx",
+      ally and ally.intent_dx or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "intent_dy",
+      ally and ally.intent_dy or 0.0)
+  end
+  push(
+    values,
+    spec,
+    "ally_count_scaled",
+    scaled(#allies, spec.ally_count_scale))
+
+  -- Block H: aggregates, config, history, weld, and multipliers.
+  local threat_radius = math.max(number(frame.threat_radius), 0.0)
+  local nearest = nearest_within(enemies)
+  local nearest_threat =
+    nearest_within(enemies, threat_radius)
+  push(
+    values,
+    spec,
     "enemy_count_scaled",
-    scaled(#enemies, 16.0))
-  set(
+    scaled(#enemies, spec.enemy_count_scale))
+  push(
     values,
-    indexes,
+    spec,
     "threat_count_scaled",
-    scaled(frame.threat_count, 8.0))
-  set(values, indexes, "nearest_enemy_dx", nearest_dx)
-  set(values, indexes, "nearest_enemy_dy", nearest_dy)
-  set(
+    scaled(
+      count_within(enemies, threat_radius),
+      spec.threat_count_scale))
+  push(values, spec, "nearest_enemy_dx", nearest and nearest.dx or 0.0)
+  push(values, spec, "nearest_enemy_dy", nearest and nearest.dy or 0.0)
+  push(
     values,
-    indexes,
+    spec,
     "nearest_enemy_distance_scaled",
-    nearest_distance < math.huge and
-      scaled(nearest_distance, 1000.0) or 0.0)
-  set(values, indexes, "nearest_threat_dx", threat_dx)
-  set(values, indexes, "nearest_threat_dy", threat_dy)
-  set(
+    nearest and scaled(nearest.distance, spec.range_scale) or 0.0)
+  push(
     values,
-    indexes,
+    spec,
+    "nearest_threat_dx",
+    nearest_threat and nearest_threat.dx or 0.0)
+  push(
+    values,
+    spec,
+    "nearest_threat_dy",
+    nearest_threat and nearest_threat.dy or 0.0)
+  push(
+    values,
+    spec,
     "nearest_threat_distance_scaled",
-    nearest_threat_distance < math.huge and
-      scaled(nearest_threat_distance, 1000.0) or 0.0)
-  set(values, indexes, "escape_dx", -threat_dx)
-  set(values, indexes, "escape_dy", -threat_dy)
-  set(
+    nearest_threat and
+      scaled(nearest_threat.distance, spec.range_scale) or 0.0)
+  push(
     values,
-    indexes,
+    spec,
+    "escape_dx",
+    nearest_threat and -nearest_threat.dx or 0.0)
+  push(
+    values,
+    spec,
+    "escape_dy",
+    nearest_threat and -nearest_threat.dy or 0.0)
+  push(
+    values,
+    spec,
     "suggested_move_dx",
     frame.suggested_move_x)
-  set(
+  push(
     values,
-    indexes,
+    spec,
     "suggested_move_dy",
     frame.suggested_move_y)
 
-  local arena = frame.arena or {}
+  local arena = type(frame.arena) == "table" and
+    frame.arena or {}
   local center_dx, center_dy, center_distance = normalize(
     number(arena.center_x) - bot_x,
     number(arena.center_y) - bot_y)
-  set(values, indexes, "arena_center_dx", center_dx)
-  set(values, indexes, "arena_center_dy", center_dy)
-  set(
+  push(values, spec, "arena_center_dx", center_dx)
+  push(values, spec, "arena_center_dy", center_dy)
+  push(
     values,
-    indexes,
+    spec,
     "arena_center_distance_scaled",
-    scaled(center_distance, 1000.0))
-  set(
+    scaled(center_distance, spec.range_scale))
+  push(
     values,
-    indexes,
+    spec,
     "arena_x_normalized",
     clamp(
       (bot_x - number(arena.center_x)) /
         math.max(number(arena.half_width, 1.0), 1.0),
       -1.0,
       1.0))
-  set(
+  push(
     values,
-    indexes,
+    spec,
     "arena_y_normalized",
     clamp(
       (bot_y - number(arena.center_y)) /
         math.max(number(arena.half_height, 1.0), 1.0),
       -1.0,
       1.0))
-  set(
+  push(
     values,
-    indexes,
+    spec,
     "edge_pressure",
     clamp(number(frame.edge_pressure), 0.0, 1.0))
-
-  set(
-    values,
-    indexes,
-    "inventory_distinct_scaled",
-    scaled(progression.inventory_distinct_count, 32.0))
-  set(
-    values,
-    indexes,
-    "inventory_stack_scaled",
-    scaled(progression.inventory_stack_count, 64.0))
-  set(
-    values,
-    indexes,
-    "potion_stack_scaled",
-    scaled(progression.potion_stack_count, 16.0))
-  set_boolean(
-    values,
-    indexes,
-    "equipment_valid",
-    progression.equipment_valid)
-  set_boolean(
-    values,
-    indexes,
-    "hat_equipped",
-    progression.hat_equipped)
-  set_boolean(
-    values,
-    indexes,
-    "robe_equipped",
-    progression.robe_equipped)
-  set_boolean(
-    values,
-    indexes,
-    "weapon_equipped",
-    progression.weapon_equipped)
-  set(
-    values,
-    indexes,
-    "ring_count_scaled",
-    scaled(progression.ring_count, 3.0))
-  set_boolean(
-    values,
-    indexes,
-    "amulet_equipped",
-    progression.amulet_equipped)
-  set(
-    values,
-    indexes,
-    "gold_scaled",
-    scaled(progression.gold, 1000.0))
-  set(
-    values,
-    indexes,
-    "progression_active_scaled",
-    scaled(progression.progression_active_count, 64.0))
-  set(
-    values,
-    indexes,
-    "progression_visible_scaled",
-    scaled(progression.progression_visible_count, 64.0))
-  set(
-    values,
-    indexes,
-    "secondary_slot_count_scaled",
-    scaled(progression.secondary_count, 8.0))
-  set_boolean(
-    values,
-    indexes,
-    "inventory_truncated",
-    progression.inventory_truncated)
-  set_boolean(
-    values,
-    indexes,
-    "progression_truncated",
-    progression.progression_truncated)
-  set(
-    values,
-    indexes,
-    "offensive_damage_multiplier_scaled",
-    scaled(progression.offensive_damage_multiplier, 4.0))
-  set(
-    values,
-    indexes,
-    "offensive_mana_multiplier_scaled",
-    scaled(progression.offensive_mana_multiplier, 4.0))
-  set(
-    values,
-    indexes,
-    "cast_speed_multiplier_scaled",
-    scaled(progression.cast_speed_multiplier, 4.0))
-  set(
-    values,
-    indexes,
-    "secondary_recharge_multiplier_scaled",
-    scaled(progression.secondary_recharge_multiplier, 4.0))
-  set_boolean(
-    values,
-    indexes,
-    "primary_available",
-    frame.primary_available)
-  for slot = 1, 8 do
-    set_boolean(
-      values,
-      indexes,
-      "secondary_" .. tostring(slot) .. "_available",
-      progression.secondary_available[slot])
-  end
   for _, name in ipairs(
-      { "fire", "water", "earth", "air", "ether" }) do
-    set_boolean(
+      {"fire", "water", "earth", "air", "ether"}) do
+    push_boolean(
       values,
-      indexes,
+      spec,
       "element_" .. name,
       context.row.element == name)
   end
-  for _, name in ipairs({ "mind", "body", "arcane" }) do
-    set_boolean(
+  for _, name in ipairs({"mind", "body", "arcane"}) do
+    push_boolean(
       values,
-      indexes,
+      spec,
       "discipline_" .. name,
       context.row.discipline == name)
   end
 
-  local memory = context.policy_memory
   local hp_delta = memory.last_hp_ratio ~= nil and
     hp_ratio - memory.last_hp_ratio or 0.0
   local mana_delta = memory.last_mana_ratio ~= nil and
     mana_ratio - memory.last_mana_ratio or 0.0
-  local target_id =
-    type(target) == "table" and
-    number(target.network_actor_id) or 0
-  local target_hp_ratio =
-    type(target) == "table" and
-    ratio(target.hp, target.max_hp) or 0.0
+  local target_id = current_target ~= nil and
+    current_target.network_actor_id or 0
+  local target_hp_ratio = current_target ~= nil and
+    ratio(current_target.hp, current_target.max_hp) or 0.0
   local target_hp_delta =
     target_id > 0 and target_id == memory.last_target_id and
     memory.last_target_hp_ratio ~= nil and
-    target_hp_ratio - memory.last_target_hp_ratio or 0.0
+      target_hp_ratio - memory.last_target_hp_ratio or 0.0
   local enemy_count_delta =
     memory.last_enemy_count ~= nil and
-    (#enemies - memory.last_enemy_count) / 16.0 or 0.0
+      (#enemies - memory.last_enemy_count) /
+        spec.enemy_count_scale or 0.0
   if hp_delta < -0.000001 then
-    memory.last_damage_ms = frame.now_ms
+    memory.last_damage_ms = now_ms
   end
-  set(values, indexes, "hp_delta", clamp(hp_delta, -1.0, 1.0))
-  set(
+  push(values, spec, "hp_delta", clamp(hp_delta, -1.0, 1.0))
+  push(values, spec, "mana_delta", clamp(mana_delta, -1.0, 1.0))
+  push(
     values,
-    indexes,
-    "mana_delta",
-    clamp(mana_delta, -1.0, 1.0))
-  set(
-    values,
-    indexes,
+    spec,
     "target_hp_delta",
     clamp(target_hp_delta, -1.0, 1.0))
-  set(
+  push(
     values,
-    indexes,
+    spec,
     "enemy_count_delta",
     clamp(enemy_count_delta, -1.0, 1.0))
-  set(
+  push(
     values,
-    indexes,
+    spec,
     "previous_move_dx",
-    memory.previous_move_x or 0.0)
-  set(
+    memory.previous_move_x)
+  push(
     values,
-    indexes,
+    spec,
     "previous_move_dy",
-    memory.previous_move_y or 0.0)
-  set_boolean(
+    memory.previous_move_y)
+  push_boolean(
     values,
-    indexes,
+    spec,
     "previous_cast_primary",
     memory.previous_cast_action == 1)
-  set_boolean(
+  push_boolean(
     values,
-    indexes,
+    spec,
     "previous_cast_secondary",
-    memory.previous_cast_action ~= nil and
-      memory.previous_cast_action >= 2)
-  set(
+    number(memory.previous_cast_action) >= 2)
+  push(
     values,
-    indexes,
+    spec,
     "time_since_damage_scaled",
-    elapsed_scaled(frame.now_ms, memory.last_damage_ms))
-  set(
+    elapsed_scaled(
+      now_ms,
+      memory.last_damage_ms,
+      spec.history_time_scale_ms))
+  push(
     values,
-    indexes,
+    spec,
     "time_since_cast_scaled",
-    elapsed_scaled(frame.now_ms, memory.last_cast_ms))
-  set(
+    elapsed_scaled(
+      now_ms,
+      memory.last_cast_ms,
+      spec.history_time_scale_ms))
+  push(
     values,
-    indexes,
+    spec,
     "time_since_move_scaled",
-    elapsed_scaled(frame.now_ms, memory.last_move_ms))
+    elapsed_scaled(
+      now_ms,
+      memory.last_move_ms,
+      spec.history_time_scale_ms))
+  push(
+    values,
+    spec,
+    "previous_target_action_scaled",
+    scaled(
+      memory.previous_target_action,
+      spec.target_action_scale))
+  push_boolean(
+    values,
+    spec,
+    "previous_target_switched",
+    memory.previous_target_switched)
+  push_boolean(
+    values,
+    spec,
+    "has_spell_welding_skill",
+    loadout.has_spell_welding_skill)
+  push_boolean(
+    values,
+    spec,
+    "weld_offer_pending",
+    loadout.weld_offer_pending)
+  push(
+    values,
+    spec,
+    "offensive_damage_multiplier_scaled",
+    scaled(
+      loadout.offensive_damage_multiplier,
+      spec.multiplier_scale))
+  push(
+    values,
+    spec,
+    "offensive_mana_multiplier_scaled",
+    scaled(
+      loadout.offensive_mana_multiplier,
+      spec.multiplier_scale))
+  push(
+    values,
+    spec,
+    "cast_speed_multiplier_scaled",
+    scaled(
+      loadout.cast_speed_multiplier,
+      spec.multiplier_scale))
+  push(
+    values,
+    spec,
+    "secondary_recharge_multiplier_scaled",
+    scaled(
+      loadout.secondary_recharge_multiplier,
+      spec.multiplier_scale))
 
+  if #values ~= #spec.observation_names then
+    error(
+      "policy observation contains " .. tostring(#values) ..
+      " values; expected " ..
+      tostring(#spec.observation_names))
+  end
   for index, value in ipairs(values) do
     if not finite_number(value) then
       error(
@@ -705,20 +1179,34 @@ function observation.capture(builder, context, frame)
 
   local movement_mask, movement_targets =
     build_movement_mask(
-      spec,
+      builder,
       bot_x,
       bot_y,
-      number(frame.movement_lookahead, 110.0))
-  local cast_mask =
-    build_cast_mask(spec, frame, snapshot, progression)
+      number(
+        frame.movement_lookahead,
+        spec.movement_lookahead))
+  local target_mask =
+    build_target_mask(spec, enemy_slots, current_target)
   return {
     values = values,
     movement_mask = movement_mask,
     movement_targets = movement_targets,
-    cast_mask = cast_mask,
+    target_mask = target_mask,
+    cast_mask = nil,
     snapshot = snapshot,
+    multiplayer = multiplayer,
     participant = participant,
-    progression = progression,
+    loadout = loadout,
+    enemies = enemies,
+    enemy_slots = enemy_slots,
+    current_target = current_target,
+    allies = allies,
+    loot = loot,
+    pickups = pickups,
+    loot_host_owned = loot_host_owned,
+    bot_x = bot_x,
+    bot_y = bot_y,
+    offense_enabled = frame.offense_enabled == true,
     metrics = {
       hp_ratio = hp_ratio,
       mana_ratio = mana_ratio,
@@ -728,6 +1216,104 @@ function observation.capture(builder, context, frame)
       enemy_health = enemy_health(enemies),
     },
   }
+end
+
+function observation.select_target(
+    builder,
+    context,
+    capture,
+    target_action)
+  target_action = math.floor(number(target_action, -1))
+  local mask_index = target_action + 1
+  if capture.target_mask[mask_index] ~= true then
+    error(
+      "policy selected illegal target action " ..
+      tostring(target_action))
+  end
+
+  local action = builder.spec.target_actions[mask_index]
+  local target = nil
+  if action.enemy_slot == 0 then
+    target = capture.current_target
+  else
+    target = capture.enemy_slots[action.enemy_slot]
+  end
+
+  local memory = ensure_memory(context)
+  local old_id = number(memory.target_actor_id)
+  local new_id =
+    type(target) == "table" and
+      number(target.network_actor_id) or 0
+  local switched = old_id ~= new_id
+  memory.target_actor_id =
+    new_id > 0 and new_id or nil
+  memory.previous_target_action = target_action
+  memory.previous_target_switched = switched
+  memory.last_target_id = new_id
+  memory.last_target_hp_ratio =
+    target ~= nil and ratio(target.hp, target.max_hp) or 0.0
+  capture.selected_target = target
+  capture.target_switched = switched
+  return target, switched
+end
+
+function observation.build_cast_mask(
+    builder,
+    capture,
+    target)
+  local spec = builder.spec
+  local mask = {}
+  for index = 1, #spec.cast_actions do
+    mask[index] = false
+  end
+  mask[1] = true
+
+  local snapshot = capture.snapshot
+  local common_ready =
+    capture.offense_enabled == true and
+    type(target) == "table" and
+    snapshot.cast_ready == true and
+    snapshot.cast_active ~= true and
+    snapshot.cast_pending ~= true
+  if not common_ready then
+    capture.cast_mask = mask
+    return mask
+  end
+
+  local primary = capture.loadout.primary
+  local primary_in_range =
+    builder.spell_descriptors:primary_in_range(
+      primary,
+      capture.bot_x,
+      capture.bot_y,
+      target)
+  mask[2] =
+    primary.occupied == true and
+    primary.affordable == true and
+    (primary.range_resolved ~= true or
+      primary_in_range == true)
+
+  for slot = 1, spec.secondary_slot_count do
+    local secondary = capture.loadout.secondaries[slot]
+    local in_range =
+      builder.spell_descriptors:secondary_in_range(
+        secondary,
+        capture.bot_x,
+        capture.bot_y,
+        target)
+    mask[slot + 2] =
+      secondary.occupied == true and
+      secondary.affordable == true and
+      secondary.ready == true and
+      (secondary.range_resolved ~= true or
+        in_range == true)
+  end
+  capture.cast_mask = mask
+  return mask
+end
+
+function observation.new_memory()
+  return new_memory()
 end
 
 return observation

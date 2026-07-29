@@ -204,6 +204,10 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 ) as launch_pair,
                 mock.patch.object(
                     verifier,
+                    "_require_owned_stage_paths",
+                ),
+                mock.patch.object(
+                    verifier,
                     "_wait",
                     side_effect=[
                         initial,
@@ -230,15 +234,7 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                     side_effect=[
                         {"ok": "true", "changed": "roster", "error": ""},
                         {"ok": "true", "changed": "roster", "error": ""},
-                        {
-                            "ok": "false",
-                            "changed": "roster",
-                            "error": "one or more settings failed to apply",
-                            "entry_error.roster": (
-                                "roster entry 3 could not spawn: "
-                                "no free gameplay slot"
-                            ),
-                        },
+                        {"ok": "true", "changed": "roster", "error": ""},
                     ],
                 ),
                 mock.patch.object(
