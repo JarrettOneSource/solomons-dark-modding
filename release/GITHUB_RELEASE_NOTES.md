@@ -1,9 +1,10 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.22
+# Solomon Dark Multiplayer Beta v0.1.0-beta.23
 
-- FIXED — Enemies spawned after the host character dies now complete the stock hostile-selector success path and keep chasing and attacking surviving players. Authority remains on the host process, while client enemy simulation stays suppressed.
-- NEW — Loader support for Lua Bots 1.0.1 adds a one-time AI-style-to-Behavior roster migration, a native Mind/Body/Arcane Discipline loadout for each bot's own skill book, complete element-colored robe/hat/staff/selector initialization and replicated nameplates, and authority-owned stuck recovery after 30 seconds without target or waypoint progress. Recovery uses native circle-placement validation, a cooldown, and explicit logging.
-- FIXED — A client who talks to the real Solomon Dig NPC to start waves no longer loses movement after the dialog. The local NPC remains alive until the stock interaction finishes its paired controller restores; wave authority remains on the host.
-- FIXED — Replicated damage to the local player now replays the genuine native red overlay, actor reaction, and throttled stock Ouch dispatch exactly once. It is presentation-only and never fires for heals, snapshot reapplies, or damage to another participant.
+- FIXED — Internet multiplayer no longer suffers client-side hard lag spikes from app-thread socket starvation and freeze-then-64-packet catch-up bursts. A dedicated bounded receiver queue now feeds a paced 16-packet/2ms apply budget.
+- FIXED — Universal 1,200-byte packet framing and reassembly lets large packets survive real internet MTUs. A bounded cumulative-ACK hit-feedback window prevents retransmission amplification, and asynchronous logging removes synchronous flush stalls of up to 180ms. Set `SDMOD_NETWORK_TELEMETRY=1` to write `.sdmod/logs/network-telemetry.jsonl`.
+- FIXED — Synthetic gameplay-slot participants now activate their equipped primary and combo progression rows through the stock choice path.
+- FIXED — The equipped spell's native effective range, including progression-dependent range, is now exposed through the bot API.
+- FIXED — The native Frost Jet damage-context branch no longer skips authoritative damage for nonzero gameplay slots.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
