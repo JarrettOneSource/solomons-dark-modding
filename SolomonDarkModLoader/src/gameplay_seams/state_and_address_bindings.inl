@@ -181,6 +181,8 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_008_slot_gate_branch", kSpellCast008SlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_008_projectile_slot_gate_branch", kSpellCast008ProjectileSlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_010_slot_gate_branch", kSpellCast010SlotGateBranch),
+        SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_018_first_damage_slot_gate_branch", kSpellCast018FirstDamageSlotGateBranch),
+        SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_018_chain_damage_slot_gate_branch", kSpellCast018ChainDamageSlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_020_damage_slot_gate_branch", kSpellCast020DamageSlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_028_slot_gate_branch", kSpellCast028SlotGateBranch),
         SDMOD_ADDR("gameplay.cast_gate_patches", "spell_cast_3ee_slot_gate_branch", kSpellCast3EESlotGateBranch),

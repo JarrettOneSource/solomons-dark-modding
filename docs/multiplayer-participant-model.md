@@ -58,8 +58,9 @@ transport flags, a character profile, and a live runtime snapshot.
 
 Lua validation can inspect networked remote players through
 `sd.bots.get_participants()`, `sd.bots.get_participant_state(id)`, and
-`sd.bots.get_nameplate(actor_address)`. Those APIs are intentionally query-only
-for native remote players.
+`sd.bots.get_nameplate(actor_address)`. The nameplate result includes the
+authoritative `health_ratio` used by the rendered HP bar. Those APIs are
+intentionally query-only for native remote players.
 
 ## Character Profile
 

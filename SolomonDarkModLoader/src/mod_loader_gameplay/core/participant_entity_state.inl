@@ -132,6 +132,8 @@ struct ParticipantEntityBinding {
     bool suppress_next_stock_tick_after_spell_filter_cancel = false;
     bool death_transition_stock_tick_seen = false;
     std::uint64_t local_death_presentation_started_ms = 0;
+    std::uint32_t last_applied_wave_respawn_run_nonce = 0;
+    std::uint32_t last_applied_wave_respawn_epoch = 0;
     bool native_remote_death_epoch_active = false;
     uintptr_t native_remote_death_attachment_actor_address = 0;
     bool native_remote_death_drop_spawned = false;

@@ -40,16 +40,15 @@ DEFAULT_CONFIG = ROOT / "tools/bot_match.example.json"
 LAUNCH_SCRIPT = ROOT / "scripts/Launch-LocalSoloSession.ps1"
 STOP_SCRIPT = ROOT / "scripts/Stop-RemoteLatencyPeer.ps1"
 LUA_CLIENT = ROOT / "tools/lua-exec.py"
-EVIDENCE_ROOT = Path("/mnt/d/codex-evidence/botmatch-20260728")
-ALLOWED_PORTS = (50511, 50512)
+EVIDENCE_ROOT = Path("/mnt/d/codex-evidence/botcombat-20260729")
+ALLOWED_PORTS = (50611, 50612)
 BOT_BRAIN_MOD_ID = "bot.brain"
 CONTROLLER_GLOBAL = "__botmatch_controller"
 LOCAL_FIGHTER_KEY = "slot0"
-MAX_WAVE_SCREENSHOTS = 40
 STUCK_TELEPORT_MARKER = "[bots] stuck teleport. bot_id="
 ARRIVAL_DISTANCE_EPSILON = 0.01
 
-Mode = Literal["gate", "smoke", "full"]
+Mode = Literal["gate", "smoke", "matrix", "full"]
 
 
 class BotMatchFailure(RuntimeError):
@@ -267,7 +266,7 @@ class BotMatchConfig:
         unused_remote_port = int(network.get("unusedRemotePort", 0))
         if (local_port, unused_remote_port) != ALLOWED_PORTS:
             raise BotMatchFailure(
-                "The bot-match harness permits only ports 50511/50512."
+                "The bot-match harness permits only ports 50611/50612."
             )
         if len(roster) != 3:
             raise BotMatchFailure(
@@ -661,11 +660,7 @@ return table.concat(output, "\n")
 """
 
 
-def controller_source(wave_capture_paths: dict[int, str]) -> str:
-    path_rows = ",\n".join(
-        f"    [{wave}] = {json.dumps(path)}"
-        for wave, path in sorted(wave_capture_paths.items())
-    )
+def controller_source(wave_capture_pattern: str) -> str:
     return f"""
 local previous = rawget(_G, "{CONTROLLER_GLOBAL}")
 if type(previous) == "table" then
@@ -686,9 +681,7 @@ local controller = {{
   wave_completed = {{}},
   wave_plans = {{}},
   wave_captures = {{}},
-  wave_capture_paths = {{
-{path_rows}
-  }},
+  wave_capture_pattern = {json.dumps(wave_capture_pattern)},
 }}
 rawset(_G, "{CONTROLLER_GLOBAL}", controller)
 
@@ -811,8 +804,8 @@ sd.events.on("wave.started", function(event)
     planned = tonumber(event and event.planned) or 0,
     composition = composition,
   }}
-  local path = active.wave_capture_paths[wave]
-  if type(path) == "string" and
+  local path = string.format(active.wave_capture_pattern, wave)
+  if wave > 0 and
       active.wave_captures[wave] == nil then
     local ok, err = sd.debug.capture_backbuffer(path)
     active.wave_captures[wave] = {{
@@ -1172,13 +1165,10 @@ print("result=" .. tostring(
         raise BotMatchFailure("Testrun did not materialize Solomon and slot 0.")
 
     def arm_controller(self) -> dict[str, str]:
-        paths = {
-            wave: windows_path(
-                self.screenshot_directory / f"wave-{wave:02d}.bmp"
-            )
-            for wave in range(1, MAX_WAVE_SCREENSHOTS + 1)
-        }
-        values = self.values(controller_source(paths))
+        capture_pattern = windows_path(
+            self.screenshot_directory / "wave-%02d.bmp"
+        )
+        values = self.values(controller_source(capture_pattern))
         if values.get("armed") != "true":
             raise BotMatchFailure(
                 f"Slot-0 bot controller did not arm: {values}"
@@ -2915,7 +2905,10 @@ print("player=" ..
             participant_id = fighter["participantId"]
             if participant_id <= 0:
                 continue
-            alive = fighter["hp"] > 0
+            alive = (
+                fighter["hp"] > 0
+                and not snapshot["controller"]["runEnded"]
+            )
             previous = self.last_alive.get(participant_id)
             if previous is True and not alive:
                 lethal_damage = self.lethal_damage_cause(
@@ -3054,7 +3047,14 @@ print("actor=" .. tostring(state and state.actor_address or 0))
                 end_reason = "wave_1_cleared"
                 break
             if (
-                self.mode == "full"
+                self.mode == "matrix"
+                and started
+                and self.matrix_damage_status()["complete"]
+            ):
+                end_reason = "four_fighter_damage_matrix_satisfied"
+                break
+            if (
+                self.mode in ("matrix", "full")
                 and started
                 and (
                     snapshot["sceneName"] != "testrun"
@@ -3068,7 +3068,7 @@ print("actor=" .. tostring(state and state.actor_address or 0))
                 )
                 break
             if (
-                self.mode == "full"
+                self.mode in ("matrix", "full")
                 and started
                 and time.monotonic() - last_progress
                 >= self.config.full_stall_timeout_seconds
@@ -3149,6 +3149,33 @@ print("actor=" .. tostring(state and state.actor_address or 0))
                 "bot-attributed post-native damage; "
                 f"damagingSynthetic={damaging_synthetic}, "
                 f"summary={summary}"
+            )
+
+    def matrix_damage_status(self) -> dict[str, Any]:
+        fighters = self.damage_summary()["fighters"]
+        damaging = sorted(
+            name
+            for name, row in fighters.items()
+            if row["damageDealtEdges"] > 0
+            and row["damageDealt"] > 0
+        )
+        return {
+            "registered": sorted(fighters),
+            "damaging": damaging,
+            "complete": (
+                len(fighters) == 4
+                and len(damaging) == 4
+            ),
+        }
+
+    def assert_matrix_damage(self) -> None:
+        status = self.matrix_damage_status()
+        if not status["complete"]:
+            raise BotMatchFailure(
+                "Primary matrix requires an authoritative enemy-HP "
+                "damage edge from slot 0 and every synthetic fighter; "
+                f"status={status}, "
+                f"summary={self.damage_summary()['fighters']}"
             )
 
     def run(self) -> dict[str, Any]:
@@ -3344,6 +3371,16 @@ print("actor=" .. tostring(state and state.actor_address or 0))
                         f"Wave-1 smoke did not clear: {result['end']}"
                     )
                 self.assert_smoke_damage()
+            elif self.mode == "matrix":
+                if (
+                    result["end"]["reason"]
+                    != "four_fighter_damage_matrix_satisfied"
+                ):
+                    raise BotMatchFailure(
+                        "Primary matrix did not reach four damaging "
+                        f"fighters: {result['end']}"
+                    )
+                self.assert_matrix_damage()
             result["ok"] = True
             return result
         except Exception as error:

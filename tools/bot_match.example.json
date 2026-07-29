@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "paths": {
-    "evidenceRoot": "/mnt/d/codex-evidence/botmatch-20260728",
-    "runtimeRoot": "/mnt/d/codex-evidence/botmatch-20260728/runtime",
+    "evidenceRoot": "/mnt/d/codex-evidence/botcombat-20260729",
+    "runtimeRoot": "/mnt/d/codex-evidence/botcombat-20260729/runtime",
     "gameDirectory": "/mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/SolomonDarkAbandonware",
     "launcherPath": "dist/launcher/SolomonDarkModLauncher.exe"
   },
   "network": {
-    "localPort": 50511,
-    "unusedRemotePort": 50512,
+    "localPort": 50611,
+    "unusedRemotePort": 50612,
     "participantId": "0x200000000000B001"
   },
   "player": {

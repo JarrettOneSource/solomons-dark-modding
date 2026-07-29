@@ -543,27 +543,6 @@ bool HasNativeRemotePerCastProjectileEmission(
     return true;
 }
 
-bool IsAuthoritativeHostLuaBrainFrostJetCast(
-    uintptr_t actor_address) {
-    constexpr std::int32_t kFrostJetPrimaryEntryIndex = 0x20;
-    if (!multiplayer::IsLocalTransportHost() ||
-        actor_address == 0) {
-        return false;
-    }
-
-    std::lock_guard<std::recursive_mutex> lock(
-        g_participant_entities_mutex);
-    const auto* binding =
-        FindParticipantEntityForActor(actor_address);
-    return binding != nullptr &&
-           binding->controller_kind ==
-               multiplayer::ParticipantControllerKind::LuaBrain &&
-           binding->ongoing_cast.remote_input_controlled &&
-           binding->ongoing_cast.active &&
-           binding->ongoing_cast.selection_state_target ==
-               kFrostJetPrimaryEntryIndex;
-}
-
 void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) {
     const auto original = GetX86HookTrampoline<PlayerActorNoArgMethodFn>(
         g_gameplay_keyboard_injection.pure_primary_attack_dispatch_hook);
@@ -631,7 +610,30 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
         }
     }
 
-    original(self);
+    {
+        ScopedNativePrimarySlotGatePatches primary_slot_gates(
+            actor_address);
+        if (!primary_slot_gates.ready()) {
+            static std::uint64_t
+                s_last_primary_slot_gate_failure_log_ms = 0;
+            const auto now_ms =
+                static_cast<std::uint64_t>(GetTickCount64());
+            if (s_last_primary_slot_gate_failure_log_ms == 0 ||
+                now_ms >=
+                    s_last_primary_slot_gate_failure_log_ms + 1000) {
+                s_last_primary_slot_gate_failure_log_ms = now_ms;
+                Log(
+                    "[bots] native primary slot gate failed before "
+                    "pure-primary dispatch. actor=" +
+                    HexString(actor_address) +
+                    " error=" +
+                    primary_slot_gates.error_message());
+            }
+            return;
+        }
+
+        original(self);
+    }
     if (!observe_emission) {
         return;
     }

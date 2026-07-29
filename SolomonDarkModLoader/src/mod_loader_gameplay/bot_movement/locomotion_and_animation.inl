@@ -192,7 +192,6 @@ void StopDeadWizardBotActorMotion(
             kActorAnimationMoveDurationTicksOffset,
             0);
     }
-    (void)memory.TryWriteField(actor_address, kActorMoveStepScaleOffset, 0.0f);
     ResetStandaloneWizardControlBrain(actor_address);
 
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
