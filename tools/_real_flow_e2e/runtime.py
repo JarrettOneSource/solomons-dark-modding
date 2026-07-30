@@ -1581,19 +1581,9 @@ def cover_participant_with_real_input_once(
         state["camera"],
     )
     started = time.time_ns()
-    if float(state["player"]["hp"]) < 45.0:
-        detail = _send_key(source_root, peer, "3", 0)
-        return {
-            "timeUtcNanoseconds": started,
-            "kind": "health-potion",
-            "key": "3",
-            "liveEnemyCount": len(live_enemies),
-            "hp": float(state["player"]["hp"]),
-            "result": detail,
-        }
     if targets:
         x, y = targets[movement_index % len(targets)]
-        detail = _click(source_root, peer, x, y, 120)
+        detail = _click(source_root, peer, x, y, 600)
         return {
             "timeUtcNanoseconds": started,
             "kind": "air-cast",

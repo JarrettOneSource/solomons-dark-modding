@@ -296,14 +296,14 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(action["liveEnemyCount"], 1)
         self.assertEqual(action["hp"], 46.0)
         click.assert_called_once()
-        self.assertEqual(click.call_args.args[-1], 120)
+        self.assertEqual(click.call_args.args[-1], 600)
 
-    @mock.patch("tools._real_flow_e2e.runtime._send_key")
-    def test_client_dig_cover_uses_stock_health_potion_when_low(
+    @mock.patch("tools._real_flow_e2e.runtime._click")
+    def test_client_dig_cover_keeps_casting_host_air_when_low(
         self,
-        send_key: mock.Mock,
+        click: mock.Mock,
     ) -> None:
-        send_key.return_value = "sent"
+        click.return_value = "clicked"
         pipe = mock.Mock()
         pipe.state.return_value = {
             "scene": {"name": "testrun"},
@@ -313,7 +313,14 @@ class RealFlowE2ETests(unittest.TestCase):
                 "x": 100.0,
                 "y": 100.0,
             },
-            "nativeEnemies": [],
+            "nativeEnemies": [
+                {
+                    "dead": False,
+                    "hp": 2.5,
+                    "x": 120.0,
+                    "y": 100.0,
+                }
+            ],
             "viewport": {"width": 1600, "height": 900},
             "camera": {
                 "sceneAvailable": True,
@@ -330,12 +337,13 @@ class RealFlowE2ETests(unittest.TestCase):
             movement_index=0,
         )
 
-        self.assertEqual(action["kind"], "health-potion")
-        send_key.assert_called_once_with(
+        self.assertEqual(action["kind"], "air-cast")
+        click.assert_called_once_with(
             ROOT,
             mock.ANY,
-            "3",
-            0,
+            0.075,
+            100.0 / 900.0,
+            600,
         )
 
     def test_shared_hub_wait_requires_converged_participant_views(
