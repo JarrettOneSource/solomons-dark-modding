@@ -300,6 +300,21 @@ class RealFlowE2ETests(unittest.TestCase):
             input_helper,
         )
 
+    def test_nfo_window_inventory_tolerates_disappearing_windows(
+        self,
+    ) -> None:
+        remote = (
+            ROOT / "scripts/Run-RealFlowRemotePeer.sh"
+        ).read_text(encoding="utf-8")
+        windows = remote.split(
+            "windows_list() {", 1
+        )[1].split("launcher_window() {", 1)[0]
+
+        self.assertIn(
+            "2>/dev/null | tr '\\n' ' ' || true",
+            windows,
+        )
+
     def test_observer_mod_is_inert_and_has_no_gameplay_callbacks(
         self,
     ) -> None:

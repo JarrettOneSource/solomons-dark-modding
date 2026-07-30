@@ -282,7 +282,7 @@ windows_list() {
         "$x11_root/usr/bin/xdotool" getwindowname "$window" 2>/dev/null || true
         printf '\t'
         "$x11_root/usr/bin/xdotool" getwindowgeometry --shell "$window" \
-            2>/dev/null | tr '\n' ' '
+            2>/dev/null | tr '\n' ' ' || true
         printf '\n'
     done < <("$x11_root/usr/bin/xdotool" search --onlyvisible --name '.*' || true)
     return 0
