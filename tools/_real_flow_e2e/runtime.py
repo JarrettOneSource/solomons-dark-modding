@@ -1585,10 +1585,16 @@ def damage_enemy_with_real_input(
             time.sleep(0.1)
             last = pipe.state()
             continue
-        x, y = click_targets[0]
+        target_index = len(actions) % len(click_targets)
+        x, y = click_targets[target_index]
         remote_burst = getattr(peer, "click_sequence", None)
         if callable(remote_burst):
-            burst_targets = [(x, y)] * 5
+            burst_targets = [
+                click_targets[
+                    (target_index + offset) % len(click_targets)
+                ]
+                for offset in range(5)
+            ]
             detail = str(remote_burst(burst_targets, 90, 450))
             physical_input_count = len(burst_targets)
         else:

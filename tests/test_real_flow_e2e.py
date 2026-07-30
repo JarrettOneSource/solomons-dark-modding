@@ -672,6 +672,16 @@ class RealFlowE2ETests(unittest.TestCase):
                         "screen_valid": False,
                         "screen_x": enemy_x,
                         "screen_y": 100.0,
+                    },
+                    {
+                        "network_id": 102,
+                        "dead": False,
+                        "hp": 2.5,
+                        "x": 1000.0 - enemy_x,
+                        "y": 900.0,
+                        "screen_valid": False,
+                        "screen_x": 1000.0 - enemy_x,
+                        "screen_y": 900.0,
                     }
                 ],
             }
@@ -722,7 +732,7 @@ class RealFlowE2ETests(unittest.TestCase):
             clicks,
             [
                 (0.1, 0.1, 90),
-                (0.2, 0.1, 90),
+                (0.8, 0.9, 90),
             ],
         )
         self.assertEqual(result["hpAfter"], 1.5)
@@ -753,6 +763,16 @@ class RealFlowE2ETests(unittest.TestCase):
                         "hp": hp,
                         "x": 300.0,
                         "y": 400.0,
+                        "screen_valid": False,
+                        "screen_x": 0.0,
+                        "screen_y": 0.0,
+                    },
+                    {
+                        "network_id": 102,
+                        "dead": False,
+                        "hp": 2.5,
+                        "x": 700.0,
+                        "y": 600.0,
                         "screen_valid": False,
                         "screen_x": 0.0,
                         "screen_y": 0.0,
@@ -802,7 +822,13 @@ class RealFlowE2ETests(unittest.TestCase):
             peer.calls,
             [
                 {
-                    "targets": [(0.3, 0.4)] * 5,
+                    "targets": [
+                        (0.3, 0.4),
+                        (0.7, 0.6),
+                        (0.3, 0.4),
+                        (0.7, 0.6),
+                        (0.3, 0.4),
+                    ],
                     "holdMs": 90,
                     "intervalMs": 450,
                 }
