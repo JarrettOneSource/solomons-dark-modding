@@ -186,7 +186,7 @@ class BotWaveRespawnTests(unittest.TestCase):
                 alive,
             )
 
-    def test_transition_rejects_actor_outside_native_party_footprint(
+    def test_transition_rejects_peer_respawn_placement_divergence(
         self,
     ) -> None:
         dead = state(
@@ -203,17 +203,49 @@ class BotWaveRespawnTests(unittest.TestCase):
             epoch=1,
             presentation_flags=0,
         )
-        alive["actor_y"] = "200"
+        client_alive = dict(alive)
+        client_alive["actor_y"] = "200"
         with self.assertRaisesRegex(
             respawn.RespawnVerificationFailure,
-            "party footprint",
+            "did not converge on respawn placement",
         ):
             respawn.validate_respawn_transition(
                 dead,
                 dead,
                 alive,
-                alive,
+                client_alive,
             )
+
+    def test_transition_allows_living_local_players_to_stay_apart(
+        self,
+    ) -> None:
+        dead = state(
+            actor=100,
+            progression=200,
+            hp=0,
+            epoch=0,
+            presentation_flags=1,
+        )
+        host_alive = state(
+            actor=100,
+            progression=200,
+            hp=100,
+            epoch=1,
+            presentation_flags=0,
+        )
+        client_alive = dict(host_alive)
+        host_alive["local_player_x"] = "900"
+        host_alive["local_player_y"] = "1600"
+        client_alive["local_player_x"] = "1800"
+        client_alive["local_player_y"] = "2900"
+        contract = respawn.validate_respawn_transition(
+            dead,
+            dead,
+            host_alive,
+            client_alive,
+        )
+        self.assertTrue(contract["peerRespawnPlacementConverged"])
+        self.assertEqual(contract["peerRespawnPlacementDelta"], 0)
 
     def test_transition_rejects_missing_full_first_respawn_sample(
         self,

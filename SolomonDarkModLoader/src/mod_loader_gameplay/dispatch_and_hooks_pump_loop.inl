@@ -87,6 +87,28 @@ void PumpQueuedGameplayActions() {
     const auto wizard_bot_sync_not_before_ms =
         g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.load(std::memory_order_acquire);
 
+    auto pending_match =
+        g_gameplay_keyboard_injection.pending_hub_start_match_requests.load(
+            std::memory_order_acquire);
+    if (!g_allow_gameplay_action_pump_in_gameplay) {
+        while (pending_match > 0) {
+            if (!g_gameplay_keyboard_injection.pending_hub_start_match_requests
+                     .compare_exchange_weak(
+                         pending_match,
+                         pending_match - 1,
+                         std::memory_order_acq_rel,
+                         std::memory_order_acquire)) {
+                continue;
+            }
+
+            if (!TryDispatchHubStartMatchOnGameThread()) {
+                g_gameplay_keyboard_injection.pending_hub_start_match_requests
+                    .fetch_add(1, std::memory_order_acq_rel);
+            }
+            break;
+        }
+    }
+
     auto pending =
         g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.load(std::memory_order_acquire);
     if (!g_allow_gameplay_action_pump_in_gameplay) {

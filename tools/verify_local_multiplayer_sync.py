@@ -345,6 +345,9 @@ def launch_pair(
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
+    no_lua_automation: bool = False,
+    host_savegames_root: Path | None = None,
+    client_savegames_root: Path | None = None,
     enable_audio: bool | None = None,
     disable_multiplayer_transport: bool = False,
 ) -> dict[str, object]:
@@ -352,6 +355,20 @@ def launch_pair(
         raise ValueError(
             "machine-wide game cleanup is unsupported; launch an isolated "
             "instance group and stop only its reported process IDs"
+        )
+    if no_lua_automation and not quick_start:
+        raise ValueError("no_lua_automation requires quick_start")
+    if fresh_install and (
+        host_savegames_root is not None
+        or client_savegames_root is not None
+    ):
+        raise ValueError(
+            "fresh_install cannot be combined with staged save roots"
+        )
+    if temporary_host_profile and host_savegames_root is not None:
+        raise ValueError(
+            "temporary_host_profile cannot be combined with "
+            "host_savegames_root"
         )
     serialized_exact_mod_ids = _serialize_exact_mod_ids(
         exact_mod_id=exact_mod_id,
@@ -428,6 +445,8 @@ def launch_pair(
         args.append("-AllowFocusSteal")
     if quick_start:
         args.append("-QuickStart")
+    if no_lua_automation:
+        args.append("-NoLuaAutomation")
     if enable_audio:
         args.append("-EnableAudio")
     if disable_multiplayer_transport:
@@ -446,6 +465,16 @@ def launch_pair(
         args.extend([
             "-RuntimeRoot",
             path_for_powershell(runtime_root),
+        ])
+    if host_savegames_root is not None:
+        args.extend([
+            "-HostSavegamesRoot",
+            path_for_powershell(host_savegames_root),
+        ])
+    if client_savegames_root is not None:
+        args.extend([
+            "-ClientSavegamesRoot",
+            path_for_powershell(client_savegames_root),
         ])
     if serialized_exact_mod_ids is not None:
         args.extend(["-ExactModIds", serialized_exact_mod_ids])

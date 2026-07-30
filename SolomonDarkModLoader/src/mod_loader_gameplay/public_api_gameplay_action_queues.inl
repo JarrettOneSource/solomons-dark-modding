@@ -37,7 +37,9 @@ bool QueueNestedSackInventoryFixture(
     return true;
 }
 
-bool QueueHubStartTestrun(std::string* error_message) {
+static bool QueueHubRunStartRequest(
+    bool generate_new_boneyard,
+    std::string* error_message) {
     if (error_message != nullptr) {
         error_message->clear();
     }
@@ -81,32 +83,63 @@ bool QueueHubStartTestrun(std::string* error_message) {
 
     std::uint32_t run_generation_seed = 0;
     if (multiplayer::IsLocalTransportHost()) {
-        run_generation_seed = EnsureHostRunGenerationSeed("hub_start_testrun_queue");
+        run_generation_seed = generate_new_boneyard
+            ? EnsureHostRunGenerationSeed("hub_start_match_queue")
+            : EnsureHostRunGenerationSeed("hub_start_testrun_queue");
     } else {
         run_generation_seed = ReadPendingRunGenerationSeed();
     }
 
     multiplayer::SetAllBotSceneIntentsToRun();
 
-    g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.exchange(1, std::memory_order_acq_rel);
+    if (generate_new_boneyard) {
+        g_gameplay_keyboard_injection.pending_hub_start_match_requests.exchange(
+            1,
+            std::memory_order_acq_rel);
+    } else {
+        g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.exchange(
+            1,
+            std::memory_order_acq_rel);
+    }
     std::uint8_t testrun_mode_flag = 0;
     uintptr_t arena_vtable = 0;
     const bool have_testrun_mode_flag =
         ProcessMemory::Instance().TryReadField(gameplay_address, kGameplayTestrunModeFlagOffset, &testrun_mode_flag);
     const bool have_arena_vtable = ProcessMemory::Instance().TryReadValue(arena_address, &arena_vtable);
-    Log(
-        "Queued hub testrun request. arena=" + HexString(arena_address) +
-        " arena_vtable=" + (have_arena_vtable ? HexString(arena_vtable) : std::string("unreadable")) +
+    const auto details =
+        " arena=" + HexString(arena_address) +
+        " arena_vtable=" +
+        (have_arena_vtable ? HexString(arena_vtable) : std::string("unreadable")) +
         " gameplay=" + HexString(gameplay_address) +
         " switch_region=" + HexString(kGameplaySwitchRegion) +
         " target_region=" + std::to_string(kArenaRegionIndex) +
         " arena_enter_dispatch=" + HexString(kArenaStartRunDispatch) +
         " create=" + HexString(kArenaCreate) +
         " run_generation_seed=" +
-        (run_generation_seed != 0 ? HexString(static_cast<uintptr_t>(run_generation_seed)) : std::string("none")) +
+        (run_generation_seed != 0
+             ? HexString(static_cast<uintptr_t>(run_generation_seed))
+             : std::string("none")) +
         " testrun_mode_flag=" +
-        (have_testrun_mode_flag ? std::to_string(static_cast<unsigned>(testrun_mode_flag)) : std::string("unreadable")));
+        (have_testrun_mode_flag
+             ? std::to_string(static_cast<unsigned>(testrun_mode_flag))
+             : std::string("unreadable"));
+    if (generate_new_boneyard) {
+        Log(
+            "Queued hub Start Match request. pending_level_kind=" +
+            std::to_string(kGeneratedBoneyardPendingLevelKind) +
+            details);
+    } else {
+        Log("Queued hub testrun request." + details);
+    }
     return true;
+}
+
+bool QueueHubStartMatch(std::string* error_message) {
+    return QueueHubRunStartRequest(true, error_message);
+}
+
+bool QueueHubStartTestrun(std::string* error_message) {
+    return QueueHubRunStartRequest(false, error_message);
 }
 
 bool SetPendingRunGenerationSeed(std::uint32_t seed, std::string* error_message) {

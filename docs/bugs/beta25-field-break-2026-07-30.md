@@ -175,7 +175,7 @@ termination cannot invoke a terminating C++ thread destructor.
 
 ## Corrective design
 
-The field-break correction has four narrow foundations:
+The field-break correction has five narrow foundations:
 
 1. Wave-respawn targets carry observed current HP and the low-level native
    primitive re-reads HP immediately before any mutation. Living local and Lua
@@ -206,6 +206,94 @@ completion boundary, exact Water contacts and authoritative HP changes, and
 wave-2 convergence. It uses only mission ports 50911/50912 and launches with
 `SDMOD_DISABLE_AUDIO=1`.
 
+## Focused permanent regression
+
+The permanent defect-class verifier is
+`tools/verify_multiplayer_wave_boundary_respawn.py`. It does not replay the
+tutorial. It copies the repository-owned
+`tests/fixtures/savegames/fieldbreak25_existing_wizard/solomondark` fixture
+into separate writable host and client save roots, launches the normal
+quick-start join flow with launcher Lua automation disabled, and asks the host
+to start a generated Boneyard through the semantic `sd.hub.start_match`
+surface.
+
+The fixture was created by an isolated `fb25` test instance, not copied from
+an owner installation. Its stable SHA-256 inputs are:
+
+- `darkdata.cfg`:
+  `0a9dd9c222b61df4930495aea50a65ebe2e057811092080451fee94a6594ea06`;
+- `Region0._cache`:
+  `b161e5ee2db912f55b6086b562f1dff797e81176a69c887fc1eb2324bd0bf15e`.
+
+The Start Match seam is distinct from the older test-run shortcut. Exact
+retail decompilation and a live isolated probe established that pending level
+kind `1` selects a newly generated Boneyard before the existing stock
+`Gameplay_SwitchRegion` call. The retained Ghidra output is under
+`/mnt/d/codex-evidence/fieldbreak25-20260730/ghidra-fb25-exact`.
+
+Focused run `fb25-wb34` proved the corrected boundary before landing:
+
+- the host was alive at `(1550, 550)` on both sides of wave-1 completion;
+- owner and observer displacement across the boundary were both exactly
+  `0.0`, and both actor identities were preserved;
+- the dead client retained its owner and observer actor identities and
+  converged exactly on the host-authored respawn position
+  `(985.219299, 150)`;
+- wave 1 completed `0.430` seconds after the controlled final stock enemy
+  death; and
+- both peers converged into wave 2, spawning phase, with one live enemy and
+  three remaining to spawn.
+
+The verifier uses a fixed stock run seed and holds one stock wave-1 enemy
+alive until the corpse observation is complete. Test-only survival support
+keeps the intended living participant alive; it does not replace the
+wave-completion publisher, wave schedule, respawn command, or same-actor
+respawn primitive. The complete preliminary result is
+`/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-targeted34-result.json`.
+
+## Retained synthetic respawn acceptance
+
+The `a21e77f` acceptance remains a native-combat proof: it uses no HP write,
+forced enemy-death call, or test wave override. An ordinary surviving fighter
+must complete the retail schedule; the dead synthetic participant must then
+return alive on the same actor and progression on host and client B, with
+full resources, native registration, coherent nameplate state, shared
+targetability, and a later authoritative enemy-HP edge.
+
+The old acceptance also required the respawned bot to be near each peer's
+local player. That assertion encoded the beta.25 defect: it passed only when
+the same completed-wave seam teleported both living humans to the respawn
+area. The corrected acceptance instead requires the bot's post-respawn
+placement to converge between host and client B while allowing living local
+players to remain where gameplay left them.
+
+Run `fb25-fieldbreak25-pre3` passed that corrected contract on ports
+50911/50912. Ember preserved both peer-local actor/progression identities,
+reached full HP/mana, converged to zero peer placement delta in traversable
+Arena space, was targeted through shared network actor IDs, and then produced
+14 authoritative Air damage edges totaling `0.350001` HP. The launcher-reported
+PIDs `3424` and `26404` were stopped by exact executable path. The result and
+visual capture are under
+`/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-pre3`.
+
+## Full-flow harness limitation
+
+The earlier fresh-profile real-flow calibration attempted to drive the stock
+menus, host Start Match UI, client B's Solomon Dig, and subsequent combat.
+The retained `fb25-loopback-calibration5..13` evidence, plus the later
+isolated `fb25-targeted1..33` diagnostics, repeatedly stopped before a usable
+wave-boundary sample, most often at the host
+`wait_scene=testrun` calibration boundary. Those runs did identify and fix a
+repeat dispatch against one retiring control-picker owner, and they improved
+loading/hub state observation, but they are not wave-boundary acceptance.
+
+Per the owner correction, that path was not iterated after the focused
+regression passed. The landing runs the full loopback variant once, records
+any remaining UI-driving gap as a harness limitation, and does not treat such
+a gap as contradictory evidence against the direct two-instance wave
+boundary proof. NFO is unnecessary unless a WAN-specific claim is required;
+none is required for this local defect.
+
 ## Validation
 
 The released beta.25 before-fix loopback attempt and the first corrective
@@ -215,5 +303,19 @@ control-picker fault described above; both clean only their exact staged
 processes and ports. They are preflight failure evidence, not wave-boundary
 acceptance.
 
-Final exact-SHA runtime evidence, test totals, Release build results, and CI
-links are added here after the corrective commit is fixed and repeated.
+Landing evidence is written without changing the tested commit:
+
+- exact-SHA source/Python/static-RE/launcher/Release totals:
+  `/mnt/d/codex-evidence/fieldbreak25-20260730/landing-validation.json`;
+- exact-SHA focused boundary result:
+  `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-targeted-final-result.json`;
+- exact-SHA synthetic respawn result:
+  `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha/result.json`;
+- the one permitted final full-flow loopback:
+  `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-fullflow-final/result.json`.
+
+The CDB crash transcript is
+`/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-client-cdb-analysis.txt`.
+The landing manifest records the exact commit, test floors, Release
+warning/error counts, push state, and CI conclusion. No release is created by
+this landing.

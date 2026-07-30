@@ -582,6 +582,31 @@ bool TryDispatchHubStartTestrunOnGameThread() {
     return true;
 }
 
+bool TryDispatchHubStartMatchOnGameThread() {
+    auto& memory = ProcessMemory::Instance();
+    const auto pending_level_kind_address =
+        memory.ResolveGameAddressOrZero(kPendingLevelKindGlobal);
+    if (pending_level_kind_address == 0 ||
+        !memory.TryWriteValue<std::int32_t>(
+            pending_level_kind_address,
+            kGeneratedBoneyardPendingLevelKind)) {
+        Log(
+            "Hub Start Match could not set the stock generated-Boneyard "
+            "selection state. pending_level_kind=" +
+            (pending_level_kind_address != 0
+                 ? HexString(pending_level_kind_address)
+                 : std::string("unresolved")));
+        return false;
+    }
+
+    Log(
+        "Hub Start Match selected the stock generated-Boneyard path before "
+        "Gameplay_SwitchRegion. pending_level_kind=" +
+        std::to_string(kGeneratedBoneyardPendingLevelKind) +
+        " address=" + HexString(pending_level_kind_address));
+    return TryDispatchHubStartTestrunOnGameThread();
+}
+
 bool TryDispatchStartWavesOnGameThread() {
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     const auto retry_not_before =

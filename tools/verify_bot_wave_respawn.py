@@ -59,6 +59,17 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def source_sha() -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
 def integer(
     values: dict[str, str],
     key: str,
@@ -1461,31 +1472,13 @@ def validate_respawn_transition(
                 f"{role} respawn destroyed the native move-step scale: "
                 f"{alive}"
             )
-        collision_radius = number(
-            alive,
-            "collision_radius",
-            0.0,
-        )
-        party_spawn_radius = max(
-            POSITION_TOLERANCE,
-            collision_radius * 4.0 + 1.0,
-        )
         if not boolean(alive, "spawn_valid"):
             raise RespawnVerificationFailure(
                 f"{role} has no Arena-authored respawn tuple: {alive}"
             )
-        if (
-            math.hypot(
-                number(alive, "actor_x")
-                - number(alive, "local_player_x"),
-                number(alive, "actor_y")
-                - number(alive, "local_player_y"),
-            )
-            > party_spawn_radius
-        ):
+        if not boolean(alive, "actor_nav_traversable"):
             raise RespawnVerificationFailure(
-                f"{role} left the native Arena respawn party footprint: "
-                f"{alive}"
+                f"{role} respawned outside traversable Arena space: {alive}"
             )
 
     epoch = integer(host_alive, "respawn_epoch")
@@ -1502,24 +1495,37 @@ def validate_respawn_transition(
             f"host_dead={host_dead} client_dead={client_dead} "
             f"host_alive={host_alive} client_alive={client_alive}"
         )
+    peer_placement_delta = math.hypot(
+        number(host_alive, "actor_x")
+        - number(client_alive, "actor_x"),
+        number(host_alive, "actor_y")
+        - number(client_alive, "actor_y"),
+    )
+    if peer_placement_delta > POSITION_TOLERANCE:
+        raise RespawnVerificationFailure(
+            "host/client B did not converge on respawn placement: "
+            f"delta={peer_placement_delta} "
+            f"host={host_alive} client={client_alive}"
+        )
     return {
         "epoch": epoch,
         "wave": integer(host_alive, "respawn_wave"),
         "hostActorPreserved": True,
         "clientActorPreserved": True,
         "fullResources": True,
-        "nativeSpawnPartyFootprint": True,
-        "hostNativePlacementCorrection": math.hypot(
-            number(host_alive, "local_player_x")
-            - number(host_alive, "spawn_x"),
-            number(host_alive, "local_player_y")
-            - number(host_alive, "spawn_y"),
+        "peerRespawnPlacementConverged": True,
+        "peerRespawnPlacementDelta": peer_placement_delta,
+        "hostRespawnDisplacement": math.hypot(
+            number(host_alive, "actor_x")
+            - number(host_dead, "actor_x"),
+            number(host_alive, "actor_y")
+            - number(host_dead, "actor_y"),
         ),
-        "clientBNativePlacementCorrection": math.hypot(
-            number(client_alive, "local_player_x")
-            - number(client_alive, "spawn_x"),
-            number(client_alive, "local_player_y")
-            - number(client_alive, "spawn_y"),
+        "clientBRespawnDisplacement": math.hypot(
+            number(client_alive, "actor_x")
+            - number(client_dead, "actor_x"),
+            number(client_alive, "actor_y")
+            - number(client_dead, "actor_y"),
         ),
         "hostRequestedSpawnNavTraversable": boolean(
             host_alive,
@@ -1527,6 +1533,10 @@ def validate_respawn_transition(
         ),
         "hostSettledActorNavTraversable": boolean(
             host_alive,
+            "actor_nav_traversable",
+        ),
+        "clientBSettledActorNavTraversable": boolean(
+            client_alive,
             "actor_nav_traversable",
         ),
         "nativeMoveStepScale": number(
@@ -1796,8 +1806,9 @@ print("applied=" .. tostring(applied))
 def run_verification(
     batch_directory: Path,
     batch_id: str,
+    instance_prefix_override: str = "",
 ) -> dict[str, Any]:
-    instance_prefix = (
+    instance_prefix = instance_prefix_override or (
         f"botcombat-respawn-{batch_id}"[:48].rstrip("._-")
     )
     ledger_path = batch_directory / "pair-process-ledger.json"
@@ -1809,6 +1820,7 @@ def run_verification(
     result: dict[str, Any] = {
         "schemaVersion": 1,
         "startedAt": utc_now(),
+        "sourceSha": source_sha(),
         "ports": [HOST_PORT, CLIENT_PORT],
         "instancePrefix": instance_prefix,
     }
@@ -2418,25 +2430,74 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Filename-safe evidence id; defaults to a UTC timestamp.",
     )
+    parser.add_argument(
+        "--instance-prefix",
+        default="",
+        help="Optional isolated launcher instance prefix.",
+    )
+    parser.add_argument(
+        "--host-port",
+        type=int,
+        default=HOST_PORT,
+        help=f"Host UDP port; defaults to {HOST_PORT}.",
+    )
+    parser.add_argument(
+        "--client-port",
+        type=int,
+        default=CLIENT_PORT,
+        help=f"Client UDP port; defaults to {CLIENT_PORT}.",
+    )
     return parser
 
 
 def main() -> int:
+    global HOST_PORT, CLIENT_PORT
     args = build_parser().parse_args()
+    HOST_PORT = args.host_port
+    CLIENT_PORT = args.client_port
     batch_id = args.batch_id or datetime.now(timezone.utc).strftime(
         "respawn-%Y%m%dT%H%M%SZ"
     )
-    if not batch_id or any(
-        character not in "abcdefghijklmnopqrstuvwxyz"
+    safe_characters = (
+        "abcdefghijklmnopqrstuvwxyz"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
-        for character in batch_id
+    )
+    unsafe_value = next(
+        (
+            value
+            for value in (batch_id, args.instance_prefix)
+            if value
+            and any(
+                character not in safe_characters
+                for character in value
+            )
+        ),
+        "",
+    )
+    if (
+        not batch_id
+        or unsafe_value
+        or HOST_PORT < 1
+        or HOST_PORT > 65535
+        or CLIENT_PORT < 1
+        or CLIENT_PORT > 65535
+        or HOST_PORT == CLIENT_PORT
     ):
-        print(f"ERROR: Unsafe batch id: {batch_id!r}", file=sys.stderr)
+        print(
+            "ERROR: Unsafe batch, instance prefix, or port selection: "
+            f"batch={batch_id!r} prefix={args.instance_prefix!r} "
+            f"ports={HOST_PORT}/{CLIENT_PORT}",
+            file=sys.stderr,
+        )
         return 1
     batch_directory = EVIDENCE_ROOT / "runs" / batch_id
     try:
         batch_directory.mkdir(parents=True, exist_ok=False)
-        result = run_verification(batch_directory, batch_id)
+        result = run_verification(
+            batch_directory,
+            batch_id,
+            args.instance_prefix,
+        )
         print(
             json.dumps(
                 {

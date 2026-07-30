@@ -21,6 +21,8 @@ param(
     [string]$GameDirectory = "",
     [string]$RuntimeRoot = "",
     [string]$LauncherPath = "",
+    [string]$HostSavegamesRoot = "",
+    [string]$ClientSavegamesRoot = "",
     [switch]$EnableThird,
     [switch]$DisableMultiplayerTransport,
     [switch]$UseSandboxPresetFlow,
@@ -82,6 +84,15 @@ if ($QuickStartRun -and -not $QuickStart) {
 if ($QuickStartRun -and $DisableMultiplayerTransport) {
     throw "-QuickStartRun requires multiplayer transport."
 }
+if ($FreshInstall -and (
+        -not [string]::IsNullOrWhiteSpace($HostSavegamesRoot) -or
+        -not [string]::IsNullOrWhiteSpace($ClientSavegamesRoot))) {
+    throw "-FreshInstall cannot be combined with staged save roots."
+}
+if ($TemporaryHostProfile -and
+    -not [string]::IsNullOrWhiteSpace($HostSavegamesRoot)) {
+    throw "-TemporaryHostProfile cannot be combined with -HostSavegamesRoot."
+}
 if ($NoLuaAutomation -and $GodMode) {
     throw "-NoLuaAutomation cannot be combined with -GodMode."
 }
@@ -112,6 +123,19 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+
+$resolvedHostSavegamesRoot = if (
+    [string]::IsNullOrWhiteSpace($HostSavegamesRoot)) {
+    ""
+} else {
+    (Get-Item -LiteralPath $HostSavegamesRoot -ErrorAction Stop).FullName
+}
+$resolvedClientSavegamesRoot = if (
+    [string]::IsNullOrWhiteSpace($ClientSavegamesRoot)) {
+    ""
+} else {
+    (Get-Item -LiteralPath $ClientSavegamesRoot -ErrorAction Stop).FullName
+}
 
 function Wait-LogContains {
     param(
@@ -348,6 +372,7 @@ function Start-MultiplayerInstance {
         [string]$ParticipantId,
         [string]$PlayerName,
         [string]$RemotePlayerName,
+        [string]$SavegamesRoot = "",
         [object]$CreateSelection = $null
     )
 
@@ -408,8 +433,14 @@ function Start-MultiplayerInstance {
     }
     if ($FreshInstall) {
         $args += "--fresh-install"
-    } elseif ($Role -eq "client" -or ($Role -eq "host" -and $TemporaryHostProfile)) {
+    } elseif (
+        [string]::IsNullOrWhiteSpace($SavegamesRoot) -and
+        ($Role -eq "client" -or
+         ($Role -eq "host" -and $TemporaryHostProfile))) {
         $args += "--temporary-profile"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($SavegamesRoot)) {
+        $args += @("--savegames-root", $SavegamesRoot)
     }
     if (-not [string]::IsNullOrWhiteSpace($GameDirectory)) {
         $args += @("--game-dir", $GameDirectory)
@@ -1315,6 +1346,7 @@ $hostResult = Start-MultiplayerInstance `
     -ParticipantId $HostParticipantId `
     -PlayerName $HostName `
     -RemotePlayerName $ClientName `
+    -SavegamesRoot $resolvedHostSavegamesRoot `
     -CreateSelection $hostSelection
 
 Write-LaunchedProcessIds -HostResult $hostResult
@@ -1372,6 +1404,7 @@ $clientResult = Start-MultiplayerInstance `
     -ParticipantId $ClientParticipantId `
     -PlayerName $ClientName `
     -RemotePlayerName $HostName `
+    -SavegamesRoot $resolvedClientSavegamesRoot `
     -CreateSelection $clientSelection
 
 Write-LaunchedProcessIds `
@@ -1445,6 +1478,7 @@ if ($EnableThird) {
         -ParticipantId $ThirdParticipantId `
         -PlayerName $ThirdName `
         -RemotePlayerName $HostName `
+        -SavegamesRoot "" `
         -CreateSelection $thirdSelection
 
     Write-LaunchedProcessIds `
@@ -1536,6 +1570,8 @@ if (-not $NoTileWindows) {
     thirdName = if ($EnableThird) { $ThirdName } else { $null }
     instancePrefix = $InstancePrefix
     runtimeRoot = $effectiveRuntimeRoot
+    hostSavegamesRoot = $resolvedHostSavegamesRoot
+    clientSavegamesRoot = $resolvedClientSavegamesRoot
     hostLuaPipe = $hostLuaPipe
     clientLuaPipe = $clientLuaPipe
     thirdLuaPipe = if ($EnableThird) { $thirdLuaPipe } else { $null }

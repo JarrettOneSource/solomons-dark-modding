@@ -853,6 +853,10 @@ local sd_hub = {}
 
 ---@param ... any
 ---@return any
+function sd_hub.start_match(...) end
+
+---@param ... any
+---@return any
 function sd_hub.start_testrun(...) end
 
 ---@param ... any

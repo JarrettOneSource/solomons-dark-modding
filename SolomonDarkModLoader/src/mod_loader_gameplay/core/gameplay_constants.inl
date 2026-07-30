@@ -185,6 +185,7 @@ constexpr std::uint64_t kRemoteParticipantSpawnSceneStableDelayMs = 1500;
 // create->hub path does not, so give shared-hub materialization its own gate.
 constexpr std::uint64_t kRemoteParticipantSpawnHubSceneStableDelayMs = 4500;
 constexpr DWORD kHubStartTestrunDispatchCooldownMs = 5000;
+constexpr std::int32_t kGeneratedBoneyardPendingLevelKind = 1;
 constexpr std::uint32_t kInjectedGameplayMouseClickFrames = 2;
 // FUN_0052C910 arms the stock control-brain action cooldown at +0x10 from
 // native random windows such as 50..150 ticks. Bot casts use the same

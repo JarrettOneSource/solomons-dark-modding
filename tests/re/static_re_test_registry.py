@@ -261,6 +261,8 @@ from static_re_multiplayer_combat_contracts import (
     test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana,
     test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_release_policy,
     test_primary_slot_gate_registry_is_authoritative_and_cast_scoped,
+    test_hub_start_match_uses_stock_generated_boneyard_selection,
+    test_hub_start_match_waits_for_app_tick_pump,
     test_hub_start_testrun_uses_gameplay_region_switch,
     test_hub_start_testrun_waits_for_app_tick_pump,
     test_lightning_chaining_verifier_uses_native_dispatcher_loop,
@@ -322,6 +324,7 @@ from static_re_transport_core_contracts import (
     test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
     test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
+    test_wave_boundary_respawn_has_staged_save_two_owner_live_regression,
     test_wave_completion_respawns_only_dead_owners_from_host_command,
 )
 from static_multiplayer_session_lifecycle_contracts import (
@@ -1163,6 +1166,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ),
     ("hub start testrun uses gameplay region switch", test_hub_start_testrun_uses_gameplay_region_switch),
     ("hub start testrun waits for app-tick pump", test_hub_start_testrun_waits_for_app_tick_pump),
+    ("hub Start Match uses stock generated Boneyard selection", test_hub_start_match_uses_stock_generated_boneyard_selection),
+    ("hub Start Match waits for app-tick pump", test_hub_start_match_waits_for_app_tick_pump),
     ("primary kill stress verifier uses native hub start", test_primary_kill_stress_verifier_uses_native_hub_start),
     ("unverified play boneyard shortcut is not exposed", test_unverified_play_boneyard_shortcut_is_not_exposed),
     ("replicated manual run enemy materialization is client bounded", test_replicated_manual_run_enemy_materialization_is_client_bounded),
@@ -1280,6 +1285,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "wave completion respawns only dead owners from reliable host command",
         test_wave_completion_respawns_only_dead_owners_from_host_command,
+    ),
+    (
+        "wave boundary respawn has staged-save two-owner live regression",
+        test_wave_boundary_respawn_has_staged_save_two_owner_live_regression,
     ),
     (
         "death spectator has isolated three-owner live regression",

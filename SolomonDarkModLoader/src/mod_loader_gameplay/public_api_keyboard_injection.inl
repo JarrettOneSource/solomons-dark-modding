@@ -1281,6 +1281,7 @@ void ShutdownGameplayKeyboardInjection() {
         std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);
+    g_gameplay_keyboard_injection.pending_hub_start_match_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_start_testrun_requests.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_hub_service_request.store(0, std::memory_order_release);
     g_gameplay_keyboard_injection.pending_start_waves_requests.store(0, std::memory_order_release);

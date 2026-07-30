@@ -372,6 +372,92 @@ def test_hub_start_testrun_waits_for_app_tick_pump() -> str:
     return "hub start testrun remains app-tick owned and deferred out of the actor-tick gameplay pump"
 
 
+def test_hub_start_match_uses_stock_generated_boneyard_selection() -> str:
+    public_api_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/mod_loader_public_api.inl")
+    action_queue_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_gameplay_action_queues.inl")
+    dispatch_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl")
+    input_bindings_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_input.cpp")
+    verifier_text = read_text(
+        ROOT / "tools/verify_multiplayer_wave_boundary_respawn.py")
+    config_text = read_text(ROOT / "config/binary-layout.ini")
+
+    required_tokens = (
+        (public_api_text, "QueueHubStartMatch(std::string* error_message)"),
+        (action_queue_text, "EnsureHostRunGenerationSeed(\"hub_start_match_queue\")"),
+        (action_queue_text, "pending_hub_start_match_requests.exchange("),
+        (action_queue_text, "Queued hub Start Match request."),
+        (dispatch_text, "TryDispatchHubStartMatchOnGameThread()"),
+        (dispatch_text, "kPendingLevelKindGlobal"),
+        (dispatch_text, "kGeneratedBoneyardPendingLevelKind))"),
+        (dispatch_text, "return TryDispatchHubStartTestrunOnGameThread();"),
+        (input_bindings_text, "sd.hub.start_match is host-only"),
+        (input_bindings_text, 'RegisterFunction(state, &LuaHubStartMatch, "start_match")'),
+        (verifier_text, "sd.hub.start_match"),
+        (config_text, "pending_level_kind=0x00B3BEDC"),
+        (config_text, "arena_create=0x0046EA90"),
+    )
+    missing = [token for text, token in required_tokens if token not in text]
+    if missing:
+        raise StaticReTestFailure(
+            "hub Start Match is missing stock generated-Boneyard token(s): " +
+            ", ".join(missing))
+
+    write_index = dispatch_text.find(
+        "kGeneratedBoneyardPendingLevelKind))")
+    switch_index = dispatch_text.find(
+        "return TryDispatchHubStartTestrunOnGameThread();",
+        write_index)
+    if write_index < 0 or switch_index < 0 or write_index >= switch_index:
+        raise StaticReTestFailure(
+            "hub Start Match must select generated-Boneyard state before "
+            "the stock Gameplay_SwitchRegion path")
+    if "sd.debug.write_i32" in verifier_text:
+        raise StaticReTestFailure(
+            "focused wave-boundary verifier bypasses the semantic Start Match seam")
+    return (
+        "hub Start Match selects the stock generated-Boneyard state before "
+        "the existing native region-switch path"
+    )
+
+
+def test_hub_start_match_waits_for_app_tick_pump() -> str:
+    pump_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl")
+    pending_index = pump_text.find(
+        "pending_hub_start_match_requests.load")
+    app_tick_guard_index = pump_text.find(
+        "if (!g_allow_gameplay_action_pump_in_gameplay) {",
+        pending_index)
+    dispatch_index = pump_text.find(
+        "TryDispatchHubStartMatchOnGameThread()",
+        pending_index)
+    testrun_index = pump_text.find(
+        "pending_hub_start_testrun_requests.load",
+        pending_index)
+    if min(
+        pending_index,
+        app_tick_guard_index,
+        dispatch_index,
+        testrun_index,
+    ) < 0:
+        raise StaticReTestFailure(
+            "hub Start Match pump no longer has app-tick guarded dispatch")
+    if not (
+        pending_index
+        < app_tick_guard_index
+        < dispatch_index
+        < testrun_index
+    ):
+        raise StaticReTestFailure(
+            "hub Start Match dispatch must stay in the app-tick guard and "
+            "precede raw testrun requests")
+    return "hub Start Match remains app-tick owned and precedes raw testrun dispatch"
+
+
 def test_primary_kill_stress_verifier_uses_native_hub_start() -> str:
     verifier_text = read_text(PRIMARY_KILL_STRESS_VERIFIER)
     local_sync_text = read_text(ROOT / "tools/verify_local_multiplayer_sync.py")

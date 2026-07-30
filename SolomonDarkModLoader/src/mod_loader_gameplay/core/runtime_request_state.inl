@@ -270,6 +270,7 @@ struct GameplayKeyboardInjectionState {
     std::atomic<uintptr_t> manual_spawner_primary_target_actor{0};
     std::atomic<bool> injected_mouse_left_active{false};
     std::atomic<bool> injected_mouse_right_active{false};
+    std::atomic<std::uint32_t> pending_hub_start_match_requests{0};
     std::atomic<std::uint32_t> pending_hub_start_testrun_requests{0};
     std::atomic<std::uint32_t> pending_hub_service_request{0};
     std::atomic<std::uint32_t> pending_start_waves_requests{0};

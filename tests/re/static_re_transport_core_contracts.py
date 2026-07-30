@@ -1205,6 +1205,106 @@ def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
     )
 
 
+def test_wave_boundary_respawn_has_staged_save_two_owner_live_regression() -> str:
+    """A focused real pair rejects living teleports and proves dead respawn."""
+
+    verifier = read_text(
+        ROOT
+        / "tools/verify_multiplayer_wave_boundary_respawn.py"
+    )
+    pair_driver = read_text(
+        ROOT / "tools/verify_local_multiplayer_sync.py"
+    )
+    pair_launcher = read_text(
+        ROOT / "scripts/Launch-LocalMultiplayerPair.ps1"
+    )
+    fixture_note = read_text(
+        ROOT
+        / "tests/fixtures/savegames/"
+        "fieldbreak25_existing_wizard/README.md"
+    )
+
+    for token in (
+        "HOST_PORT = 50911",
+        "CLIENT_PORT = 50912",
+        "RUN_GENERATION_SEED = 0x2FFE3A50",
+        "fieldbreak25_existing_wizard",
+        'host_preset="map_create_air_mind_hub"',
+        'client_preset="map_create_water_body_hub"',
+        "test_wave_override=None",
+        "exact_mod_id=death.ACCEPTANCE_MOD_ID",
+        "quick_start=True",
+        "no_lua_automation=True",
+        "host_savegames_root=host_savegames",
+        "client_savegames_root=client_savegames",
+        "third_player=False",
+        "tile_windows=False",
+        "allow_focus_steal=False",
+        "kill_existing=False",
+        "enable_audio=False",
+        "assert_living_participant_unchanged(",
+        "assert_dead_participant_respawned_same_actor(",
+        "_wait_for_run_loading_barrier(",
+        "_wait_for_run_loading_started(",
+        "_start_match_when_ready(",
+        "sd.hub.start_match",
+        "_set_run_generation_seed(",
+        "sd.rng.set_seed",
+        "_hold_wave_one_on_single_enemy(",
+        "_wait_for_solomon_materialized_during_run_loading(",
+        "sd.hub.get_solomon_dig_state",
+        '"all-participants-ready"',
+        '"released") == "false"',
+        "host live stock wave 1",
+        "_wait_for_wave_two_convergence(",
+        "stop_game_processes(process_ids)",
+    ):
+        assert token in verifier, (
+            f"focused wave-boundary live regression lacks: {token}"
+        )
+    for forbidden in (
+        "select_available_windows_udp_ports",
+        "Get-Process SolomonDark",
+        "kill_existing=True",
+    ):
+        assert forbidden not in verifier
+
+    for token in (
+        "no_lua_automation: bool = False",
+        "host_savegames_root: Path | None = None",
+        "client_savegames_root: Path | None = None",
+        '"-HostSavegamesRoot"',
+        '"-ClientSavegamesRoot"',
+    ):
+        assert token in pair_driver, (
+            f"local pair driver cannot stage an existing save: {token}"
+        )
+    for token in (
+        "[string]$HostSavegamesRoot = \"\"",
+        "[string]$ClientSavegamesRoot = \"\"",
+        '$args += @("--savegames-root", $SavegamesRoot)',
+        "hostSavegamesRoot = $resolvedHostSavegamesRoot",
+        "clientSavegamesRoot = $resolvedClientSavegamesRoot",
+    ):
+        assert token in pair_launcher, (
+            f"pair launcher cannot isolate staged saves: {token}"
+        )
+    for token in (
+        "launcher-owned test profile",
+        "It is not copied from an owner",
+        "native multiplayer quick-start flow",
+        "The verifier copies",
+        "checked-in fixture remains read-only input",
+    ):
+        assert token in fixture_note
+
+    return (
+        "an isolated two-owner staged-save gate keeps a living human away "
+        "from spawn, respawns one dead human on the same actor, converges into "
+        "wave 2, uses only fb25 ports, and stops only launcher-reported PIDs"
+    )
+
+
 def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
     """The acceptance pass observes presentation, camera, clicks, and respawn."""
 

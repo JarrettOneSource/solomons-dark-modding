@@ -190,6 +190,7 @@ REQUIRED_FUNCTIONS: dict[str, tuple[str, ...]] = {
         "trigger_enemy_death",
     ),
     "hub": (
+        "start_match",
         "start_testrun",
         "open_service",
         "get_surface_state",

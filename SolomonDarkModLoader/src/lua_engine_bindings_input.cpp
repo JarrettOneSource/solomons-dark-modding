@@ -153,6 +153,22 @@ int LuaHubStartTestrun(lua_State* state) {
     return 1;
 }
 
+int LuaHubStartMatch(lua_State* state) {
+    if (multiplayer::IsLocalTransportClient()) {
+        return luaL_error(
+            state,
+            "sd.hub.start_match is host-only while connected to a multiplayer session.");
+    }
+
+    std::string error_message;
+    if (!QueueHubStartMatch(&error_message)) {
+        return luaL_error(state, "sd.hub.start_match failed: %s", error_message.c_str());
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 void PushSolomonDigState(
     lua_State* state,
     const SDModSolomonDigState& solomon) {
@@ -526,7 +542,8 @@ void RegisterLuaInputBindings(lua_State* state) {
 }
 
 void RegisterLuaHubBindings(lua_State* state) {
-    lua_createtable(state, 0, 5);
+    lua_createtable(state, 0, 6);
+    RegisterFunction(state, &LuaHubStartMatch, "start_match");
     RegisterFunction(state, &LuaHubStartTestrun, "start_testrun");
     RegisterFunction(
         state,
