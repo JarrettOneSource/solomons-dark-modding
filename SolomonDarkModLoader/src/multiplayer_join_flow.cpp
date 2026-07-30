@@ -455,7 +455,8 @@ bool ResolvePendingActionUnlocked(
     DebugUiActionDispatchSnapshot dispatch;
     if (!TryGetDebugUiActionDispatchSnapshot(
             g_join_flow.pending_action_request_id,
-            &dispatch)) {
+            &dispatch) ||
+        dispatch.status == "failed") {
         if (g_join_flow.pending_action_id ==
             "control_scheme_picker.select_wasd") {
             g_join_flow.control_scheme_dispatched_owner_address = 0;
@@ -466,16 +467,6 @@ bool ResolvePendingActionUnlocked(
         return false;
     }
 
-    if (dispatch.status == "failed") {
-        if (g_join_flow.pending_action_id ==
-            "control_scheme_picker.select_wasd") {
-            g_join_flow.control_scheme_dispatched_owner_address = 0;
-        }
-        ClearPendingActionUnlocked();
-        g_join_flow.action_retry_not_before_ms =
-            now_ms + kActionRetryDelayMs;
-        return false;
-    }
     if (dispatch.status != "dispatched") {
         return false;
     }
