@@ -96,6 +96,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<string>? pendingLobbyMods_;
     private bool isJoiningLobby_;
     private bool launcherCloseStarted_;
+    private string connectProgressText_ = string.Empty;
+    private double connectProgressPercent_;
+    private bool isConnectProgressVisible_;
+    private bool isConnectProgressError_;
+    private bool connectProgressCompleted_;
+    private int connectProgressGeneration_;
 
     public MainWindowViewModel(LauncherUiCommandClient client)
     {
@@ -253,6 +259,32 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         get => statusText_;
         private set => SetProperty(ref statusText_, value);
+    }
+
+    public string ConnectProgressText
+    {
+        get => connectProgressText_;
+        private set => SetProperty(ref connectProgressText_, value);
+    }
+
+    /// <summary>0–100 for the gold progress bar; derived from the loader's
+    /// observed session phase, never from a timer.</summary>
+    public double ConnectProgressPercent
+    {
+        get => connectProgressPercent_;
+        private set => SetProperty(ref connectProgressPercent_, value);
+    }
+
+    public bool IsConnectProgressVisible
+    {
+        get => isConnectProgressVisible_;
+        private set => SetProperty(ref isConnectProgressVisible_, value);
+    }
+
+    public bool IsConnectProgressError
+    {
+        get => isConnectProgressError_;
+        private set => SetProperty(ref isConnectProgressError_, value);
     }
 
     public bool IsUpdateProgressVisible
@@ -1531,6 +1563,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         LauncherCliMultiplayerSession initialStatus)
     {
         StopSteamSessionMonitoring(clearStatus: false);
+        ShowConnectProgress(SessionConnectProgressMapper.StartingGame());
         ApplySteamSessionStatus(initialStatus);
 
         var stageRootPath = response.Stage?.StageRoot;
@@ -1598,6 +1631,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         modSettingsSessionStatus_ = status;
         UpdateModSettingsInstance();
         UpdateLobbyDetails(status);
+        if (status.Enabled)
+        {
+            ShowConnectProgress(
+                SessionConnectProgressMapper.FromSessionStatus(status));
+        }
         if (status.Phase == "Error" &&
             !string.IsNullOrWhiteSpace(status.ErrorText))
         {
@@ -2180,6 +2218,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         RaiseCommandStates();
         StopSteamInviteListener();
         StatusText = $"Connecting to lobby {lobbyId}…";
+        ShowConnectProgress(SessionConnectProgressMapper.JoiningLobby(lobbyId));
         try
         {
             steamLobbySession_.Join(lobbyId);
@@ -2190,6 +2229,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             System.ComponentModel.Win32Exception)
         {
             isJoiningLobby_ = false;
+            HideConnectProgress();
             SetError(exception.Message);
             StatusText = "The lobby was not joined.";
             RaiseCommandStates();
@@ -2257,6 +2297,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             notification.LobbyId is { } lobbyId)
         {
             isJoiningLobby_ = false;
+            HideConnectProgress();
             lobbyLaunchState_.MarkJoined(lobbyId);
             OnPropertyChanged(nameof(JoinGameButtonText));
             OnPropertyChanged(nameof(CanLeaveLobby));
@@ -2275,6 +2316,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         steamLobbySession_.Leave();
         isJoiningLobby_ = false;
+        HideConnectProgress();
         pendingLobbyMods_ = null;
         ClearLobbyDetails();
         var message = string.IsNullOrWhiteSpace(notification.Error)
@@ -2399,6 +2441,60 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         modSettingsSessionStatus_ = null;
         UpdateModSettingsInstance();
         ClearLobbyDetails();
+        HideConnectProgress();
+    }
+
+    private void ShowConnectProgress(SessionConnectProgress progress)
+    {
+        ConnectProgressText = progress.Text;
+        ConnectProgressPercent = progress.Fraction * 100.0;
+        IsConnectProgressError = progress.IsError;
+        IsConnectProgressVisible = true;
+        if (progress.IsComplete)
+        {
+            if (!connectProgressCompleted_)
+            {
+                connectProgressCompleted_ = true;
+                _ = HideConnectProgressAfterDelayAsync(
+                    ++connectProgressGeneration_);
+            }
+        }
+        else
+        {
+            connectProgressCompleted_ = false;
+        }
+    }
+
+    private async Task HideConnectProgressAfterDelayAsync(int generation)
+    {
+        try
+        {
+            await Task.Delay(
+                TimeSpan.FromSeconds(4),
+                lifetimeCancellation_.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            if (connectProgressGeneration_ == generation &&
+                connectProgressCompleted_)
+            {
+                HideConnectProgress();
+            }
+        });
+    }
+
+    private void HideConnectProgress()
+    {
+        connectProgressGeneration_++;
+        connectProgressCompleted_ = false;
+        IsConnectProgressVisible = false;
+        IsConnectProgressError = false;
+        ConnectProgressText = string.Empty;
+        ConnectProgressPercent = 0;
     }
 
     private static bool IsProcessRunning(int processId)

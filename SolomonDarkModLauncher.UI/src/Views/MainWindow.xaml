@@ -229,6 +229,40 @@
                                  ToolTip="The launcher adds the Lobby ID when you host. To join by ID, paste the Lobby ID here."
                                  Style="{StaticResource DarkTextBoxStyle}" />
                     </StackPanel>
+
+                    <!-- Connect progress: stage text + bar driven by the loader's
+                         observed session phase (never a timer). Visible from lobby
+                         join / game launch until the session reaches the hub. -->
+                    <StackPanel Margin="0,12,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnectProgressVisible}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock FontSize="12"
+                                   Margin="0,0,0,4"
+                                   Text="{Binding ConnectProgressText}"
+                                   TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsConnectProgressError}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ProgressBar Value="{Binding ConnectProgressPercent, Mode=OneWay}"
+                                     Style="{StaticResource UpdateProgressBarStyle}">
+                        </ProgressBar>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

@@ -60,6 +60,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("normal runtime hides diagnostic UI", TestNormalRuntimeHidesDiagnosticUiAsync),
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
+    ("lobby connect progress mapping", TestLobbyConnectProgressMappingAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("bot member status compatibility", TestBotMemberStatusCompatibilityAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
@@ -1793,6 +1794,93 @@ static Task TestHeadlessSimulationLaunchRoutingAsync()
         Directory.Delete(root, recursive: true);
     }
 
+    return Task.CompletedTask;
+}
+
+static Task TestLobbyConnectProgressMappingAsync()
+{
+    static LauncherCliMultiplayerSession Session(
+        string phase,
+        string sessionState = "",
+        bool isHost = false,
+        uint peers = 0,
+        string errorText = "") => new()
+        {
+            Enabled = true,
+            IsHost = isHost,
+            Phase = phase,
+            SessionState = sessionState,
+            AuthenticatedPeerCount = peers,
+            ErrorText = errorText
+        };
+
+    // The client-join ladder must be strictly monotonic so the bar only ever
+    // advances while the loader progresses through its real phase sequence.
+    var ladder = new[]
+    {
+        SessionConnectProgressMapper.JoiningLobby(123),
+        SessionConnectProgressMapper.StartingGame(),
+        SessionConnectProgressMapper.FromSessionStatus(Session("Disabled")),
+        SessionConnectProgressMapper.FromSessionStatus(Session("JoiningLobby")),
+        SessionConnectProgressMapper.FromSessionStatus(Session("Handshaking")),
+        SessionConnectProgressMapper.FromSessionStatus(Session("LobbyReady")),
+        SessionConnectProgressMapper.FromSessionStatus(Session("Connected")),
+        SessionConnectProgressMapper.FromSessionStatus(
+            Session("Connected", sessionState: "in-hub", peers: 1))
+    };
+    for (var index = 1; index < ladder.Length; index++)
+    {
+        Require(
+            ladder[index].Fraction > ladder[index - 1].Fraction,
+            $"connect ladder regressed between steps {index - 1} and {index}");
+        Require(
+            !string.IsNullOrWhiteSpace(ladder[index].Text),
+            $"connect ladder step {index} lost its status text");
+    }
+    Require(
+        ladder[^1].IsComplete && ladder[^1].Fraction == 1.0,
+        "reaching the hub does not complete the connect bar");
+    Require(
+        ladder.Take(ladder.Length - 1).All(step => !step.IsComplete),
+        "a pre-hub stage claims completion");
+    Require(
+        ladder.All(step => !step.IsError),
+        "a healthy connect stage claims an error");
+
+    var inBoneyard = SessionConnectProgressMapper.FromSessionStatus(
+        Session("Connected", sessionState: "in-boneyard", peers: 2));
+    Require(
+        inBoneyard.IsComplete && inBoneyard.Fraction == 1.0,
+        "an in-progress match no longer completes the connect bar");
+    Require(
+        inBoneyard.Text.Contains("2 other players", StringComparison.Ordinal),
+        "peer count is no longer described to the player");
+
+    var error = SessionConnectProgressMapper.FromSessionStatus(
+        Session("Error", errorText: "Steam rejected the session."));
+    Require(
+        error.IsError && !error.IsComplete,
+        "a session error is not surfaced as an error state");
+    Require(
+        error.Text == "Steam rejected the session.",
+        "the loader's error text is not shown verbatim");
+
+    var reconnecting = SessionConnectProgressMapper.FromSessionStatus(
+        Session("Reconnecting"));
+    Require(
+        !reconnecting.IsError && !reconnecting.IsComplete,
+        "reconnecting must stay a live, non-terminal stage");
+    Require(
+        reconnecting.Fraction <
+            SessionConnectProgressMapper.ConnectedFraction,
+        "reconnecting may not present as fully connected");
+
+    var hostWaiting = SessionConnectProgressMapper.FromSessionStatus(
+        Session("Connected", isHost: true));
+    Require(
+        hostWaiting.Text != SessionConnectProgressMapper
+            .FromSessionStatus(Session("Connected")).Text,
+        "host and client connect wording are indistinguishable");
     return Task.CompletedTask;
 }
 

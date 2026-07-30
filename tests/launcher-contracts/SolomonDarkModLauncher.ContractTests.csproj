@@ -32,6 +32,8 @@
              Link="LobbyLaunchState.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherCliResponse.cs"
              Link="LauncherCliResponse.cs" />
+    <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\SessionConnectProgress.cs"
+             Link="SessionConnectProgress.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherJsonResponseReader.cs"
              Link="LauncherJsonResponseReader.cs" />
     <Compile Include="..\..\SolomonDarkModLauncher.UI\src\Infrastructure\LauncherSelfUpdater.cs"
