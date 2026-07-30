@@ -1,9 +1,11 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.25
+# Solomon Dark Multiplayer Beta v0.1.0-beta.26
 
-- FIXED — Steam multiplayer no longer loses the remote client's enemy world after the host talks to Solomon Dig. Steam result-25 backpressure now preserves the session, while the reliable queue replaces stale semantic generations, evicts obsolete fragments and duplicates, paces routes fairly, bounds retries, and reports accurate Steam telemetry. The fix was exercised on owner-topology Steam/SDR, real WAN, and loopback.
-- The real-flow E2E harness now permanently covers the launcher-to-Solomon-Dig-to-wave path on loopback, WAN, and Steam/SDR.
-- FIXED — Framework participant seams now give synthetic slots native primary-damage parity across Fire, Air, Water, and Earth and restore synthetic participants through the stock completed-wave respawn path while preserving actor identity, progression, and replicated death epochs.
-- NEW — The launcher/framework now supports accelerated headless simulation, and the Lua bot APIs expose semantic loadout and native spell details for read-only consumers.
+- FIXED — After a wave completes, living players are no longer teleported back to spawn. The wave-respawn seam now returns and respawns only dead participants; living participants' positions and state remain untouched.
+- FIXED — Steam clients no longer wait behind bulk gameplay traffic to enter the loading screen when the host starts a match. Join-phase run control now has bounded reliable priority under route pressure.
+- FIXED — Participant destruction now runs after the stock application tick, and logger, telemetry, and local-UDP workers use process-detach-safe handles, resolving the participant-teardown and process-exit crash paths reported on July 30.
+- FIXED — Fresh multiplayer quick-start no longer repeatedly dispatches the stock control-picker action against one retiring UI owner.
+- KNOWN BEHAVIOR — Water damage remains the stock value per contact; rapid multi-target, multi-frame contact aggregation can appear as larger single hits.
+- Permanent regression coverage now includes the focused two-peer wave-boundary respawn verifier and the hardened real-flow E2E.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
