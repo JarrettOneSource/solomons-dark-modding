@@ -1362,8 +1362,6 @@ def approach_solomon_and_complete_dialogue(
     best_distance = math.inf
     stalled_samples = 0
     detour_count = 0
-    if cover_action is not None:
-        cover_action()
     while time.monotonic() < deadline:
         local_state = pipe.state()
         authority_state = (
@@ -1583,19 +1581,19 @@ def cover_participant_with_real_input_once(
         state["camera"],
     )
     started = time.time_ns()
-    if float(state["player"]["hp"]) < 30.0:
-        detail = _click(source_root, peer, 0.423, 0.955, 300)
+    if float(state["player"]["hp"]) < 45.0:
+        detail = _send_key(source_root, peer, "3", 0)
         return {
             "timeUtcNanoseconds": started,
             "kind": "health-potion",
-            "screenFraction": [0.423, 0.955],
+            "key": "3",
             "liveEnemyCount": len(live_enemies),
             "hp": float(state["player"]["hp"]),
             "result": detail,
         }
     if targets:
         x, y = targets[movement_index % len(targets)]
-        detail = _click(source_root, peer, x, y, 1500)
+        detail = _click(source_root, peer, x, y, 120)
         return {
             "timeUtcNanoseconds": started,
             "kind": "air-cast",

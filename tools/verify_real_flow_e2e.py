@@ -759,9 +759,6 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             host_cover_actions.append(action)
             return action
 
-        if config.solomon_interactor == "client":
-            cover_client_dig()
-            cover_client_dig()
         result["sharedRun"] = {
             "host": host_run,
             "clientB": wait_for_state(

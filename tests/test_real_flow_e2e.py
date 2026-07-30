@@ -252,10 +252,6 @@ class RealFlowE2ETests(unittest.TestCase):
             runtime,
         )
         self.assertIn("cover_action=(", controller)
-        self.assertGreaterEqual(
-            controller.count("cover_client_dig()"),
-            3,
-        )
 
     @mock.patch("tools._real_flow_e2e.runtime._click")
     def test_client_dig_cover_casts_host_air_at_a_live_enemy(
@@ -268,7 +264,7 @@ class RealFlowE2ETests(unittest.TestCase):
             "scene": {"name": "testrun"},
             "player": {
                 "valid": True,
-                "hp": 42.0,
+                "hp": 46.0,
                 "x": 100.0,
                 "y": 100.0,
             },
@@ -298,16 +294,16 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertEqual(action["kind"], "air-cast")
         self.assertEqual(action["liveEnemyCount"], 1)
-        self.assertEqual(action["hp"], 42.0)
+        self.assertEqual(action["hp"], 46.0)
         click.assert_called_once()
-        self.assertEqual(click.call_args.args[-1], 1500)
+        self.assertEqual(click.call_args.args[-1], 120)
 
-    @mock.patch("tools._real_flow_e2e.runtime._click")
+    @mock.patch("tools._real_flow_e2e.runtime._send_key")
     def test_client_dig_cover_uses_stock_health_potion_when_low(
         self,
-        click: mock.Mock,
+        send_key: mock.Mock,
     ) -> None:
-        click.return_value = "clicked"
+        send_key.return_value = "sent"
         pipe = mock.Mock()
         pipe.state.return_value = {
             "scene": {"name": "testrun"},
@@ -335,12 +331,11 @@ class RealFlowE2ETests(unittest.TestCase):
         )
 
         self.assertEqual(action["kind"], "health-potion")
-        click.assert_called_once_with(
+        send_key.assert_called_once_with(
             ROOT,
             mock.ANY,
-            0.423,
-            0.955,
-            300,
+            "3",
+            0,
         )
 
     def test_shared_hub_wait_requires_converged_participant_views(
