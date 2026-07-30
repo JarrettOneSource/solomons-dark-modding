@@ -290,6 +290,22 @@ acceptance still contains no direct HP write or forced enemy death. The
 nonlethal diagnostic is retained under
 `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha`.
 
+The controlled native death now occurs only after the stock schedule advances
+beyond wave 1 and reaches a window with at most three outstanding live plus
+pending enemies. Participant automation pauses only while the native lethal
+call lands, then the surviving ordinary fighters resume and must complete the
+wave themselves. The observer records the already-acknowledged epoch as its
+baseline so only the next completed-wave respawn can satisfy the acceptance.
+
+The next exact-SHA invocation exposed a second obsolete harness constraint:
+after Ember's controlled death it froze the host human's movement, even
+though living-player proximity is no longer part of the corrected
+acceptance. The host died first, client B died later, and stock
+`all_players_dead` ended the run before the wave boundary. The verifier now
+keeps both living humans' stock movement and casting controllers active,
+including a low-health retreat rule. The failed trace is retained under
+`/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha-r2`.
+
 ## Full-flow harness limitation
 
 The earlier fresh-profile real-flow calibration attempted to drive the stock
@@ -324,7 +340,7 @@ Landing evidence is written without changing the tested commit:
 - exact-SHA focused boundary result:
   `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-targeted-final-result.json`;
 - exact-SHA synthetic respawn result:
-  `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha-r2/result.json`;
+  `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha-r3/result.json`;
 - the one permitted final full-flow loopback:
   `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-fullflow-final/result.json`.
 

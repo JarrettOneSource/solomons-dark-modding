@@ -51,6 +51,7 @@ ROUTE_ARRIVAL_RADIUS = 34.0
 RETAIL_RUN_SEED = 0x2E9D3B65
 NATIVE_LETHAL_PROBE_LIMIT = 10
 NATIVE_LETHAL_RETRY_INTERVAL = 0.5
+LETHAL_WINDOW_MAX_OUTSTANDING = 3
 
 
 class RespawnVerificationFailure(RuntimeError):
@@ -697,6 +698,8 @@ emit("first_respawn_hp", first_respawn.hp or 0)
 emit("first_respawn_max_hp", first_respawn.max_hp or 0)
 emit("first_respawn_mp", first_respawn.mp or 0)
 emit("first_respawn_max_mp", first_respawn.max_mp or 0)
+emit("first_respawn_x", first_respawn.x or 0)
+emit("first_respawn_y", first_respawn.y or 0)
 emit("spawn_valid", world.player_spawn_valid == true)
 emit("spawn_x", world.player_spawn_x or 0)
 emit("spawn_y", world.player_spawn_y or 0)
@@ -704,6 +707,7 @@ emit("nameplate_id", nameplate and nameplate.id or 0)
 emit("nameplate_name", nameplate and nameplate.name or "")
 emit("nameplate_health_ratio",
   nameplate and nameplate.health_ratio or -1)
+emit("bots_tick_disabled", lua_bots_disable_tick == true)
 """
 
 
@@ -731,6 +735,7 @@ local controller = {{
   last_cast_ms = 0,
   cast_attempts = 0,
   cast_accepted = 0,
+  combat_enabled = true,
   combat_movement_enabled = true,
 }}
 rawset(_G, "{ROUTE_CONTROLLER_GLOBAL}", controller)
@@ -781,6 +786,10 @@ local function drive_route(event)
       (tonumber(player.hp) or 0) <= 0 then
     return
   end
+  if active.combat_enabled == false then
+    pcall(sd.input.hold_movement_frames, 0.0, 0.0, 1)
+    return
+  end
   local enemy, enemy_distance = nil, math.huge
   for _, actor in ipairs(sd.world.list_actors() or {{}}) do
     local hp = tonumber(actor.hp) or 0
@@ -797,7 +806,12 @@ local function drive_route(event)
   local ex, ey = tonumber(enemy.x) or x, tonumber(enemy.y) or y
   local toward_x, toward_y = normalize(ex - x, ey - y)
   local move_x, move_y = 0.0, 0.0
-  if enemy_distance > 220.0 then
+  local max_hp = tonumber(player.max_hp) or 0
+  local low_health =
+    max_hp > 0 and (tonumber(player.hp) or 0) / max_hp < 0.5
+  if low_health then
+    move_x, move_y = -toward_x, -toward_y
+  elseif enemy_distance > 220.0 then
     move_x, move_y = toward_x, toward_y
   elseif enemy_distance < 95.0 then
     move_x, move_y = -toward_x, -toward_y
@@ -1373,6 +1387,44 @@ def arm_client_b_combat(client_pipe: str) -> dict[str, str]:
     return armed
 
 
+def set_combat_activity(
+    pipe_name: str,
+    *,
+    enabled: bool,
+    manage_bots: bool,
+) -> dict[str, str]:
+    lua_boolean = "true" if enabled else "false"
+    bot_assignment = (
+        f"lua_bots_disable_tick = {str(not enabled).lower()}"
+        if manage_bots
+        else ""
+    )
+    observed = values(
+        pipe_name,
+        f"""
+local controller = assert(
+  rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}"),
+  "combat controller unavailable")
+controller.combat_enabled = {lua_boolean}
+{bot_assignment}
+print("combat_enabled=" .. tostring(
+  controller.combat_enabled == true))
+print("expected_enabled={lua_boolean}")
+print("bots_expected=" .. tostring({str(manage_bots).lower()}))
+print("bots_disabled=" .. tostring(lua_bots_disable_tick == true))
+""",
+    )
+    if boolean(observed, "combat_enabled") != enabled:
+        raise RespawnVerificationFailure(
+            f"Could not set combat activity on {pipe_name}: {observed}"
+        )
+    if manage_bots and boolean(observed, "bots_disabled") == enabled:
+        raise RespawnVerificationFailure(
+            f"Could not set bot activity on {pipe_name}: {observed}"
+        )
+    return observed
+
+
 def state_is_alive(state: dict[str, str]) -> bool:
     hp = number(state, "hp")
     maximum = number(state, "max_hp")
@@ -1389,6 +1441,23 @@ def state_is_alive(state: dict[str, str]) -> bool:
         and hp > 0.0
         and integer(state, "grid_member") == 1
         and integer(state, "grid_cell") > 0
+    )
+
+
+def lethal_window_ready(
+    wave: dict[str, str],
+    target: dict[str, str],
+    minimum_wave: int,
+) -> bool:
+    alive = integer(wave, "alive")
+    remaining = integer(wave, "remaining")
+    return (
+        state_is_alive(target)
+        and integer(wave, "wave") > minimum_wave
+        and wave.get("phase") in {"spawning", "clearing"}
+        and alive > 0
+        and remaining >= 0
+        and alive + remaining <= LETHAL_WINDOW_MAX_OUTSTANDING
     )
 
 
@@ -1443,6 +1512,10 @@ def validate_respawn_transition(
             alive,
             "first_respawn_max_mp",
         )
+        first_x = number(alive, "first_respawn_x")
+        first_y = number(alive, "first_respawn_y")
+        actor_x = number(alive, "actor_x")
+        actor_y = number(alive, "actor_y")
         if (
             integer(alive, "first_respawn_epoch")
             != integer(alive, "respawn_epoch")
@@ -1452,6 +1525,10 @@ def validate_respawn_transition(
             != integer(alive, "progression")
             or abs(first_hp - first_maximum) > VITAL_TOLERANCE
             or abs(first_mp - first_maximum_mp) > VITAL_TOLERANCE
+            or not math.isfinite(first_x)
+            or not math.isfinite(first_y)
+            or not math.isfinite(actor_x)
+            or not math.isfinite(actor_y)
         ):
             raise RespawnVerificationFailure(
                 f"{role} did not first publish full native respawn "
@@ -1497,6 +1574,21 @@ def validate_respawn_transition(
             f"host_dead={host_dead} client_dead={client_dead} "
             f"host_alive={host_alive} client_alive={client_alive}"
         )
+    host_first_spawn_delta = math.hypot(
+        number(host_alive, "first_respawn_x")
+        - number(host_alive, "spawn_x"),
+        number(host_alive, "first_respawn_y")
+        - number(host_alive, "spawn_y"),
+    )
+    if (
+        host_first_spawn_delta > POSITION_TOLERANCE
+        or not boolean(host_alive, "bots_tick_disabled")
+    ):
+        raise RespawnVerificationFailure(
+            "host did not freeze the bot at its first Arena-authored "
+            f"respawn placement: delta={host_first_spawn_delta} "
+            f"host={host_alive}"
+        )
     peer_placement_delta = math.hypot(
         number(host_alive, "actor_x")
         - number(client_alive, "actor_x"),
@@ -1515,18 +1607,19 @@ def validate_respawn_transition(
         "hostActorPreserved": True,
         "clientActorPreserved": True,
         "fullResources": True,
+        "hostFirstRespawnSpawnDelta": host_first_spawn_delta,
         "peerRespawnPlacementConverged": True,
         "peerRespawnPlacementDelta": peer_placement_delta,
         "hostRespawnDisplacement": math.hypot(
-            number(host_alive, "actor_x")
+            number(host_alive, "first_respawn_x")
             - number(host_dead, "actor_x"),
-            number(host_alive, "actor_y")
+            number(host_alive, "first_respawn_y")
             - number(host_dead, "actor_y"),
         ),
         "clientBRespawnDisplacement": math.hypot(
-            number(client_alive, "actor_x")
+            number(host_alive, "first_respawn_x")
             - number(client_dead, "actor_x"),
-            number(client_alive, "actor_y")
+            number(host_alive, "first_respawn_y")
             - number(client_dead, "actor_y"),
         ),
         "hostRequestedSpawnNavTraversable": boolean(
@@ -2026,6 +2119,38 @@ print("player=" ..
         result["midWaveCheckpoint"] = mid_wave
         result["midWaveCheckpointAt"] = mid_wave_at
 
+        lethal_window, lethal_window_at = wait_for(
+            lambda: {
+                "wave": values(host_pipe, WAVE_PROBE),
+                "target": values(
+                    host_pipe,
+                    participant_probe(participant_id),
+                ),
+            },
+            lambda row: lethal_window_ready(
+                row["wave"],
+                row["target"],
+                integer(active_wave, "wave"),
+            ),
+            label="late retail wave lethal window",
+            timeout=90,
+            interval=0.05,
+        )
+        result["lethalWindow"] = lethal_window
+        result["lethalWindowAt"] = lethal_window_at
+        result["preLethalCombatPause"] = {
+            "host": set_combat_activity(
+                host_pipe,
+                enabled=False,
+                manage_bots=True,
+            ),
+            "clientB": set_combat_activity(
+                client_pipe,
+                enabled=False,
+                manage_bots=False,
+            ),
+        }
+        time.sleep(0.25)
         result["nativeLethalHit"] = invoke_native_lethal_hit(
             host_pipe,
             participant_id,
@@ -2039,8 +2164,14 @@ local hold = {{
   stops = 0,
 }}
 rawset(_G, "__botcombat_respawn_target_hold", hold)
+local baseline_runtime =
+  sd.runtime.get_multiplayer_state() or {{}}
+local baseline_spectator =
+  baseline_runtime.death_spectator or {{}}
 local observer = {{
   participant_id = {participant_id},
+  baseline_epoch =
+    tonumber(baseline_spectator.last_applied_respawn_epoch) or 0,
   first_respawn = nil,
 }}
 rawset(_G, "__botcombat_respawn_observer", observer)
@@ -2058,11 +2189,6 @@ sd.events.on("runtime.tick", function()
     if ok and stopped == true then
       current.stops = current.stops + 1
     end
-    local route_controller =
-      rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
-    if type(route_controller) == "table" then
-      route_controller.combat_movement_enabled = false
-    end
   end
   local current_observer =
     rawget(_G, "__botcombat_respawn_observer")
@@ -2070,9 +2196,11 @@ sd.events.on("runtime.tick", function()
   local spectator = runtime.death_spectator or {{}}
   local epoch =
     tonumber(spectator.last_applied_respawn_epoch) or 0
-  if epoch <= 0 or type(current_observer) ~= "table" then
+  if type(current_observer) ~= "table" or
+      epoch <= (tonumber(current_observer.baseline_epoch) or 0) then
     return
   end
+  lua_bots_disable_tick = true
   if type(current_observer.first_respawn) ~= "table" then
     local bot = sd.bots.get_participant_state(
       current_observer.participant_id)
@@ -2087,6 +2215,8 @@ sd.events.on("runtime.tick", function()
         max_hp = tonumber(bot.max_hp) or 0,
         mp = tonumber(bot.mp) or 0,
         max_mp = tonumber(bot.max_mp) or 0,
+        x = tonumber(bot.x) or 0,
+        y = tonumber(bot.y) or 0,
       }}
     end
   end
@@ -2115,12 +2245,20 @@ sd.events.on("runtime.tick", function()
   end
 end)
 lua_bots_disable_tick = false
+local route_controller =
+  rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
+if type(route_controller) == "table" then
+  route_controller.combat_enabled = true
+end
 print("target_held=" .. tostring(
   type(rawget(_G, "__botcombat_respawn_target_hold")) ==
     "table"))
 print("other_bots_active=" .. tostring(
   lua_bots_disable_tick == false))
-print("host_slot_zero_movement_hold_armed=true")
+print("host_slot_zero_combat_active=" .. tostring(
+  type(route_controller) == "table" and
+  route_controller.combat_enabled == true and
+  route_controller.combat_movement_enabled == true))
 """,
         )
         if (
@@ -2134,26 +2272,36 @@ print("host_slot_zero_movement_hold_armed=true")
             )
             or not boolean(
                 result["postLethalTargetHold"],
-                "host_slot_zero_movement_hold_armed",
+                "host_slot_zero_combat_active",
             )
         ):
             raise RespawnVerificationFailure(
-                "Could not hold the dead target and slot-0 movement while "
-                "leaving the surviving bot policy active."
+                "Could not hold the dead target while keeping the living "
+                "combat controllers active."
             )
-        result["clientBPostLethalMovementHold"] = values(
+        result["clientBPostLethalCombat"] = values(
             client_pipe,
             f"""
+local baseline_runtime =
+  sd.runtime.get_multiplayer_state() or {{}}
+local baseline_spectator =
+  baseline_runtime.death_spectator or {{}}
 local observer = {{
   participant_id = {participant_id},
+  baseline_epoch =
+    tonumber(baseline_spectator.last_applied_respawn_epoch) or 0,
   first_respawn = nil,
-  hold_active = true,
 }}
 rawset(_G, "__botcombat_respawn_observer", observer)
 rawset(_G, "__botcombat_respawn_targetability", {{
   participant_id = {participant_id},
   network_actor_ids = {{}},
 }})
+local route_controller =
+  rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
+if type(route_controller) == "table" then
+  route_controller.combat_enabled = true
+end
 sd.events.on("runtime.tick", function()
   local current =
     rawget(_G, "__botcombat_respawn_observer")
@@ -2162,14 +2310,7 @@ sd.events.on("runtime.tick", function()
   local spectator = runtime.death_spectator or {{}}
   local epoch =
     tonumber(spectator.last_applied_respawn_epoch) or 0
-  if epoch <= 0 then return end
-  if current.hold_active == true then
-    local route_controller =
-      rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
-    if type(route_controller) == "table" then
-      route_controller.combat_movement_enabled = false
-    end
-  end
+  if epoch <= (tonumber(current.baseline_epoch) or 0) then return end
   if type(current.first_respawn) ~= "table" then
     local bot =
       sd.bots.get_participant_state(current.participant_id)
@@ -2184,6 +2325,8 @@ sd.events.on("runtime.tick", function()
         max_hp = tonumber(bot.max_hp) or 0,
         mp = tonumber(bot.mp) or 0,
         max_mp = tonumber(bot.max_mp) or 0,
+        x = tonumber(bot.x) or 0,
+        y = tonumber(bot.y) or 0,
       }}
     end
   end
@@ -2203,16 +2346,21 @@ sd.events.on("runtime.tick", function()
     end
   end
 end)
-print("client_b_movement_hold_armed=true")
+local route_controller =
+  rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
+print("client_b_combat_active=" .. tostring(
+  type(route_controller) == "table" and
+  route_controller.combat_enabled == true and
+  route_controller.combat_movement_enabled == true))
 """,
         )
         if not boolean(
-            result["clientBPostLethalMovementHold"],
-            "client_b_movement_hold_armed",
+            result["clientBPostLethalCombat"],
+            "client_b_combat_active",
         ):
             raise RespawnVerificationFailure(
-                "Could not isolate client B movement during the native "
-                "respawn placement observation."
+                "Could not keep client B combat active during the native "
+                "respawn observation."
             )
         host_actor = integer(initial_host, "actor")
         host_progression = integer(initial_host, "progression")
@@ -2299,11 +2447,42 @@ print("client_b_movement_hold_armed=true")
             timeout=15,
             interval=0.05,
         )
+        aligned, aligned_at = wait_for(
+            lambda: {
+                "host": values(
+                    host_pipe,
+                    participant_probe(participant_id),
+                ),
+                "clientB": values(
+                    client_pipe,
+                    participant_probe(participant_id),
+                ),
+            },
+            lambda row: (
+                state_is_alive(row["host"])
+                and state_is_alive(row["clientB"])
+                and integer(row["host"], "respawn_epoch")
+                == integer(row["clientB"], "respawn_epoch")
+                and math.hypot(
+                    number(row["host"], "actor_x")
+                    - number(row["clientB"], "actor_x"),
+                    number(row["host"], "actor_y")
+                    - number(row["clientB"], "actor_y"),
+                )
+                <= POSITION_TOLERANCE
+            ),
+            label="host/client B aligned synthetic respawn placement",
+            timeout=15,
+            interval=0.05,
+        )
+        host_alive = aligned["host"]
+        client_alive = aligned["clientB"]
         result["respawn"] = {
             "host": host_alive,
             "hostAt": host_alive_at,
             "clientB": client_alive,
             "clientBAt": client_alive_at,
+            "alignedAt": aligned_at,
             "contract": validate_respawn_transition(
                 host_dead,
                 client_dead,
@@ -2322,17 +2501,10 @@ print("client_b_movement_hold_armed=true")
 local hold =
   rawget(_G, "__botcombat_respawn_target_hold")
 if type(hold) == "table" then hold.active = false end
-local route_controller =
-  rawget(_G, "__botcombat_respawn_route")
-if type(route_controller) == "table" then
-  route_controller.combat_movement_enabled = true
-end
 lua_bots_disable_tick = false
 print("resumed=" .. tostring(
   lua_bots_disable_tick == false and
   (type(hold) ~= "table" or hold.active == false) and
-  (type(route_controller) ~= "table" or
-    route_controller.combat_movement_enabled == true) and
   type(rawget(
     _G,
     "__botcombat_respawn_targetability")) == "table"))
@@ -2348,19 +2520,7 @@ print("resumed=" .. tostring(
         result["clientBPostRespawnResume"] = values(
             client_pipe,
             f"""
-local route_controller =
-  rawget(_G, "{ROUTE_CONTROLLER_GLOBAL}")
-if type(route_controller) == "table" then
-  route_controller.combat_movement_enabled = true
-end
-local observer =
-  rawget(_G, "__botcombat_respawn_observer")
-if type(observer) == "table" then
-  observer.hold_active = false
-end
 print("resumed=" .. tostring(
-  (type(route_controller) ~= "table" or
-    route_controller.combat_movement_enabled == true) and
   type(rawget(
     _G,
     "__botcombat_respawn_targetability")) == "table"))
@@ -2371,8 +2531,7 @@ print("resumed=" .. tostring(
             "resumed",
         ):
             raise RespawnVerificationFailure(
-                "Could not resume client B combat movement after the "
-                "native placement observation."
+                "Could not retain client B targetability observations."
             )
 
         values(

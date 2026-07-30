@@ -66,16 +66,41 @@ def state(
         "first_respawn_max_hp": "100" if epoch else "0",
         "first_respawn_mp": "80" if epoch else "0",
         "first_respawn_max_mp": "80" if epoch else "0",
+        "first_respawn_x": "10" if epoch else "0",
+        "first_respawn_y": "20" if epoch else "0",
         "spawn_valid": "true",
         "spawn_x": "10",
         "spawn_y": "20",
         "nameplate_id": "42",
         "nameplate_name": "Ember",
         "nameplate_health_ratio": "1" if hp > 0 else "0",
+        "bots_tick_disabled": "true" if epoch else "false",
     }
 
 
 class BotWaveRespawnTests(unittest.TestCase):
+    def test_native_lethal_window_requires_late_live_wave(self) -> None:
+        target = state(
+            actor=100,
+            progression=200,
+            hp=50,
+            epoch=0,
+            presentation_flags=0,
+        )
+        wave = {
+            "wave": "2",
+            "phase": "spawning",
+            "alive": "2",
+            "killed": "0",
+            "remaining": "1",
+        }
+        self.assertTrue(respawn.lethal_window_ready(wave, target, 1))
+        wave["remaining"] = "2"
+        self.assertFalse(respawn.lethal_window_ready(wave, target, 1))
+        wave["remaining"] = "1"
+        target["hp"] = "0"
+        self.assertFalse(respawn.lethal_window_ready(wave, target, 1))
+
     def test_native_lethal_hit_retries_across_pump_ticks(self) -> None:
         queues = [
             {"ok": "true", "serial": str(serial)}
