@@ -210,7 +210,6 @@ void PumpQueuedGameplayActions() {
     bool have_region_switch_request = false;
     multiplayer::LootSnapshotRuntimeInfo replicated_loot_snapshot;
     bool have_replicated_loot_snapshot = false;
-    std::vector<std::uint64_t> destroy_requests;
     {
         std::lock_guard<std::mutex> lock(g_gameplay_keyboard_injection.pending_gameplay_world_actions_mutex);
         if (wizard_bot_sync_not_before_ms <= now_ms &&
@@ -252,10 +251,6 @@ void PumpQueuedGameplayActions() {
 
                 g_gameplay_keyboard_injection.pending_gameplay_region_switch_requests.push_back(pending_request);
             }
-        }
-        while (!g_gameplay_keyboard_injection.pending_participant_destroy_requests.empty()) {
-            destroy_requests.push_back(g_gameplay_keyboard_injection.pending_participant_destroy_requests.front());
-            g_gameplay_keyboard_injection.pending_participant_destroy_requests.pop_front();
         }
         if (!g_gameplay_keyboard_injection.pending_reward_spawn_requests.empty()) {
             reward_request = std::move(g_gameplay_keyboard_injection.pending_reward_spawn_requests.front());
@@ -398,15 +393,6 @@ void PumpQueuedGameplayActions() {
         native_enemy_death_probes,
         native_experience_gain_probes,
         native_staff_effect_probes);
-
-    for (const auto bot_id : destroy_requests) {
-        DestroyParticipantEntityNow(bot_id);
-    }
-
-    if (have_participant_sync_request &&
-        std::find(destroy_requests.begin(), destroy_requests.end(), participant_sync_request.bot_id) != destroy_requests.end()) {
-        have_participant_sync_request = false;
-    }
 
     if (have_region_switch_request) {
         std::string error_message;

@@ -1110,8 +1110,8 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
     )
 
 
-def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> str:
-    """Every process applies one authenticated host respawn to its local owner."""
+def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
+    """Each process acknowledges the host epoch but mutates only a dead owner."""
 
     protocol_text = read_text(MULTIPLAYER_PROTOCOL)
     transport_text = read_text(
@@ -1170,11 +1170,14 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
         "world.player_spawn_y",
         "TryRespawnLocalPlayerAt(",
         "IsPacketSequenceNewer(",
-        "ResetLocalDeathSpectatorState(\"wave_respawn\")",
+        "local_respawned",
+        "if (local_respawned)",
+        "living_untouched",
     ):
         assert token in transport_text, f"wave respawn lifecycle lacks: {token}"
 
     assert "bool TryRespawnLocalPlayerAt(" in gameplay_header
+    assert "bool* did_respawn" in gameplay_header
     for token in (
         "struct WizardRespawnTarget",
         "TryRespawnWizardActorAt(",
@@ -1197,8 +1200,8 @@ def test_wave_completion_respawns_every_owner_from_reliable_host_command() -> st
 
     return (
         "wave completion publishes one authenticated host epoch over fast and "
-        "reliable packets, and revives local and host-owned synthetic players "
-        "through one same-actor native contract"
+        "reliable packets, acknowledges living owners without mutation, and "
+        "revives only dead local and host-owned synthetic players"
     )
 
 
@@ -1272,7 +1275,7 @@ def test_death_spectator_has_isolated_three_owner_live_regression() -> str:
     assert "verify_multiplayer_death_spectator_respawn.py" in native_re
     return (
         "an isolated no-focus-steal trio verifies the death delay, named camera "
-        "target, both click inputs, and all-owner wave respawn"
+        "target, both click inputs, and dead-owner wave respawn"
     )
 
 

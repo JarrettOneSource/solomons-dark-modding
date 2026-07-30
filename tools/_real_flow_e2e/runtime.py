@@ -657,6 +657,127 @@ class LuaPipe:
     def state(self) -> dict[str, Any]:
         return normalize_state(parse_key_values(self.execute(STATE_LUA)))
 
+    def reset_local_cast_observation(self, network_actor_id: int) -> bool:
+        if network_actor_id <= 0:
+            raise RuntimeProbeError(
+                "local cast observation requires a nonzero network actor ID"
+            )
+        output = self.execute(
+            "local armed = "
+            "sd.debug.reset_local_cast_observation("
+            f"{network_actor_id})\n"
+            'return "armed=" .. tostring(armed)'
+        )
+        return _boolean(parse_key_values(output), "armed")
+
+    def take_local_cast_observation(
+        self,
+        network_actor_id: int,
+    ) -> dict[str, Any]:
+        if network_actor_id <= 0:
+            raise RuntimeProbeError(
+                "local cast observation requires a nonzero network actor ID"
+            )
+        output = self.execute(
+            "local observation = "
+            "sd.debug.get_local_cast_observation("
+            f"{network_actor_id})\n"
+            "local output = {}\n"
+            "local function emit(key, value)\n"
+            "  output[#output + 1] = key .. '=' .. tostring(value)\n"
+            "end\n"
+            "for key, value in pairs(observation) do\n"
+            "  if type(value) ~= 'table' then emit(key, value) end\n"
+            "end\n"
+            "for index, value in ipairs("
+            "observation.damage_native_contact_samples or {}) do\n"
+            "  emit('native_sample.' .. tostring(index), value)\n"
+            "end\n"
+            "for index, value in ipairs("
+            "observation.damage_claim_samples or {}) do\n"
+            "  emit('claim_sample.' .. tostring(index), value)\n"
+            "end\n"
+            "return table.concat(output, '\\n')"
+        )
+        values = parse_key_values(output)
+        native_sample_count = _integer(
+            values,
+            "damage_native_contact_sample_count",
+        )
+        claim_sample_count = _integer(
+            values,
+            "damage_claim_sample_count",
+        )
+        return {
+            "manaValid": _boolean(values, "mana_valid"),
+            "manaSpentTotal": _number(values, "mana_spent_total"),
+            "damageClaimValid": _boolean(
+                values,
+                "damage_claim_valid",
+            ),
+            "nativeContactCount": _integer(
+                values,
+                "damage_native_contact_count",
+            ),
+            "nativeContactSkillId": _integer(
+                values,
+                "damage_native_contact_skill_id",
+            ),
+            "nativeContactSkillConsistent": _boolean(
+                values,
+                "damage_native_contact_skill_consistent",
+            ),
+            "nativeContactTotal": _number(
+                values,
+                "damage_native_contact_total",
+            ),
+            "nativeContactMinimum": _number(
+                values,
+                "damage_native_contact_minimum",
+            ),
+            "nativeContactMaximum": _number(
+                values,
+                "damage_native_contact_maximum",
+            ),
+            "nativeContactSamples": [
+                _number(values, f"native_sample.{index}")
+                for index in range(1, native_sample_count + 1)
+            ],
+            "claimCount": _integer(values, "damage_claim_count"),
+            "associatedClaimCount": _integer(
+                values,
+                "damage_associated_claim_count",
+            ),
+            "unassociatedClaimCount": _integer(
+                values,
+                "damage_unassociated_claim_count",
+            ),
+            "associatedSkillId": _integer(
+                values,
+                "damage_associated_skill_id",
+            ),
+            "associatedSkillConsistent": _boolean(
+                values,
+                "damage_associated_skill_consistent",
+            ),
+            "claimedTotal": _number(
+                values,
+                "damage_claimed_total",
+            ),
+            "claimedMinimum": _number(
+                values,
+                "damage_claimed_minimum",
+            ),
+            "claimedMaximum": _number(
+                values,
+                "damage_claimed_maximum",
+            ),
+            "claimSamples": [
+                _number(values, f"claim_sample.{index}")
+                for index in range(1, claim_sample_count + 1)
+            ],
+        }
+
     def navigation_grid(self, *, timeout: float = 8.0) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         last: dict[str, Any] | None = None
@@ -1624,4 +1745,251 @@ def damage_enemy_with_real_input(
         f"baseline={hp_before_by_id}; actions={actions}; "
         f"lastScene={last['scene']['name']!r}; "
         f"lastPlayerHp={last['player']['hp']}"
+    )
+
+
+def observe_water_cast_with_real_input(
+    source_root: Path,
+    peer: WindowsPeer,
+    client_pipe: LuaPipe,
+    host_pipe: LuaPipe,
+    *,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    selected: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        client_before = client_pipe.state()
+        host_before = host_pipe.state()
+        host_enemies = {
+            int(enemy["network_id"]): enemy
+            for enemy in host_before["nativeEnemies"]
+            if (
+                int(enemy["network_id"]) != 0
+                and not enemy["dead"]
+                and float(enemy["hp"]) > 0.5
+            )
+        }
+        if (
+            client_before["scene"]["name"] == "testrun"
+            and client_before["player"]["valid"]
+            and client_before["player"]["hp"] > 0
+        ):
+            for enemy in client_before["replicatedEnemies"]:
+                network_actor_id = int(enemy["network_id"])
+                if (
+                    network_actor_id not in host_enemies
+                    or enemy["dead"]
+                    or float(enemy["hp"]) <= 0
+                ):
+                    continue
+                targets = damage_click_targets(
+                    [enemy],
+                    client_before["player"],
+                    client_before["viewport"],
+                    client_before["camera"],
+                )
+                if targets:
+                    selected = {
+                        "networkActorId": network_actor_id,
+                        "screenFraction": list(targets[0]),
+                        "clientBefore": client_before,
+                        "hostBefore": host_before,
+                        "hostHpBefore": float(
+                            host_enemies[network_actor_id]["hp"]
+                        ),
+                    }
+                    break
+        if selected is not None:
+            break
+        time.sleep(0.1)
+    if selected is None:
+        raise RuntimeProbeError(
+            "client B could not acquire an aligned, native-camera-aimable "
+            "enemy for the isolated Water cast"
+        )
+
+    network_actor_id = int(selected["networkActorId"])
+    if not client_pipe.reset_local_cast_observation(network_actor_id):
+        raise RuntimeProbeError(
+            "client B could not arm the native Water cast observation"
+        )
+    x, y = selected["screenFraction"]
+    action = {
+        "timeUtcNanoseconds": time.time_ns(),
+        "screenFraction": [x, y],
+        "result": _click(source_root, peer, x, y, 90),
+        "physicalInputCount": 1,
+    }
+
+    host_after: dict[str, Any] | None = None
+    client_after: dict[str, Any] | None = None
+    host_hp_after = selected["hostHpBefore"]
+    damage_deadline = min(deadline, time.monotonic() + 15.0)
+    while time.monotonic() < damage_deadline:
+        host_after = host_pipe.state()
+        client_after = client_pipe.state()
+        current = next(
+            (
+                enemy
+                for enemy in host_after["nativeEnemies"]
+                if int(enemy["network_id"]) == network_actor_id
+            ),
+            None,
+        )
+        host_hp_after = (
+            0.0
+            if current is None or current["dead"]
+            else float(current["hp"])
+        )
+        if host_hp_after < float(selected["hostHpBefore"]) - 0.001:
+            break
+        time.sleep(0.08)
+    else:
+        raise RuntimeProbeError(
+            "the isolated client Water input produced no authoritative host "
+            f"damage for enemy {network_actor_id}"
+        )
+
+    # Let the final contact/claim generated by the physical key-up drain
+    # before consuming the one-shot observation.
+    time.sleep(0.25)
+    observation = client_pipe.take_local_cast_observation(network_actor_id)
+    host_after = host_pipe.state()
+    current = next(
+        (
+            enemy
+            for enemy in host_after["nativeEnemies"]
+            if int(enemy["network_id"]) == network_actor_id
+        ),
+        None,
+    )
+    host_hp_after = (
+        0.0
+        if current is None or current["dead"]
+        else float(current["hp"])
+    )
+    convergence_deadline = time.monotonic() + 3.0
+    while True:
+        client_after = client_pipe.state()
+        client_current = next(
+            (
+                enemy
+                for enemy in client_after["replicatedEnemies"]
+                if int(enemy["network_id"]) == network_actor_id
+            ),
+            None,
+        )
+        client_hp_after = (
+            0.0
+            if client_current is None or client_current["dead"]
+            else float(client_current["hp"])
+        )
+        if math.isclose(
+            client_hp_after,
+            host_hp_after,
+            rel_tol=0.0,
+            abs_tol=0.0005,
+        ):
+            break
+        if time.monotonic() >= convergence_deadline:
+            break
+        time.sleep(0.08)
+    return {
+        **selected,
+        "hostHpAfter": host_hp_after,
+        "hostDamage": float(selected["hostHpBefore"]) - host_hp_after,
+        "clientAfter": client_after,
+        "hostAfter": host_after,
+        "observation": observation,
+        "action": action,
+    }
+
+
+def effective_wave_index(state: dict[str, Any]) -> int:
+    return max(
+        int(state["wave"]["index"]),
+        int(state["combat"]["waveIndex"]),
+        int(state["world"]["waveIndex"]),
+    )
+
+
+def drive_combat_to_wave_with_real_input(
+    source_root: Path,
+    peer: WindowsPeer,
+    client_pipe: LuaPipe,
+    host_pipe: LuaPipe,
+    *,
+    target_wave: int,
+    timeout: float,
+    sample: Callable[[str], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if target_wave < 2:
+        raise RuntimeProbeError("combat wave target must be at least wave 2")
+    deadline = time.monotonic() + timeout
+    actions: list[dict[str, Any]] = []
+    last: dict[str, Any] = {}
+    idle_samples = 0
+    while time.monotonic() < deadline:
+        host_state = host_pipe.state()
+        client_state = client_pipe.state()
+        last = {"host": host_state, "clientB": client_state}
+        if sample is not None:
+            sample("wave-clear")
+        host_wave = effective_wave_index(host_state)
+        client_wave = effective_wave_index(client_state)
+        if host_wave >= target_wave and client_wave >= target_wave:
+            return {
+                "targetWave": target_wave,
+                "hostWave": host_wave,
+                "clientBWave": client_wave,
+                "actions": actions,
+                "completion": last,
+            }
+        for role, state in (
+            ("host", host_state),
+            ("client B", client_state),
+        ):
+            if (
+                state["scene"]["name"] != "testrun"
+                or not state["player"]["valid"]
+                or float(state["player"]["hp"]) <= 0.0
+            ):
+                raise RuntimeProbeError(
+                    f"{role} stopped being a living testrun participant "
+                    f"before wave {target_wave}: {state['player']}"
+                )
+
+        live_enemies = [
+            enemy
+            for enemy in client_state["replicatedEnemies"]
+            if not enemy["dead"] and float(enemy["hp"]) > 0
+        ]
+        targets = damage_click_targets(
+            live_enemies,
+            client_state["player"],
+            client_state["viewport"],
+            client_state["camera"],
+        )
+        if not targets:
+            idle_samples += 1
+            time.sleep(0.1)
+            continue
+        idle_samples = 0
+        x, y = targets[len(actions) % len(targets)]
+        actions.append(
+            {
+                "timeUtcNanoseconds": time.time_ns(),
+                "screenFraction": [x, y],
+                "result": _click(source_root, peer, x, y, 180),
+                "hostWave": host_wave,
+                "clientBWave": client_wave,
+                "liveEnemyCount": len(live_enemies),
+            }
+        )
+        time.sleep(0.06)
+    raise RuntimeProbeError(
+        f"client B physical Water input did not reach wave {target_wave}; "
+        f"actions={len(actions)} idleSamples={idle_samples} "
+        f"last={json.dumps(last, sort_keys=True)}"
     )

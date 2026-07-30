@@ -61,6 +61,11 @@ void ObserveLocalPlayerReplicatedRunEnemyDamageEventInternal(
         return;
     }
 
+    RecordLocalEnemyDamageContactObservationInternal(
+        network_actor_id,
+        damage,
+        associated_skill_id);
+
     const auto authoritative_hp =
         ClampEnemyHp(baseline->second, max_hp);
     auto& observed =

@@ -193,6 +193,7 @@ def test_wave_respawn_applies_same_actor_contract_to_synthetic_participants() ->
         "same-actor respawn primitive",
         (
             "struct WizardRespawnTarget",
+            "current_hp",
             "TryRespawnWizardActorAt(",
             "TryRespawnLocalPlayerAt(",
             "TryRespawnHostOwnedSyntheticParticipantsAt(",
@@ -204,8 +205,37 @@ def test_wave_respawn_applies_same_actor_contract_to_synthetic_participants() ->
             "RebindSceneActorCell(",
             "PublishParticipantGameplaySnapshot(",
             "multiplayer::StopBot(binding.bot_id)",
+            "living participant",
         ),
     )
+    hp_recheck = respawn.find(
+        "target.progression_address,\n"
+        "            kProgressionHpOffset,"
+    )
+    first_respawn_mutation = min(
+        position
+        for position in (
+            respawn.find("ClearWizardActorGameplayCastState("),
+            respawn.find("ClearQueuedGameplayMouseLeft();"),
+            respawn.find("multiplayer::StopBot(binding.bot_id)"),
+        )
+        if position >= 0
+    )
+    if not 0 <= hp_recheck < first_respawn_mutation:
+        raise StaticReTestFailure(
+            "same-actor respawn does not re-read terminal HP before any "
+            "input, cast, movement, resource, or position mutation"
+        )
+    for forbidden in (
+        "The completed-wave command intentionally applies the same "
+        "resource and spawn restoration to every party member",
+        "every party member, not just members observed dead",
+    ):
+        if forbidden in design:
+            raise StaticReTestFailure(
+                "synthetic respawn design still authorizes living-participant "
+                "mutation"
+            )
     stop_intent = respawn.find(
         "multiplayer::StopBot(binding.bot_id)"
     )
@@ -300,8 +330,8 @@ def test_wave_respawn_applies_same_actor_contract_to_synthetic_participants() ->
         ),
     )
     return (
-        "each host wave-respawn epoch restores every Lua participant "
-        "through the same idempotent same-actor lifecycle as slot 0"
+        "each host wave-respawn epoch leaves living Lua participants untouched "
+        "and restores dead ones through the idempotent same-actor lifecycle"
     )
 
 

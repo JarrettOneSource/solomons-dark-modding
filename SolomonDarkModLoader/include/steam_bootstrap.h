@@ -122,6 +122,15 @@ bool SteamSendNetworkMessage(
     std::size_t size,
     SteamNetworkSendMode mode,
     std::int32_t* result_code = nullptr);
+bool SteamSendNetworkMessageOnChannel(
+    std::uint64_t remote_steam_id,
+    const void* data,
+    std::size_t size,
+    SteamNetworkSendMode mode,
+    std::int32_t channel,
+    std::int32_t* result_code = nullptr);
+constexpr std::int32_t kSteamSessionAndBulkChannel = 0;
+constexpr std::int32_t kSteamGameplayControlChannel = 1;
 std::vector<SteamNetworkMessage> SteamReceiveNetworkMessages(
     std::int32_t channel,
     std::int32_t max_messages);

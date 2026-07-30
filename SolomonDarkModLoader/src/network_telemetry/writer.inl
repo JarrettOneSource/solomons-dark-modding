@@ -82,7 +82,7 @@ void EnqueueEvent(
     EnqueueLine(std::move(line));
 }
 
-void WriterMain() {
+unsigned __stdcall WriterMain(void*) {
     auto& state = g_network_telemetry;
     for (;;) {
         std::deque<std::string> lines;
@@ -110,4 +110,5 @@ void WriterMain() {
             break;
         }
     }
+    return 0;
 }

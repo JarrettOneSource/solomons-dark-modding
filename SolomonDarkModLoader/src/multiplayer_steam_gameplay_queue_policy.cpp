@@ -46,6 +46,14 @@ bool SteamGameplayOutboundQueuePolicy::IsReliable(
     return mode == SteamNetworkSendMode::ReliableNoNagle;
 }
 
+bool SteamGameplayOutboundQueuePolicy::IsControlPacket(
+    const OutboundPacket& packet) {
+    return
+        IsReliable(packet.mode) &&
+        packet.identity.kind ==
+            static_cast<std::uint16_t>(PacketKind::State);
+}
+
 #include "multiplayer_steam_gameplay_packet_identity.inl"
 
 bool SteamGameplayOutboundQueuePolicy::Supersedes(
@@ -321,6 +329,9 @@ bool SteamGameplayOutboundQueuePolicy::Queue(
     packet.remote_steam_id = remote_steam_id;
     packet.mode = mode;
     packet.identity = DescribePacket(data, size, mode);
+    if (IsControlPacket(packet)) {
+        packet.channel = kSteamGameplayControlChannel;
+    }
     const auto* begin = static_cast<const std::uint8_t*>(data);
     packet.payload.assign(begin, begin + size);
     if (IsAcceptedLogicalEvent(packet) ||
@@ -374,8 +385,13 @@ bool SteamGameplayOutboundQueuePolicy::
     RouteCanAcceptGameplay(
         std::uint64_t remote_steam_id,
         std::uint64_t now_ms,
+        bool control_packet,
         const SteamGameplayRouteStatusFunction&
-            route_status) {
+            route_status,
+        bool* sent_under_pressure) {
+    if (sent_under_pressure != nullptr) {
+        *sent_under_pressure = false;
+    }
     if (!route_status) {
         EnterBackpressure(remote_steam_id, now_ms);
         return false;
@@ -389,10 +405,26 @@ bool SteamGameplayOutboundQueuePolicy::
     const auto threshold = already_limited
         ? kQueueTimeLowWaterMicroseconds
         : kQueueTimeHighWaterMicroseconds;
-    if (!status.connected ||
-        status.queue_time_microseconds >= threshold) {
+    if (!status.connected) {
         EnterBackpressure(remote_steam_id, now_ms);
         return false;
+    }
+    if (status.queue_time_microseconds >= threshold) {
+        EnterBackpressure(remote_steam_id, now_ms);
+        auto& active_pressure =
+            backpressure_by_peer_[remote_steam_id];
+        if (!control_packet ||
+            (active_pressure.last_control_probe_ms != 0 &&
+             now_ms <
+                 active_pressure.last_control_probe_ms +
+                     kLimitRetryIntervalMs)) {
+            return false;
+        }
+        active_pressure.last_control_probe_ms = now_ms;
+        if (sent_under_pressure != nullptr) {
+            *sent_under_pressure = true;
+        }
+        return true;
     }
     if (already_limited &&
         now_ms < pressure->second.retry_after_ms) {
@@ -422,7 +454,7 @@ SteamGameplayOutboundQueuePolicy::Service(
     const SteamGameplaySendFunction& send,
     const SteamGameplayRouteStatusFunction&
         route_status) {
-    std::unordered_set<std::uint64_t> blocked_peers;
+    std::unordered_set<std::uint64_t> result_blocked_peers;
     const auto packets_at_start = packets_.size();
     std::size_t examined = 0;
     std::size_t attempts = 0;
@@ -435,15 +467,20 @@ SteamGameplayOutboundQueuePolicy::Service(
         packets_.pop_front();
         examined += 1;
 
-        if (blocked_peers.find(packet.remote_steam_id) !=
-                blocked_peers.end() ||
-            !RouteCanAcceptGameplay(
+        if (result_blocked_peers.find(packet.remote_steam_id) !=
+            result_blocked_peers.end()) {
+            deferred.push_back(std::move(packet));
+            continue;
+        }
+
+        bool sent_under_pressure = false;
+        if (!RouteCanAcceptGameplay(
                 packet.remote_steam_id,
                 now_ms,
-                route_status)) {
+                IsControlPacket(packet),
+                route_status,
+                &sent_under_pressure)) {
             deferred.push_back(std::move(packet));
-            blocked_peers.insert(
-                packet.remote_steam_id);
             continue;
         }
 
@@ -455,10 +492,14 @@ SteamGameplayOutboundQueuePolicy::Service(
                 packet.payload.data(),
                 packet.payload.size(),
                 packet.mode,
+                packet.channel,
                 &result_code);
         attempts += 1;
         if (sent) {
             stats_.packets_sent += 1;
+            if (sent_under_pressure) {
+                stats_.control_packets_sent_under_pressure += 1;
+            }
             RememberAcceptedLogicalEvent(packet);
             continue;
         }
@@ -489,7 +530,7 @@ SteamGameplayOutboundQueuePolicy::Service(
             peer_pressure.dropped_disposable_packets += 1;
             stats_.dropped_outbound_packets += 1;
         }
-        blocked_peers.insert(limited_peer);
+        result_blocked_peers.insert(limited_peer);
     }
 
     deferred.insert(

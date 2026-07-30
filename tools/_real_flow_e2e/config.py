@@ -66,6 +66,12 @@ def _require_int(
     return value
 
 
+def _require_bool(value: Any, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(f"{label} must be a boolean")
+    return value
+
+
 def _optional_path(
     value: Any,
     label: str,
@@ -366,6 +372,11 @@ class HarnessConfig:
     expected_source_sha: str
     host: PeerConfig
     client: PeerConfig
+    solomon_interactor: Literal["host", "client"] = "host"
+    verify_through_wave: int = 1
+    require_water_contact_observation: bool = False
+    expected_water_contact_damage: float = 0.025
+    wave_boundary_max_displacement: float = 64.0
     timeout_seconds: float = 120.0
     sampling_seconds: float = 0.25
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -413,6 +424,14 @@ class HarnessConfig:
             raise ConfigError(
                 "directoryUrl must use HTTPS or an explicit loopback HTTP URL"
             )
+        solomon_interactor = _require_string(
+            row.get("solomonInteractor", "host"),
+            "solomonInteractor",
+        ).lower()
+        if solomon_interactor not in {"host", "client"}:
+            raise ConfigError(
+                "solomonInteractor must be host or client"
+            )
         config = HarnessConfig(
             source_path=source_path,
             run_name=run_name,
@@ -454,6 +473,23 @@ class HarnessConfig:
                 "client",
                 role="client",
             ),
+            solomon_interactor=solomon_interactor,
+            verify_through_wave=_require_int(
+                row.get("verifyThroughWave", 1),
+                "verifyThroughWave",
+                minimum=1,
+                maximum=10,
+            ),
+            require_water_contact_observation=_require_bool(
+                row.get("requireWaterContactObservation", False),
+                "requireWaterContactObservation",
+            ),
+            expected_water_contact_damage=float(
+                row.get("expectedWaterContactDamage", 0.025)
+            ),
+            wave_boundary_max_displacement=float(
+                row.get("waveBoundaryMaxDisplacement", 64.0)
+            ),
             timeout_seconds=float(row.get("timeoutSeconds", 120.0)),
             sampling_seconds=float(row.get("samplingSeconds", 0.25)),
             metadata=_require_object(row.get("metadata", {}), "metadata"),
@@ -471,6 +507,22 @@ class HarnessConfig:
         if not 0.05 <= self.sampling_seconds <= 2.0:
             raise ConfigError(
                 "samplingSeconds must be between 0.05 and 2.0"
+            )
+        if not 0.0 < self.expected_water_contact_damage <= 10.0:
+            raise ConfigError(
+                "expectedWaterContactDamage must be greater than zero and "
+                "at most 10"
+            )
+        if (
+            self.require_water_contact_observation
+            and self.client.loadout_element != "water"
+        ):
+            raise ConfigError(
+                "requireWaterContactObservation requires client Water"
+            )
+        if not 1.0 <= self.wave_boundary_max_displacement <= 500.0:
+            raise ConfigError(
+                "waveBoundaryMaxDisplacement must be between 1 and 500"
             )
         for path, label in (
             (self.source_root, "sourceRoot"),
@@ -532,9 +584,9 @@ class HarnessConfig:
                 self.client.local_port,
                 self.client.remote_port,
             }
-            if ports != {50711, 50712}:
+            if ports != {50911, 50912}:
                 raise ConfigError(
-                    "loopback_windows is reserved to ports 50711/50712"
+                    "loopback_windows is reserved to ports 50911/50912"
                 )
             if (
                 self.host.remote_host not in {"127.0.0.1", "localhost"}
@@ -559,11 +611,11 @@ class HarnessConfig:
                 )
             if (
                 self.client.ssh.stage_root
-                != "/root/sd-netrepro-20260729"
+                != "/root/sd-fieldbreak25-20260730"
             ):
                 raise ConfigError(
                     "wan_udp_nfo is confined to "
-                    "/root/sd-netrepro-20260729"
+                    "/root/sd-fieldbreak25-20260730"
                 )
             if self.proton_archive is None:
                 raise ConfigError(
@@ -576,18 +628,18 @@ class HarnessConfig:
                 self.client.local_port,
                 self.client.remote_port,
             }
-            if ports != {51611, 51612}:
+            if ports != {50911, 50912}:
                 raise ConfigError(
-                    "wan_udp_nfo is reserved to ports 51611/51612"
+                    "wan_udp_nfo is reserved to ports 50911/50912"
                 )
             if (
-                self.host.local_port != 51611
-                or self.host.remote_port != 51612
-                or self.client.local_port != 51612
-                or self.client.remote_port != 51611
+                self.host.local_port != 50911
+                or self.host.remote_port != 50912
+                or self.client.local_port != 50912
+                or self.client.remote_port != 50911
             ):
                 raise ConfigError(
-                    "wan_udp_nfo requires host 51611 and client B 51612"
+                    "wan_udp_nfo requires host 50911 and client B 50912"
                 )
         if self.topology == "steam_windows_ws20":
             if self.host.platform != LOCAL_WINDOWS:
@@ -681,6 +733,17 @@ class HarnessConfig:
             "directoryUrl": self.directory_url,
             "privacy": self.privacy,
             "expectedSourceSha": self.expected_source_sha,
+            "solomonInteractor": self.solomon_interactor,
+            "verifyThroughWave": self.verify_through_wave,
+            "requireWaterContactObservation": (
+                self.require_water_contact_observation
+            ),
+            "expectedWaterContactDamage": (
+                self.expected_water_contact_damage
+            ),
+            "waveBoundaryMaxDisplacement": (
+                self.wave_boundary_max_displacement
+            ),
             "timeoutSeconds": self.timeout_seconds,
             "samplingSeconds": self.sampling_seconds,
             "host": peer_value(self.host),

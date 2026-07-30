@@ -11,6 +11,10 @@
 
 namespace sdmod::multiplayer {
 
+static_assert(
+    kSteamGameplayControlChannel != kSteamSessionAndBulkChannel,
+    "gameplay control traffic requires a channel independent of bulk");
+
 struct SteamGameplayQueueStats {
     std::uint64_t packets_sent = 0;
     std::uint64_t send_failures = 0;
@@ -20,6 +24,7 @@ struct SteamGameplayQueueStats {
     std::uint64_t sustained_backpressure_reports = 0;
     std::uint64_t dropped_outbound_packets = 0;
     std::uint64_t superseded_outbound_packets = 0;
+    std::uint64_t control_packets_sent_under_pressure = 0;
     std::uint64_t dropped_inbound_packets = 0;
     std::size_t queued_outbound_packets = 0;
     std::size_t congested_peers = 0;
@@ -48,6 +53,7 @@ using SteamGameplaySendFunction = std::function<bool(
     const void* data,
     std::size_t size,
     SteamNetworkSendMode mode,
+    std::int32_t channel,
     std::int32_t* result_code)>;
 
 using SteamGameplayRouteStatusFunction = std::function<
@@ -107,6 +113,8 @@ private:
         SteamNetworkSendMode mode =
             SteamNetworkSendMode::UnreliableNoNagle;
         PacketIdentity identity;
+        std::int32_t channel =
+            kSteamSessionAndBulkChannel;
         std::vector<std::uint8_t> payload;
     };
 
@@ -120,10 +128,13 @@ private:
         bool sustained_reported = false;
         std::uint64_t first_backpressure_ms = 0;
         std::uint64_t retry_after_ms = 0;
+        std::uint64_t last_control_probe_ms = 0;
         std::uint64_t dropped_disposable_packets = 0;
     };
 
     static bool IsReliable(SteamNetworkSendMode mode);
+    static bool IsControlPacket(
+        const OutboundPacket& packet);
     static PacketIdentity DescribePacket(
         const void* data,
         std::size_t size,
@@ -152,7 +163,9 @@ private:
     bool RouteCanAcceptGameplay(
         std::uint64_t remote_steam_id,
         std::uint64_t now_ms,
-        const SteamGameplayRouteStatusFunction& route_status);
+        bool control_packet,
+        const SteamGameplayRouteStatusFunction& route_status,
+        bool* sent_under_pressure);
     std::size_t CountQueuedReliablePackets(
         std::uint64_t remote_steam_id) const;
     void RefreshGauges();

@@ -92,6 +92,7 @@ bool ReliablePacketsSurviveTemporaryLimitExceeded() {
             const void*,
             std::size_t,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             attempts += 1;
             if (attempts == 1) {
@@ -139,11 +140,8 @@ bool ReliablePacketsSurviveTemporaryLimitExceeded() {
 
 bool ProactiveRoutePacingKeepsOnlyFreshState() {
     SteamGameplayOutboundQueuePolicy queue;
-    StatePacket first{};
-    first.header = MakePacketHeader(PacketKind::State, 1);
-    first.participant_id = 101;
-    StatePacket latest = first;
-    latest.header.sequence = 2;
+    auto first = WorldFragment(1, 100, 0, 1);
+    auto latest = WorldFragment(2, 101, 0, 1);
 
     if (!queue.Queue(
             kLimitedPeer,
@@ -155,7 +153,7 @@ bool ProactiveRoutePacingKeepsOnlyFreshState() {
 
     std::int64_t route_queue_time = 300'000;
     std::size_t attempts = 0;
-    std::uint32_t delivered_sequence = 0;
+    std::uint32_t delivered_snapshot = 0;
     const SteamGameplayRouteStatusFunction route =
         [&](std::uint64_t) {
             return ConnectedRoute(route_queue_time);
@@ -165,12 +163,13 @@ bool ProactiveRoutePacingKeepsOnlyFreshState() {
             const void* data,
             std::size_t size,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             attempts += 1;
-            StatePacket packet{};
+            WorldSnapshotPacket packet{};
             if (size == sizeof(packet)) {
                 std::memcpy(&packet, data, sizeof(packet));
-                delivered_sequence = packet.header.sequence;
+                delivered_snapshot = packet.snapshot_id;
             }
             *result_code = 1;
             return true;
@@ -189,10 +188,10 @@ bool ProactiveRoutePacingKeepsOnlyFreshState() {
                 &latest,
                 sizeof(latest),
                 SteamNetworkSendMode::ReliableNoNagle),
-            "fresh state was rejected during route pressure") ||
+            "fresh bulk state was rejected during route pressure") ||
         !Require(
             queue.SnapshotStats().queued_outbound_packets == 1,
-            "superseded state accumulated in the app queue")) {
+            "superseded bulk state accumulated in the app queue")) {
         return false;
     }
 
@@ -208,18 +207,139 @@ bool ProactiveRoutePacingKeepsOnlyFreshState() {
     queue.Service(201, send, route);
     const auto stats = queue.SnapshotStats();
     return Require(
-               attempts == 1 && delivered_sequence == 2,
-               "route recovery did not send only the freshest state") &&
+               attempts == 1 && delivered_snapshot == 101,
+               "route recovery did not send only the freshest bulk state") &&
         Require(
             stats.limit_exceeded_failures == 0,
             "proactive pacing waited for a result-25 rejection") &&
         Require(
             stats.superseded_outbound_packets == 1,
-            "state supersession accounting is wrong") &&
+            "bulk-state supersession accounting is wrong") &&
         Require(
             stats.queued_outbound_packets == 0 &&
                 stats.congested_peers == 0,
             "route recovery did not clear queue pressure");
+}
+
+bool CurrentControlBypassesBulkRoutePressure() {
+    SteamGameplayOutboundQueuePolicy queue;
+    const auto bulk = WorldFragment(1, 100, 0, 1);
+    StatePacket first_control{};
+    first_control.header =
+        MakePacketHeader(PacketKind::State, 2);
+    first_control.participant_id = 101;
+    if (!queue.Queue(
+            kLimitedPeer,
+            &bulk,
+            sizeof(bulk),
+            SteamNetworkSendMode::ReliableNoNagle) ||
+        !queue.Queue(
+            kLimitedPeer,
+            &first_control,
+            sizeof(first_control),
+            SteamNetworkSendMode::ReliableNoNagle)) {
+        return false;
+    }
+
+    std::vector<std::pair<PacketKind, std::int32_t>>
+        delivered;
+    std::vector<std::uint32_t> state_sequences;
+    const SteamGameplaySendFunction send =
+        [&](std::uint64_t,
+            const void* data,
+            std::size_t size,
+            SteamNetworkSendMode,
+            std::int32_t channel,
+            std::int32_t* result_code) {
+            PacketHeader header{};
+            if (size >= sizeof(header)) {
+                std::memcpy(&header, data, sizeof(header));
+                delivered.emplace_back(
+                    static_cast<PacketKind>(header.kind),
+                    channel);
+                if (static_cast<PacketKind>(header.kind) ==
+                    PacketKind::State) {
+                    state_sequences.push_back(header.sequence);
+                }
+            }
+            *result_code = 1;
+            return true;
+        };
+    const auto pressured_route =
+        [](std::uint64_t) {
+            return ConnectedRoute(300'000);
+        };
+
+    queue.Service(100, send, pressured_route);
+    if (!Require(
+            delivered ==
+                std::vector<
+                    std::pair<PacketKind, std::int32_t>>{
+                    {
+                        PacketKind::State,
+                        kSteamGameplayControlChannel,
+                    },
+                },
+            "current State control did not bypass retained bulk on its "
+            "dedicated channel") ||
+        !Require(
+            queue.SnapshotStats().queued_outbound_packets == 1,
+            "bulk packet was sent or lost during route pressure") ||
+        !Require(
+            queue.SnapshotStats()
+                    .control_packets_sent_under_pressure == 1,
+            "control-under-pressure send was not accounted")) {
+        return false;
+    }
+
+    StatePacket queued_control = first_control;
+    queued_control.header.sequence = 3;
+    queue.Queue(
+        kLimitedPeer,
+        &queued_control,
+        sizeof(queued_control),
+        SteamNetworkSendMode::ReliableNoNagle);
+    queue.Service(200, send, pressured_route);
+    queued_control.header.sequence = 4;
+    queue.Queue(
+        kLimitedPeer,
+        &queued_control,
+        sizeof(queued_control),
+        SteamNetworkSendMode::ReliableNoNagle);
+    queue.Service(349, send, pressured_route);
+    if (!Require(
+            state_sequences ==
+                std::vector<std::uint32_t>{2},
+            "control probe interval was bypassed")) {
+        return false;
+    }
+    queue.Service(350, send, pressured_route);
+    if (!Require(
+            state_sequences ==
+                std::vector<std::uint32_t>{2, 4},
+            "bounded control probe did not send only the freshest State") ||
+        !Require(
+            queue.SnapshotStats().queued_outbound_packets == 1,
+            "fresh control did not leave only paced bulk queued")) {
+        return false;
+    }
+
+    queue.Service(400, send, HealthyRoute());
+    const auto stats = queue.SnapshotStats();
+    return Require(
+               delivered.back() ==
+                   std::pair<PacketKind, std::int32_t>{
+                       PacketKind::WorldSnapshot,
+                       kSteamSessionAndBulkChannel,
+                   },
+               "bulk recovery used the control channel") &&
+        Require(
+            stats.queued_outbound_packets == 0 &&
+                stats.congested_peers == 0,
+            "healthy route did not drain paced bulk") &&
+        Require(
+            stats.control_packets_sent_under_pressure == 2,
+            "bounded control accounting is wrong");
 }
 
 bool RoutePressureDoesNotBlockAnotherPeer() {
@@ -257,6 +377,7 @@ bool RoutePressureDoesNotBlockAnotherPeer() {
             const void*,
             std::size_t,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             sends[peer] += 1;
             *result_code = 1;
@@ -332,6 +453,7 @@ bool LatestWorldGenerationSupersedesStaleFragments() {
             const void* data,
             std::size_t size,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             WorldSnapshotPacket sent{};
             if (size == sizeof(sent)) {
@@ -409,6 +531,7 @@ bool CapacityEvictsWholeReplaceableGeneration() {
             const void* data,
             std::size_t size,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             if (size >= sizeof(PacketHeader)) {
                 PacketHeader header{};
@@ -464,6 +587,7 @@ bool ReliableRecoveryRetriesAreDeduplicatedAfterAcceptance() {
             const void* data,
             std::size_t size,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             ParticipantHitFeedbackPacket packet{};
             if (size == sizeof(packet)) {
@@ -534,6 +658,7 @@ bool OrderedReliablePacketsRemainOrdered() {
             const void* data,
             std::size_t,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             PacketHeader header{};
             std::memcpy(&header, data, sizeof(header));
@@ -569,6 +694,7 @@ bool ResetPeerDropsOnlyTheTargetPeer() {
             const void*,
             std::size_t,
             SteamNetworkSendMode,
+            std::int32_t,
             std::int32_t* result_code) {
             delivered.push_back(peer);
             *result_code = 1;
@@ -590,6 +716,7 @@ int main() {
     using namespace sdmod::multiplayer;
     if (!ReliablePacketsSurviveTemporaryLimitExceeded() ||
         !ProactiveRoutePacingKeepsOnlyFreshState() ||
+        !CurrentControlBypassesBulkRoutePressure() ||
         !RoutePressureDoesNotBlockAnotherPeer() ||
         !LatestWorldGenerationSupersedesStaleFragments() ||
         !CapacityEvictsWholeReplaceableGeneration() ||

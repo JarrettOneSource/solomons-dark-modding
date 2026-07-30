@@ -1,6 +1,7 @@
 #include "network_telemetry.h"
 
 #include <Windows.h>
+#include <process.h>
 
 #include <algorithm>
 #include <atomic>
@@ -16,7 +17,6 @@
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <utility>
 
 namespace sdmod {
@@ -51,7 +51,7 @@ struct NetworkTelemetryState {
     std::deque<std::string> queued_lines;
     bool stopping = false;
     std::uint64_t dropped_lines = 0;
-    std::thread writer_thread;
+    HANDLE writer_thread = nullptr;
     std::ofstream stream;
 
     std::mutex receive_mutex;
@@ -198,14 +198,21 @@ void InitializeNetworkTelemetry(
         state.present = PresentState{};
     }
 
-    try {
-        state.enabled.store(true, std::memory_order_release);
-        state.writer_thread = std::thread(WriterMain);
-    } catch (...) {
+    state.enabled.store(true, std::memory_order_release);
+    const auto writer_thread = _beginthreadex(
+        nullptr,
+        0,
+        &WriterMain,
+        nullptr,
+        0,
+        nullptr);
+    if (writer_thread == 0) {
         state.enabled.store(false, std::memory_order_release);
         state.stream.close();
         return;
     }
+    state.writer_thread =
+        reinterpret_cast<HANDLE>(writer_thread);
 
     std::ostringstream fields;
     fields << ",\"process_id\":" << GetCurrentProcessId()
@@ -237,8 +244,10 @@ void ShutdownNetworkTelemetry() {
         state.stopping = true;
     }
     state.queue_changed.notify_one();
-    if (state.writer_thread.joinable()) {
-        state.writer_thread.join();
+    if (state.writer_thread != nullptr) {
+        WaitForSingleObject(state.writer_thread, INFINITE);
+        CloseHandle(state.writer_thread);
+        state.writer_thread = nullptr;
     }
     state.stream.flush();
     state.stream.close();

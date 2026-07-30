@@ -142,7 +142,16 @@ void HandleSessionKeepalive(
 
 void PumpNetworkMessages(std::uint64_t now_ms) {
     std::unordered_set<std::uint64_t> handled_session_hello_senders;
-    for (auto& message : SteamReceiveNetworkMessages(0, kReceiveBatchSize)) {
+    auto messages = SteamReceiveNetworkMessages(
+        kSteamSessionAndBulkChannel,
+        kReceiveBatchSize);
+    auto control_messages = SteamReceiveNetworkMessages(
+        kSteamGameplayControlChannel,
+        kReceiveBatchSize);
+    for (auto& message : control_messages) {
+        messages.push_back(std::move(message));
+    }
+    for (auto& message : messages) {
         if (!IsLobbyMember(message.sender_steam_id) ||
             message.payload.size() < sizeof(PacketHeader)) {
             SteamCloseNetworkSession(message.sender_steam_id);

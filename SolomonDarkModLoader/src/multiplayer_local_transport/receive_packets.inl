@@ -38,7 +38,7 @@ std::size_t g_local_udp_ingress_bytes = 0;
 std::uint64_t g_local_udp_ingress_dropped_packets = 0;
 std::uint64_t g_local_udp_ingress_dropped_bytes = 0;
 std::atomic<bool> g_local_udp_ingress_stop_requested{false};
-std::thread g_local_udp_ingress_thread;
+HANDLE g_local_udp_ingress_thread = nullptr;
 LocalUdpFragmentReassembler g_local_udp_fragment_reassembler;
 
 PacketHeader ReadTelemetryPacketHeader(
@@ -297,7 +297,9 @@ void ProcessLocalUdpDatagram(
         true);
 }
 
-void LocalUdpIngressWorkerMain(SOCKET socket_handle) {
+unsigned __stdcall LocalUdpIngressWorkerMain(void* parameter) {
+    const auto socket_handle =
+        reinterpret_cast<SOCKET>(parameter);
     std::array<
         char,
         kLocalUdpMaximumLogicalPacketBytes> datagram{};
@@ -361,15 +363,16 @@ void LocalUdpIngressWorkerMain(SOCKET socket_handle) {
                 datagram.data(),
                 static_cast<std::size_t>(received),
                 from,
-                NetworkTelemetryNowMicroseconds());
+            NetworkTelemetryNowMicroseconds());
         }
     }
+    return 0;
 }
 
 bool StartLocalUdpIngressWorker(
     SOCKET socket_handle) {
     if (socket_handle == INVALID_SOCKET ||
-        g_local_udp_ingress_thread.joinable()) {
+        g_local_udp_ingress_thread != nullptr) {
         return false;
     }
     {
@@ -384,16 +387,21 @@ bool StartLocalUdpIngressWorker(
     g_local_udp_ingress_stop_requested.store(
         false,
         std::memory_order_release);
-    try {
-        g_local_udp_ingress_thread = std::thread(
-            LocalUdpIngressWorkerMain,
-            socket_handle);
-    } catch (...) {
+    const auto ingress_thread = _beginthreadex(
+        nullptr,
+        0,
+        &LocalUdpIngressWorkerMain,
+        reinterpret_cast<void*>(socket_handle),
+        0,
+        nullptr);
+    if (ingress_thread == 0) {
         g_local_udp_ingress_stop_requested.store(
             true,
             std::memory_order_release);
         return false;
     }
+    g_local_udp_ingress_thread =
+        reinterpret_cast<HANDLE>(ingress_thread);
     return true;
 }
 
@@ -401,8 +409,12 @@ void StopLocalUdpIngressWorker() {
     g_local_udp_ingress_stop_requested.store(
         true,
         std::memory_order_release);
-    if (g_local_udp_ingress_thread.joinable()) {
-        g_local_udp_ingress_thread.join();
+    if (g_local_udp_ingress_thread != nullptr) {
+        WaitForSingleObject(
+            g_local_udp_ingress_thread,
+            INFINITE);
+        CloseHandle(g_local_udp_ingress_thread);
+        g_local_udp_ingress_thread = nullptr;
     }
     g_local_udp_fragment_reassembler.Clear();
     std::lock_guard<std::mutex> lock(

@@ -190,6 +190,7 @@ bool HoldLocalPlayerMultiplayerDeathPresentation(
 bool TryRespawnLocalPlayerAt(
     float world_x,
     float world_y,
+    bool* did_respawn,
     std::string* error_message);
 bool TryRespawnHostOwnedSyntheticParticipantsAt(
     std::uint32_t respawn_epoch,

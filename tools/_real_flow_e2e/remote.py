@@ -451,17 +451,20 @@ class RemoteProtonPeer:
         harness: HarnessConfig,
         workspace: Path,
     ) -> dict[str, Any]:
-        if self.connection.stage_root != "/root/sd-netrepro-20260729":
+        if (
+            self.connection.stage_root
+            != "/root/sd-fieldbreak25-20260730"
+        ):
             raise RemoteHarnessError(
                 "NFO preparation is confined to "
-                "/root/sd-netrepro-20260729"
+                "/root/sd-fieldbreak25-20260730"
             )
         if harness.proton_archive is None:
             raise RemoteHarnessError(
                 "NFO preparation requires a local Proton archive"
             )
         stage_probe = self.connection.run(
-            "if test -e /root/sd-netrepro-20260729; "
+            "if test -e /root/sd-fieldbreak25-20260730; "
             "then printf present; else printf absent; fi"
         ).strip()
         if stage_probe != "absent":
@@ -541,18 +544,19 @@ class RemoteProtonPeer:
         }
         self.connection.run(
             "install -d -m 700 "
-            "/root/sd-netrepro-20260729/incoming"
+            "/root/sd-fieldbreak25-20260730/incoming"
         )
         for name, path in upload_inputs.items():
             self.connection.scp_to(
                 path,
-                f"/root/sd-netrepro-20260729/incoming/{name}",
+                f"/root/sd-fieldbreak25-20260730/incoming/{name}",
             )
         output = self.connection.run(
             "chmod 700 "
-            "/root/sd-netrepro-20260729/incoming/Stage-RealFlowNfo.sh "
-            "&& /root/sd-netrepro-20260729/incoming/"
-            "Stage-RealFlowNfo.sh /root/sd-netrepro-20260729",
+            "/root/sd-fieldbreak25-20260730/incoming/"
+            "Stage-RealFlowNfo.sh "
+            "&& /root/sd-fieldbreak25-20260730/incoming/"
+            "Stage-RealFlowNfo.sh /root/sd-fieldbreak25-20260730",
             timeout=900,
         )
         if output.strip().splitlines()[-1:] != ["prepared"]:
@@ -568,13 +572,16 @@ class RemoteProtonPeer:
         }
 
     def delete_stage(self) -> dict[str, Any]:
-        if self.connection.stage_root != "/root/sd-netrepro-20260729":
+        if (
+            self.connection.stage_root
+            != "/root/sd-fieldbreak25-20260730"
+        ):
             raise RemoteHarnessError(
                 "refusing to delete an unexpected remote stage root"
             )
         helper_exists = self.connection.run(
             "if test -x "
-            "/root/sd-netrepro-20260729/tools/"
+            "/root/sd-fieldbreak25-20260730/tools/"
             "Run-RealFlowRemotePeer.sh; "
             "then printf yes; else printf no; fi"
         ).strip()
@@ -585,7 +592,7 @@ class RemoteProtonPeer:
         )
         ports = self.connection.run(
             "ss -H -lunp | "
-            "grep -E ':(51611|51612)[[:space:]]' || true"
+            "grep -E ':(50911|50912)[[:space:]]' || true"
         ).strip()
         path_processes = self.connection.run(
             "for proc in /proc/[0-9]*; do "
@@ -594,7 +601,7 @@ class RemoteProtonPeer:
             "exe=$(readlink -f \"$proc/exe\" 2>/dev/null || true); "
             "cwd=$(readlink -f \"$proc/cwd\" 2>/dev/null || true); "
             "case \"$exe $cwd\" in "
-            "*'/root/sd-netrepro-20260729'*) "
+            "*'/root/sd-fieldbreak25-20260730'*) "
             "printf '%s\\t%s\\t%s\\n' \"$pid\" \"$exe\" \"$cwd\";; "
             "esac; "
             "done"
@@ -606,8 +613,8 @@ class RemoteProtonPeer:
                 f"ports={ports!r}"
             )
         output = self.connection.run(
-            "rm -rf -- /root/sd-netrepro-20260729 "
-            "&& test ! -e /root/sd-netrepro-20260729 "
+            "rm -rf -- /root/sd-fieldbreak25-20260730 "
+            "&& test ! -e /root/sd-fieldbreak25-20260730 "
             "&& printf deleted"
         ).strip()
         if output != "deleted":
@@ -615,7 +622,7 @@ class RemoteProtonPeer:
                 f"remote stage deletion returned {output!r}"
             )
         return {
-            "stageRoot": "/root/sd-netrepro-20260729",
+            "stageRoot": "/root/sd-fieldbreak25-20260730",
             "deleted": True,
             "recoverable": False,
         }

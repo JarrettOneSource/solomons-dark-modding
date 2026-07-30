@@ -282,8 +282,8 @@ def run_wan_nfo(
     connection = RemoteConnection(config.client, config.source_root)
     remote = RemoteProtonPeer(config.client, connection)
     remote_before = connection.run(
-        "ss -H -lunp | grep -E ':(51611|51612)[[:space:]]' || true; "
-        "ps auxww | grep -F /root/sd-netrepro-20260729 | "
+        "ss -H -lunp | grep -E ':(50911|50912)[[:space:]]' || true; "
+        "ps auxww | grep -F /root/sd-fieldbreak25-20260730 | "
         "grep -v grep || true"
     )
     local_before = port_inventory(ps, {config.host.local_port})
@@ -562,7 +562,7 @@ def run_wan_nfo(
             result["ok"] = False
         try:
             stage_exists = connection.run(
-                "if test -e /root/sd-netrepro-20260729; "
+                "if test -e /root/sd-fieldbreak25-20260730; "
                 "then printf yes; else printf no; fi"
             ).strip()
             if stage_exists == "yes":
@@ -579,8 +579,8 @@ def run_wan_nfo(
         try:
             after_remote = connection.run(
                 "ss -H -lunp | "
-                "grep -E ':(51611|51612)[[:space:]]' || true; "
-                "ps auxww | grep -F /root/sd-netrepro-20260729 | "
+                "grep -E ':(50911|50912)[[:space:]]' || true; "
+                "ps auxww | grep -F /root/sd-fieldbreak25-20260730 | "
                 "grep -v grep || true"
             )
             after_local = port_inventory(ps, {config.host.local_port})

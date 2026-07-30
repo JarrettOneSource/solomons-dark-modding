@@ -22,6 +22,11 @@ from tools._real_flow_e2e.runtime import (
     damage_enemy_with_real_input,
     normalize_state,
 )
+from tools.verify_real_flow_e2e import (
+    validate_living_wave_boundary,
+    validate_stock_water_cast,
+    validate_wave_convergence,
+)
 from tools._real_flow_e2e.wan import _damage_remote_enemy
 from tools._real_flow_e2e.windows import (
     ProcessRecord,
@@ -58,6 +63,11 @@ class RealFlowE2ETests(unittest.TestCase):
             "expectedSourceSha": "1" * 40,
             "timeoutSeconds": 120,
             "samplingSeconds": 0.25,
+            "solomonInteractor": "client",
+            "verifyThroughWave": 2,
+            "requireWaterContactObservation": True,
+            "expectedWaterContactDamage": 0.025,
+            "waveBoundaryMaxDisplacement": 64,
             "host": {
                 "platform": "windows_local",
                 "launcherScope": "real-host",
@@ -65,9 +75,10 @@ class RealFlowE2ETests(unittest.TestCase):
                 "playerName": "Host",
                 "pipeName": "RealFlowHost",
                 "participantId": "0x1001",
-                "localPort": 50711,
+                "loadoutElement": "air",
+                "localPort": 50911,
                 "remoteHost": "127.0.0.1",
-                "remotePort": 50712,
+                "remotePort": 50912,
                 "matchStartActions": [
                     {
                         "kind": "click",
@@ -83,9 +94,10 @@ class RealFlowE2ETests(unittest.TestCase):
                 "playerName": "client B",
                 "pipeName": "RealFlowClient",
                 "participantId": "0x1002",
-                "localPort": 50712,
+                "loadoutElement": "water",
+                "localPort": 50912,
                 "remoteHost": "127.0.0.1",
-                "remotePort": 50711,
+                "remotePort": 50911,
                 "matchStartActions": [],
             },
         }
@@ -145,11 +157,16 @@ class RealFlowE2ETests(unittest.TestCase):
             document = self._config_document(root)
             config = self._load_document(root, document)
 
-            self.assertEqual(config.host.local_port, 50711)
-            self.assertEqual(config.client.local_port, 50712)
+            self.assertEqual(config.host.local_port, 50911)
+            self.assertEqual(config.client.local_port, 50912)
+            self.assertEqual(config.solomon_interactor, "client")
+            self.assertEqual(config.verify_through_wave, 2)
+            self.assertTrue(config.require_water_contact_observation)
+            self.assertEqual(config.host.loadout_element, "air")
+            self.assertEqual(config.client.loadout_element, "water")
 
-            document["host"]["localPort"] = 50713  # type: ignore[index]
-            with self.assertRaisesRegex(ConfigError, "50711/50712"):
+            document["host"]["localPort"] = 50913  # type: ignore[index]
+            with self.assertRaisesRegex(ConfigError, "50911/50912"):
                 self._load_document(root, document)
 
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
@@ -164,28 +181,28 @@ class RealFlowE2ETests(unittest.TestCase):
             document["protonArchive"] = str(proton)
             host = document["host"]  # type: ignore[assignment]
             client = document["client"]  # type: ignore[assignment]
-            host["localPort"] = 51611
-            host["remotePort"] = 51612
+            host["localPort"] = 50911
+            host["remotePort"] = 50912
             host["remoteHost"] = "203.0.113.10"
             client["platform"] = "linux_ssh_proton"
-            client["localPort"] = 51612
-            client["remotePort"] = 51611
+            client["localPort"] = 50912
+            client["remotePort"] = 50911
             client["remoteHost"] = "198.51.100.20"
             client["ssh"] = {
                 "target": "nfo-test",
-                "stageRoot": "/root/sd-netrepro-20260729",
+                "stageRoot": "/root/sd-fieldbreak25-20260730",
             }
 
             config = self._load_document(root, document)
 
             self.assertEqual(
                 config.client.ssh.stage_root,  # type: ignore[union-attr]
-                "/root/sd-netrepro-20260729",
+                "/root/sd-fieldbreak25-20260730",
             )
             document["client"]["ssh"]["stageRoot"] = "/root/other"  # type: ignore[index]
             with self.assertRaisesRegex(
                 ConfigError,
-                "/root/sd-netrepro-20260729",
+                "/root/sd-fieldbreak25-20260730",
             ):
                 self._load_document(root, document)
 
@@ -249,12 +266,9 @@ class RealFlowE2ETests(unittest.TestCase):
             "sd.hub.trigger_solomon_dig",
         ):
             self.assertNotIn(forbidden, combined)
-        self.assertIn(
-            "approach_solomon_and_complete_dialogue(\n"
-            "            config.source_root,\n"
-            "            host,",
-            combined,
-        )
+        self.assertIn("config.solomon_interactor == \"host\"", combined)
+        self.assertIn("approach_solomon_and_complete_dialogue(", combined)
+        self.assertIn("verify_through_wave", combined)
 
     def test_every_launched_peer_enables_telemetry_and_disables_audio(
         self,
@@ -1098,7 +1112,7 @@ class RealFlowE2ETests(unittest.TestCase):
             'result["clientEnemyMaterialization"] = materialization'
         )
         damage = source.index(
-            'sampler.set_phase("client-real-damage")',
+            'sampler.set_phase("client-real-water-damage")',
             materialized,
         )
         capture = source.index(
@@ -1107,6 +1121,128 @@ class RealFlowE2ETests(unittest.TestCase):
         )
 
         self.assertLess(damage, capture)
+
+    def test_stock_water_cast_requires_exact_contacts_and_peer_hp(
+        self,
+    ) -> None:
+        cast = {
+            "networkActorId": 77,
+            "hostDamage": 0.05,
+            "hostHpAfter": 1.95,
+            "clientAfter": {
+                "replicatedEnemies": [
+                    {
+                        "network_id": 77,
+                        "dead": False,
+                        "hp": 1.95,
+                    }
+                ],
+            },
+            "observation": {
+                "damageClaimValid": True,
+                "nativeContactCount": 2,
+                "nativeContactSkillId": 32,
+                "nativeContactSkillConsistent": True,
+                "nativeContactSamples": [0.025, 0.025],
+                "nativeContactTotal": 0.05,
+                "claimedTotal": 0.05,
+                "associatedSkillId": 32,
+                "associatedSkillConsistent": True,
+                "unassociatedClaimCount": 0,
+            },
+        }
+
+        result = validate_stock_water_cast(
+            cast,
+            expected_contact_damage=0.025,
+        )
+
+        self.assertEqual(result["contactCount"], 2)
+        self.assertEqual(result["hostAuthoritativeDamage"], 0.05)
+        cast["observation"]["nativeContactSamples"] = [0.05, 0.05]
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "non-stock native contacts",
+        ):
+            validate_stock_water_cast(
+                cast,
+                expected_contact_damage=0.025,
+            )
+
+    def test_wave_boundary_rejects_living_position_teleport(
+        self,
+    ) -> None:
+        def state(
+            wave: int,
+            x: float,
+            y: float,
+        ) -> dict[str, object]:
+            participants = [
+                {
+                    "connected": True,
+                    "in_run": True,
+                    "wave": wave,
+                },
+                {
+                    "connected": True,
+                    "in_run": True,
+                    "wave": wave,
+                },
+            ]
+            return {
+                "scene": {"name": "testrun"},
+                "player": {"hp": 1.0, "x": x, "y": y},
+                "wave": {"index": wave},
+                "combat": {"waveIndex": wave},
+                "world": {"waveIndex": wave},
+                "multiplayer": {
+                    "participantCount": 2,
+                    "participants": participants,
+                },
+            }
+
+        stable_rows = [
+            {
+                "utcNanoseconds": 1,
+                "host": state(1, 500.0, 600.0),
+                "clientB": state(1, 800.0, 900.0),
+            },
+            {
+                "utcNanoseconds": 2,
+                "host": state(2, 501.0, 600.0),
+                "clientB": state(2, 801.0, 900.0),
+            },
+        ]
+        result = validate_living_wave_boundary(
+            stable_rows,
+            target_wave=2,
+            maximum_displacement=64.0,
+        )
+        self.assertLess(
+            result["participants"]["host"]["boundaryDisplacement"],
+            2.0,
+        )
+        validate_wave_convergence(
+            stable_rows[-1]["host"],
+            stable_rows[-1]["clientB"],
+            target_wave=2,
+        )
+
+        teleported = [dict(row) for row in stable_rows]
+        teleported[1] = {
+            "utcNanoseconds": 2,
+            "host": state(2, 1276.0, 2238.0),
+            "clientB": state(2, 1276.0, 2238.0),
+        }
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "living host position was moved",
+        ):
+            validate_living_wave_boundary(
+                teleported,
+                target_wave=2,
+                maximum_displacement=64.0,
+            )
 
     def test_ws20_capture_uses_remote_execution_wall_clock(
         self,

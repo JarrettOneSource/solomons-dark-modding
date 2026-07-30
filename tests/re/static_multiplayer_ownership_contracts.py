@@ -931,6 +931,37 @@ def test_loot_deactivation_uses_stock_deferred_retirement() -> str:
     )
 
 
+def test_participant_destroy_is_deferred_until_after_stock_tick() -> str:
+    generic_pump = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "dispatch_and_hooks_pump_loop.inl"
+    )
+    post_tick_pump = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_main_thread_pump.inl"
+    )
+    app_tick = _read("SolomonDarkModLoader/src/background_focus_bypass.cpp")
+
+    assert "pending_participant_destroy_requests" not in generic_pump
+    assert "DestroyParticipantEntityNow(" not in generic_pump
+    for token in (
+        "void PumpParticipantDestroyRequestsPostStockTick()",
+        "pending_participant_destroy_requests",
+        "DestroyParticipantEntityNow(",
+        "PumpParticipantDestroyRequestsPostStockTick();",
+    ):
+        assert token in post_tick_pump
+
+    stock_tick = app_tick.find("original(app, edx);")
+    post_tick = app_tick.find("PumpGameplayPostStockTickWork();", stock_tick)
+    assert 0 <= stock_tick < post_tick
+
+    return (
+        "transport teardown cannot dematerialize a participant until the "
+        "current stock application tick has finished traversing actors"
+    )
+
+
 def test_client_loot_pickup_requests_are_single_flight_per_drop() -> str:
     transport = _read("SolomonDarkModLoader/src/multiplayer_local_transport.cpp")
     queue = _read(

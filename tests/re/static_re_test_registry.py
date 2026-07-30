@@ -144,6 +144,7 @@ from static_multiplayer_ownership_contracts import (
     test_lua_exec_timeout_cancels_pending_work,
     test_native_item_pickup_converges_into_stock_inventory,
     test_native_unregister_retires_address_bound_network_identity,
+    test_participant_destroy_is_deferred_until_after_stock_tick,
     test_transient_status_correction_ack_waits_for_native_application,
     test_powerup_rewards_are_authoritative_and_native,
     test_remote_windows_lua_bridge_is_persistent_and_framed,
@@ -321,7 +322,7 @@ from static_re_transport_core_contracts import (
     test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
     test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
-    test_wave_completion_respawns_every_owner_from_reliable_host_command,
+    test_wave_completion_respawns_only_dead_owners_from_host_command,
 )
 from static_multiplayer_session_lifecycle_contracts import (
     test_match_end_preserves_lobby_and_reports_explicit_activity_state,
@@ -692,6 +693,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "loot removal uses stock deferred retirement",
         test_loot_deactivation_uses_stock_deferred_retirement,
+    ),
+    (
+        "participant teardown waits until after the stock application tick",
+        test_participant_destroy_is_deferred_until_after_stock_tick,
     ),
     (
         "client loot pickup requests stay single-flight per drop",
@@ -1273,8 +1278,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_dead_client_spectates_alive_players_with_local_camera_and_hud,
     ),
     (
-        "wave completion respawns every owner from reliable host command",
-        test_wave_completion_respawns_every_owner_from_reliable_host_command,
+        "wave completion respawns only dead owners from reliable host command",
+        test_wave_completion_respawns_only_dead_owners_from_host_command,
     ),
     (
         "death spectator has isolated three-owner live regression",

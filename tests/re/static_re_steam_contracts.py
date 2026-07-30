@@ -252,6 +252,8 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         (policy_header, "kQueueTimeHighWaterMicroseconds"),
         (policy_header, "kQueueTimeLowWaterMicroseconds"),
         (policy_header, "kMaximumRememberedLogicalEvents"),
+        (policy_header, "control_packets_sent_under_pressure"),
+        (policy_header, "kSteamGameplayControlChannel"),
         (
             policy_header,
             "kSustainedBackpressureReportIntervalMs = 2000",
@@ -261,14 +263,18 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         (policy_source, "Retention::LatestGeneration"),
         (policy_source, "Retention::DistinctLogicalEvent"),
         (policy_source, "RememberAcceptedLogicalEvent(packet)"),
+        (policy_source, "IsControlPacket(packet)"),
+        (policy_source, "last_control_probe_ms"),
         (policy_source, "EvictReplaceableUnit("),
         (policy_source, "IsPacketSequenceNewer("),
         (policy_source, "pressure.sustained_reported = true"),
         (queue_source, "SetSteamGameplayPeerSendEnabled("),
         (queue_source, "g_send_enabled_peers"),
         (queue_source, "SteamGetNetworkSessionStatus("),
+        (queue_source, "SteamSendNetworkMessageOnChannel("),
         (queue_source, "Steam gameplay send sustained backpressure."),
         (steam_bridge, "RecordNetworkSteamSendResult("),
+        (steam_bridge, "bool SteamSendNetworkMessageOnChannel("),
         (steam_bridge, "pending_unreliable_bytes"),
         (steam_bridge, "queue_time_microseconds"),
         (telemetry_source, 'EnqueueEvent("steam_send_result"'),
@@ -276,6 +282,7 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         (service_loop, "ServiceSteamGameplaySendQueue();"),
         (session, "ResetSteamGameplayPeerSendQueue(steam_id)"),
         (session, "RecordNetworkSteamRouteStatus("),
+        (session, "kSteamGameplayControlChannel"),
         (peer_lifecycle, "SetSteamGameplayPeerSendEnabled(steam_id, true)"),
         (peer_lifecycle, "SetSteamGameplayPeerSendEnabled(steam_id, false)"),
         (outgoing, "BuildWorldMotionSnapshotForIdentity("),
@@ -283,6 +290,7 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         (outgoing, "identity_timeline_changed"),
         (native_test, "ReliablePacketsSurviveTemporaryLimitExceeded"),
         (native_test, "ProactiveRoutePacingKeepsOnlyFreshState"),
+        (native_test, "CurrentControlBypassesBulkRoutePressure"),
         (native_test, "RoutePressureDoesNotBlockAnotherPeer"),
         (native_test, "LatestWorldGenerationSupersedesStaleFragments"),
         (native_test, "CapacityEvictsWholeReplaceableGeneration"),
@@ -316,7 +324,8 @@ def test_steam_send_queue_owns_backpressure_without_resetting_session() -> str:
         )
 
     return (
-        "Steam send pacing stops before result 25, keeps only current "
+        "Steam send pacing stops before result 25, lets current control "
+        "advance on a dedicated reliable channel, keeps only current "
         "checkpoint generations, deduplicates accepted recovery retries, "
         "preserves ordered events and peer fairness, records actual API and "
         "route state, and never resets an authenticated session for pressure"

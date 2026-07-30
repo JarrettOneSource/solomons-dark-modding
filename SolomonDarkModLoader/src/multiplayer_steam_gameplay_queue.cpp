@@ -182,12 +182,14 @@ void ServiceSteamGameplaySendQueue() {
                const void* data,
                std::size_t size,
                SteamNetworkSendMode mode,
+               std::int32_t channel,
                std::int32_t* result_code) {
-                return SteamSendNetworkMessage(
+                return SteamSendNetworkMessageOnChannel(
                     remote_steam_id,
                     data,
                     size,
                     mode,
+                    channel,
                     result_code);
             },
             [](std::uint64_t remote_steam_id) {

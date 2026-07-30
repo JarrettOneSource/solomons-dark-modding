@@ -199,9 +199,11 @@ bool TryApplyWaveRespawnCommand(
         return false;
     }
 
+    bool local_respawned = false;
     if (!TryRespawnLocalPlayerAt(
             command.world_x,
             command.world_y,
+            &local_respawned,
             &respawn_error)) {
         if (g_last_wave_respawn_failure_log_ms == 0 ||
             now_ms >=
@@ -222,13 +224,17 @@ bool TryApplyWaveRespawnCommand(
     g_last_applied_wave_respawn_authority_packet_sequence =
         authority_packet_sequence;
     g_last_wave_respawn_failure_log_ms = 0;
-    ResetLocalDeathSpectatorState("wave_respawn");
+    if (local_respawned) {
+        ResetLocalDeathSpectatorState("wave_respawn");
+    }
     SDModPlayerState player;
     const bool have_player =
         TryGetPlayerState(&player) && player.valid;
     UpdateRuntimeState([&](RuntimeState& state) {
         auto* mutable_local = FindLocalParticipant(state);
-        if (mutable_local != nullptr && have_player) {
+        if (local_respawned &&
+            mutable_local != nullptr &&
+            have_player) {
             mutable_local->runtime.life_current = player.hp;
             mutable_local->runtime.life_max = player.max_hp;
             mutable_local->runtime.mana_current = player.mp;
@@ -244,14 +250,23 @@ bool TryApplyWaveRespawnCommand(
             command.epoch;
         state.death_spectator.last_applied_respawn_wave =
             command.wave;
-        state.death_spectator.last_respawn_x = command.world_x;
-        state.death_spectator.last_respawn_y = command.world_y;
+        if (local_respawned) {
+            state.death_spectator.last_respawn_x =
+                command.world_x;
+            state.death_spectator.last_respawn_y =
+                command.world_y;
+        }
     });
     Log(
         "Multiplayer wave respawn applied. source=" +
         std::string(source) +
         " epoch=" + std::to_string(command.epoch) +
         " wave=" + std::to_string(command.wave) +
+        " local=" +
+        std::string(
+            local_respawned
+                ? "dead_respawned"
+                : "living_untouched") +
         " authority_packet_sequence=" +
         std::to_string(authority_packet_sequence) +
         " position=(" + std::to_string(command.world_x) + "," +

@@ -1,6 +1,8 @@
 #include "logger_internal.h"
 #include "network_telemetry.h"
 
+#include <process.h>
+
 #include <chrono>
 
 namespace sdmod::detail::logger {
@@ -12,7 +14,7 @@ void WriteDebuggerLine(const std::string& line) {
     OutputDebugStringW(wide.c_str());
 }
 
-void LogWriterMain() {
+unsigned __stdcall LogWriterMain(void*) {
     for (;;) {
         std::deque<std::string> lines;
         std::uint64_t dropped_lines = 0;
@@ -78,6 +80,7 @@ void LogWriterMain() {
             break;
         }
     }
+    return 0;
 }
 
 }  // namespace
@@ -94,13 +97,21 @@ bool StartLogWriter() {
     g_written_log_line_count = 0;
     g_dropped_log_line_count = 0;
     g_log_writer_stopping = false;
-    try {
-        g_log_writer_thread = std::thread(&LogWriterMain);
-        g_log_writer_running = true;
-    } catch (...) {
+    const auto writer_thread = _beginthreadex(
+        nullptr,
+        0,
+        &LogWriterMain,
+        nullptr,
+        0,
+        nullptr);
+    if (writer_thread == 0) {
         g_log_writer_running = false;
+        return false;
     }
-    return g_log_writer_running;
+    g_log_writer_thread =
+        reinterpret_cast<HANDLE>(writer_thread);
+    g_log_writer_running = true;
+    return true;
 }
 
 void FlushLogWriter() {
@@ -129,8 +140,10 @@ void StopLogWriter() {
         g_log_writer_stopping = true;
     }
     g_log_queue_changed.notify_one();
-    if (g_log_writer_thread.joinable()) {
-        g_log_writer_thread.join();
+    if (g_log_writer_thread != nullptr) {
+        WaitForSingleObject(g_log_writer_thread, INFINITE);
+        CloseHandle(g_log_writer_thread);
+        g_log_writer_thread = nullptr;
     }
 
     std::lock_guard<std::mutex> lock(g_log_mutex);

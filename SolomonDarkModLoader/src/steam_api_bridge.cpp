@@ -335,16 +335,18 @@ bool SteamHasImmediateFriend(std::uint64_t steam_id) {
         steamabi::kFriendFlagImmediate);
 }
 
-bool SteamSendNetworkMessage(
+bool SteamSendNetworkMessageOnChannel(
     std::uint64_t remote_steam_id,
     const void* data,
     std::size_t size,
     SteamNetworkSendMode mode,
+    std::int32_t channel,
     std::int32_t* result_code) {
     if (result_code != nullptr) {
         *result_code = 0;
     }
-    if (data == nullptr || size == 0 || size > kMaxSteamMessageBytes ||
+    if (data == nullptr || size == 0 || channel < 0 ||
+        size > kMaxSteamMessageBytes ||
         size > (std::numeric_limits<std::uint32_t>::max)()) {
         return false;
     }
@@ -383,7 +385,7 @@ bool SteamSendNetworkMessage(
                 data,
                 static_cast<std::uint32_t>(size),
                 flags,
-                0);
+                channel);
             called_steam = true;
         }
     }
@@ -407,6 +409,21 @@ bool SteamSendNetworkMessage(
                 : 0);
     }
     return accepted;
+}
+
+bool SteamSendNetworkMessage(
+    std::uint64_t remote_steam_id,
+    const void* data,
+    std::size_t size,
+    SteamNetworkSendMode mode,
+    std::int32_t* result_code) {
+    return SteamSendNetworkMessageOnChannel(
+        remote_steam_id,
+        data,
+        size,
+        mode,
+        kSteamSessionAndBulkChannel,
+        result_code);
 }
 
 std::vector<SteamNetworkMessage> SteamReceiveNetworkMessages(

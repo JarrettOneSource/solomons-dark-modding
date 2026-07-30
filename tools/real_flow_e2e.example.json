@@ -20,9 +20,9 @@
     "participantId": "0x1000000000000001",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
-    "localPort": 50711,
+    "localPort": 50911,
     "remoteHost": "127.0.0.1",
-    "remotePort": 50712,
+    "remotePort": 50912,
     "matchStartActions": [
       {
         "kind": "click",
@@ -46,9 +46,9 @@
     "participantId": "0x1000000000000002",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
-    "localPort": 50712,
+    "localPort": 50912,
     "remoteHost": "127.0.0.1",
-    "remotePort": 50711,
+    "remotePort": 50911,
     "matchStartActions": []
   },
   "metadata": {

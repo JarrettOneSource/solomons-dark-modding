@@ -1,6 +1,7 @@
 struct WizardRespawnTarget {
     uintptr_t actor_address = 0;
     uintptr_t progression_address = 0;
+    float current_hp = 0.0f;
     float max_hp = 0.0f;
     float max_mp = 0.0f;
 };
@@ -17,6 +18,7 @@ bool TryBuildWizardRespawnTarget(
     }
 
     uintptr_t progression_address = 0;
+    float current_hp = 0.0f;
     float max_hp = 0.0f;
     float max_mp = 0.0f;
     uintptr_t world_address = 0;
@@ -30,6 +32,10 @@ bool TryBuildWizardRespawnTarget(
             kActorOwnerOffset,
             &world_address) ||
         world_address == 0 ||
+        !TryReadFiniteFloatField(
+            progression_address,
+            kProgressionHpOffset,
+            &current_hp) ||
         !TryReadFiniteFloatField(
             progression_address,
             kProgressionMaxHpOffset,
@@ -53,6 +59,7 @@ bool TryBuildWizardRespawnTarget(
     *target = WizardRespawnTarget{
         actor_address,
         progression_address,
+        current_hp,
         max_hp,
         max_mp,
     };
@@ -63,7 +70,11 @@ bool TryRespawnWizardActorAt(
     const WizardRespawnTarget& target,
     float world_x,
     float world_y,
+    bool* did_respawn,
     std::string* error_message) {
+    if (did_respawn != nullptr) {
+        *did_respawn = false;
+    }
     if (error_message != nullptr) {
         error_message->clear();
     }
@@ -71,6 +82,7 @@ bool TryRespawnWizardActorAt(
         1000000.0f;
     if (target.actor_address == 0 ||
         target.progression_address == 0 ||
+        !std::isfinite(target.current_hp) ||
         !std::isfinite(target.max_hp) ||
         !std::isfinite(target.max_mp) ||
         target.max_hp <= 0.0f ||
@@ -109,6 +121,25 @@ bool TryRespawnWizardActorAt(
                 "Wizard progression changed before respawn.";
         }
         return false;
+    }
+
+    float current_hp = 0.0f;
+    if (!TryReadFiniteFloatField(
+            target.progression_address,
+            kProgressionHpOffset,
+            &current_hp)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Wizard HP could not be read immediately before respawn.";
+        }
+        return false;
+    }
+    if (current_hp > 0.0f) {
+        Log(
+            "Wave respawn left living participant untouched. actor=" +
+            HexString(target.actor_address) +
+            " hp=" + std::to_string(current_hp));
+        return true;
     }
 
     std::string cast_error;
@@ -285,6 +316,9 @@ bool TryRespawnWizardActorAt(
         " grid_cell=" + HexString(verified_grid_cell) +
         " hp=" + std::to_string(verified_hp) +
         " mp=" + std::to_string(verified_mp));
+    if (did_respawn != nullptr) {
+        *did_respawn = true;
+    }
     return true;
 }
 
@@ -313,7 +347,11 @@ void QuiesceLocalPlayerRespawnInput() {
 bool TryRespawnLocalPlayerAt(
     float world_x,
     float world_y,
+    bool* did_respawn,
     std::string* error_message) {
+    if (did_respawn != nullptr) {
+        *did_respawn = false;
+    }
     if (error_message != nullptr) {
         error_message->clear();
     }
@@ -332,29 +370,43 @@ bool TryRespawnLocalPlayerAt(
         return false;
     }
 
-    ClearQueuedGameplayMouseLeft();
-    ClearQueuedGameplayMouseRight();
-    QuiesceLocalPlayerRespawnInput();
-
     const WizardRespawnTarget target{
         player.actor_address,
         player.progression_address,
+        player.hp,
         player.max_hp,
         player.max_mp,
     };
+    bool respawned = false;
     if (!TryRespawnWizardActorAt(
             target,
             world_x,
             world_y,
+            &respawned,
             error_message)) {
         return false;
     }
+    if (!respawned) {
+        Log(
+            "Wave respawn acknowledged for living local participant "
+            "without mutation. actor=" +
+            HexString(player.actor_address) +
+            " hp=" + std::to_string(player.hp));
+        return true;
+    }
+
+    ClearQueuedGameplayMouseLeft();
+    ClearQueuedGameplayMouseRight();
+    QuiesceLocalPlayerRespawnInput();
 
     Log(
         "Respawned local multiplayer player. actor=" +
         HexString(player.actor_address) +
         " position=(" + std::to_string(world_x) + "," +
         std::to_string(world_y) + ")");
+    if (did_respawn != nullptr) {
+        *did_respawn = true;
+    }
     return true;
 }
 
@@ -410,6 +462,38 @@ bool TryRespawnHostOwnedSyntheticParticipantsAt(
             continue;
         }
 
+        WizardRespawnTarget target;
+        std::string target_error;
+        if (!TryBuildWizardRespawnTarget(
+                binding.actor_address,
+                &target,
+                &target_error)) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Synthetic participant " +
+                    std::to_string(binding.bot_id) +
+                    " has no respawn target: " + target_error;
+            }
+            return false;
+        }
+        if (target.current_hp > 0.0f) {
+            binding.last_applied_wave_respawn_run_nonce =
+                run_nonce;
+            binding.last_applied_wave_respawn_epoch =
+                respawn_epoch;
+            PublishParticipantGameplaySnapshot(binding);
+            Log(
+                "[bots] host synthetic wave respawn left living "
+                "participant untouched. participant_id=" +
+                std::to_string(binding.bot_id) +
+                " actor=" + HexString(binding.actor_address) +
+                " hp=" + std::to_string(target.current_hp) +
+                " run_nonce=" + std::to_string(run_nonce) +
+                " epoch=" + std::to_string(respawn_epoch) +
+                " wave=" + std::to_string(wave));
+            continue;
+        }
+
         if (binding.ongoing_cast.active) {
             auto& memory = ProcessMemory::Instance();
             const auto cleanup_address =
@@ -448,16 +532,12 @@ bool TryRespawnHostOwnedSyntheticParticipantsAt(
             return false;
         }
         QuiesceDeadWizardBinding(&binding);
-        WizardRespawnTarget target;
-        std::string target_error;
-        if (!TryBuildWizardRespawnTarget(
-                binding.actor_address,
-                &target,
-                &target_error) ||
-            !TryRespawnWizardActorAt(
+        bool respawned = false;
+        if (!TryRespawnWizardActorAt(
                 target,
                 world_x,
                 world_y,
+                &respawned,
                 &target_error)) {
             if (error_message != nullptr) {
                 *error_message =
@@ -466,6 +546,22 @@ bool TryRespawnHostOwnedSyntheticParticipantsAt(
                     " did not converge: " + target_error;
             }
             return false;
+        }
+        if (!respawned) {
+            binding.last_applied_wave_respawn_run_nonce =
+                run_nonce;
+            binding.last_applied_wave_respawn_epoch =
+                respawn_epoch;
+            PublishParticipantGameplaySnapshot(binding);
+            Log(
+                "[bots] host synthetic wave respawn observed living "
+                "participant at final native gate. participant_id=" +
+                std::to_string(binding.bot_id) +
+                " actor=" + HexString(binding.actor_address) +
+                " run_nonce=" + std::to_string(run_nonce) +
+                " epoch=" + std::to_string(respawn_epoch) +
+                " wave=" + std::to_string(wave));
+            continue;
         }
 
         binding.death_transition_stock_tick_seen = false;

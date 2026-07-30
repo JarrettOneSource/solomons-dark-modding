@@ -14,7 +14,7 @@ std::uint64_t g_written_log_line_count = 0;
 std::uint64_t g_dropped_log_line_count = 0;
 bool g_log_writer_stopping = false;
 bool g_log_writer_running = false;
-std::thread g_log_writer_thread;
+HANDLE g_log_writer_thread = nullptr;
 std::filesystem::path g_crash_log_path;
 LPTOP_LEVEL_EXCEPTION_FILTER g_previous_exception_filter = nullptr;
 bool g_crash_handler_installed = false;

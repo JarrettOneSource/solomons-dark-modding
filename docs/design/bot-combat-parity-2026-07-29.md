@@ -203,12 +203,13 @@ host-authored alive frame on the same participant/transport epoch. Its existing
 remote alive transition clears the matching remote death epoch, restores
 alive registration, rebinds the actor, and resumes ordinary playback.
 
-The completed-wave command intentionally applies the same resource and spawn
-restoration to every party member, not just members observed dead. That is the
-existing slot-0 rule and is now the synthetic rule as well. A reported respawn
-is narrower: it counts only an observed dead-to-alive transition. This
-distinction matters at Game Over because a final fractional slot-0 HP sample is
-not a respawn once the native controller has ended the run.
+The completed-wave command is an epoch acknowledgement for every party member,
+but the native respawn primitive applies resource and spawn restoration only
+to members whose live native HP is zero or below. Living human and synthetic
+participants consume the epoch without input, cast, resource, position,
+terminal-state, or grid-registration mutation. A low-level HP recheck
+immediately before the same-actor writes closes the race between the command
+and the native actor state.
 
 ### Run-end rule
 

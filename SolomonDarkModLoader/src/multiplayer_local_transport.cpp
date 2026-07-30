@@ -51,12 +51,12 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <process.h>
 #include <random>
 #include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -1301,6 +1301,60 @@ void ResetLocalEnemyDamageClaimObservationInternal(
         g_local_enemy_damage_claim_observation_mutex);
     g_local_enemy_damage_claim_observations[network_actor_id] =
         LocalEnemyDamageClaimObservation{};
+}
+
+void RecordLocalEnemyDamageContactObservationInternal(
+    std::uint64_t network_actor_id,
+    float native_damage,
+    std::int32_t associated_skill_id) {
+    if (network_actor_id == 0 ||
+        !std::isfinite(native_damage) ||
+        native_damage <= 0.0f) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(
+        g_local_enemy_damage_claim_observation_mutex);
+    const auto existing =
+        g_local_enemy_damage_claim_observations.find(network_actor_id);
+    if (existing == g_local_enemy_damage_claim_observations.end()) {
+        return;
+    }
+
+    auto& observation = existing->second;
+    observation.valid = true;
+    observation.network_actor_id = network_actor_id;
+    ++observation.native_contact_count;
+    if (observation.native_contact_count == 1) {
+        observation.native_contact_skill_id =
+            associated_skill_id;
+        observation.minimum_native_contact_damage =
+            native_damage;
+        observation.maximum_native_contact_damage =
+            native_damage;
+    } else {
+        if (observation.native_contact_skill_id !=
+            associated_skill_id) {
+            observation.native_contact_skill_consistent =
+                false;
+        }
+        observation.minimum_native_contact_damage =
+            (std::min)(
+                observation.minimum_native_contact_damage,
+                native_damage);
+        observation.maximum_native_contact_damage =
+            (std::max)(
+                observation.maximum_native_contact_damage,
+                native_damage);
+    }
+    observation.native_contact_damage_total +=
+        native_damage;
+    if (observation.native_contact_sample_count <
+        observation.native_contact_damage_samples.size()) {
+        observation.native_contact_damage_samples[
+            observation.native_contact_sample_count++] =
+                native_damage;
+    }
 }
 
 void RecordLocalEnemyDamageClaimObservationInternal(

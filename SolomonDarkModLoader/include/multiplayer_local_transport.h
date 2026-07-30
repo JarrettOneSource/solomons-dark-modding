@@ -234,6 +234,15 @@ constexpr std::size_t kLocalEnemyDamageClaimObservationMaxSamples = 128;
 struct LocalEnemyDamageClaimObservation {
     bool valid = false;
     std::uint64_t network_actor_id = 0;
+    std::uint32_t native_contact_count = 0;
+    std::int32_t native_contact_skill_id = -1;
+    bool native_contact_skill_consistent = true;
+    float native_contact_damage_total = 0.0f;
+    float minimum_native_contact_damage = 0.0f;
+    float maximum_native_contact_damage = 0.0f;
+    std::size_t native_contact_sample_count = 0;
+    std::array<float, kLocalEnemyDamageClaimObservationMaxSamples>
+        native_contact_damage_samples = {};
     std::uint32_t claim_count = 0;
     std::uint32_t associated_claim_count = 0;
     std::uint32_t unassociated_claim_count = 0;

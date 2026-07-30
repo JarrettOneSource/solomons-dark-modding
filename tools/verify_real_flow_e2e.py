@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -41,9 +42,12 @@ from tools._real_flow_e2e.runtime import (  # noqa: E402
     RuntimeProbeError,
     approach_solomon_and_complete_dialogue,
     damage_enemy_with_real_input,
+    drive_combat_to_wave_with_real_input,
+    effective_wave_index,
     enemy_attack_assertion,
     enemy_motion_assertion,
     execute_actions,
+    observe_water_cast_with_real_input,
     wait_for_state,
     wait_shared_hub,
 )
@@ -74,6 +78,275 @@ from tools._real_flow_e2e.ws20 import (  # noqa: E402
 
 class RealFlowFailure(RuntimeError):
     """The real-flow contract did not complete or an assertion failed."""
+
+
+def validate_stock_water_cast(
+    cast: dict[str, Any],
+    *,
+    expected_contact_damage: float,
+) -> dict[str, Any]:
+    observation = cast["observation"]
+    contact_count = int(observation["nativeContactCount"])
+    contact_samples = [
+        float(value)
+        for value in observation["nativeContactSamples"]
+    ]
+    if not observation["damageClaimValid"] or contact_count <= 0:
+        raise RealFlowFailure(
+            f"Water cast produced no native damage observation: {observation}"
+        )
+    if (
+        int(observation["nativeContactSkillId"]) != 32
+        or not observation["nativeContactSkillConsistent"]
+    ):
+        raise RealFlowFailure(
+            "Water cast contacts did not retain stock skill 32: "
+            f"{observation}"
+        )
+    if not contact_samples:
+        raise RealFlowFailure(
+            f"Water cast retained no exact native samples: {observation}"
+        )
+    tolerance = 0.00001
+    non_stock = [
+        value
+        for value in contact_samples
+        if not math.isclose(
+            value,
+            expected_contact_damage,
+            rel_tol=0.0,
+            abs_tol=tolerance,
+        )
+    ]
+    if non_stock:
+        raise RealFlowFailure(
+            "Water cast contained non-stock native contacts: "
+            f"expected={expected_contact_damage} actual={non_stock}"
+        )
+    expected_total = expected_contact_damage * contact_count
+    native_total = float(observation["nativeContactTotal"])
+    claimed_total = float(observation["claimedTotal"])
+    host_damage = float(cast["hostDamage"])
+    for label, actual in (
+        ("native contact total", native_total),
+        ("replicated claim total", claimed_total),
+        ("host authoritative HP delta", host_damage),
+    ):
+        if not math.isclose(
+            actual,
+            expected_total,
+            rel_tol=0.0,
+            abs_tol=0.0002,
+        ):
+            raise RealFlowFailure(
+                f"Water {label} diverged from stock per-cast total: "
+                f"contacts={contact_count} expected={expected_total:.6f} "
+                f"actual={actual:.6f}"
+            )
+    if (
+        int(observation["associatedSkillId"]) != 32
+        or not observation["associatedSkillConsistent"]
+        or int(observation["unassociatedClaimCount"]) != 0
+    ):
+        raise RealFlowFailure(
+            "Water claim association was ambiguous or used a non-Water "
+            f"skill: {observation}"
+        )
+    network_actor_id = int(cast["networkActorId"])
+    client_enemy = next(
+        (
+            enemy
+            for enemy in cast["clientAfter"]["replicatedEnemies"]
+            if int(enemy["network_id"]) == network_actor_id
+        ),
+        None,
+    )
+    client_hp = (
+        0.0
+        if client_enemy is None or client_enemy["dead"]
+        else float(client_enemy["hp"])
+    )
+    host_hp = float(cast["hostHpAfter"])
+    if not math.isclose(
+        client_hp,
+        host_hp,
+        rel_tol=0.0,
+        abs_tol=0.0005,
+    ):
+        raise RealFlowFailure(
+            "Water cast HP did not converge on both peers: "
+            f"host={host_hp:.6f} clientB={client_hp:.6f}"
+        )
+    return {
+        "networkActorId": network_actor_id,
+        "skillId": 32,
+        "contactCount": contact_count,
+        "perContactDamage": expected_contact_damage,
+        "nativeContactTotal": native_total,
+        "replicatedClaimTotal": claimed_total,
+        "hostAuthoritativeDamage": host_damage,
+        "hostHpAfter": host_hp,
+        "clientBHpAfter": client_hp,
+    }
+
+
+def validate_living_wave_boundary(
+    rows: list[dict[str, Any]],
+    *,
+    target_wave: int,
+    maximum_displacement: float,
+) -> dict[str, Any]:
+    ordered = sorted(rows, key=lambda row: int(row["utcNanoseconds"]))
+    after_index = next(
+        (
+            index
+            for index, row in enumerate(ordered)
+            if (
+                effective_wave_index(row["host"]) >= target_wave
+                and effective_wave_index(row["clientB"]) >= target_wave
+                and float(row["host"]["player"]["hp"]) > 0
+                and float(row["clientB"]["player"]["hp"]) > 0
+            )
+        ),
+        None,
+    )
+    if after_index is None:
+        raise RealFlowFailure(
+            f"no living paired sample reached wave {target_wave}"
+        )
+    before_index = next(
+        (
+            index
+            for index in range(after_index - 1, -1, -1)
+            if (
+                effective_wave_index(ordered[index]["host"])
+                == target_wave - 1
+                and effective_wave_index(ordered[index]["clientB"])
+                == target_wave - 1
+                and float(ordered[index]["host"]["player"]["hp"]) > 0
+                and float(ordered[index]["clientB"]["player"]["hp"]) > 0
+            )
+        ),
+        None,
+    )
+    if before_index is None:
+        raise RealFlowFailure(
+            f"no living paired sample preceded wave {target_wave}"
+        )
+    before = ordered[before_index]
+    after = ordered[after_index]
+    window = ordered[max(0, before_index - 4):min(
+        len(ordered),
+        after_index + 5,
+    )]
+    participants: dict[str, Any] = {}
+    for role, key in (("host", "host"), ("clientB", "clientB")):
+        before_position = (
+            float(before[key]["player"]["x"]),
+            float(before[key]["player"]["y"]),
+        )
+        after_position = (
+            float(after[key]["player"]["x"]),
+            float(after[key]["player"]["y"]),
+        )
+        boundary_displacement = math.dist(
+            before_position,
+            after_position,
+        )
+        living_positions = [
+            (
+                float(row[key]["player"]["x"]),
+                float(row[key]["player"]["y"]),
+            )
+            for row in window
+            if (
+                row[key]["scene"]["name"] == "testrun"
+                and float(row[key]["player"]["hp"]) > 0
+            )
+        ]
+        jumps = [
+            math.dist(first, second)
+            for first, second in zip(
+                living_positions,
+                living_positions[1:],
+            )
+        ]
+        maximum_jump = max(jumps, default=0.0)
+        if (
+            boundary_displacement > maximum_displacement
+            or maximum_jump > maximum_displacement
+        ):
+            raise RealFlowFailure(
+                f"living {role} position was moved by the wave respawn seam: "
+                f"boundary={boundary_displacement:.3f} "
+                f"maximumJump={maximum_jump:.3f} "
+                f"limit={maximum_displacement:.3f}"
+            )
+        participants[role] = {
+            "hpBefore": float(before[key]["player"]["hp"]),
+            "hpAfter": float(after[key]["player"]["hp"]),
+            "positionBefore": list(before_position),
+            "positionAfter": list(after_position),
+            "boundaryDisplacement": boundary_displacement,
+            "maximumLivingSampleJump": maximum_jump,
+        }
+    return {
+        "fromWave": target_wave - 1,
+        "toWave": target_wave,
+        "maximumAllowedDisplacement": maximum_displacement,
+        "beforeUtcNanoseconds": int(before["utcNanoseconds"]),
+        "afterUtcNanoseconds": int(after["utcNanoseconds"]),
+        "participants": participants,
+    }
+
+
+def validate_wave_convergence(
+    host: dict[str, Any],
+    client: dict[str, Any],
+    *,
+    target_wave: int,
+) -> dict[str, Any]:
+    host_wave = effective_wave_index(host)
+    client_wave = effective_wave_index(client)
+    if host_wave < target_wave or client_wave < target_wave:
+        raise RealFlowFailure(
+            f"wave state did not converge through {target_wave}: "
+            f"host={host_wave} clientB={client_wave}"
+        )
+    if (
+        host["scene"]["name"] != "testrun"
+        or client["scene"]["name"] != "testrun"
+        or float(host["player"]["hp"]) <= 0
+        or float(client["player"]["hp"]) <= 0
+    ):
+        raise RealFlowFailure(
+            "wave convergence did not retain two living testrun participants"
+        )
+    for role, state in (("host", host), ("clientB", client)):
+        active = [
+            participant
+            for participant in state["multiplayer"]["participants"]
+            if participant["connected"] and participant["in_run"]
+        ]
+        if len(active) < 2 or any(
+            int(participant["wave"]) < target_wave
+            for participant in active
+        ):
+            raise RealFlowFailure(
+                f"{role} participant projection did not converge through "
+                f"wave {target_wave}: {active}"
+            )
+    return {
+        "targetWave": target_wave,
+        "hostWave": host_wave,
+        "clientBWave": client_wave,
+        "hostParticipantCount": (
+            host["multiplayer"]["participantCount"]
+        ),
+        "clientBParticipantCount": (
+            client["multiplayer"]["participantCount"]
+        ),
+    }
 
 
 class PairSampler:
@@ -476,14 +749,29 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         }
         sampler.sample_now("native-run-materialized")
 
-        sampler.set_phase("host-solomon-dig")
-        result["hostSolomonDig"] = approach_solomon_and_complete_dialogue(
-            config.source_root,
-            host,
-            host_pipe,
-            timeout=config.timeout_seconds,
+        solomon_peer = (
+            host if config.solomon_interactor == "host" else client
         )
-        sampler.sample_now("host-solomon-native-completion")
+        solomon_pipe = (
+            host_pipe
+            if config.solomon_interactor == "host"
+            else client_pipe
+        )
+        sampler.set_phase(
+            f"{config.solomon_interactor}-solomon-dig"
+        )
+        result["solomonDig"] = {
+            "interactor": config.solomon_interactor,
+            "flow": approach_solomon_and_complete_dialogue(
+                config.source_root,
+                solomon_peer,
+                solomon_pipe,
+                timeout=config.timeout_seconds,
+            ),
+        }
+        sampler.sample_now(
+            f"{config.solomon_interactor}-solomon-native-completion"
+        )
 
         sampler.set_phase("first-enemy-spawn")
         enemy_state = sampler.sample_now("first-enemy-wait-start")
@@ -515,13 +803,31 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         assert materialization is not None
         result["clientEnemyMaterialization"] = materialization
 
-        sampler.set_phase("client-real-damage")
-        result["clientEnemyDamage"] = damage_enemy_with_real_input(
-            config.source_root,
-            client,
-            client_pipe,
-            timeout=config.timeout_seconds,
-        )
+        sampler.set_phase("client-real-water-damage")
+        if config.require_water_contact_observation:
+            water_cast = observe_water_cast_with_real_input(
+                config.source_root,
+                client,
+                client_pipe,
+                host_pipe,
+                timeout=config.timeout_seconds,
+            )
+            result["stockWaterCast"] = validate_stock_water_cast(
+                water_cast,
+                expected_contact_damage=(
+                    config.expected_water_contact_damage
+                ),
+            )
+            result["clientEnemyDamage"] = water_cast
+        else:
+            result["clientEnemyDamage"] = (
+                damage_enemy_with_real_input(
+                    config.source_root,
+                    client,
+                    client_pipe,
+                    timeout=config.timeout_seconds,
+                )
+            )
         sampler.sample_now("client-damage-observed")
 
         sampler.set_phase("paired-render-capture")
@@ -559,7 +865,54 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             config.evidence_root / "screenshots",
             label="post-client-damage",
         )
-        result["completedPhase"] = "full"
+        if config.verify_through_wave >= 2:
+            sampler.set_phase(
+                f"client-wave-clear-through-{config.verify_through_wave}"
+            )
+            result["waveAdvance"] = (
+                drive_combat_to_wave_with_real_input(
+                    config.source_root,
+                    client,
+                    client_pipe,
+                    host_pipe,
+                    target_wave=config.verify_through_wave,
+                    timeout=config.timeout_seconds,
+                    sample=sampler.sample_now,
+                )
+            )
+            final_wave = sampler.sample_now(
+                f"wave-{config.verify_through_wave}-converged"
+            )
+            result["waveBoundaryPositions"] = [
+                validate_living_wave_boundary(
+                    sampler.rows,
+                    target_wave=target_wave,
+                    maximum_displacement=(
+                        config.wave_boundary_max_displacement
+                    ),
+                )
+                for target_wave in range(
+                    2,
+                    config.verify_through_wave + 1,
+                )
+            ]
+            result["waveConvergence"] = validate_wave_convergence(
+                final_wave["host"],
+                final_wave["clientB"],
+                target_wave=config.verify_through_wave,
+            )
+            result["wave2Capture"] = paired_windows_capture(
+                config.source_root,
+                host,
+                client,
+                config.evidence_root / "screenshots",
+                label=f"wave-{config.verify_through_wave}",
+            )
+            result["completedPhase"] = (
+                f"wave-{config.verify_through_wave}"
+            )
+        else:
+            result["completedPhase"] = "full"
         result["ok"] = True
         return result
     except BaseException as exc:

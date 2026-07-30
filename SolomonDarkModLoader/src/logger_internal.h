@@ -19,7 +19,6 @@
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <unordered_map>
 
 namespace sdmod::detail::logger {
@@ -36,7 +35,7 @@ extern std::uint64_t g_written_log_line_count;
 extern std::uint64_t g_dropped_log_line_count;
 extern bool g_log_writer_stopping;
 extern bool g_log_writer_running;
-extern std::thread g_log_writer_thread;
+extern HANDLE g_log_writer_thread;
 extern std::filesystem::path g_crash_log_path;
 extern LPTOP_LEVEL_EXCEPTION_FILTER g_previous_exception_filter;
 extern bool g_crash_handler_installed;

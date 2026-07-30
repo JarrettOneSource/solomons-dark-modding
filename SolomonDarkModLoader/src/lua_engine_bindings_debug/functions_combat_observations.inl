@@ -28,7 +28,7 @@ int LuaDebugGetLocalCastObservation(lua_State* state) {
             network_actor_id,
             &damage);
 
-    lua_createtable(state, 0, 20);
+    lua_createtable(state, 0, 30);
     lua_pushboolean(state, mana_valid ? 1 : 0);
     lua_setfield(state, -2, "mana_valid");
     lua_pushinteger(state, static_cast<lua_Integer>(mana.actor_address));
@@ -48,6 +48,62 @@ int LuaDebugGetLocalCastObservation(lua_State* state) {
 
     lua_pushboolean(state, damage_valid ? 1 : 0);
     lua_setfield(state, -2, "damage_claim_valid");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(damage.native_contact_count));
+    lua_setfield(state, -2, "damage_native_contact_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(damage.native_contact_skill_id));
+    lua_setfield(state, -2, "damage_native_contact_skill_id");
+    lua_pushboolean(
+        state,
+        damage.native_contact_skill_consistent ? 1 : 0);
+    lua_setfield(
+        state,
+        -2,
+        "damage_native_contact_skill_consistent");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            damage.native_contact_damage_total));
+    lua_setfield(state, -2, "damage_native_contact_total");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            damage.minimum_native_contact_damage));
+    lua_setfield(state, -2, "damage_native_contact_minimum");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            damage.maximum_native_contact_damage));
+    lua_setfield(state, -2, "damage_native_contact_maximum");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            damage.native_contact_sample_count));
+    lua_setfield(
+        state,
+        -2,
+        "damage_native_contact_sample_count");
+    lua_createtable(
+        state,
+        static_cast<int>(
+            damage.native_contact_sample_count),
+        0);
+    for (std::size_t index = 0;
+         index < damage.native_contact_sample_count;
+         ++index) {
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(
+                damage.native_contact_damage_samples[index]));
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "damage_native_contact_samples");
     lua_pushinteger(state, static_cast<lua_Integer>(damage.claim_count));
     lua_setfield(state, -2, "damage_claim_count");
     lua_pushinteger(

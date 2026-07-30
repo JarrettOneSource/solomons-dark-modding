@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "runName": "fb25-loopback-yyyymmdd-hhmmss",
+  "topology": "loopback_windows",
+  "sourceRoot": "/mnt/c/sd-fieldbreak25-20260730",
+  "packageRoot": "/replace/with/fieldbreak25/package",
+  "gameDirectory": "/replace/with/original/game/directory",
+  "evidenceRoot": "/mnt/d/codex-evidence/fieldbreak25-20260730/run-name",
+  "directoryUrl": "https://solomondarker.com",
+  "privacy": "friends",
+  "expectedSourceSha": "0000000000000000000000000000000000000000",
+  "solomonInteractor": "client",
+  "verifyThroughWave": 2,
+  "requireWaterContactObservation": true,
+  "expectedWaterContactDamage": 0.025,
+  "waveBoundaryMaxDisplacement": 64,
+  "timeoutSeconds": 300,
+  "samplingSeconds": 0.1,
+  "host": {
+    "platform": "windows_local",
+    "launcherScope": "fb25-host",
+    "instance": "fb25-host",
+    "playerName": "Host",
+    "pipeName": "SolomonDarkModLoader_LuaExec_fb25-host",
+    "participantId": "0x2500000000000001",
+    "loadoutElement": "air",
+    "loadoutDiscipline": "body",
+    "localPort": 50911,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 50912,
+    "matchStartActions": [
+      {
+        "kind": "click",
+        "x": 0.956,
+        "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "wait_scene",
+        "scene": "testrun",
+        "timeoutSeconds": 90
+      }
+    ]
+  },
+  "client": {
+    "platform": "windows_local",
+    "launcherScope": "fb25-client",
+    "instance": "fb25-client",
+    "playerName": "client B",
+    "pipeName": "SolomonDarkModLoader_LuaExec_fb25-client",
+    "participantId": "0x2500000000000002",
+    "loadoutElement": "water",
+    "loadoutDiscipline": "body",
+    "localPort": 50912,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 50911,
+    "matchStartActions": []
+  },
+  "metadata": {
+    "purpose": "beta25 owner flow: client B walks to Dig, Water damage stays stock, living positions survive wave 1, and wave 2 converges"
+  }
+}

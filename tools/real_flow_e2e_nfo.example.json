@@ -21,9 +21,9 @@
     "participantId": "0x2000000000000001",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
-    "localPort": 51611,
+    "localPort": 50911,
     "remoteHost": "198.51.100.20",
-    "remotePort": 51612,
+    "remotePort": 50912,
     "matchStartActions": [
       {
         "kind": "click",
@@ -47,17 +47,17 @@
     "participantId": "0x2000000000000002",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
-    "localPort": 51612,
+    "localPort": 50912,
     "remoteHost": "203.0.113.10",
-    "remotePort": 51611,
+    "remotePort": 50911,
     "matchStartActions": [],
     "ssh": {
       "executable": "/mnt/c/Windows/System32/OpenSSH/ssh.exe",
       "target": "nfo-alias",
-      "stageRoot": "/root/sd-netrepro-20260729",
+      "stageRoot": "/root/sd-fieldbreak25-20260730",
       "display": ":97",
-      "protonPath": "/root/sd-netrepro-20260729/proton/proton",
-      "xvfbPath": "/root/sd-netrepro-20260729/x11/usr/bin/Xvfb"
+      "protonPath": "/root/sd-fieldbreak25-20260730/proton/proton",
+      "xvfbPath": "/root/sd-fieldbreak25-20260730/x11/usr/bin/Xvfb"
     }
   },
   "metadata": {

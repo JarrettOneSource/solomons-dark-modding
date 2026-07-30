@@ -458,12 +458,30 @@ def test_process_termination_has_no_joinable_static_worker_destructors() -> str:
         "runtime tick": read_text(
             ROOT / "SolomonDarkModLoader/src/runtime_tick_service.cpp"
         ),
+        "asynchronous logger": read_text(
+            ROOT / "SolomonDarkModLoader/src/logger.cpp"
+        ) + read_text(
+            ROOT / "SolomonDarkModLoader/src/logger_writer.cpp"
+        ),
+        "network telemetry": read_text(
+            ROOT / "SolomonDarkModLoader/src/network_telemetry.cpp"
+        ),
+        "local UDP ingress": read_text(
+            ROOT / "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+        ) + read_text(
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "receive_packets.inl"
+        ),
     }
 
     joinable_statics = [
         name
         for name, source in worker_sources.items()
-        if re.search(r"^std::thread\s+g_\w+_thread\s*;", source, re.M)
+        if re.search(
+            r"(?:^|\n)\s*std::thread\s+(?:g_\w+_thread|writer_thread)\s*;",
+            source,
+        )
     ]
     if joinable_statics:
         raise StaticReTestFailure(
@@ -478,7 +496,7 @@ def test_process_termination_has_no_joinable_static_worker_destructors() -> str:
             token in source
             for token in (
                 "#include <process.h>",
-                "HANDLE g_",
+                "HANDLE ",
                 "_beginthreadex(",
                 "WaitForSingleObject(",
                 "CloseHandle(",
