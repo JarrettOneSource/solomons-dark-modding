@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +76,81 @@ def state(
 
 
 class BotWaveRespawnTests(unittest.TestCase):
+    def test_native_lethal_hit_retries_across_pump_ticks(self) -> None:
+        queues = [
+            {"ok": "true", "serial": str(serial)}
+            for serial in (11, 12, 13)
+        ]
+        results = [
+            (
+                {
+                    "completed": "true",
+                    "success": "true",
+                    "before": before,
+                    "after": after,
+                    "error": "",
+                },
+                completed_at,
+            )
+            for before, after, completed_at in (
+                ("50", "34", "first"),
+                ("34", "18", "second"),
+                ("18", "0", "third"),
+            )
+        ]
+        with (
+            mock.patch.object(respawn, "values", side_effect=queues),
+            mock.patch.object(respawn, "wait_for", side_effect=results),
+            mock.patch.object(respawn.time, "sleep") as sleep,
+        ):
+            lethal = respawn.invoke_native_lethal_hit("host-pipe", 42)
+
+        self.assertEqual(lethal["serials"], [11, 12, 13])
+        self.assertEqual(lethal["probeCount"], 3)
+        self.assertEqual(lethal["hpBefore"], 50)
+        self.assertEqual(lethal["hpAfter"], 0)
+        self.assertEqual(
+            sleep.call_args_list,
+            [
+                mock.call(respawn.NATIVE_LETHAL_RETRY_INTERVAL),
+                mock.call(respawn.NATIVE_LETHAL_RETRY_INTERVAL),
+            ],
+        )
+
+    def test_native_lethal_hit_has_a_bounded_probe_count(self) -> None:
+        queues = [
+            {"ok": "true", "serial": str(serial)}
+            for serial in range(1, respawn.NATIVE_LETHAL_PROBE_LIMIT + 1)
+        ]
+        results = [
+            (
+                {
+                    "completed": "true",
+                    "success": "true",
+                    "before": "50",
+                    "after": "50",
+                    "error": "",
+                },
+                f"attempt-{serial}",
+            )
+            for serial in range(1, respawn.NATIVE_LETHAL_PROBE_LIMIT + 1)
+        ]
+        with (
+            mock.patch.object(respawn, "values", side_effect=queues),
+            mock.patch.object(respawn, "wait_for", side_effect=results),
+            mock.patch.object(respawn.time, "sleep") as sleep,
+            self.assertRaisesRegex(
+                respawn.RespawnVerificationFailure,
+                "after 10 separated stock probes",
+            ),
+        ):
+            respawn.invoke_native_lethal_hit("host-pipe", 42)
+
+        self.assertEqual(
+            sleep.call_count,
+            respawn.NATIVE_LETHAL_PROBE_LIMIT - 1,
+        )
+
     def test_retail_gate_is_selected_by_native_route_geometry(self) -> None:
         gate = respawn.select_retail_gate(
             (326.0, 150.0),

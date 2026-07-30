@@ -391,6 +391,8 @@ def test_botcombat_live_harnesses_require_applied_damage_and_peer_respawn() -> s
             '"-NoTileWindows"',
             "queue_native_magic_hit_behavior_probe(",
             "get_native_magic_hit_behavior_probe_result(",
+            "NATIVE_LETHAL_PROBE_LIMIT = 10",
+            "time.sleep(NATIVE_LETHAL_RETRY_INTERVAL)",
             "route_slot_zero_to_retail_waves(",
             '"arrival_valid"',
             '"arrivalDistance"',

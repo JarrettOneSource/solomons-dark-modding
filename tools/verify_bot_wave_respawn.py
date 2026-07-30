@@ -49,6 +49,8 @@ VITAL_TOLERANCE = 0.1
 POSITION_TOLERANCE = 35.0
 ROUTE_ARRIVAL_RADIUS = 34.0
 RETAIL_RUN_SEED = 0x2E9D3B65
+NATIVE_LETHAL_PROBE_LIMIT = 10
+NATIVE_LETHAL_RETRY_INTERVAL = 0.5
 
 
 class RespawnVerificationFailure(RuntimeError):
@@ -1554,9 +1556,11 @@ def invoke_native_lethal_hit(
     host_pipe: str,
     participant_id: int,
 ) -> dict[str, Any]:
-    queued = values(
-        host_pipe,
-        f"""
+    probes: list[dict[str, Any]] = []
+    for probe_index in range(NATIVE_LETHAL_PROBE_LIMIT):
+        queued = values(
+            host_pipe,
+            f"""
 local ok, err, serial =
   sd.debug.queue_native_magic_hit_behavior_probe(
     0.0, 10000.0, 8, {participant_id}, 0.0)
@@ -1564,16 +1568,16 @@ print("ok=" .. tostring(ok))
 print("error=" .. tostring(err or ""))
 print("serial=" .. tostring(serial or 0))
 """,
-    )
-    serial = integer(queued, "serial")
-    if queued.get("ok") != "true" or serial <= 0:
-        raise RespawnVerificationFailure(
-            f"Native lethal hit did not queue: {queued}"
         )
-    result, completed_at = wait_for(
-        lambda: values(
-            host_pipe,
-            f"""
+        serial = integer(queued, "serial")
+        if queued.get("ok") != "true" or serial <= 0:
+            raise RespawnVerificationFailure(
+                f"Native lethal hit did not queue: {queued}"
+            )
+        result, completed_at = wait_for(
+            lambda: values(
+                host_pipe,
+                f"""
 local completed, success, before, after, err =
   sd.debug.get_native_magic_hit_behavior_probe_result({serial})
 print("completed=" .. tostring(completed))
@@ -1582,27 +1586,51 @@ print("before=" .. tostring(before or 0))
 print("after=" .. tostring(after or 0))
 print("error=" .. tostring(err or ""))
 """,
-        ),
-        lambda row: row.get("completed") == "true",
-        label="native synthetic lethal hit",
-        timeout=12,
-        interval=0.05,
-    )
-    if (
-        result.get("success") != "true"
-        or number(result, "before") <= 0.0
-        or number(result, "after", 1.0) > 0.0
-    ):
-        raise RespawnVerificationFailure(
-            f"Native lethal hit did not kill the synthetic target: {result}"
+            ),
+            lambda row: row.get("completed") == "true",
+            label="native synthetic lethal hit",
+            timeout=12,
+            interval=0.05,
         )
-    return {
-        "serial": serial,
-        "completedAt": completed_at,
-        "hpBefore": number(result, "before"),
-        "hpAfter": number(result, "after"),
-        "raw": result,
-    }
+        hp_before = number(result, "before")
+        hp_after = number(result, "after")
+        if (
+            result.get("success") != "true"
+            or not math.isfinite(hp_before)
+            or not math.isfinite(hp_after)
+            or hp_before <= 0.0
+            or hp_after > hp_before + VITAL_TOLERANCE
+        ):
+            raise RespawnVerificationFailure(
+                f"Native lethal hit returned an invalid result: {result}"
+            )
+        probes.append(
+            {
+                "serial": serial,
+                "completedAt": completed_at,
+                "hpBefore": hp_before,
+                "hpAfter": hp_after,
+                "raw": result,
+            }
+        )
+        if hp_after <= 0.0:
+            return {
+                "serial": serial,
+                "serials": [probe["serial"] for probe in probes],
+                "completedAt": completed_at,
+                "hpBefore": probes[0]["hpBefore"],
+                "hpAfter": hp_after,
+                "probeCount": len(probes),
+                "probes": probes,
+                "raw": result,
+            }
+        if probe_index + 1 < NATIVE_LETHAL_PROBE_LIMIT:
+            time.sleep(NATIVE_LETHAL_RETRY_INTERVAL)
+
+    raise RespawnVerificationFailure(
+        "Native lethal hit did not kill the synthetic target after "
+        f"{NATIVE_LETHAL_PROBE_LIMIT} separated stock probes: {probes}"
+    )
 
 
 def damage_edges_for(

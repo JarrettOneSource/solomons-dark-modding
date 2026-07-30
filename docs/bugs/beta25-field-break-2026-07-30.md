@@ -280,6 +280,16 @@ PIDs `3424` and `26404` were stopped by exact executable path. The result and
 visual capture are under
 `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-pre3`.
 
+The first exact-SHA landing invocation exposed a harness assumption before
+respawn: eight immediate calls inside one native probe reduced Ember from
+50 to 34 rather than killing her. The calls share one gameplay-pump tick, so
+that setup is not a deterministic lethal transaction. The verifier now makes
+at most ten probe requests separated by 0.5 seconds, stopping on the first
+lethal result. Every request still invokes the stock damage handler; the
+acceptance still contains no direct HP write or forced enemy death. The
+nonlethal diagnostic is retained under
+`/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha`.
+
 ## Full-flow harness limitation
 
 The earlier fresh-profile real-flow calibration attempted to drive the stock
@@ -314,7 +324,7 @@ Landing evidence is written without changing the tested commit:
 - exact-SHA focused boundary result:
   `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-targeted-final-result.json`;
 - exact-SHA synthetic respawn result:
-  `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha/result.json`;
+  `/mnt/d/codex-evidence/botcombat-20260729/runs/fb25-fieldbreak25-final-sha-r2/result.json`;
 - the one permitted final full-flow loopback:
   `/mnt/d/codex-evidence/fieldbreak25-20260730/fb25-fullflow-final/result.json`.
 
