@@ -241,7 +241,15 @@ class RealFlowE2ETests(unittest.TestCase):
         controller = (
             ROOT / "tools/verify_real_flow_e2e.py"
         ).read_text(encoding="utf-8")
+        runtime = (
+            ROOT / "tools/_real_flow_e2e/runtime.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("authority_pipe=host_pipe", controller)
+        self.assertIn('"kind": "direct-authority-target"', runtime)
+        self.assertIn(
+            "12000 if remote_authority else 1200",
+            runtime,
+        )
 
     def test_shared_hub_wait_requires_converged_participant_views(
         self,

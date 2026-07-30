@@ -777,9 +777,22 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 timeout=config.timeout_seconds,
             ),
         }
-        sampler.sample_now(
+        solomon_completion = sampler.sample_now(
             f"{config.solomon_interactor}-solomon-native-completion"
         )
+        dead_at_completion = [
+            role
+            for role, state in (
+                ("host", solomon_completion["host"]),
+                ("client B", solomon_completion["clientB"]),
+            )
+            if float(state["player"]["hp"]) <= 0.0
+        ]
+        if dead_at_completion:
+            raise RealFlowFailure(
+                "a participant died before the client completed Solomon Dig: "
+                + ", ".join(dead_at_completion)
+            )
 
         sampler.set_phase("first-enemy-spawn")
         enemy_state = sampler.sample_now("first-enemy-wait-start")

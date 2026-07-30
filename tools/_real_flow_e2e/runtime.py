@@ -1323,16 +1323,26 @@ def approach_solomon_and_complete_dialogue(
         local_initial,
         target_initial,
     )
-    obstacles = pipe.openable_path_obstacles()
-    gate_route = plan_openable_gate_route(
-        obstacles,
-        initial["player"]["x"],
-        initial["player"]["y"],
-        initial["solomon"]["x"],
-        initial["solomon"]["y"],
+    remote_authority = target_pipe is not pipe
+    obstacles = [] if remote_authority else pipe.openable_path_obstacles()
+    gate_route = (
+        None
+        if remote_authority
+        else plan_openable_gate_route(
+            obstacles,
+            initial["player"]["x"],
+            initial["player"]["y"],
+            initial["solomon"]["x"],
+            initial["solomon"]["y"],
+        )
     )
     grid: dict[str, Any] | None = None
-    if gate_route is not None:
+    if remote_authority:
+        path = {
+            "kind": "direct-authority-target",
+            "waypoints": [],
+        }
+    elif gate_route is not None:
         path = gate_route
     else:
         grid = pipe.navigation_grid(timeout=min(15.0, timeout))
@@ -1450,7 +1460,13 @@ def approach_solomon_and_complete_dialogue(
             source_root,
             peer,
             key,
-            max(50, min(1200, round(component * 2.0))),
+            max(
+                50,
+                min(
+                    12000 if remote_authority else 1200,
+                    round(component * (10.0 if remote_authority else 2.0)),
+                ),
+            ),
         )
     if acquired is None:
         raise RuntimeProbeError(
