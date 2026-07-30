@@ -252,6 +252,10 @@ class RealFlowE2ETests(unittest.TestCase):
             runtime,
         )
         self.assertIn("cover_action=(", controller)
+        self.assertGreaterEqual(
+            controller.count("cover_client_dig()"),
+            3,
+        )
 
     @mock.patch("tools._real_flow_e2e.runtime._click")
     def test_client_dig_cover_casts_host_air_at_a_live_enemy(

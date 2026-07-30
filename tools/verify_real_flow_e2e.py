@@ -738,16 +738,32 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             host_pipe,
             config.host.match_start_actions,
         )
-        result["sharedRun"] = {
-            "host": wait_for_state(
-                host_pipe,
-                lambda state: (
-                    state["solomon"]["valid"]
-                    and state["scene"]["name"] == "testrun"
-                ),
-                timeout=config.timeout_seconds,
-                label="host native testrun after Start Match",
+        host_run = wait_for_state(
+            host_pipe,
+            lambda state: (
+                state["solomon"]["valid"]
+                and state["scene"]["name"] == "testrun"
             ),
+            timeout=config.timeout_seconds,
+            label="host native testrun after Start Match",
+        )
+        host_cover_actions: list[dict[str, Any]] = []
+
+        def cover_client_dig() -> dict[str, Any]:
+            action = cover_participant_with_real_input_once(
+                config.source_root,
+                host,
+                host_pipe,
+                movement_index=len(host_cover_actions),
+            )
+            host_cover_actions.append(action)
+            return action
+
+        if config.solomon_interactor == "client":
+            cover_client_dig()
+            cover_client_dig()
+        result["sharedRun"] = {
+            "host": host_run,
             "clientB": wait_for_state(
                 client_pipe,
                 lambda state: state["scene"]["name"] == "testrun",
@@ -768,18 +784,6 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         sampler.set_phase(
             f"{config.solomon_interactor}-solomon-dig"
         )
-        host_cover_actions: list[dict[str, Any]] = []
-
-        def cover_client_dig() -> dict[str, Any]:
-            action = cover_participant_with_real_input_once(
-                config.source_root,
-                host,
-                host_pipe,
-                movement_index=len(host_cover_actions),
-            )
-            host_cover_actions.append(action)
-            return action
-
         result["solomonDig"] = {
             "interactor": config.solomon_interactor,
             "flow": approach_solomon_and_complete_dialogue(
