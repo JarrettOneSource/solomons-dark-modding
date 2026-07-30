@@ -1020,6 +1020,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         IsBusy = true;
         ClearUpdateProgress();
         StatusText = statusText;
+        switch (mode)
+        {
+            case LauncherUiCommandMode.PrepareSteamJoin:
+                ShowConnectProgress(
+                    SessionConnectProgressMapper.PreparingLobby());
+                break;
+            case LauncherUiCommandMode.LaunchSteamJoin:
+            case LauncherUiCommandMode.HostSteam:
+                ShowConnectProgress(
+                    SessionConnectProgressMapper.StagingGame());
+                break;
+        }
         CommandPreviewText = client_.BuildCommandPreview(mode, targetModId, hostOptions);
         LauncherUiInvocationResult invocation;
         try
@@ -1036,6 +1048,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             SetError(ex.Message);
             StatusText = "The command failed. Read the error message.";
             IsBusy = false;
+            HideConnectProgress();
             if (launchesGame)
             {
                 StartSteamInviteListener();
@@ -1056,6 +1069,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             SetError(invocation.ErrorMessage ?? "The launcher command failed.");
             StatusText = "The command failed. Read the error message.";
             IsBusy = false;
+            HideConnectProgress();
             if (launchesGame)
             {
                 StartSteamInviteListener();
@@ -2393,6 +2407,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         consentedJoinStatusText_ = null;
         pendingLobbyMods_ = null;
         IsModDownloadPromptOpen = false;
+        HideConnectProgress();
         StatusText = "Join canceled. No mods were downloaded.";
         TryStartPendingLobbyJoin();
     }

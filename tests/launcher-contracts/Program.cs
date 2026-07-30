@@ -1819,6 +1819,8 @@ static Task TestLobbyConnectProgressMappingAsync()
     var ladder = new[]
     {
         SessionConnectProgressMapper.JoiningLobby(123),
+        SessionConnectProgressMapper.PreparingLobby(),
+        SessionConnectProgressMapper.StagingGame(),
         SessionConnectProgressMapper.StartingGame(),
         SessionConnectProgressMapper.FromSessionStatus(Session("Disabled")),
         SessionConnectProgressMapper.FromSessionStatus(Session("JoiningLobby")),

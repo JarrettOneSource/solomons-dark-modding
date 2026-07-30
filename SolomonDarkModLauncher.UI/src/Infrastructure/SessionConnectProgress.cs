@@ -16,6 +16,8 @@ internal sealed record SessionConnectProgress(
 internal static class SessionConnectProgressMapper
 {
     public const double JoiningLobbyFraction = 0.08;
+    public const double PreparingLobbyFraction = 0.11;
+    public const double StagingGameFraction = 0.13;
     public const double StartingGameFraction = 0.15;
     public const double SessionBootFraction = 0.22;
     public const double LobbyPhaseFraction = 0.35;
@@ -28,6 +30,20 @@ internal static class SessionConnectProgressMapper
     /// and no joined/status event has arrived yet.</summary>
     public static SessionConnectProgress JoiningLobby(ulong lobbyId) =>
         new($"Joining lobby {lobbyId}…", JoiningLobbyFraction, false, false);
+
+    /// <summary>Launcher-side stage: the joined lobby is being prepared —
+    /// host mod sync and instance staging before launch.</summary>
+    public static SessionConnectProgress PreparingLobby() =>
+        new(
+            "Preparing the lobby — syncing host mods…",
+            PreparingLobbyFraction,
+            false,
+            false);
+
+    /// <summary>Launcher-side stage: the staged instance is being assembled
+    /// right before the game process starts.</summary>
+    public static SessionConnectProgress StagingGame() =>
+        new("Staging the game…", StagingGameFraction, false, false);
 
     /// <summary>Launcher-side stage: the game process was launched and the
     /// loader has not written a session status yet.</summary>
