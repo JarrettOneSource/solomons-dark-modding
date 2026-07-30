@@ -1104,6 +1104,25 @@ def exact_owned_processes(
     return records
 
 
+def _run_owned_process_action(
+    ps: PowerShell,
+    peers: tuple[WindowsPeer, ...],
+    pid: int,
+    script: str,
+    *,
+    exited_result: str,
+) -> str:
+    try:
+        return ps.run(script, timeout=15)
+    except WindowsHarnessError:
+        if any(
+            process.pid == pid
+            for process in exact_owned_processes(ps, peers)
+        ):
+            raise
+        return exited_result
+
+
 def stop_exact_owned_processes(
     ps: PowerShell,
     peers: tuple[WindowsPeer, ...],
@@ -1121,7 +1140,10 @@ def stop_exact_owned_processes(
         expected_paths.items(),
         reverse=True,
     ):
-        output = ps.run(
+        output = _run_owned_process_action(
+            ps,
+            peers,
+            pid,
             f"""
 $target=Get-CimInstance Win32_Process -Filter 'ProcessId={pid}'
 if($null -eq $target){{
@@ -1137,7 +1159,7 @@ if(-not [string]::Equals(
 Stop-Process -Id {pid} -Force
 [Console]::Out.Write('stopped')
 """,
-            timeout=15,
+            exited_result="exited-before-stop",
         )
         stopped.append(
             {
@@ -1168,7 +1190,10 @@ def close_exact_owned_processes(
     requested: list[dict[str, Any]] = []
     for record in sorted(records, key=lambda row: row.pid, reverse=True):
         expected_path = record.executable_path
-        output = ps.run(
+        output = _run_owned_process_action(
+            ps,
+            peers,
+            record.pid,
             f"""
 $target=Get-CimInstance Win32_Process -Filter 'ProcessId={record.pid}'
 if($null -eq $target){{
@@ -1191,7 +1216,7 @@ if($process.MainWindowHandle -eq 0){{
   [Console]::Out.Write('close-declined')
 }}
 """,
-            timeout=15,
+            exited_result="exited-before-close",
         )
         requested.append(
             {

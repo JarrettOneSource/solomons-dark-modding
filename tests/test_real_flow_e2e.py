@@ -22,6 +22,11 @@ from tools._real_flow_e2e.runtime import (
     damage_enemy_with_real_input,
     normalize_state,
 )
+from tools._real_flow_e2e.windows import (
+    ProcessRecord,
+    WindowsHarnessError,
+    close_exact_owned_processes,
+)
 from tools._real_flow_e2e.ws20 import Ws20Peer
 
 
@@ -368,6 +373,64 @@ class RealFlowE2ETests(unittest.TestCase):
                     "enemyHealthBarCandidates"
                 ][0]["signature"],
                 "enemy-health-bar",
+            )
+
+    def test_cleanup_accepts_a_process_that_exits_before_close(
+        self,
+    ) -> None:
+        class RacingPowerShell:
+            def run(self, script: str, *, timeout: float) -> str:
+                raise WindowsHarnessError(
+                    "refusing PID 8184; path changed to"
+                )
+
+        record = ProcessRecord(
+            pid=8184,
+            parent_pid=1,
+            executable_path=r"C:\owned\SolomonDark.exe",
+            command_line="",
+        )
+        with mock.patch(
+            "tools._real_flow_e2e.windows.exact_owned_processes",
+            side_effect=[[record], [], []],
+        ):
+            result = close_exact_owned_processes(
+                RacingPowerShell(),  # type: ignore[arg-type]
+                (),
+            )
+
+        self.assertTrue(result["allExitedGracefully"])
+        self.assertEqual(
+            result["gracefulRequests"][0]["result"],
+            "exited-before-close",
+        )
+
+    def test_cleanup_still_rejects_a_live_process_path_mismatch(
+        self,
+    ) -> None:
+        class MismatchedPowerShell:
+            def run(self, script: str, *, timeout: float) -> str:
+                raise WindowsHarnessError("process path changed")
+
+        record = ProcessRecord(
+            pid=8184,
+            parent_pid=1,
+            executable_path=r"C:\owned\SolomonDark.exe",
+            command_line="",
+        )
+        with (
+            mock.patch(
+                "tools._real_flow_e2e.windows.exact_owned_processes",
+                side_effect=[[record], [record]],
+            ),
+            self.assertRaisesRegex(
+                WindowsHarnessError,
+                "process path changed",
+            ),
+        ):
+            close_exact_owned_processes(
+                MismatchedPowerShell(),  # type: ignore[arg-type]
+                (),
             )
 
     def test_packet_accounting_preserves_fragment_rejections(
