@@ -1583,7 +1583,7 @@ def cover_participant_with_real_input_once(
         state["camera"],
     )
     started = time.time_ns()
-    if targets:
+    if targets and movement_index % 3 == 2:
         x, y = targets[movement_index % len(targets)]
         detail = _click(source_root, peer, x, y, 120)
         return {
@@ -1594,13 +1594,15 @@ def cover_participant_with_real_input_once(
             "hp": float(state["player"]["hp"]),
             "result": detail,
         }
-    key = ("d", "s", "a", "w")[movement_index % 4]
-    detail = _send_key(source_root, peer, key, 450)
+    evade_index = movement_index - (movement_index // 3)
+    key = ("d", "s", "a", "w")[evade_index % 4]
+    hold_ms = 2200 if movement_index == 0 else 1400
+    detail = _send_key(source_root, peer, key, hold_ms)
     return {
         "timeUtcNanoseconds": started,
         "kind": "evade",
         "key": key,
-        "liveEnemyCount": 0,
+        "liveEnemyCount": len(live_enemies),
         "hp": float(state["player"]["hp"]),
         "result": detail,
     }

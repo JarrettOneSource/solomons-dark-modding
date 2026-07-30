@@ -289,7 +289,7 @@ class RealFlowE2ETests(unittest.TestCase):
             ROOT,
             mock.Mock(),
             pipe,
-            movement_index=0,
+            movement_index=2,
         )
 
         self.assertEqual(action["kind"], "air-cast")
