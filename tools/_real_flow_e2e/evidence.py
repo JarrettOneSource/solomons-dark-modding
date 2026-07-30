@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import threading
@@ -109,14 +110,6 @@ def rendered_enemy_assertion(
     viewport = state["viewport"]
     width = int(viewport["width"])
     height = int(viewport["height"])
-    projected = [
-        enemy
-        for enemy in state["replicatedEnemies"]
-        if enemy["screen_valid"]
-        and 0 <= enemy["screen_x"] < width
-        and 0 <= enemy["screen_y"] < height
-        and not enemy["dead"]
-    ]
     bindings = {
         int(binding["network_id"]): binding
         for binding in state["enemyBindings"]
@@ -142,21 +135,66 @@ def rendered_enemy_assertion(
             "client screenshot has no replicated enemy with a matched "
             "native render actor"
         )
-    projected_candidates = [
-        enemy
-        for enemy in projected
-        if int(enemy["network_id"]) in bindings
-        and int(enemy["network_id"]) in native
-    ]
+    camera = state.get("camera", {})
+    projected_candidates: list[
+        tuple[dict[str, Any], float, float, str]
+    ] = []
+    for enemy in candidates:
+        network_id = int(enemy["network_id"])
+        actor = native[network_id]
+        if (
+            camera.get("sceneAvailable") is True
+            and all(
+                key in camera
+                for key in ("originX", "originY", "scale")
+            )
+            and all(key in actor for key in ("x", "y"))
+        ):
+            camera_scale = float(camera["scale"])
+            screen_x = (
+                float(actor["x"]) - float(camera["originX"])
+            ) * camera_scale
+            screen_y = (
+                float(actor["y"]) - float(camera["originY"])
+            ) * camera_scale
+            if (
+                camera_scale > 0
+                and math.isfinite(screen_x)
+                and math.isfinite(screen_y)
+                and 0 <= screen_x < width
+                and 0 <= screen_y < height
+            ):
+                projected_candidates.append(
+                    (enemy, screen_x, screen_y, "native-camera")
+                )
+                continue
+        if (
+            enemy["screen_valid"]
+            and 0 <= float(enemy["screen_x"]) < width
+            and 0 <= float(enemy["screen_y"]) < height
+        ):
+            projected_candidates.append(
+                (
+                    enemy,
+                    float(enemy["screen_x"]),
+                    float(enemy["screen_y"]),
+                    "replicated-state",
+                )
+            )
     with Image.open(capture_path) as image:
         rgb = image.convert("RGB")
         image_size = [rgb.width, rgb.height]
         scale_x = rgb.width / max(1, width)
         scale_y = rgb.height / max(1, height)
         rows: list[dict[str, Any]] = []
-        for enemy in projected_candidates:
-            center_x = round(float(enemy["screen_x"]) * scale_x)
-            center_y = round(float(enemy["screen_y"]) * scale_y)
+        for (
+            enemy,
+            screen_x,
+            screen_y,
+            projection_source,
+        ) in projected_candidates:
+            center_x = round(screen_x * scale_x)
+            center_y = round(screen_y * scale_y)
             radius = max(
                 8,
                 min(48, round(24 * max(scale_x, scale_y))),
@@ -181,9 +219,10 @@ def rendered_enemy_assertion(
                         bindings[int(enemy["network_id"])]["address"]
                     ),
                     "projection": [
-                        float(enemy["screen_x"]),
-                        float(enemy["screen_y"]),
+                        screen_x,
+                        screen_y,
                     ],
+                    "projectionSource": projection_source,
                     "cropBounds": list(bounds),
                     "channelRanges": channel_ranges,
                     "channelStandardDeviation": standard_deviation,

@@ -99,6 +99,12 @@ class RealFlowE2ETests(unittest.TestCase):
     def _render_state(self, *, projected: bool = False) -> dict[str, object]:
         return {
             "viewport": {"width": 100, "height": 100},
+            "camera": {
+                "sceneAvailable": True,
+                "originX": 0.0,
+                "originY": 0.0,
+                "scale": 1.0,
+            },
             "replicatedEnemies": [
                 {
                     "network_id": 101,
@@ -121,6 +127,8 @@ class RealFlowE2ETests(unittest.TestCase):
                 {
                     "network_id": 101,
                     "dead": False,
+                    "x": 50.0,
+                    "y": 50.0,
                 }
             ],
         }
@@ -303,10 +311,38 @@ class RealFlowE2ETests(unittest.TestCase):
     def test_render_assertion_rejects_unrelated_world_texture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             capture = Path(directory) / "uniform.png"
-            Image.new("RGB", (100, 100), (90, 100, 110)).save(capture)
+            image = Image.new("RGB", (100, 100), (90, 100, 110))
+            for y in range(8):
+                for x in range(8):
+                    image.putpixel((x, y), (200, 10, 220))
+            image.save(capture)
 
             with self.assertRaisesRegex(EvidenceError, "visually uniform"):
                 rendered_enemy_assertion(self._render_state(), capture)
+
+    def test_render_assertion_projects_bound_native_actor_through_camera(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            capture = Path(directory) / "native-camera.png"
+            image = Image.new("RGB", (100, 100), (20, 20, 20))
+            for y in range(45, 56):
+                for x in range(45, 56):
+                    image.putpixel(
+                        (x, y),
+                        (220, 180, 40) if (x + y) % 2 else (40, 80, 220),
+                    )
+            image.save(capture)
+
+            result = rendered_enemy_assertion(
+                self._render_state(),
+                capture,
+            )
+
+            self.assertEqual(
+                result["accepted"][0]["projectionSource"],
+                "native-camera",
+            )
 
     def test_render_assertion_accepts_enemy_health_bar_signature(
         self,
