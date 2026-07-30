@@ -26,6 +26,7 @@ from .remote import (
 from .runtime import (
     LuaPipe,
     approach_solomon_and_complete_dialogue,
+    damage_click_targets,
     enemy_attack_assertion,
     enemy_motion_assertion,
     execute_actions,
@@ -150,65 +151,65 @@ def _damage_remote_enemy(
     *,
     timeout: float,
 ) -> dict[str, Any]:
+    def live_candidates(state: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            enemy
+            for enemy in state["replicatedEnemies"]
+            if not enemy["dead"] and enemy["hp"] > 0
+        ]
+
     before = wait_for_state(
         pipe,
-        lambda state: any(
-            not enemy["dead"] and enemy["hp"] > 0
-            for enemy in state["replicatedEnemies"]
+        lambda state: (
+            state["scene"]["name"] == "testrun"
+            and state["player"]["valid"]
+            and state["player"]["hp"] > 0
+            and bool(
+                damage_click_targets(
+                    live_candidates(state),
+                    state["player"],
+                    state["viewport"],
+                    state["camera"],
+                )
+            )
         ),
         timeout=timeout,
-        label="client B live replica for real damage",
+        label="client B native-camera-aimable replica for real damage",
     )
     viewport = before["viewport"]
     if viewport["width"] <= 0 or viewport["height"] <= 0:
         raise WanFlowFailure(
             f"client B reported an invalid viewport: {viewport}"
         )
-    live = [
-        enemy
-        for enemy in before["replicatedEnemies"]
-        if not enemy["dead"] and enemy["hp"] > 0
-    ]
+    live = live_candidates(before)
     hp_before = {
         int(enemy["network_id"]): float(enemy["hp"])
         for enemy in live
     }
-    projected = [
-        (
-            max(
-                0.02,
-                min(
-                    0.98,
-                    float(enemy["screen_x"]) / viewport["width"],
-                ),
-            ),
-            max(
-                0.02,
-                min(
-                    0.95,
-                    float(enemy["screen_y"]) / viewport["height"],
-                ),
-            ),
-        )
-        for enemy in live
-        if enemy["screen_valid"]
-        and viewport["height"] * 0.03
-        < enemy["screen_y"]
-        < viewport["height"] * 0.85
-    ]
-    fallbacks = [
-        (x, y)
-        for y in (0.25, 0.40, 0.55, 0.70)
-        for x in (0.25, 0.50, 0.75)
-    ]
-    targets = projected + fallbacks
-    if not targets:
-        raise WanFlowFailure("client B had no safe real click targets")
 
     actions: list[dict[str, Any]] = []
     deadline = time.monotonic() + min(timeout, 25.0)
     last = before
     while time.monotonic() < deadline:
+        if (
+            last["scene"]["name"] != "testrun"
+            or not last["player"]["valid"]
+            or last["player"]["hp"] <= 0
+        ):
+            raise WanFlowFailure(
+                "client B left live combat before real pointer input "
+                f"damaged an enemy; actions={actions}"
+            )
+        targets = damage_click_targets(
+            live_candidates(last),
+            last["player"],
+            last["viewport"],
+            last["camera"],
+        )
+        if not targets:
+            time.sleep(0.12)
+            last = pipe.state()
+            continue
         target = targets[len(actions) % len(targets)]
         actions.append(remote.click_game(*target))
         time.sleep(0.12)
@@ -234,7 +235,8 @@ def _damage_remote_enemy(
                     "after": last,
                 }
     raise WanFlowFailure(
-        "client B real pointer input did not damage a replicated enemy"
+        "client B real pointer input did not damage a replicated enemy; "
+        f"baseline={hp_before}; actions={actions}"
     )
 
 

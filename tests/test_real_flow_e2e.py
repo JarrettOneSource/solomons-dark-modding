@@ -22,6 +22,7 @@ from tools._real_flow_e2e.runtime import (
     damage_enemy_with_real_input,
     normalize_state,
 )
+from tools._real_flow_e2e.wan import _damage_remote_enemy
 from tools._real_flow_e2e.windows import (
     ProcessRecord,
     WindowsHarnessError,
@@ -849,6 +850,74 @@ class RealFlowE2ETests(unittest.TestCase):
                 (0.8, 0.9, 90),
             ],
         )
+        self.assertEqual(result["hpAfter"], 1.5)
+
+    def test_nfo_damage_probe_refreshes_native_camera_target(
+        self,
+    ) -> None:
+        def state(enemy_x: float, hp: float) -> dict[str, object]:
+            return {
+                "scene": {"name": "testrun"},
+                "viewport": {"width": 1000, "height": 1000},
+                "camera": {
+                    "sceneAvailable": True,
+                    "originX": 0.0,
+                    "originY": 0.0,
+                    "scale": 1.0,
+                },
+                "player": {
+                    "valid": True,
+                    "x": 50.0,
+                    "y": 50.0,
+                    "hp": 50.0,
+                },
+                "replicatedEnemies": [
+                    {
+                        "network_id": 101,
+                        "dead": False,
+                        "hp": hp,
+                        "x": enemy_x,
+                        "y": 100.0,
+                        "screen_valid": False,
+                        "screen_x": 900.0,
+                        "screen_y": 900.0,
+                    }
+                ],
+            }
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.states = iter(
+                    [
+                        state(100.0, 2.5),
+                        state(200.0, 2.5),
+                        state(200.0, 1.5),
+                    ]
+                )
+
+            def state(self) -> dict[str, object]:
+                return next(self.states)
+
+        class Remote:
+            def __init__(self) -> None:
+                self.clicks: list[tuple[float, float]] = []
+
+            def click_game(self, x: float, y: float) -> dict[str, float]:
+                self.clicks.append((x, y))
+                return {"xFraction": x, "yFraction": y}
+
+        remote = Remote()
+        with mock.patch(
+            "tools._real_flow_e2e.wan.time.sleep",
+            return_value=None,
+        ):
+            result = _damage_remote_enemy(
+                remote,  # type: ignore[arg-type]
+                FakePipe(),  # type: ignore[arg-type]
+                timeout=5.0,
+            )
+
+        self.assertEqual(remote.clicks, [(0.1, 0.1), (0.2, 0.1)])
         self.assertEqual(result["hpAfter"], 1.5)
 
     def test_damage_probe_concentrates_one_bounded_remote_click_burst(
