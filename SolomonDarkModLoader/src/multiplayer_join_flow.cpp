@@ -64,6 +64,7 @@ struct JoinFlowState {
     std::uint64_t pending_action_request_id = 0;
     std::uint64_t pending_action_generation = 0;
     std::string pending_action_id;
+    std::uintptr_t control_scheme_dispatched_owner_address = 0;
     std::string quick_start_element_action_id;
     std::string quick_start_discipline_action_id;
     std::uint32_t quick_start_element_id = kCreateSelectionUnset;
@@ -218,6 +219,7 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->pending_action_request_id = 0;
     state->pending_action_generation = 0;
     state->pending_action_id.clear();
+    state->control_scheme_dispatched_owner_address = 0;
     state->quick_start_element_action_id.clear();
     state->quick_start_discipline_action_id.clear();
     state->quick_start_element_id = kCreateSelectionUnset;
@@ -454,6 +456,10 @@ bool ResolvePendingActionUnlocked(
     if (!TryGetDebugUiActionDispatchSnapshot(
             g_join_flow.pending_action_request_id,
             &dispatch)) {
+        if (g_join_flow.pending_action_id ==
+            "control_scheme_picker.select_wasd") {
+            g_join_flow.control_scheme_dispatched_owner_address = 0;
+        }
         ClearPendingActionUnlocked();
         g_join_flow.action_retry_not_before_ms =
             now_ms + kActionRetryDelayMs;
@@ -461,6 +467,10 @@ bool ResolvePendingActionUnlocked(
     }
 
     if (dispatch.status == "failed") {
+        if (g_join_flow.pending_action_id ==
+            "control_scheme_picker.select_wasd") {
+            g_join_flow.control_scheme_dispatched_owner_address = 0;
+        }
         ClearPendingActionUnlocked();
         g_join_flow.action_retry_not_before_ms =
             now_ms + kActionRetryDelayMs;

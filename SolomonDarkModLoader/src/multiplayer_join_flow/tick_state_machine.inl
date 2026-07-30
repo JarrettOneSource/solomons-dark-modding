@@ -25,6 +25,10 @@ void TickMultiplayerJoinFlow() {
         TryGetLatestDebugUiSurfaceSnapshot(&current_snapshot);
     const auto* snapshot =
         snapshot_available ? &current_snapshot : nullptr;
+    if (snapshot != nullptr &&
+        snapshot->surface_id != "control_scheme_picker") {
+        g_join_flow.control_scheme_dispatched_owner_address = 0;
+    }
 
     switch (g_join_flow.phase) {
     case JoinFlowPhase::AdvancingMenus:
@@ -60,10 +64,22 @@ void TickMultiplayerJoinFlow() {
             HasAction(
                 *snapshot,
                 "control_scheme_picker.select_wasd")) {
-            (void)QueueActionUnlocked(
-                *snapshot,
-                "control_scheme_picker.select_wasd",
-                now_ms);
+            const auto owner_address =
+                snapshot->elements.empty()
+                ? std::uintptr_t{0}
+                : snapshot->elements.front().surface_object_ptr;
+            if (owner_address != 0 &&
+                owner_address !=
+                    g_join_flow
+                        .control_scheme_dispatched_owner_address &&
+                QueueActionUnlocked(
+                    *snapshot,
+                    "control_scheme_picker.select_wasd",
+                    now_ms)) {
+                g_join_flow
+                    .control_scheme_dispatched_owner_address =
+                    owner_address;
+            }
             return;
         }
         if (snapshot->surface_id == "dialog" &&

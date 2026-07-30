@@ -795,6 +795,16 @@ def test_multiplayer_quick_start_keeps_private_gameplay_visible() -> str:
             "the semantic UI action surface"
         )
     for token in (
+        "control_scheme_dispatched_owner_address",
+        "snapshot->elements.front().surface_object_ptr",
+        "owner_address !=",
+    ):
+        if token not in flow_text:
+            raise StaticReTestFailure(
+                "fresh quick-start can redispatch the stock control picker "
+                f"against one retiring owner: {token}"
+            )
+    for token in (
         "kFreshTrackedDialogPriorityMs = 250",
         "now_ms - dialog_snapshot->captured_at <=",
         "!dialog_was_just_captured",

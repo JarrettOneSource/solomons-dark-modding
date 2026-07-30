@@ -189,6 +189,15 @@ The field-break correction has four narrow foundations:
    later control work.
 4. Logger, telemetry, and local-UDP worker ownership uses explicit Windows
    thread handles rather than namespace-static `std::thread` destructors.
+5. The fresh-profile real-flow preflight exposed a separate deterministic
+   quick-start failure before either peer reached the hub. The control-scheme
+   picker action was dispatched 26 times against one retiring stock UI owner
+   in under a second, followed immediately by a null-call fault at static
+   retail `0x005D7FD3`. The join flow now records the picker owner when its
+   one semantic action is queued and cannot dispatch against that owner
+   again. A failed queued dispatch clears the record; observing a different
+   surface retires it. This preserves retry for a genuinely new picker
+   instance without invoking a completed stock surface twice.
 
 The owner-flow harness permanently selects client B as the Solomon
 interactor, client Water, host Air, and continues from wave 1 into wave 2. It
@@ -198,6 +207,13 @@ wave-2 convergence. It uses only mission ports 50911/50912 and launches with
 `SDMOD_DISABLE_AUDIO=1`.
 
 ## Validation
+
+The released beta.25 before-fix loopback attempt and the first corrective
+attempt are preserved under `fb25-loopback-prefx-beta25` and
+`fb25-loopback-postfix`. Both stop before the shared hub at the repeatable
+control-picker fault described above; both clean only their exact staged
+processes and ports. They are preflight failure evidence, not wave-boundary
+acceptance.
 
 Final exact-SHA runtime evidence, test totals, Release build results, and CI
 links are added here after the corrective commit is fixed and repeated.
