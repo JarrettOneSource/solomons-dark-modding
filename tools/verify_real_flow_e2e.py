@@ -773,6 +773,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 config.source_root,
                 solomon_peer,
                 solomon_pipe,
+                authority_pipe=host_pipe,
                 timeout=config.timeout_seconds,
             ),
         }

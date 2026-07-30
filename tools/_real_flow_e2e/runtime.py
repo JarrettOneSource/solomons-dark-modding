@@ -1300,13 +1300,28 @@ def approach_solomon_and_complete_dialogue(
     peer: WindowsPeer,
     pipe: LuaPipe,
     *,
+    authority_pipe: LuaPipe | None = None,
     timeout: float,
 ) -> dict[str, Any]:
-    initial = wait_for_state(
-        pipe,
+    target_pipe = authority_pipe or pipe
+    target_initial = wait_for_state(
+        target_pipe,
         lambda state: state["solomon"]["valid"],
         timeout=timeout,
         label="stock Solomon Dig actor",
+    )
+    local_initial = wait_for_state(
+        pipe,
+        lambda state: (
+            state["scene"]["name"] == "testrun"
+            and state["player"]["valid"]
+        ),
+        timeout=timeout,
+        label="local Solomon Dig interactor",
+    )
+    initial = _merge_solomon_authority_state(
+        local_initial,
+        target_initial,
     )
     obstacles = pipe.openable_path_obstacles()
     gate_route = plan_openable_gate_route(
@@ -1337,7 +1352,14 @@ def approach_solomon_and_complete_dialogue(
     stalled_samples = 0
     detour_count = 0
     while time.monotonic() < deadline:
-        state = pipe.state()
+        local_state = pipe.state()
+        authority_state = (
+            local_state if target_pipe is pipe else target_pipe.state()
+        )
+        state = _merge_solomon_authority_state(
+            local_state,
+            authority_state,
+        )
         solomon = state["solomon"]
         if (
             solomon["acquired"]
@@ -1450,7 +1472,14 @@ def approach_solomon_and_complete_dialogue(
     dialogue_samples: list[dict[str, Any]] = []
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        state = pipe.state()
+        local_state = pipe.state()
+        authority_state = (
+            local_state if target_pipe is pipe else target_pipe.state()
+        )
+        state = _merge_solomon_authority_state(
+            local_state,
+            authority_state,
+        )
         dialogue_samples.append(
             {
                 "timeUtcNanoseconds": time.time_ns(),
@@ -1481,6 +1510,21 @@ def approach_solomon_and_complete_dialogue(
         "host stock Solomon dialogue did not reach native completion; "
         f"last={dialogue_samples[-1] if dialogue_samples else None}"
     )
+
+
+def _merge_solomon_authority_state(
+    local_state: dict[str, Any],
+    authority_state: dict[str, Any],
+) -> dict[str, Any]:
+    if local_state is authority_state:
+        return local_state
+    return {
+        **local_state,
+        "solomon": authority_state["solomon"],
+        "combat": authority_state["combat"],
+        "wave": authority_state["wave"],
+        "world": authority_state["world"],
+    }
 
 
 def enemy_motion_assertion(

@@ -18,6 +18,7 @@ from tools._real_flow_e2e.evidence import (
     write_manifest,
 )
 from tools._real_flow_e2e.runtime import (
+    _merge_solomon_authority_state,
     damage_click_targets,
     damage_enemy_with_real_input,
     normalize_state,
@@ -210,6 +211,37 @@ class RealFlowE2ETests(unittest.TestCase):
             ],
         )
         self.assertEqual(actions[-1]["scene"], "testrun")
+
+    def test_client_solomon_flow_uses_host_authority_state(self) -> None:
+        local = {
+            "player": {"x": 900.0, "y": 2000.0},
+            "solomon": {"valid": False},
+            "combat": {"waveIndex": 0},
+            "wave": {"index": 0},
+            "world": {"waveIndex": 0},
+        }
+        authority = {
+            "solomon": {
+                "valid": True,
+                "x": 850.5,
+                "y": 974.9,
+            },
+            "combat": {"waveIndex": 1},
+            "wave": {"index": 1},
+            "world": {"waveIndex": 1},
+        }
+
+        merged = _merge_solomon_authority_state(local, authority)
+
+        self.assertIs(merged["player"], local["player"])
+        self.assertIs(merged["solomon"], authority["solomon"])
+        self.assertIs(merged["combat"], authority["combat"])
+        self.assertIs(merged["wave"], authority["wave"])
+        self.assertIs(merged["world"], authority["world"])
+        controller = (
+            ROOT / "tools/verify_real_flow_e2e.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("authority_pipe=host_pipe", controller)
 
     def test_shared_hub_wait_requires_converged_participant_views(
         self,
