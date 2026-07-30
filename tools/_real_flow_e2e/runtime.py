@@ -933,10 +933,10 @@ def shared_hub_views_converged(
     ):
         return False
 
-    participant_views: list[dict[int, dict[str, Any]]] = []
+    participant_views: list[dict[str, dict[str, Any]]] = []
     for state in states:
         participants = {
-            int(participant["id"]): participant
+            str(participant["name"]): participant
             for participant in state["multiplayer"]["participants"]
         }
         if (
@@ -956,13 +956,13 @@ def shared_hub_views_converged(
         return False
     return all(
         _distance(
-            float(participant_views[0][participant_id]["x"]),
-            float(participant_views[0][participant_id]["y"]),
-            float(participant_views[1][participant_id]["x"]),
-            float(participant_views[1][participant_id]["y"]),
+            float(participant_views[0][participant_name]["x"]),
+            float(participant_views[0][participant_name]["y"]),
+            float(participant_views[1][participant_name]["x"]),
+            float(participant_views[1][participant_name]["y"]),
         )
         <= 4.0
-        for participant_id in participant_views[0]
+        for participant_name in participant_views[0]
     )
 
 

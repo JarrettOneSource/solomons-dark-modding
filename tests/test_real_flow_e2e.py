@@ -187,6 +187,9 @@ class RealFlowE2ETests(unittest.TestCase):
                     "participants": [
                         {
                             "id": local_id,
+                            "name": (
+                                "Host" if local_id == 1 else "client B"
+                            ),
                             "connected": True,
                             "ready": True,
                             "in_run": False,
@@ -196,6 +199,9 @@ class RealFlowE2ETests(unittest.TestCase):
                         },
                         {
                             "id": 3 - local_id,
+                            "name": (
+                                "client B" if local_id == 1 else "Host"
+                            ),
                             "connected": True,
                             "ready": True,
                             "in_run": False,
@@ -217,6 +223,74 @@ class RealFlowE2ETests(unittest.TestCase):
 
         client["loadingScreen"]["active"] = True  # type: ignore[index]
         self.assertFalse(shared_hub_views_converged(host, client))
+
+    def test_shared_hub_wait_matches_large_ids_by_participant_name(
+        self,
+    ) -> None:
+        host = {
+            "scene": {"kind": "hub"},
+            "loadingScreen": {"active": False},
+            "multiplayer": {
+                "sessionState": "in-hub",
+                "sessionStatus": "Ready",
+                "participantCount": 2,
+                "participants": [
+                    {
+                        "id": 1,
+                        "name": "Host",
+                        "connected": True,
+                        "ready": True,
+                        "in_run": False,
+                        "scene_kind": "SharedHub",
+                        "x": 918.3,
+                        "y": 222.8,
+                    },
+                    {
+                        "id": 2666130979403333632,
+                        "name": "client B",
+                        "connected": True,
+                        "ready": True,
+                        "in_run": False,
+                        "scene_kind": "SharedHub",
+                        "x": 952.6,
+                        "y": 162.9,
+                    },
+                ],
+            },
+        }
+        client = {
+            "scene": {"kind": "hub"},
+            "loadingScreen": {"active": False},
+            "multiplayer": {
+                "sessionState": "in-hub",
+                "sessionStatus": "Ready",
+                "participantCount": 2,
+                "participants": [
+                    {
+                        "id": 1,
+                        "name": "client B",
+                        "connected": True,
+                        "ready": True,
+                        "in_run": False,
+                        "scene_kind": "SharedHub",
+                        "x": 952.6,
+                        "y": 162.9,
+                    },
+                    {
+                        "id": 2666130979403333632,
+                        "name": "Host",
+                        "connected": True,
+                        "ready": True,
+                        "in_run": False,
+                        "scene_kind": "SharedHub",
+                        "x": 918.3,
+                        "y": 222.8,
+                    },
+                ],
+            },
+        }
+
+        self.assertTrue(shared_hub_views_converged(host, client))
 
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
         self,
