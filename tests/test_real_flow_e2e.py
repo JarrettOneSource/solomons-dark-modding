@@ -21,6 +21,7 @@ from tools._real_flow_e2e.runtime import (
     damage_click_targets,
     damage_enemy_with_real_input,
     normalize_state,
+    shared_hub_views_converged,
 )
 from tools.verify_real_flow_e2e import (
     validate_living_wave_boundary,
@@ -168,6 +169,50 @@ class RealFlowE2ETests(unittest.TestCase):
             document["host"]["localPort"] = 50913  # type: ignore[index]
             with self.assertRaisesRegex(ConfigError, "50911/50912"):
                 self._load_document(root, document)
+
+    def test_shared_hub_wait_requires_converged_participant_views(
+        self,
+    ) -> None:
+        def state(
+            local_id: int,
+            other_y: float,
+        ) -> dict[str, object]:
+            return {
+                "scene": {"kind": "hub"},
+                "multiplayer": {
+                    "sessionState": "in-hub",
+                    "sessionStatus": "Ready",
+                    "participantCount": 2,
+                    "participants": [
+                        {
+                            "id": local_id,
+                            "connected": True,
+                            "ready": True,
+                            "in_run": False,
+                            "scene_kind": "SharedHub",
+                            "x": 952.5,
+                            "y": 163.25,
+                        },
+                        {
+                            "id": 3 - local_id,
+                            "connected": True,
+                            "ready": True,
+                            "in_run": False,
+                            "scene_kind": "SharedHub",
+                            "x": 952.5,
+                            "y": other_y,
+                        },
+                    ],
+                },
+            }
+
+        host = state(1, 60.0)
+        client = state(2, 90.0)
+        self.assertFalse(shared_hub_views_converged(host, client))
+
+        host["multiplayer"]["participants"][1]["y"] = 163.2  # type: ignore[index]
+        client["multiplayer"]["participants"][1]["y"] = 163.3  # type: ignore[index]
+        self.assertTrue(shared_hub_views_converged(host, client))
 
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
         self,

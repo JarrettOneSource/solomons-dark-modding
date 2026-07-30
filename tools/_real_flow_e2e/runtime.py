@@ -878,29 +878,73 @@ def wait_shared_hub(
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, Any] = {}
+    converged_since: float | None = None
     while time.monotonic() < deadline:
         try:
             host = host_pipe.state()
             client = client_pipe.state()
             last = {"host": host, "clientB": client}
-            if (
-                host["scene"]["kind"] == "hub"
-                and client["scene"]["kind"] == "hub"
-                and host["multiplayer"]["participantCount"] >= 2
-                and client["multiplayer"]["participantCount"] >= 2
-                and all(
-                    participant["connected"]
-                    for state in (host, client)
-                    for participant in state["multiplayer"]["participants"]
-                )
-            ):
-                return last
+            if shared_hub_views_converged(host, client):
+                now = time.monotonic()
+                if converged_since is None:
+                    converged_since = now
+                elif now - converged_since >= 2.0:
+                    return last
+            else:
+                converged_since = None
         except RuntimeProbeError:
-            pass
+            converged_since = None
         time.sleep(0.2)
     raise RuntimeProbeError(
         "both real launcher peers did not materialize in the shared hub: "
         + json.dumps(last, sort_keys=True)
+    )
+
+
+def shared_hub_views_converged(
+    host: dict[str, Any],
+    client: dict[str, Any],
+) -> bool:
+    states = (host, client)
+    if any(
+        state["scene"]["kind"] != "hub"
+        or state["multiplayer"]["sessionState"] != "in-hub"
+        or state["multiplayer"]["sessionStatus"] != "Ready"
+        or state["multiplayer"]["participantCount"] < 2
+        for state in states
+    ):
+        return False
+
+    participant_views: list[dict[int, dict[str, Any]]] = []
+    for state in states:
+        participants = {
+            int(participant["id"]): participant
+            for participant in state["multiplayer"]["participants"]
+        }
+        if (
+            len(participants) < 2
+            or any(
+                not participant["connected"]
+                or not participant["ready"]
+                or participant["in_run"]
+                or participant["scene_kind"] != "SharedHub"
+                for participant in participants.values()
+            )
+        ):
+            return False
+        participant_views.append(participants)
+
+    if participant_views[0].keys() != participant_views[1].keys():
+        return False
+    return all(
+        _distance(
+            float(participant_views[0][participant_id]["x"]),
+            float(participant_views[0][participant_id]["y"]),
+            float(participant_views[1][participant_id]["x"]),
+            float(participant_views[1][participant_id]["y"]),
+        )
+        <= 4.0
+        for participant_id in participant_views[0]
     )
 
 

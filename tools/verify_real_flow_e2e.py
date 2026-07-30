@@ -712,6 +712,13 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         sampler.start()
         sampler_started = True
         sampler.sample_now("shared-hub-ready")
+        result["sharedHubCapture"] = paired_windows_capture(
+            config.source_root,
+            host,
+            client,
+            config.evidence_root / "captures",
+            label="shared-hub",
+        )
 
         if phase == "shared-hub":
             result["ok"] = True
