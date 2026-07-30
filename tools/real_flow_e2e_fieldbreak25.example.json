@@ -30,9 +30,52 @@
     "remotePort": 50912,
     "matchStartActions": [
       {
+        "kind": "key",
+        "key": "d",
+        "holdMilliseconds": 4000
+      },
+      {
+        "kind": "key",
+        "key": "s",
+        "holdMilliseconds": 3000
+      },
+      {
+        "kind": "key",
+        "key": "a",
+        "holdMilliseconds": 2750
+      },
+      {
+        "kind": "key",
+        "key": "w",
+        "holdMilliseconds": 1100
+      },
+      {
+        "kind": "key",
+        "key": "a",
+        "holdMilliseconds": 800
+      },
+      {
+        "kind": "click",
+        "x": 0.5,
+        "y": 0.43,
+        "holdMilliseconds": 300
+      },
+      {
+        "kind": "click",
+        "x": 0.5,
+        "y": 0.43,
+        "holdMilliseconds": 300
+      },
+      {
         "kind": "click",
         "x": 0.956,
         "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "click",
+        "x": 0.534,
+        "y": 0.539,
         "holdMilliseconds": 250
       },
       {
@@ -57,6 +100,6 @@
     "matchStartActions": []
   },
   "metadata": {
-    "purpose": "beta25 owner flow: client B walks to Dig, Water damage stays stock, living positions survive wave 1, and wave 2 converges"
+    "purpose": "beta25 owner flow from a fresh profile: complete Provokatus onboarding, select Dead Hawg, have client B walk to Dig, keep Water damage stock, preserve living positions after wave 1, and converge in wave 2"
   }
 }

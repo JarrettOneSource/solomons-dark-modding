@@ -170,6 +170,47 @@ class RealFlowE2ETests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "50911/50912"):
                 self._load_document(root, document)
 
+    def test_fieldbreak_example_drives_fresh_profile_to_dead_hawg(
+        self,
+    ) -> None:
+        document = json.loads(
+            (
+                ROOT / "tools/real_flow_e2e_fieldbreak25.example.json"
+            ).read_text(encoding="utf-8")
+        )
+        actions = document["host"]["matchStartActions"]
+
+        self.assertEqual(
+            [
+                (
+                    action["kind"],
+                    action.get("key"),
+                    action.get("holdMilliseconds"),
+                )
+                for action in actions[:5]
+            ],
+            [
+                ("key", "d", 4000),
+                ("key", "s", 3000),
+                ("key", "a", 2750),
+                ("key", "w", 1100),
+                ("key", "a", 800),
+            ],
+        )
+        self.assertEqual(
+            [
+                (action["x"], action["y"])
+                for action in actions[5:9]
+            ],
+            [
+                (0.5, 0.43),
+                (0.5, 0.43),
+                (0.956, 0.944),
+                (0.534, 0.539),
+            ],
+        )
+        self.assertEqual(actions[-1]["scene"], "testrun")
+
     def test_shared_hub_wait_requires_converged_participant_views(
         self,
     ) -> None:
