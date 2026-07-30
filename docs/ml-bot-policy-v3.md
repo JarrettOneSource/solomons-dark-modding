@@ -128,6 +128,51 @@ Investigation must produce:
 - Existing scripted-bot behaviors must keep working for mixed-composition
   training.
 
+## Adjudications — 2026-07-30 (post-V3-1 investigation)
+
+Rulings on `ml-bot-policy-v3-implementation.md` §H. These freeze the v3
+contract; implementation phases execute against them.
+
+1. **Size approved as proposed**: 1279 observations, K-obstacles 8,
+   K-hazards 12, potion slots 12, trunk 512/256, four main heads
+   (movement 9 / target 9 / ability 22 / aim 9) + value, choice-event head
+   with 56-value option descriptors.
+2. **v2 fidelity fix is mandatory** and a Phase V3-2/V3-3 exit gate: patch
+   and rays recomputed from exact primitives; the measured 4.5–5.9% error
+   class must be eliminated, verified live against native placement tests.
+3. **Destructibility**: type-backed `destructible_resolved` only; unknown
+   types stay false/unresolved. No mask-guessing.
+4. **Telegraph coverage**: launch with what is proven;
+   `telegraph_known=0` for unmapped families while identity/facing/raw anim
+   remain. Coverage grows post-launch; training does not block on all 19.
+5. **Hazard registry rule**: damaging = hostile-sourced effects that apply
+   damage/status by contact or area (projectile/area/beam). Excluded: pure
+   presentation, friendly/self effects, and summons that are actors (enemy
+   block's job). Codex freezes the concrete 46-class partition with
+   evidence in the spec. **Unknown new hostile effect classes default to
+   included with `type_known=0`** — an unclassified threat must be visible,
+   never silently dropped.
+6. **Aim head**: discrete center+8 at 60 world units with per-family masks,
+   as proposed. Continuous aim deferred.
+7. **Choice SMDP approved**: variable-duration GAE as specified, entropy
+   0.05 normalized by log(valid options), temperature 1.25 annealing to 1.0
+   once every offered family and weld pair has ≥20 selections across the
+   training run set (tunable with documented rationale).
+8. **Custom potions**: learned use requires the mod to declare
+   synthetic-safe `policy_effects` metadata; undeclared custom potions are
+   observed (possession) but action-masked off. Stock six unaffected.
+9. **Synthetic native use proof is binding**: any stock subtype whose
+   participant-scoped native effect path cannot be proven loses its action
+   for v3 (observation remains); no offset emulation. Report which, if any.
+10. **Equip/unequip deferred** to a future version, affirmed.
+11. **Generated gear**: pickup-time effect-summary aggregates suffice for
+    v3; a fuller FX grammar is deferred.
+12. **Counts**: bounded log1p with saturation at 99; potion slots ranked by
+    count descending; overflow beyond 12 types aggregates into the Block Q
+    summary.
+13. **No recurrence in v3**, affirmed — the ID-tracked history, hazard
+    kinematics, and SMDP credit close the demonstrated gaps.
+
 ## Process
 
 Phase V3-1 (investigation): answer every numbered question above with
