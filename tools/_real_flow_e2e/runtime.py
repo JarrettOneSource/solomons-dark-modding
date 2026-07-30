@@ -1583,6 +1583,16 @@ def cover_participant_with_real_input_once(
         state["camera"],
     )
     started = time.time_ns()
+    if float(state["player"]["hp"]) < 30.0:
+        detail = _click(source_root, peer, 0.423, 0.955, 300)
+        return {
+            "timeUtcNanoseconds": started,
+            "kind": "health-potion",
+            "screenFraction": [0.423, 0.955],
+            "liveEnemyCount": len(live_enemies),
+            "hp": float(state["player"]["hp"]),
+            "result": detail,
+        }
     if targets:
         x, y = targets[movement_index % len(targets)]
         detail = _click(source_root, peer, x, y, 1500)

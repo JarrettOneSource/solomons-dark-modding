@@ -302,6 +302,47 @@ class RealFlowE2ETests(unittest.TestCase):
         click.assert_called_once()
         self.assertEqual(click.call_args.args[-1], 1500)
 
+    @mock.patch("tools._real_flow_e2e.runtime._click")
+    def test_client_dig_cover_uses_stock_health_potion_when_low(
+        self,
+        click: mock.Mock,
+    ) -> None:
+        click.return_value = "clicked"
+        pipe = mock.Mock()
+        pipe.state.return_value = {
+            "scene": {"name": "testrun"},
+            "player": {
+                "valid": True,
+                "hp": 20.0,
+                "x": 100.0,
+                "y": 100.0,
+            },
+            "nativeEnemies": [],
+            "viewport": {"width": 1600, "height": 900},
+            "camera": {
+                "sceneAvailable": True,
+                "originX": 0.0,
+                "originY": 0.0,
+                "scale": 1.0,
+            },
+        }
+
+        action = cover_participant_with_real_input_once(
+            ROOT,
+            mock.Mock(),
+            pipe,
+            movement_index=0,
+        )
+
+        self.assertEqual(action["kind"], "health-potion")
+        click.assert_called_once_with(
+            ROOT,
+            mock.ANY,
+            0.423,
+            0.955,
+            300,
+        )
+
     def test_shared_hub_wait_requires_converged_participant_views(
         self,
     ) -> None:
