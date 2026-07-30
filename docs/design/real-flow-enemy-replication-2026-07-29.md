@@ -2,8 +2,9 @@
 
 Date: 2026-07-29
 
-Status: production-Steam failure reproduced and root-caused; post-fix
-acceptance is pending
+Status: the two-layer production-Steam queue failure is fixed and the
+investigation branch passes all three real-flow topologies; rebase, exact-SHA
+repeat acceptance, and landing are pending
 
 ## Owner incident
 
@@ -133,15 +134,19 @@ The harness and temporary evidence probes distinguish these hypotheses.
 | Client enemy-simulation suppression is wrongly engaged | Client B has replicated enemy identity but presentation/materialization is gated by the wrong suppression state. | Client suppression decisions, stock spawner state, native enemy roster, and bound replicated roster at the same samples. | Rejected. Both projections materialized and rendered the roster. The failing Steam client had zero replicated identities and zero bindings, so presentation suppression was downstream of the loss, not its cause. |
 | Enemy snapshot subscription depends on how the run began | The real match-start path never arms or resets the client run-world snapshot consumer that the `start_testrun` seam happens to arm. | Subscription/reset lifecycle events for seam-started control evidence versus real-flow evidence. | Rejected. The native Start Match path worked over both `local_udp` topologies. On Steam the host built and queued reliable world-identity checkpoints; the trace loses them at the Steam send boundary instead of omitting them at the publisher. |
 | Host-side Dig state interferes with authority | Host modal completion or deferred Solomon retirement mutates authority, run state, or reconciliation in a way the client-initiated Dig slice cannot exercise. | Host/client Solomon state, modal completion, deferred-retirement counters, authority ID, and first post-Dig world snapshots. | Rejected as the replication fault. The host retained authority and produced 11 enemies after the native Dig flow. The transport was already cycling authenticated peer state under send pressure and continued doing so after Dig; no Dig state mutation reset authority or the world publisher. |
-| beta.23 framing/reassembly mishandles real-path packet shapes | Large or fragmented world snapshots leave the host but are dropped, incomplete, or never dispatched on client B. | Per-family/per-channel send/receive accounting, fragment message IDs/counts/bytes, reassembly completion/expiry/drop records, and decoded world-snapshot sequence continuity. | Rejected. `local_udp` fragmentation completed without rejection. The Steam trace failed earlier: `ISteamNetworkingMessages::SendMessageToUser` returned result 25 before the rejected reliable fragments entered Steam, and the recovery path then closed the route and discarded queued reliable data. |
+| beta.23 framing/reassembly mishandles real-path packet shapes | Large or fragmented world snapshots leave the host but are dropped, incomplete, or never dispatched on client B. | Per-family/per-channel send/receive accounting, fragment message IDs/counts/bytes, reassembly completion/expiry/drop records, and decoded world-snapshot sequence continuity. | Rejected. `local_udp` fragmentation completed without rejection. The beta.24 Steam trace failed earlier: `ISteamNetworkingMessages::SendMessageToUser` returned result 25 before rejected fragments entered Steam. After the destructive reset was removed, `ws20fix4` received all 11 identity records but materialized none because stale reliable generations and recovery duplicates remained ahead of the current binding state. |
 
 ## Topology matrix
 
 | Topology | Purpose | Broker/transport | Pre-fix | Post-fix |
 | --- | --- | --- | --- | --- |
-| Local Windows pair, 50711/50712 | Deterministic flow/session-state reproduction | Real desktop launcher flow; supported `local_udp` projection | PASS on beta.24 (`b24f23`) | Pending |
-| Home PC to NFO, 51611/51612 staging allocation | Real-desktop cross-OS/WAN projection | Real desktop launchers over `local_udp`; **not** Steam broker acceptance | PASS on beta.24 (`nfob24f6`) | Pending |
-| Home PC to ws20 | Owner's exact machine topology | Steam lobby plus Steam Networking Messages/SDR | FAIL reproduced on beta.24 (`ws20b24s1`): host 11 native enemies; client B 0 replicated/0 native enemies | Pending |
+| Local Windows pair, 50711/50712 | Deterministic flow/session-state reproduction | Real desktop launcher flow; supported `local_udp` projection | PASS on beta.24 (`b24f23`) | PASS on branch SHA `796052a` (`post796loop1`): client B bound/materialized 10/10 and killed one through real input |
+| Home PC to NFO, 51611/51612 staging allocation | Real-desktop cross-OS/WAN projection | Real desktop launchers over `local_udp`; **not** Steam broker acceptance | PASS on beta.24 (`nfob24f6`) | PASS on branch SHA `1560980` (`post156nfo1`): client B bound/materialized 10/10 and killed one through real input |
+| Home PC to ws20 | Owner's exact machine topology | Steam lobby plus Steam Networking Messages/SDR | FAIL reproduced on beta.24 (`ws20b24s1`): host 11 native enemies; client B 0 replicated/0 native enemies | PASS on branch SHA `2f49b68` (`ws20ray1`): client B initially bound/materialized 9/9, rendered and observed moving/attacking enemies, and killed one through remote physical input; all 3,701 Steam sends were accepted |
+
+These post-fix rows are immutable investigation-branch evidence. They are not
+the final landing claim: the same matrix must pass on the exact rebased commit
+that is pushed and merged.
 
 ## Safety boundaries
 
@@ -160,7 +165,12 @@ The harness and temporary evidence probes distinguish these hypotheses.
 
 ## Root cause
 
-The Steam-only send queue interpreted sustained
+The failure had two Steam-only queue layers. Removing the first made the second
+observable; the first patch was therefore necessary but not sufficient.
+
+### Layer 1: result 25 was treated as terminal
+
+The beta.24 send queue interpreted sustained
 `k_EResultLimitExceeded` (result 25) as a broken peer route. Result 25 means
 Steam already has too much data queued to accept another message; it is
 backpressure, not a terminal session failure.
@@ -168,45 +178,78 @@ backpressure, not a terminal session failure.
 The beta.24 sequence was:
 
 1. the host produced a reliable world-identity checkpoint;
-2. `SendMessageToUser` returned result 25, so the application queue correctly
-   retained the reliable packet for a 250 ms retry;
+2. `SendMessageToUser` returned result 25, so the application queue retained
+   the reliable packet for a 250 ms retry;
 3. after two seconds, the queue emitted a “congestion recovery” event and
    permanently stopped retrying that peer;
-4. the service thread responded by suspending the authenticated peer, clearing
-   its application send queue, and calling `CloseSessionWithUser`; and
+4. the service thread suspended the authenticated peer, cleared its application
+   send queue, and called `CloseSessionWithUser`; and
 5. closing the Steam session without a linger guarantee discarded reliable
    data already queued below the application boundary. Reauthentication then
-   repeated the same cycle.
+   repeated the cycle.
 
 The failing beta.24 host recorded 105 result-25 log intervals, 18 congestion
-recoveries, and 18 saturated-route resets during the bounded run. At the final
-aligned sample it had 11 native enemies and 127 reliable send failures, while
-client B still had sequence 0, zero replicated actors, and zero native
-enemies. The client was connected enough to exchange participant state, but
-never received a complete current world-identity checkpoint.
+recoveries, and 18 saturated-route resets. At the final aligned sample it had
+11 native enemies and 127 reliable send failures, while client B still had
+sequence 0, zero replicated actors, and zero native enemies.
+
+Commit `c49525b` stopped treating backpressure as a terminal route event. In
+`ws20fix2`, that change drained result-25 pressure and materialized 15/15
+enemies, but the run missed only the paired-capture timing gate. A later
+decisive repeat, `ws20fix4`, disproved the patch as a complete solution.
+
+### Layer 2: opaque reliable FIFO traffic starved current state
+
+After `c49525b`, repeated reliable checkpoints, fragmented generations, and
+recovery events still entered the queue as opaque FIFO packets. Under Steam
+pressure:
+
+1. old checkpoint generations remained ahead of their replacements;
+2. the recovery publishers enqueued semantic duplicates of already accepted
+   or queued logical events;
+3. producers continued adding traffic while the route was saturated; and
+4. fresh identity bindings and current state waited behind stale generations
+   long enough for one-way liveness to fail.
+
+`ws20fix4` is the decisive discriminator. The host had 11 native enemies and
+client B received those same 11 network identities, but client B bound and
+materialized none. The host made 9,070 Steam API send attempts: 8,511 were
+accepted, 559 returned result 25, and the recovery path published 1,477
+recovery sends. The client later lost the one-way session and reset its
+replicated sequence to zero. The defect was therefore no longer missing
+publication, decoding, or presentation; semantically stale reliable work was
+head-of-line blocking the current world.
 
 The queue also had an adjacent ordering defect: moving a rejected reliable
 packet back into the live deque could rotate retained fragments relative to
-one another. A 12-fragment regression exposed that issue before the fix was
-accepted.
+one another. A 12-fragment regression exposed that issue before the
+foundational fix was accepted.
 
 ## Fix
 
-Steam result-25 pressure now remains wholly owned by the bounded send queue:
+Steam result-25 pressure now remains wholly owned by a bounded,
+semantics-aware send queue:
 
-- reliable packets stay queued and retry every 250 ms until Steam accepts them
-  or a separate terminal peer/session event resets the peer;
-- disposable snapshots remain coalesced under pressure;
-- a deferred queue preserves reliable FIFO order while allowing uncongested
-  peers to make progress;
-- the two-second threshold emits one sustained-backpressure diagnostic per
-  episode but never mutates authentication, closes the Steam session, or
-  clears reliable packets; and
-- telemetry records the result of each actual Steam API send attempt, separate
-  from the existing application queue-admission event.
+- Steam route queue time provides proactive pacing with 250 ms high-water and
+  50 ms low-water hysteresis, before result 25 is required to signal pressure;
+- retryable Steam rejection retains work and retries after 250 ms, while the
+  two-second threshold emits one diagnostic and never mutates authentication,
+  closes the session, or clears the queue;
+- latest-stream snapshots replace older values from the same stream;
+- latest-generation checkpoints evict complete older generations, including
+  all retained fragments, instead of interleaving generations;
+- distinct logical recovery events deduplicate against both queued and already
+  accepted events;
+- genuinely ordered events preserve FIFO order;
+- a blocked peer cannot prevent other peers from making progress;
+- only authenticated, send-enabled peers can admit gameplay work; and
+- hello, acknowledgement, and keepalive control traffic stays outside the
+  congestible gameplay FIFO.
 
-Terminal disconnect, authentication failure, lobby departure, and explicit
-teardown still reset the peer queue through their existing lifecycle paths.
+Telemetry records queue admission, semantic supersession/deduplication, route
+queue time, and every actual Steam API result separately. Terminal disconnect,
+authentication failure, lobby departure, and explicit teardown still reset a
+peer through their existing lifecycle paths.
 
 The permanent test-gap work is implemented on the investigation branch:
 
@@ -224,6 +267,13 @@ The permanent test-gap work is implemented on the investigation branch:
 - `tests/test_real_flow_e2e.py` permanently rejects forbidden start seams,
   weak screenshot acceptance, telemetry/audio omissions, unsafe topology
   ports/stage roots, and loss of Steam failure counters.
+
+The real-input proof uses read-only camera state to project the same stock
+world-to-screen target the game renders. A remote workstation action sends one
+bounded five-click sequence to the exact staged PID, avoiding an SSH
+round-trip between casts. If the nearest attacking enemy is just outside the
+camera, the harness preserves the player-to-enemy ray and clips the target to
+the camera edge instead of selecting a farther visible enemy.
 
 Run a loopback acceptance with:
 
@@ -264,10 +314,30 @@ barrier in these pre-hardening runs is controller request-start skew
 instant; WAN captures use a minimum-RTT SSH clock-offset estimate and include
 its uncertainty.
 
-### Remaining acceptance gate
+### Post-fix branch evidence
 
-Build an isolated package from the fixed committed SHA, rerun all three
-topologies, manually inspect the paired Steam frames, run the full repository
-battery, rebase onto current `main`, and repeat the affected proof before
-landing. This document does not claim completion until that matrix is filled
-with the exact landed SHA.
+| Assertion | Loopback `post796loop1` | Home PC↔NFO `post156nfo1` | Home PC↔ws20 `ws20ray1` |
+| --- | --- | --- | --- |
+| Exact source SHA | `796052a` | `1560980` | `2f49b68` |
+| Desktop launcher, native Start Match, host physical Dig | PASS | PASS | PASS through the real Steam lobby |
+| Client B initial replicated/native enemies | 10/10 | 10/10 | 9/9 |
+| Client B render and motion | PASS | PASS | PASS; paired frames visually inspected |
+| Client B real-input damage | 2.5→0 HP | 2.5→0 HP | 2.5→0 HP in one bounded remote action |
+| Enemy attacks client B | PASS | PASS | 50→0 HP over the sampler; 50→21.817 during the damage action |
+| Steam send results | Not applicable | Not applicable | 3,701/3,701 accepted; zero result-25 or other rejection |
+| Steam route queue | Not applicable | Not applicable | connected throughout; host maximum 4,318 µs |
+| Actual paired capture skew | 267,800 ns | 184,687,562 ns, with 234,926,657 ns clock uncertainty | 590,180,700 ns |
+| Cleanup | zero reserved ports/owned processes | exact remote stage deleted; zero reserved ports/owned processes | zero owned processes/tasks; one pre-existing Steam process retained |
+
+Every row used the real launcher flow, the native Start Match action, physical
+host traversal to Solomon Dig, stock dialogue, and no forbidden start or
+damage seam. Each evidence root contains its logs, telemetry, timeline,
+captures, safety inventory, result, and SHA-256 manifest.
+
+### Remaining landing gate
+
+Rebase onto current `main`, run the full repository battery, build and verify an
+isolated package from that exact commit, and repeat all three topologies.
+Manually inspect the final Steam frames, push and merge that same SHA, verify
+its CI, and repeat the safety/cleanup audit. This document does not claim
+landing completion from the pre-rebase branch evidence above.
