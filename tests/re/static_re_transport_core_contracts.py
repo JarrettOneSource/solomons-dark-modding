@@ -1248,6 +1248,8 @@ def test_wave_boundary_respawn_has_staged_save_two_owner_live_regression() -> st
         "_wait_for_run_loading_started(",
         "_start_match_when_ready(",
         "sd.hub.start_match",
+        "_queue_stock_wave_start(",
+        "sd.gameplay.start_waves",
         "_set_run_generation_seed(",
         "sd.rng.set_seed",
         "_hold_wave_one_on_single_enemy(",

@@ -230,6 +230,10 @@ retail decompilation and a live isolated probe established that pending level
 kind `1` selects a newly generated Boneyard before the existing stock
 `Gameplay_SwitchRegion` call. The retained Ghidra output is under
 `/mnt/d/codex-evidence/fieldbreak25-20260730/ghidra-fb25-exact`.
+After both peers release the run-loading barrier, the verifier queues the
+idempotent stock `ArenaStartWaves` entrypoint once. This removes dependence on
+which peer happens to publish the first wave edge while retaining the real
+`wave.txt` schedule and native spawner; no test wave override is installed.
 
 Focused run `fb25-wb34` proved the corrected boundary before landing:
 

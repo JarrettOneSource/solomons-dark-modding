@@ -394,6 +394,32 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
         self.assertEqual(lua.call_count, 2)
         self.assertIn("sd.hub.start_match", lua.call_args.args[1])
 
+    def test_stock_wave_start_uses_the_native_arena_entrypoint(self) -> None:
+        with mock.patch.object(
+            verifier,
+            "lua",
+            return_value="invoked=true\nqueued=true\ndetail=true",
+        ) as lua:
+            result = verifier._queue_stock_wave_start("host-pipe")
+
+        self.assertEqual(result["queued"], "true")
+        self.assertIn("sd.gameplay.start_waves", lua.call_args.args[1])
+
+    def test_stock_wave_start_rejects_a_failed_queue(self) -> None:
+        with mock.patch.object(
+            verifier,
+            "lua",
+            return_value=(
+                "invoked=false\nqueued=false\n"
+                "detail=Arena is not active."
+            ),
+        ):
+            with self.assertRaisesRegex(
+                local.VerifyFailure,
+                "ArenaStartWaves",
+            ):
+                verifier._queue_stock_wave_start("host-pipe")
+
     def test_live_launch_stages_saves_and_cleans_only_reported_pid(
         self,
     ) -> None:

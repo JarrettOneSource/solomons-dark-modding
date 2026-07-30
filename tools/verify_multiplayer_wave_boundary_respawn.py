@@ -952,6 +952,28 @@ print("detail=" .. tostring(result))
     )
 
 
+def _queue_stock_wave_start(host_pipe: str) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            host_pipe,
+            """
+local invoked, result = pcall(sd.gameplay.start_waves)
+print("invoked=" .. tostring(invoked))
+print("queued=" .. tostring(invoked and result == true))
+print("detail=" .. tostring(result))
+""",
+        )
+    )
+    if (
+        values.get("invoked") != "true"
+        or values.get("queued") != "true"
+    ):
+        raise VerifyFailure(
+            f"host could not queue stock ArenaStartWaves: {values}"
+        )
+    return values
+
+
 def _wait_for_solomon_materialized_during_run_loading(
     host_pipe: str,
     *,
@@ -1196,6 +1218,9 @@ def run_live_verification(
                     participant_id=CLIENT_ID,
                     label="client",
                 )
+            )
+            result["stock_wave_start_request"] = (
+                _queue_stock_wave_start(host_pipe)
             )
             result["wave_one_active"] = {
                 "host": _wait_for_wave_state(
