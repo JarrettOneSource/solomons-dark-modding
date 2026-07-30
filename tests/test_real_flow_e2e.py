@@ -851,7 +851,7 @@ class RealFlowE2ETests(unittest.TestCase):
         )
         self.assertEqual(result["hpAfter"], 1.5)
 
-    def test_damage_probe_uses_one_bounded_remote_click_burst(
+    def test_damage_probe_concentrates_one_bounded_remote_click_burst(
         self,
     ) -> None:
         def state(hp: float) -> dict[str, object]:
@@ -938,9 +938,9 @@ class RealFlowE2ETests(unittest.TestCase):
                 {
                     "targets": [
                         (0.3, 0.4),
-                        (0.7, 0.6),
                         (0.3, 0.4),
-                        (0.7, 0.6),
+                        (0.3, 0.4),
+                        (0.3, 0.4),
                         (0.3, 0.4),
                     ],
                     "holdMs": 90,
