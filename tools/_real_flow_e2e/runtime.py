@@ -1421,6 +1421,19 @@ def damage_click_targets(
         and math.isfinite(float(camera.get("originX", math.nan)))
         and math.isfinite(float(camera.get("originY", math.nan)))
     )
+    minimum_x = viewport_width * 0.01
+    maximum_x = viewport_width * 0.99
+    minimum_y = viewport_height * 0.01
+    maximum_y = viewport_height * 0.99
+    player_screen_x = math.nan
+    player_screen_y = math.nan
+    if camera_projection_available:
+        player_screen_x = (
+            float(player["x"]) - float(camera["originX"])
+        ) * camera_scale
+        player_screen_y = (
+            float(player["y"]) - float(camera["originY"])
+        ) * camera_scale
     for enemy in sorted(
         candidates,
         key=lambda row: _distance(
@@ -1440,10 +1453,33 @@ def damage_click_targets(
             if not (
                 math.isfinite(screen_x)
                 and math.isfinite(screen_y)
-                and 0.0 <= screen_x < viewport_width
-                and 0.0 <= screen_y < viewport_height
+                and minimum_x <= player_screen_x <= maximum_x
+                and minimum_y <= player_screen_y <= maximum_y
             ):
                 continue
+            ray_scale = 1.0
+            for start, end, lower, upper in (
+                (player_screen_x, screen_x, minimum_x, maximum_x),
+                (player_screen_y, screen_y, minimum_y, maximum_y),
+            ):
+                if end < lower:
+                    ray_scale = min(
+                        ray_scale,
+                        (lower - start) / (end - start),
+                    )
+                elif end > upper:
+                    ray_scale = min(
+                        ray_scale,
+                        (upper - start) / (end - start),
+                    )
+            if not 0.0 < ray_scale <= 1.0:
+                continue
+            screen_x = player_screen_x + (
+                screen_x - player_screen_x
+            ) * ray_scale
+            screen_y = player_screen_y + (
+                screen_y - player_screen_y
+            ) * ray_scale
         else:
             if not enemy["screen_valid"]:
                 continue
@@ -1451,8 +1487,8 @@ def damage_click_targets(
             screen_y = float(enemy["screen_y"])
         x = screen_x / viewport_width
         y = screen_y / viewport_height
-        # Physical pointer input is converted back to world space with this
-        # native camera origin and scale, so the actor origin is the exact aim.
+        # Physical input is converted back through this camera. When the actor
+        # center is offscreen, the clipped point preserves the exact aim ray.
         target = (
             max(0.01, min(0.99, x)),
             max(0.01, min(0.99, y)),
@@ -1492,7 +1528,7 @@ def damage_enemy_with_real_input(
             )
         ),
         timeout=timeout,
-        label="client B native-camera-visible replicated enemy for damage",
+        label="client B native-camera-aimable replicated enemy for damage",
     )
     viewport = before["viewport"]
     if viewport["width"] <= 0 or viewport["height"] <= 0:

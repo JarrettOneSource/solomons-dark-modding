@@ -610,6 +610,39 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertEqual(targets[0], (796.0 / 1600.0, 307.0 / 900.0))
 
+    def test_damage_targets_preserve_ray_to_nearest_offscreen_actor(
+        self,
+    ) -> None:
+        targets = damage_click_targets(
+            [
+                {
+                    "screen_valid": False,
+                    "screen_x": 0.0,
+                    "screen_y": 0.0,
+                    "x": 400.0,
+                    "y": -80.0,
+                },
+                {
+                    "screen_valid": False,
+                    "screen_x": 0.0,
+                    "screen_y": 0.0,
+                    "x": 800.0,
+                    "y": 500.0,
+                },
+            ],
+            {"x": 500.0, "y": 20.0},
+            {"width": 1000, "height": 1000},
+            {
+                "sceneAvailable": True,
+                "originX": 0.0,
+                "originY": 0.0,
+                "scale": 1.0,
+            },
+        )
+
+        self.assertEqual(targets[0], (0.49, 0.01))
+        self.assertEqual(targets[1], (0.8, 0.5))
+
     def test_damage_probe_refreshes_native_target_before_each_click(
         self,
     ) -> None:
