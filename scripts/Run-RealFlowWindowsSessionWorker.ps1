@@ -355,6 +355,46 @@ function Start-Client {
 function Invoke-RealInput {
     param([Parameter(Mandatory = $true)][object]$Request)
 
+    if ($Request.Action -eq "click-sequence") {
+        $targets = @(ConvertTo-Array -Value $Request.Targets)
+        if ($targets.Count -lt 2 -or $targets.Count -gt 8) {
+            throw "Click sequence must contain 2 through 8 targets."
+        }
+        $intervalMilliseconds = [int]$Request.IntervalMilliseconds
+        if (
+            $intervalMilliseconds -lt 100 -or
+            $intervalMilliseconds -gt 1500
+        ) {
+            throw "Click sequence interval must be 100 through 1500 milliseconds."
+        }
+        $helperOutputs = @()
+        for ($index = 0; $index -lt $targets.Count; $index++) {
+            $target = $targets[$index]
+            $arguments = @(
+                "click",
+                [string]$Request.ProcessId,
+                [string]$Request.GameExecutable,
+                [string]$target.X,
+                [string]$target.Y,
+                [string]$Request.HoldMilliseconds
+            )
+            $output = & ([string]$Request.InputHelper) @arguments 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Real-input helper failed with exit code $LASTEXITCODE`: $output"
+            }
+            $helperOutputs += [string]($output | Out-String).Trim()
+            if ($index + 1 -lt $targets.Count) {
+                Start-Sleep -Milliseconds $intervalMilliseconds
+            }
+        }
+        return [ordered]@{
+            action = [string]$Request.Action
+            processId = [int]$Request.ProcessId
+            clickCount = $targets.Count
+            helper = $helperOutputs
+        }
+    }
+
     $arguments = @(
         [string]$Request.Action,
         [string]$Request.ProcessId,
@@ -467,6 +507,7 @@ try {
         "launch-client" { Start-Client -Request $request }
         "key" { Invoke-RealInput -Request $request }
         "click" { Invoke-RealInput -Request $request }
+        "click-sequence" { Invoke-RealInput -Request $request }
         "close" { Close-RunProcesses -Request $request }
         default { throw "Unsupported session-worker action '$($request.Action)'." }
     }

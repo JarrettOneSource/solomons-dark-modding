@@ -1097,6 +1097,52 @@ $values | ConvertTo-Json -Compress
             sort_keys=True,
         )
 
+    def click_sequence(
+        self,
+        targets: list[tuple[float, float]],
+        hold_ms: int,
+        interval_ms: int,
+    ) -> str:
+        if not 2 <= len(targets) <= 8:
+            raise Ws20HarnessError(
+                "workstation20 click sequence must contain 2 through 8 targets"
+            )
+        if not 100 <= interval_ms <= 1500:
+            raise Ws20HarnessError(
+                "workstation20 click sequence interval must be 100 through "
+                "1500 milliseconds"
+            )
+        detail = self._invoke(
+            "click-sequence",
+            {
+                "ProcessId": self.game_pid,
+                "GameExecutable": self.game_executable,
+                "InputHelper": self.input_helper,
+                "Targets": [
+                    {"X": f"{x:.8f}", "Y": f"{y:.8f}"}
+                    for x, y in targets
+                ],
+                "HoldMilliseconds": hold_ms,
+                "IntervalMilliseconds": interval_ms,
+            },
+            timeout=30,
+        )
+        click_count = int(detail.get("clickCount", 0))
+        if click_count != len(targets):
+            raise Ws20HarnessError(
+                "workstation20 click sequence returned an unexpected count"
+            )
+        return json.dumps(
+            {
+                "action": "click-sequence",
+                "clickCount": click_count,
+                "holdMilliseconds": hold_ms,
+                "intervalMilliseconds": interval_ms,
+                "processId": int(detail.get("processId", 0)),
+            },
+            sort_keys=True,
+        )
+
     def capture_window(self, output: Path) -> dict[str, Any]:
         output.parent.mkdir(parents=True, exist_ok=True)
         if output.exists():

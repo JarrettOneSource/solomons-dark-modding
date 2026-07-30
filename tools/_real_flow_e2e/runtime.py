@@ -1536,7 +1536,7 @@ def damage_enemy_with_real_input(
         ):
             raise RuntimeProbeError(
                 "client B left live combat before physical input damaged "
-                f"an enemy; actions={len(actions)}"
+                f"an enemy; actions={actions}"
             )
         current_candidates = live_candidates(last)
         click_targets = damage_click_targets(
@@ -1550,7 +1550,14 @@ def damage_enemy_with_real_input(
             last = pipe.state()
             continue
         x, y = click_targets[0]
-        detail = _click(source_root, peer, x, y, 90)
+        remote_burst = getattr(peer, "click_sequence", None)
+        if callable(remote_burst):
+            burst_targets = [(x, y)] * 5
+            detail = str(remote_burst(burst_targets, 90, 450))
+            physical_input_count = len(burst_targets)
+        else:
+            detail = _click(source_root, peer, x, y, 90)
+            physical_input_count = 1
         actions.append(
             {
                 "timeUtcNanoseconds": time.time_ns(),
@@ -1558,6 +1565,7 @@ def damage_enemy_with_real_input(
                 "result": detail,
                 "playerHp": float(last["player"]["hp"]),
                 "candidateCount": len(current_candidates),
+                "physicalInputCount": physical_input_count,
             }
         )
         time.sleep(0.1)

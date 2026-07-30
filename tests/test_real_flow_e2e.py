@@ -694,6 +694,115 @@ class RealFlowE2ETests(unittest.TestCase):
         )
         self.assertEqual(result["hpAfter"], 1.5)
 
+    def test_damage_probe_uses_one_bounded_remote_click_burst(
+        self,
+    ) -> None:
+        def state(hp: float) -> dict[str, object]:
+            return {
+                "scene": {"name": "testrun"},
+                "viewport": {"width": 1000, "height": 1000},
+                "camera": {
+                    "sceneAvailable": True,
+                    "originX": 0.0,
+                    "originY": 0.0,
+                    "scale": 1.0,
+                },
+                "player": {
+                    "valid": True,
+                    "x": 500.0,
+                    "y": 500.0,
+                    "hp": 50.0,
+                },
+                "replicatedEnemies": [
+                    {
+                        "network_id": 101,
+                        "dead": False,
+                        "hp": hp,
+                        "x": 300.0,
+                        "y": 400.0,
+                        "screen_valid": False,
+                        "screen_x": 0.0,
+                        "screen_y": 0.0,
+                    }
+                ],
+            }
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.states = iter([state(2.5), state(1.5)])
+
+            def state(self) -> dict[str, object]:
+                return next(self.states)
+
+        class BurstPeer:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def click_sequence(
+                self,
+                targets: list[tuple[float, float]],
+                hold_ms: int,
+                interval_ms: int,
+            ) -> str:
+                self.calls.append(
+                    {
+                        "targets": targets,
+                        "holdMs": hold_ms,
+                        "intervalMs": interval_ms,
+                    }
+                )
+                return "ok"
+
+        peer = BurstPeer()
+        with mock.patch(
+            "tools._real_flow_e2e.runtime.time.sleep",
+            return_value=None,
+        ):
+            result = damage_enemy_with_real_input(
+                ROOT,
+                peer,  # type: ignore[arg-type]
+                FakePipe(),  # type: ignore[arg-type]
+                timeout=5.0,
+            )
+
+        self.assertEqual(
+            peer.calls,
+            [
+                {
+                    "targets": [(0.3, 0.4)] * 5,
+                    "holdMs": 90,
+                    "intervalMs": 450,
+                }
+            ],
+        )
+        self.assertEqual(result["hpAfter"], 1.5)
+        self.assertEqual(result["actions"][0]["physicalInputCount"], 5)
+
+    def test_ws20_worker_bounds_remote_click_bursts(
+        self,
+    ) -> None:
+        worker = (
+            ROOT / "scripts/Run-RealFlowWindowsSessionWorker.ps1"
+        ).read_text(encoding="utf-8")
+        real_input = worker.split(
+            "function Invoke-RealInput {", 1
+        )[1].split("function Close-RunProcesses {", 1)[0]
+
+        self.assertIn(
+            '$Request.Action -eq "click-sequence"',
+            real_input,
+        )
+        self.assertIn("$targets.Count -gt 8", real_input)
+        self.assertIn("$targets.Count -lt 2", real_input)
+        self.assertIn(
+            "Start-Sleep -Milliseconds $intervalMilliseconds",
+            real_input,
+        )
+        self.assertIn(
+            '[string]$Request.GameExecutable',
+            real_input,
+        )
+
     def test_ws20_action_uses_one_remote_powershell_round_trip(
         self,
     ) -> None:
