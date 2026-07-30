@@ -41,6 +41,7 @@ from tools._real_flow_e2e.runtime import (  # noqa: E402
     LuaPipe,
     RuntimeProbeError,
     approach_solomon_and_complete_dialogue,
+    cover_participant_with_real_input_once,
     damage_enemy_with_real_input,
     drive_combat_to_wave_with_real_input,
     effective_wave_index,
@@ -767,6 +768,18 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         sampler.set_phase(
             f"{config.solomon_interactor}-solomon-dig"
         )
+        host_cover_actions: list[dict[str, Any]] = []
+
+        def cover_client_dig() -> dict[str, Any]:
+            action = cover_participant_with_real_input_once(
+                config.source_root,
+                host,
+                host_pipe,
+                movement_index=len(host_cover_actions),
+            )
+            host_cover_actions.append(action)
+            return action
+
         result["solomonDig"] = {
             "interactor": config.solomon_interactor,
             "flow": approach_solomon_and_complete_dialogue(
@@ -774,8 +787,14 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 solomon_peer,
                 solomon_pipe,
                 authority_pipe=host_pipe,
+                cover_action=(
+                    cover_client_dig
+                    if config.solomon_interactor == "client"
+                    else None
+                ),
                 timeout=config.timeout_seconds,
             ),
+            "hostAirCover": host_cover_actions,
         }
         solomon_completion = sampler.sample_now(
             f"{config.solomon_interactor}-solomon-native-completion"

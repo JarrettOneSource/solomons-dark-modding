@@ -1301,6 +1301,7 @@ def approach_solomon_and_complete_dialogue(
     pipe: LuaPipe,
     *,
     authority_pipe: LuaPipe | None = None,
+    cover_action: Callable[[], dict[str, Any]] | None = None,
     timeout: float,
 ) -> dict[str, Any]:
     target_pipe = authority_pipe or pipe
@@ -1361,6 +1362,8 @@ def approach_solomon_and_complete_dialogue(
     best_distance = math.inf
     stalled_samples = 0
     detour_count = 0
+    if cover_action is not None:
+        cover_action()
     while time.monotonic() < deadline:
         local_state = pipe.state()
         authority_state = (
@@ -1429,6 +1432,8 @@ def approach_solomon_and_complete_dialogue(
                 key,
                 max(80, min(2500, round(component * 10.0))),
             )
+            if cover_action is not None:
+                cover_action()
             continue
         if distance < best_distance - 2.0:
             best_distance = distance
@@ -1446,6 +1451,8 @@ def approach_solomon_and_complete_dialogue(
                 detour_keys[detour_count % 2],
                 1200,
             )
+            if cover_action is not None:
+                cover_action()
             detour_count += 1
             stalled_samples = 0
             best_distance = math.inf
@@ -1463,11 +1470,13 @@ def approach_solomon_and_complete_dialogue(
             max(
                 50,
                 min(
-                    12000 if remote_authority else 1200,
+                    1800 if remote_authority else 1200,
                     round(component * (10.0 if remote_authority else 2.0)),
                 ),
             ),
         )
+        if cover_action is not None:
+            cover_action()
     if acquired is None:
         raise RuntimeProbeError(
             "host physical Solomon proximity timed out; "
@@ -1521,6 +1530,8 @@ def approach_solomon_and_complete_dialogue(
         # in the 640x480 logical viewport. This is real pointer input.
         if state["solomon"]["state"] <= 2:
             _click(source_root, peer, 0.5, 388.0 / 480.0, 300)
+        if cover_action is not None:
+            cover_action()
         time.sleep(0.35)
     raise RuntimeProbeError(
         "host stock Solomon dialogue did not reach native completion; "
@@ -1540,6 +1551,58 @@ def _merge_solomon_authority_state(
         "combat": authority_state["combat"],
         "wave": authority_state["wave"],
         "world": authority_state["world"],
+    }
+
+
+def cover_participant_with_real_input_once(
+    source_root: Path,
+    peer: WindowsPeer,
+    pipe: LuaPipe,
+    *,
+    movement_index: int,
+) -> dict[str, Any]:
+    state = pipe.state()
+    if (
+        state["scene"]["name"] != "testrun"
+        or not state["player"]["valid"]
+        or float(state["player"]["hp"]) <= 0.0
+    ):
+        raise RuntimeProbeError(
+            "the host could not provide real-input cover during client Dig: "
+            f"scene={state['scene']['name']} player={state['player']}"
+        )
+    live_enemies = [
+        enemy
+        for enemy in state["nativeEnemies"]
+        if not enemy["dead"] and float(enemy["hp"]) > 0.0
+    ]
+    targets = damage_click_targets(
+        live_enemies,
+        state["player"],
+        state["viewport"],
+        state["camera"],
+    )
+    started = time.time_ns()
+    if targets:
+        x, y = targets[movement_index % len(targets)]
+        detail = _click(source_root, peer, x, y, 120)
+        return {
+            "timeUtcNanoseconds": started,
+            "kind": "air-cast",
+            "screenFraction": [x, y],
+            "liveEnemyCount": len(live_enemies),
+            "hp": float(state["player"]["hp"]),
+            "result": detail,
+        }
+    key = ("d", "s", "a", "w")[movement_index % 4]
+    detail = _send_key(source_root, peer, key, 450)
+    return {
+        "timeUtcNanoseconds": started,
+        "kind": "evade",
+        "key": key,
+        "liveEnemyCount": 0,
+        "hp": float(state["player"]["hp"]),
+        "result": detail,
     }
 
 
