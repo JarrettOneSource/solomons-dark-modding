@@ -1595,7 +1595,7 @@ def cover_participant_with_real_input_once(
             "result": detail,
         }
     evade_index = movement_index - (movement_index // 3)
-    key = ("d", "s", "a", "w")[evade_index % 4]
+    key = ("d", "w", "a", "s")[evade_index % 4]
     hold_ms = 2200 if movement_index == 0 else 1400
     detail = _send_key(source_root, peer, key, hold_ms)
     return {
