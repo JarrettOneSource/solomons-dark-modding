@@ -651,7 +651,7 @@ class RealFlowE2ETests(unittest.TestCase):
             },
         )
 
-    def test_damage_targets_choose_nearest_visible_actor_first(
+    def test_damage_targets_prioritize_interior_actor_over_nearest_edge(
         self,
     ) -> None:
         targets = damage_click_targets(
@@ -679,8 +679,8 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(
             targets[:2],
             [
-                (0.2925, 22.0 / 900.0),
                 (0.625, 500.0 / 900.0),
+                (0.2925, 22.0 / 900.0),
             ],
         )
 
@@ -709,7 +709,7 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertEqual(targets[0], (796.0 / 1600.0, 307.0 / 900.0))
 
-    def test_damage_targets_preserve_ray_to_nearest_offscreen_actor(
+    def test_damage_targets_keep_offscreen_ray_as_fallback(
         self,
     ) -> None:
         targets = damage_click_targets(
@@ -739,8 +739,8 @@ class RealFlowE2ETests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(targets[0], (0.49, 0.01))
-        self.assertEqual(targets[1], (0.8, 0.5))
+        self.assertEqual(targets[0], (0.8, 0.5))
+        self.assertEqual(targets[1], (0.49, 0.01))
 
     def test_damage_probe_refreshes_native_target_before_each_click(
         self,

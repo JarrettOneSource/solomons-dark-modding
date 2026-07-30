@@ -1408,11 +1408,12 @@ def damage_click_targets(
     viewport: dict[str, Any],
     camera: dict[str, Any],
 ) -> list[tuple[float, float]]:
-    projected: list[tuple[float, float]] = []
+    interior: list[tuple[float, float]] = []
+    edge: list[tuple[float, float]] = []
     viewport_width = float(viewport["width"])
     viewport_height = float(viewport["height"])
     if viewport_width <= 0.0 or viewport_height <= 0.0:
-        return projected
+        return []
     camera_scale = float(camera.get("scale", math.nan))
     camera_projection_available = (
         bool(camera.get("sceneAvailable"))
@@ -1425,6 +1426,10 @@ def damage_click_targets(
     maximum_x = viewport_width * 0.99
     minimum_y = viewport_height * 0.01
     maximum_y = viewport_height * 0.99
+    interior_minimum_x = viewport_width * 0.08
+    interior_maximum_x = viewport_width * 0.92
+    interior_minimum_y = viewport_height * 0.08
+    interior_maximum_y = viewport_height * 0.92
     player_screen_x = math.nan
     player_screen_y = math.nan
     if camera_projection_available:
@@ -1493,9 +1498,16 @@ def damage_click_targets(
             max(0.01, min(0.99, x)),
             max(0.01, min(0.99, y)),
         )
-        if target not in projected:
-            projected.append(target)
-    return projected
+        if target in interior or target in edge:
+            continue
+        if (
+            interior_minimum_x <= screen_x <= interior_maximum_x
+            and interior_minimum_y <= screen_y <= interior_maximum_y
+        ):
+            interior.append(target)
+        else:
+            edge.append(target)
+    return interior + edge
 
 
 def damage_enemy_with_real_input(
