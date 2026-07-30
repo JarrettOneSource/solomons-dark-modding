@@ -1583,9 +1583,9 @@ def cover_participant_with_real_input_once(
         state["camera"],
     )
     started = time.time_ns()
-    if targets and movement_index % 3 == 2:
+    if targets:
         x, y = targets[movement_index % len(targets)]
-        detail = _click(source_root, peer, x, y, 120)
+        detail = _click(source_root, peer, x, y, 1500)
         return {
             "timeUtcNanoseconds": started,
             "kind": "air-cast",
@@ -1594,8 +1594,7 @@ def cover_participant_with_real_input_once(
             "hp": float(state["player"]["hp"]),
             "result": detail,
         }
-    evade_index = movement_index - (movement_index // 3)
-    key = ("d", "w", "a", "s")[evade_index % 4]
+    key = ("d", "w", "a", "s")[movement_index % 4]
     hold_ms = 2200 if movement_index == 0 else 1400
     detail = _send_key(source_root, peer, key, hold_ms)
     return {

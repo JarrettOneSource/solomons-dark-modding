@@ -300,6 +300,7 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(action["liveEnemyCount"], 1)
         self.assertEqual(action["hp"], 42.0)
         click.assert_called_once()
+        self.assertEqual(click.call_args.args[-1], 1500)
 
     def test_shared_hub_wait_requires_converged_participant_views(
         self,
