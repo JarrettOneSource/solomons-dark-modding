@@ -141,6 +141,22 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn("LoadingScreenStage::ConfirmingParticipants", barrier)
         self.assertIn("CompleteLoadingScreen();", barrier)
 
+    def test_lua_runtime_exposes_actual_loading_screen_state(self) -> None:
+        bindings = (
+            ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+        ).read_text(encoding="utf-8")
+        harness = (
+            ROOT / "tools/_real_flow_e2e/runtime.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "PushLoadingScreenSnapshot(state, GetLoadingScreenSnapshot());",
+            bindings,
+        )
+        self.assertIn('"loading_screen"', bindings)
+        self.assertIn('emit("loading.active"', harness)
+        self.assertIn('state["loadingScreen"]["active"]', harness)
+
     def test_asset_is_staged_packaged_and_loaded_from_sdmod_assets(self) -> None:
         materializer = (
             ROOT

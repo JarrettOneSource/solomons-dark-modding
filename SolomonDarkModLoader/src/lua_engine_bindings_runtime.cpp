@@ -3,6 +3,7 @@
 
 #include "lua_engine.h"
 
+#include "loading_screen.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 
@@ -675,10 +676,38 @@ void PushRunLoadingBarrierRuntimeInfo(
         "waiting_participant_ids");
 }
 
+void PushLoadingScreenSnapshot(
+    lua_State* state,
+    const LoadingScreenSnapshot& loading_screen) {
+    lua_createtable(state, 0, 7);
+    lua_pushboolean(state, loading_screen.active ? 1 : 0);
+    lua_setfield(state, -2, "active");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(loading_screen.flow));
+    lua_setfield(state, -2, "flow");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(loading_screen.stage));
+    lua_setfield(state, -2, "stage");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(loading_screen.progress));
+    lua_setfield(state, -2, "progress");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(loading_screen.sequence));
+    lua_setfield(state, -2, "sequence");
+    lua_pushstring(state, loading_screen.stage_id.c_str());
+    lua_setfield(state, -2, "stage_id");
+    lua_pushstring(state, loading_screen.label.c_str());
+    lua_setfield(state, -2, "label");
+}
+
 int LuaRuntimeGetMultiplayerState(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
 
-    lua_createtable(state, 0, 20);
+    lua_createtable(state, 0, 21);
     lua_pushboolean(state, runtime.foundation_ready ? 1 : 0);
     lua_setfield(state, -2, "foundation_ready");
     lua_pushboolean(state, multiplayer::IsLocalTransportEnabled() ? 1 : 0);
@@ -858,6 +887,8 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         state,
         -2,
         "run_loading_barrier");
+    PushLoadingScreenSnapshot(state, GetLoadingScreenSnapshot());
+    lua_setfield(state, -2, "loading_screen");
 
     return 1;
 }

@@ -179,6 +179,7 @@ class RealFlowE2ETests(unittest.TestCase):
         ) -> dict[str, object]:
             return {
                 "scene": {"kind": "hub"},
+                "loadingScreen": {"active": False},
                 "multiplayer": {
                     "sessionState": "in-hub",
                     "sessionStatus": "Ready",
@@ -213,6 +214,9 @@ class RealFlowE2ETests(unittest.TestCase):
         host["multiplayer"]["participants"][1]["y"] = 163.2  # type: ignore[index]
         client["multiplayer"]["participants"][1]["y"] = 163.3  # type: ignore[index]
         self.assertTrue(shared_hub_views_converged(host, client))
+
+        client["loadingScreen"]["active"] = True  # type: ignore[index]
+        self.assertFalse(shared_hub_views_converged(host, client))
 
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
         self,

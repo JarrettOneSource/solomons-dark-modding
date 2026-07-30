@@ -159,6 +159,14 @@ emit("mp.steam_reliable_send_failures",
   mp and mp.steam_reliable_send_failures or 0)
 emit("mp.last_steam_send_failure_result",
   mp and mp.last_steam_send_failure_result or 0)
+local loading = mp and mp.loading_screen or nil
+emit("loading.active", loading and loading.active or false)
+emit("loading.flow", loading and loading.flow or 0)
+emit("loading.stage", loading and loading.stage or 0)
+emit("loading.progress", loading and loading.progress or 0)
+emit("loading.sequence", loading and loading.sequence or 0)
+emit("loading.stage_id", loading and loading.stage_id or "")
+emit("loading.label", loading and loading.label or "")
 for index, participant in ipairs(mp and mp.participants or {}) do
   if index > 8 then break end
   local prefix = "participant." .. tostring(index)
@@ -543,6 +551,15 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
                 participant_fields,
             ),
         },
+        "loadingScreen": {
+            "active": _boolean(values, "loading.active"),
+            "flow": _integer(values, "loading.flow"),
+            "stage": _integer(values, "loading.stage"),
+            "progress": _number(values, "loading.progress"),
+            "sequence": _integer(values, "loading.sequence"),
+            "stageId": values.get("loading.stage_id", ""),
+            "label": values.get("loading.label", ""),
+        },
         "solomon": {
             "valid": _boolean(values, "solomon.valid"),
             "address": _integer(values, "solomon.address"),
@@ -908,6 +925,7 @@ def shared_hub_views_converged(
     states = (host, client)
     if any(
         state["scene"]["kind"] != "hub"
+        or state["loadingScreen"]["active"]
         or state["multiplayer"]["sessionState"] != "in-hub"
         or state["multiplayer"]["sessionStatus"] != "Ready"
         or state["multiplayer"]["participantCount"] < 2
