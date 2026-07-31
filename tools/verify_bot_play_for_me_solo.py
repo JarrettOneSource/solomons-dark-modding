@@ -118,7 +118,10 @@ def _stage_package(
     return destination
 
 
-def _write_initial_settings(evidence_root: Path) -> Path:
+def _write_initial_settings(
+    evidence_root: Path,
+    behavior: str,
+) -> Path:
     path = evidence_root / "inputs" / "bot.brain.initial.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -127,7 +130,7 @@ def _write_initial_settings(evidence_root: Path) -> Path:
                 "schemaVersion": 1,
                 "values": {
                     "play_for_me": False,
-                    "play_for_me_behavior": "skirmisher",
+                    "play_for_me_behavior": behavior,
                     "roster": [],
                 },
             },
@@ -603,7 +606,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         args.evidence_root,
     )
     runtime_root = args.evidence_root / "staging" / "runtime"
-    settings_path = _write_initial_settings(args.evidence_root)
+    settings_path = _write_initial_settings(
+        args.evidence_root,
+        args.behavior,
+    )
     launch: dict[str, Any] = {}
     process_id = 0
     expected_executable = windows_path(
@@ -623,6 +629,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "ports": [args.local_port, args.unused_remote_port],
         "participantId": PARTICIPANT_ID,
         "audioDisabledRequired": True,
+        "behavior": args.behavior,
         "targetWaveAlive": args.target_wave,
     }
     cleanup: dict[str, Any] = {}
@@ -697,6 +704,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             peer,
             pipe,
             enabled=True,
+            behavior=args.behavior,
         )
         active_bot = _wait_for_bot_state(
             pipe,
@@ -861,6 +869,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             peer,
             pipe,
             enabled=False,
+            behavior=args.behavior,
         )
         released = _wait_for_bot_state(
             pipe,
@@ -1048,6 +1057,12 @@ def parse_args() -> argparse.Namespace:
         default=51412,
     )
     parser.add_argument("--target-wave", type=int, default=5)
+    parser.add_argument(
+        "--behavior",
+        choices=("skirmisher", "guardian", "striker", "learned"),
+        default="striker",
+        help="existing bot-brain policy used for the acceptance run",
+    )
     parser.add_argument("--timeout-seconds", type=float, default=600.0)
     args = parser.parse_args()
     args.package_root = args.package_root.resolve()

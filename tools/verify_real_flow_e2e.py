@@ -709,6 +709,7 @@ def _write_bot_settings(
     peer: WindowsPeer,
     *,
     enabled: bool,
+    behavior: str = "skirmisher",
 ) -> Path:
     path = _bot_settings_path(peer)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -723,7 +724,7 @@ def _write_bot_settings(
                 "schemaVersion": 1,
                 "values": {
                     "play_for_me": enabled,
-                    "play_for_me_behavior": "skirmisher",
+                    "play_for_me_behavior": behavior,
                     "roster": [],
                 },
             },
@@ -834,10 +835,16 @@ def _set_bot_play(
     pipe: LuaPipe,
     *,
     enabled: bool,
+    behavior: str = "skirmisher",
 ) -> dict[str, Any]:
-    path = _write_bot_settings(peer, enabled=enabled)
+    path = _write_bot_settings(
+        peer,
+        enabled=enabled,
+        behavior=behavior,
+    )
     return {
         "enabled": enabled,
+        "behavior": behavior,
         "settingsPath": str(path),
         "reload": _reload_bot_settings(pipe),
     }
