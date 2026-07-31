@@ -345,11 +345,13 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
             result = verifier._query_equipped_primary_view(
                 "host-pipe",
                 42,
+                owner_view=True,
             )
 
         code = lua.call_args.args[1]
         self.assertEqual(result["current_spell_id"], "1011")
-        self.assertIn("participant_id = 42", code)
+        self.assertIn("requested_participant_id = 42", code)
+        self.assertIn("expected_owner_view = true", code)
         self.assertIn("owned.spellbook_entries", code)
         self.assertIn('layout_offset("progression_current_spell_id")', code)
         self.assertIn("sd.bots.get_loadout_details", code)

@@ -184,20 +184,25 @@ emit("dead", found == nil or found.dead == true)
 emit("hp", hp)
 """
 EQUIPPED_PRIMARY_STATE_PROBE = r"""
-local participant_id = __PARTICIPANT_ID__
+local requested_participant_id = __PARTICIPANT_ID__
+local expected_owner_view = __OWNER_VIEW__
 local function emit(key, value)
   print(key .. "=" .. tostring(value == nil and "" or value))
 end
 local multiplayer = assert(sd.runtime.get_multiplayer_state())
 local participant = nil
 for _, candidate in ipairs(multiplayer.participants or {}) do
-  if tonumber(candidate.participant_id) == participant_id then
+  if (expected_owner_view and candidate.kind == "LocalHuman") or
+     (not expected_owner_view and
+      tonumber(candidate.participant_id) == requested_participant_id) then
     participant = candidate
     break
   end
 end
 local is_owner = participant ~= nil and
   participant.kind == "LocalHuman"
+local participant_id = participant and
+  tonumber(participant.participant_id) or requested_participant_id
 local player = is_owner and sd.player.get_state() or nil
 local gameplay = not is_owner and
   sd.bots.get_participant_state(participant_id) or nil
@@ -451,6 +456,8 @@ def _query_views(
 def _query_equipped_primary_view(
     pipe_name: str,
     participant_id: int,
+    *,
+    owner_view: bool,
 ) -> dict[str, str]:
     return parse_key_values(
         lua(
@@ -458,6 +465,9 @@ def _query_equipped_primary_view(
             EQUIPPED_PRIMARY_STATE_PROBE.replace(
                 "__PARTICIPANT_ID__",
                 str(participant_id),
+            ).replace(
+                "__OWNER_VIEW__",
+                "true" if owner_view else "false",
             ),
             timeout=8.0,
         )
@@ -474,10 +484,12 @@ def _query_equipped_primary_views(
         "owner": _query_equipped_primary_view(
             owner_pipe,
             participant_id,
+            owner_view=True,
         ),
         "observer": _query_equipped_primary_view(
             observer_pipe,
             participant_id,
+            owner_view=False,
         ),
     }
 
