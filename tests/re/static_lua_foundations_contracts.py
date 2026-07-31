@@ -58,6 +58,8 @@ def test_lua_run_seed_is_authority_owned_and_native_applied() -> str:
     for token in (
         "kNativeRngSeedMask = 0x3FFFFFFF",
         "PublishLocalRunNonce(seed)",
+        "local->runtime.run_nonce != "
+        "runtime_state.last_terminated_run_nonce",
         "kNativeRngInitialize",
         "ApplyPendingRunGenerationSeedForSceneSwitch",
     ):

@@ -123,7 +123,9 @@ std::uint32_t EnsureHostRunGenerationSeed(const char* source) {
 
     const auto runtime_state = multiplayer::SnapshotRuntimeState();
     if (const auto* local = multiplayer::FindLocalParticipant(runtime_state);
-        local != nullptr && local->runtime.run_nonce != 0) {
+        local != nullptr &&
+        local->runtime.run_nonce != 0 &&
+        local->runtime.run_nonce != runtime_state.last_terminated_run_nonce) {
         const auto published = NormalizeRunGenerationSeed(local->runtime.run_nonce);
         (void)SetPendingRunGenerationSeedInternal(published, source);
         return published;
