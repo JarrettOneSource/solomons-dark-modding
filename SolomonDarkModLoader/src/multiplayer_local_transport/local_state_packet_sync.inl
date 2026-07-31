@@ -389,6 +389,13 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.magic_shield_hit_flash = shield_state.hit_flash;
         local->runtime.render_drive_overlay_alpha = player_state.render_drive_overlay_alpha;
         local->runtime.render_drive_move_blend = player_state.render_drive_move_blend;
+        if (state.run_end_pending_lobby_return &&
+            state.last_terminated_run_nonce != 0) {
+            ResetParticipantRuntimeForRunTermination(
+                local);
+            local->runtime.run_nonce =
+                state.last_terminated_run_nonce;
+        }
     });
 }
 

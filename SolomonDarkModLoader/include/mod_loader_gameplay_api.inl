@@ -199,6 +199,8 @@ bool TryRespawnHostOwnedSyntheticParticipantsAt(
     float world_x,
     float world_y,
     std::string* error_message);
+void ResetParticipantEntitiesForRunTermination(
+    std::string_view reason);
 bool TryApplyAuthoritativeLocalPlayerDeath(std::string* error_message);
 bool QueueManualRunEnemySpawn(
     int type_id,

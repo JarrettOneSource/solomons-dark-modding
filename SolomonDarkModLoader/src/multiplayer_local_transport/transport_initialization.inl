@@ -6,6 +6,9 @@ bool InitializeLocalTransport() {
         true,
         std::memory_order_release);
     g_local_transport_host.store(false, std::memory_order_release);
+    g_local_terminated_run_nonce.store(
+        0,
+        std::memory_order_release);
     ResetParticipantHitFeedbackState();
     ResetRunGameOverState("transport_initialize");
     ResetRunLoadingBarrierState("transport_initialize");

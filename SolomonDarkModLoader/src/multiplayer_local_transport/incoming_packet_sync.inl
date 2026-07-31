@@ -427,6 +427,71 @@ void ApplyParticipantFrameToRuntime(
     }
     participant->last_packet_ms = now_ms;
     participant->runtime.valid = true;
+    if (IsParticipantPacketFromTerminatedRun(
+            packet.run_nonce) &&
+        !IsHealthyPostTerminationParticipantFrame(
+            packet)) {
+        participant->runtime.run_nonce =
+            packet.run_nonce;
+        participant->runtime.level = packet.level;
+        if (std::isfinite(normalized.life_max) &&
+            normalized.life_max > 0.0f) {
+            participant->runtime.life_max =
+                normalized.life_max;
+        }
+        if (std::isfinite(packet.mana_max) &&
+            packet.mana_max > 0.0f) {
+            participant->runtime.mana_max =
+                packet.mana_max;
+        }
+        participant->runtime.move_speed =
+            packet.move_speed;
+        participant->runtime.experience_current =
+            packet.experience_current;
+        participant->runtime.experience_next =
+            packet.experience_next;
+        participant->runtime.presentation_flags =
+            packet.presentation_flags &
+            ~(ParticipantPresentationFlagStaffVisualState |
+              ParticipantPresentationFlagDeathPresentation);
+        participant->runtime.render_variant_primary =
+            packet.render_variant_primary;
+        participant->runtime.render_variant_secondary =
+            packet.render_variant_secondary;
+        participant->runtime.render_weapon_type =
+            packet.render_weapon_type;
+        participant->runtime.render_selection_byte =
+            packet.render_selection_byte;
+        participant->runtime.render_variant_tertiary =
+            packet.render_variant_tertiary;
+        participant->runtime.primary_visual_link_type_id =
+            packet.primary_visual_link_type_id;
+        participant->runtime.secondary_visual_link_type_id =
+            packet.secondary_visual_link_type_id;
+        participant->runtime.primary_visual_link_recipe_uid =
+            packet.primary_visual_link_recipe_uid;
+        participant->runtime.secondary_visual_link_recipe_uid =
+            packet.secondary_visual_link_recipe_uid;
+        participant->runtime.attachment_visual_link_type_id =
+            packet.attachment_visual_link_type_id;
+        participant->runtime.attachment_visual_link_recipe_uid =
+            packet.attachment_visual_link_recipe_uid;
+        std::memcpy(
+            participant->runtime
+                .primary_visual_link_color_block.data(),
+            packet.primary_visual_link_color_block,
+            participant->runtime
+                .primary_visual_link_color_block.size());
+        std::memcpy(
+            participant->runtime
+                .secondary_visual_link_color_block.data(),
+            packet.secondary_visual_link_color_block,
+            participant->runtime
+                .secondary_visual_link_color_block.size());
+        ResetParticipantRuntimeForRunTermination(
+            participant);
+        return;
+    }
     participant->runtime.in_run = packet.in_run != 0;
     participant->runtime.run_nonce = packet.run_nonce;
     participant->runtime.scene_intent = scene_intent;

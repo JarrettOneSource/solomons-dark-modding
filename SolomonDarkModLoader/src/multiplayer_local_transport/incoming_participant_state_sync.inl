@@ -210,41 +210,54 @@ void ApplyRemoteStatePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
-    ApplyAuthoritativeRunGameOver(
-        packet,
-        packet_from_configured_authority);
-    RecordRunGameOverAcknowledgement(packet);
-    ApplyRunLoadingBarrierPacket(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
-    if (IsLocalTransportHost()) {
-        ApplyHostMenuPauseRequest(
-            packet.participant_id,
+    if (IsAuthenticatedFreshRunEntryPacket(
+            packet,
+            scene_intent,
+            packet_from_configured_authority)) {
+        RetireParticipantRunTerminationFenceForNewRun(
             packet.run_nonce,
-            packet.local_menu_pause_request_epoch,
-            packet.local_menu_pause_requested != 0,
-            now_ms);
-    } else if (packet_from_configured_authority) {
-        ApplyAuthoritativeSharedGameplayPause(
-            packet.authority_participant_id,
-            packet.run_nonce,
-            packet.shared_gameplay_pause_origin_participant_id,
-            packet.shared_gameplay_pause_deadline_remaining_ms,
-            packet.shared_gameplay_pause_active != 0,
-            packet.shared_gameplay_pause_timed_out != 0,
-            now_ms);
-        ApplyAuthoritativeLuaTimeControlSnapshot(
-            packet.authority_participant_id,
-            packet.run_nonce,
-            packet.lua_time_scale_units,
-            packet.lua_time_revision);
+            "state_packet");
     }
+    const bool packet_from_terminated_run =
+        IsParticipantPacketFromTerminatedRun(
+            packet.run_nonce);
+    if (!packet_from_terminated_run) {
+        ApplyAuthoritativeRunGameOver(
+            packet,
+            packet_from_configured_authority);
+        RecordRunGameOverAcknowledgement(packet);
+        ApplyRunLoadingBarrierPacket(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+        if (IsLocalTransportHost()) {
+            ApplyHostMenuPauseRequest(
+                packet.participant_id,
+                packet.run_nonce,
+                packet.local_menu_pause_request_epoch,
+                packet.local_menu_pause_requested != 0,
+                now_ms);
+        } else if (packet_from_configured_authority) {
+            ApplyAuthoritativeSharedGameplayPause(
+                packet.authority_participant_id,
+                packet.run_nonce,
+                packet.shared_gameplay_pause_origin_participant_id,
+                packet.shared_gameplay_pause_deadline_remaining_ms,
+                packet.shared_gameplay_pause_active != 0,
+                packet.shared_gameplay_pause_timed_out != 0,
+                now_ms);
+            ApplyAuthoritativeLuaTimeControlSnapshot(
+                packet.authority_participant_id,
+                packet.run_nonce,
+                packet.lua_time_scale_units,
+                packet.lua_time_revision);
+        }
 
-    ApplyAuthoritativeWaveRespawn(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
+        ApplyAuthoritativeWaveRespawn(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+    }
 
     UpdateRuntimeState([&](RuntimeState& state) {
 
@@ -357,11 +370,13 @@ void ApplyRemoteStatePacket(
         }
     });
 
-    MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
-    StageClientHostRunExitFollow(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
+    if (!packet_from_terminated_run) {
+        MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
+        StageClientHostRunExitFollow(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+    }
 
     SDModParticipantGameplayState gameplay_state;
     const bool participant_materialized =
@@ -451,40 +466,53 @@ void ApplyRemoteParticipantFramePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
-    ApplyAuthoritativeRunGameOver(
-        packet,
-        packet_from_configured_authority);
-    RecordRunGameOverAcknowledgement(packet);
-    ApplyRunLoadingBarrierPacket(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
-    if (IsLocalTransportHost()) {
-        ApplyHostMenuPauseRequest(
-            packet.participant_id,
+    if (IsAuthenticatedFreshRunEntryPacket(
+            packet,
+            scene_intent,
+            packet_from_configured_authority)) {
+        RetireParticipantRunTerminationFenceForNewRun(
             packet.run_nonce,
-            packet.local_menu_pause_request_epoch,
-            packet.local_menu_pause_requested != 0,
-            now_ms);
-    } else if (packet_from_configured_authority) {
-        ApplyAuthoritativeSharedGameplayPause(
-            packet.authority_participant_id,
-            packet.run_nonce,
-            packet.shared_gameplay_pause_origin_participant_id,
-            packet.shared_gameplay_pause_deadline_remaining_ms,
-            packet.shared_gameplay_pause_active != 0,
-            packet.shared_gameplay_pause_timed_out != 0,
-            now_ms);
-        ApplyAuthoritativeLuaTimeControlSnapshot(
-            packet.authority_participant_id,
-            packet.run_nonce,
-            packet.lua_time_scale_units,
-            packet.lua_time_revision);
+            "participant_frame");
     }
-    ApplyAuthoritativeWaveRespawn(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
+    const bool packet_from_terminated_run =
+        IsParticipantPacketFromTerminatedRun(
+            packet.run_nonce);
+    if (!packet_from_terminated_run) {
+        ApplyAuthoritativeRunGameOver(
+            packet,
+            packet_from_configured_authority);
+        RecordRunGameOverAcknowledgement(packet);
+        ApplyRunLoadingBarrierPacket(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+        if (IsLocalTransportHost()) {
+            ApplyHostMenuPauseRequest(
+                packet.participant_id,
+                packet.run_nonce,
+                packet.local_menu_pause_request_epoch,
+                packet.local_menu_pause_requested != 0,
+                now_ms);
+        } else if (packet_from_configured_authority) {
+            ApplyAuthoritativeSharedGameplayPause(
+                packet.authority_participant_id,
+                packet.run_nonce,
+                packet.shared_gameplay_pause_origin_participant_id,
+                packet.shared_gameplay_pause_deadline_remaining_ms,
+                packet.shared_gameplay_pause_active != 0,
+                packet.shared_gameplay_pause_timed_out != 0,
+                now_ms);
+            ApplyAuthoritativeLuaTimeControlSnapshot(
+                packet.authority_participant_id,
+                packet.run_nonce,
+                packet.lua_time_scale_units,
+                packet.lua_time_revision);
+        }
+        ApplyAuthoritativeWaveRespawn(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+    }
     MultiplayerCharacterProfile profile;
     bool participant_found = false;
     UpdateRuntimeState([&](RuntimeState& state) {
@@ -505,11 +533,13 @@ void ApplyRemoteParticipantFramePacket(
         return;
     }
 
-    MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
-    StageClientHostRunExitFollow(
-        packet,
-        packet_from_configured_authority,
-        now_ms);
+    if (!packet_from_terminated_run) {
+        MaybeQueueClientHostRunStart(packet, scene_intent, from, now_ms);
+        StageClientHostRunExitFollow(
+            packet,
+            packet_from_configured_authority,
+            now_ms);
+    }
 
     SDModParticipantGameplayState gameplay_state;
     const bool participant_materialized =

@@ -91,6 +91,9 @@ void ShutdownLocalTransport() {
         0,
         std::memory_order_release);
     g_local_run_exit_latched_nonce.store(0, std::memory_order_release);
+    g_local_terminated_run_nonce.store(
+        0,
+        std::memory_order_release);
     {
         std::lock_guard<std::mutex> lock(g_client_host_run_authorization_mutex);
         g_client_host_run_authorization = ClientHostRunAuthorization{};

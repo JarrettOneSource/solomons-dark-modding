@@ -495,3 +495,153 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         "all participants keep Loading Boneyard until every peer acks the same "
         "materialized actor set, with authenticated host release and bounded fallbacks"
     )
+
+
+def test_run_termination_resets_every_participant_without_retiring_wan_death_durability() -> str:
+    runtime_state = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_effect_state.inl"
+    )
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport.cpp"
+    )
+    transport_reset = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_run_termination.inl"
+    )
+    incoming = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_sync.inl"
+    )
+    lifecycle = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/"
+        "enemy_tracking_and_reset.inl"
+    )
+    gameplay_api = _read(
+        "SolomonDarkModLoader/include/mod_loader_gameplay_api.inl"
+    )
+    gameplay_public = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/public_api.inl"
+    )
+    gameplay_reset = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_participant_run_termination.inl"
+    )
+    materialization = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "bot_registry_and_movement_participant_lifecycle.inl"
+    )
+    verifier = _read("tools/verify_game_over_session_semantics.py")
+
+    _require_tokens(
+        runtime_state,
+        ("std::uint32_t last_terminated_run_nonce = 0;",),
+        "runtime run-generation fence",
+    )
+    _require_tokens(
+        transport_reset,
+        (
+            "bool IsAuthenticatedFreshRunEntryPacket(",
+            "run_loading_deadline_remaining_ms != 0;",
+            "void RetireParticipantRunTerminationFenceForNewRun(",
+            "void ResetParticipantRuntimeForRunTermination(",
+            "participant.transform_history.clear();",
+            "transition_transform.presentation_flags =",
+            "participant.transform_history.push_back(",
+            "participant.runtime.life_current =",
+            "participant.runtime.life_max;",
+            "ParticipantPresentationFlagDeathPresentation",
+        ),
+        "transport participant run reset",
+    )
+    _require_tokens(
+        transport,
+        (
+            "state.last_terminated_run_nonce = 0;",
+            "for (auto& participant : state.participants)",
+            "ResetParticipantRuntimeForRunTermination(",
+            "g_local_terminated_run_nonce.store(",
+        ),
+        "transport participant run reset",
+    )
+    _require_tokens(
+        incoming,
+        (
+            "IsParticipantPacketFromTerminatedRun(",
+            "packet.run_nonce",
+            "ResetParticipantRuntimeForRunTermination(",
+            "participant);",
+        ),
+        "late old-run packet fence",
+    )
+    _require_tokens(
+        _read(
+            "SolomonDarkModLoader/src/multiplayer_local_transport/"
+            "incoming_participant_state_sync.inl"
+        ),
+        (
+            "IsAuthenticatedFreshRunEntryPacket(",
+            "RetireParticipantRunTerminationFenceForNewRun(",
+            '"state_packet"',
+            '"participant_frame"',
+        ),
+        "authenticated next-run fence retirement",
+    )
+    _require_tokens(
+        gameplay_api,
+        ("void ResetParticipantEntitiesForRunTermination(",),
+        "native participant reset API",
+    )
+    assert (
+        '#include "public_api_participant_run_termination.inl"'
+        in gameplay_public
+    )
+    _require_tokens(
+        gameplay_reset,
+        (
+            "void ResetParticipantEntitiesForRunTermination(",
+            "for (auto& binding : g_participant_entities)",
+            "binding.native_remote_death_epoch_active = false;",
+            "binding.native_remote_death_attachment_actor_address",
+            "binding.native_remote_death_drop_spawned = false;",
+            "binding.ongoing_cast =",
+            "ParticipantEntityBinding::OngoingCastState{};",
+        ),
+        "native participant run reset",
+    )
+    _require_in_order(
+        lifecycle,
+        "multiplayer::NotifyLocalRunEnded(reason);",
+        "ResetParticipantEntitiesForRunTermination(reason);",
+        "ResetRunLifecycleBookkeeping(clear_enemy_tracking);",
+    )
+
+    materialization_reset = materialization[
+        materialization.index(
+            "void ResetParticipantEntityMaterializationState("
+        ):
+        materialization.index(
+            "void MarkParticipantEntityWorldUnregistered("
+        )
+    ]
+    assert "native_remote_death_epoch_active" not in materialization_reset
+    assert "native_remote_death_drop_spawned" not in materialization_reset
+
+    for token in (
+        "host_first_hub_before_client_return",
+        "same_lobby_hub_vitality",
+        "second_run_vitality",
+        '"host_first_hub_before_client_return": (',
+        'f"hub_{label}"',
+        'f"run2_{label}"',
+        "run_boundary_vitality_reset_matches(",
+    ):
+        assert token in verifier, (
+            "Game Over next-run verifier lacks: " + token
+        )
+
+    return (
+        "the common run-termination seam clears all participant combat, "
+        "vitality, transform history, and native death-epoch state, retains "
+        "one sanitized transition pose for hub materialization, and leaves "
+        "generic within-run rematerialization durable for WAN corpses"
+    )

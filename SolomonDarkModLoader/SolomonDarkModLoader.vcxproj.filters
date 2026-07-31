@@ -1175,6 +1175,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_participant_run_termination.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -1383,6 +1386,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\participant_hit_feedback_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\participant_run_termination.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl">

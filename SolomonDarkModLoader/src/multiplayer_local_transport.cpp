@@ -1189,6 +1189,7 @@ std::atomic<bool> g_local_transport_teardown_complete{true};
 std::atomic<bool> g_local_transport_host{false};
 std::atomic<std::uint64_t> g_local_transport_authority_participant_id{0};
 std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
+std::atomic<std::uint32_t> g_local_terminated_run_nonce{0};
 std::atomic<std::uint64_t>
     g_remote_native_progression_reconcile_suppressed_for_test{0};
 std::mutex g_local_transport_event_mutex;
@@ -1672,6 +1673,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/death_spectator_sync.inl"
 #include "multiplayer_local_transport/run_game_over_sync.inl"
 #include "multiplayer_local_transport/run_loading_barrier_sync.inl"
+#include "multiplayer_local_transport/participant_run_termination.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
@@ -1963,7 +1965,11 @@ void NotifyLocalRunStarted() {
     ResetParticipantHitFeedbackState();
     UpdateRuntimeState([](RuntimeState& state) {
         state.run_end_pending_lobby_return = false;
+        state.last_terminated_run_nonce = 0;
     });
+    g_local_terminated_run_nonce.store(
+        0,
+        std::memory_order_release);
     const auto previous_exit_nonce =
         g_local_run_exit_latched_nonce.exchange(0, std::memory_order_acq_rel);
     const bool cleared_client_exit_follow =
@@ -1988,6 +1994,7 @@ void NotifyLocalRunEnded(std::string_view reason) {
     ResetWaveRespawnState();
     ResetRunLoadingBarrierState(reason);
     ResetParticipantHitFeedbackState();
+    ResetParticipantCombatTransportStateForRunTermination();
     const auto runtime_state = SnapshotRuntimeState();
     const auto* local = FindLocalParticipant(runtime_state);
     const auto current_nonce =
@@ -1996,6 +2003,11 @@ void NotifyLocalRunEnded(std::string_view reason) {
             : g_local_run_exit_latched_nonce.load(std::memory_order_acquire);
     const bool terminal_game_over =
         IsRunGameOverAccepted(current_nonce);
+    if (current_nonce != 0) {
+        g_local_terminated_run_nonce.store(
+            current_nonce,
+            std::memory_order_release);
+    }
     if (g_local_transport.is_host &&
         current_nonce != 0 &&
         !terminal_game_over) {
@@ -2004,15 +2016,16 @@ void NotifyLocalRunEnded(std::string_view reason) {
 
     UpdateRuntimeState([&](RuntimeState& state) {
         state.run_end_pending_lobby_return = true;
-        auto* mutable_local = FindLocalParticipant(state);
-        if (mutable_local == nullptr) {
-            return;
+        if (current_nonce != 0) {
+            state.last_terminated_run_nonce = current_nonce;
         }
-        mutable_local->runtime.in_run = false;
-        mutable_local->runtime.transform_valid = false;
-        mutable_local->runtime.scene_intent = DefaultParticipantSceneIntent();
-        if (g_local_transport.is_host && current_nonce != 0) {
-            mutable_local->runtime.run_nonce = current_nonce;
+        for (auto& participant : state.participants) {
+            ResetParticipantRuntimeForRunTermination(
+                &participant);
+            if (current_nonce != 0) {
+                participant.runtime.run_nonce =
+                    current_nonce;
+            }
         }
     });
 

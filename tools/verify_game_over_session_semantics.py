@@ -11,7 +11,9 @@ import math
 import ntpath
 import os
 import select
+import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -59,6 +61,14 @@ SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
 CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 VITAL_TOLERANCE = 0.05
 GAME_OVER_LAYOUT = ROOT / "config" / "binary-layout.ini"
+EXISTING_WIZARD_SAVE_FIXTURE = (
+    ROOT
+    / "tests"
+    / "fixtures"
+    / "savegames"
+    / "fieldbreak25_existing_wizard"
+    / "solomondark"
+)
 
 
 def _read_layout_address(section: str, key: str) -> int:
@@ -240,6 +250,139 @@ emit("loading_expected_participant_set_hash",
 emit("loading_release_reason", loading.release_reason or "")
 """
 
+DEATH_RESET_STATE_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local function profile_fingerprint(profile)
+  if profile == nil then
+    return ""
+  end
+  local choices = {}
+  for _, value in ipairs(profile.appearance_choice_ids or {}) do
+    table.insert(choices, tostring(value))
+  end
+  return table.concat({
+    tostring(profile.element_id or -1),
+    tostring(profile.discipline_id or -1),
+    table.concat(choices, ","),
+  }, ":")
+end
+local function render_selector(state)
+  if state == nil then
+    return ""
+  end
+  return table.concat({
+    tostring(state.render_variant_primary or 0),
+    tostring(state.render_variant_secondary or 0),
+    tostring(state.render_weapon_type or 0),
+    tostring(state.render_selection_byte or 0),
+    tostring(state.render_variant_tertiary or 0),
+  }, ",")
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local scene = sd.world.get_scene()
+local player = sd.player.get_state()
+local local_row = nil
+local remote_row = nil
+for _, participant in ipairs(multiplayer.participants or {}) do
+  if participant.kind == "LocalHuman" then
+    local_row = participant
+  elseif participant.transport_connected then
+    remote_row = participant
+  end
+end
+local remote_bot = nil
+if remote_row ~= nil then
+  for _, bot in ipairs(sd.bots.get_participants() or {}) do
+    if bot.id == remote_row.participant_id then
+      remote_bot = bot
+      break
+    end
+  end
+end
+emit("scene", scene and (scene.name or scene.kind) or "")
+emit("session_state", multiplayer.session_state or "")
+emit("participant_count", multiplayer.participant_count or 0)
+emit("local.participant_id", local_row and local_row.participant_id or 0)
+emit("local.runtime.in_run", local_row and local_row.in_run or false)
+emit("local.runtime.run_nonce", local_row and local_row.run_nonce or 0)
+emit("local.runtime.life_current",
+  local_row and local_row.life_current or 0)
+emit("local.runtime.life_max", local_row and local_row.life_max or 0)
+emit("local.runtime.presentation_flags",
+  local_row and local_row.presentation_flags or 0)
+emit("local.runtime.death_presentation_tick",
+  local_row and local_row.death_presentation_tick or 0)
+emit("local.runtime.persistent_status_flags",
+  local_row and local_row.persistent_status_flags or 0)
+emit("local.runtime.transient_status_flags",
+  local_row and local_row.transient_status_flags or 0)
+emit("local.runtime.poison_remaining_ticks",
+  local_row and local_row.poison_remaining_ticks or 0)
+emit("local.runtime.damage_x4_remaining_ticks",
+  local_row and local_row.damage_x4_remaining_ticks or 0)
+emit("local.native.life_current", player and player.hp or 0)
+emit("local.native.life_max", player and player.max_hp or 0)
+emit("local.native.persistent_status_flags",
+  player and player.persistent_status_flags or 0)
+emit("local.native.transient_status_flags",
+  player and player.transient_status_flags or 0)
+emit("local.native.poison_remaining_ticks",
+  player and player.poison_remaining_ticks or 0)
+emit("local.native.render_selector", render_selector(player))
+emit("remote.participant_id",
+  remote_row and remote_row.participant_id or 0)
+emit("remote.runtime.in_run", remote_row and remote_row.in_run or false)
+emit("remote.runtime.run_nonce", remote_row and remote_row.run_nonce or 0)
+emit("remote.runtime.life_current",
+  remote_row and remote_row.life_current or 0)
+emit("remote.runtime.life_max", remote_row and remote_row.life_max or 0)
+emit("remote.runtime.presentation_flags",
+  remote_row and remote_row.presentation_flags or 0)
+emit("remote.runtime.death_presentation_tick",
+  remote_row and remote_row.death_presentation_tick or 0)
+emit("remote.runtime.persistent_status_flags",
+  remote_row and remote_row.persistent_status_flags or 0)
+emit("remote.runtime.transient_status_flags",
+  remote_row and remote_row.transient_status_flags or 0)
+emit("remote.runtime.poison_remaining_ticks",
+  remote_row and remote_row.poison_remaining_ticks or 0)
+emit("remote.runtime.damage_x4_remaining_ticks",
+  remote_row and remote_row.damage_x4_remaining_ticks or 0)
+emit("remote.native.materialized",
+  remote_bot and remote_bot.entity_materialized or false)
+emit("remote.native.actor", remote_bot and remote_bot.actor_address or 0)
+emit("remote.native.life_current", remote_bot and remote_bot.hp or 0)
+emit("remote.native.life_max", remote_bot and remote_bot.max_hp or 0)
+emit("remote.native.anim_drive_state",
+  remote_bot and remote_bot.anim_drive_state or 0)
+emit("remote.native.replicated_persistent_status_flags",
+  remote_bot and remote_bot.replicated_persistent_status_flags or 0)
+emit("remote.native.native_persistent_status_flags",
+  remote_bot and remote_bot.native_persistent_status_flags or 0)
+emit("remote.native.replicated_transient_status_flags",
+  remote_bot and remote_bot.replicated_transient_status_flags or 0)
+emit("remote.native.native_transient_status_flags",
+  remote_bot and remote_bot.native_transient_status_flags or 0)
+emit("remote.native.replicated_poison_remaining_ticks",
+  remote_bot and remote_bot.replicated_poison_remaining_ticks or 0)
+emit("remote.native.native_poison_remaining_ticks",
+  remote_bot and remote_bot.native_poison_remaining_ticks or 0)
+emit("remote.native.profile",
+  remote_bot and profile_fingerprint(remote_bot.profile) or "")
+emit("remote.native.render_selector", render_selector(remote_bot))
+emit("remote.native.primary_visual_type",
+  remote_bot and remote_bot.primary_visual_lane and
+    remote_bot.primary_visual_lane.current_object_type_id or 0)
+emit("remote.native.secondary_visual_type",
+  remote_bot and remote_bot.secondary_visual_lane and
+    remote_bot.secondary_visual_lane.current_object_type_id or 0)
+emit("remote.native.attachment_visual_type",
+  remote_bot and remote_bot.attachment_visual_lane and
+    remote_bot.attachment_visual_lane.current_object_type_id or 0)
+"""
+
 
 NATIVE_GAME_OVER_PROBE = f"""
 local function emit(key, value)
@@ -347,6 +490,139 @@ def _resolve_udp_ports(explicit: list[int | None]) -> list[int]:
     if len(set(ports)) != 7:
         raise ValueError("explicit UDP ports must be distinct")
     return ports
+
+
+def _resolve_death_reset_ports(
+    host_port: int | None,
+    client_port: int | None,
+) -> list[int]:
+    if host_port is None or client_port is None:
+        raise ValueError("both death-reset ports must be provided")
+    ports = [int(host_port), int(client_port)]
+    if any(port < 1 or port > 0xFFFF for port in ports):
+        raise ValueError("death-reset ports must be between 1 and 65535")
+    if len(set(ports)) != 2:
+        raise ValueError("death-reset ports must be distinct")
+    return ports
+
+
+def remote_appearance_fingerprint(
+    values: Mapping[str, str],
+) -> tuple[str, ...]:
+    return (
+        values.get("remote.native.profile", ""),
+        values.get("remote.native.render_selector", ""),
+        values.get("remote.native.primary_visual_type", ""),
+        values.get("remote.native.secondary_visual_type", ""),
+        values.get("remote.native.attachment_visual_type", ""),
+    )
+
+
+def _full_vitality_matches(
+    values: Mapping[str, str],
+    current_key: str,
+    maximum_key: str,
+) -> bool:
+    current = _number(values, current_key)
+    maximum = _number(values, maximum_key)
+    return (
+        math.isfinite(current)
+        and math.isfinite(maximum)
+        and maximum > VITAL_TOLERANCE
+        and abs(current - maximum) <= VITAL_TOLERANCE
+    )
+
+
+def run_boundary_vitality_reset_matches(
+    values: Mapping[str, str],
+    *,
+    expected_remote_appearance: tuple[str, ...],
+    expected_scene: str,
+) -> bool:
+    zero_keys = (
+        "local.runtime.death_presentation_tick",
+        "local.runtime.poison_remaining_ticks",
+        "local.runtime.damage_x4_remaining_ticks",
+        "local.native.poison_remaining_ticks",
+        "remote.runtime.death_presentation_tick",
+        "remote.runtime.poison_remaining_ticks",
+        "remote.runtime.damage_x4_remaining_ticks",
+        "remote.native.replicated_poison_remaining_ticks",
+        "remote.native.native_poison_remaining_ticks",
+    )
+    death_presentation_mask = 1 << 6
+    persistent_combat_mask = 0x07
+    transient_combat_mask = 0x1F
+    presentation_keys = (
+        "local.runtime.presentation_flags",
+        "remote.runtime.presentation_flags",
+    )
+    persistent_status_keys = (
+        "local.runtime.persistent_status_flags",
+        "local.native.persistent_status_flags",
+        "remote.runtime.persistent_status_flags",
+        "remote.native.replicated_persistent_status_flags",
+        "remote.native.native_persistent_status_flags",
+    )
+    transient_status_keys = (
+        "local.runtime.transient_status_flags",
+        "local.native.transient_status_flags",
+        "remote.runtime.transient_status_flags",
+        "remote.native.replicated_transient_status_flags",
+        "remote.native.native_transient_status_flags",
+    )
+    expected_session = (
+        "in-hub" if expected_scene == "hub" else "in-boneyard"
+    )
+    expected_in_run = expected_scene != "hub"
+    return (
+        values.get("scene") == expected_scene
+        and values.get("session_state") == expected_session
+        and _integer(values, "participant_count") == 2
+        and values.get("local.runtime.in_run")
+        == str(expected_in_run).lower()
+        and values.get("remote.runtime.in_run")
+        == str(expected_in_run).lower()
+        and _integer(values, "local.participant_id") > 0
+        and _integer(values, "remote.participant_id") > 0
+        and _full_vitality_matches(
+            values,
+            "local.runtime.life_current",
+            "local.runtime.life_max",
+        )
+        and _full_vitality_matches(
+            values,
+            "local.native.life_current",
+            "local.native.life_max",
+        )
+        and _full_vitality_matches(
+            values,
+            "remote.runtime.life_current",
+            "remote.runtime.life_max",
+        )
+        and _full_vitality_matches(
+            values,
+            "remote.native.life_current",
+            "remote.native.life_max",
+        )
+        and values.get("remote.native.materialized") == "true"
+        and _integer(values, "remote.native.actor") > 0
+        and all(_integer(values, key) == 0 for key in zero_keys)
+        and all(
+            _integer(values, key) & death_presentation_mask == 0
+            for key in presentation_keys
+        )
+        and all(
+            _integer(values, key) & persistent_combat_mask == 0
+            for key in persistent_status_keys
+        )
+        and all(
+            _integer(values, key) & transient_combat_mask == 0
+            for key in transient_status_keys
+        )
+        and remote_appearance_fingerprint(values)
+        == expected_remote_appearance
+    )
 
 
 def _windows_path_equal(left: str, right: str) -> bool:
@@ -616,9 +892,52 @@ def query_session_state(pipe_name: str) -> dict[str, str]:
     return parse_key_values(lua(pipe_name, SESSION_STATE_PROBE, timeout=8.0))
 
 
+def query_death_reset_state(pipe_name: str) -> dict[str, str]:
+    return parse_key_values(
+        lua(pipe_name, DEATH_RESET_STATE_PROBE, timeout=8.0)
+    )
+
+
 def query_native_game_over_state(pipe_name: str) -> dict[str, str]:
     return parse_key_values(
         lua(pipe_name, NATIVE_GAME_OVER_PROBE, timeout=8.0)
+    )
+
+
+def _wait_for_death_reset_state(
+    pipe_name: str,
+    *,
+    expected_scene: str,
+    timeout: float = 20.0,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            last = query_death_reset_state(pipe_name)
+            last_error = ""
+            if (
+                last.get("scene") == expected_scene
+                and _integer(last, "participant_count") == 2
+                and values_have_materialized_remote(last)
+            ):
+                return last
+        except Exception as exc:  # noqa: BLE001 - preserve live evidence.
+            last_error = str(exc)
+        time.sleep(0.1)
+    suffix = f" last_error={last_error}" if last_error else ""
+    raise VerifyFailure(
+        f"timed out waiting for {expected_scene} vitality snapshot on "
+        f"{pipe_name}; last={last}.{suffix}"
+    )
+
+
+def values_have_materialized_remote(values: Mapping[str, str]) -> bool:
+    return (
+        values.get("remote.native.materialized") == "true"
+        and _integer(values, "remote.native.actor") > 0
+        and _integer(values, "remote.participant_id") > 0
     )
 
 
@@ -1326,6 +1645,19 @@ def _owned_pair_processes(
     }
 
 
+def _copy_existing_wizard_save(destination: Path) -> None:
+    if not EXISTING_WIZARD_SAVE_FIXTURE.is_dir():
+        raise VerifyFailure(
+            "existing-wizard save fixture is missing: "
+            f"{EXISTING_WIZARD_SAVE_FIXTURE}"
+        )
+    destination.mkdir(parents=True, exist_ok=False)
+    shutil.copytree(
+        EXISTING_WIZARD_SAVE_FIXTURE,
+        destination / "solomondark",
+    )
+
+
 def run_solo_verification(
     *,
     instance_prefix: str,
@@ -1981,6 +2313,425 @@ def run_loading_timeout_verification(
         stop_owned_processes(owned)
 
 
+def run_death_reset_pair_verification(
+    *,
+    instance_prefix: str,
+    ports: list[int],
+    game_directory: Path,
+    launcher_path: Path | None = None,
+) -> dict[str, object]:
+    if len(ports) != 2:
+        raise ValueError("death-reset verification requires exactly two ports")
+    if not instance_prefix.startswith("drst"):
+        raise ValueError(
+            "death-reset verification instance prefix must start with 'drst'"
+        )
+
+    artifact_directory = ARTIFACT_ROOT / instance_prefix / "death-reset"
+    artifact_directory.mkdir(parents=True, exist_ok=True)
+    runtime_parent = ROOT / "runtime"
+    runtime_parent.mkdir(parents=True, exist_ok=True)
+    result: dict[str, object] = {
+        "ok": False,
+        "instance_prefix": instance_prefix,
+        "ports": ports,
+        "fixture": str(EXISTING_WIZARD_SAVE_FIXTURE),
+    }
+    with tempfile.TemporaryDirectory(
+        prefix=f"{instance_prefix}-save-",
+        dir=runtime_parent,
+    ) as temporary_root_text:
+        temporary_root = Path(temporary_root_text)
+        host_savegames = temporary_root / "host"
+        client_savegames = temporary_root / "client"
+        _copy_existing_wizard_save(host_savegames)
+        _copy_existing_wizard_save(client_savegames)
+        result["save_staging"] = {
+            "mode": "copied_existing_wizard_per_peer",
+            "host_root": str(host_savegames),
+            "client_root": str(client_savegames),
+        }
+
+        launch = launch_pair(
+            host_preset="map_create_air_mind_hub",
+            client_preset="map_create_water_body_hub",
+            temporary_host_profile=False,
+            fresh_install=False,
+            god_mode=False,
+            tile_windows=False,
+            third_player=False,
+            allow_focus_steal=False,
+            kill_existing=False,
+            instance_prefix=instance_prefix,
+            host_port=ports[0],
+            client_port=ports[1],
+            third_port=ports[1],
+            game_directory=game_directory,
+            launcher_path=launcher_path,
+            exact_mod_id=ACCEPTANCE_MOD_ID,
+            quick_start=True,
+            no_lua_automation=True,
+            host_savegames_root=host_savegames,
+            client_savegames_root=client_savegames,
+            enable_audio=False,
+        )
+        owned = _owned_pair_processes(launch)
+        result["launch"] = launch
+        result["owned_processes"] = validate_owned_processes(owned)
+        host_pipe = str(launch["hostLuaPipe"])
+        client_pipe = str(launch["clientLuaPipe"])
+        pipes = {
+            "host": host_pipe,
+            "client": client_pipe,
+        }
+        try:
+            if launch.get("audioDisabled") is not True:
+                raise VerifyFailure(
+                    f"death-reset pair did not disable audio: {launch}"
+                )
+            if launch.get("quickStartEnabled") is not True:
+                raise VerifyFailure(
+                    f"death-reset pair did not enable quick-start: {launch}"
+                )
+            if launch.get("noLuaAutomation") is not True:
+                raise VerifyFailure(
+                    "death-reset pair did not use native quick-start"
+                )
+
+            result["bots_disabled"] = _disable_bots(list(pipes.values()))
+            result["initial_hub_relationships"] = {
+                "host_observes_client": wait_for_remote(
+                    host_pipe,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    "hub",
+                    45.0,
+                ),
+                "client_observes_host": wait_for_remote(
+                    client_pipe,
+                    HOST_ID,
+                    HOST_NAME,
+                    "hub",
+                    45.0,
+                ),
+            }
+
+            _start_testrun_when_ready(host_pipe)
+            for pipe_name in pipes.values():
+                wait_for_scene(pipe_name, "testrun", 45.0)
+            result["first_run_relationships"] = {
+                "host_observes_client": wait_for_remote(
+                    host_pipe,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    "testrun",
+                    45.0,
+                ),
+                "client_observes_host": wait_for_remote(
+                    client_pipe,
+                    HOST_ID,
+                    HOST_NAME,
+                    "testrun",
+                    45.0,
+                ),
+            }
+            result["first_run_loading_release"] = {
+                label: _wait_for_state(
+                    pipe_name,
+                    lambda values: healthy_loading_barrier_state_matches(
+                        values,
+                        2,
+                    ),
+                    timeout=15.0,
+                    description=(
+                        "first-run two-participant loading release"
+                    ),
+                )
+                for label, pipe_name in pipes.items()
+            }
+            first_run_states = {
+                label: _wait_for_death_reset_state(
+                    pipe_name,
+                    expected_scene="testrun",
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["first_run_alive"] = first_run_states
+            expected_appearance = {
+                label: remote_appearance_fingerprint(values)
+                for label, values in first_run_states.items()
+            }
+            result["expected_remote_appearance"] = expected_appearance
+            result["first_run_frames"] = {
+                label: capture_game_backbuffer(
+                    pipe_name,
+                    artifact_directory / f"{label}-first-run-alive.png",
+                )
+                for label, pipe_name in pipes.items()
+            }
+
+            result["client_death"] = (
+                _apply_authoritative_remote_lethal_hit(
+                    host_pipe,
+                    CLIENT_ID,
+                    "death-reset client death",
+                )
+            )
+            result["client_death_presentation"] = (
+                _wait_for_spectator_state(
+                    client_pipe,
+                    death_presentation_state_matches,
+                    timeout=5.0,
+                    description="death-reset client death presentation",
+                )
+            )
+            result["client_spectating"] = _wait_for_spectator_state(
+                client_pipe,
+                spectator_state_matches,
+                timeout=12.0,
+                description="death-reset client spectator state",
+            )
+            result["host_primed_vitals"] = set_local_player_vitals(
+                host_pipe,
+                1.0,
+                25.0,
+            )
+            result["host_death"] = invoke_native_magic_hit_trial(
+                host_pipe,
+                projectile_damage=0.0,
+                magic_damage=1000.0,
+                attempts=2,
+                label="death-reset host terminal death",
+                timeout=8.0,
+            )
+
+            result["terminal_states"] = {
+                label: _wait_for_state(
+                    pipe_name,
+                    terminal_game_over_state_matches,
+                    timeout=12.0,
+                    description=(
+                        "death-reset authority-scoped Game Over dispatch"
+                    ),
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["game_over"] = {
+                label: capture_native_game_over(
+                    pipe_name,
+                    artifact_directory / f"{label}-game-over.png",
+                    allow_boneyard_mode=True,
+                )
+                for label, pipe_name in pipes.items()
+            }
+            host_first_return = _drive_stock_click_until(
+                host_pipe,
+                int(launch["hostProcessId"]),
+                0.5,
+                0.5,
+                lambda values: (
+                    values.get("scene") == "hub"
+                    and values.get("session_state") == "in-hub"
+                ),
+                timeout=60.0,
+                description=(
+                    "host-only same-lobby hub before client Game Over return"
+                ),
+            )
+            wait_for_remote(
+                host_pipe,
+                CLIENT_ID,
+                CLIENT_NAME,
+                "hub",
+                45.0,
+            )
+            host_first_hub = _wait_for_death_reset_state(
+                host_pipe,
+                expected_scene="hub",
+            )
+            result["host_first_hub_before_client_return"] = (
+                host_first_hub
+            )
+            result["host_first_hub_frame"] = capture_game_backbuffer(
+                host_pipe,
+                artifact_directory
+                / "host-first-hub-before-client-return.png",
+            )
+            result["client_state_during_host_first_hub"] = (
+                query_session_state(client_pipe)
+            )
+            client_return = _drive_stock_click_until(
+                client_pipe,
+                int(launch["clientProcessId"]),
+                0.5,
+                0.5,
+                lambda values: (
+                    values.get("scene") == "hub"
+                    and values.get("session_state") == "in-hub"
+                ),
+                timeout=60.0,
+                description=(
+                    "client same-lobby hub after host-first observation"
+                ),
+            )
+            result["post_game_over"] = {
+                "progression": "exact-pid-window-input",
+                "host_first_return": host_first_return,
+                "client_return": client_return,
+            }
+
+            for pipe_name in pipes.values():
+                wait_for_scene(pipe_name, "hub", 60.0)
+            result["same_lobby_hub_relationships"] = {
+                "host_observes_client": wait_for_remote(
+                    host_pipe,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    "hub",
+                    45.0,
+                ),
+                "client_observes_host": wait_for_remote(
+                    client_pipe,
+                    HOST_ID,
+                    HOST_NAME,
+                    "hub",
+                    45.0,
+                ),
+            }
+            hub_states = {
+                label: _wait_for_death_reset_state(
+                    pipe_name,
+                    expected_scene="hub",
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["same_lobby_hub_vitality"] = hub_states
+            result["same_lobby_hub_frames"] = {
+                label: capture_game_backbuffer(
+                    pipe_name,
+                    artifact_directory
+                    / f"{label}-same-lobby-hub.png",
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["same_processes_after_game_over"] = (
+                validate_owned_processes(owned)
+            )
+
+            _start_testrun_when_ready(host_pipe)
+            for pipe_name in pipes.values():
+                wait_for_scene(pipe_name, "testrun", 45.0)
+            result["second_run_relationships"] = {
+                "host_observes_client": wait_for_remote(
+                    host_pipe,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    "testrun",
+                    45.0,
+                ),
+                "client_observes_host": wait_for_remote(
+                    client_pipe,
+                    HOST_ID,
+                    HOST_NAME,
+                    "testrun",
+                    45.0,
+                ),
+            }
+            result["second_run_loading_release"] = {
+                label: _wait_for_state(
+                    pipe_name,
+                    lambda values: healthy_loading_barrier_state_matches(
+                        values,
+                        2,
+                    ),
+                    timeout=15.0,
+                    description=(
+                        "second-run two-participant loading release"
+                    ),
+                )
+                for label, pipe_name in pipes.items()
+            }
+            second_run_states = {
+                label: _wait_for_death_reset_state(
+                    pipe_name,
+                    expected_scene="testrun",
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["second_run_vitality"] = second_run_states
+            result["second_run_frames"] = {
+                label: capture_game_backbuffer(
+                    pipe_name,
+                    artifact_directory / f"{label}-second-run-alive.png",
+                )
+                for label, pipe_name in pipes.items()
+            }
+            result["same_processes_in_second_run"] = (
+                validate_owned_processes(owned)
+            )
+
+            assertions = {
+                "host_first_hub_before_client_return": (
+                    run_boundary_vitality_reset_matches(
+                        host_first_hub,
+                        expected_remote_appearance=(
+                            expected_appearance["host"]
+                        ),
+                        expected_scene="hub",
+                    )
+                ),
+            }
+            assertions.update(
+                {
+                    f"hub_{label}": (
+                        run_boundary_vitality_reset_matches(
+                            values,
+                            expected_remote_appearance=(
+                                expected_appearance[label]
+                            ),
+                            expected_scene="hub",
+                        )
+                    )
+                    for label, values in hub_states.items()
+                }
+            )
+            assertions.update(
+                {
+                    f"run2_{label}": (
+                        run_boundary_vitality_reset_matches(
+                            values,
+                            expected_remote_appearance=(
+                                expected_appearance[label]
+                            ),
+                            expected_scene="testrun",
+                        )
+                    )
+                    for label, values in second_run_states.items()
+                }
+            )
+            result["vitality_reset_assertions"] = assertions
+            result["same_session_continuity"] = {
+                "same_process_ids": True,
+                "rejoin_performed": False,
+                "relaunch_performed": False,
+            }
+            failed = [
+                label
+                for label, accepted in assertions.items()
+                if not accepted
+            ]
+            if failed:
+                result["error"] = (
+                    "Game Over run-boundary vitality reset failed: "
+                    + ", ".join(failed)
+                )
+            else:
+                result["ok"] = True
+            return result
+        finally:
+            stop_owned_processes(owned)
+
+
 def run_live_verification(
     *,
     instance_prefix: str,
@@ -2039,6 +2790,14 @@ def main() -> int:
     parser.add_argument("--third-port", type=int, default=None)
     parser.add_argument("--timeout-host-port", type=int, default=None)
     parser.add_argument("--timeout-client-port", type=int, default=None)
+    parser.add_argument(
+        "--death-reset-only",
+        action="store_true",
+        help=(
+            "Run the focused two-peer Game Over -> hub -> next-run "
+            "vitality and appearance reset regression."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
 
@@ -2048,23 +2807,34 @@ def main() -> int:
         "instance_prefix": instance_prefix,
     }
     try:
-        result = run_live_verification(
-            instance_prefix=instance_prefix,
-            ports=_resolve_udp_ports(
-                [
-                    args.solo_port,
-                    args.solo_unused_port,
+        if args.death_reset_only:
+            result = run_death_reset_pair_verification(
+                instance_prefix=instance_prefix,
+                ports=_resolve_death_reset_ports(
                     args.host_port,
                     args.client_port,
-                    args.third_port,
-                    args.timeout_host_port,
-                    args.timeout_client_port,
-                ]
-            ),
-            game_directory=args.game_dir,
-            launcher_path=args.launcher_path,
-        )
-        exit_code = 0
+                ),
+                game_directory=args.game_dir,
+                launcher_path=args.launcher_path,
+            )
+        else:
+            result = run_live_verification(
+                instance_prefix=instance_prefix,
+                ports=_resolve_udp_ports(
+                    [
+                        args.solo_port,
+                        args.solo_unused_port,
+                        args.host_port,
+                        args.client_port,
+                        args.third_port,
+                        args.timeout_host_port,
+                        args.timeout_client_port,
+                    ]
+                ),
+                game_directory=args.game_dir,
+                launcher_path=args.launcher_path,
+            )
+        exit_code = 0 if result.get("ok") is True else 1
     except Exception as exc:  # noqa: BLE001 - preserve full verifier failure.
         result["error"] = str(exc)
         exit_code = 1

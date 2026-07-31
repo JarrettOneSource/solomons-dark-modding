@@ -330,6 +330,7 @@ from static_re_transport_core_contracts import (
 from static_multiplayer_session_lifecycle_contracts import (
     test_match_end_preserves_lobby_and_reports_explicit_activity_state,
     test_run_loading_waits_for_every_peer_visibility_and_is_bounded,
+    test_run_termination_resets_every_participant_without_retiring_wan_death_durability,
 )
 from static_re_steam_contracts import (
     test_manual_enemy_test_mode_logging_is_transition_only,
@@ -1277,6 +1278,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "run loading waits for every peer visibility and is bounded",
         test_run_loading_waits_for_every_peer_visibility_and_is_bounded,
+    ),
+    (
+        "run termination resets every participant without retiring WAN death durability",
+        test_run_termination_resets_every_participant_without_retiring_wan_death_durability,
     ),
     (
         "dead client spectates alive players with local camera and HUD",

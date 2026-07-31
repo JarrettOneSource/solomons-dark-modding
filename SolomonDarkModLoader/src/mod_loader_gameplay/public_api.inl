@@ -15,6 +15,7 @@
 #include "public_api_authoritative_local_player_death.inl"
 #include "public_api_local_player_death_presentation.inl"
 #include "public_api_local_player_respawn.inl"
+#include "public_api_participant_run_termination.inl"
 #include "public_api_lua_enemy_ai.inl"
 #include "public_api_replicated_loot.inl"
 #include "nav_grid_snapshot_service.inl"

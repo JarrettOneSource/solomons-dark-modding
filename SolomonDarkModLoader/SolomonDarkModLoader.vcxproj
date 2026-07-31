@@ -446,6 +446,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_death_presentation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_participant_run_termination.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_main_thread_pump.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_bot_spawn_placement.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_debug_and_spawn.inl" />
@@ -508,6 +509,7 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_endpoint_send.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_hit_feedback_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\participant_run_termination.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_participant_state_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_codec.inl" />
     <ClInclude Include="src\multiplayer_local_transport\lua_mod_stream_public.inl" />

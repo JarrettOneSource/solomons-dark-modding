@@ -208,6 +208,7 @@ void CompleteRunLifecycleEnd(
     bool dispatch_lua,
     bool clear_enemy_tracking = true) {
     multiplayer::NotifyLocalRunEnded(reason);
+    ResetParticipantEntitiesForRunTermination(reason);
     ResetRunLifecycleBookkeeping(clear_enemy_tracking);
     ClearLocalRunGenerationSeed();
     multiplayer::SetAllBotSceneIntentsToSharedHub();

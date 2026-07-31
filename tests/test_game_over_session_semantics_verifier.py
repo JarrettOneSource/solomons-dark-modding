@@ -117,6 +117,108 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
                 ]
             )
 
+    def test_death_reset_ports_are_explicit_and_distinct(self) -> None:
+        self.assertEqual(
+            verifier._resolve_death_reset_ports(51111, 51112),
+            [51111, 51112],
+        )
+        with self.assertRaisesRegex(ValueError, "both death-reset ports"):
+            verifier._resolve_death_reset_ports(51111, None)
+        with self.assertRaisesRegex(ValueError, "must be distinct"):
+            verifier._resolve_death_reset_ports(51111, 51111)
+
+    def test_run_boundary_vitality_requires_full_alive_state(self) -> None:
+        values = {
+            "scene": "hub",
+            "session_state": "in-hub",
+            "participant_count": "2",
+            "local.participant_id": "101",
+            "local.runtime.in_run": "false",
+            "local.runtime.life_current": "40",
+            "local.runtime.life_max": "40",
+            "local.runtime.presentation_flags": "59",
+            "local.runtime.death_presentation_tick": "0",
+            "local.runtime.persistent_status_flags": "128",
+            "local.runtime.transient_status_flags": "128",
+            "local.runtime.poison_remaining_ticks": "0",
+            "local.runtime.damage_x4_remaining_ticks": "0",
+            "local.native.life_current": "40",
+            "local.native.life_max": "40",
+            "local.native.persistent_status_flags": "128",
+            "local.native.transient_status_flags": "128",
+            "local.native.poison_remaining_ticks": "0",
+            "remote.participant_id": "102",
+            "remote.runtime.in_run": "false",
+            "remote.runtime.life_current": "35",
+            "remote.runtime.life_max": "35",
+            "remote.runtime.presentation_flags": "59",
+            "remote.runtime.death_presentation_tick": "0",
+            "remote.runtime.persistent_status_flags": "128",
+            "remote.runtime.transient_status_flags": "128",
+            "remote.runtime.poison_remaining_ticks": "0",
+            "remote.runtime.damage_x4_remaining_ticks": "0",
+            "remote.native.life_current": "35",
+            "remote.native.life_max": "35",
+            "remote.native.materialized": "true",
+            "remote.native.actor": "1234",
+            "remote.native.replicated_persistent_status_flags": "128",
+            "remote.native.native_persistent_status_flags": "128",
+            "remote.native.replicated_transient_status_flags": "128",
+            "remote.native.native_transient_status_flags": "128",
+            "remote.native.replicated_poison_remaining_ticks": "0",
+            "remote.native.native_poison_remaining_ticks": "0",
+            "remote.native.profile": "3:2:8,9,10,11",
+            "remote.native.render_selector": "2,0,0,0,0",
+        }
+        expected = verifier.remote_appearance_fingerprint(values)
+
+        self.assertTrue(
+            verifier.run_boundary_vitality_reset_matches(
+                values,
+                expected_remote_appearance=expected,
+                expected_scene="hub",
+            )
+        )
+
+        for key, bad_value in (
+            ("local.runtime.life_current", "0"),
+            ("local.native.life_current", "-1"),
+            ("remote.runtime.life_current", "0"),
+            ("remote.native.life_current", "0"),
+            ("remote.runtime.presentation_flags", "123"),
+            ("remote.runtime.death_presentation_tick", "150"),
+            ("remote.native.materialized", "false"),
+            ("remote.native.actor", "0"),
+            ("remote.native.profile", "3:2:99"),
+        ):
+            broken = dict(values)
+            broken[key] = bad_value
+            self.assertFalse(
+                verifier.run_boundary_vitality_reset_matches(
+                    broken,
+                    expected_remote_appearance=expected,
+                    expected_scene="hub",
+                ),
+                key,
+            )
+
+        for key, bad_value in (
+            ("local.runtime.persistent_status_flags", "129"),
+            ("local.runtime.transient_status_flags", "130"),
+            ("remote.runtime.persistent_status_flags", "132"),
+            ("remote.runtime.transient_status_flags", "144"),
+        ):
+            broken = dict(values)
+            broken[key] = bad_value
+            self.assertFalse(
+                verifier.run_boundary_vitality_reset_matches(
+                    broken,
+                    expected_remote_appearance=expected,
+                    expected_scene="hub",
+                ),
+                key,
+            )
+
     def test_windows_process_paths_are_case_and_separator_insensitive(self) -> None:
         self.assertTrue(
             verifier._windows_path_equal(

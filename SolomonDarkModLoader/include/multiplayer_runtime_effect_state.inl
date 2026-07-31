@@ -179,6 +179,7 @@ struct RuntimeState {
     SessionTransportKind session_transport = SessionTransportKind::None;
     LobbySessionState lobby_session_state = LobbySessionState::NotInGame;
     bool run_end_pending_lobby_return = false;
+    std::uint32_t last_terminated_run_nonce = 0;
     std::string status_text;
     std::string error_text;
     std::vector<ParticipantInfo> participants;
