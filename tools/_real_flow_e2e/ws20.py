@@ -1514,6 +1514,11 @@ if(Test-Path -LiteralPath $path -PathType Leaf){{
         stage = ntpath.dirname(self.game_executable)
         candidates = {
             "networkTelemetry": self.telemetry_path,
+            "launcherLog": ntpath.join(
+                self.settings_root,
+                "logs",
+                "launcher.log",
+            ),
             "loaderLog": ntpath.join(
                 stage,
                 ".sdmod",

@@ -49,7 +49,9 @@ from tools.verify_real_flow_e2e import (
 from tools._real_flow_e2e.wan import _damage_remote_enemy
 from tools._real_flow_e2e.windows import (
     ProcessRecord,
+    UiElement,
     WindowsHarnessError,
+    _launcher_ui_diagnostics,
     close_exact_owned_processes,
     launch_environment,
 )
@@ -64,6 +66,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_launcher_failure_diagnostics_preserve_visible_status(self) -> None:
+        peer = SimpleNamespace(ui_pid=41)
+        status = UiElement(
+            name="Steam could not create the lobby.",
+            control_type="ControlType.Text",
+            automation_id="",
+            enabled=True,
+            offscreen=False,
+            value="",
+        )
+        with mock.patch(
+            "tools._real_flow_e2e.windows.ui_elements",
+            return_value=[status],
+        ):
+            rows = _launcher_ui_diagnostics(
+                SimpleNamespace(),  # type: ignore[arg-type]
+                peer,  # type: ignore[arg-type]
+            )
+
+        self.assertEqual(rows[0]["name"], status.name)
+        self.assertFalse(rows[0]["offscreen"])
+
     def test_local_lua_pipe_serializes_concurrent_requests(self) -> None:
         active = 0
         maximum_active = 0

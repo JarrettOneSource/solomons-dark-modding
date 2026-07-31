@@ -689,7 +689,7 @@ def _copy_and_account(
     if not telemetry["copied"]:
         raise RealFlowFailure(
             f"{peer.config.role} did not produce mandatory network telemetry: "
-            f"{telemetry}"
+            f"{telemetry}; copiedArtifacts={copied}"
         )
     accounting = packet_accounting(Path(telemetry["path"]))
     if accounting["events"].get("telemetry_start", 0) != 1:

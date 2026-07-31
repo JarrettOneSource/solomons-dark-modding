@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         {
             closePrepared_ = true;
             closePreparationRunning_ = false;
-            Close();
+            _ = Dispatcher.BeginInvoke(new Action(Close));
         }
     }
 

@@ -899,6 +899,26 @@ def wait_game_process(
     )
 
 
+def _launcher_ui_diagnostics(
+    ps: PowerShell,
+    peer: WindowsPeer,
+) -> list[dict[str, Any]]:
+    rows = []
+    for element in ui_elements(ps, peer.ui_pid):
+        if not element.name and not element.value:
+            continue
+        rows.append(
+            {
+                "name": element.name[:300],
+                "value": element.value[:300],
+                "controlType": element.control_type,
+                "enabled": element.enabled,
+                "offscreen": element.offscreen,
+            }
+        )
+    return rows[:100]
+
+
 def host_through_launcher(
     ps: PowerShell,
     harness: HarnessConfig,
@@ -933,7 +953,23 @@ def host_through_launcher(
         "Friends Only" if harness.privacy == "friends" else "Public",
     )
     invoke_button(ps, peer.ui_pid, "Start Lobby")
-    process = wait_game_process(ps, peer, timeout=harness.timeout_seconds)
+    try:
+        process = wait_game_process(
+            ps,
+            peer,
+            timeout=harness.timeout_seconds,
+        )
+    except WindowsHarnessError as exc:
+        try:
+            diagnostics: Any = _launcher_ui_diagnostics(ps, peer)
+        except (WindowsHarnessError, json.JSONDecodeError) as diagnostic_exc:
+            diagnostics = {
+                "error": f"{type(diagnostic_exc).__name__}: {diagnostic_exc}"
+            }
+        raise WindowsHarnessError(
+            f"{exc}; launcherUi="
+            + json.dumps(diagnostics, sort_keys=True)
+        ) from exc
     deadline = time.monotonic() + harness.timeout_seconds
     last_error = ""
     while time.monotonic() < deadline:

@@ -364,6 +364,7 @@ def copy_runtime_artifacts(
     stage_root = peer.game_executable.parent
     candidates = {
         "networkTelemetry": peer.telemetry_path,
+        "launcherLog": peer.settings_root / "logs" / "launcher.log",
         "loaderLog": (
             stage_root
             / ".sdmod"

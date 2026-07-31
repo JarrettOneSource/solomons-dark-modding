@@ -184,6 +184,36 @@ drained. This was a self-limiting startup synchronization burst, not the
 reliable tick-rate amplification seen in the preceding run, so no product
 change was made for it.
 
+## Product finding: synchronous close preparation reentered WPF Closing
+
+The next attempt completed the host launcher's Ready, instance, Host Game,
+privacy, and Start Lobby UI boundaries, but no staged game process appeared.
+When exact-path cleanup requested a normal close of the still-live launcher,
+Windows recorded an unhandled `System.InvalidOperationException` from
+`MainWindow_Closing`: WPF rejected `Close()` because the window was already
+closing.
+
+The handler cancels the first `Closing` event, awaits launcher cleanup, then
+calls `Close()` after setting its prepared flag. With no active game, the
+cleanup task completes synchronously. The continuation therefore called
+`Close()` recursively before the first event returned. The correction posts
+the final close to the window dispatcher, allowing the canceled event to
+unwind first. This keeps the existing graceful lobby/game shutdown behavior
+and removes the reentrant close path.
+
+## Harness finding: a failed launcher start discarded its diagnostics
+
+The initiating reason that no game started was not preserved in that attempt.
+The wait reported only the expected staged executable path; cleanup then
+deleted the isolated launcher profile and its log. No `SolomonDark.exe` crash
+appeared in the Windows Application event window, so assigning a product or
+Steam cause from that evidence would be speculation.
+
+The real-flow harness now includes the visible launcher automation state in a
+launch-timeout error and copies the scoped `launcher.log` with the runtime
+artifacts, including when mandatory game telemetry is absent. The next exact-
+SHA rerun must use those receipts to resolve the launch failure if it recurs.
+
 ## Rerun requirement
 
 The product failure fixes and remote staging fix must be rebuilt together and

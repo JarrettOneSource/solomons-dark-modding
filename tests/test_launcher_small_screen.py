@@ -8,6 +8,21 @@ MAIN_WINDOW_CODE = ROOT / "SolomonDarkModLauncher.UI/src/Views/MainWindow.xaml.c
 
 
 class LauncherSmallScreenTests(unittest.TestCase):
+    def test_async_launcher_close_resumes_after_closing_event_returns(
+        self,
+    ) -> None:
+        code = MAIN_WINDOW_CODE.read_text(encoding="utf-8")
+        handler = code[
+            code.index("private async void MainWindow_Closing"):
+            code.index("private void HostSetupCreate_Click")
+        ]
+
+        self.assertIn(
+            "Dispatcher.BeginInvoke(new Action(Close))",
+            handler,
+        )
+        self.assertNotIn("\n            Close();", handler)
+
     def test_window_fits_working_area_and_keeps_content_scrollable(self) -> None:
         xaml = MAIN_WINDOW_XAML.read_text(encoding="utf-8")
         code = MAIN_WINDOW_CODE.read_text(encoding="utf-8")
