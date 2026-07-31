@@ -55,6 +55,7 @@ from tools._real_flow_e2e.windows import (
     _launcher_ui_diagnostics,
     close_exact_owned_processes,
     launch_environment,
+    prepare_windows_peer,
 )
 from tools._real_flow_e2e.ws20 import (
     RemoteWindowsConnection,
@@ -489,6 +490,9 @@ class RealFlowE2ETests(unittest.TestCase):
             document = self._config_document(root)
             (root / "source/mods/bot-brain").mkdir(parents=True)
             (root / "source/mods/bot-brain/manifest.json").touch()
+            observer = root / "source/tools/_real_flow_e2e/observer_mod"
+            observer.mkdir(parents=True)
+            (observer / "manifest.json").touch()
             document.update(
                 {
                     "runName": "bply-botendure",
@@ -498,7 +502,7 @@ class RealFlowE2ETests(unittest.TestCase):
                     "enduranceMode": True,
                     "enduranceMaxSeconds": 5400,
                     "reuseWs20Prestage": True,
-                    "directoryUrl": "http://127.0.0.1:1",
+                    "clientDirectoryUrl": "http://127.0.0.1:1",
                     "localStagingRoot": str(
                         root / "bply-botendure-stage"
                     ),
@@ -551,7 +555,31 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertEqual(config.endurance_max_seconds, 5400)
             self.assertTrue(config.reuse_ws20_prestage)
             self.assertEqual(
+                config.client_directory_url,
+                "http://127.0.0.1:1",
+            )
+            self.assertEqual(
                 config.directory_url,
+                "https://solomondarker.com",
+            )
+            with mock.patch(
+                "tools._real_flow_e2e.windows.windows_path",
+                side_effect=lambda path: rf"C:\stage\{path.name}",
+            ):
+                host_peer = prepare_windows_peer(config, config.host)
+                client_peer = prepare_windows_peer(config, config.client)
+            host_settings = json.loads(
+                (host_peer.settings_root / "settings.json").read_text()
+            )
+            client_settings = json.loads(
+                (client_peer.settings_root / "settings.json").read_text()
+            )
+            self.assertEqual(
+                host_settings["directoryUrl"],
+                "https://solomondarker.com",
+            )
+            self.assertEqual(
+                client_settings["directoryUrl"],
                 "http://127.0.0.1:1",
             )
             self.assertEqual(
