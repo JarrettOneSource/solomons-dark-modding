@@ -2119,6 +2119,7 @@ class RealFlowE2ETests(unittest.TestCase):
         connection.stage_root = (
             r"C:\Users\client-b\sd-botendure-stage"
         )
+        connection.profile_root = r"C:\Users\client-b"
         connection.stage_leaf = "sd-botendure-stage"
         scripts: list[str] = []
         connection.run_ps = scripts.append  # type: ignore[method-assign]
@@ -2131,6 +2132,8 @@ class RealFlowE2ETests(unittest.TestCase):
             "New-Item -ItemType Directory -Path $target",
             scripts[0],
         )
+        self.assertIn(r"C:\Users\client-b", scripts[0])
+        self.assertNotIn("$env:USERPROFILE", scripts[0])
         source = (
             ROOT / "tools/verify_real_flow_e2e.py"
         ).read_text(encoding="utf-8")
@@ -2187,10 +2190,28 @@ class RealFlowE2ETests(unittest.TestCase):
             "^sd-[a-z0-9][a-z0-9-]{0,31}-stage$",
             controller,
         )
+        self.assertIn("GetOwnerSid", controller)
+        self.assertIn("Win32_UserProfile", controller)
         self.assertIn("GetDirectoryName($resolvedStageRoot)", controller)
+        self.assertIn("$info.LastRunTime.ToUniversalTime()", controller)
         self.assertNotIn(
             'Join-Path $env:USERPROFILE "sd-netrepro-stage"',
             controller,
+        )
+
+    def test_ws20_connection_resolves_stage_from_interactive_steam_profile(
+        self,
+    ) -> None:
+        source = (
+            ROOT / "tools/_real_flow_e2e/ws20.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("GetOwnerSid", source)
+        self.assertIn("Win32_UserProfile", source)
+        self.assertIn("$expected=Join-Path $profile", source)
+        self.assertNotIn(
+            "$expected=Join-Path $env:USERPROFILE",
+            source,
         )
 
     def test_client_attack_precedes_paired_capture(self) -> None:

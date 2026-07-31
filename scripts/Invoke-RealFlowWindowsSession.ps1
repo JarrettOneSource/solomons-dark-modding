@@ -22,8 +22,41 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $resolvedStageRoot = [System.IO.Path]::GetFullPath($StageRoot).TrimEnd("\")
-$resolvedProfile =
-    [System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd("\")
+$steam = @(
+    Get-Process steam -IncludeUserName -ErrorAction Stop |
+        Where-Object { $_.SessionId -gt 0 }
+)
+if ($steam.Count -ne 1) {
+    throw "Expected exactly one logged-on interactive Steam process."
+}
+$steamProcess =
+    Get-CimInstance Win32_Process -Filter "ProcessId=$($steam[0].Id)"
+$owner = Invoke-CimMethod -InputObject $steamProcess -MethodName GetOwner
+if ($owner.ReturnValue -ne 0 -or [string]::IsNullOrWhiteSpace($owner.User)) {
+    throw "Could not resolve the owner of the interactive Steam process."
+}
+$ownerSid = Invoke-CimMethod -InputObject $steamProcess -MethodName GetOwnerSid
+if (
+    $ownerSid.ReturnValue -ne 0 -or
+    [string]::IsNullOrWhiteSpace($ownerSid.Sid)
+) {
+    throw "Could not resolve the interactive Steam owner SID."
+}
+$profiles = @(
+    Get-CimInstance Win32_UserProfile |
+        Where-Object { $_.SID -eq $ownerSid.Sid -and $_.Loaded }
+)
+if (
+    $profiles.Count -ne 1 -or
+    [string]::IsNullOrWhiteSpace($profiles[0].LocalPath)
+) {
+    throw "Could not resolve the interactive Steam owner profile."
+}
+$resolvedProfile = [System.IO.Path]::GetFullPath(
+    [string]$profiles[0].LocalPath).TrimEnd("\")
+if (-not [System.IO.Directory]::Exists($resolvedProfile)) {
+    throw "The interactive Steam owner profile does not exist."
+}
 $stageLeaf = [System.IO.Path]::GetFileName($resolvedStageRoot)
 if (
     -not [string]::Equals(
@@ -53,18 +86,6 @@ if (Test-Path -LiteralPath $ResultPath) {
 $worker = Join-Path $StageRoot "tools\Run-RealFlowWindowsSessionWorker.ps1"
 if (-not (Test-Path -LiteralPath $worker -PathType Leaf)) {
     throw "Session worker is missing: $worker"
-}
-$steam = @(
-    Get-Process steam -IncludeUserName -ErrorAction Stop |
-        Where-Object { $_.SessionId -gt 0 }
-)
-if ($steam.Count -ne 1) {
-    throw "Expected exactly one logged-on interactive Steam process."
-}
-$steamProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($steam[0].Id)"
-$owner = Invoke-CimMethod -InputObject $steamProcess -MethodName GetOwner
-if ($owner.ReturnValue -ne 0 -or [string]::IsNullOrWhiteSpace($owner.User)) {
-    throw "Could not resolve the owner of the interactive Steam process."
 }
 $userId = "$($owner.Domain)\$($owner.User)"
 $taskName = "SolomonDarkNetrepro_$TaskToken"
@@ -121,8 +142,9 @@ try {
         }
         $info = Get-ScheduledTaskInfo -TaskName $taskName
         $state = (Get-ScheduledTask -TaskName $taskName).State
+        $lastRunUtc = $info.LastRunTime.ToUniversalTime()
         if (
-            $info.LastRunTime -ge $startedAt.AddSeconds(-1) -and
+            $lastRunUtc -ge $startedAt.AddSeconds(-1) -and
             $state -eq "Ready" -and
             [int64]$info.LastTaskResult -ne 267009
         ) {

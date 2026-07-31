@@ -425,7 +425,34 @@ class RemoteWindowsConnection:
         try:
             self.stage_root = self.run_ps(
                 f"""
-$expected=Join-Path $env:USERPROFILE '{self.stage_leaf}'
+$steam=@(
+  Get-Process steam -IncludeUserName -ErrorAction Stop |
+    Where-Object {{ $_.SessionId -gt 0 }}
+)
+if($steam.Count -ne 1){{
+  throw 'Expected exactly one logged-on interactive Steam process.'
+}}
+$steamProcess=Get-CimInstance Win32_Process -Filter (
+  'ProcessId=' + $steam[0].Id)
+$ownerSid=Invoke-CimMethod -InputObject $steamProcess -MethodName GetOwnerSid
+if($ownerSid.ReturnValue -ne 0 -or
+   [string]::IsNullOrWhiteSpace($ownerSid.Sid)){{
+  throw 'Could not resolve the interactive Steam owner SID.'
+}}
+$profiles=@(
+  Get-CimInstance Win32_UserProfile |
+    Where-Object {{ $_.SID -eq $ownerSid.Sid -and $_.Loaded }}
+)
+if($profiles.Count -ne 1 -or
+   [string]::IsNullOrWhiteSpace($profiles[0].LocalPath)){{
+  throw 'Could not resolve the interactive Steam owner profile.'
+}}
+$profile=[System.IO.Path]::GetFullPath(
+  [string]$profiles[0].LocalPath).TrimEnd('\\')
+if(-not [System.IO.Directory]::Exists($profile)){{
+  throw 'The interactive Steam owner profile does not exist.'
+}}
+$expected=Join-Path $profile '{self.stage_leaf}'
 [Console]::Out.Write([System.IO.Path]::GetFullPath($expected).TrimEnd('\\'))
 """
             )
@@ -438,6 +465,7 @@ $expected=Join-Path $env:USERPROFILE '{self.stage_leaf}'
                 raise Ws20HarnessError(
                     "workstation20 returned an unsafe staging root"
                 )
+            self.profile_root = ntpath.dirname(self.stage_root)
         except BaseException:
             self.close()
             raise
@@ -668,11 +696,12 @@ if(Test-Path -LiteralPath $target){{
 
     def create_stage_root(self) -> None:
         escaped_stage = self.stage_root.replace("'", "''")
+        escaped_profile = self.profile_root.replace("'", "''")
         escaped_leaf = self.stage_leaf.replace("'", "''")
         self.run_ps(
             f"""
 $target=[System.IO.Path]::GetFullPath('{escaped_stage}').TrimEnd('\\')
-$profile=[System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\\')
+$profile=[System.IO.Path]::GetFullPath('{escaped_profile}').TrimEnd('\\')
 if(-not [string]::Equals(
     [System.IO.Path]::GetDirectoryName($target),
     $profile,
@@ -695,11 +724,12 @@ if(-not (Test-Path -LiteralPath $target -PathType Container)){{
 
     def remove_stage_root(self) -> None:
         escaped_stage = self.stage_root.replace("'", "''")
+        escaped_profile = self.profile_root.replace("'", "''")
         escaped_leaf = self.stage_leaf.replace("'", "''")
         self.run_ps(
             f"""
 $target=[System.IO.Path]::GetFullPath('{escaped_stage}').TrimEnd('\\')
-$profile=[System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\\')
+$profile=[System.IO.Path]::GetFullPath('{escaped_profile}').TrimEnd('\\')
 if(-not [string]::Equals(
     [System.IO.Path]::GetDirectoryName($target),
     $profile,
