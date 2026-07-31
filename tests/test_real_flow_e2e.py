@@ -228,6 +228,9 @@ class RealFlowE2ETests(unittest.TestCase):
                     "runName": "bply-contract",
                     "topology": "loopback_windows_botplay",
                     "botPlayForMe": True,
+                    "localStagingRoot": str(
+                        root / "bply-contract-stage"
+                    ),
                     "verifyThroughWave": 4,
                 }
             )
@@ -257,6 +260,10 @@ class RealFlowE2ETests(unittest.TestCase):
             )
             config = self._load_document(root, document)
             self.assertTrue(config.bot_play_for_me)
+            self.assertEqual(
+                config.windows_staging_root,
+                root / "bply-contract-stage",
+            )
             self.assertEqual(config.host.local_port, 51411)
             self.assertEqual(config.client.local_port, 51412)
             self.assertEqual(

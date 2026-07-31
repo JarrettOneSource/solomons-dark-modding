@@ -1578,6 +1578,11 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             "this controller currently requires local Windows launcher peers; "
             "remote peer controllers are selected by their topology adapter"
         )
+    staging_root = config.windows_staging_root
+    if staging_root.exists():
+        raise RealFlowFailure(
+            f"local staging root must be new: {staging_root}"
+        )
     config.evidence_root.mkdir(parents=True, exist_ok=False)
     write_json(config.evidence_root / "config.redacted.json", config.redacted())
     write_json(
@@ -1646,7 +1651,6 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 )
             finally:
                 connection.close()
-        staging_root = config.evidence_root / "staging"
         if staging_root.is_dir():
             shutil.rmtree(staging_root)
         raise
@@ -2046,7 +2050,6 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 )
                 result["ok"] = False
         try:
-            staging_root = config.evidence_root / "staging"
             if staging_root.is_dir():
                 shutil.rmtree(staging_root)
                 cleanup["stagingDeleted"] = str(staging_root)

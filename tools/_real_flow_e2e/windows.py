@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -214,7 +215,7 @@ def prepare_windows_peer(
     harness: HarnessConfig,
     peer: PeerConfig,
 ) -> WindowsPeer:
-    staging_root = harness.evidence_root / "staging" / peer.role
+    staging_root = harness.windows_staging_root / peer.role
     bundle_root = staging_root / "launcher"
     if staging_root.exists():
         raise WindowsHarnessError(
@@ -357,12 +358,35 @@ def prepare_windows_peer(
         / "loading"
         / "Wizards_dire_BG.png"
     )
-    windows_runtime_asset = windows_path(longest_runtime_asset)
-    if len(windows_runtime_asset) >= 248:
+    safe_path_candidates = [longest_runtime_asset]
+    if harness.bot_play_for_me:
+        bot_storage_key = hashlib.sha256(
+            BOT_PLAY_MOD_ID.encode("utf-8")
+        ).hexdigest()
+        staged_bot_root = (
+            runtime_root
+            / "instances"
+            / peer.instance
+            / "stage"
+            / ".sdmod"
+            / "runtime"
+            / "mods"
+            / bot_storage_key
+        )
+        safe_path_candidates.extend(
+            staged_bot_root / source.relative_to(bot_source)
+            for source in bot_source.rglob("*")
+            if source.is_file()
+        )
+    longest_windows_path = max(
+        (windows_path(path) for path in safe_path_candidates),
+        key=len,
+    )
+    if len(longest_windows_path) >= 248:
         raise WindowsHarnessError(
             "staged Windows runtime path exceeds the native safe path "
-            f"budget ({len(windows_runtime_asset)} >= 248): "
-            f"{windows_runtime_asset}"
+            f"budget ({len(longest_windows_path)} >= 248): "
+            f"{longest_windows_path}"
         )
     return WindowsPeer(
         config=peer,

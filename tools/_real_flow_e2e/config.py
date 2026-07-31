@@ -367,6 +367,7 @@ class HarnessConfig:
     package_root: Path
     game_directory: Path
     evidence_root: Path
+    local_staging_root: Path | None
     proton_archive: Path | None
     directory_url: str
     privacy: Literal["friends", "public"]
@@ -458,6 +459,11 @@ class HarnessConfig:
                 "evidenceRoot",
                 base,
             ),
+            local_staging_root=_optional_path(
+                row.get("localStagingRoot"),
+                "localStagingRoot",
+                base,
+            ),
             proton_archive=_optional_path(
                 row.get("protonArchive"),
                 "protonArchive",
@@ -541,6 +547,27 @@ class HarnessConfig:
             raise ConfigError(
                 f"sourceRoot is not the requested worktree: {self.source_root}"
             )
+        if self.local_staging_root is not None:
+            if (
+                not self.local_staging_root.name.startswith("bply")
+                or self.local_staging_root in {
+                    Path("/"),
+                    Path.home(),
+                    self.source_root,
+                    self.package_root,
+                    self.game_directory,
+                    self.evidence_root,
+                }
+            ):
+                raise ConfigError(
+                    "localStagingRoot must be a dedicated bply-prefixed "
+                    "directory"
+                )
+            if self.local_staging_root.exists():
+                raise ConfigError(
+                    "localStagingRoot must be new; the harness never "
+                    f"overwrites an earlier stage: {self.local_staging_root}"
+                )
         if not (
             self.package_root / "SolomonDarkMultiplayerBeta.exe"
         ).is_file():
@@ -625,6 +652,11 @@ class HarnessConfig:
             if not self.bot_play_for_me:
                 raise ConfigError(
                     "loopback_windows_botplay requires botPlayForMe=true"
+                )
+            if self.local_staging_root is None:
+                raise ConfigError(
+                    "loopback_windows_botplay requires a short, dedicated "
+                    "localStagingRoot"
                 )
             if not self.run_name.startswith("bply"):
                 raise ConfigError(
@@ -786,6 +818,11 @@ class HarnessConfig:
             "packageRoot": str(self.package_root),
             "gameDirectory": str(self.game_directory),
             "evidenceRoot": str(self.evidence_root),
+            "localStagingRoot": (
+                str(self.local_staging_root)
+                if self.local_staging_root is not None
+                else ""
+            ),
             "protonArchive": (
                 str(self.proton_archive)
                 if self.proton_archive is not None
@@ -812,3 +849,11 @@ class HarnessConfig:
             "client": peer_value(self.client),
             "metadata": self.metadata,
         }
+
+    @property
+    def windows_staging_root(self) -> Path:
+        return (
+            self.local_staging_root
+            if self.local_staging_root is not None
+            else self.evidence_root / "staging"
+        )

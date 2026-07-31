@@ -7,6 +7,7 @@
   "packageRoot": "/replace/with/extracted/beta28/package",
   "gameDirectory": "/mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/SolomonDarkAbandonware",
   "evidenceRoot": "/mnt/d/codex-evidence/botplay-20260731/pair",
+  "localStagingRoot": "/mnt/d/bply-pair-stage",
   "directoryUrl": "https://solomondarker.com",
   "privacy": "friends",
   "expectedSourceSha": "0000000000000000000000000000000000000000",
