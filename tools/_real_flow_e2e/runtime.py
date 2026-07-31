@@ -172,6 +172,10 @@ for index, participant in ipairs(mp and mp.participants or {}) do
   local prefix = "participant." .. tostring(index)
   emit(prefix .. ".id", participant.participant_id or 0)
   emit(prefix .. ".name", participant.name or "")
+  emit(prefix .. ".kind", participant.kind or "")
+  emit(
+    prefix .. ".controller_kind",
+    participant.controller_kind or "")
   emit(prefix .. ".owner", participant.is_owner or false)
   emit(prefix .. ".ready", participant.ready or false)
   emit(prefix .. ".connected", participant.transport_connected or false)
@@ -397,7 +401,12 @@ def _rows(
                 "removed",
             }:
                 row[field] = value.casefold() == "true"
-            elif field in {"name", "scene_kind"}:
+            elif field in {
+                "name",
+                "kind",
+                "controller_kind",
+                "scene_kind",
+            }:
                 row[field] = value
             elif field in {
                 "x",
@@ -445,6 +454,8 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
     participant_fields = (
         "id",
         "name",
+        "kind",
+        "controller_kind",
         "owner",
         "ready",
         "connected",
@@ -936,23 +947,26 @@ def shared_hub_views_converged(
     ):
         return False
 
+    participant_rows: list[list[dict[str, Any]]] = []
     participant_views: list[dict[str, dict[str, Any]]] = []
     for state in states:
+        rows = state["multiplayer"]["participants"]
         participants = {
             str(participant["name"]): participant
-            for participant in state["multiplayer"]["participants"]
+            for participant in rows
         }
         if (
-            len(participants) < 2
+            len(rows) < 2
             or any(
                 not participant["connected"]
                 or not participant["ready"]
                 or participant["in_run"]
                 or participant["scene_kind"] != "SharedHub"
-                for participant in participants.values()
+                for participant in rows
             )
         ):
             return False
+        participant_rows.append(rows)
         participant_views.append(participants)
 
     if participant_views[0].keys() == participant_views[1].keys():
@@ -965,6 +979,74 @@ def shared_hub_views_converged(
             )
             <= 4.0
             for participant_name in participant_views[0]
+        )
+
+    native_owner_views = [
+        [
+            participant
+            for participant in rows
+            if participant.get("owner") is True
+            and participant.get("controller_kind") == "Native"
+        ]
+        for rows in participant_rows
+    ]
+    native_remote_views = [
+        [
+            participant
+            for participant in rows
+            if participant.get("owner") is False
+            and participant.get("controller_kind") == "Native"
+        ]
+        for rows in participant_rows
+    ]
+    if all(
+        len(owners) == 1 and len(remotes) == 1
+        for owners, remotes in zip(
+            native_owner_views,
+            native_remote_views,
+        )
+    ):
+        shared_views = [
+            {
+                (
+                    str(participant.get("controller_kind", "")),
+                    int(participant.get("id", 0)),
+                ): participant
+                for participant in rows
+                if participant.get("controller_kind") != "Native"
+            }
+            for rows in participant_rows
+        ]
+        host_owner = native_owner_views[0][0]
+        host_remote = native_remote_views[0][0]
+        client_owner = native_owner_views[1][0]
+        client_remote = native_remote_views[1][0]
+        return (
+            _distance(
+                float(host_owner["x"]),
+                float(host_owner["y"]),
+                float(client_remote["x"]),
+                float(client_remote["y"]),
+            )
+            <= 4.0
+            and _distance(
+                float(host_remote["x"]),
+                float(host_remote["y"]),
+                float(client_owner["x"]),
+                float(client_owner["y"]),
+            )
+            <= 4.0
+            and shared_views[0].keys() == shared_views[1].keys()
+            and all(
+                _distance(
+                    float(shared_views[0][key]["x"]),
+                    float(shared_views[0][key]["y"]),
+                    float(shared_views[1][key]["x"]),
+                    float(shared_views[1][key]["y"]),
+                )
+                <= 4.0
+                for key in shared_views[0]
+            )
         )
 
     if all(len(view) == 2 for view in participant_views):

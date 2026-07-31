@@ -649,6 +649,122 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertTrue(shared_hub_views_converged(host, client))
 
+    def test_shared_hub_wait_matches_native_peers_with_lua_bots(
+        self,
+    ) -> None:
+        def row(
+            participant_id: int,
+            name: str,
+            *,
+            owner: bool,
+            controller_kind: str,
+            x: float,
+            y: float,
+        ) -> dict[str, object]:
+            return {
+                "id": participant_id,
+                "name": name,
+                "owner": owner,
+                "controller_kind": controller_kind,
+                "connected": True,
+                "ready": True,
+                "in_run": False,
+                "scene_kind": "SharedHub",
+                "x": x,
+                "y": y,
+            }
+
+        def state(
+            participants: list[dict[str, object]],
+        ) -> dict[str, object]:
+            return {
+                "scene": {"kind": "hub"},
+                "loadingScreen": {"active": False},
+                "multiplayer": {
+                    "sessionState": "in-hub",
+                    "sessionStatus": "Ready",
+                    "participantCount": len(participants),
+                    "participants": participants,
+                },
+            }
+
+        ember_id = 0x1000000000000000
+        brook_id = ember_id + 1
+        host = state(
+            [
+                row(
+                    1,
+                    "FUN DENIER",
+                    owner=True,
+                    controller_kind="Native",
+                    x=952.5,
+                    y=163.6,
+                ),
+                row(
+                    ember_id,
+                    "Ember",
+                    owner=False,
+                    controller_kind="LuaBrain",
+                    x=1027.5,
+                    y=79.9,
+                ),
+                row(
+                    brook_id,
+                    "Brook",
+                    owner=False,
+                    controller_kind="LuaBrain",
+                    x=983.9,
+                    y=203.2,
+                ),
+                row(
+                    0x2B00000000000002,
+                    "Bply Client",
+                    owner=False,
+                    controller_kind="Native",
+                    x=951.1,
+                    y=164.5,
+                ),
+            ]
+        )
+        client = state(
+            [
+                row(
+                    1,
+                    "FUN DENIER",
+                    owner=True,
+                    controller_kind="Native",
+                    x=951.1,
+                    y=164.5,
+                ),
+                row(
+                    ember_id,
+                    "Ember",
+                    owner=False,
+                    controller_kind="LuaBrain",
+                    x=1027.5,
+                    y=79.9,
+                ),
+                row(
+                    brook_id,
+                    "Brook",
+                    owner=False,
+                    controller_kind="LuaBrain",
+                    x=983.9,
+                    y=203.2,
+                ),
+                row(
+                    0x2B00000000000001,
+                    "Bply Host",
+                    owner=False,
+                    controller_kind="Native",
+                    x=952.5,
+                    y=163.6,
+                ),
+            ]
+        )
+
+        self.assertTrue(shared_hub_views_converged(host, client))
+
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
         self,
     ) -> None:
