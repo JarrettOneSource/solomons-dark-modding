@@ -31,6 +31,7 @@ from tools._real_flow_e2e.endurance import (
 )
 from tools._real_flow_e2e.runtime import (
     LuaPipe,
+    RuntimeProbeError,
     _merge_solomon_authority_state,
     approach_solomon_and_complete_dialogue,
     cover_participant_with_real_input_once,
@@ -40,9 +41,12 @@ from tools._real_flow_e2e.runtime import (
     shared_hub_views_converged,
 )
 from tools.verify_real_flow_e2e import (
+    EnduranceProbeOutage,
+    RealFlowFailure,
     _assert_clean_release,
     _drain_authority_damage_log,
     _native_enemy_render_assertion,
+    _try_endurance_probe_bundle,
     validate_living_wave_boundary,
     validate_stock_water_cast,
     validate_wave_convergence,
@@ -59,6 +63,7 @@ from tools._real_flow_e2e.windows import (
 )
 from tools._real_flow_e2e.ws20 import (
     RemoteWindowsConnection,
+    Ws20HarnessError,
     Ws20Peer,
     _longest_staged_runtime_path,
 )
@@ -68,6 +73,128 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_endurance_probe_bundle_recovers_from_bounded_remote_outage(
+        self,
+    ) -> None:
+        sample = {"elapsedSeconds": 12.0, "host": {}, "clientB": {}}
+        sampler = SimpleNamespace(
+            sample_now=mock.Mock(
+                side_effect=[
+                    RuntimeProbeError(
+                        "remote Lua bridge failed: remote Windows Lua "
+                        "bridge timed out"
+                    ),
+                    Ws20HarnessError(
+                        "remote bridge startup failed: SSH timed out"
+                    ),
+                    sample,
+                ]
+            )
+        )
+        outage = EnduranceProbeOutage(budget_seconds=180.0)
+
+        with mock.patch(
+            "tools.verify_real_flow_e2e.time.monotonic",
+            side_effect=[100.0, 110.0, 125.0],
+        ), mock.patch(
+            "tools.verify_real_flow_e2e._bot_probe",
+            side_effect=[{"active": True}, {"active": True}],
+        ):
+            unavailable, started = _try_endurance_probe_bundle(
+                sampler,
+                SimpleNamespace(),
+                SimpleNamespace(),
+                outage,
+                elapsed_seconds=12.0,
+                sanitize_error=lambda value: value,
+            )
+            recovered, ended = _try_endurance_probe_bundle(
+                sampler,
+                SimpleNamespace(),
+                SimpleNamespace(),
+                outage,
+                elapsed_seconds=22.0,
+                sanitize_error=lambda value: value,
+            )
+            self.assertIsNone(recovered)
+            self.assertEqual(ended["event"], "probe-outage-retry")
+            recovered, ended = _try_endurance_probe_bundle(
+                sampler,
+                SimpleNamespace(),
+                SimpleNamespace(),
+                outage,
+                elapsed_seconds=37.0,
+                sanitize_error=lambda value: value,
+            )
+
+        self.assertIsNone(unavailable)
+        self.assertEqual(started["event"], "probe-outage-start")
+        self.assertEqual(recovered["sample"], sample)
+        self.assertEqual(recovered["bots"]["host"], {"active": True})
+        self.assertEqual(ended["event"], "probe-outage-recovered")
+        self.assertEqual(ended["durationSeconds"], 25.0)
+        self.assertEqual(ended["failureCount"], 2)
+        self.assertEqual(len(outage.completed), 1)
+
+    def test_endurance_probe_bundle_aborts_persistent_remote_outage(
+        self,
+    ) -> None:
+        error = RuntimeProbeError(
+            "remote Lua bridge failed: remote Windows Lua bridge timed out"
+        )
+        sampler = SimpleNamespace(
+            sample_now=mock.Mock(side_effect=[error, error])
+        )
+        outage = EnduranceProbeOutage(budget_seconds=180.0)
+
+        with mock.patch(
+            "tools.verify_real_flow_e2e.time.monotonic",
+            side_effect=[100.0, 281.0],
+        ):
+            bundle, _ = _try_endurance_probe_bundle(
+                sampler,
+                SimpleNamespace(),
+                SimpleNamespace(),
+                outage,
+                elapsed_seconds=12.0,
+                sanitize_error=lambda value: value,
+            )
+            self.assertIsNone(bundle)
+            with self.assertRaisesRegex(
+                RealFlowFailure,
+                "remote endurance probe outage exceeded 180.0 seconds",
+            ):
+                _try_endurance_probe_bundle(
+                    sampler,
+                    SimpleNamespace(),
+                    SimpleNamespace(),
+                    outage,
+                    elapsed_seconds=193.0,
+                    sanitize_error=lambda value: value,
+                )
+
+    def test_endurance_probe_bundle_does_not_hide_game_lua_errors(
+        self,
+    ) -> None:
+        sampler = SimpleNamespace(
+            sample_now=mock.Mock(
+                side_effect=RuntimeProbeError("Lua execution failed")
+            )
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeProbeError,
+            "Lua execution failed",
+        ):
+            _try_endurance_probe_bundle(
+                sampler,
+                SimpleNamespace(),
+                SimpleNamespace(),
+                EnduranceProbeOutage(budget_seconds=180.0),
+                elapsed_seconds=12.0,
+                sanitize_error=lambda value: value,
+            )
+
     def test_launcher_failure_diagnostics_preserve_visible_status(self) -> None:
         peer = SimpleNamespace(ui_pid=41)
         status = UiElement(

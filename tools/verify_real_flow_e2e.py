@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any
+from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1467,6 +1467,108 @@ def _wait_for_client_enemy_materialization(
     )
 
 
+class EnduranceProbeOutage:
+    def __init__(self, *, budget_seconds: float) -> None:
+        self.budget_seconds = budget_seconds
+        self.started_monotonic: float | None = None
+        self.started_elapsed_seconds = 0.0
+        self.failure_count = 0
+        self.last_error = ""
+        self.completed: list[dict[str, Any]] = []
+
+    @staticmethod
+    def retryable(error: BaseException) -> bool:
+        if not isinstance(error, (RuntimeProbeError, Ws20HarnessError)):
+            return False
+        message = str(error)
+        return message.startswith(
+            "remote Lua bridge failed:"
+        ) or message.startswith("remote bridge startup failed:")
+
+    def failed(
+        self,
+        error: BaseException,
+        *,
+        elapsed_seconds: float,
+        sanitize_error: Callable[[str], str],
+    ) -> dict[str, Any]:
+        now = time.monotonic()
+        first_failure = self.started_monotonic is None
+        if first_failure:
+            self.started_monotonic = now
+            self.started_elapsed_seconds = elapsed_seconds
+        self.failure_count += 1
+        self.last_error = sanitize_error(str(error))
+        assert self.started_monotonic is not None
+        duration = now - self.started_monotonic
+        if duration >= self.budget_seconds:
+            raise RealFlowFailure(
+                "remote endurance probe outage exceeded "
+                f"{self.budget_seconds:.1f} seconds after "
+                f"{self.failure_count} failures; "
+                f"last={self.last_error!r}"
+            ) from error
+        return {
+            "event": (
+                "probe-outage-start"
+                if first_failure
+                else "probe-outage-retry"
+            ),
+            "kind": "remote-probe-outage",
+            "startedElapsedSeconds": self.started_elapsed_seconds,
+            "elapsedSeconds": elapsed_seconds,
+            "failureCount": self.failure_count,
+            "message": self.last_error,
+        }
+
+    def recovered(self, *, elapsed_seconds: float) -> dict[str, Any] | None:
+        if self.started_monotonic is None:
+            return None
+        record = {
+            "kind": "remote-probe-outage",
+            "startedElapsedSeconds": self.started_elapsed_seconds,
+            "recoveredElapsedSeconds": elapsed_seconds,
+            "durationSeconds": time.monotonic() - self.started_monotonic,
+            "failureCount": self.failure_count,
+            "lastError": self.last_error,
+        }
+        self.completed.append(record)
+        self.started_monotonic = None
+        self.started_elapsed_seconds = 0.0
+        self.failure_count = 0
+        self.last_error = ""
+        return {"event": "probe-outage-recovered", **record}
+
+
+def _try_endurance_probe_bundle(
+    sampler: PairSampler,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    outage: EnduranceProbeOutage,
+    *,
+    elapsed_seconds: float,
+    sanitize_error: Callable[[str], str],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    try:
+        sample = sampler.sample_now("endurance-monitor")
+        bots = {
+            "host": _bot_probe(host_pipe),
+            "clientB": _bot_probe(client_pipe),
+        }
+    except (RuntimeProbeError, Ws20HarnessError) as exc:
+        if not outage.retryable(exc):
+            raise
+        return None, outage.failed(
+            exc,
+            elapsed_seconds=elapsed_seconds,
+            sanitize_error=sanitize_error,
+        )
+    return {
+        "sample": sample,
+        "bots": bots,
+    }, outage.recovered(elapsed_seconds=elapsed_seconds)
+
+
 def _run_bot_play_endurance(
     config: HarnessConfig,
     host: WindowsPeer,
@@ -1590,9 +1692,29 @@ def _run_bot_play_endurance(
     final_bots = result["activeTakeovers"]
     termination_reason = ""
     game_over_capture: dict[str, Any] | None = None
+    probe_outage = EnduranceProbeOutage(budget_seconds=180.0)
+    sanitize_probe_error = (
+        client.connection.sanitize_text
+        if isinstance(client, Ws20Peer)
+        else lambda value: value
+    )
 
     while True:
-        sample = sampler.sample_now("endurance-monitor")
+        probe_bundle, probe_event = _try_endurance_probe_bundle(
+            sampler,
+            host_pipe,
+            client_pipe,
+            probe_outage,
+            elapsed_seconds=time.monotonic() - sampler.started,
+            sanitize_error=sanitize_probe_error,
+        )
+        if probe_event is not None:
+            event_writer.append(probe_event)
+        if probe_bundle is None:
+            time.sleep(max(0.1, config.sampling_seconds))
+            continue
+        sample = probe_bundle["sample"]
+        bots = probe_bundle["bots"]
         final_sample = sample
         if "clientEnemyMaterialization" not in result:
             try:
@@ -1635,10 +1757,6 @@ def _run_bot_play_endurance(
             )
             player_rows_written += 1
 
-        bots = {
-            "host": _bot_probe(host_pipe),
-            "clientB": _bot_probe(client_pipe),
-        }
         final_bots = bots
         driving = {
             role: _bot_is_driving(
@@ -1856,6 +1974,13 @@ def _run_bot_play_endurance(
 
     elapsed_seconds = time.monotonic() - started_monotonic
     findings = monitor.finish(float(final_sample["elapsedSeconds"]))
+    for completed_outage in probe_outage.completed:
+        findings.append(
+            {
+                "id": f"F{len(findings) + 1:03d}",
+                **completed_outage,
+            }
+        )
     fighter_stats = tracker.result(enemy_rows, player_rows)
     for role, stats in fighter_stats.items():
         if stats["damageDealtEdges"] == 0:
@@ -1900,6 +2025,7 @@ def _run_bot_play_endurance(
             ),
             "milestoneCaptures": captures,
             "captureErrors": capture_errors,
+            "probeOutages": probe_outage.completed,
             "gameOverOrLimitCapture": game_over_capture,
             "findings": findings,
             "finalBots": final_bots,

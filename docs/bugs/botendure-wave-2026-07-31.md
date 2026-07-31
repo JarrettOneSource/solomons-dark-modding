@@ -351,10 +351,35 @@ Public Lua spawning remains host/offline-authority-only, manual direct spawning
 still requires explicit test mode and simulation authority, and host wave
 ownership is unchanged.
 
+## Harness finding: transient ws20 SSH loss terminated a live match
+
+The repaired flow reached wave 8 and proved the delayed materialization path
+with 42 direct client catch-up dispatches, 42 exact stock-path completions,
+and no unavailable-spawner failures. The client held all 40 replicated enemy
+bindings. At 26 minutes, however, the evidence controller terminated on
+`remote Lua bridge failed: remote Windows Lua bridge timed out`.
+
+This was not a game Lua failure. The existing bridge stopped returning, a new
+bridge could not establish SSH, and the artifact and cleanup commands all
+reported the same SSH connection timeout. Both exact staged processes remained
+alive. SSH later recovered without a game or workstation change, allowing the
+client artifacts to be copied and the owned processes and stage to be removed.
+The workstation still had ample free memory and disk, its tailnet service was
+running, and the System event log contained no warning or error in the failure
+window.
+
+The endurance loop now tolerates only the two exact remote-bridge connectivity
+errors for a cumulative 180-second outage. It records the outage start, retries,
+recovery, duration, and failure count. A persistent outage still aborts at the
+budget, and local/game Lua errors remain immediately fatal. Setup,
+materialization, and non-endurance probes retain their existing fail-closed
+behavior.
+
 ## Rerun requirement
 
-The product failure fixes and remote staging fix must be rebuilt together and
-rerun through the same real launcher, lobby, and Steam flow. Completion
-requires both Bot Play takeovers to become active through the mod setting,
-live state and transport sampling throughout the match, milestone screenshots
-from both peers, and either natural Game Over or the 90-minute endurance cap.
+The product failure fixes, remote staging fix, and bounded endurance probe
+continuity must be rebuilt together and rerun through the same real launcher,
+lobby, and Steam flow. Completion requires both Bot Play takeovers to become
+active through the mod setting, live state and transport sampling throughout
+the match, milestone screenshots from both peers, and either natural Game Over
+or the 90-minute endurance cap.
