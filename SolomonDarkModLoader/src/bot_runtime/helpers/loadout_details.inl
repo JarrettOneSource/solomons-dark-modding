@@ -82,6 +82,46 @@ void InitializeSecondaryLoadoutRows(
     }
 }
 
+void OverlayLivePrimaryAttackWindow(
+    uintptr_t progression_runtime_address,
+    uintptr_t actor_address,
+    BotLoadoutDetails* details) {
+    if (details == nullptr) {
+        return;
+    }
+
+    details->primary.range_min = 0.0f;
+    details->primary.range_max = 0.0f;
+    details->primary.range_resolved = false;
+    details->primary.range_source = "unresolved";
+
+    float primary_range = 0.0f;
+    std::string range_source;
+    const auto water_primary_entry =
+        ResolveNativePrimaryEntryForElement(1);
+    const bool frost_jet =
+        details->primary.entry_id == water_primary_entry &&
+        details->primary.combo_entry_id == water_primary_entry;
+    if (frost_jet &&
+        TryResolveNativeFrostJetQueryRange(
+            progression_runtime_address,
+            &primary_range,
+            nullptr)) {
+        details->primary.range_max = primary_range;
+        details->primary.range_resolved = true;
+        details->primary.range_source =
+            "native_frost_jet_query_range";
+    } else if (!frost_jet &&
+        TryReadPrimarySelectionPursuitRange(
+            actor_address,
+            &primary_range,
+            &range_source)) {
+        details->primary.range_max = primary_range;
+        details->primary.range_resolved = true;
+        details->primary.range_source = range_source;
+    }
+}
+
 void ResolveStaticParticipantLoadoutDetails(
     const ParticipantInfo& participant,
     uintptr_t progression_runtime_address,
@@ -196,31 +236,10 @@ void ResolveStaticParticipantLoadoutDetails(
         }
     }
 
-    float primary_range = 0.0f;
-    std::string range_source;
-    const auto water_primary_entry =
-        ResolveNativePrimaryEntryForElement(1);
-    const bool frost_jet =
-        details->primary.entry_id == water_primary_entry &&
-        details->primary.combo_entry_id == water_primary_entry;
-    if (frost_jet &&
-        TryResolveNativeFrostJetQueryRange(
-            progression_runtime_address,
-            &primary_range,
-            nullptr)) {
-        range_source = "native_frost_jet_query_range";
-        details->primary.range_max = primary_range;
-        details->primary.range_resolved = true;
-        details->primary.range_source = range_source;
-    } else if (!frost_jet &&
-        TryReadPrimarySelectionPursuitRange(
-            actor_address,
-            &primary_range,
-            &range_source)) {
-        details->primary.range_max = primary_range;
-        details->primary.range_resolved = true;
-        details->primary.range_source = range_source;
-    }
+    OverlayLivePrimaryAttackWindow(
+        progression_runtime_address,
+        actor_address,
+        details);
 
     if (progression_runtime_address == 0) {
         return;

@@ -73,6 +73,14 @@ def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> s
         assert token in runtime + api, (
             f"loadout revision cache lacks {token}"
         )
+    _require_in_order(
+        api,
+        "participant_id == kLocalParticipantId",
+        "::sdmod::TryGetPlayerState(&local_player)",
+        "local_player.progression_address",
+        "local_player.actor_address",
+        "TryGetParticipantGameplayState(",
+    )
 
     assert "TryReadNativePrimarySpellStatsFromCurrentOutput(" in helper
     assert "TryReadNativeCurrentPrimarySelection(" in helper
@@ -98,8 +106,14 @@ def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> s
         helper,
         "const bool frost_jet =",
         "TryResolveNativeFrostJetQueryRange(",
-        'range_source = "native_frost_jet_query_range"',
+        '"native_frost_jet_query_range"',
         "TryReadPrimarySelectionPursuitRange(",
+    )
+    _require_in_order(
+        api,
+        "if (participant_id == kLocalParticipantId)",
+        "OverlayLivePrimaryAttackWindow(",
+        "OverlayLiveSecondaryCooldowns(",
     )
 
     for token in (
@@ -157,6 +171,7 @@ def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> s
         "never invokes that mutating",
         "100 ticks per second",
         "`cooldown_resolved = false`",
+        "local participant uses its live native player state",
     ):
         assert token in docs
 

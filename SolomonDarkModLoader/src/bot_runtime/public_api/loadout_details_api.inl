@@ -17,20 +17,27 @@ bool ReadParticipantLoadoutDetails(
         return false;
     }
 
-    SDModParticipantGameplayState gameplay_state;
-    const bool gameplay_state_available =
-        TryGetParticipantGameplayState(
-            participant_id,
-            &gameplay_state) &&
-        gameplay_state.available;
-    const auto progression_runtime_address =
-        gameplay_state_available
-            ? gameplay_state.progression_runtime_state_address
-            : 0;
-    const auto actor_address =
-        gameplay_state_available
-            ? gameplay_state.actor_address
-            : 0;
+    uintptr_t progression_runtime_address = 0;
+    uintptr_t actor_address = 0;
+    if (participant_id == kLocalParticipantId) {
+        SDModPlayerState local_player;
+        if (::sdmod::TryGetPlayerState(&local_player) &&
+            local_player.valid) {
+            progression_runtime_address =
+                local_player.progression_address;
+            actor_address = local_player.actor_address;
+        }
+    } else {
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(
+                participant_id,
+                &gameplay_state) &&
+            gameplay_state.available) {
+            progression_runtime_address =
+                gameplay_state.progression_runtime_state_address;
+            actor_address = gameplay_state.actor_address;
+        }
+    }
     const auto revisions =
         ResolveBotLoadoutRevisionTuple(*participant);
 
@@ -92,6 +99,12 @@ bool ReadParticipantLoadoutDetails(
         }
     }
 
+    if (participant_id == kLocalParticipantId) {
+        OverlayLivePrimaryAttackWindow(
+            progression_runtime_address,
+            actor_address,
+            details);
+    }
     OverlayLiveSecondaryCooldowns(
         progression_runtime_address,
         details);

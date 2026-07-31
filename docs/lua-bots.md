@@ -166,6 +166,11 @@ Unknown participant IDs return `nil`. Empty secondary slots have
 `entry_id = -1`; all numeric semantic fields remain present, and every value
 that can fail native resolution has a corresponding `*_resolved` flag.
 Callers must not infer resolution from a zero value.
+The local participant uses its live native player state; synthetic and remote
+participants use their replicated gameplay snapshots. This lets the same
+semantic query serve a brain driving the stock local control path. Its attack
+window is overlaid live so a takeover activated during the stock wave-entry
+transition observes the control brain once the native selection is ready.
 
 Base primary build IDs are normalized to their entry IDs
 (`8`, `16`, `24`, `32`, or `40`). Welds retain native build IDs
