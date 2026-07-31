@@ -113,9 +113,16 @@ emit("brain.mode", brain.mode or "")
 emit("brain.wave", brain.wave or 0)
 emit("brain.think_count", brain.think_count or 0)
 emit("brain.move_accepted", brain.move_accepted or 0)
+emit("brain.cast_issued", brain.cast_issued or 0)
 emit("brain.cast_accepted", brain.cast_accepted or 0)
 emit("brain.target_network_actor_id",
   brain.target_network_actor_id or 0)
+emit("brain.live_enemy_count", brain.live_enemy_count or 0)
+emit("brain.attack_window_max", brain.attack_window_max or 0)
+emit("brain.nearest_enemy_distance",
+  brain.nearest_enemy_distance or 0)
+emit("brain.target_distance", brain.target_distance or 0)
+emit("brain.hp_ratio", brain.hp_ratio or 0)
 for _, key in ipairs({
   "active",
   "clean",
@@ -759,8 +766,10 @@ def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
         "brain.wave",
         "brain.think_count",
         "brain.move_accepted",
+        "brain.cast_issued",
         "brain.cast_accepted",
         "brain.target_network_actor_id",
+        "brain.live_enemy_count",
         "takeover.actor_address",
         "takeover.target_actor_address",
         "takeover.pending_movement_frames",
@@ -774,6 +783,10 @@ def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
         "takeover.current_target_actor_address",
     }
     float_keys = {
+        "brain.attack_window_max",
+        "brain.nearest_enemy_distance",
+        "brain.target_distance",
+        "brain.hp_ratio",
         "takeover.movement_input_x",
         "takeover.movement_input_y",
         "takeover.pending_movement_x",

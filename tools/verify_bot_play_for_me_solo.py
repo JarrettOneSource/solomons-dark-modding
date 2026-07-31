@@ -723,6 +723,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         enemy_rows: list[dict[str, Any]] = []
         player_rows: list[dict[str, Any]] = []
         samples: list[dict[str, Any]] = []
+        result["samples"] = samples
         screenshot: dict[str, Any] | None = None
         final_state: dict[str, Any] | None = None
         final_bot: dict[str, Any] | None = None
@@ -747,7 +748,21 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "botMode": bot.get("brain.mode"),
                 "botThinkCount": bot.get("brain.think_count"),
                 "botMoveAccepted": bot.get("brain.move_accepted"),
+                "botCastIssued": bot.get("brain.cast_issued"),
                 "botCastAccepted": bot.get("brain.cast_accepted"),
+                "botLiveEnemies": bot.get("brain.live_enemy_count"),
+                "botAttackWindowMax": bot.get(
+                    "brain.attack_window_max"
+                ),
+                "botNearestEnemyDistance": bot.get(
+                    "brain.nearest_enemy_distance"
+                ),
+                "botTargetDistance": bot.get(
+                    "brain.target_distance"
+                ),
+                "botHpRatio": bot.get("brain.hp_ratio"),
+                "x": state["player"]["x"],
+                "y": state["player"]["y"],
                 "damageEdges": len(enemy_rows),
             }
             samples.append(sample)
@@ -805,7 +820,6 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             raise SoloBotPlayFailure(
                 "solo bot never produced an indicator-and-fighting capture"
             )
-        result["samples"] = samples
         result["finalState"] = final_state
         result["finalBot"] = final_bot
         result["fightingCapture"] = screenshot
