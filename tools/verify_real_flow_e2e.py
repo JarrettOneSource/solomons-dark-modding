@@ -2804,6 +2804,19 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                     f"{type(exc).__name__}: {exc}"
                 )
                 result["ok"] = False
+        cleanup["localLuaPipeClose"] = {}
+        local_pipes = {"host": host_pipe}
+        if not is_ws20:
+            local_pipes["clientB"] = client_pipe
+        for role, pipe in local_pipes.items():
+            try:
+                pipe.close()
+                cleanup["localLuaPipeClose"][role] = "closed"
+            except BaseException as exc:
+                cleanup["localLuaPipeClose"][role] = (
+                    f"{type(exc).__name__}: {exc}"
+                )
+                result["ok"] = False
         try:
             cleanup["processClose"] = close_exact_owned_processes(ps, peers)
         except BaseException as exc:

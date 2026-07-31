@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import base64
+from concurrent.futures import ThreadPoolExecutor
+import io
 import json
 from pathlib import Path
 import tempfile
+import threading
+import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -24,7 +29,9 @@ from tools._real_flow_e2e.endurance import (
     terminal_game_over,
 )
 from tools._real_flow_e2e.runtime import (
+    LuaPipe,
     _merge_solomon_authority_state,
+    approach_solomon_and_complete_dialogue,
     cover_participant_with_real_input_once,
     damage_click_targets,
     damage_enemy_with_real_input,
@@ -57,6 +64,159 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_local_lua_pipe_serializes_concurrent_requests(self) -> None:
+        active = 0
+        maximum_active = 0
+        active_lock = threading.Lock()
+
+        def run_bridge(*args: object, **kwargs: object) -> str:
+            nonlocal active, maximum_active
+            with active_lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            time.sleep(0.03)
+            with active_lock:
+                active -= 1
+            return "ok"
+
+        pipe = LuaPipe(ROOT, "test-pipe")
+        with mock.patch.object(
+            pipe,
+            "_execute_daemon",
+            side_effect=run_bridge,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(executor.map(pipe.execute, ("one", "two")))
+
+        self.assertEqual(results, ["ok", "ok"])
+        self.assertEqual(maximum_active, 1)
+
+    def test_local_lua_pipe_reuses_and_closes_one_daemon(self) -> None:
+        raw = json.dumps(
+            {
+                "ok": True,
+                "print_output": "",
+                "results": ["answer=42"],
+                "error": None,
+            }
+        ).encode("utf-8")
+        responses = base64.b64encode(raw) + b"\n"
+
+        class InputSink:
+            def __init__(self) -> None:
+                self.writes: list[bytes] = []
+
+            def write(self, value: bytes) -> None:
+                self.writes.append(value)
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
+        class Process:
+            def __init__(self) -> None:
+                self.stdin = InputSink()
+                self.stdout = io.BytesIO(responses * 2)
+                self.stderr = io.BytesIO()
+                self.exited = False
+
+            def poll(self) -> int | None:
+                return 0 if self.exited else None
+
+            def wait(self, *, timeout: float) -> int:
+                self.exited = True
+                return 0
+
+            def terminate(self) -> None:
+                self.exited = True
+
+            def kill(self) -> None:
+                self.exited = True
+
+        process = Process()
+        pipe = LuaPipe(ROOT, "test-pipe")
+        with mock.patch(
+            "tools._real_flow_e2e.runtime.subprocess.Popen",
+            return_value=process,
+        ) as popen:
+            self.assertEqual(pipe.execute("return 42"), "answer=42")
+            self.assertEqual(pipe.execute("return 42"), "answer=42")
+            pipe.close()
+
+        popen.assert_called_once()
+        self.assertTrue(process.exited)
+        self.assertEqual(process.stdin.writes[-1], b"__SDLUA_EXIT__\n")
+
+    def test_solomon_waypoint_stall_uses_real_input_detour(self) -> None:
+        def state(*, acquired: bool = False) -> dict[str, object]:
+            return {
+                "scene": {"name": "testrun"},
+                "player": {"valid": True, "x": 0.0, "y": 0.0},
+                "solomon": {
+                    "valid": True,
+                    "acquired": acquired,
+                    "state": 1 if acquired else 0,
+                    "x": 1000.0,
+                    "y": 0.0,
+                },
+                "wave": {"index": 0},
+                "combat": {"waveIndex": 0},
+                "world": {},
+            }
+
+        initial = state()
+        complete = state(acquired=True)
+        complete["wave"]["index"] = 1  # type: ignore[index]
+        samples = [
+            *[state() for _ in range(5)],
+            state(acquired=True),
+            complete,
+        ]
+
+        class Pipe:
+            def openable_path_obstacles(self) -> list[object]:
+                return []
+
+            def navigation_grid(self, *, timeout: float) -> dict[str, object]:
+                return {
+                    "cellWidth": 100.0,
+                    "cellHeight": 100.0,
+                    "nodes": {},
+                }
+
+            def state(self) -> dict[str, object]:
+                return samples.pop(0)
+
+        pipe = Pipe()
+        peer = SimpleNamespace()
+        with (
+            mock.patch(
+                "tools._real_flow_e2e.runtime.wait_for_state",
+                return_value=initial,
+            ),
+            mock.patch(
+                "tools._real_flow_e2e.runtime.plan_navigation_path",
+                return_value={
+                    "kind": "test-grid",
+                    "waypoints": [{"x": 100.0, "y": 0.0}],
+                },
+            ),
+            mock.patch(
+                "tools._real_flow_e2e.runtime._send_key"
+            ) as send_key,
+        ):
+            result = approach_solomon_and_complete_dialogue(
+                ROOT,
+                peer,  # type: ignore[arg-type]
+                pipe,  # type: ignore[arg-type]
+                timeout=1.0,
+            )
+
+        self.assertEqual(result["navigation"]["detourCount"], 1)
+        self.assertIn(mock.call(ROOT, peer, "s", 1200), send_key.mock_calls)
+
     def test_human_control_does_not_reopen_takeover_state(self) -> None:
         state = {
             "active": False,

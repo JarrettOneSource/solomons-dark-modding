@@ -135,6 +135,55 @@ combat and before either takeover was active. It recovered without a process
 restart. That event cannot be attributed to the primary-cast amplification;
 it remains a distinct external-transport observation for the corrected rerun.
 
+## Harness finding: planned waypoints bypassed stall recovery
+
+The first edge-deduplicated rerun joined the real lobby and moved the host
+partway through Solomon Dig, then held the same position for more than four
+minutes. Both Steam routes remained ready and continued exchanging packets;
+the failure was local navigation rather than a network stall. The captured
+timeline fixes the host at `(689.496, 397.125)` while Solomon remained at
+`(1299.262, 890.261)`.
+
+The navigation loop measured progress and issued perpendicular detours only
+after its planned waypoint list was exhausted. While an active grid waypoint
+existed, the branch sent the same blocked movement input and immediately
+continued, bypassing all stall accounting. An obstructed waypoint could
+therefore loop until the outer timeout. The correction applies the same
+progress threshold and alternating real-input detour to every active waypoint.
+It does not teleport the player, rewrite navigation state, or use a test seam.
+
+## Harness finding: local Lua sampling spawned overlapping PowerShell clients
+
+During the same stalled approach, the foreground Solomon controller and the
+periodic pair sampler queried the host Lua pipe concurrently. The local
+`LuaPipe` created a new PowerShell process for every query and had no lock,
+while the native server exposes one named-pipe instance and services one client
+at a time. One bridge eventually failed inside .NET with an index error. The
+cleanup process inventory then failed with `System.OutOfMemoryException`, and
+the workstation20 controller returned malformed output instead of its JSON
+receipt. Both game processes were still alive; workstation20 nevertheless
+closed and removed its owned stage. The exact staged host PID was verified by
+executable path, closed through its main window without force, and the local
+stage and ports were verified clean in the manual cleanup receipt.
+
+The correction gives each local Lua pipe one serialized, persistent PowerShell
+daemon for the run and closes it before game cleanup. This matches the existing
+daemon protocol, removes per-sample process churn, and prevents two clients
+from racing the loader's single pipe instance. The retained exact-path process
+cleanup remains fail closed; the harness does not broaden process ownership or
+force-close an unverified PID.
+
+## Transport observation: bounded shared-hub startup backpressure
+
+That rerun emitted one host warning during shared-hub actor materialization:
+nine reliable messages were queued and 71 disposable updates were dropped over
+two seconds. All 6,743 captured host Steam sends were accepted, the route stayed
+connected, and the warning did not recur during the following four minutes.
+The maximum pending reliable payload was 27,472 bytes and the queue later
+drained. This was a self-limiting startup synchronization burst, not the
+reliable tick-rate amplification seen in the preceding run, so no product
+change was made for it.
+
 ## Rerun requirement
 
 The product failure fixes and remote staging fix must be rebuilt together and

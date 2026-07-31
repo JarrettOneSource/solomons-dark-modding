@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
+import queue
 import subprocess
+import threading
 import time
 from typing import Any, Callable
 
@@ -706,45 +710,193 @@ class LuaPipe:
     source_root: Path
     name: str
     timeout_seconds: float = 8.0
+    _execute_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _process: subprocess.Popen[bytes] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _responses: queue.Queue[tuple[bytes, BaseException | None]] = field(
+        default_factory=queue.Queue,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def execute(self, code: str) -> str:
+        with self._execute_lock:
+            return self._execute_daemon(code)
+
+    def _start_daemon(self) -> subprocess.Popen[bytes]:
+        process = self._process
+        if process is not None and process.poll() is None:
+            return process
+        if process is not None:
+            self._stop_daemon(request_exit=False)
+        responses: queue.Queue[tuple[bytes, BaseException | None]] = (
+            queue.Queue()
+        )
+        process = subprocess.Popen(
+            [
+                "powershell.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/Invoke-LuaExec.ps1",
+                "-Daemon",
+                "-PipeName",
+                self.name,
+                "-ResponseTimeoutMilliseconds",
+                str(max(100, round(self.timeout_seconds * 1000))),
+            ],
+            cwd=self.source_root,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        def read_responses() -> None:
+            if process.stdout is None:
+                responses.put((b"", None))
+                return
+            while True:
+                try:
+                    line = process.stdout.readline()
+                except BaseException as exc:
+                    responses.put((b"", exc))
+                    return
+                responses.put((line, None))
+                if not line:
+                    return
+
+        threading.Thread(
+            target=read_responses,
+            name=f"lua-pipe-reader-{self.name}",
+            daemon=True,
+        ).start()
+        self._process = process
+        self._responses = responses
+        return process
+
+    @staticmethod
+    def _exit_detail(process: subprocess.Popen[bytes]) -> str:
+        if process.poll() is None or process.stderr is None:
+            return ""
         try:
-            completed = subprocess.run(
-                [
-                    "powershell.exe",
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    "scripts/Invoke-LuaExec.ps1",
-                    "-PipeName",
-                    self.name,
-                    "-ResponseTimeoutMilliseconds",
-                    str(max(100, round(self.timeout_seconds * 1000))),
-                ],
-                input=code,
-                cwd=self.source_root,
-                text=True,
-                encoding="utf-8",
+            return process.stderr.read().decode(
+                "utf-8",
                 errors="replace",
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=self.timeout_seconds + 7.0,
-                check=False,
+            ).strip()
+        except OSError:
+            return ""
+
+    def _stop_daemon(self, *, request_exit: bool) -> None:
+        process = self._process
+        self._process = None
+        self._responses = queue.Queue()
+        if process is None:
+            return
+        if process.stdin is not None:
+            try:
+                if request_exit and process.poll() is None:
+                    process.stdin.write(b"__SDLUA_EXIT__\n")
+                    process.stdin.flush()
+                process.stdin.close()
+            except (BrokenPipeError, OSError):
+                pass
+        try:
+            process.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3.0)
+
+    def _execute_daemon(self, code: str) -> str:
+        process = self._start_daemon()
+        if process.stdin is None:
+            self._stop_daemon(request_exit=False)
+            raise RuntimeProbeError(
+                f"Lua pipe {self.name} bridge has no standard input"
             )
-        except subprocess.TimeoutExpired as exc:
+        request = base64.b64encode(code.encode("utf-8")) + b"\n"
+        try:
+            process.stdin.write(request)
+            process.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            detail = self._exit_detail(process)
+            self._stop_daemon(request_exit=False)
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeProbeError(
+                f"Lua pipe {self.name} bridge write failed{suffix}"
+            ) from exc
+        try:
+            line, error = self._responses.get(
+                timeout=self.timeout_seconds + 7.0
+            )
+        except queue.Empty as exc:
+            self._stop_daemon(request_exit=False)
             raise RuntimeProbeError(
                 f"Lua pipe {self.name} bridge timed out after "
                 f"{self.timeout_seconds + 7.0:.1f}s"
             ) from exc
-        if completed.returncode != 0:
+        if error is not None:
+            self._stop_daemon(request_exit=False)
             raise RuntimeProbeError(
-                f"Lua pipe {self.name} failed ({completed.returncode}): "
-                f"{completed.stdout.strip()}"
+                f"Lua pipe {self.name} bridge read failed: {error}"
+            ) from error
+        if not line:
+            detail = self._exit_detail(process)
+            self._stop_daemon(request_exit=False)
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeProbeError(
+                f"Lua pipe {self.name} bridge closed unexpectedly{suffix}"
             )
-        return completed.stdout
+        try:
+            raw = base64.b64decode(line.strip(), validate=True).decode(
+                "utf-8",
+                errors="replace",
+            )
+        except (binascii.Error, ValueError) as exc:
+            self._stop_daemon(request_exit=False)
+            raise RuntimeProbeError(
+                f"Lua pipe {self.name} bridge returned an invalid frame"
+            ) from exc
+        if raw.startswith("ERROR:"):
+            raise RuntimeProbeError(raw.removeprefix("ERROR:").strip())
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+        if not isinstance(value, dict) or "ok" not in value:
+            return raw
+        pieces: list[str] = []
+        printed = value.get("print_output")
+        if isinstance(printed, str) and printed:
+            pieces.append(printed.rstrip("\r\n"))
+        results = value.get("results")
+        if isinstance(results, list):
+            pieces.extend(str(item) for item in results)
+        if value.get("ok") is not True:
+            raise RuntimeProbeError(
+                str(value.get("error") or "Lua execution failed")
+            )
+        return "\n".join(pieces) or "ok\n"
+
+    def close(self) -> None:
+        with self._execute_lock:
+            self._stop_daemon(request_exit=True)
 
     def state(self) -> dict[str, Any]:
         return normalize_state(parse_key_values(self.execute(STATE_LUA)))
@@ -1605,8 +1757,34 @@ def approach_solomon_and_complete_dialogue(
                 best_distance = math.inf
                 stalled_samples = 0
                 continue
+            if waypoint_distance < best_distance - 2.0:
+                best_distance = waypoint_distance
+                stalled_samples = 0
+            else:
+                stalled_samples += 1
             dx = waypoint_dx
             dy = waypoint_dy
+            if stalled_samples >= 4:
+                if abs(dx) >= abs(dy):
+                    detour_keys = (
+                        ("w", "s") if dy > 0 else ("s", "w")
+                    )
+                else:
+                    detour_keys = (
+                        ("a", "d") if dx > 0 else ("d", "a")
+                    )
+                _send_key(
+                    source_root,
+                    peer,
+                    detour_keys[detour_count % 2],
+                    1200,
+                )
+                if cover_action is not None:
+                    cover_action()
+                detour_count += 1
+                stalled_samples = 0
+                best_distance = math.inf
+                continue
             component = max(abs(dx), abs(dy))
             if abs(dx) >= abs(dy):
                 key = "d" if dx > 0 else "a"
