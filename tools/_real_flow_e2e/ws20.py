@@ -543,14 +543,22 @@ $expected=Join-Path $profile '{self.stage_leaf}'
         )
         output = completed.stdout.decode("utf-8", "replace").lstrip("\ufeff")
         if completed.returncode != 0:
+            detail = self.sanitize_text(output).strip()
+            suffix = f": {detail[-2000:]}" if detail else ""
             raise Ws20HarnessError(
                 "remote Windows PowerShell failed "
-                f"({completed.returncode})"
+                f"({completed.returncode}){suffix}"
             )
         return output.strip()
 
     def sanitize_text(self, value: str) -> str:
         sanitized = value.replace(self.ssh.target, "workstation20")
+        sanitized = re.sub(
+            re.escape(self.ssh.username),
+            "client B",
+            sanitized,
+            flags=re.IGNORECASE,
+        )
         stage_root = getattr(self, "stage_root", "")
         if stage_root:
             sanitized = re.sub(
@@ -559,6 +567,13 @@ $expected=Join-Path $profile '{self.stage_leaf}'
                 sanitized,
                 flags=re.IGNORECASE,
             )
+        sanitized = re.sub(
+            r"[A-Za-z]:\\Users\\[^\\\r\n]+",
+            "%USERPROFILE%",
+            sanitized,
+            flags=re.IGNORECASE,
+        )
+        sanitized = re.sub(r"\b[0-9]{15,20}\b", "<steam-id>", sanitized)
         return sanitized
 
     def run_ps_json(

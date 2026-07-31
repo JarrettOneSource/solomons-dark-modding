@@ -2179,6 +2179,33 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(local, r"D:\evidence\capture.png")
         convert.assert_called_once()
 
+    def test_ws20_remote_errors_redact_accounts_paths_and_steam_ids(
+        self,
+    ) -> None:
+        connection = object.__new__(RemoteWindowsConnection)
+        connection.ssh = SimpleNamespace(
+            target="workstation20.tail.example",
+            username="ssh-login",
+        )
+        connection.stage_root = (
+            r"C:\Users\interactive-owner\sd-botendure-stage"
+        )
+        connection.stage_leaf = "sd-botendure-stage"
+
+        output = connection.sanitize_text(
+            "ssh-login at workstation20.tail.example: "
+            r"C:\Users\interactive-owner\sd-botendure-stage\control "
+            r"C:\Users\another-account\file "
+            "76561198000000000"
+        )
+
+        self.assertEqual(
+            output,
+            "client B at workstation20: "
+            r"%USERPROFILE%\sd-botendure-stage\control "
+            r"%USERPROFILE%\file <steam-id>",
+        )
+
     def test_ws20_controller_accepts_only_a_safe_profile_stage_leaf(
         self,
     ) -> None:
