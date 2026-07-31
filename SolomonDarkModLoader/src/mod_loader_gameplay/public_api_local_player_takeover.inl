@@ -561,21 +561,9 @@ bool TryGetLocalPlayerControlTakeoverState(
         state->pending_mouse_right_frames == 0 &&
         state->pending_scancode_count == 0 &&
         state->pending_native_control_frames == 0 &&
-        state->cast_intent == 0 &&
-        state->primary_skill_id == 0 &&
-        state->previous_skill_id == 0 &&
-        state->current_target_actor_address == 0 &&
-        std::abs(state->movement_input_x) <=
-            kCleanInputEpsilon &&
-        std::abs(state->movement_input_y) <=
-            kCleanInputEpsilon &&
         std::abs(state->pending_movement_x) <=
             kCleanInputEpsilon &&
         std::abs(state->pending_movement_y) <=
-            kCleanInputEpsilon &&
-        std::abs(state->control_brain_move_x) <=
-            kCleanInputEpsilon &&
-        std::abs(state->control_brain_move_y) <=
             kCleanInputEpsilon;
     return true;
 }

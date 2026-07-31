@@ -26,6 +26,7 @@ from tools._real_flow_e2e.runtime import (
     shared_hub_views_converged,
 )
 from tools.verify_real_flow_e2e import (
+    _assert_clean_release,
     validate_living_wave_boundary,
     validate_stock_water_cast,
     validate_wave_convergence,
@@ -44,6 +45,49 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_human_control_does_not_reopen_takeover_state(self) -> None:
+        state = {
+            "active": False,
+            "desired": False,
+            "focus_active": False,
+            "takeover.active": False,
+            "takeover.clean": True,
+            "takeover.target_valid": False,
+            "takeover.actor_address": 0,
+            "takeover.target_actor_address": 0,
+            "takeover.pending_movement_frames": 0,
+            "takeover.pending_mouse_left_frames": 0,
+            "takeover.pending_mouse_right_frames": 0,
+            "takeover.pending_scancode_count": 0,
+            "takeover.pending_native_control_frames": 0,
+            "takeover.pending_movement_x": 0.0,
+            "takeover.pending_movement_y": 0.0,
+            "takeover.cast_intent": 0,
+            "takeover.primary_skill_id": 0,
+            "takeover.previous_skill_id": 0,
+            "takeover.current_target_actor_address": 0,
+            "takeover.movement_input_x": 0.0,
+            "takeover.movement_input_y": 0.0,
+            "takeover.control_brain_move_x": 0.66,
+            "takeover.control_brain_move_y": -0.75,
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "release retained control state",
+        ):
+            _assert_clean_release(state)
+        assertion = _assert_clean_release(
+            state,
+            after_human_input=True,
+        )
+        self.assertTrue(assertion["clean"])
+        self.assertTrue(assertion["afterHumanInput"])
+        self.assertNotIn(
+            "takeover.control_brain_move_x",
+            assertion["explicitZeroFields"],
+        )
+
     def _config_document(self, root: Path) -> dict[str, object]:
         source = root / "source"
         package = root / "package"

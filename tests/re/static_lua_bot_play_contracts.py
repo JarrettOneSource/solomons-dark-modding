@@ -106,6 +106,13 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "if (state->active)" in input_api
     assert "state->actor_address = local_actor_address;" in input_api
     assert "state->actor_address == 0" in input_api
+    clean_expression = input_api.split("state->clean =", 1)[1].split(
+        "return true;",
+        1,
+    )[0]
+    assert "pending_movement_x" in clean_expression
+    assert "control_brain_move_x" not in clean_expression
+    assert "movement_input_x" not in clean_expression
     assert "state->clean =" in input_api
 
     assert "IsLocalPlayerControlTakeoverActive()" in local_input

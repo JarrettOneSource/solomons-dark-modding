@@ -983,7 +983,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "method": "physical-window-key-after-clean-release",
             "attempts": movement_attempts,
             "takeoverStillClean": _assert_clean_release(
-                _bot_probe(pipe)
+                _bot_probe(pipe),
+                after_human_input=True,
             ),
         }
         result["ok"] = True

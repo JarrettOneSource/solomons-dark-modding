@@ -879,8 +879,12 @@ def _wait_for_bot_state(
     )
 
 
-def _assert_clean_release(state: dict[str, Any]) -> dict[str, Any]:
-    exact_zero = (
+def _assert_clean_release(
+    state: dict[str, Any],
+    *,
+    after_human_input: bool = False,
+) -> dict[str, Any]:
+    takeover_exact_zero = (
         "takeover.actor_address",
         "takeover.target_actor_address",
         "takeover.pending_movement_frames",
@@ -888,19 +892,28 @@ def _assert_clean_release(state: dict[str, Any]) -> dict[str, Any]:
         "takeover.pending_mouse_right_frames",
         "takeover.pending_scancode_count",
         "takeover.pending_native_control_frames",
+    )
+    stock_exact_zero = (
         "takeover.cast_intent",
         "takeover.primary_skill_id",
         "takeover.previous_skill_id",
         "takeover.current_target_actor_address",
     )
-    float_zero = (
-        "takeover.movement_input_x",
-        "takeover.movement_input_y",
+    takeover_float_zero = (
         "takeover.pending_movement_x",
         "takeover.pending_movement_y",
+    )
+    stock_float_zero = (
+        "takeover.movement_input_x",
+        "takeover.movement_input_y",
         "takeover.control_brain_move_x",
         "takeover.control_brain_move_y",
     )
+    exact_zero = takeover_exact_zero
+    float_zero = takeover_float_zero
+    if not after_human_input:
+        exact_zero += stock_exact_zero
+        float_zero += stock_float_zero
     failures = {
         key: state.get(key)
         for key in exact_zero
@@ -933,6 +946,7 @@ def _assert_clean_release(state: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         "clean": True,
+        "afterHumanInput": after_human_input,
         "explicitZeroFields": list(exact_zero + float_zero),
         "state": state,
     }
