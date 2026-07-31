@@ -292,14 +292,14 @@ function Start-Client {
         }
         Wait-Ui `
             -ProcessId $launcher.Id `
-            -Name "Join Game" `
+            -Name "Host Game" `
             -TimeoutSeconds ([int]$Request.TimeoutSeconds) | Out-Null
         Set-LauncherInstance `
             -ProcessId $launcher.Id `
             -Instance ([string]$Request.Instance)
         Wait-Ui `
             -ProcessId $launcher.Id `
-            -Name "Join Game" `
+            -Name "Host Game" `
             -TimeoutSeconds ([int]$Request.TimeoutSeconds) | Out-Null
         Set-LauncherLobbyId `
             -ProcessId $launcher.Id `
