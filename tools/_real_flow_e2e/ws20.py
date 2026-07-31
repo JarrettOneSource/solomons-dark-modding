@@ -1266,6 +1266,7 @@ $values | ConvertTo-Json -Compress
         )
         self.connection._require_confined(settings_path)
         temporary_path = settings_path + ".bply-tmp"
+        backup_path = settings_path + ".bply-backup"
         payload = base64.b64encode(
             (
                 json.dumps(
@@ -1281,20 +1282,24 @@ $values | ConvertTo-Json -Compress
         ).decode("ascii")
         escaped_settings = settings_path.replace("'", "''")
         escaped_temporary = temporary_path.replace("'", "''")
+        escaped_backup = backup_path.replace("'", "''")
         escaped_parent = ntpath.dirname(settings_path).replace("'", "''")
         self.connection.run_ps(
             f"""
 $path='{escaped_settings}'
 $temporary='{escaped_temporary}'
-if(Test-Path -LiteralPath $temporary){{
-  throw 'Bot settings temporary path already exists.'
+$backup='{escaped_backup}'
+if((Test-Path -LiteralPath $temporary) -or
+   (Test-Path -LiteralPath $backup)){{
+  throw 'Bot settings transaction path already exists.'
 }}
 New-Item -ItemType Directory -Path '{escaped_parent}' -Force | Out-Null
 [System.IO.File]::WriteAllBytes(
   $temporary,
   [System.Convert]::FromBase64String('{payload}'))
 if(Test-Path -LiteralPath $path -PathType Leaf){{
-  [System.IO.File]::Replace($temporary,$path,$null)
+  [System.IO.File]::Replace($temporary,$path,$backup)
+  Remove-Item -LiteralPath $backup -Force -ErrorAction Stop
 }}else{{
   [System.IO.File]::Move($temporary,$path)
 }}

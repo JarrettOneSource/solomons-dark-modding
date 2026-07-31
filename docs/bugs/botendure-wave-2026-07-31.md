@@ -67,6 +67,19 @@ setting the lobby ID, then invokes that exact button. This preserves the
 neutral Host Game readiness check before the lobby ID exists and removes the
 remaining render-timing race without using coordinates or a product seam.
 
+## Harness finding: Windows PowerShell rejected a null replacement backup
+
+The next rerun completed the real lobby join, converged both peers in the hub,
+entered wave 1, and loaded Bot Brain successfully on workstation20. Enabling
+client B's takeover then failed before the setting reached the mod. Windows
+PowerShell bound `File.Replace(source, destination, $null)` to a .NET Framework
+path call that rejected the null backup as an illegal path.
+
+The remote settings transaction now supplies a stage-confined backup path,
+checks that both transaction paths are new, performs the atomic replacement,
+and deletes the backup after success. The first-write path remains an atomic
+same-volume move. No game or launcher seam was added.
+
 ## Rerun requirement
 
 The product failure fix and remote staging fix must be rebuilt together and

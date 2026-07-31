@@ -2171,6 +2171,15 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn("bot.brain.json", output)
         self.assertIn("[System.IO.File]::Replace", peer.connection.scripts[0])
         self.assertIn(".bply-tmp", peer.connection.scripts[0])
+        self.assertIn(".bply-backup", peer.connection.scripts[0])
+        self.assertIn(
+            "Replace($temporary,$path,$backup)",
+            peer.connection.scripts[0],
+        )
+        self.assertNotIn(
+            "Replace($temporary,$path,$null)",
+            peer.connection.scripts[0],
+        )
 
     def test_ws20_stage_is_claimed_before_preparation_and_deleted_if_owned(
         self,
