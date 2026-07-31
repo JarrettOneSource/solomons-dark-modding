@@ -53,6 +53,7 @@ from verify_player_health_death_sync import set_local_player_vitals
 
 
 ACCEPTANCE_MOD_ID = "sample.lua.ui_sandbox_lab"
+BOT_PLAY_MOD_ID = "bot.brain"
 SOLO_PARTICIPANT_ID = 0x2000000000001A01
 SOLO_PLAYER_NAME = "Solo Game Over"
 OUTPUT = ROOT / "runtime" / "game_over_session_semantics.json"
@@ -69,6 +70,73 @@ EXISTING_WIZARD_SAVE_FIXTURE = (
     / "fieldbreak25_existing_wizard"
     / "solomondark"
 )
+
+
+def _acceptance_mod_ids(
+    with_bot_play_mod: bool,
+) -> tuple[str, ...]:
+    if with_bot_play_mod:
+        return (ACCEPTANCE_MOD_ID, BOT_PLAY_MOD_ID)
+    return (ACCEPTANCE_MOD_ID,)
+
+
+def _seed_bot_play_settings(
+    instances: list[str],
+) -> dict[str, str]:
+    payload = {
+        "schemaVersion": 1,
+        "values": {
+            "play_for_me": False,
+            "play_for_me_behavior": "skirmisher",
+            "roster": [],
+        },
+    }
+    seeded: dict[str, str] = {}
+    for instance in instances:
+        path = (
+            ROOT
+            / "runtime"
+            / "instances"
+            / instance.lower()
+            / "stage"
+            / ".sdmod"
+            / "mod-settings"
+            / f"{BOT_PLAY_MOD_ID}.json"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        seeded[instance] = str(path)
+    return seeded
+
+
+def _assert_bot_play_mod_active(pipe_name: str) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            f"""-- sdmod-exec-target: {BOT_PLAY_MOD_ID}
+local debug = rawget(_G, "bot_brain_debug")
+print("loaded=" .. tostring(debug ~= nil))
+print("play_for_me=" ..
+  tostring(debug and debug.play_for_me or false))
+print("local_active=" ..
+  tostring(debug and debug.local_player and
+    debug.local_player.active or false))
+""",
+            timeout=8.0,
+        )
+    )
+    if (
+        values.get("loaded") != "true"
+        or values.get("play_for_me") != "false"
+        or values.get("local_active") != "false"
+    ):
+        raise VerifyFailure(
+            f"Bot Play For Me mod was not active and inert: {values}"
+        )
+    return values
 
 
 def _read_layout_address(section: str, key: str) -> int:
@@ -790,6 +858,7 @@ def launch_solo(
     test_wave_override: Path | None = None,
     quick_start: bool = True,
     fresh_install: bool = True,
+    exact_mod_ids: tuple[str, ...] = (ACCEPTANCE_MOD_ID,),
 ) -> dict[str, object]:
     ledger = ROOT / "runtime" / f".game-over-solo-{os.getpid()}-{time.time_ns()}.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -815,7 +884,7 @@ def launch_solo(
         "-GameDirectory",
         path_for_powershell(game_directory),
         "-ExactModIds",
-        ACCEPTANCE_MOD_ID,
+        ",".join(exact_mod_ids),
         "-ProcessIdOutputPath",
         path_for_powershell(ledger),
     ]
@@ -1664,24 +1733,36 @@ def run_solo_verification(
     ports: list[int],
     game_directory: Path,
     launcher_path: Path | None = None,
+    with_bot_play_mod: bool = False,
 ) -> dict[str, object]:
     instance = _launcher_instance_prefix(instance_prefix, "s")
+    bot_settings = (
+        _seed_bot_play_settings([instance])
+        if with_bot_play_mod
+        else {}
+    )
     launch = launch_solo(
         instance=instance,
         local_port=ports[0],
         unused_remote_port=ports[1],
         game_directory=game_directory,
         launcher_path=launcher_path,
+        exact_mod_ids=_acceptance_mod_ids(with_bot_play_mod),
     )
     owned = _owned_solo_processes(launch)
     result: dict[str, object] = {
         "launch": launch,
         "owned_processes": validate_owned_processes(owned),
+        "bot_play_settings": bot_settings,
     }
     pipe_name = str(launch["luaPipe"])
     artifact_directory = ARTIFACT_ROOT / instance_prefix / "solo"
     try:
         wait_for_scene(pipe_name, "hub", 30.0)
+        if with_bot_play_mod:
+            result["bot_play_mod_active"] = (
+                _assert_bot_play_mod_active(pipe_name)
+            )
         result["bots_disabled"] = _disable_bots([pipe_name])
         _start_testrun_when_ready(pipe_name)
         wait_for_scene(pipe_name, "testrun", 30.0)
@@ -1744,8 +1825,20 @@ def run_trio_verification(
     ports: list[int],
     game_directory: Path,
     launcher_path: Path | None = None,
+    with_bot_play_mod: bool = False,
 ) -> dict[str, object]:
     trio_prefix = _launcher_instance_prefix(instance_prefix, "m")
+    bot_settings = (
+        _seed_bot_play_settings(
+            [
+                f"{trio_prefix}-host",
+                f"{trio_prefix}-client",
+                f"{trio_prefix}-third",
+            ]
+        )
+        if with_bot_play_mod
+        else {}
+    )
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_water_body_hub",
@@ -1761,13 +1854,14 @@ def run_trio_verification(
         third_port=ports[4],
         game_directory=game_directory,
         launcher_path=launcher_path,
-        exact_mod_id=ACCEPTANCE_MOD_ID,
+        exact_mod_ids=_acceptance_mod_ids(with_bot_play_mod),
         quick_start=True,
     )
     owned = _owned_trio_processes(launch)
     result: dict[str, object] = {
         "launch": launch,
         "owned_processes": validate_owned_processes(owned),
+        "bot_play_settings": bot_settings,
     }
     host_pipe = str(launch["hostLuaPipe"])
     client_pipe = str(launch["clientLuaPipe"])
@@ -1780,6 +1874,11 @@ def run_trio_verification(
     }
     artifact_directory = ARTIFACT_ROOT / instance_prefix / "trio"
     try:
+        if with_bot_play_mod:
+            result["bot_play_mod_active"] = {
+                label: _assert_bot_play_mod_active(pipe_name)
+                for label, pipe_name in pipes_by_label.items()
+            }
         result["bots_disabled"] = _disable_bots(pipes)
         _start_testrun_when_ready(host_pipe)
         result["loading_boneyard"] = (
@@ -2095,8 +2194,19 @@ def run_loading_timeout_verification(
     ports: list[int],
     game_directory: Path,
     launcher_path: Path | None = None,
+    with_bot_play_mod: bool = False,
 ) -> dict[str, object]:
     pair_prefix = _launcher_instance_prefix(instance_prefix, "t")
+    bot_settings = (
+        _seed_bot_play_settings(
+            [
+                f"{pair_prefix}-host",
+                f"{pair_prefix}-client",
+            ]
+        )
+        if with_bot_play_mod
+        else {}
+    )
     launch = launch_pair(
         host_preset="map_create_fire_mind_hub",
         client_preset="map_create_water_body_hub",
@@ -2110,7 +2220,7 @@ def run_loading_timeout_verification(
         client_port=ports[6],
         game_directory=game_directory,
         launcher_path=launcher_path,
-        exact_mod_id=ACCEPTANCE_MOD_ID,
+        exact_mod_ids=_acceptance_mod_ids(with_bot_play_mod),
         quick_start=True,
     )
     owned = _owned_pair_processes(launch)
@@ -2130,8 +2240,14 @@ def run_loading_timeout_verification(
     result: dict[str, object] = {
         "launch": launch,
         "owned_processes": validate_owned_processes(owned),
+        "bot_play_settings": bot_settings,
     }
     try:
+        if with_bot_play_mod:
+            result["bot_play_mod_active"] = {
+                "host": _assert_bot_play_mod_active(host_pipe),
+                "client": _assert_bot_play_mod_active(client_pipe),
+            }
         result["bots_disabled"] = _disable_bots(
             [host_pipe, client_pipe]
         )
@@ -2319,12 +2435,15 @@ def run_death_reset_pair_verification(
     ports: list[int],
     game_directory: Path,
     launcher_path: Path | None = None,
+    with_bot_play_mod: bool = False,
 ) -> dict[str, object]:
     if len(ports) != 2:
         raise ValueError("death-reset verification requires exactly two ports")
-    if not instance_prefix.startswith("drst"):
+    required_prefix = "bply" if with_bot_play_mod else "drst"
+    if not instance_prefix.startswith(required_prefix):
         raise ValueError(
-            "death-reset verification instance prefix must start with 'drst'"
+            "death-reset verification instance prefix must start with "
+            f"'{required_prefix}'"
         )
 
     artifact_directory = ARTIFACT_ROOT / instance_prefix / "death-reset"
@@ -2337,6 +2456,13 @@ def run_death_reset_pair_verification(
         "ports": ports,
         "fixture": str(EXISTING_WIZARD_SAVE_FIXTURE),
     }
+    if with_bot_play_mod:
+        result["bot_play_settings"] = _seed_bot_play_settings(
+            [
+                f"{instance_prefix}-host",
+                f"{instance_prefix}-client",
+            ]
+        )
     with tempfile.TemporaryDirectory(
         prefix=f"{instance_prefix}-save-",
         dir=runtime_parent,
@@ -2368,7 +2494,7 @@ def run_death_reset_pair_verification(
             third_port=ports[1],
             game_directory=game_directory,
             launcher_path=launcher_path,
-            exact_mod_id=ACCEPTANCE_MOD_ID,
+            exact_mod_ids=_acceptance_mod_ids(with_bot_play_mod),
             quick_start=True,
             no_lua_automation=True,
             host_savegames_root=host_savegames,
@@ -2397,6 +2523,11 @@ def run_death_reset_pair_verification(
                 raise VerifyFailure(
                     "death-reset pair did not use native quick-start"
                 )
+            if with_bot_play_mod:
+                result["bot_play_mod_active"] = {
+                    "host": _assert_bot_play_mod_active(host_pipe),
+                    "client": _assert_bot_play_mod_active(client_pipe),
+                }
 
             result["bots_disabled"] = _disable_bots(list(pipes.values()))
             result["initial_hub_relationships"] = {
@@ -2738,6 +2869,7 @@ def run_live_verification(
     ports: list[int],
     game_directory: Path,
     launcher_path: Path | None = None,
+    with_bot_play_mod: bool = False,
 ) -> dict[str, object]:
     return {
         "instance_prefix": instance_prefix,
@@ -2747,19 +2879,23 @@ def run_live_verification(
             ports=ports,
             game_directory=game_directory,
             launcher_path=launcher_path,
+            with_bot_play_mod=with_bot_play_mod,
         ),
         "trio": run_trio_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
             launcher_path=launcher_path,
+            with_bot_play_mod=with_bot_play_mod,
         ),
         "timeout_drill": run_loading_timeout_verification(
             instance_prefix=instance_prefix,
             ports=ports,
             game_directory=game_directory,
             launcher_path=launcher_path,
+            with_bot_play_mod=with_bot_play_mod,
         ),
+        "with_bot_play_mod": with_bot_play_mod,
         "ok": True,
     }
 
@@ -2798,6 +2934,14 @@ def main() -> int:
             "vitality and appearance reset regression."
         ),
     )
+    parser.add_argument(
+        "--with-bot-play-mod",
+        action="store_true",
+        help=(
+            "Enable bot.brain with local takeover disabled while the "
+            "canonical stock Game Over semantics run."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
 
@@ -2807,6 +2951,13 @@ def main() -> int:
         "instance_prefix": instance_prefix,
     }
     try:
+        if (
+            args.with_bot_play_mod
+            and not instance_prefix.startswith("bply")
+        ):
+            raise ValueError(
+                "Bot Play For Me canonical instances require bply prefix"
+            )
         if args.death_reset_only:
             result = run_death_reset_pair_verification(
                 instance_prefix=instance_prefix,
@@ -2816,6 +2967,7 @@ def main() -> int:
                 ),
                 game_directory=args.game_dir,
                 launcher_path=args.launcher_path,
+                with_bot_play_mod=args.with_bot_play_mod,
             )
         else:
             result = run_live_verification(
@@ -2833,6 +2985,7 @@ def main() -> int:
                 ),
                 game_directory=args.game_dir,
                 launcher_path=args.launcher_path,
+                with_bot_play_mod=args.with_bot_play_mod,
             )
         exit_code = 0 if result.get("ok") is True else 1
     except Exception as exc:  # noqa: BLE001 - preserve full verifier failure.

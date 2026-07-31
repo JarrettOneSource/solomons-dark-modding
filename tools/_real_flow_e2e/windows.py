@@ -17,6 +17,7 @@ class WindowsHarnessError(RuntimeError):
     """A local Windows launch, UI, input, or ownership check failed."""
 
 OBSERVER_MOD_ID = "tool.real_flow_e2e_observer"
+BOT_PLAY_MOD_ID = "bot.brain"
 
 
 def ps_quote(value: str) -> str:
@@ -253,14 +254,57 @@ def prepare_windows_peer(
         / "mod-manager-state.json"
     )
     mod_state_path.parent.mkdir(parents=True, exist_ok=True)
+    enabled_mods = {
+        OBSERVER_MOD_ID: {
+            "Enabled": True,
+        },
+    }
+    if harness.bot_play_for_me:
+        bot_source = harness.source_root / "mods" / "bot-brain"
+        bot_destination = bundle_root / "mods" / "bot-brain"
+        if not (bot_source / "manifest.json").is_file():
+            raise WindowsHarnessError(
+                f"Bot Play For Me mod is missing: {bot_source}"
+            )
+        shutil.copytree(
+            bot_source,
+            bot_destination,
+            symlinks=False,
+            copy_function=shutil.copy2,
+        )
+        enabled_mods[BOT_PLAY_MOD_ID] = {
+            "Enabled": True,
+        }
+        settings_path = (
+            runtime_root
+            / "instances"
+            / peer.instance
+            / "stage"
+            / ".sdmod"
+            / "mod-settings"
+            / f"{BOT_PLAY_MOD_ID}.json"
+        )
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "values": {
+                        "play_for_me": False,
+                        "play_for_me_behavior": "skirmisher",
+                        "roster": [],
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     mod_state_path.write_text(
         json.dumps(
             {
-                "Mods": {
-                    OBSERVER_MOD_ID: {
-                        "Enabled": True,
-                    },
-                },
+                "Mods": enabled_mods,
             },
             indent=2,
         )
@@ -416,7 +460,11 @@ def launch_environment(
             config.loadout_discipline,
         "SDMOD_MULTIPLAYER_QUICK_START_RUN": "",
     }
-    if harness.topology in {"loopback_windows", "wan_udp_nfo"}:
+    if harness.topology in {
+        "loopback_windows",
+        "loopback_windows_botplay",
+        "wan_udp_nfo",
+    }:
         environment.update(
             {
                 "SDMOD_MULTIPLAYER_TRANSPORT": "local_udp",

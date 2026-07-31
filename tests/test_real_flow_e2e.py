@@ -172,6 +172,52 @@ class RealFlowE2ETests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "50911/50912"):
                 self._load_document(root, document)
 
+    def test_botplay_loopback_uses_owner_ports_and_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            document = self._config_document(root)
+            (root / "source/mods/bot-brain").mkdir(parents=True)
+            (root / "source/mods/bot-brain/manifest.json").touch()
+            document.update(
+                {
+                    "runName": "bply-contract",
+                    "topology": "loopback_windows_botplay",
+                    "botPlayForMe": True,
+                    "verifyThroughWave": 4,
+                }
+            )
+            host = document["host"]
+            client = document["client"]
+            assert isinstance(host, dict)
+            assert isinstance(client, dict)
+            host.update(
+                {
+                    "launcherScope": "bply-host",
+                    "instance": "bply-host",
+                    "pipeName": "bply-host",
+                    "localPort": 51411,
+                    "remotePort": 51412,
+                }
+            )
+            client.update(
+                {
+                    "launcherScope": "bply-client",
+                    "instance": "bply-client",
+                    "pipeName": "bply-client",
+                    "localPort": 51412,
+                    "remotePort": 51411,
+                }
+            )
+            config = self._load_document(root, document)
+            self.assertTrue(config.bot_play_for_me)
+            self.assertEqual(config.host.local_port, 51411)
+            self.assertEqual(config.client.local_port, 51412)
+
+            host["localPort"] = 51080
+            client["remotePort"] = 51080
+            with self.assertRaisesRegex(ConfigError, "at or above 51400"):
+                self._load_document(root, document)
+
     def test_fieldbreak_example_drives_fresh_profile_to_dead_hawg(
         self,
     ) -> None:

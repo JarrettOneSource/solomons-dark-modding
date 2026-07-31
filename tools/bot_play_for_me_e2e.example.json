@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "runName": "bply-loopback-yyyymmdd-hhmmss",
+  "topology": "loopback_windows_botplay",
+  "botPlayForMe": true,
+  "sourceRoot": "/mnt/c/sd-botplay-20260731",
+  "packageRoot": "/replace/with/extracted/beta28/package",
+  "gameDirectory": "/mnt/c/Users/User/Documents/GitHub/SB Modding/Solomon Dark/SolomonDarkAbandonware",
+  "evidenceRoot": "/mnt/d/codex-evidence/botplay-20260731/pair",
+  "directoryUrl": "https://solomondarker.com",
+  "privacy": "friends",
+  "expectedSourceSha": "0000000000000000000000000000000000000000",
+  "solomonInteractor": "client",
+  "verifyThroughWave": 4,
+  "timeoutSeconds": 600,
+  "samplingSeconds": 0.25,
+  "host": {
+    "platform": "windows_local",
+    "launcherScope": "bply-host",
+    "instance": "bply-host",
+    "playerName": "Bply Host",
+    "pipeName": "bply-host",
+    "participantId": "0x2B00000000000001",
+    "loadoutElement": "air",
+    "loadoutDiscipline": "body",
+    "localPort": 51411,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 51412,
+    "matchStartActions": [
+      {
+        "kind": "key",
+        "key": "d",
+        "holdMilliseconds": 4000
+      },
+      {
+        "kind": "key",
+        "key": "s",
+        "holdMilliseconds": 3000
+      },
+      {
+        "kind": "key",
+        "key": "a",
+        "holdMilliseconds": 2750
+      },
+      {
+        "kind": "key",
+        "key": "w",
+        "holdMilliseconds": 1100
+      },
+      {
+        "kind": "key",
+        "key": "a",
+        "holdMilliseconds": 800
+      },
+      {
+        "kind": "click",
+        "x": 0.5,
+        "y": 0.43,
+        "holdMilliseconds": 300
+      },
+      {
+        "kind": "click",
+        "x": 0.5,
+        "y": 0.43,
+        "holdMilliseconds": 300
+      },
+      {
+        "kind": "click",
+        "x": 0.956,
+        "y": 0.944,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "click",
+        "x": 0.534,
+        "y": 0.539,
+        "holdMilliseconds": 250
+      },
+      {
+        "kind": "wait_scene",
+        "scene": "testrun",
+        "timeoutSeconds": 90
+      }
+    ]
+  },
+  "client": {
+    "platform": "windows_local",
+    "launcherScope": "bply-client",
+    "instance": "bply-client",
+    "playerName": "Bply Client",
+    "pipeName": "bply-client",
+    "participantId": "0x2B00000000000002",
+    "loadoutElement": "water",
+    "loadoutDiscipline": "body",
+    "localPort": 51412,
+    "remoteHost": "127.0.0.1",
+    "remotePort": 51411,
+    "matchStartActions": []
+  },
+  "metadata": {
+    "purpose": "real launcher, lobby, native Start Match, physical Solomon Dig, two local-player bot brains through three completed stock waves, clean release, and mixed mode"
+  }
+}

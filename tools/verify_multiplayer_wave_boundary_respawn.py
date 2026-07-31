@@ -37,6 +37,7 @@ from verify_local_multiplayer_sync import (
 
 HOST_PORT = 50911
 CLIENT_PORT = 50912
+BOT_PLAY_MOD_ID = "bot.brain"
 RUN_GENERATION_SEED = 0x2FFE3A50
 HOST_TEST_POSITION = (1550.0, 550.0)
 CLIENT_TEST_POSITION = (50.0, 350.0)
@@ -180,6 +181,65 @@ def _integer(values: Mapping[str, str], key: str) -> int:
             return int(float(raw))
         except (TypeError, ValueError, OverflowError):
             return -1
+
+
+def _seed_bot_play_settings(
+    runtime_root: Path,
+    instance_prefix: str,
+) -> dict[str, str]:
+    seeded: dict[str, str] = {}
+    payload = {
+        "schemaVersion": 1,
+        "values": {
+            "play_for_me": False,
+            "play_for_me_behavior": "skirmisher",
+            "roster": [],
+        },
+    }
+    for role in ("host", "client"):
+        path = (
+            runtime_root
+            / "instances"
+            / f"{instance_prefix}-{role}"
+            / "stage"
+            / ".sdmod"
+            / "mod-settings"
+            / f"{BOT_PLAY_MOD_ID}.json"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        seeded[role] = str(path)
+    return seeded
+
+
+def _assert_bot_play_mod_active(pipe_name: str) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            pipe_name,
+            f"""-- sdmod-exec-target: {BOT_PLAY_MOD_ID}
+local debug = rawget(_G, "bot_brain_debug")
+print("loaded=" .. tostring(debug ~= nil))
+print("play_for_me=" ..
+  tostring(debug and debug.play_for_me or false))
+print("local_active=" ..
+  tostring(debug and debug.local_player and
+    debug.local_player.active or false))
+""",
+            timeout=8.0,
+        )
+    )
+    if (
+        values.get("loaded") != "true"
+        or values.get("play_for_me") != "false"
+        or values.get("local_active") != "false"
+    ):
+        raise VerifyFailure(
+            f"Bot Play For Me mod was not active and inert: {values}"
+        )
+    return values
 
 
 def _distance(
@@ -1058,9 +1118,12 @@ print("reason=" .. tostring(loading.release_reason or ""))
 def run_live_verification(
     *,
     instance_prefix: str,
+    host_port: int,
+    client_port: int,
     game_directory: Path | None,
     launcher_path: Path | None,
     runtime_root: Path | None,
+    with_bot_play_mod: bool,
 ) -> dict[str, Any]:
     fixture_manifest = _fixture_manifest()
     runtime_parent = ROOT / "runtime"
@@ -1069,9 +1132,20 @@ def run_live_verification(
         "ok": False,
         "source_sha": _source_sha(),
         "instance_prefix": instance_prefix,
-        "ports": [HOST_PORT, CLIENT_PORT],
+        "ports": [host_port, client_port],
         "save_fixture_sha256": fixture_manifest,
+        "with_bot_play_mod": with_bot_play_mod,
     }
+    effective_runtime_root = runtime_root or ROOT / "runtime"
+    if with_bot_play_mod:
+        if not instance_prefix.startswith("bply"):
+            raise VerifyFailure(
+                "Bot Play For Me canonical instances require bply prefix"
+            )
+        result["bot_play_settings"] = _seed_bot_play_settings(
+            effective_runtime_root,
+            instance_prefix,
+        )
     with tempfile.TemporaryDirectory(
         prefix=f"{instance_prefix}-save-",
         dir=runtime_parent,
@@ -1100,13 +1174,20 @@ def run_live_verification(
             allow_focus_steal=False,
             kill_existing=False,
             instance_prefix=instance_prefix,
-            host_port=HOST_PORT,
-            client_port=CLIENT_PORT,
-            third_port=CLIENT_PORT,
+            host_port=host_port,
+            client_port=client_port,
+            third_port=client_port,
             game_directory=game_directory,
             launcher_path=launcher_path,
             runtime_root=runtime_root,
-            exact_mod_id=death.ACCEPTANCE_MOD_ID,
+            exact_mod_id=death.ACCEPTANCE_MOD_ID
+            if not with_bot_play_mod
+            else None,
+            exact_mod_ids=(
+                (death.ACCEPTANCE_MOD_ID, BOT_PLAY_MOD_ID)
+                if with_bot_play_mod
+                else None
+            ),
             quick_start=True,
             no_lua_automation=True,
             host_savegames_root=host_savegames,
@@ -1139,6 +1220,11 @@ def run_live_verification(
                 raise VerifyFailure(
                     f"targeted pair did not enable quick-start: {launch}"
                 )
+            if with_bot_play_mod:
+                result["bot_play_mod_active"] = {
+                    "host": _assert_bot_play_mod_active(host_pipe),
+                    "client": _assert_bot_play_mod_active(client_pipe),
+                }
 
             result["bots_disabled"] = death._disable_bots(pipe_names)
             result["survival_hold_enabled"] = {
@@ -1411,6 +1497,16 @@ def main() -> int:
         default=None,
         help="Isolated launcher runtime root override.",
     )
+    parser.add_argument("--host-port", type=int, default=HOST_PORT)
+    parser.add_argument("--client-port", type=int, default=CLIENT_PORT)
+    parser.add_argument(
+        "--with-bot-play-mod",
+        action="store_true",
+        help=(
+            "Enable bot.brain on both peers with local takeover disabled "
+            "while the canonical stock semantics run."
+        ),
+    )
     args = parser.parse_args()
 
     instance_prefix = (
@@ -1419,15 +1515,18 @@ def main() -> int:
     result: dict[str, Any] = {
         "ok": False,
         "instance_prefix": instance_prefix,
-        "ports": [HOST_PORT, CLIENT_PORT],
+        "ports": [args.host_port, args.client_port],
     }
     exit_code = 0
     try:
         result = run_live_verification(
             instance_prefix=instance_prefix,
+            host_port=args.host_port,
+            client_port=args.client_port,
             game_directory=args.game_dir,
             launcher_path=args.launcher_path,
             runtime_root=args.runtime_root,
+            with_bot_play_mod=args.with_bot_play_mod,
         )
     except Exception as exc:  # noqa: BLE001 - persist exact live failure.
         result["error"] = str(exc)

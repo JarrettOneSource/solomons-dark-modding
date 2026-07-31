@@ -464,9 +464,12 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
             ):
                 verifier.run_live_verification(
                     instance_prefix="fb25-test",
+                    host_port=50911,
+                    client_port=50912,
                     game_directory=None,
                     launcher_path=None,
                     runtime_root=None,
+                    with_bot_play_mod=False,
                 )
 
         kwargs = launch_pair.call_args.kwargs

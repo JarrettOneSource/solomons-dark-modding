@@ -37,9 +37,7 @@ public:
                 kGameplayLocalMovementInputYOffset,
                 &saved_y_)) {
             if (consumed_pending_frame_) {
-                pending_frames.fetch_add(
-                    1,
-                    std::memory_order_acq_rel);
+                pending_frames.fetch_add(1, std::memory_order_acq_rel);
             }
             return;
         }
@@ -80,9 +78,7 @@ public:
                 saved_y_);
         }
         if (consumed_pending_frame_) {
-            pending_frames.fetch_add(
-                1,
-                std::memory_order_acq_rel);
+            pending_frames.fetch_add(1, std::memory_order_acq_rel);
         }
     }
 

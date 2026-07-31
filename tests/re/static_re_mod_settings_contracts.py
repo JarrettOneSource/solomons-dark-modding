@@ -270,6 +270,9 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         for entry in bot_manifest["settings"]["entries"]
     }
     assert set(entries) == {
+        "play_for_me",
+        "play_for_me_behavior",
+        "play_for_me_toggle",
         "kite_radius",
         "offense_enabled",
         "policy_weld_preference",
@@ -278,6 +281,10 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "focus_bot_key",
         "respawn_bot",
     }
+    assert entries["play_for_me"]["scope"] == "local"
+    assert entries["play_for_me"]["default"] is False
+    assert entries["play_for_me_behavior"]["scope"] == "local"
+    assert entries["play_for_me_toggle"]["type"] == "keybind"
     assert entries["kite_radius"]["default"] == 340
     assert entries["roster"]["type"] == "list"
     assert entries["roster"]["max_items"] == 32

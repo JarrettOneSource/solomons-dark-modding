@@ -8,6 +8,7 @@ from dataclasses import asdict
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -49,6 +50,7 @@ from tools._real_flow_e2e.runtime import (  # noqa: E402
     enemy_motion_assertion,
     execute_actions,
     observe_water_cast_with_real_input,
+    parse_key_values,
     wait_for_state,
     wait_shared_hub,
 )
@@ -63,6 +65,7 @@ from tools._real_flow_e2e.windows import (  # noqa: E402
     host_through_launcher,
     port_inventory,
     prepare_windows_peer,
+    send_key,
     windows_processes,
 )
 from tools._real_flow_e2e.remote import RemoteHarnessError  # noqa: E402
@@ -79,6 +82,102 @@ from tools._real_flow_e2e.ws20 import (  # noqa: E402
 
 class RealFlowFailure(RuntimeError):
     """The real-flow contract did not complete or an assertion failed."""
+
+
+BOT_MOD_ID = "bot.brain"
+OBSERVER_MOD_ID = "tool.real_flow_e2e_observer"
+BOT_EXEC_DIRECTIVE = f"-- sdmod-exec-target: {BOT_MOD_ID}\n"
+OBSERVER_EXEC_DIRECTIVE = (
+    f"-- sdmod-exec-target: {OBSERVER_MOD_ID}\n"
+)
+BOT_PROBE_LUA = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local root = rawget(_G, "bot_brain_debug") or {}
+local local_player = root.local_player or {}
+local brain = local_player.brain or {}
+local takeover = sd.input.get_local_player_takeover_state()
+emit("loaded", rawget(_G, "bot_brain_debug") ~= nil)
+emit("desired", local_player.desired or false)
+emit("active", local_player.active or false)
+emit("behavior", local_player.behavior or "")
+emit("participant_id", local_player.participant_id or 0)
+emit("activation_count", local_player.activation_count or 0)
+emit("release_count", local_player.release_count or 0)
+emit("release_clean", local_player.release_clean or false)
+emit("last_release_reason", local_player.last_release_reason or "")
+emit("last_error", local_player.last_error or "")
+emit("focus_active", root.focus_active or false)
+emit("brain.mode", brain.mode or "")
+emit("brain.wave", brain.wave or 0)
+emit("brain.think_count", brain.think_count or 0)
+emit("brain.move_accepted", brain.move_accepted or 0)
+emit("brain.cast_accepted", brain.cast_accepted or 0)
+emit("brain.target_network_actor_id",
+  brain.target_network_actor_id or 0)
+for _, key in ipairs({
+  "active",
+  "clean",
+  "owner_mod_id",
+  "actor_address",
+  "target_actor_address",
+  "target_valid",
+  "movement_input_x",
+  "movement_input_y",
+  "pending_movement_x",
+  "pending_movement_y",
+  "pending_movement_frames",
+  "pending_mouse_left_frames",
+  "pending_mouse_right_frames",
+  "pending_scancode_count",
+  "pending_native_control_frames",
+  "cast_intent",
+  "primary_skill_id",
+  "previous_skill_id",
+  "current_target_actor_address",
+  "control_brain_move_x",
+  "control_brain_move_y",
+}) do
+  emit("takeover." .. key, takeover[key])
+end
+"""
+RESET_DAMAGE_LUA = r"""
+print("enemy=" ..
+  tostring(sd.debug.reset_enemy_damage_observations()))
+print("player=" ..
+  tostring(sd.debug.reset_player_damage_observations()))
+"""
+DRAIN_DAMAGE_LUA = r"""
+local output = {}
+for _, row in ipairs(
+    sd.debug.take_enemy_damage_observations() or {}) do
+  output[#output + 1] = table.concat({
+    "enemy",
+    tostring(row.sequence or 0),
+    tostring(row.monotonic_ms or 0),
+    tostring(row.source_participant_id or 0),
+    tostring(row.target_network_actor_id or 0),
+    tostring(row.target_hp_before or 0),
+    tostring(row.target_hp_after or 0),
+    tostring(row.hp_delta or 0),
+  }, "|")
+end
+for _, row in ipairs(
+    sd.debug.take_player_damage_observations() or {}) do
+  output[#output + 1] = table.concat({
+    "player",
+    tostring(row.sequence or 0),
+    tostring(row.monotonic_ms or 0),
+    tostring(row.target_participant_id or 0),
+    tostring(row.target_hp_before or 0),
+    tostring(row.target_hp_after or 0),
+    tostring(row.hp_delta or 0),
+  }, "|")
+end
+if #output == 0 then return "none" end
+return table.concat(output, "\n")
+"""
 
 
 def validate_stock_water_cast(
@@ -465,6 +564,48 @@ def _owned_process_rows(
     return [asdict(record) for record in exact_owned_processes(ps, peers)]
 
 
+def _udp_exclusion_inventory(
+    ps: PowerShell,
+    ports: set[int],
+) -> dict[str, Any]:
+    raw = ps.run(
+        "netsh interface ipv4 show excludedportrange protocol=udp",
+        timeout=20,
+    )
+    ranges: list[dict[str, int]] = []
+    for line in raw.splitlines():
+        match = re.fullmatch(
+            r"\s*([0-9]+)\s+([0-9]+)(?:\s+\*)?\s*",
+            line,
+        )
+        if match is None:
+            continue
+        ranges.append(
+            {
+                "start": int(match.group(1)),
+                "end": int(match.group(2)),
+            }
+        )
+    excluded = {
+        port
+        for port in ports
+        if any(row["start"] <= port <= row["end"] for row in ranges)
+    }
+    if excluded:
+        raise RealFlowFailure(
+            f"requested UDP ports are Windows-excluded: {sorted(excluded)}"
+        )
+    return {
+        "command": (
+            "netsh interface ipv4 show excludedportrange protocol=udp"
+        ),
+        "raw": raw,
+        "ranges": ranges,
+        "requestedPorts": sorted(ports),
+        "requestedPortsExcluded": [],
+    }
+
+
 def _assert_client_enemy_materialization(
     state: dict[str, Any],
 ) -> dict[str, Any]:
@@ -545,6 +686,812 @@ def _copy_and_account(
     return result
 
 
+def _bot_settings_path(peer: WindowsPeer) -> Path:
+    return (
+        peer.runtime_root
+        / "instances"
+        / peer.config.instance
+        / "stage"
+        / ".sdmod"
+        / "mod-settings"
+        / f"{BOT_MOD_ID}.json"
+    )
+
+
+def _write_bot_settings(
+    peer: WindowsPeer,
+    *,
+    enabled: bool,
+) -> Path:
+    path = _bot_settings_path(peer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.bply-tmp")
+    if temporary.exists():
+        raise RealFlowFailure(
+            f"bot-play settings temporary path already exists: {temporary}"
+        )
+    temporary.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "values": {
+                    "play_for_me": enabled,
+                    "play_for_me_behavior": "skirmisher",
+                    "roster": [],
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
+
+
+def _targeted_execute(
+    pipe: LuaPipe,
+    mod_id: str,
+    code: str,
+) -> str:
+    return pipe.execute(f"-- sdmod-exec-target: {mod_id}\n{code}")
+
+
+def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
+    raw = parse_key_values(
+        _targeted_execute(pipe, BOT_MOD_ID, BOT_PROBE_LUA)
+    )
+    boolean_keys = {
+        "loaded",
+        "desired",
+        "active",
+        "release_clean",
+        "focus_active",
+        "takeover.active",
+        "takeover.clean",
+        "takeover.target_valid",
+    }
+    integer_keys = {
+        "participant_id",
+        "activation_count",
+        "release_count",
+        "brain.wave",
+        "brain.think_count",
+        "brain.move_accepted",
+        "brain.cast_accepted",
+        "brain.target_network_actor_id",
+        "takeover.actor_address",
+        "takeover.target_actor_address",
+        "takeover.pending_movement_frames",
+        "takeover.pending_mouse_left_frames",
+        "takeover.pending_mouse_right_frames",
+        "takeover.pending_scancode_count",
+        "takeover.pending_native_control_frames",
+        "takeover.cast_intent",
+        "takeover.primary_skill_id",
+        "takeover.previous_skill_id",
+        "takeover.current_target_actor_address",
+    }
+    float_keys = {
+        "takeover.movement_input_x",
+        "takeover.movement_input_y",
+        "takeover.pending_movement_x",
+        "takeover.pending_movement_y",
+        "takeover.control_brain_move_x",
+        "takeover.control_brain_move_y",
+    }
+    normalized: dict[str, Any] = dict(raw)
+    for key in boolean_keys:
+        normalized[key] = raw.get(key, "").casefold() == "true"
+    for key in integer_keys:
+        try:
+            normalized[key] = int(float(raw.get(key, "0")))
+        except ValueError:
+            normalized[key] = 0
+    for key in float_keys:
+        try:
+            normalized[key] = float(raw.get(key, "0"))
+        except ValueError:
+            normalized[key] = math.nan
+    return normalized
+
+
+def _reload_bot_settings(pipe: LuaPipe) -> dict[str, str]:
+    output = _targeted_execute(
+        pipe,
+        BOT_MOD_ID,
+        f"""
+local result = sd.__settings_reload("{BOT_MOD_ID}")
+print("ok=" .. tostring(result.ok))
+print("changed=" .. table.concat(result.changed or {{}}, ","))
+print("error=" .. tostring(result.error or ""))
+""",
+    )
+    result = parse_key_values(output)
+    if result.get("ok") != "true":
+        raise RealFlowFailure(
+            f"Bot Play For Me settings reload failed: {result}"
+        )
+    return result
+
+
+def _set_bot_play(
+    peer: WindowsPeer,
+    pipe: LuaPipe,
+    *,
+    enabled: bool,
+) -> dict[str, Any]:
+    path = _write_bot_settings(peer, enabled=enabled)
+    return {
+        "enabled": enabled,
+        "settingsPath": str(path),
+        "reload": _reload_bot_settings(pipe),
+    }
+
+
+def _wait_for_bot_state(
+    pipe: LuaPipe,
+    predicate: Any,
+    *,
+    timeout: float,
+    label: str,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            last = _bot_probe(pipe)
+            last_error = ""
+            if predicate(last):
+                return last
+        except (RuntimeProbeError, ValueError) as exc:
+            last_error = str(exc)
+        time.sleep(0.1)
+    raise RealFlowFailure(
+        f"{label} timed out; last={last} error={last_error!r}"
+    )
+
+
+def _assert_clean_release(state: dict[str, Any]) -> dict[str, Any]:
+    exact_zero = (
+        "takeover.actor_address",
+        "takeover.target_actor_address",
+        "takeover.pending_movement_frames",
+        "takeover.pending_mouse_left_frames",
+        "takeover.pending_mouse_right_frames",
+        "takeover.pending_scancode_count",
+        "takeover.pending_native_control_frames",
+        "takeover.cast_intent",
+        "takeover.primary_skill_id",
+        "takeover.previous_skill_id",
+        "takeover.current_target_actor_address",
+    )
+    float_zero = (
+        "takeover.movement_input_x",
+        "takeover.movement_input_y",
+        "takeover.pending_movement_x",
+        "takeover.pending_movement_y",
+        "takeover.control_brain_move_x",
+        "takeover.control_brain_move_y",
+    )
+    failures = {
+        key: state.get(key)
+        for key in exact_zero
+        if int(state.get(key, -1)) != 0
+    }
+    failures.update(
+        {
+            key: state.get(key)
+            for key in float_zero
+            if not math.isclose(
+                float(state.get(key, math.nan)),
+                0.0,
+                rel_tol=0.0,
+                abs_tol=0.000001,
+            )
+        }
+    )
+    if (
+        state.get("active") is True
+        or state.get("desired") is True
+        or state.get("takeover.active") is True
+        or state.get("takeover.clean") is not True
+        or state.get("takeover.target_valid") is True
+        or state.get("focus_active") is True
+        or failures
+    ):
+        raise RealFlowFailure(
+            "Bot Play For Me release retained control state: "
+            f"failures={failures} state={state}"
+        )
+    return {
+        "clean": True,
+        "explicitZeroFields": list(exact_zero + float_zero),
+        "state": state,
+    }
+
+
+def _reset_damage_observations(
+    pipe: LuaPipe,
+    *,
+    target_mod_id: str = OBSERVER_MOD_ID,
+) -> dict[str, str]:
+    result = parse_key_values(
+        _targeted_execute(
+            pipe,
+            target_mod_id,
+            RESET_DAMAGE_LUA,
+        )
+    )
+    if result != {"enemy": "true", "player": "true"}:
+        raise RealFlowFailure(
+            f"could not reset damage observations: {result}"
+        )
+    return result
+
+
+def _drain_damage_observations(
+    pipe: LuaPipe,
+    enemy_rows: list[dict[str, Any]],
+    player_rows: list[dict[str, Any]],
+    *,
+    target_mod_id: str = OBSERVER_MOD_ID,
+) -> None:
+    output = _targeted_execute(
+        pipe,
+        target_mod_id,
+        DRAIN_DAMAGE_LUA,
+    ).strip()
+    if output in {"", "none"}:
+        return
+    for line in output.splitlines():
+        parts = line.strip().split("|")
+        try:
+            if len(parts) == 8 and parts[0] == "enemy":
+                enemy_rows.append(
+                    {
+                        "sequence": int(parts[1]),
+                        "monotonicMs": int(parts[2]),
+                        "sourceParticipantId": int(parts[3]),
+                        "targetNetworkActorId": int(parts[4]),
+                        "targetHpBefore": float(parts[5]),
+                        "targetHpAfter": float(parts[6]),
+                        "damage": float(parts[7]),
+                    }
+                )
+            elif len(parts) == 7 and parts[0] == "player":
+                player_rows.append(
+                    {
+                        "sequence": int(parts[1]),
+                        "monotonicMs": int(parts[2]),
+                        "targetParticipantId": int(parts[3]),
+                        "targetHpBefore": float(parts[4]),
+                        "targetHpAfter": float(parts[5]),
+                        "damage": float(parts[6]),
+                    }
+                )
+            else:
+                raise ValueError("unexpected row shape")
+        except ValueError as exc:
+            raise RealFlowFailure(
+                f"malformed applied-damage observation: {line!r}"
+            ) from exc
+
+
+def _damage_metrics(
+    config: HarnessConfig,
+    enemy_rows: list[dict[str, Any]],
+    player_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    fighters: dict[str, Any] = {}
+    for role, peer in (("host", config.host), ("clientB", config.client)):
+        dealt = [
+            row
+            for row in enemy_rows
+            if row["sourceParticipantId"] == peer.participant_id
+            and row["damage"] > 0.0
+        ]
+        taken = [
+            row
+            for row in player_rows
+            if row["targetParticipantId"] == peer.participant_id
+            and row["damage"] > 0.0
+        ]
+        fighters[role] = {
+            "participantId": peer.participant_id,
+            "damageDealt": sum(row["damage"] for row in dealt),
+            "damageDealtEdges": len(dealt),
+            "damageTaken": sum(row["damage"] for row in taken),
+            "damageTakenEdges": len(taken),
+        }
+    missing = [
+        role
+        for role, row in fighters.items()
+        if row["damageDealt"] <= 0.0
+        or row["damageDealtEdges"] <= 0
+    ]
+    if missing:
+        raise RealFlowFailure(
+            "bot-driven fighters lacked authoritative enemy damage: "
+            f"{missing} metrics={fighters}"
+        )
+    return {
+        "fighters": fighters,
+        "enemyDamageEdges": len(enemy_rows),
+        "playerDamageEdges": len(player_rows),
+        "totalEnemyDamage": sum(row["damage"] for row in enemy_rows),
+        "enemyRows": enemy_rows,
+        "playerRows": player_rows,
+    }
+
+
+def _indicator_region_assertion(capture_path: Path) -> dict[str, Any]:
+    from PIL import Image
+
+    with Image.open(capture_path) as image:
+        rgb = image.convert("RGB")
+        left = max(0, rgb.width - 220)
+        top = 0
+        right = rgb.width
+        bottom = min(rgb.height, 75)
+        crop = rgb.crop((left, top, right, bottom))
+        green_pixels = sum(
+            1
+            for red, green, blue in crop.getdata()
+            if green >= 145
+            and green - red >= 35
+            and green - blue >= 20
+        )
+        if green_pixels < 40:
+            raise RealFlowFailure(
+                "bot indicator was not visible in its top-right capture "
+                f"region: path={capture_path} greenPixels={green_pixels}"
+            )
+        return {
+            "capturePath": str(capture_path),
+            "imageSize": [rgb.width, rgb.height],
+            "region": [left, top, right, bottom],
+            "greenPixels": green_pixels,
+        }
+
+
+def _bot_is_driving(
+    state: dict[str, Any],
+    participant_id: int,
+) -> bool:
+    return (
+        state.get("loaded") is True
+        and state.get("desired") is True
+        and state.get("active") is True
+        and state.get("takeover.active") is True
+        and state.get("takeover.clean") is False
+        and state.get("takeover.owner_mod_id") == BOT_MOD_ID
+        and int(state.get("participant_id", 0)) == participant_id
+        and int(state.get("takeover.actor_address", 0)) > 0
+        and state.get("focus_active") is False
+    )
+
+
+def _visible_living_enemy(state: dict[str, Any]) -> bool:
+    return any(
+        enemy["screen_valid"]
+        and not enemy["dead"]
+        and float(enemy["hp"]) > 0.0
+        for enemy in state["nativeEnemies"]
+    )
+
+
+def _fighter_damage_present(
+    rows: list[dict[str, Any]],
+    participant_id: int,
+) -> bool:
+    return any(
+        row["sourceParticipantId"] == participant_id
+        and row["damage"] > 0.0
+        for row in rows
+    )
+
+
+def _run_bot_play_for_me(
+    config: HarnessConfig,
+    host: WindowsPeer,
+    client: WindowsPeer,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    sampler: PairSampler,
+) -> dict[str, Any]:
+    if config.verify_through_wave < 4:
+        raise RealFlowFailure(
+            "Bot Play For Me acceptance must verify through wave 4 so three "
+            "full stock waves have completed"
+        )
+    enemy_rows: list[dict[str, Any]] = []
+    player_rows: list[dict[str, Any]] = []
+    result: dict[str, Any] = {
+        "targetCompletedWaves": config.verify_through_wave - 1,
+        "settingsStartedDisabledForPhysicalMatchEntry": True,
+    }
+    result["damageObserversReset"] = _reset_damage_observations(
+        host_pipe
+    )
+    result["activationRequests"] = {
+        "host": _set_bot_play(host, host_pipe, enabled=True),
+        "clientB": _set_bot_play(
+            client,
+            client_pipe,
+            enabled=True,
+        ),
+    }
+    result["activeTakeovers"] = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            lambda state: _bot_is_driving(
+                state,
+                config.host.participant_id,
+            ),
+            timeout=15.0,
+            label="host local-player bot takeover",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            lambda state: _bot_is_driving(
+                state,
+                config.client.participant_id,
+            ),
+            timeout=15.0,
+            label="client local-player bot takeover",
+        ),
+    }
+
+    sampler.set_phase("both-local-players-bot-driven")
+    deadline = time.monotonic() + config.timeout_seconds
+    screenshot: dict[str, Any] | None = None
+    screenshot_assertions: dict[str, Any] | None = None
+    screenshot_errors: list[str] = []
+    next_capture_at = time.monotonic()
+    final_sample: dict[str, Any] | None = None
+    last_summary: dict[str, Any] = {}
+    wave_samples: list[dict[str, Any]] = []
+    last_wave_signature: tuple[int, int] | None = None
+    while time.monotonic() < deadline:
+        sample = sampler.sample_now("bot-play-combat")
+        _drain_damage_observations(
+            host_pipe,
+            enemy_rows,
+            player_rows,
+        )
+        host_bot = _bot_probe(host_pipe)
+        client_bot = _bot_probe(client_pipe)
+        host_wave = effective_wave_index(sample["host"])
+        client_wave = effective_wave_index(sample["clientB"])
+        wave_signature = (host_wave, client_wave)
+        if wave_signature != last_wave_signature:
+            wave_samples.append(
+                {
+                    "hostWave": host_wave,
+                    "clientBWave": client_wave,
+                    "hostHp": sample["host"]["player"]["hp"],
+                    "clientBHp": sample["clientB"]["player"]["hp"],
+                    "utcNanoseconds": sample["utcNanoseconds"],
+                }
+            )
+            last_wave_signature = wave_signature
+        last_summary = {
+            "hostWave": host_wave,
+            "clientBWave": client_wave,
+            "hostHp": sample["host"]["player"]["hp"],
+            "clientBHp": sample["clientB"]["player"]["hp"],
+            "hostBot": host_bot,
+            "clientBBot": client_bot,
+            "enemyDamageEdges": len(enemy_rows),
+        }
+        if (
+            screenshot is None
+            and time.monotonic() >= next_capture_at
+            and int(host_bot.get("brain.cast_accepted", 0)) > 0
+            and int(client_bot.get("brain.cast_accepted", 0)) > 0
+            and _fighter_damage_present(
+                enemy_rows,
+                config.host.participant_id,
+            )
+            and _fighter_damage_present(
+                enemy_rows,
+                config.client.participant_id,
+            )
+            and _visible_living_enemy(sample["host"])
+            and _visible_living_enemy(sample["clientB"])
+        ):
+            try:
+                candidate = paired_windows_capture(
+                    config.source_root,
+                    host,
+                    client,
+                    config.evidence_root / "screenshots",
+                    label=f"bot-fighting-wave-{min(host_wave, client_wave)}",
+                )
+                host_capture = Path(
+                    candidate["captures"]["host"]["path"]
+                )
+                client_capture = Path(
+                    candidate["captures"]["clientB"]["path"]
+                )
+                assertions = {
+                    "hostIndicator": _indicator_region_assertion(
+                        host_capture
+                    ),
+                    "clientBIndicator": _indicator_region_assertion(
+                        client_capture
+                    ),
+                    "clientBEnemyRendered": rendered_enemy_assertion(
+                        sample["clientB"],
+                        client_capture,
+                    ),
+                    "hostVisibleLivingEnemy": True,
+                    "clientBVisibleLivingEnemy": True,
+                    "hostBot": host_bot,
+                    "clientBBot": client_bot,
+                }
+                screenshot = candidate
+                screenshot_assertions = assertions
+            except (EvidenceError, RealFlowFailure) as exc:
+                screenshot_errors.append(str(exc))
+                next_capture_at = time.monotonic() + 2.0
+        if (
+            host_wave >= config.verify_through_wave
+            and client_wave >= config.verify_through_wave
+            and float(sample["host"]["player"]["hp"]) > 0.0
+            and float(sample["clientB"]["player"]["hp"]) > 0.0
+            and _bot_is_driving(
+                host_bot,
+                config.host.participant_id,
+            )
+            and _bot_is_driving(
+                client_bot,
+                config.client.participant_id,
+            )
+        ):
+            final_sample = sample
+            break
+        if (
+            sample["host"]["scene"]["name"] != "testrun"
+            or sample["clientB"]["scene"]["name"] != "testrun"
+        ):
+            raise RealFlowFailure(
+                "bot-driven pair left the stock run before three waves "
+                f"completed: {last_summary}"
+            )
+        time.sleep(max(0.1, config.sampling_seconds))
+    if final_sample is None:
+        raise RealFlowFailure(
+            "bot-driven peers did not complete three stock waves alive and "
+            f"converged: {last_summary}"
+        )
+    _drain_damage_observations(
+        host_pipe,
+        enemy_rows,
+        player_rows,
+    )
+    if screenshot is None or screenshot_assertions is None:
+        raise RealFlowFailure(
+            "both bot-driven peers never produced an indicator-and-fighting "
+            f"capture: {screenshot_errors[-5:]}"
+        )
+    final_bots = {
+        "host": _bot_probe(host_pipe),
+        "clientB": _bot_probe(client_pipe),
+    }
+    for role, bot in final_bots.items():
+        if int(bot.get("brain.cast_accepted", 0)) <= 0:
+            raise RealFlowFailure(
+                f"{role} bot brain never accepted a cast: {bot}"
+            )
+        if int(bot.get("brain.move_accepted", 0)) <= 0:
+            raise RealFlowFailure(
+                f"{role} bot brain never accepted movement: {bot}"
+            )
+    result["waveSamples"] = wave_samples
+    result["finalBots"] = final_bots
+    result["waveConvergence"] = validate_wave_convergence(
+        final_sample["host"],
+        final_sample["clientB"],
+        target_wave=config.verify_through_wave,
+    )
+    result["damageMetrics"] = _damage_metrics(
+        config,
+        enemy_rows,
+        player_rows,
+    )
+    result["pairedFightingCapture"] = screenshot
+    result["captureAssertions"] = screenshot_assertions
+    result["captureAttemptErrors"] = screenshot_errors
+
+    sampler.set_phase("client-human-control-restored")
+    result["clientToggleOffRequest"] = _set_bot_play(
+        client,
+        client_pipe,
+        enabled=False,
+    )
+    client_released = _wait_for_bot_state(
+        client_pipe,
+        lambda state: (
+            state.get("desired") is False
+            and state.get("active") is False
+            and state.get("takeover.active") is False
+            and state.get("takeover.clean") is True
+        ),
+        timeout=5.0,
+        label="client clean takeover release",
+    )
+    result["clientCleanRelease"] = _assert_clean_release(
+        client_released
+    )
+
+    before_input = client_pipe.state()
+    movement_attempts: list[dict[str, Any]] = []
+    moved = False
+    for key in ("d", "w", "a", "s"):
+        before = client_pipe.state()
+        helper = send_key(
+            config.source_root,
+            client,
+            key,
+            600,
+        )
+        try:
+            after = wait_for_state(
+                client_pipe,
+                lambda state: math.dist(
+                    (
+                        float(before["player"]["x"]),
+                        float(before["player"]["y"]),
+                    ),
+                    (
+                        float(state["player"]["x"]),
+                        float(state["player"]["y"]),
+                    ),
+                )
+                >= 4.0,
+                timeout=3.0,
+                label=f"client physical {key} movement after release",
+            )
+        except RuntimeProbeError as exc:
+            movement_attempts.append(
+                {
+                    "key": key,
+                    "helper": helper,
+                    "before": before["player"],
+                    "error": str(exc),
+                    "displacement": 0.0,
+                }
+            )
+            continue
+        displacement = math.dist(
+            (
+                float(before["player"]["x"]),
+                float(before["player"]["y"]),
+            ),
+            (
+                float(after["player"]["x"]),
+                float(after["player"]["y"]),
+            ),
+        )
+        movement_attempts.append(
+            {
+                "key": key,
+                "helper": helper,
+                "before": before["player"],
+                "after": after["player"],
+                "displacement": displacement,
+            }
+        )
+        if displacement >= 4.0:
+            moved = True
+            break
+    if not moved:
+        raise RealFlowFailure(
+            "physical human input did not move the released client: "
+            f"{movement_attempts}"
+        )
+    result["humanControlProof"] = {
+        "method": "physical-window-key-after-clean-release",
+        "before": before_input["player"],
+        "attempts": movement_attempts,
+    }
+    result["clientStillCleanAfterHumanInput"] = _assert_clean_release(
+        _bot_probe(client_pipe)
+    )
+
+    sampler.set_phase("mixed-host-bot-client-idle-human")
+    mixed_started = sampler.sample_now("mixed-mode-start")
+    mixed_samples: list[dict[str, Any]] = []
+    mixed_deadline = time.monotonic() + 5.0
+    while time.monotonic() < mixed_deadline:
+        sample = sampler.sample_now("mixed-mode-idle-human")
+        host_bot = _bot_probe(host_pipe)
+        client_clean = _bot_probe(client_pipe)
+        if not _bot_is_driving(
+            host_bot,
+            config.host.participant_id,
+        ):
+            raise RealFlowFailure(
+                f"host bot stopped during mixed mode: {host_bot}"
+            )
+        _assert_clean_release(client_clean)
+        if (
+            sample["host"]["scene"]["name"] != "testrun"
+            or sample["clientB"]["scene"]["name"] != "testrun"
+            or float(sample["host"]["player"]["hp"]) <= 0.0
+            or float(sample["clientB"]["player"]["hp"]) <= 0.0
+        ):
+            raise RealFlowFailure(
+                "mixed bot/idle-human pair became unhealthy: "
+                f"{sample}"
+            )
+        mixed_samples.append(
+            {
+                "utcNanoseconds": sample["utcNanoseconds"],
+                "hostWave": effective_wave_index(sample["host"]),
+                "clientBWave": effective_wave_index(sample["clientB"]),
+                "hostHp": sample["host"]["player"]["hp"],
+                "clientBHp": sample["clientB"]["player"]["hp"],
+                "hostPacketsSent": (
+                    sample["host"]["multiplayer"]["packetsSent"]
+                ),
+                "clientBPacketsReceived": (
+                    sample["clientB"]["multiplayer"]["packetsReceived"]
+                ),
+            }
+        )
+        time.sleep(0.25)
+    mixed_final = sampler.sample_now("mixed-mode-complete")
+    host_packet_delta = (
+        mixed_final["host"]["multiplayer"]["packetsSent"]
+        - mixed_started["host"]["multiplayer"]["packetsSent"]
+    )
+    client_packet_delta = (
+        mixed_final["clientB"]["multiplayer"]["packetsReceived"]
+        - mixed_started["clientB"]["multiplayer"]["packetsReceived"]
+    )
+    if host_packet_delta <= 0 or client_packet_delta <= 0:
+        raise RealFlowFailure(
+            "mixed mode starved the idle human peer of session traffic: "
+            f"hostDelta={host_packet_delta} clientDelta={client_packet_delta}"
+        )
+    result["mixedMode"] = {
+        "durationSeconds": 5.0,
+        "hostBotDriven": True,
+        "clientBIdleHuman": True,
+        "clientBCleanThroughout": True,
+        "hostPacketsSentDelta": host_packet_delta,
+        "clientBPacketsReceivedDelta": client_packet_delta,
+        "samples": mixed_samples,
+    }
+
+    result["hostToggleOffRequest"] = _set_bot_play(
+        host,
+        host_pipe,
+        enabled=False,
+    )
+    host_released = _wait_for_bot_state(
+        host_pipe,
+        lambda state: (
+            state.get("desired") is False
+            and state.get("active") is False
+            and state.get("takeover.active") is False
+            and state.get("takeover.clean") is True
+        ),
+        timeout=5.0,
+        label="host clean takeover release",
+    )
+    result["hostCleanRelease"] = _assert_clean_release(host_released)
+    result["completedPhase"] = (
+        f"bot-play-completed-{config.verify_through_wave - 1}-waves"
+    )
+    return result
+
+
 def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     actual_sha = _git_sha(config.source_root)
     if actual_sha != config.expected_source_sha:
@@ -588,6 +1535,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         for peer in (config.host, config.client)
         if peer.remote_port
     )
+    udp_exclusions = _udp_exclusion_inventory(ps, ports)
     assert_ports_free(ps, ports)
     connection: RemoteWindowsConnection | None = None
     remote_before: dict[str, int] | None = None
@@ -607,6 +1555,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     before = {
         "utcNanoseconds": time.time_ns(),
         "processes": _process_rows(ps),
+        "udpExclusions": udp_exclusions,
         "reservedPorts": port_inventory(ps, ports),
     }
     if remote_before is not None:
@@ -843,6 +1792,21 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             )
         assert materialization is not None
         result["clientEnemyMaterialization"] = materialization
+
+        if config.bot_play_for_me:
+            result["botPlayForMe"] = _run_bot_play_for_me(
+                config,
+                host,
+                client,
+                host_pipe,
+                client_pipe,
+                sampler,
+            )
+            result["completedPhase"] = result["botPlayForMe"][
+                "completedPhase"
+            ]
+            result["ok"] = True
+            return result
 
         sampler.set_phase("client-real-water-damage")
         if config.require_water_contact_observation:

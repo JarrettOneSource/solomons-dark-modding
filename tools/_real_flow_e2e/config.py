@@ -15,6 +15,7 @@ PEER_PLATFORMS = frozenset((LOCAL_WINDOWS, LINUX_SSH_PROTON, WINDOWS_SSH))
 TOPOLOGIES = frozenset(
     (
         "loopback_windows",
+        "loopback_windows_botplay",
         "wan_udp_nfo",
         "steam_windows_proton",
         "steam_windows_ws20",
@@ -379,6 +380,7 @@ class HarnessConfig:
     wave_boundary_max_displacement: float = 64.0
     timeout_seconds: float = 120.0
     sampling_seconds: float = 0.25
+    bot_play_for_me: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
@@ -492,6 +494,10 @@ class HarnessConfig:
             ),
             timeout_seconds=float(row.get("timeoutSeconds", 120.0)),
             sampling_seconds=float(row.get("samplingSeconds", 0.25)),
+            bot_play_for_me=_require_bool(
+                row.get("botPlayForMe", False),
+                "botPlayForMe",
+            ),
             metadata=_require_object(row.get("metadata", {}), "metadata"),
         )
         config.validate()
@@ -570,13 +576,16 @@ class HarnessConfig:
             raise ConfigError("host and client pipe names must differ")
         if self.host.launcher_scope == self.client.launcher_scope:
             raise ConfigError("launcher scopes must differ")
-        if self.topology == "loopback_windows":
+        if self.topology in {
+            "loopback_windows",
+            "loopback_windows_botplay",
+        }:
             if (
                 self.host.platform != LOCAL_WINDOWS
                 or self.client.platform != LOCAL_WINDOWS
             ):
                 raise ConfigError(
-                    "loopback_windows requires two windows_local peers"
+                    f"{self.topology} requires two windows_local peers"
                 )
             ports = {
                 self.host.local_port,
@@ -584,9 +593,25 @@ class HarnessConfig:
                 self.client.local_port,
                 self.client.remote_port,
             }
-            if ports != {50911, 50912}:
+            if (
+                self.topology == "loopback_windows"
+                and ports != {50911, 50912}
+            ):
                 raise ConfigError(
                     "loopback_windows is reserved to ports 50911/50912"
+                )
+            if (
+                self.topology == "loopback_windows_botplay"
+                and (
+                    len(ports) != 2
+                    or min(ports) < 51400
+                    or self.host.local_port != self.client.remote_port
+                    or self.client.local_port != self.host.remote_port
+                )
+            ):
+                raise ConfigError(
+                    "loopback_windows_botplay requires a reciprocal distinct "
+                    "port pair at or above 51400"
                 )
             if (
                 self.host.remote_host not in {"127.0.0.1", "localhost"}
@@ -596,6 +621,37 @@ class HarnessConfig:
                 raise ConfigError(
                     "loopback_windows peers must target loopback"
                 )
+        if self.topology == "loopback_windows_botplay":
+            if not self.bot_play_for_me:
+                raise ConfigError(
+                    "loopback_windows_botplay requires botPlayForMe=true"
+                )
+            if not self.run_name.startswith("bply"):
+                raise ConfigError(
+                    "bot-play runName must use the bply prefix"
+                )
+            for peer in (self.host, self.client):
+                if (
+                    not peer.launcher_scope.startswith("bply")
+                    or not peer.instance.startswith("bply")
+                    or not peer.pipe_name.casefold().startswith("bply")
+                ):
+                    raise ConfigError(
+                        "bot-play launcher scopes, instances, and pipe names "
+                        "must use the bply prefix"
+                    )
+            if not (self.source_root / "mods/bot-brain/manifest.json").is_file():
+                raise ConfigError(
+                    "bot-play source is missing mods/bot-brain"
+                )
+            if self.verify_through_wave < 4:
+                raise ConfigError(
+                    "bot-play acceptance requires verifyThroughWave >= 4"
+                )
+        elif self.bot_play_for_me:
+            raise ConfigError(
+                "botPlayForMe is confined to loopback_windows_botplay"
+            )
         if self.topology == "wan_udp_nfo":
             if self.host.platform != LOCAL_WINDOWS:
                 raise ConfigError(
@@ -746,6 +802,7 @@ class HarnessConfig:
             ),
             "timeoutSeconds": self.timeout_seconds,
             "samplingSeconds": self.sampling_seconds,
+            "botPlayForMe": self.bot_play_for_me,
             "host": peer_value(self.host),
             "client": peer_value(self.client),
             "metadata": self.metadata,
