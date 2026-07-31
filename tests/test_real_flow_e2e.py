@@ -2022,6 +2022,20 @@ class RealFlowE2ETests(unittest.TestCase):
             real_input,
         )
 
+    def test_ws20_client_waits_for_the_actionable_join_boundary(
+        self,
+    ) -> None:
+        worker = (
+            ROOT / "scripts/Run-RealFlowWindowsSessionWorker.ps1"
+        ).read_text(encoding="utf-8")
+        start_client = worker.split(
+            "function Start-Client {", 1
+        )[1].split("function Invoke-RealInput {", 1)[0]
+
+        self.assertNotIn('-Name "Ready"', start_client)
+        self.assertGreaterEqual(start_client.count('-Name "Join Game"'), 3)
+        self.assertIn('-Name "Launch Game"', start_client)
+
     def test_ws20_action_uses_one_remote_powershell_round_trip(
         self,
     ) -> None:
