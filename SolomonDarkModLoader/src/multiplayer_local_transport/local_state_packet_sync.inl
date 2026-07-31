@@ -157,6 +157,7 @@ void RefreshLocalParticipantFromGameState() {
     const auto configured_name = ReadLocalDisplayName();
     SDModWorldState world_state;
     const bool have_world_state = TryGetWorldState(&world_state) && world_state.valid;
+    const auto wave_summary = SnapshotWaveSummary();
     SDModInventoryState inventory_state;
     const bool have_inventory_state =
         TryGetPlayerInventoryState(&inventory_state) && inventory_state.valid;
@@ -286,6 +287,11 @@ void RefreshLocalParticipantFromGameState() {
         RefreshOwnedAbilityLoadoutFromProfile(local->character_profile.loadout, &local->owned_progression);
         if (have_world_state) {
             local->runtime.wave = world_state.wave;
+        }
+        if (local->runtime.in_run && wave_summary.valid) {
+            local->runtime.wave = (std::max)(
+                local->runtime.wave,
+                wave_summary.wave);
         }
         local->runtime.position_x = player_state.x;
         local->runtime.position_y = player_state.y;

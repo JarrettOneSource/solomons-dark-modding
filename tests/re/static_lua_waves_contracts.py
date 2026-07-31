@@ -126,6 +126,14 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     ):
         assert token in protocol, f"wave packet contract lacks: {token}"
     assert "PopulateAuthorityWaveSummary(&packet)" not in outgoing
+    _require_in_order(
+        outgoing,
+        "const auto wave_summary = SnapshotWaveSummary();",
+        "if (have_world_state)",
+        "if (local->runtime.in_run && wave_summary.valid)",
+        "wave_summary.wave",
+        "packet->wave = participant.runtime.wave",
+    )
     assert "SendLocalWaveSummary(" in wave_sync
     for token in (
         "IsConfiguredRemoteAuthorityEndpoint(from)",
