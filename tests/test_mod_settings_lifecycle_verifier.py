@@ -219,6 +219,11 @@ class ModSettingsLifecycleVerifierTests(unittest.TestCase):
                 ),
                 mock.patch.object(verifier, "_start_testrun"),
                 mock.patch.object(
+                    verifier,
+                    "_start_stock_waves",
+                    return_value={"prelude": "true", "waves": "true"},
+                ),
+                mock.patch.object(
                     verifier.local_sync,
                     "wait_for_scene",
                 ),

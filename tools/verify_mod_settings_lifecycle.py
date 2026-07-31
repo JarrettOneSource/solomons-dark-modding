@@ -372,6 +372,28 @@ def _start_testrun() -> None:
     )
 
 
+def _start_stock_waves() -> dict[str, str]:
+    values = local_sync.parse_key_values(
+        local_sync.lua(
+            HOST_PIPE,
+            """
+print("prelude=" ..
+  tostring(sd.gameplay.enable_combat_prelude()))
+print("waves=" .. tostring(sd.gameplay.start_waves()))
+""",
+            timeout=10.0,
+        )
+    )
+    if (
+        values.get("prelude") != "true"
+        or values.get("waves") != "true"
+    ):
+        raise ModSettingsLifecycleFailure(
+            f"stock waves did not start: {values}"
+        )
+    return values
+
+
 def _roster_matches(
     values: dict[str, str],
     expected: list[dict[str, str]],
@@ -625,6 +647,7 @@ def verify_lifecycle(
         _start_testrun()
         local_sync.wait_for_scene(HOST_PIPE, "testrun", timeout=45.0)
         local_sync.wait_for_scene(CLIENT_PIPE, "testrun", timeout=45.0)
+        result["waveStart"] = _start_stock_waves()
         behaviors = _wait(
             lambda: _query(HOST_PIPE),
             _behaviors_measurable,

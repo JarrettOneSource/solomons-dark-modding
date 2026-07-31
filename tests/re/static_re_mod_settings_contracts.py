@@ -272,6 +272,7 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
     assert set(entries) == {
         "kite_radius",
         "offense_enabled",
+        "skill_choice_mode",
         "policy_weld_preference",
         "roster",
         "think_profile",

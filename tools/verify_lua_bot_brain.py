@@ -60,7 +60,14 @@ def _integer(
     key: str,
     default: int = 0,
 ) -> int:
-    return int(_number(values, key, float(default)))
+    value = values.get(key)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
 
 
 def _utc_now() -> str:
@@ -171,8 +178,10 @@ emit("policy.movement_actions",
   policy.movement_action_size or 0)
 emit("policy.target_actions",
   policy.target_action_size or 0)
-emit("policy.cast_actions",
-  policy.cast_action_size or 0)
+emit("policy.ability_actions",
+  policy.ability_action_size or 0)
+emit("policy.aim_actions",
+  policy.aim_action_size or 0)
 for _, key in ipairs({
   "authority",
   "active",
@@ -270,19 +279,20 @@ def _pair_bot_ready(
         and client.get("member.name") == BOT_NAME
         and host.get("member.controller") == "LuaBrain"
         and client.get("member.controller") == "LuaBrain"
-        and _integer(host, "policy.version") == 2
-        and _integer(client, "policy.version") == 2
+        and _integer(host, "policy.version") == 3
+        and _integer(client, "policy.version") == 3
         and host.get("policy.architecture")
-        == "mlp-tanh-three-head-v2"
+        == "mlp-tanh-four-head-v3"
         and client.get("policy.architecture")
-        == "mlp-tanh-three-head-v2"
-        and _integer(host, "policy.observation_size") == 395
-        and _integer(client, "policy.observation_size") == 395
-        and _integer(host, "policy.hidden_1") == 192
-        and _integer(host, "policy.hidden_2") == 96
+        == "mlp-tanh-four-head-v3"
+        and _integer(host, "policy.observation_size") == 1279
+        and _integer(client, "policy.observation_size") == 1279
+        and _integer(host, "policy.hidden_1") == 512
+        and _integer(host, "policy.hidden_2") == 256
         and _integer(host, "policy.movement_actions") == 9
         and _integer(host, "policy.target_actions") == 9
-        and _integer(host, "policy.cast_actions") == 10
+        and _integer(host, "policy.ability_actions") == 22
+        and _integer(host, "policy.aim_actions") == 9
     )
 
 
@@ -401,6 +411,8 @@ local function apply_pending_choice()
 end
 
 local primary, ready = primary_details()
+matched_primary =
+  tonumber(primary.entry_id) == primary_entry
 local level_steps = 0
 while not ready and level_steps < maximum_level_steps do
   apply_pending_choice()

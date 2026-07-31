@@ -31,6 +31,34 @@ local WELD_PAIRS = {
   [1009] = {24, 40},
 }
 
+-- Only families whose native dispatch consumes a freely useful point/heading
+-- receive offset actions. Homing missiles, beams, cones, toggles, self buffs,
+-- and radial caster effects remain center-only.
+local FREE_AIM_ENTRY_IDS = {
+  [11] = true, -- Call Leviathan point
+  [15] = true, -- Phasing heading
+  [16] = true, -- Fireball
+  [27] = true, -- Magic Storm
+  [45] = true, -- Raise Golem placement
+  [48] = true, -- Teleport destination
+  [49] = true, -- Magic Circle
+  [50] = true, -- Magic Trap
+  [72] = true, -- Acid Rain
+  [73] = true, -- Fire Wall
+  [74] = true, -- Ether Drain
+  [76] = true, -- Call Comet
+  [77] = true, -- Turn Undead area
+}
+
+local FREE_AIM_BUILD_IDS = {
+  [16] = true,
+  [40] = true,
+  [1006] = true,
+  [1007] = true,
+  [1008] = true,
+  [1009] = true,
+}
+
 local function finite_number(value)
   return type(value) == "number" and value == value and
     value > -math.huge and value < math.huge
@@ -250,6 +278,8 @@ local function resolve_primary(
     affordable =
       mana_cost_resolved and mana_current >= mana_cost,
     custom = custom ~= nil,
+    aim_free =
+      custom ~= nil or FREE_AIM_BUILD_IDS[build_id] == true,
   }
 end
 
@@ -331,6 +361,8 @@ local function resolve_secondary(
       occupied and mana_cost_resolved and
       mana_current >= mana_cost,
     custom = custom ~= nil,
+    aim_free =
+      custom ~= nil or FREE_AIM_ENTRY_IDS[entry_id] == true,
   }
 end
 
@@ -415,6 +447,10 @@ end
 
 function Resolver:is_base_primary(entry_id)
   return BASE_PRIMARY_IDS[number(entry_id)] == true
+end
+
+function Resolver:aim_is_free(spell)
+  return type(spell) == "table" and spell.aim_free == true
 end
 
 function Resolver:primary_in_range(

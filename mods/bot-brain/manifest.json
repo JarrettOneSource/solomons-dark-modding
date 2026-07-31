@@ -53,10 +53,29 @@
         "group": "Combat"
       },
       {
+        "key": "skill_choice_mode",
+        "type": "choice",
+        "label": "Learned bot skill choices",
+        "description": "Uses the learned event policy by default; scripted mode is the A/B evaluation escape hatch.",
+        "default": "learned",
+        "scope": "host",
+        "group": "Combat",
+        "choices": [
+          {
+            "value": "learned",
+            "label": "Learned"
+          },
+          {
+            "value": "scripted",
+            "label": "Scripted A/B"
+          }
+        ]
+      },
+      {
         "key": "policy_weld_preference",
         "type": "choice",
-        "label": "Learned bot welding",
-        "description": "Controls deterministic Spell Welding choices while the combat policy owns movement, targets, and casts.",
+        "label": "Scripted bot welding",
+        "description": "Controls Spell Welding only while skill choices are forced to scripted mode.",
         "default": "auto",
         "scope": "host",
         "group": "Combat",

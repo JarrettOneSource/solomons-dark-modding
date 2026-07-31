@@ -1485,3 +1485,94 @@ The ordinary `dist/launcher` DLL was held by an unrelated process that could
 not be touched under the environment guardrails. Verification therefore used
 a worktree-local launcher publish with the byte-identical clean Release DLL;
 the native build and launched binary hashes matched.
+
+## J. Phase V3-3 implementation record
+
+Phase V3-3 implements the frozen Lua contract without loading a learned model.
+The strict runtime, Python mirror, trainer, and replacement v3 weights remain
+one V3-4 cutover; the historical v2 Lua artifact is neither adapted nor loaded.
+
+### Contract and Lua behavior
+
+- `policy_spec.lua` now defines exactly 1,279 unique ordered observation names,
+  preserves the 395-value v2 prefix, fixes versions at 3 and the trunk at
+  512/256, and declares movement/target/ability/aim heads of 9/9/22/9.
+  Inventory counts use `log1p(min(count, 99)) / log(100)`. The choice contract
+  contains exactly 56 ordered option descriptor names, a maximum of 16 native
+  options, entropy 0.05, initial/final temperatures 1.25/1.0, and coverage 20.
+- `policy_geometry.lua` adopts only complete collision snapshots, keys copied
+  primitives by `(scene_epoch, run_nonce, static_revision, dynamic_revision)`,
+  polls native dynamic state at two-second cadence, and uses current replicated
+  participant positions between polls. Circle, segment, and polygon overlap
+  recompute the 48-cell patch, eight clearance rays, and K=8 obstacle rows with
+  the observing participant excluded. `sd.nav.test_segment` is used only for
+  movement-action legality.
+- Focused enemy, hazard, inventory, and skill-choice modules populate Blocks
+  J-Q. Unknown active hostile hazards are retained with `type_known=0`.
+  Potions are ranked by descending count; Wizard Chug, Antidote, and Mind Chug
+  remain visible but are permanently masked independent of vitals or timers.
+  Health, Mana, Rejuvenation, and declared synthetic-safe custom effects retain
+  state/usefulness legality. Equipment is observation-only.
+- Ability execution is mutually exclusive across none, primary, eight
+  secondaries, and twelve ranked potion slots. The nine-way aim head is
+  center-only for none, potions, homing, beam/cone, toggle, self, and radial
+  families; proven heading/point/line/area families receive all offsets.
+- Each new pending native skill generation freezes the full observation,
+  option rows, and mask. Learned mode invokes the choice head once per
+  generation; scripted mode retains the deterministic manager and weld
+  preference as an A/B escape hatch. Main trajectory-v3 and separate
+  choice-event-v3 SMDP records are bounded independently. Scripted choice rows
+  carry `trainable=false` and are excluded by the normal choice drain. The
+  combat reward remains exactly the v2 formula.
+
+There is no observation-layout or option-descriptor delta from the adjudicated
+proposal: the final sizes are 1,279 and 56 respectively. The only
+implementation-time concretization is the aim-family mask, derived from the
+already cited native primary/secondary dispatch tables; it changes no tensor
+shape or descriptor.
+
+### Deterministic and static verification
+
+The V3-3 Lua fixture proves:
+
+- 1,279 finite values in exact name order;
+- exact self-excluding primitive geometry, three native refresh requests but
+  only two revision-driven geometry builds, and no per-observation rebuild;
+- enemy-status, target-motion/facing, obstacle, unknown-hazard, hazard,
+  potion, equipment, and ally transitions;
+- target-conditioned ability masks, the three permanent stock-potion masks,
+  and center/free aim-family masks;
+- 56-value permutation-invariant option rows, one apply per generation,
+  a two-step choice duration, scripted-row exclusion, and both trajectory-v3
+  record shapes.
+
+Every bot-brain Lua file passes `luac -p`. Final repository verification is
+306/306 static RE contracts, 526/526 Python unittests, and 672 checked
+source/header fragments.
+
+### Fresh scripted-live verification
+
+`verify_mod_settings_lifecycle.py` passed on the worktree's isolated
+`ms2-host`/`ms2-client` stages with audio disabled. It explicitly started the
+stock wave schedule before measuring behavior. Guardian `Ward` completed 190
+think ticks and 158 accepted moves while holding 50.24997 units from human
+participant 1. Striker `Spark` completed 249 think ticks, 149 accepted moves,
+and 125 accepted casts with a 262.014 attack window. The skirmisher reload was
+accepted, the third requested bot reported `lobby full` without a reconciliation
+error, both processes stayed responsive, and no crash artifact appeared.
+
+`verify_lua_bot_brain.py` also passed fresh on isolated
+`bot-host`/`bot-client` stages with audio disabled. The bot reached wave 7 alive
+at 50/50 HP, issued and accepted 15/15 casts, accepted 75 movement requests,
+and accumulated 3,579.427 units of brain-measured path motion. Both peers
+reported policy version 3, observation size 1,279, hidden sizes 512/256, and
+9/9/22/9 heads. The active Fireball primary resolved at mana cost 12 and range
+297.993988. Cleanup stopped only the exact launcher-returned staged process
+IDs after executable-path equality checks.
+
+Three verifier corrections were required to make those gates measure the
+intended behavior, not to change game or policy semantics: the settings
+verifier now starts stock waves after entering its test run; numeric parsing
+preserves decimal string participant IDs before any floating-point conversion;
+and primary priming accepts an already-active requested Fireball instead of
+requiring the verifier itself to select it from an offer.

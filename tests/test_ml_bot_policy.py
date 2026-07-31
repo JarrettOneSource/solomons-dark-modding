@@ -56,7 +56,7 @@ from train_bot_policy import (  # noqa: E402
 MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
 HISTORICAL_V1_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
 LUA_WEIGHTS = ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
-LUA_CONTRACT = ROOT / "tests" / "lua" / "ml_bot_policy_contract.lua"
+LUA_CONTRACT = ROOT / "tests" / "lua" / "ml_bot_policy_v3_phase3.lua"
 COMPOSITIONS = ROOT / "tools" / "ml_bot" / "team-compositions.json"
 
 
@@ -654,99 +654,33 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertIn("sd.rng.set_seed(requested)", calls[0])
         self.assertIn("sd.rng.get_seed()", calls[0])
 
-    def test_lua_and_python_contract_and_inference_match(self) -> None:
+    def test_lua_policy_v3_phase3_contract_fixture(self) -> None:
         values = self._run_lua_contract()
-        self.assertEqual(values.get("training_ring_ok"), "true")
-        self.assertEqual(values.get("v1_rejected"), "true")
-        self.assertEqual(
-            values["observation_names"].split(","),
-            list(spec.OBSERVATION_NAMES),
-        )
-        self.assertEqual(
-            values["movement_names"].split(","),
-            list(spec.MOVEMENT_ACTION_NAMES),
-        )
-        self.assertEqual(
-            values["target_names"].split(","),
-            list(spec.TARGET_ACTION_NAMES),
-        )
-        self.assertEqual(
-            values["cast_names"].split(","),
-            list(spec.CAST_ACTION_NAMES),
-        )
-        self.assertEqual(values["hidden_sizes"], "192,96")
-
-        observation = np.asarray(
-            [
-                ((index * 37) % 101 - 50) / 50
-                for index in range(1, 396)
-            ]
-        )
-        movement_mask = np.asarray(
-            [index % 3 != 0 for index in range(1, 10)]
-        )
-        target_mask = np.asarray(
-            [index % 4 != 0 for index in range(1, 10)]
-        )
-        policy = load_model(MODEL)
-        preliminary = policy.forward(
-            observation,
-            movement_mask[None, :],
-            target_mask[None, :],
-            np.ones((1, 10), dtype=np.bool_),
-        )
-        target_action = int(np.argmax(preliminary.target_probabilities[0]))
-        cast_mask = np.asarray(
-            [
-                ((index + target_action) % 4 != 0) or index == 1
-                for index in range(1, 11)
-            ]
-        )
-        forward = policy.forward(
-            observation,
-            movement_mask[None, :],
-            target_mask[None, :],
-            cast_mask[None, :],
-        )
-        movement_action = int(
-            np.argmax(forward.movement_probabilities[0])
-        )
-        cast_action = int(np.argmax(forward.cast_probabilities[0]))
-        expected_log_probability = (
-            math.log(
-                forward.movement_probabilities[0, movement_action]
-            )
-            + math.log(forward.target_probabilities[0, target_action])
-            + math.log(forward.cast_probabilities[0, cast_action])
-        )
-        self.assertEqual(int(values["movement_action"]), movement_action)
-        self.assertEqual(int(values["target_action"]), target_action)
-        self.assertEqual(int(values["cast_action"]), cast_action)
-        self.assertEqual(
-            values["cast_mask"],
-            "".join("1" if value else "0" for value in cast_mask),
-        )
-        self.assertAlmostEqual(
-            float(values["log_probability"]),
-            expected_log_probability,
-            places=11,
-        )
-        self.assertAlmostEqual(
-            float(values["value"]),
-            float(forward.values[0]),
-            places=11,
-        )
-        for key, expected in (
-            ("movement_probabilities", forward.movement_probabilities[0]),
-            ("target_probabilities", forward.target_probabilities[0]),
-            ("cast_probabilities", forward.cast_probabilities[0]),
-        ):
-            np.testing.assert_allclose(
-                np.fromstring(values[key], sep=","),
-                expected,
-                rtol=2e-12,
-                atol=2e-12,
-            )
+        expected = {
+            "observation_count": "1279",
+            "exact_order": "true",
+            "finite": "true",
+            "exact_geometry": "true",
+            "enemy_status_transition": "true",
+            "target_motion_facing": "true",
+            "obstacle_transition": "true",
+            "unknown_hazard_retained": "true",
+            "hazard_transition": "true",
+            "potion_transition": "true",
+            "equipment_transition": "true",
+            "permanent_potion_masks": "true",
+            "aim_family_masks": "true",
+            "target_conditioned_ability_masks": "true",
+            "choice_descriptor_count": "56",
+            "choice_permutation_invariant": "true",
+            "choice_generation_exactly_once": "true",
+            "choice_duration_steps": "2",
+            "scripted_choice_excluded": "true",
+            "trajectory_v3": "true",
+        }
+        for key, expected_value in expected.items():
+            self.assertEqual(values.get(key), expected_value, key)
+        self.assertEqual(values.get("geometry_builds"), "2")
 
     def _run_lua_contract(self) -> dict[str, str]:
         command = self._lua_command()

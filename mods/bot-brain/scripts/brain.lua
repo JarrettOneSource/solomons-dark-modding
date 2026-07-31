@@ -59,19 +59,29 @@ local function update_arena(
     bot_y,
     scene_key)
   local shared = context.shared
-  shared.policy_geometry:refresh(now_ms, scene_key)
-  local geometry_revision =
-    shared.policy_geometry.revision
+  context.policy_geometry:refresh(
+    now_ms,
+    scene_key,
+    context.participant_id)
   if context.arena ~= nil and
-      context.arena_geometry_revision == geometry_revision then
+      now_ms - context.last_arena_refresh_ms <
+        shared.policy_spec.nav_refresh_ms then
     return context.arena
   end
-  context.arena =
-    context.steering.arena_from_grid(
-      shared.policy_geometry.grid,
-      bot_x,
-      bot_y)
-  context.arena_geometry_revision = geometry_revision
+  context.last_arena_refresh_ms = now_ms
+  local grid = nil
+  local ok, candidate = pcall(sd.nav.get_grid, 1)
+  if ok and type(candidate) == "table" and
+      candidate.refresh_pending == false then
+    grid = candidate
+  end
+  if grid ~= nil or context.arena == nil then
+    context.arena =
+      context.steering.arena_from_grid(
+        grid,
+        bot_x,
+        bot_y)
+  end
   context.debug.arena_grid_backed = context.arena.grid_backed
   return context.arena
 end
@@ -165,19 +175,7 @@ local function weld_offer_eligible(
     (preference == "auto" and learned_count >= 2)
 end
 
-local function choose_pending_skill(context, choices)
-  if type(choices) ~= "table" or
-      choices.pending ~= true or
-      type(choices.options) ~= "table" or
-      #choices.options == 0 then
-    return
-  end
-  local generation = tonumber(choices.generation)
-  if generation == nil or
-      generation == context.last_skill_choice_generation then
-    return
-  end
-
+local function select_scripted_skill(context, options)
   local element_bands = {
     ether = { 8, 15 },
     fire = { 16, 23 },
@@ -218,7 +216,7 @@ local function choose_pending_skill(context, choices)
   end
   local selected_index = nil
   local selected_priority = math.huge
-  for index, option in ipairs(choices.options) do
+  for index, option in ipairs(options or {}) do
     local option_id = tonumber(option.id)
     local option_priority = priority[option_id]
     if option_id == 52 then
@@ -238,15 +236,37 @@ local function choose_pending_skill(context, choices)
     end
   end
   if selected_index == nil then
+    return nil
+  end
+  return selected_index
+end
+
+local function choose_pending_skill(context, choices)
+  if type(choices) ~= "table" or
+      choices.pending ~= true or
+      type(choices.options) ~= "table" or
+      #choices.options == 0 then
+    return
+  end
+  local generation = tonumber(choices.generation)
+  if generation == nil or
+      generation == context.last_skill_choice_generation then
+    return
+  end
+  local selected_index =
+    select_scripted_skill(context, choices.options)
+  if selected_index == nil then
     context.debug.last_error =
-      "skill choices contained no eligible deterministic option"
+      "skill choices contained no eligible scripted option"
     return
   end
   local apply_ok, accepted = pcall(
     sd.bots.choose_skill,
-    context.participant_id,
-    selected_index,
-    generation)
+    {
+      id = context.participant_id,
+      option_index = selected_index,
+      generation = generation,
+    })
   if apply_ok and accepted == true then
     context.last_skill_choice_generation = generation
     context.debug.skill_choices_accepted =
@@ -510,30 +530,68 @@ local function issue_policy_movement(
   memory.previous_move_y = action.y
 end
 
-local function issue_policy_cast(
+local function issue_policy_ability(
     context,
     capture,
     decision,
     target,
     now_ms)
   local memory = context.policy_memory
-  local action = decision.cast
-  context.debug.policy_cast_action = decision.cast_action
-  context.debug.policy_cast_name = action.name
-  context.debug.policy_cast_probability =
-    decision.cast_probability
-  memory.previous_cast_action = decision.cast_action
-  if decision.cast_action == 0 or target == nil then
+  local action = decision.ability
+  context.debug.policy_ability_action =
+    decision.ability_action
+  context.debug.policy_ability_name = action.name
+  context.debug.policy_ability_probability =
+    decision.ability_probability
+  context.debug.policy_aim_action = decision.aim_action
+  context.debug.policy_aim_name = decision.aim.name
+  context.debug.policy_aim_probability =
+    decision.aim_probability
+  memory.previous_cast_action = decision.ability_action
+  if action.kind == "none" then
     return
   end
 
+  if action.kind == "potion" then
+    context.debug.potion_use_issued =
+      context.debug.potion_use_issued + 1
+    local ok, accepted, result_or_error = pcall(
+      context.shared.policy_inventory.use,
+      context.shared.policy_inventory,
+      context.participant_id,
+      capture.inventory,
+      action.potion_slot)
+    if ok and accepted == true then
+      context.debug.potion_use_accepted =
+        context.debug.potion_use_accepted + 1
+      context.debug.last_potion_slot = action.potion_slot
+      context.debug.last_potion_use_id =
+        type(result_or_error) == "table" and
+          tonumber(result_or_error.use_id) or 0
+      context.debug.last_error = ""
+    else
+      context.debug.last_error = tostring(
+        ok and result_or_error or accepted or
+          "policy potion use rejected")
+    end
+    return
+  end
+
+  if target == nil then
+    return
+  end
+  local aim_x, aim_y =
+    context.shared.policy_observation.aim_point(
+      context.shared.policy_observation_builder,
+      target,
+      decision.aim_action)
   context.last_cast_attempt_ms = now_ms
   context.debug.cast_issued = context.debug.cast_issued + 1
   local ok, accepted, error_message = pcall(function()
     return context.bot:cast(
       action.skill_slot,
-      target.x,
-      target.y,
+      aim_x,
+      aim_y,
       context.shared.cast_hold_ms)
   end)
   if ok and accepted == true then
@@ -541,6 +599,10 @@ local function issue_policy_cast(
       context.debug.cast_accepted + 1
     context.debug.last_error = ""
     memory.last_cast_ms = now_ms
+    context.debug.last_aim_x = aim_x
+    context.debug.last_aim_y = aim_y
+    context.debug.last_aim_offset_x = aim_x - target.x
+    context.debug.last_aim_offset_y = aim_y - target.y
     if action.skill_slot > 0 and
         target.in_primary_range ~= true then
       context.debug.secondary_beyond_primary_accepted =
@@ -635,6 +697,41 @@ local function think_with_policy(
     shared.policy_observation_builder,
     context,
     frame)
+  local choice_event =
+    shared.policy_skill_choices:capture(
+      capture.participant,
+      capture.values,
+      capture.loadout,
+      frame.skill_choices,
+      frame.simulation_tick,
+      capture.metrics)
+  if choice_event ~= nil and
+      (shared.skill_choice_mode == "scripted" or
+       shared.policy_runtime ~= nil) then
+    shared.policy_skill_choices:handle(
+      context,
+      choice_event,
+      shared.skill_choice_mode,
+      shared.policy_runtime,
+      shared.policy_training,
+      function(options)
+        return select_scripted_skill(context, options)
+      end,
+      shared.policy_training.enabled == true)
+  end
+  if shared.policy_runtime == nil then
+    context.debug.mode = "learned_unavailable"
+    context.debug.policy_observation_version =
+      shared.policy_spec.observation_version
+    context.debug.policy_observation_count =
+      #capture.values
+    context.debug.policy_observation_finite = true
+    context.debug.policy_observation = capture.values
+    context.debug.last_error =
+      "strict v3 policy runtime and weights arrive in Phase V3-4"
+    return nil
+  end
+
   local selected_target = nil
   local target_switched = false
   local decision = shared.policy_runtime:forward(
@@ -648,10 +745,16 @@ local function think_with_policy(
           context,
           capture,
           target_action)
-      return shared.policy_observation.build_cast_mask(
+      return shared.policy_observation.build_ability_mask(
         shared.policy_observation_builder,
         capture,
         selected_target)
+    end,
+    function(ability_action)
+      return shared.policy_observation.build_aim_mask(
+        shared.policy_observation_builder,
+        capture,
+        ability_action)
     end,
     shared.policy_training.enabled == true)
   context.debug.mode = "learned"
@@ -697,15 +800,19 @@ local function think_with_policy(
     capture.movement_targets
   context.debug.policy_target_mask =
     capture.target_mask
-  context.debug.policy_cast_mask =
-    decision.cast_mask
+  context.debug.policy_ability_mask =
+    decision.ability_mask
+  context.debug.policy_aim_mask =
+    decision.aim_mask
   context.debug.policy_selected_actions_legal =
     capture.movement_mask[
       decision.movement_action + 1] == true and
     capture.target_mask[
       decision.target_action + 1] == true and
-    decision.cast_mask[
-      decision.cast_action + 1] == true
+    decision.ability_mask[
+      decision.ability_action + 1] == true and
+    decision.aim_mask[
+      decision.aim_action + 1] == true
   context.debug.primary_welded =
     capture.loadout.primary.welded == true
   context.debug.primary_build_id =
@@ -751,7 +858,7 @@ local function think_with_policy(
     capture,
     decision,
     frame.now_ms)
-  issue_policy_cast(
+  issue_policy_ability(
     context,
     capture,
     decision,
@@ -814,13 +921,17 @@ function brain.new(row, roster_index, shared, steering)
     last_position_x = nil,
     last_position_y = nil,
     arena = nil,
-    arena_geometry_revision = -1,
+    last_arena_refresh_ms =
+      -shared.policy_spec.nav_refresh_ms,
+    policy_geometry = shared.new_policy_geometry(),
+    policy_hazards = shared.new_policy_hazards(),
     attack_window = nil,
     fleeing = false,
     death_latched = false,
     last_wave = -1,
     ward_enemy_distances = {},
     policy_pending = nil,
+    policy_choice_pending = nil,
     last_policy_metrics = nil,
     policy_memory =
       shared.policy_observation.new_memory(),
@@ -866,9 +977,12 @@ function brain.new(row, roster_index, shared, steering)
       policy_movement_action = 0,
       policy_movement_name = "idle",
       policy_movement_probability = 0.0,
-      policy_cast_action = 0,
-      policy_cast_name = "none",
-      policy_cast_probability = 0.0,
+      policy_ability_action = 0,
+      policy_ability_name = "none",
+      policy_ability_probability = 0.0,
+      policy_aim_action = 0,
+      policy_aim_name = "center",
+      policy_aim_probability = 0.0,
       policy_target_action = 0,
       policy_target_name = "keep_current",
       policy_target_probability = 0.0,
@@ -902,7 +1016,8 @@ function brain.new(row, roster_index, shared, steering)
       policy_movement_mask = {},
       policy_movement_targets = {},
       policy_target_mask = {},
-      policy_cast_mask = {},
+      policy_ability_mask = {},
+      policy_aim_mask = {},
       policy_selected_actions_legal = false,
       primary_welded = false,
       primary_build_id = 0,
@@ -916,7 +1031,19 @@ function brain.new(row, roster_index, shared, steering)
       loot_authority_participant_id = 0,
       ally_observation_count = 0,
       secondary_beyond_primary_accepted = 0,
-      weld_preference = shared.weld_preference,
+      skill_choice_mode = shared.skill_choice_mode,
+      skill_choice_generation = 0,
+      skill_choice_option_index = 0,
+      skill_choice_option_id = -1,
+      skill_choice_probability = 0.0,
+      potion_use_issued = 0,
+      potion_use_accepted = 0,
+      last_potion_slot = 0,
+      last_potion_use_id = 0,
+      last_aim_x = 0.0,
+      last_aim_y = 0.0,
+      last_aim_offset_x = 0.0,
+      last_aim_offset_y = 0.0,
       last_error = "",
     },
   }
@@ -930,6 +1057,7 @@ function brain.reset_run(context, started)
   else
     context.policy_pending = nil
   end
+  context.policy_choice_pending = nil
   context.fleeing = false
   context.death_latched = false
   context.last_position_x = nil
@@ -941,7 +1069,10 @@ function brain.reset_run(context, started)
   context.policy_memory =
     context.shared.policy_observation.new_memory()
   context.arena = nil
-  context.arena_geometry_revision = -1
+  context.last_arena_refresh_ms =
+    -context.shared.policy_spec.nav_refresh_ms
+  context.policy_geometry:reset(nil)
+  context.policy_hazards:reset()
   context.attack_window = nil
   if not started then
     context.debug.active = false
@@ -977,7 +1108,9 @@ function brain.think(
 
   local wave = update_wave_debug(context)
   local skill_choices = read_skill_choices(context)
-  choose_pending_skill(context, skill_choices)
+  if context.row.behavior ~= "learned" then
+    choose_pending_skill(context, skill_choices)
+  end
   local is_run, scene_key = current_run_scene()
   if not is_run then
     context.debug.active = false
@@ -1260,6 +1393,7 @@ end
 
 brain.profiles = PROFILES
 brain.choose_pending_skill = choose_pending_skill
+brain.select_scripted_skill = select_scripted_skill
 brain.request_nearby_pickup = request_nearby_pickup
 
 return brain

@@ -54,38 +54,78 @@ local brain = assert(require_mod("scripts/brain.lua"))
 local roster = assert(require_mod("scripts/roster.lua"))
 local policy_spec =
   assert(require_mod("scripts/policy_spec.lua"))
-local policy_weights =
-  assert(require_mod("scripts/policy_weights.lua"))
-local policy_module =
-  assert(require_mod("scripts/policy.lua"))
 local policy_geometry_module =
   assert(require_mod("scripts/policy_geometry.lua"))
 local policy_spell_descriptors_module =
   assert(require_mod(
     "scripts/policy_spell_descriptors.lua"))
+local policy_enemy_descriptors_module =
+  assert(require_mod(
+    "scripts/policy_enemy_descriptors.lua"))
+local policy_hazards_module =
+  assert(require_mod("scripts/policy_hazards.lua"))
+local policy_inventory_module =
+  assert(require_mod("scripts/policy_inventory.lua"))
+local policy_skill_catalog =
+  assert(require_mod("scripts/policy_skill_catalog.lua"))
+local policy_skill_choices_module =
+  assert(require_mod("scripts/policy_skill_choices.lua"))
 local policy_observation =
   assert(require_mod("scripts/policy_observation.lua"))
 local policy_training_module =
   assert(require_mod("scripts/policy_training.lua"))
 
-local policy_runtime =
-  policy_module.new(policy_spec, policy_weights, 20260729)
+-- V3-3 owns the complete Lua contract but intentionally has no learned
+-- inference artifact. The strict v3 runtime and weights land together in
+-- V3-4; a v2 model is never adapted or loaded into this contract.
+local policy_runtime = nil
 local policy_geometry =
   policy_geometry_module.new(policy_spec)
 local policy_spell_descriptors =
   policy_spell_descriptors_module.new(policy_spec)
+local policy_enemy_descriptors =
+  policy_enemy_descriptors_module.new(policy_spec)
+local policy_hazards =
+  policy_hazards_module.new(policy_spec)
+local policy_inventory =
+  policy_inventory_module.new(policy_spec)
+local policy_skill_choices =
+  policy_skill_choices_module.new(
+    policy_spec,
+    policy_skill_catalog,
+    policy_spell_descriptors)
 local policy_observation_builder =
   policy_observation.new(
     policy_spec,
     {
       geometry = policy_geometry,
       spell_descriptors = policy_spell_descriptors,
+      enemy_descriptors = policy_enemy_descriptors,
+      hazards = policy_hazards,
+      inventory = policy_inventory,
     })
 local policy_training =
   policy_training_module.new(policy_spec, policy_runtime)
 
 local function policy_status()
-  return policy_runtime:status()
+  return {
+    available = false,
+    version = policy_spec.model_version,
+    observation_version =
+      policy_spec.observation_version,
+    observation_size =
+      #policy_spec.observation_names,
+    architecture = policy_spec.architecture,
+    hidden_sizes = policy_spec.hidden_sizes,
+    movement_action_size =
+      #policy_spec.movement_actions,
+    target_action_size = #policy_spec.target_actions,
+    ability_action_size =
+      #policy_spec.ability_actions,
+    aim_action_size = #policy_spec.aim_actions,
+    reason =
+      "strict v3 policy runtime and weights arrive in Phase V3-4",
+  }
 end
 
 local shared = {
@@ -110,11 +150,23 @@ local shared = {
   policy_spec = policy_spec,
   policy_runtime = policy_runtime,
   policy_geometry = policy_geometry,
+  new_policy_geometry = function()
+    return policy_geometry_module.new(policy_spec)
+  end,
   policy_spell_descriptors =
     policy_spell_descriptors,
+  policy_enemy_descriptors =
+    policy_enemy_descriptors,
+  policy_hazards = policy_hazards,
+  new_policy_hazards = function()
+    return policy_hazards_module.new(policy_spec)
+  end,
+  policy_inventory = policy_inventory,
+  policy_skill_choices = policy_skill_choices,
   policy_observation = policy_observation,
   policy_observation_builder = policy_observation_builder,
   policy_training = policy_training,
+  skill_choice_mode = "learned",
   weld_preference = "auto",
 }
 
@@ -124,6 +176,8 @@ shared.think_profile = sd.settings.get("think_profile")
 shared.think_interval_ms =
   shared.think_profile == "relaxed" and 400 or 250
 shared.focus_bot_key = sd.settings.get("focus_bot_key")
+shared.skill_choice_mode =
+  sd.settings.get("skill_choice_mode")
 shared.weld_preference =
   sd.settings.get("policy_weld_preference")
 
@@ -145,6 +199,7 @@ local debug = {
   offense_enabled = shared.offense_enabled,
   think_profile = shared.think_profile,
   focus_bot_key = shared.focus_bot_key,
+  skill_choice_mode = shared.skill_choice_mode,
   weld_preference = shared.weld_preference,
   focus_active = false,
   settings_change_count = 0,
@@ -282,6 +337,9 @@ sd.settings.on_changed(function(key, new_value, old_value)
   elseif key == "focus_bot_key" then
     shared.focus_bot_key = new_value
     debug.focus_bot_key = new_value
+  elseif key == "skill_choice_mode" then
+    shared.skill_choice_mode = new_value
+    debug.skill_choice_mode = new_value
   elseif key == "policy_weld_preference" then
     shared.weld_preference = new_value
     debug.weld_preference = new_value
@@ -323,6 +381,7 @@ end)
 
 sd.events.on("run.started", function()
   policy_geometry:reset(nil)
+  policy_hazards:reset()
   policy_training:begin_episode()
   manager:reset_run(true)
   log(nil, "run started")
@@ -330,6 +389,7 @@ end)
 
 sd.events.on("run.ended", function()
   policy_geometry:reset(nil)
+  policy_hazards:reset()
   manager:reset_run(false)
   log(nil, "run ended")
 end)

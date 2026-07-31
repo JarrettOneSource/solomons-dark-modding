@@ -14,8 +14,10 @@ earlier `persona_name` scalar is gone; names belong to rows. The other launcher
 controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
 cadence for scripted rows, local focus key, and the confirmed host-only roster
 respawn action. `policy_weld_preference` controls whether the shared skill
-manager prefers, avoids, or automatically accepts Spell Welding. Learned rows
-decide every 100 ms of simulation time once matching v2 weights are installed.
+manager prefers, avoids, or automatically accepts Spell Welding only while
+`skill_choice_mode=scripted`. The default `learned` mode routes each pending
+native generation to the v3 choice-event head. Learned rows decide every
+100 ms of simulation time once matching v3 weights are installed.
 
 ## Ordered reconciliation
 
@@ -54,10 +56,17 @@ Every Behavior samples `sd.world.get_replicated_actors()` and keeps live
 `tracked_enemy` rows. Scripted candidate destinations come from short steering
 lookaheads clamped to the current arena and must pass `sd.nav.test_segment`
 before `bot:move_to`. The learned observation uses a per-scene
-`sd.nav.get_grid(4)` cache, adopts only completed snapshots about every two
-seconds, and computes its 48 walkability samples and eight clearance rays in
-Lua. `sd.nav.test_segment` remains authoritative only for the learned movement
-mask. Neither path writes a transform. The loader may apply its
+`sd.nav.get_collision_geometry(participant_id)` cache. It adopts only completed
+snapshots, rebuilds copied circle/segment/polygon primitives only when the
+scene/run/static/dynamic revision tuple changes, and refreshes native dynamic
+state about every two seconds. Lua recomputes the 48 walkability samples, eight
+clearance rays, and eight nearest radius-inflated obstacles against those exact
+primitives. Other live participants use their replicated positions and cached
+native collision radii; the observing participant is excluded.
+`sd.nav.test_segment` remains authoritative only for the learned movement
+mask. The older grid snapshot is retained only for coarse scripted arena
+bounds and steering, not learned patch/ray observations. Neither path writes a
+transform. The loader may apply its
 authority-owned, native-placement-validated stuck recovery only after a full
 30-second no-progress window.
 
@@ -114,29 +123,42 @@ lookup, replicated slot-0 cast ingress, and wave-transition movement.
 
 ### Learned
 
-Policy v2's learned runtime is bundled. Every 100 ms it
-can capture exactly 395 ordered finite values: self state; dynamic primary and
-eight-secondary descriptors; eight enemies with actor-ID velocity history;
-the persisted target; cached local geometry; four pickups; the four nearest
-in-run allies plus a cap-independent ally count; and aggregate, history, weld,
-and combat-multiplier values. Target selection is a separate nine-action head.
-The cast mask is rebuilt against the target selected on that same decision, so
-secondary range/readiness is not constrained by the primary attack window.
+Policy v3 captures exactly 1,279 ordered finite values every 100 ms. Positions
+1-395 preserve v2 exactly. The appended blocks add three participant-scoped
+potion timers; identity, facing, proven telegraphs, and replicated combat
+statuses for eight enemies; persisted-target motion/facing; eight exact
+obstacles; twelve nearest hostile projectile/area/beam hazards; twelve
+count-ranked potion types; seven fixed equipment slots; and nine log-scaled
+inventory taxonomy counts. Unknown hostile hazard classes remain present with
+`type_known=0`, and counts use `log1p` with saturation at 99.
 
-The strict 395 -> 192 -> 96 three-head weights run locally in Lua: inference
-does not start Python, require a GPU, or contact a model service, and all
-movement and casts still use the native participant rails. Historical v1
-weights are rejected explicitly rather than reinterpreted.
+The main action contract has movement 9, actor-ID-persistent target 9,
+mutually-exclusive ability 22, and aim 9 heads. Ability actions are none,
+primary, eight secondaries, or one of twelve ranked potion slots. Cast legality
+is rebuilt against the target selected on the same decision. Aim is center plus
+eight 60-unit compass offsets; homing, beam/cone, self/radial, no-op, and potion
+families are center-masked. Health, Mana, and Rejuvenation use the validated
+participant-scoped native consumable path. Wizard Chug, Antidote, and Mind
+Chug remain observable but are permanently action-masked because no synthetic
+native effect path was proven. Custom potions require declared
+synthetic-safe `policy_effects`. Equipment remains observation-only.
 
-The shared skill manager sees learned primary progression, pending weld build
-IDs, and Spell Welding option 52. In `auto` mode it accepts a weld only after
-both component primaries are learned; `prefer` and `avoid` provide explicit
-owner control. Learned rows also make rate-limited pickup requests only for
-host-owned replicated drops inside the drop's native pickup radius. The
-current native bot API still has no owner-safe per-bot consume/equip mutation,
-so inventory actions remain out of scope. See [`ml-bot.md`](ml-bot.md) for
-player setup, live PPO training, checkpoint replacement, and the versioned
-action boundary.
+Each pending native skill generation freezes the full observation plus one
+56-value semantic descriptor and mask bit per offered option. Learned mode
+scores the variable option set; scripted mode keeps the deterministic v2
+selector and its weld preference for A/B runs. Scripted events are tagged and
+excluded from choice batches. Training records a main trajectory-v3 stream and
+a separate variable-duration choice-event-v3 SMDP stream while retaining the
+v2 combat reward formula unchanged.
+
+Phase V3-3 deliberately activates no learned inference artifact:
+`policy.lua`, `policy_weights.lua`, the Python mirror, and v3 model are replaced
+together in V3-4. The Lua layer reports a clear unavailable reason and never
+adapts or loads the historical v1/v2 weights still present in the tree. Once
+the strict v3 runtime is installed, inference remains local—no Python, GPU, or
+network service—and all movement, casts, pickups, and consumable uses continue
+through native participant rails. See [`ml-bot.md`](ml-bot.md) for the
+currently released v2 training workflow.
 
 ## Diagnostics and acceptance
 
@@ -149,9 +171,10 @@ diagnostic readers and the longevity verifier. The root also reports desired,
 active, and
 capacity-refused counts plus the aggregate status string. Learned rows also
 report policy generation, decision count, selected actions/probabilities,
-value estimate, target action and persisted actor ID, pickup requests,
-inventory/loadout counts, and whether the scheduler is using the simulation or
-fallback wall clock. This is acceptance telemetry, not a gameplay control API.
+value estimate, target/ability/aim actions, persisted actor ID, choice
+generation/option, pickup requests, potion uses, inventory/loadout counts, and
+whether the scheduler is using the simulation or fallback wall clock. This is
+acceptance telemetry, not a gameplay control API.
 
 The retail host/client combat gate uses the launcher-configured roster and
 stock wave schedule. Cast acceptance is diagnostic only; success requires

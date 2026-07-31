@@ -6,6 +6,8 @@ local function append(name)
   observation_names[#observation_names + 1] = name
 end
 
+-- V2 Blocks A-I remain byte-for-byte ordered at positions 1-395.
+
 -- Block A: self.
 for _, name in ipairs({
   "self_hp_ratio",
@@ -163,8 +165,7 @@ for slot = 1, 4 do
 end
 append("ally_count_scaled")
 
--- Block H: retained aggregates/config/history, weld state, and the four
--- progression-derived combat multipliers adjudicated for v2.
+-- Block H: aggregates, config, history, weld, and combat multipliers.
 for _, name in ipairs({
   "enemy_count_scaled",
   "threat_count_scaled",
@@ -217,42 +218,348 @@ end
 
 assert(
   #observation_names == 395,
-  "ML bot v2 observation contract must contain exactly 395 names")
+  "ML bot v3 must preserve the exact 395-value v2 prefix")
+
+-- Block J: participant-scoped potion timers.
+for _, name in ipairs({
+  "self_damage_x4_remaining_scaled",
+  "self_poison_immunity_remaining_scaled",
+  "self_all_concentration_remaining_scaled",
+}) do
+  append(name)
+end
+
+-- Block K: identity, facing, telegraph, and combat status for the existing
+-- eight enemy slots.
+local enemy_extension_suffixes = {
+  "species_index_scaled",
+  "species_known",
+  "role_melee",
+  "role_ranged",
+  "role_caster",
+  "role_spawner",
+  "role_exploder",
+  "role_boss",
+  "role_flying",
+  "role_stationary",
+  "facing_dx",
+  "facing_dy",
+  "anim_state_scaled",
+  "telegraph_known",
+  "winding_up",
+  "attack_active",
+  "recovering",
+  "slowed",
+  "slow_remaining_scaled",
+  "frozen",
+  "frozen_remaining_scaled",
+  "poisoned",
+  "poison_remaining_scaled",
+  "webbed",
+  "webbed_remaining_scaled",
+  "turn_undead",
+  "turn_undead_remaining_scaled",
+}
+for slot = 1, 8 do
+  local prefix = "enemy_" .. tostring(slot) .. "_"
+  for _, suffix in ipairs(enemy_extension_suffixes) do
+    append(prefix .. suffix)
+  end
+end
+
+-- Block L: persisted target motion and facing.
+for _, name in ipairs({
+  "target_velocity_dx",
+  "target_velocity_dy",
+  "target_facing_dx",
+  "target_facing_dy",
+}) do
+  append(name)
+end
+
+-- Block M: eight nearest exact collision primitives.
+local obstacle_suffixes = {
+  "present",
+  "nearest_dx",
+  "nearest_dy",
+  "clearance_scaled",
+  "normal_dx",
+  "normal_dy",
+  "radius_scaled",
+  "extent_x_scaled",
+  "extent_y_scaled",
+  "kind_circle",
+  "kind_segment",
+  "kind_polygon",
+  "is_participant",
+  "is_destructible",
+}
+for slot = 1, 8 do
+  local prefix = "obstacle_" .. tostring(slot) .. "_"
+  for _, suffix in ipairs(obstacle_suffixes) do
+    append(prefix .. suffix)
+  end
+end
+
+-- Block N: twelve nearest hostile hazards. Unknown hostile classes remain
+-- present and carry type_known=0.
+local hazard_suffixes = {
+  "present",
+  "hazard_type_index_scaled",
+  "type_known",
+  "dx",
+  "dy",
+  "distance_scaled",
+  "velocity_dx",
+  "velocity_dy",
+  "radius_scaled",
+  "time_to_contact_scaled",
+  "remaining_time_scaled",
+  "kind_projectile",
+  "kind_area",
+  "kind_beam",
+  "homing",
+  "targeting_self",
+  "source_enemy",
+}
+for slot = 1, 12 do
+  local prefix = "hazard_" .. tostring(slot) .. "_"
+  for _, suffix in ipairs(hazard_suffixes) do
+    append(prefix .. suffix)
+  end
+end
+append("hazard_count_scaled")
+
+-- Block O: twelve count-ranked potion descriptors plus overflow context.
+local potion_suffixes = {
+  "present",
+  "count_scaled",
+  "stock_health",
+  "stock_mana",
+  "stock_wizard_chug",
+  "stock_antidote",
+  "stock_mind_chug",
+  "stock_rejuvenation",
+  "custom",
+  "restores_hp_fraction",
+  "restores_mana_fraction",
+  "damage_multiplier_scaled",
+  "cures_poison",
+  "poison_immunity_duration_scaled",
+  "concentrates_all",
+  "effect_duration_scaled",
+  "custom_effect_known",
+  "identity_hash_a",
+  "identity_hash_b",
+}
+for slot = 1, 12 do
+  local prefix = "potion_" .. tostring(slot) .. "_"
+  for _, suffix in ipairs(potion_suffixes) do
+    append(prefix .. suffix)
+  end
+end
+append("potion_type_count_scaled")
+append("potion_total_count_scaled")
+
+-- Block P: seven equipped-item descriptors.
+local equipment_suffixes = {
+  "present",
+  "catalog_known",
+  "identity_hash_a",
+  "identity_hash_b",
+  "rarity_scaled",
+  "level_scaled",
+  "set_complete",
+  "offense_effect_scaled",
+  "resource_effect_scaled",
+  "mobility_effect_scaled",
+  "defense_effect_scaled",
+  "targeted_effect_present",
+  "target_kind_scaled",
+  "target_magnitude_scaled",
+  "special_feature_present",
+}
+for _, slot in ipairs({
+  "hat",
+  "robe",
+  "weapon",
+  "ring_1",
+  "ring_2",
+  "ring_3",
+  "amulet",
+}) do
+  local prefix = "equipment_" .. slot .. "_"
+  for _, suffix in ipairs(equipment_suffixes) do
+    append(prefix .. suffix)
+  end
+end
+
+-- Block Q: bounded inventory taxonomy totals.
+for _, name in ipairs({
+  "inventory_item_total_count_scaled",
+  "inventory_potion_count_scaled",
+  "inventory_equipment_count_scaled",
+  "inventory_sack_count_scaled",
+  "inventory_misc_count_scaled",
+  "inventory_perk_count_scaled",
+  "inventory_map_count_scaled",
+  "inventory_registered_custom_count_scaled",
+  "inventory_unknown_count_scaled",
+}) do
+  append(name)
+end
+
+assert(
+  #observation_names == 1279,
+  "ML bot v3 observation contract must contain exactly 1279 names")
+
+local option_descriptor_names = {
+  "present",
+  "option_id_index_scaled",
+  "catalog_known",
+  "apply_count_scaled",
+  "learned_rank_scaled",
+  "effective_rank_scaled",
+  "cap_rank_scaled",
+  "max_rank_scaled",
+  "band_index_scaled",
+  "family_element",
+  "family_discipline",
+  "family_ether",
+  "family_fire",
+  "family_air",
+  "family_water",
+  "family_earth",
+  "family_arcane",
+  "family_mind",
+  "family_body",
+  "family_advanced",
+  "family_runtime_only",
+  "is_primary",
+  "is_secondary",
+  "is_passive",
+  "is_utility",
+  "is_weld",
+  "is_health_up",
+  "is_mana_up",
+  "weld_element_ether",
+  "weld_element_fire",
+  "weld_element_air",
+  "weld_element_water",
+  "weld_element_earth",
+  "weld_build_index_scaled",
+  "mana_cost_scaled",
+  "damage_min_scaled",
+  "damage_max_scaled",
+  "range_scaled",
+  "cooldown_scaled",
+  "radius_scaled",
+  "duration_scaled",
+  "value_scaled",
+  "concentration_scaled",
+  "chance_scaled",
+  "quantity_or_strength_scaled",
+  "mana_cost_present",
+  "damage_min_present",
+  "damage_max_present",
+  "range_present",
+  "cooldown_present",
+  "radius_present",
+  "duration_present",
+  "value_present",
+  "concentration_present",
+  "chance_present",
+  "quantity_or_strength_present",
+}
+
+assert(
+  #option_descriptor_names == 56,
+  "ML bot v3 choice option descriptor must contain 56 names")
+
+local movement_actions = {
+  {name = "idle", x = 0.0, y = 0.0},
+  {name = "east", x = 1.0, y = 0.0},
+  {name = "southeast", x = inverse_sqrt_two, y = inverse_sqrt_two},
+  {name = "south", x = 0.0, y = 1.0},
+  {name = "southwest", x = -inverse_sqrt_two, y = inverse_sqrt_two},
+  {name = "west", x = -1.0, y = 0.0},
+  {name = "northwest", x = -inverse_sqrt_two, y = -inverse_sqrt_two},
+  {name = "north", x = 0.0, y = -1.0},
+  {name = "northeast", x = inverse_sqrt_two, y = -inverse_sqrt_two},
+}
+
+local target_actions = {
+  {name = "keep_current", enemy_slot = 0},
+}
+for slot = 1, 8 do
+  target_actions[#target_actions + 1] = {
+    name = "enemy_" .. tostring(slot),
+    enemy_slot = slot,
+  }
+end
+
+local ability_actions = {
+  {name = "none", kind = "none", skill_slot = -1},
+  {name = "primary", kind = "cast", skill_slot = 0},
+}
+for slot = 1, 8 do
+  ability_actions[#ability_actions + 1] = {
+    name = "secondary_" .. tostring(slot),
+    kind = "cast",
+    skill_slot = slot,
+  }
+end
+for slot = 1, 12 do
+  ability_actions[#ability_actions + 1] = {
+    name = "drink_potion_" .. tostring(slot),
+    kind = "potion",
+    potion_slot = slot,
+  }
+end
+
+local aim_actions = {
+  {name = "center", x = 0.0, y = 0.0},
+}
+for index = 2, #movement_actions do
+  local direction = movement_actions[index]
+  aim_actions[#aim_actions + 1] = {
+    name = direction.name,
+    x = direction.x,
+    y = direction.y,
+  }
+end
+
+assert(#movement_actions == 9)
+assert(#target_actions == 9)
+assert(#ability_actions == 22)
+assert(#aim_actions == 9)
 
 return {
   model_format = "solomon-dark-bot-policy",
-  model_version = 2,
-  observation_version = 2,
-  trajectory_version = 2,
-  architecture = "mlp-tanh-three-head-v2",
-  hidden_sizes = {192, 96},
+  model_version = 3,
+  observation_version = 3,
+  trajectory_version = 3,
+  choice_trajectory_version = 3,
+  architecture = "mlp-tanh-four-head-v3",
+  hidden_sizes = {512, 256},
   observation_names = observation_names,
+  option_descriptor_names = option_descriptor_names,
 
   secondary_slot_count = 8,
   enemy_slot_count = 8,
   pickup_slot_count = 4,
   ally_slot_count = 4,
+  obstacle_slot_count = 8,
+  hazard_slot_count = 12,
+  potion_slot_count = 12,
+  equipment_slot_count = 7,
+  max_choice_options = 16,
 
-  -- Fixed v2 scales. These are contract constants, not batch statistics.
-  --
-  -- Native baseline max HP/MP is 50. Mana Up 56 tops out at +1250 and
-  -- Health Up 64 at +650 (native-skill-catalog.json); the stock 25% Mana
-  -- and Life Charms are documented in native-hagatha-perk-catalog.json.
-  -- Thus the end-game maxima are 1625 MP and 875 HP, covered by 2000/1000.
+  -- Fixed v3 scales. These are source-evidenced constants rather than batch
+  -- statistics. V2's maxima remain documented in the accepted v2 contract.
   mana_scale = 2000.0,
   hp_scale = 1000.0,
-  --
-  -- Rush 67 tops out at +50% and its concentration bonus is +25%
-  -- (native-skill-catalog.json); stock walk-speed equipment tops out at +50%
-  -- (native-item-catalog.json), and Speed Charm adds +10%
-  -- (native-hagatha-perk-catalog.json). The native movement-envelope probe in
-  -- tests/re/run_live_bot_native_speed_probe.py measures actor deltas and
-  -- rejects motion above the PlayerActorTick cap. Its fastest observed mover
-  -- remains below 1000 world units/second; 1000 is the fixed round ceiling.
   velocity_scale = 1000.0,
-  --
-  -- Phase 2's live Teleport-48 probe resolved a 60.0-second cap; the native
-  -- cooldown rows are already converted to seconds by get_loadout_details.
   cooldown_scale = 60.0,
   range_scale = 1000.0,
   radius_scale = 100.0,
@@ -266,7 +573,6 @@ return {
   ray_step = 60.0,
   patch_spacing = 60.0,
   patch_radius = 3,
-  nav_subdivisions = 4,
   nav_refresh_ms = 2000,
   movement_lookahead = 110.0,
   pickup_count_scale = 8.0,
@@ -274,70 +580,53 @@ return {
   multiplier_scale = 4.0,
   pickup_request_interval_ms = 500,
 
-  -- primary_build_index_scaled uses native skill-band order for base
-  -- primaries: Ether/Fire/Air/Water/Earth map to 0/.2/.4/.6/.8. Welds map
-  -- exactly as (build_id - 1000) / 10, yielding 0 through .9. The element
-  -- flags disambiguate intentional overlap between the two encodings.
+  -- Native modifier and consumable timers run at 100 Hz. The accepted live
+  -- Teleport cap is 60 seconds and covers every currently exposed timer.
+  status_duration_scale_seconds = 60.0,
+  hazard_lifetime_scale_seconds = 60.0,
+  hazard_time_to_contact_scale_seconds = 10.0,
+
+  enemy_species_scale = 19.0,
+  enemy_animation_state_scale = 255.0,
+  hazard_type_scale = 38.0,
+  equipment_catalog_scale = 46.0,
+  equipment_rarity_scale = 2.0,
+  equipment_target_kind_scale = 8.0,
+  equipment_effect_scale = 4.0,
+
+  -- Adjudication 13 fixes every inventory count to log1p saturation at 99.
+  inventory_count_saturation = 99.0,
+
+  aim_offset_world = 60.0,
+
+  -- Catalog maxima from native-skill-catalog.json: Damage 500, Cooldown 60,
+  -- Radius 20, Duration 30, Value 1250, Concentration 25, Chance 100, and
+  -- max(Quantity, Strength) 2100. Mana and range reuse the v2 scales.
+  skill_id_scale = 81.0,
+  skill_rank_scale = 20.0,
+  skill_band_scale = 8.0,
+  skill_damage_scale = 500.0,
+  skill_radius_scale = 20.0,
+  skill_duration_scale = 30.0,
+  skill_value_scale = 1250.0,
+  skill_concentration_scale = 25.0,
+  skill_chance_scale = 100.0,
+  skill_quantity_or_strength_scale = 2100.0,
+
+  choice_entropy_coefficient = 0.05,
+  choice_exploration_temperature = 1.25,
+  choice_final_temperature = 1.0,
+  choice_coverage_threshold = 20,
+
   primary_build_index_encoding =
     "base_band_identity_or_weld_pair_index",
 
-  weld_preferences = {
-    prefer = true,
-    avoid = true,
-    auto = true,
-  },
+  movement_actions = movement_actions,
+  target_actions = target_actions,
+  ability_actions = ability_actions,
+  aim_actions = aim_actions,
 
-  movement_actions = {
-    { name = "idle", x = 0.0, y = 0.0 },
-    { name = "east", x = 1.0, y = 0.0 },
-    {
-      name = "southeast",
-      x = inverse_sqrt_two,
-      y = inverse_sqrt_two,
-    },
-    { name = "south", x = 0.0, y = 1.0 },
-    {
-      name = "southwest",
-      x = -inverse_sqrt_two,
-      y = inverse_sqrt_two,
-    },
-    { name = "west", x = -1.0, y = 0.0 },
-    {
-      name = "northwest",
-      x = -inverse_sqrt_two,
-      y = -inverse_sqrt_two,
-    },
-    { name = "north", x = 0.0, y = -1.0 },
-    {
-      name = "northeast",
-      x = inverse_sqrt_two,
-      y = -inverse_sqrt_two,
-    },
-  },
-  target_actions = {
-    { name = "keep_current", enemy_slot = 0 },
-    { name = "enemy_1", enemy_slot = 1 },
-    { name = "enemy_2", enemy_slot = 2 },
-    { name = "enemy_3", enemy_slot = 3 },
-    { name = "enemy_4", enemy_slot = 4 },
-    { name = "enemy_5", enemy_slot = 5 },
-    { name = "enemy_6", enemy_slot = 6 },
-    { name = "enemy_7", enemy_slot = 7 },
-    { name = "enemy_8", enemy_slot = 8 },
-  },
-  cast_actions = {
-    { name = "none", skill_slot = -1 },
-    { name = "primary", skill_slot = 0 },
-    { name = "secondary_1", skill_slot = 1 },
-    { name = "secondary_2", skill_slot = 2 },
-    { name = "secondary_3", skill_slot = 3 },
-    { name = "secondary_4", skill_slot = 4 },
-    { name = "secondary_5", skill_slot = 5 },
-    { name = "secondary_6", skill_slot = 6 },
-    { name = "secondary_7", skill_slot = 7 },
-    { name = "secondary_8", skill_slot = 8 },
-  },
-  trajectory_fields = {
+  main_trajectory_fields = {
     "trajectory_version",
     "episode_id",
     "participant_id",
@@ -345,18 +634,41 @@ return {
     "observation",
     "movement_mask",
     "target_mask",
-    "cast_mask",
+    "ability_mask",
+    "aim_mask",
     "movement_action",
     "target_action",
-    "cast_action",
+    "ability_action",
+    "aim_action",
     "old_log_probability",
     "old_value",
     "reward",
     "done",
   },
+  choice_trajectory_fields = {
+    "choice_trajectory_version",
+    "episode_id",
+    "participant_id",
+    "generation",
+    "simulation_tick",
+    "observation",
+    "option_descriptors",
+    "option_mask",
+    "selected_option",
+    "old_log_probability",
+    "old_value",
+    "next_value",
+    "duration_steps",
+    "rewards",
+    "done",
+    "choice_mode",
+    "trainable",
+    "accepted",
+  },
 
-  -- Skill upgrades remain deterministic in v2. A learned weld/upgrade head is
-  -- intentionally deferred to v3 because level-up offers are too sparse at
-  -- the 10 Hz combat decision cadence.
-  learned_skill_choice_head = false,
+  learned_skill_choice_head = true,
+  skill_choice_modes = {
+    learned = true,
+    scripted = true,
+  },
 }

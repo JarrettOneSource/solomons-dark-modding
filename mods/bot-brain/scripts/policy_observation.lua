@@ -30,6 +30,13 @@ local function ratio(value, maximum)
   return clamp(number(value) / maximum, 0.0, 1.0)
 end
 
+local function log_count_scaled(value, saturation)
+  saturation = math.max(number(saturation, 99.0), 1.0)
+  local bounded = clamp(number(value), 0.0, saturation)
+  return math.log(1.0 + bounded) /
+    math.log(1.0 + saturation)
+end
+
 local function normalize(x, y)
   x = number(x)
   y = number(y)
@@ -137,7 +144,8 @@ local function sort_enemies(
     memory,
     spell_descriptors,
     primary,
-    velocity_scale)
+    velocity_scale,
+    enemy_descriptors)
   local rows = {}
   local next_history = {}
   for source_index, enemy in ipairs(enemies or {}) do
@@ -191,6 +199,14 @@ local function sort_enemies(
         velocity_dx = scaled(velocity_x, velocity_scale),
         velocity_dy = scaled(velocity_y, velocity_scale),
         in_primary_range = in_primary_range,
+        descriptor = enemy_descriptors:describe(enemy),
+        heading = number(enemy.heading),
+        object_type_id = number(
+          enemy.object_type_id,
+          number(enemy.native_type_id)),
+        anim_drive_state = number(enemy.anim_drive_state),
+        combat_status_resolved =
+          enemy.combat_status_resolved == true,
       }
     end
   end
@@ -427,6 +443,10 @@ function observation.new(spec, dependencies)
     geometry = assert(dependencies.geometry),
     spell_descriptors =
       assert(dependencies.spell_descriptors),
+    enemy_descriptors =
+      assert(dependencies.enemy_descriptors),
+    hazards = assert(dependencies.hazards),
+    inventory = assert(dependencies.inventory),
     get_snapshot =
       dependencies.get_snapshot or default_snapshot,
     get_multiplayer_state =
@@ -444,7 +464,14 @@ function observation.capture(builder, context, frame)
   local bot_x = number(frame.bot_x)
   local bot_y = number(frame.bot_y)
   local now_ms = number(frame.now_ms)
-  builder.geometry:refresh(now_ms, frame.scene_key)
+  local geometry_cache =
+    context.policy_geometry or builder.geometry
+  local hazard_resolver =
+    context.policy_hazards or builder.hazards
+  geometry_cache:refresh(
+    now_ms,
+    frame.scene_key,
+    context.participant_id)
 
   local snapshot = builder.get_snapshot(
     context.participant_id)
@@ -469,7 +496,8 @@ function observation.capture(builder, context, frame)
     memory,
     builder.spell_descriptors,
     primary,
-    spec.velocity_scale)
+    spec.velocity_scale,
+    builder.enemy_descriptors)
 
   local persisted_id = number(memory.target_actor_id)
   local current_target =
@@ -490,6 +518,15 @@ function observation.capture(builder, context, frame)
   local loot = builder.get_loot()
   loot = type(loot) == "table" and loot or {}
   local pickups = sort_pickups(loot, bot_x, bot_y)
+  local inventory_capture = builder.inventory:capture(
+    context.participant_id,
+    snapshot)
+  local hazard_capture = hazard_resolver:capture(
+    bot_x,
+    bot_y,
+    context.participant_id,
+    geometry_cache.observer_radius,
+    now_ms)
 
   local hp_current = number(frame.hp, number(snapshot.hp))
   local hp_max = number(frame.max_hp, number(snapshot.max_hp))
@@ -780,8 +817,12 @@ function observation.capture(builder, context, frame)
     scaled(primary.range_max, spec.range_scale))
 
   -- Block F: cached local geometry.
-  local clearances, patch =
-    builder.geometry:features(bot_x, bot_y)
+  local clearances, patch, obstacles =
+    geometry_cache:features(
+      bot_x,
+      bot_y,
+      multiplayer.participants,
+      context.participant_id)
   if #clearances ~= 8 or #patch ~= 48 then
     error("policy geometry must produce 8 rays and 48 patch values")
   end
@@ -1067,7 +1108,8 @@ function observation.capture(builder, context, frame)
     values,
     spec,
     "previous_cast_secondary",
-    number(memory.previous_cast_action) >= 2)
+    number(memory.previous_cast_action) >= 2 and
+      number(memory.previous_cast_action) <= 9)
   push(
     values,
     spec,
@@ -1143,6 +1185,530 @@ function observation.capture(builder, context, frame)
       loadout.secondary_recharge_multiplier,
       spec.multiplier_scale))
 
+  -- Block J: participant-scoped potion timers.
+  push(
+    values,
+    spec,
+    "self_damage_x4_remaining_scaled",
+    inventory_capture.damage_x4_remaining_scaled)
+  push(
+    values,
+    spec,
+    "self_poison_immunity_remaining_scaled",
+    inventory_capture.poison_immunity_remaining_scaled)
+  push(
+    values,
+    spec,
+    "self_all_concentration_remaining_scaled",
+    inventory_capture.all_concentration_remaining_scaled)
+
+  -- Block K: enemy identity, combat state, and statuses.
+  for slot = 1, spec.enemy_slot_count do
+    local enemy = enemy_slots[slot]
+    local descriptor =
+      enemy ~= nil and enemy.descriptor or {}
+    local prefix = "enemy_" .. tostring(slot) .. "_"
+    push(
+      values,
+      spec,
+      prefix .. "species_index_scaled",
+      descriptor.species_index_scaled)
+    for _, name in ipairs({
+      "species_known",
+      "role_melee",
+      "role_ranged",
+      "role_caster",
+      "role_spawner",
+      "role_exploder",
+      "role_boss",
+      "role_flying",
+      "role_stationary",
+    }) do
+      push_boolean(
+        values,
+        spec,
+        prefix .. name,
+        descriptor[name])
+    end
+    push(
+      values,
+      spec,
+      prefix .. "facing_dx",
+      descriptor.facing_dx)
+    push(
+      values,
+      spec,
+      prefix .. "facing_dy",
+      descriptor.facing_dy)
+    push(
+      values,
+      spec,
+      prefix .. "anim_state_scaled",
+      descriptor.anim_state_scaled)
+    for _, name in ipairs({
+      "telegraph_known",
+      "winding_up",
+      "attack_active",
+      "recovering",
+    }) do
+      push_boolean(
+        values,
+        spec,
+        prefix .. name,
+        descriptor[name])
+    end
+    push_boolean(
+      values,
+      spec,
+      prefix .. "slowed",
+      descriptor.slowed)
+    push(
+      values,
+      spec,
+      prefix .. "slow_remaining_scaled",
+      scaled(
+        descriptor.slow_remaining_seconds,
+        spec.status_duration_scale_seconds))
+    push_boolean(
+      values,
+      spec,
+      prefix .. "frozen",
+      descriptor.frozen)
+    push(
+      values,
+      spec,
+      prefix .. "frozen_remaining_scaled",
+      scaled(
+        descriptor.frozen_remaining_seconds,
+        spec.status_duration_scale_seconds))
+    push_boolean(
+      values,
+      spec,
+      prefix .. "poisoned",
+      descriptor.poisoned)
+    push(
+      values,
+      spec,
+      prefix .. "poison_remaining_scaled",
+      scaled(
+        descriptor.poison_remaining_seconds,
+        spec.status_duration_scale_seconds))
+    push_boolean(
+      values,
+      spec,
+      prefix .. "webbed",
+      descriptor.webbed)
+    push(
+      values,
+      spec,
+      prefix .. "webbed_remaining_scaled",
+      scaled(
+        descriptor.webbed_remaining_seconds,
+        spec.status_duration_scale_seconds))
+    push_boolean(
+      values,
+      spec,
+      prefix .. "turn_undead",
+      descriptor.turn_undead)
+    push(
+      values,
+      spec,
+      prefix .. "turn_undead_remaining_scaled",
+      scaled(
+        descriptor.turn_undead_remaining_seconds,
+        spec.status_duration_scale_seconds))
+  end
+
+  -- Block L: persisted target motion and facing.
+  push(
+    values,
+    spec,
+    "target_velocity_dx",
+    current_target and current_target.velocity_dx or 0.0)
+  push(
+    values,
+    spec,
+    "target_velocity_dy",
+    current_target and current_target.velocity_dy or 0.0)
+  push(
+    values,
+    spec,
+    "target_facing_dx",
+    current_target and
+      current_target.descriptor.facing_dx or 0.0)
+  push(
+    values,
+    spec,
+    "target_facing_dy",
+    current_target and
+      current_target.descriptor.facing_dy or 0.0)
+
+  -- Block M: nearest exact, radius-inflated collision obstacles.
+  for slot = 1, spec.obstacle_slot_count do
+    local obstacle = obstacles[slot]
+    local prefix = "obstacle_" .. tostring(slot) .. "_"
+    push_boolean(
+      values,
+      spec,
+      prefix .. "present",
+      obstacle ~= nil)
+    push(
+      values,
+      spec,
+      prefix .. "nearest_dx",
+      obstacle and obstacle.nearest_dx or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "nearest_dy",
+      obstacle and obstacle.nearest_dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "clearance_scaled",
+      obstacle and
+        scaled(obstacle.clearance, spec.range_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "normal_dx",
+      obstacle and obstacle.normal_dx or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "normal_dy",
+      obstacle and obstacle.normal_dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "radius_scaled",
+      obstacle and
+        scaled(obstacle.radius, spec.radius_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "extent_x_scaled",
+      obstacle and
+        scaled(obstacle.extent_x, spec.range_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "extent_y_scaled",
+      obstacle and
+        scaled(obstacle.extent_y, spec.range_scale) or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "kind_circle",
+      obstacle ~= nil and obstacle.kind == "circle")
+    push_boolean(
+      values,
+      spec,
+      prefix .. "kind_segment",
+      obstacle ~= nil and obstacle.kind == "segment")
+    push_boolean(
+      values,
+      spec,
+      prefix .. "kind_polygon",
+      obstacle ~= nil and obstacle.kind == "polygon")
+    push_boolean(
+      values,
+      spec,
+      prefix .. "is_participant",
+      obstacle ~= nil and obstacle.is_participant)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "is_destructible",
+      obstacle ~= nil and obstacle.is_destructible)
+  end
+
+  -- Block N: nearest hostile hazards. Unknown hostile classes are retained.
+  for slot = 1, spec.hazard_slot_count do
+    local hazard = hazard_capture.rows[slot]
+    local prefix = "hazard_" .. tostring(slot) .. "_"
+    push_boolean(
+      values,
+      spec,
+      prefix .. "present",
+      hazard ~= nil)
+    push(
+      values,
+      spec,
+      prefix .. "hazard_type_index_scaled",
+      hazard and hazard.hazard_type_index_scaled or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "type_known",
+      hazard ~= nil and hazard.type_known)
+    push(values, spec, prefix .. "dx", hazard and hazard.dx or 0.0)
+    push(values, spec, prefix .. "dy", hazard and hazard.dy or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "distance_scaled",
+      hazard and scaled(hazard.distance, spec.range_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "velocity_dx",
+      hazard and
+        scaled(hazard.velocity_x, spec.velocity_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "velocity_dy",
+      hazard and
+        scaled(hazard.velocity_y, spec.velocity_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "radius_scaled",
+      hazard and scaled(hazard.radius, spec.radius_scale) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "time_to_contact_scaled",
+      hazard and
+        scaled(
+          hazard.time_to_contact,
+          spec.hazard_time_to_contact_scale_seconds) or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "remaining_time_scaled",
+      hazard and
+        scaled(
+          hazard.remaining_time,
+          spec.hazard_lifetime_scale_seconds) or 0.0)
+    for _, name in ipairs({
+      "kind_projectile",
+      "kind_area",
+      "kind_beam",
+      "homing",
+      "targeting_self",
+      "source_enemy",
+    }) do
+      push_boolean(
+        values,
+        spec,
+        prefix .. name,
+        hazard ~= nil and hazard[name])
+    end
+  end
+  push(
+    values,
+    spec,
+    "hazard_count_scaled",
+    log_count_scaled(
+      hazard_capture.total_count,
+      spec.inventory_count_saturation))
+
+  -- Block O: count-ranked potion descriptors.
+  for slot = 1, spec.potion_slot_count do
+    local potion = inventory_capture.potion_rows[slot]
+    local prefix = "potion_" .. tostring(slot) .. "_"
+    for _, name in ipairs({
+      "present",
+      "stock_health",
+      "stock_mana",
+      "stock_wizard_chug",
+      "stock_antidote",
+      "stock_mind_chug",
+      "stock_rejuvenation",
+      "custom",
+    }) do
+      if name == "present" then
+        push_boolean(
+          values,
+          spec,
+          prefix .. name,
+          potion ~= nil and potion.present)
+        push(
+          values,
+          spec,
+          prefix .. "count_scaled",
+          potion and potion.count_scaled or 0.0)
+      else
+        push_boolean(
+          values,
+          spec,
+          prefix .. name,
+          potion ~= nil and potion[name])
+      end
+    end
+    push(
+      values,
+      spec,
+      prefix .. "restores_hp_fraction",
+      potion and potion.restores_hp_fraction or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "restores_mana_fraction",
+      potion and potion.restores_mana_fraction or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "damage_multiplier_scaled",
+      potion and potion.damage_multiplier_scaled or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "cures_poison",
+      potion ~= nil and potion.cures_poison)
+    push(
+      values,
+      spec,
+      prefix .. "poison_immunity_duration_scaled",
+      potion and
+        potion.poison_immunity_duration_scaled or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "concentrates_all",
+      potion ~= nil and potion.concentrates_all)
+    push(
+      values,
+      spec,
+      prefix .. "effect_duration_scaled",
+      potion and potion.effect_duration_scaled or 0.0)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "custom_effect_known",
+      potion ~= nil and potion.custom_effect_known)
+    push(
+      values,
+      spec,
+      prefix .. "identity_hash_a",
+      potion and potion.identity_hash_a or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "identity_hash_b",
+      potion and potion.identity_hash_b or 0.0)
+  end
+  push(
+    values,
+    spec,
+    "potion_type_count_scaled",
+    inventory_capture.potion_type_count_scaled)
+  push(
+    values,
+    spec,
+    "potion_total_count_scaled",
+    inventory_capture.potion_total_count_scaled)
+
+  -- Block P: equipped item identity and effect summaries.
+  for _, slot in ipairs({
+    "hat",
+    "robe",
+    "weapon",
+    "ring_1",
+    "ring_2",
+    "ring_3",
+    "amulet",
+  }) do
+    local equipment = inventory_capture.equipment_rows[slot]
+    local prefix = "equipment_" .. slot .. "_"
+    push_boolean(
+      values,
+      spec,
+      prefix .. "present",
+      equipment.present)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "catalog_known",
+      equipment.catalog_known)
+    push(
+      values,
+      spec,
+      prefix .. "identity_hash_a",
+      equipment.identity_hash_a)
+    push(
+      values,
+      spec,
+      prefix .. "identity_hash_b",
+      equipment.identity_hash_b)
+    push(
+      values,
+      spec,
+      prefix .. "rarity_scaled",
+      equipment.rarity_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "level_scaled",
+      equipment.level_scaled)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "set_complete",
+      equipment.set_complete)
+    push(
+      values,
+      spec,
+      prefix .. "offense_effect_scaled",
+      equipment.offense_effect_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "resource_effect_scaled",
+      equipment.resource_effect_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "mobility_effect_scaled",
+      equipment.mobility_effect_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "defense_effect_scaled",
+      equipment.defense_effect_scaled)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "targeted_effect_present",
+      equipment.targeted_effect_present)
+    push(
+      values,
+      spec,
+      prefix .. "target_kind_scaled",
+      equipment.target_kind_scaled)
+    push(
+      values,
+      spec,
+      prefix .. "target_magnitude_scaled",
+      equipment.target_magnitude_scaled)
+    push_boolean(
+      values,
+      spec,
+      prefix .. "special_feature_present",
+      equipment.special_feature_present)
+  end
+
+  -- Block Q: bounded/log-scaled inventory taxonomy counts.
+  for _, field in ipairs({
+    "item_total_count",
+    "potion_count",
+    "equipment_count",
+    "sack_count",
+    "misc_count",
+    "perk_count",
+    "map_count",
+    "registered_custom_count",
+    "unknown_count",
+  }) do
+    push(
+      values,
+      spec,
+      "inventory_" .. field .. "_scaled",
+      inventory_capture.summary[field])
+  end
+
   if #values ~= #spec.observation_names then
     error(
       "policy observation contains " .. tostring(#values) ..
@@ -1179,7 +1745,8 @@ function observation.capture(builder, context, frame)
     movement_mask = movement_mask,
     movement_targets = movement_targets,
     target_mask = target_mask,
-    cast_mask = nil,
+    ability_mask = nil,
+    aim_mask = nil,
     snapshot = snapshot,
     multiplayer = multiplayer,
     participant = participant,
@@ -1190,6 +1757,10 @@ function observation.capture(builder, context, frame)
     allies = allies,
     loot = loot,
     pickups = pickups,
+    obstacles = obstacles,
+    hazards = hazard_capture.rows,
+    hazard_snapshot = hazard_capture.snapshot,
+    inventory = inventory_capture,
     bot_x = bot_x,
     bot_y = bot_y,
     offense_enabled = frame.offense_enabled == true,
@@ -1243,59 +1814,112 @@ function observation.select_target(
   return target, switched
 end
 
-function observation.build_cast_mask(
+function observation.build_ability_mask(
     builder,
     capture,
     target)
   local spec = builder.spec
   local mask = {}
-  for index = 1, #spec.cast_actions do
+  for index = 1, #spec.ability_actions do
     mask[index] = false
   end
   mask[1] = true
 
   local snapshot = capture.snapshot
-  local common_ready =
+  local cast_ready =
     capture.offense_enabled == true and
     type(target) == "table" and
     snapshot.cast_ready == true and
     snapshot.cast_active ~= true and
     snapshot.cast_pending ~= true
-  if not common_ready then
-    capture.cast_mask = mask
-    return mask
-  end
-
-  local primary = capture.loadout.primary
-  local primary_in_range =
-    builder.spell_descriptors:primary_in_range(
-      primary,
-      capture.bot_x,
-      capture.bot_y,
-      target)
-  mask[2] =
-    primary.occupied == true and
-    primary.affordable == true and
-    (primary.range_resolved ~= true or
-      primary_in_range == true)
-
-  for slot = 1, spec.secondary_slot_count do
-    local secondary = capture.loadout.secondaries[slot]
-    local in_range =
-      builder.spell_descriptors:secondary_in_range(
-        secondary,
+  if cast_ready then
+    local primary = capture.loadout.primary
+    local primary_in_range =
+      builder.spell_descriptors:primary_in_range(
+        primary,
         capture.bot_x,
         capture.bot_y,
         target)
-    mask[slot + 2] =
-      secondary.occupied == true and
-      secondary.affordable == true and
-      secondary.ready == true and
-      (secondary.range_resolved ~= true or
-        in_range == true)
+    mask[2] =
+      primary.occupied == true and
+      primary.affordable == true and
+      (primary.range_resolved ~= true or
+        primary_in_range == true)
+
+    for slot = 1, spec.secondary_slot_count do
+      local secondary = capture.loadout.secondaries[slot]
+      local in_range =
+        builder.spell_descriptors:secondary_in_range(
+          secondary,
+          capture.bot_x,
+          capture.bot_y,
+          target)
+      mask[slot + 2] =
+        secondary.occupied == true and
+        secondary.affordable == true and
+        secondary.ready == true and
+        (secondary.range_resolved ~= true or
+          in_range == true)
+    end
   end
-  capture.cast_mask = mask
+
+  for slot = 1, spec.potion_slot_count do
+    -- The inventory resolver permanently rejects stock subtypes 2/3/4,
+    -- independent of vitals or timers.
+    mask[slot + 10] =
+      capture.inventory.potion_legal[slot] == true
+  end
+  capture.ability_mask = mask
   return mask
+end
+
+function observation.build_aim_mask(
+    builder,
+    capture,
+    ability_action)
+  ability_action = math.floor(number(ability_action, -1))
+  local action = builder.spec.ability_actions[ability_action + 1]
+  if type(action) ~= "table" then
+    error(
+      "policy selected invalid ability action " ..
+      tostring(ability_action))
+  end
+  local free = false
+  if action.kind == "cast" then
+    local spell
+    if action.skill_slot == 0 then
+      spell = capture.loadout.primary
+    else
+      spell = capture.loadout.secondaries[action.skill_slot]
+    end
+    free = builder.spell_descriptors:aim_is_free(spell)
+  end
+  local mask = {}
+  for index = 1, #builder.spec.aim_actions do
+    mask[index] = index == 1 or free == true
+  end
+  capture.aim_mask = mask
+  return mask
+end
+
+function observation.aim_point(
+    builder,
+    target,
+    aim_action)
+  if type(target) ~= "table" then
+    return nil, nil
+  end
+  aim_action = math.floor(number(aim_action, -1))
+  local action = builder.spec.aim_actions[aim_action + 1]
+  if type(action) ~= "table" then
+    error(
+      "policy selected invalid aim action " ..
+      tostring(aim_action))
+  end
+  return number(target.x) +
+      action.x * builder.spec.aim_offset_world,
+    number(target.y) +
+      action.y * builder.spec.aim_offset_world
 end
 
 function observation.new_memory()

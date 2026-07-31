@@ -100,11 +100,40 @@ function steering.live_enemies(world_snapshot)
         hp > 0.0 and max_hp > 0.0 then
       table.insert(enemies, {
         network_actor_id = tonumber(actor.network_actor_id) or 0,
+        object_type_id =
+          tonumber(actor.object_type_id) or
+          tonumber(actor.native_type_id) or 0,
+        enemy_type = tonumber(actor.enemy_type) or 0,
+        content_id = tonumber(actor.content_id) or 0,
         x = x,
         y = y,
         radius = math.max(tonumber(actor.radius) or 0.0, 0.0),
         hp = hp,
         max_hp = max_hp,
+        heading = tonumber(actor.heading) or 0.0,
+        anim_drive_state =
+          tonumber(actor.anim_drive_state) or 0,
+        anim_drive_state_word =
+          tonumber(actor.anim_drive_state_word) or 0,
+        combat_status_resolved =
+          actor.combat_status_resolved == true,
+        slowed = actor.slowed == true,
+        slow_remaining_seconds =
+          tonumber(actor.slow_remaining_seconds) or 0.0,
+        frozen = actor.frozen == true,
+        frozen_remaining_seconds =
+          tonumber(actor.frozen_remaining_seconds) or 0.0,
+        poisoned = actor.poisoned == true,
+        poison_remaining_seconds =
+          tonumber(actor.poison_remaining_seconds) or 0.0,
+        webbed = actor.webbed == true,
+        webbed_remaining_seconds =
+          tonumber(actor.webbed_remaining_seconds) or 0.0,
+        turn_undead_resolved =
+          actor.turn_undead_resolved == true,
+        turn_undead = actor.turn_undead == true,
+        turn_undead_remaining_seconds =
+          tonumber(actor.turn_undead_remaining_seconds) or 0.0,
       })
     end
   end

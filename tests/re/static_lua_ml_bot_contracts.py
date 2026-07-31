@@ -73,26 +73,24 @@ def test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete() -> str:
     )
 
 
-def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
+def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     spec = _read("mods/bot-brain/scripts/policy_spec.lua")
-    geometry = _read(
-        "mods/bot-brain/scripts/policy_geometry.lua"
+    geometry = _read("mods/bot-brain/scripts/policy_geometry.lua")
+    spells = _read("mods/bot-brain/scripts/policy_spell_descriptors.lua")
+    enemies = _read("mods/bot-brain/scripts/policy_enemy_descriptors.lua")
+    hazards = _read("mods/bot-brain/scripts/policy_hazards.lua")
+    inventory = _read("mods/bot-brain/scripts/policy_inventory.lua")
+    choices = _read("mods/bot-brain/scripts/policy_skill_choices.lua")
+    skill_catalog = _read("mods/bot-brain/scripts/policy_skill_catalog.lua")
+    catalog_generator = _read(
+        "tools/generate_ml_bot_skill_catalog_lua.py"
     )
-    descriptors = _read(
-        "mods/bot-brain/scripts/policy_spell_descriptors.lua"
-    )
-    observation = _read(
-        "mods/bot-brain/scripts/policy_observation.lua"
-    )
+    observation = _read("mods/bot-brain/scripts/policy_observation.lua")
     brain = _read("mods/bot-brain/scripts/brain.lua")
     main = _read("mods/bot-brain/scripts/main.lua")
-    training = _read(
-        "mods/bot-brain/scripts/policy_training.lua"
-    )
-    fixture = _read(
-        "tests/lua/ml_bot_policy_v2_phase3.lua"
-    )
+    training = _read("mods/bot-brain/scripts/policy_training.lua")
+    fixture = _read("tests/lua/ml_bot_policy_v3_phase3.lua")
 
     assert manifest["version"] == "1.1.0"
     capabilities = set(
@@ -112,46 +110,82 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         entry["key"]: entry
         for entry in manifest["settings"]["entries"]
     }
+    choice_mode = settings["skill_choice_mode"]
+    assert choice_mode["default"] == "learned"
+    assert {
+        choice["value"] for choice in choice_mode["choices"]
+    } == {"learned", "scripted"}
     weld = settings["policy_weld_preference"]
     assert weld["default"] == "auto"
     assert {
         choice["value"] for choice in weld["choices"]
     } == {"prefer", "avoid", "auto"}
+    assert "scripted mode" in weld["description"]
     # The loader's current list-schema ceiling is configuration, not a Lua
     # participant-count assumption.
     assert settings["roster"]["max_items"] == 32
 
     for token in (
-        "model_version = 2",
-        "observation_version = 2",
-        "trajectory_version = 2",
-        'architecture = "mlp-tanh-three-head-v2"',
-        "hidden_sizes = {192, 96}",
-        "#observation_names == 395",
+        "model_version = 3",
+        "observation_version = 3",
+        "trajectory_version = 3",
+        "choice_trajectory_version = 3",
+        'architecture = "mlp-tanh-four-head-v3"',
+        "hidden_sizes = {512, 256}",
+        "#observation_names == 1279",
+        "#option_descriptor_names == 56",
         "secondary_slot_count = 8",
         "enemy_slot_count = 8",
         "pickup_slot_count = 4",
         "ally_slot_count = 4",
+        "obstacle_slot_count = 8",
+        "hazard_slot_count = 12",
+        "potion_slot_count = 12",
+        "equipment_slot_count = 7",
+        "max_choice_options = 16",
         "mana_scale = 2000.0",
         "hp_scale = 1000.0",
         "velocity_scale = 1000.0",
         "cooldown_scale = 60.0",
+        "inventory_count_saturation = 99.0",
+        "aim_offset_world = 60.0",
+        "choice_entropy_coefficient = 0.05",
+        "choice_exploration_temperature = 1.25",
+        "choice_final_temperature = 1.0",
+        "choice_coverage_threshold = 20",
+        "assert(#movement_actions == 9)",
+        "assert(#target_actions == 9)",
+        "assert(#ability_actions == 22)",
+        "assert(#aim_actions == 9)",
         '"keep_current"',
-        '"enemy_8"',
-        '"secondary_8"',
-        '"ally_count_scaled"',
-        '"secondary_recharge_multiplier_scaled"',
+        '"enemy_" .. tostring(slot)',
+        '"secondary_" .. tostring(slot)',
+        '"drink_potion_" .. tostring(slot)',
+        '"target_velocity_dx"',
+        '"obstacle_" .. tostring(slot) .. "_"',
+        '"hazard_count_scaled"',
+        '"potion_type_count_scaled"',
+        '"inventory_unknown_count_scaled"',
     ):
-        assert token in spec, f"phase-3 policy spec lacks {token}"
+        assert token in spec, f"v3 Phase-3 policy spec lacks {token}"
 
     assert "sd.nav.test_segment" not in geometry
-    assert "grid.refresh_pending == false" in geometry
-    assert "self.spec.nav_refresh_ms" in geometry
-    assert "self.spec.nav_subdivisions" in geometry
-    assert "self.grid_build_count = self.grid_build_count + 1" in geometry
-    assert "function Cache:walkable_at(world_x, world_y)" in geometry
-    assert "function Cache:features(world_x, world_y)" in geometry
-    assert "sd.nav.get_grid(subdivisions)" in geometry
+    assert "sd.nav.get_grid" not in geometry
+    for token in (
+        "sd.nav.get_collision_geometry(participant_id)",
+        "snapshot.refresh_pending == false",
+        "snapshot.static_revision",
+        "snapshot.dynamic_revision",
+        "self.geometry_build_count =",
+        "function Cache:walkable_at(",
+        "function Cache:nearest_obstacles(",
+        "function Cache:features(",
+        "participant_id ~= observer_id",
+        "primitive.path_blocks == true",
+        "primitive.destructible_resolved == true",
+        "self.spec.nav_refresh_ms",
+    ):
+        assert token in geometry, f"exact geometry cache lacks {token}"
 
     for token in (
         "sd.bots.get_loadout_details",
@@ -165,10 +199,69 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "snapshot.cast_ready == true",
         "entry.entry_index",
         "entry_id == 52",
+        "FREE_AIM_ENTRY_IDS",
+        "FREE_AIM_BUILD_IDS",
+        "function Resolver:aim_is_free(spell)",
     ):
-        assert token in descriptors, (
-            f"phase-3 spell descriptors lack {token}"
+        assert token in spells, (
+            f"v3 Phase-3 spell descriptors lack {token}"
         )
+
+    for token in (
+        "local SPECIES = {",
+        "local TELEGRAPHS = {",
+        "telegraph_known = phase ~= nil",
+        "enemy.combat_status_resolved == true",
+        "enemy.turn_undead_resolved == true",
+        "slow_remaining_seconds",
+        "frozen_remaining_seconds",
+        "poison_remaining_seconds",
+        "webbed_remaining_seconds",
+    ):
+        assert token in enemies, f"enemy descriptor table lacks {token}"
+
+    for token in (
+        "sd.world.get_replicated_hazards",
+        "hazard.hostile == true",
+        "hazard.type_known == true and",
+        "type_index ~= nil and",
+        "type_index / self.spec.hazard_type_scale or 0.0",
+        "function Resolver:capture(",
+        "impact_time(",
+    ):
+        assert token in hazards, f"hazard descriptor table lacks {token}"
+
+    for token in (
+        "sd.bots.get_inventory_details",
+        "sd.bots.use_consumable",
+        "left_count > right_count",
+        "spec.inventory_count_saturation",
+        "if subtype == 2 or subtype == 3 or subtype == 4 then",
+        "potion.synthetic_use_supported ~= true",
+        "potion.effect_resolved ~= true",
+        "capture.details.inventory_revision",
+        '"hat"',
+        '"ring_3"',
+        '"amulet"',
+    ):
+        assert token in inventory, f"inventory policy lacks {token}"
+
+    for token in (
+        "#skill_choices.options > self.spec.max_choice_options",
+        "option_descriptor(",
+        "catalog_known",
+        "pending_weld_build_id_resolved == true",
+        "event.option_mask[selected_index] ~= true",
+        "context.last_skill_choice_generation = event.generation",
+        "runtime:forward_choice(",
+        "training:record_choice(",
+        'mode == "learned"',
+    ):
+        assert token in choices, f"choice event policy lacks {token}"
+    assert "[52] = {" in skill_catalog
+    assert "[64] = {" in skill_catalog
+    assert "native-skill-catalog.json" in catalog_generator
+    assert "policy_skill_catalog.lua" in catalog_generator
 
     _require_in_order(
         observation,
@@ -181,9 +274,17 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "-- Block G: replicated loot.",
         "-- Block I: nearest in-run participants other than self.",
         "-- Block H: aggregates, config, history, weld, and multipliers.",
+        "-- Block J: participant-scoped potion timers.",
+        "-- Block K: enemy identity, combat state, and statuses.",
+        "-- Block L: persisted target motion and facing.",
+        "-- Block M: nearest exact, radius-inflated collision obstacles.",
+        "-- Block N: nearest hostile hazards. Unknown hostile classes are retained.",
+        "-- Block O: count-ranked potion descriptors.",
+        "-- Block P: equipped item identity and effect summaries.",
+        "-- Block Q: bounded/log-scaled inventory taxonomy counts.",
     )
     for token in (
-        "builder.geometry:refresh(now_ms, frame.scene_key)",
+        "geometry_cache:refresh(",
         "memory.enemy_position_history[actor_id]",
         "memory.target_actor_id",
         "participant.in_run == true",
@@ -193,16 +294,23 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "resource_kind == 0",
         "resource_kind == 1",
         "function observation.select_target(",
-        "function observation.build_cast_mask(",
+        "function observation.build_ability_mask(",
+        "function observation.build_aim_mask(",
+        "function observation.aim_point(",
         "capture.target_mask[mask_index] ~= true",
         "primary.range_resolved ~= true or",
         "secondary.range_resolved ~= true or",
         "secondary.affordable == true",
         "secondary.ready == true",
         "builder.test_segment",
+        "hazard_capture.rows[slot]",
+        "inventory_capture.potion_rows[slot]",
+        "inventory_capture.equipment_rows[slot]",
+        "capture.inventory.potion_legal[slot] == true",
+        "The inventory resolver permanently rejects stock subtypes 2/3/4",
     ):
         assert token in observation, (
-            f"phase-3 observation contract lacks {token}"
+            f"v3 Phase-3 observation contract lacks {token}"
         )
     assert "for _, participant in ipairs(multiplayer.participants or {})" in (
         observation
@@ -217,11 +325,13 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
     _require_in_order(
         brain,
         "shared.policy_observation.capture(",
+        "shared.policy_skill_choices:capture(",
+        "shared.policy_skill_choices:handle(",
+        "if shared.policy_runtime == nil then",
         "shared.policy_runtime:forward(",
-        "capture.target_mask,",
-        "shared.policy_observation.select_target(",
-        "shared.policy_observation.build_cast_mask(",
-        "issue_policy_cast(",
+        "shared.policy_observation.build_ability_mask(",
+        "shared.policy_observation.build_aim_mask(",
+        "issue_policy_ability(",
     )
     for token in (
         "details.pending_weld_build_id_resolved ~= true",
@@ -235,19 +345,34 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "sd.world.request_loot_pickup",
         "selected_target",
         "enemies = all_enemies",
+        'shared.skill_choice_mode == "scripted"',
+        "shared.policy_inventory.use",
+        "shared.policy_observation.aim_point(",
+        "decision.ability_action",
+        "decision.aim_action",
+        "shared.policy_training:record(",
     ):
-        assert token in brain, f"phase-3 brain lacks {token}"
+        assert token in brain, f"v3 Phase-3 brain lacks {token}"
 
     for script in (
         "policy_geometry.lua",
         "policy_spell_descriptors.lua",
+        "policy_enemy_descriptors.lua",
+        "policy_hazards.lua",
+        "policy_inventory.lua",
+        "policy_skill_catalog.lua",
+        "policy_skill_choices.lua",
         "policy_observation.lua",
         "policy_training.lua",
     ):
         assert f'"scripts/{script}"' in main
-    assert "policy_module.new(policy_spec, policy_weights, 20260729)" in main
-    assert "policy_runtime_unavailable_reason" not in main
-    assert "weights are unavailable until Phase 4" not in main
+    assert "local policy_runtime = nil" in main
+    assert 'require_mod("scripts/policy.lua")' not in main
+    assert 'require_mod("scripts/policy_weights.lua")' not in main
+    assert "a v2 model is never adapted or loaded" in main
+    assert "strict v3 policy runtime and weights arrive in Phase V3-4" in main
+    assert 'sd.settings.get("skill_choice_mode")' in main
+    assert 'sd.settings.get("policy_weld_preference")' in main
     assert "policy_geometry:reset(nil)" in main
 
     _require_in_order(
@@ -257,17 +382,26 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
     )
     for token in (
         "trajectory_version = self.spec.trajectory_version",
+        "choice_trajectory_version =",
         "target_mask = copy_mask(capture.target_mask)",
         "target_action = decision.target_action",
-        "cast_mask = copy_mask(capture.cast_mask)",
+        "ability_mask = copy_mask(capture.ability_mask)",
+        "aim_mask = copy_mask(capture.aim_mask)",
+        "ability_action = decision.ability_action",
+        "aim_action = decision.aim_action",
         "old_log_probability = decision.log_probability",
         "old_value = decision.value",
+        "pending.duration_steps = pending.duration_steps + 1",
+        "pending.rewards[#pending.rewards + 1] = reward",
+        "trainable = mode == \"learned\"",
+        "function Controller:drain_choices(",
+        "record.trainable == true",
     ):
         assert token in training, (
-            f"trajectory v2 writer lacks {token}"
+            f"trajectory v3 writer lacks {token}"
         )
-    # Reward coefficients stay byte-for-byte represented as the audited v1
-    # formula; Phase 3 adds no target-shaped term.
+    # Reward coefficients stay byte-for-byte represented as the audited v2
+    # formula; v3 adds no target-, hazard-, item-, or choice-shaped term.
     for token in (
         "local reward = 0.002",
         "reward = reward + hp_delta * 1.25",
@@ -283,22 +417,33 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
     ]
 
     for token in (
-        "observation_count=395",
+        "observation_count=1279",
         "exact_order=true",
-        "target_conditioned_masks=true",
-        "actor_id_persistence=true",
-        "ally_transition=true",
-        "weld_transition=true",
-        "pickup_transition=true",
-        "guardian_far_return=true",
-        "nav_grid_builds=",
-        "trajectory_v2=true",
+        "finite=true",
+        "exact_geometry=true",
+        "geometry_builds=",
+        "enemy_status_transition=true",
+        "target_motion_facing=true",
+        "obstacle_transition=true",
+        "unknown_hazard_retained=true",
+        "hazard_transition=true",
+        "potion_transition=true",
+        "equipment_transition=true",
+        "permanent_potion_masks=true",
+        "aim_family_masks=true",
+        "target_conditioned_ability_masks=true",
+        "choice_descriptor_count=56",
+        "choice_permutation_invariant=true",
+        "choice_generation_exactly_once=true",
+        "choice_duration_steps=2",
+        "scripted_choice_excluded=true",
+        "trajectory_v3=true",
     ):
         assert token in fixture
     return (
-        "Phase 3 pins 395 ordered observations, cached geometry, dynamic "
-        "spell descriptors, actor-ID targeting, allies, assists, and "
-        "trajectory v2 without changing the reward"
+        "V3 Phase 3 pins 1279 ordered observations, exact cached geometry, "
+        "four action masks, inventory and hazard semantics, and separate "
+        "main and choice-event trajectories without changing the reward"
     )
 
 
@@ -460,12 +605,20 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         assert token in main
     for script in (
         "policy_spec.lua",
-        "policy_weights.lua",
-        "policy.lua",
+        "policy_geometry.lua",
+        "policy_spell_descriptors.lua",
+        "policy_enemy_descriptors.lua",
+        "policy_hazards.lua",
+        "policy_inventory.lua",
+        "policy_skill_catalog.lua",
+        "policy_skill_choices.lua",
         "policy_observation.lua",
         "policy_training.lua",
     ):
-        assert f'require_mod("scripts/{script}")' in main
+        assert f'"scripts/{script}"' in main
+    assert 'require_mod("scripts/policy_weights.lua")' not in main
+    assert 'require_mod("scripts/policy.lua")' not in main
+    assert "local policy_runtime = nil" in main
     for token in (
         "function Manager:tick(now_ms, authority, simulation_tick)",
         "simulation_tick)",
@@ -634,8 +787,9 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         assert token in _read("tools/verify_ml_bot_live.py")
 
     return (
-        "The bot keeps its simulation clock, strict v2 runtime, native action "
-        "routing, historical-v1 rejection, and exact-process training bridge"
+        "The v3 Lua layer keeps the simulation clock and native action rails "
+        "while the unloaded v2 artifact and bridge remain strict historical "
+        "inputs until the v3 runtime lands"
     )
 
 
@@ -785,9 +939,11 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         )
     for token in (
         "policy.version",
-        "mlp-tanh-three-head-v2",
+        "mlp-tanh-four-head-v3",
         "policy.observation_size",
         "policy.target_actions",
+        "policy.ability_actions",
+        "policy.aim_actions",
         "def _prime_scripted_primary()",
         "sd.bots.get_loadout_details(participant_id)",
         "sd.bots.debug_sync_level_up",
