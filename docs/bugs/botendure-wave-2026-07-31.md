@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-Status: corrective code complete; exact-SHA owner-topology rerun pending
+Status: second corrective pass complete; exact-SHA owner-topology rerun pending
 
 ## Scope
 
@@ -213,6 +213,117 @@ The real-flow harness now includes the visible launcher automation state in a
 launch-timeout error and copies the scoped `launcher.log` with the runtime
 artifacts, including when mandatory game telemetry is absent. The next exact-
 SHA rerun must use those receipts to resolve the launch failure if it recurs.
+
+The next attempt reproduced the launch refusal while it was live. UI
+Automation showed the definitive message that Steam was not ready, and the
+local process inventory contained zero `steam.exe` processes. This also
+resolves the preceding attempt: its UI path and absence of a game crash were
+the same, but its status text had not yet been retained. This is an external
+prerequisite loss, not a launcher, package, or game defect. The existing local
+Steam client may be started under the same interactive account for the next
+authorized lobby run; no login, setting, library, or account change is needed.
+
+## Transport observation: recurrent one-way Steam handshakes
+
+The first complete owner-topology match reached both active local takeovers,
+host enemy authority, and client materialization. The client route nevertheless
+entered `Handshaking` four times. The intervals lasted 62, 32, 274, and 179
+seconds. During each interval the client's receive counter stopped while the
+host continued producing outbound traffic; all four intervals later recovered
+without a process restart and neither peer reported a Steam send rejection.
+
+The second interval began during combat. Client B remained locally at 50 HP
+while disconnected, then received the queued authority state on recovery,
+briefly showed 23 HP, and reached zero in the same sampling interval. The host
+recorded 52 native damage edges totaling 78 damage against client B. This
+explains the early death and is distinct from Bot Brain activation or target
+selection.
+
+The same multi-minute one-way interruption occurred before combat in the
+edge-amplification run, so it predates and survives the primary-cast fix. The
+routes recovered, all sends were accepted, and no product-side transport error
+identified a failing call. This remains an external Steam/SDR finding; adding
+a resend, timeout override, or alternate transport under match pressure would
+be a blind product patch.
+
+## Harness finding: endurance monitoring began after materialization
+
+The pair sampler recorded the route loss and death above, but the endurance
+anomaly monitor did not start until after it had synchronously waited for
+client enemy materialization. The wait therefore hid the most important
+transport interval from live finding emission and began fighter accounting
+only after the client was already dead.
+
+The endurance loop now starts immediately after both normal-setting takeovers
+are active. Enemy materialization remains a required gate, but it is evaluated
+inside the monitored loop. Transport, bot state, HP transitions, and damage
+are therefore observed while that gate is pending instead of after it.
+
+## Harness finding: peer-local wave counters inflated endurance progress
+
+The first match emitted a wave-divergence finding and attributed client B's
+death to wave 4 even though the replicated authority wave was 2 on both peers.
+The helper took the maximum of `sd.waves`, the native combat counter, and the
+world counter. Client B's peer-local combat loop advanced to 4 during the
+route interruption while the host remained on native combat index 1. Those
+diagnostic counters are not authority-owned progress.
+
+Endurance progress, milestone capture, and fighter statistics now use only the
+replicated `sd.waves` summary. The peer-local counters remain in every timeline
+sample for diagnosis but cannot manufacture a higher wave or a false
+divergence.
+
+## Harness finding: outbound traffic masked one-way packet stalls
+
+The packet monitor stored all four send/receive counters in one tuple and
+treated any tuple change as progress. A host send increment therefore reset the
+stall clock even while client B's receive count was frozen for minutes.
+
+The monitor now tracks the last progress time of each counter independently
+and reports a packet stall when either peer's receive counter remains unchanged
+for 30 seconds in the run. Continued outbound traffic can no longer conceal a
+one-way receive failure.
+
+## Bot finding: accepted skirmisher casts did not produce combat progress
+
+After client B died, the host skirmisher survived and travelled throughout the
+arena but stopped making meaningful offensive progress. The captured prefix
+contains 893 accepted primary casts and only seven authoritative enemy-damage
+edges totaling seven damage. Network actor `281543696187401` alone received
+651 accepted cast attempts and no HP edge. After the second enemy death, the
+host spent the final 458 seconds with the same nine living enemies and 21.5
+aggregate HP while its own HP regenerated to 50.
+
+This is a Bot Brain policy pathology, not a cast-ingress rejection. Scripted
+target selection considers native range and geometric distance, while its
+progress state counts accepted casts. It has no applied-damage feedback and no
+projectile-clear-path signal, so repeated misses against the same moving or
+occluded target look successful to the policy. The long perimeter circuit
+also defeats the existing short-window oscillation detector because net
+displacement remains large.
+
+No combat-policy threshold was changed from this one match. Retargeting after
+an arbitrary cast count or treating the player-sized navigation grid as
+projectile line of sight would be a band-aid without live applied-damage
+validation. The endurance monitor instead gains a class-closing finding when
+an active bot accepts at least eight casts over 60 seconds without any living
+enemy count or HP progress. The next run explicitly selects the shipped
+Striker behavior through the same local setting to continue the owner match
+without claiming that this resolves Skirmisher.
+
+## Product finding: local primary diagnostics logged every stock tick
+
+The host loader artifact reached 149 MB before the run ended. It contains
+53,202 `pure_primary_start enter` rows and 53,201 matching exits for only 893
+accepted Bot Brain casts. `HookPurePrimarySpellStart` budgeted diagnostics for
+synthetic actors, but its local-player branch set `log_this` on every stock
+invocation without consuming the same budget. Each row also formatted a large
+native startup snapshot on the gameplay thread.
+
+The local-player branch now uses the existing 32-entry pure-primary diagnostic
+budget. Targeted live probes retain bounded startup evidence, while a held
+primary can no longer grow the loader log at frame rate. This is a diagnostic
+volume fix only; it does not change input, cast, damage, or network ownership.
 
 ## Rerun requirement
 

@@ -1285,9 +1285,11 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         if (TryResolveCurrentGameplayScene(&gameplay_address) &&
             gameplay_address != 0 &&
             TryResolvePlayerActorForSlot(gameplay_address, 0, &local_actor_address) &&
-            local_actor_address == actor_address) {
+            local_actor_address == actor_address &&
+            g_pure_primary_control_log_budget > 0) {
             log_this = true;
             local_player = true;
+            --g_pure_primary_control_log_budget;
         }
     }
 

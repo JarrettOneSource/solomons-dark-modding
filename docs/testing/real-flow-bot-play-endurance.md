@@ -9,9 +9,19 @@ Set both `botPlayForMe` and `enduranceMode` to `true`. The controller stages
 `mods/bot-brain` from the selected source checkout on both peers, enables the
 local-player takeover through the mod's persisted settings and settings reload
 path, and leaves the synthetic bot roster empty. Thus the two network
-participants are the only fighters. `enduranceMaxSeconds` is bounded from 60
+participants are the only fighters. `botPlayBehavior` selects the same
+`skirmisher`, `guardian`, `striker`, or `learned` local setting on both peers
+and defaults to `skirmisher`. `enduranceMaxSeconds` is bounded from 60
 through 5,400 seconds; reaching the cap ends the owned staged processes
 cleanly, while a mutually accepted native Game Over ends the run naturally.
+
+For a workstation that cannot reach the directory service, use an explicit
+loopback `directoryUrl` so the production offline-fallback path fails locally
+instead of contacting the filtered website. Join by Steam lobby ID and keep
+the exact host mod set pre-staged; unpublished mods are never downloaded.
+`reuseWs20Prestage` may be set only for the workstation20 topology after the
+stage has been hash-checked and contains `prestage/launcher` plus
+`prestage/game`. The run still deletes that exact owned stage during cleanup.
 
 The endurance evidence adds:
 
@@ -29,8 +39,10 @@ The endurance evidence adds:
 
 The live anomaly monitor uses sustained thresholds for scene/wave divergence,
 transport loss, packet stalls, client materialization loss, stopped takeover,
-brain-think stalls, idle/stuck/oscillating movement, and any Steam send
-failure. Screenshot failures and missed milestones are findings rather than
+brain-think stalls, idle/stuck/oscillating movement, sustained accepted casts
+without enemy HP progress, and any Steam send failure. Receive progress is
+tracked independently in each direction, so continuing outbound traffic
+cannot hide a one-way stall. Screenshot failures and missed milestones are findings rather than
 silent omissions. Findings remain evidence; they do not authorize a blind
 product patch. Diagnose them from the aligned timeline, loader logs, network
 telemetry, bot probes, and captures, then rerun from a new evidence root after

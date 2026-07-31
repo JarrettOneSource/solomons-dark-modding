@@ -10,11 +10,10 @@ ROLES = ("host", "clientB")
 
 
 def effective_wave(state: dict[str, Any]) -> int:
-    return max(
-        int(state["wave"]["index"]),
-        int(state["combat"]["waveIndex"]),
-        int(state["world"]["waveIndex"]),
-    )
+    # sd.waves is authority-owned and replicated. The native combat/world
+    # counters remain peer-local and can advance independently while a client
+    # is disconnected, so they are diagnostics rather than endurance progress.
+    return int(state["wave"]["index"])
 
 
 def terminal_game_over(state: dict[str, Any]) -> bool:
@@ -210,14 +209,21 @@ class EnduranceAnomalyMonitor:
         "clientB-bot-stuck": 0.0,
         "host-bot-oscillation": 0.0,
         "clientB-bot-oscillation": 0.0,
+        "host-bot-no-damage-progress": 0.0,
+        "clientB-bot-no-damage-progress": 0.0,
         "steam-send-failure": 0.0,
     }
 
     def __init__(self) -> None:
         self.active: dict[str, _ActiveAnomaly] = {}
         self.findings: list[dict[str, Any]] = []
-        self.last_packets: tuple[int, ...] | None = None
-        self.last_packet_progress_elapsed = 0.0
+        self.last_packets: dict[str, int] = {}
+        self.last_packet_progress_elapsed = {
+            "hostSent": 0.0,
+            "hostReceived": 0.0,
+            "clientBSent": 0.0,
+            "clientBReceived": 0.0,
+        }
         self.last_thinks = {role: 0 for role in ROLES}
         self.last_think_progress_elapsed = {role: 0.0 for role in ROLES}
         self.last_casts = {role: 0 for role in ROLES}
@@ -230,6 +236,11 @@ class EnduranceAnomalyMonitor:
         self.motion_windows: dict[
             str, deque[tuple[float, float, float, int]]
         ] = {role: deque() for role in ROLES}
+        self.last_enemy_wave = {role: 0 for role in ROLES}
+        self.last_enemy_count = {role: 0 for role in ROLES}
+        self.last_enemy_hp = {role: 0.0 for role in ROLES}
+        self.last_enemy_progress_elapsed = {role: 0.0 for role in ROLES}
+        self.casts_at_enemy_progress = {role: 0 for role in ROLES}
 
     @staticmethod
     def _living_enemies(state: dict[str, Any]) -> int:
@@ -244,6 +255,14 @@ class EnduranceAnomalyMonitor:
         return sum(
             1
             for enemy in state["replicatedEnemies"]
+            if not enemy["dead"] and float(enemy["hp"]) > 0.0
+        )
+
+    @staticmethod
+    def _living_enemy_hp(state: dict[str, Any]) -> float:
+        return sum(
+            float(enemy["hp"])
+            for enemy in state["nativeEnemies"]
             if not enemy["dead"] and float(enemy["hp"]) > 0.0
         )
 
@@ -265,15 +284,23 @@ class EnduranceAnomalyMonitor:
         host_enemies = self._living_enemies(host)
         client_enemies = self._living_enemies(client)
 
-        packets = (
-            int(host["multiplayer"]["packetsSent"]),
-            int(host["multiplayer"]["packetsReceived"]),
-            int(client["multiplayer"]["packetsSent"]),
-            int(client["multiplayer"]["packetsReceived"]),
-        )
-        if self.last_packets is None or packets != self.last_packets:
-            self.last_packets = packets
-            self.last_packet_progress_elapsed = elapsed
+        packets = {
+            "hostSent": int(host["multiplayer"]["packetsSent"]),
+            "hostReceived": int(host["multiplayer"]["packetsReceived"]),
+            "clientBSent": int(client["multiplayer"]["packetsSent"]),
+            "clientBReceived": int(client["multiplayer"]["packetsReceived"]),
+        }
+        for counter, value in packets.items():
+            if counter not in self.last_packets or value != self.last_packets[counter]:
+                self.last_packets[counter] = value
+                self.last_packet_progress_elapsed[counter] = elapsed
+        receive_stalls = {
+            role: elapsed - self.last_packet_progress_elapsed[counter]
+            for role, counter in (
+                ("host", "hostReceived"),
+                ("clientB", "clientBReceived"),
+            )
+        }
 
         conditions: dict[str, tuple[bool, dict[str, Any]]] = {
             "wave-divergence": (
@@ -310,10 +337,13 @@ class EnduranceAnomalyMonitor:
                 },
             ),
             "packet-stall": (
-                elapsed - self.last_packet_progress_elapsed >= 30.0
+                max(receive_stalls.values()) >= 30.0
                 and host["scene"]["name"] == "testrun"
                 and client["scene"]["name"] == "testrun",
-                {"packets": packets},
+                {
+                    "packets": packets,
+                    "secondsWithoutReceiveProgress": receive_stalls,
+                },
             ),
             "client-materialization-loss": (
                 host_enemies > 0
@@ -394,6 +424,22 @@ class EnduranceAnomalyMonitor:
                 },
             )
             casts = int(bot.get("brain.cast_accepted", 0))
+            enemy_hp = self._living_enemy_hp(state)
+            wave = effective_wave(state)
+            enemy_progress = (
+                role not in self.initialized_roles
+                or wave != self.last_enemy_wave[role]
+                or enemies > self.last_enemy_count[role]
+                or enemy_hp > self.last_enemy_hp[role] + 0.0005
+                or enemies < self.last_enemy_count[role]
+                or enemy_hp < self.last_enemy_hp[role] - 0.0005
+            )
+            if enemy_progress or not combat_relevant:
+                self.last_enemy_progress_elapsed[role] = elapsed
+                self.casts_at_enemy_progress[role] = casts
+            self.last_enemy_wave[role] = wave
+            self.last_enemy_count[role] = enemies
+            self.last_enemy_hp[role] = enemy_hp
             player = state["player"]
             position = (float(player["x"]), float(player["y"]))
             previous = self.last_positions[role]
@@ -449,6 +495,32 @@ class EnduranceAnomalyMonitor:
                     ),
                     "targetDistance": target_distance,
                     "requestedMovement": [move_x, move_y],
+                },
+            )
+            casts_without_damage = max(
+                casts - self.casts_at_enemy_progress[role],
+                0,
+            )
+            seconds_without_damage = (
+                elapsed - self.last_enemy_progress_elapsed[role]
+            )
+            conditions[f"{role}-bot-no-damage-progress"] = (
+                combat_relevant
+                and driving[role]
+                and seconds_without_damage >= 60.0
+                and casts_without_damage >= 8,
+                {
+                    "hp": hp,
+                    "wave": wave,
+                    "livingEnemies": enemies,
+                    "livingEnemyHp": enemy_hp,
+                    "secondsWithoutEnemyHpProgress": seconds_without_damage,
+                    "castsWithoutEnemyHpProgress": casts_without_damage,
+                    "targetDistance": target_distance,
+                    "targetNetworkActorId": int(
+                        bot.get("brain.target_network_actor_id", 0)
+                    ),
+                    "mode": str(bot.get("brain.mode", "")),
                 },
             )
 

@@ -388,8 +388,12 @@ class HarnessConfig:
     timeout_seconds: float = 120.0
     sampling_seconds: float = 0.25
     bot_play_for_me: bool = False
+    bot_play_behavior: Literal[
+        "skirmisher", "guardian", "striker", "learned"
+    ] = "skirmisher"
     endurance_mode: bool = False
     endurance_max_seconds: float = 5400.0
+    reuse_ws20_prestage: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
@@ -512,12 +516,20 @@ class HarnessConfig:
                 row.get("botPlayForMe", False),
                 "botPlayForMe",
             ),
+            bot_play_behavior=_require_string(
+                row.get("botPlayBehavior", "skirmisher"),
+                "botPlayBehavior",
+            ).lower(),
             endurance_mode=_require_bool(
                 row.get("enduranceMode", False),
                 "enduranceMode",
             ),
             endurance_max_seconds=float(
                 row.get("enduranceMaxSeconds", 5400.0)
+            ),
+            reuse_ws20_prestage=_require_bool(
+                row.get("reuseWs20Prestage", False),
+                "reuseWs20Prestage",
             ),
             metadata=_require_object(row.get("metadata", {}), "metadata"),
         )
@@ -542,6 +554,22 @@ class HarnessConfig:
         if self.endurance_mode and not self.bot_play_for_me:
             raise ConfigError(
                 "enduranceMode requires botPlayForMe=true"
+            )
+        if (
+            self.reuse_ws20_prestage
+            and self.topology != "steam_windows_ws20"
+        ):
+            raise ConfigError(
+                "reuseWs20Prestage requires steam_windows_ws20"
+            )
+        if self.bot_play_behavior not in {
+            "skirmisher",
+            "guardian",
+            "striker",
+            "learned",
+        }:
+            raise ConfigError(
+                "botPlayBehavior must be skirmisher, guardian, striker, or learned"
             )
         if not 0.0 < self.expected_water_contact_damage <= 10.0:
             raise ConfigError(
@@ -887,8 +915,10 @@ class HarnessConfig:
             "timeoutSeconds": self.timeout_seconds,
             "samplingSeconds": self.sampling_seconds,
             "botPlayForMe": self.bot_play_for_me,
+            "botPlayBehavior": self.bot_play_behavior,
             "enduranceMode": self.endurance_mode,
             "enduranceMaxSeconds": self.endurance_max_seconds,
+            "reuseWs20Prestage": self.reuse_ws20_prestage,
             "host": peer_value(self.host),
             "client": peer_value(self.client),
             "metadata": self.metadata,

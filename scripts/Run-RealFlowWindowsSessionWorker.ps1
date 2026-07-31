@@ -427,6 +427,75 @@ function Invoke-RealInput {
     }
 }
 
+function Test-SteamAttach {
+    param([Parameter(Mandatory = $true)][object]$Request)
+
+    $launcher = [System.IO.Path]::GetFullPath(
+        [string]$Request.LauncherExecutable)
+    $stagePrefix = [System.IO.Path]::GetFullPath(
+        [Environment]::CurrentDirectory).TrimEnd("\") + "\"
+    if (-not $launcher.StartsWith(
+            $stagePrefix,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "The Steam attach probe launcher escapes the owned stage."
+    }
+    if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+        throw "The staged launcher CLI is missing: $launcher"
+    }
+
+    $start = [System.Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $launcher
+    $start.WorkingDirectory = [System.IO.Path]::GetDirectoryName($launcher)
+    $start.UseShellExecute = $false
+    $start.RedirectStandardInput = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.CreateNoWindow = $true
+    $start.Arguments = "__join-steam-lobby " +
+        [System.Diagnostics.Process]::GetCurrentProcess().Id.ToString() +
+        " " + ([uint64]$Request.LobbyId).ToString()
+
+    $process = [System.Diagnostics.Process]::Start($start)
+    if ($null -eq $process) {
+        throw "The staged Steam attach probe did not start."
+    }
+    try {
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit([int]$Request.TimeoutSeconds * 1000)) {
+            $process.StandardInput.WriteLine("leave")
+            $process.StandardInput.Flush()
+            if (-not $process.WaitForExit(3000)) {
+                $current = Get-ExactProcess `
+                    -ExecutablePath $launcher `
+                    -AllowAbsent
+                if ($null -ne $current -and
+                    $current.ProcessId -eq $process.Id) {
+                    $process.Kill()
+                    $process.WaitForExit(3000)
+                }
+            }
+        }
+
+        $outputLines = @(
+            $stdout.GetAwaiter().GetResult() -split "`r?`n" |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        $errorLines = @(
+            $stderr.GetAwaiter().GetResult() -split "`r?`n" |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        return [ordered]@{
+            processId = [int]$process.Id
+            exitCode = [int]$process.ExitCode
+            stdout = $outputLines
+            stderr = $errorLines
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Close-RunProcesses {
     param([Parameter(Mandatory = $true)][object]$Request)
 
@@ -509,6 +578,7 @@ try {
     $result.action = [string]$request.Action
     $result.detail = switch ([string]$request.Action) {
         "launch-client" { Start-Client -Request $request }
+        "probe-steam" { Test-SteamAttach -Request $request }
         "key" { Invoke-RealInput -Request $request }
         "click" { Invoke-RealInput -Request $request }
         "click-sequence" { Invoke-RealInput -Request $request }

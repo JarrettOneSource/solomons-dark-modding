@@ -495,6 +495,23 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
         raise StaticReTestFailure(
             "pure-primary capture can still amplify one held input edge into tick-rate casts")
 
+    pure_primary_hook_start = player_control_text.find(
+        "void __fastcall HookPurePrimarySpellStart(")
+    if pure_primary_hook_start == -1:
+        raise StaticReTestFailure("pure-primary start hook was not found")
+    pure_primary_hook = player_control_text[pure_primary_hook_start:]
+    local_player_log_guard = (
+        "local_actor_address == actor_address &&\n"
+        "            g_pure_primary_control_log_budget > 0"
+    )
+    if (
+        local_player_log_guard not in pure_primary_hook
+        or pure_primary_hook.count(
+            "--g_pure_primary_control_log_budget;") != 2
+    ):
+        raise StaticReTestFailure(
+            "local-player pure-primary diagnostics can still log every stock tick")
+
     return "queued mouse holds preserve repeated presses without tick-rate primary amplification"
 
 

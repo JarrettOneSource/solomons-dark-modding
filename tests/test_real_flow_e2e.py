@@ -25,6 +25,7 @@ from tools._real_flow_e2e.evidence import (
 from tools._real_flow_e2e.endurance import (
     EnduranceAnomalyMonitor,
     FighterStatsTracker,
+    effective_wave,
     is_capture_milestone,
     terminal_game_over,
 )
@@ -493,8 +494,11 @@ class RealFlowE2ETests(unittest.TestCase):
                     "runName": "bply-botendure",
                     "topology": "steam_windows_ws20",
                     "botPlayForMe": True,
+                    "botPlayBehavior": "striker",
                     "enduranceMode": True,
                     "enduranceMaxSeconds": 5400,
+                    "reuseWs20Prestage": True,
+                    "directoryUrl": "http://127.0.0.1:1",
                     "localStagingRoot": str(
                         root / "bply-botendure-stage"
                     ),
@@ -542,8 +546,14 @@ class RealFlowE2ETests(unittest.TestCase):
             config = self._load_document(root, document)
 
             self.assertTrue(config.bot_play_for_me)
+            self.assertEqual(config.bot_play_behavior, "striker")
             self.assertTrue(config.endurance_mode)
             self.assertEqual(config.endurance_max_seconds, 5400)
+            self.assertTrue(config.reuse_ws20_prestage)
+            self.assertEqual(
+                config.directory_url,
+                "http://127.0.0.1:1",
+            )
             self.assertEqual(
                 config.redacted()["client"]["sshStageRoot"],
                 r"%USERPROFILE%\sd-botendure-stage",
@@ -556,10 +566,25 @@ class RealFlowE2ETests(unittest.TestCase):
             ):
                 self._load_document(root, document)
             document["botPlayForMe"] = True
+            document["botPlayBehavior"] = "berserker"
+            with self.assertRaisesRegex(
+                ConfigError,
+                "botPlayBehavior must be",
+            ):
+                self._load_document(root, document)
+            document["botPlayBehavior"] = "striker"
             document["enduranceMaxSeconds"] = 5401
             with self.assertRaisesRegex(
                 ConfigError,
                 "enduranceMaxSeconds must be between 60 and 5400",
+            ):
+                self._load_document(root, document)
+
+            document["enduranceMaxSeconds"] = 5400
+            document["topology"] = "loopback_windows_botplay"
+            with self.assertRaisesRegex(
+                ConfigError,
+                "reuseWs20Prestage requires steam_windows_ws20",
             ):
                 self._load_document(root, document)
 
@@ -1786,6 +1811,180 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertTrue(is_capture_milestone(5))
         self.assertFalse(is_capture_milestone(4))
 
+    def test_endurance_wave_uses_replicated_authority_summary(self) -> None:
+        state = {
+            "wave": {"index": 2},
+            "combat": {"waveIndex": 9},
+            "world": {"waveIndex": 7},
+        }
+
+        self.assertEqual(effective_wave(state), 2)
+
+    def test_endurance_monitor_detects_one_way_receive_stall(self) -> None:
+        def state(*, sent: int, received: int) -> dict[str, object]:
+            return {
+                "wave": {"index": 1},
+                "combat": {"waveIndex": 1},
+                "world": {"waveIndex": 1},
+                "scene": {"name": "testrun"},
+                "player": {
+                    "valid": True,
+                    "x": float(sent),
+                    "y": 2.0,
+                    "hp": 2.0,
+                    "maxHp": 2.0,
+                },
+                "nativeEnemies": [],
+                "replicatedEnemies": [],
+                "gameOver": {
+                    "commandEpoch": 0,
+                    "acceptedEpoch": 0,
+                    "runNonce": 0,
+                    "authorityParticipantId": 0,
+                    "pendingDispatch": False,
+                    "dispatchCount": 0,
+                },
+                "multiplayer": {
+                    "participants": [],
+                    "transportReady": True,
+                    "sessionStatus": "Ready",
+                    "packetsSent": sent,
+                    "packetsReceived": received,
+                    "steamSendFailures": 0,
+                    "steamReliableSendFailures": 0,
+                    "lastSteamSendFailureResult": 0,
+                },
+            }
+
+        monitor = EnduranceAnomalyMonitor()
+        bots = {
+            "host": {"brain.think_count": 1},
+            "clientB": {"brain.think_count": 1},
+        }
+        monitor.observe(
+            {
+                "elapsedSeconds": 1.0,
+                "host": state(sent=10, received=10),
+                "clientB": state(sent=10, received=10),
+            },
+            bots,
+            {"host": True, "clientB": True},
+        )
+        findings = monitor.observe(
+            {
+                "elapsedSeconds": 32.0,
+                "host": state(sent=50, received=40),
+                "clientB": state(sent=40, received=10),
+            },
+            bots,
+            {"host": True, "clientB": True},
+        )
+
+        self.assertEqual([row["kind"] for row in findings], ["packet-stall"])
+        self.assertEqual(
+            findings[0]["evidence"]["secondsWithoutReceiveProgress"][
+                "clientB"
+            ],
+            31.0,
+        )
+
+    def test_endurance_monitor_detects_casting_without_enemy_damage(
+        self,
+    ) -> None:
+        def state(*, enemy_hp: float, packets: int) -> dict[str, object]:
+            enemies = (
+                [
+                    {
+                        "dead": False,
+                        "hp": enemy_hp,
+                    }
+                ]
+                if enemy_hp > 0.0
+                else []
+            )
+            return {
+                "wave": {"index": 2},
+                "combat": {"waveIndex": 1},
+                "world": {"waveIndex": 0},
+                "scene": {"name": "testrun"},
+                "player": {
+                    "valid": True,
+                    "x": float(packets),
+                    "y": 2.0,
+                    "hp": 50.0,
+                    "maxHp": 50.0,
+                },
+                "nativeEnemies": enemies,
+                "replicatedEnemies": [],
+                "gameOver": {
+                    "commandEpoch": 0,
+                    "acceptedEpoch": 0,
+                    "runNonce": 0,
+                    "authorityParticipantId": 0,
+                    "pendingDispatch": False,
+                    "dispatchCount": 0,
+                },
+                "multiplayer": {
+                    "participants": [],
+                    "transportReady": True,
+                    "sessionStatus": "Ready",
+                    "packetsSent": packets,
+                    "packetsReceived": packets,
+                    "steamSendFailures": 0,
+                    "steamReliableSendFailures": 0,
+                    "lastSteamSendFailureResult": 0,
+                },
+            }
+
+        monitor = EnduranceAnomalyMonitor()
+        client_state = state(enemy_hp=0.0, packets=1)
+        monitor.observe(
+            {
+                "elapsedSeconds": 1.0,
+                "host": state(enemy_hp=10.0, packets=1),
+                "clientB": client_state,
+            },
+            {
+                "host": {
+                    "brain.think_count": 1,
+                    "brain.cast_accepted": 1,
+                    "brain.target_distance": 100.0,
+                    "brain.target_network_actor_id": 9001,
+                    "brain.mode": "kite",
+                },
+                "clientB": {"brain.think_count": 1},
+            },
+            {"host": True, "clientB": False},
+        )
+        findings = monitor.observe(
+            {
+                "elapsedSeconds": 62.0,
+                "host": state(enemy_hp=10.0, packets=62),
+                "clientB": state(enemy_hp=0.0, packets=62),
+            },
+            {
+                "host": {
+                    "brain.think_count": 62,
+                    "brain.cast_accepted": 20,
+                    "brain.target_distance": 100.0,
+                    "brain.target_network_actor_id": 9001,
+                    "brain.mode": "kite",
+                },
+                "clientB": {"brain.think_count": 62},
+            },
+            {"host": True, "clientB": False},
+        )
+
+        no_damage = next(
+            row
+            for row in findings
+            if row["kind"] == "host-bot-no-damage-progress"
+        )
+        self.assertEqual(
+            no_damage["evidence"]["castsWithoutEnemyHpProgress"],
+            19,
+        )
+
     def test_runtime_state_preserves_large_participant_ids(self) -> None:
         participant_id = 0x2B00000000000002
         state = normalize_state(
@@ -2266,6 +2465,49 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn('bundle_root = ntpath.join(run_root, "l")', source)
         self.assertIn("Move-Item -LiteralPath $source", source)
 
+    def test_ws20_verified_prestage_uploads_only_dynamic_run_state(
+        self,
+    ) -> None:
+        source = (
+            ROOT / "tools" / "_real_flow_e2e" / "ws20.py"
+        ).read_text(encoding="utf-8")
+
+        branch = source.split(
+            "if harness.reuse_ws20_prestage:", 1
+        )[1].split("else:", 1)[0]
+        self.assertIn(
+            'prestage_bundle = ntpath.join(prestage_root, "launcher")',
+            branch,
+        )
+        self.assertIn(
+            'prestage_game = ntpath.join(prestage_root, "game")',
+            branch,
+        )
+        self.assertIn("Copy-Item -LiteralPath $bundleSource", branch)
+        self.assertIn('client.bundle_root / "mods"', branch)
+        self.assertIn('client.bundle_root / ".sdmod-test-data"', branch)
+        self.assertNotIn("harness.game_directory, run_root", branch)
+
+    def test_ws20_worker_has_bounded_interactive_steam_attach_probe(
+        self,
+    ) -> None:
+        worker = (
+            ROOT / "scripts/Run-RealFlowWindowsSessionWorker.ps1"
+        ).read_text(encoding="utf-8")
+        probe = worker.split(
+            "function Test-SteamAttach {", 1
+        )[1].split("function Close-RunProcesses {", 1)[0]
+
+        self.assertIn("__join-steam-lobby", probe)
+        self.assertIn(
+            "$process.WaitForExit([int]$Request.TimeoutSeconds",
+            probe,
+        )
+        self.assertIn('$process.StandardInput.WriteLine("leave")', probe)
+        self.assertIn("$current.ProcessId -eq $process.Id", probe)
+        self.assertIn("escapes the owned stage", probe)
+        self.assertIn('"probe-steam" { Test-SteamAttach', worker)
+
     def test_ws20_action_uses_one_remote_powershell_round_trip(
         self,
     ) -> None:
@@ -2544,6 +2786,20 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn(
             '"clientB": client_prearm_request',
             source,
+        )
+        endurance_body = source.split(
+            "def _run_bot_play_endurance(", 1
+        )[1].split("\ndef ", 1)[0]
+        monitor_phase = endurance_body.index(
+            'sampler.set_phase("bot-play-endurance")'
+        )
+        materialization = endurance_body.index(
+            "_assert_client_enemy_materialization(sample)"
+        )
+        self.assertLess(monitor_phase, materialization)
+        self.assertNotIn(
+            "_wait_for_client_enemy_materialization(config, sampler)",
+            endurance_body,
         )
 
     def test_stock_water_cast_requires_exact_contacts_and_peer_hp(

@@ -1510,6 +1510,7 @@ def _run_bot_play_endurance(
     result: dict[str, Any] = {
         "mode": "natural-game-over-or-wall-clock-limit",
         "maxWallClockSeconds": config.endurance_max_seconds,
+        "botPlayBehavior": config.bot_play_behavior,
         "syntheticTeamRoster": [],
         "participantIdentity": {
             role: {
@@ -1543,6 +1544,7 @@ def _run_bot_play_endurance(
             host,
             host_pipe,
             enabled=True,
+            behavior=config.bot_play_behavior,
             roster=[],
         ),
         "clientB": client_prearm_request,
@@ -1570,16 +1572,14 @@ def _run_bot_play_endurance(
             runtime_participant_ids[role]
         )
 
-    result["clientEnemyMaterialization"] = (
-        _wait_for_client_enemy_materialization(config, sampler)
-    )
-
     sampler.set_phase("bot-play-endurance")
     tracker = FighterStatsTracker(participant_ids)
     monitor = EnduranceAnomalyMonitor()
     started_monotonic = time.monotonic()
     started_utc_ns = time.time_ns()
     deadline = started_monotonic + config.endurance_max_seconds
+    materialization_deadline = started_monotonic + config.timeout_seconds
+    materialization_error = ""
     captures: list[dict[str, Any]] = []
     capture_errors: list[dict[str, Any]] = []
     captured_milestones: set[int] = set()
@@ -1594,6 +1594,20 @@ def _run_bot_play_endurance(
     while True:
         sample = sampler.sample_now("endurance-monitor")
         final_sample = sample
+        if "clientEnemyMaterialization" not in result:
+            try:
+                result["clientEnemyMaterialization"] = (
+                    _assert_client_enemy_materialization(sample)
+                )
+            except RealFlowFailure as exc:
+                materialization_error = str(exc)
+                if time.monotonic() >= materialization_deadline:
+                    raise RealFlowFailure(
+                        "the real flow produced no aligned host/native and "
+                        "client/materialized replicated enemies while live "
+                        "monitoring remained active; "
+                        f"last={materialization_error!r}"
+                    ) from exc
         for event in tracker.observe(sample):
             event_writer.append(event)
         _drain_damage_observations(
@@ -2374,12 +2388,13 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     if is_ws20:
         connection = RemoteWindowsConnection(config.client)
         remote_before = connection.inventory()
-        if remote_before != {
-            "stageRootExists": False,
+        expected_remote_before = {
+            "stageRootExists": config.reuse_ws20_prestage,
             "ownedProcessCount": 0,
             "taskCount": 0,
             "interactiveSteamCount": 1,
-        }:
+        }
+        if remote_before != expected_remote_before:
             connection.close()
             raise RealFlowFailure(
                 "workstation20 did not satisfy the isolated preflight "
@@ -2397,7 +2412,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
 
     try:
         if connection is not None:
-            connection.create_stage_root()
+            if not config.reuse_ws20_prestage:
+                connection.create_stage_root()
             remote_stage_claimed = True
         host = prepare_windows_peer(config, config.host)
         if is_ws20:
@@ -2519,6 +2535,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 client,
                 client_pipe,
                 enabled=True,
+                behavior=config.bot_play_behavior,
                 roster=[],
             )
             prearm_state = _wait_for_bot_state(

@@ -992,15 +992,70 @@ New-Item -ItemType Directory -Path '{escaped_run}' -Force | Out-Null
 New-Item -ItemType Directory -Path '{escaped_tools}' -Force | Out-Null
 """
         )
-        connection.copy_tree_to(client.bundle_root, run_root)
-        uploaded_bundle_root = ntpath.join(
-            run_root,
-            client.bundle_root.name,
-        )
-        connection._require_confined(uploaded_bundle_root)
-        connection._require_confined(bundle_root)
-        connection.run_ps(
-            f"""
+        if harness.reuse_ws20_prestage:
+            prestage_root = ntpath.join(
+                connection.stage_root,
+                "prestage",
+            )
+            prestage_bundle = ntpath.join(prestage_root, "launcher")
+            prestage_game = ntpath.join(prestage_root, "game")
+            game_target = ntpath.join(
+                run_root,
+                harness.game_directory.name,
+            )
+            for path in (
+                prestage_root,
+                prestage_bundle,
+                prestage_game,
+                bundle_root,
+                game_target,
+            ):
+                connection._require_confined(path)
+            connection.run_ps(
+                f"""
+$bundleSource='{prestage_bundle.replace("'", "''")}'
+$gameSource='{prestage_game.replace("'", "''")}'
+$bundleTarget='{bundle_root.replace("'", "''")}'
+$gameTarget='{game_target.replace("'", "''")}'
+if(-not (Test-Path -LiteralPath $bundleSource -PathType Container) -or
+   -not (Test-Path -LiteralPath $gameSource -PathType Container)){{
+  throw 'The verified workstation20 prestage is incomplete.'
+}}
+if((Test-Path -LiteralPath $bundleTarget) -or
+   (Test-Path -LiteralPath $gameTarget)){{
+  throw 'The compact workstation20 run targets must be new.'
+}}
+Copy-Item -LiteralPath $bundleSource -Destination $bundleTarget `
+  -Recurse -ErrorAction Stop
+Copy-Item -LiteralPath $gameSource -Destination $gameTarget `
+  -Recurse -ErrorAction Stop
+foreach($dynamic in @('mods','.sdmod-test-data')){{
+  $path=Join-Path $bundleTarget $dynamic
+  if(Test-Path -LiteralPath $path){{
+    Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+  }}
+}}
+""",
+                timeout=180,
+            )
+            connection.copy_tree_to(
+                client.bundle_root / "mods",
+                bundle_root,
+            )
+            connection.copy_tree_to(
+                client.bundle_root / ".sdmod-test-data",
+                bundle_root,
+            )
+        else:
+            connection.copy_tree_to(client.bundle_root, run_root)
+            uploaded_bundle_root = ntpath.join(
+                run_root,
+                client.bundle_root.name,
+            )
+            connection._require_confined(uploaded_bundle_root)
+            connection._require_confined(bundle_root)
+            connection.run_ps(
+                f"""
 $source='{uploaded_bundle_root.replace("'", "''")}'
 $target='{bundle_root.replace("'", "''")}'
 if(-not (Test-Path -LiteralPath $source -PathType Container)){{
@@ -1011,8 +1066,8 @@ if(Test-Path -LiteralPath $target){{
 }}
 Move-Item -LiteralPath $source -Destination $target -ErrorAction Stop
 """
-        )
-        connection.copy_tree_to(harness.game_directory, run_root)
+            )
+            connection.copy_tree_to(harness.game_directory, run_root)
         tool_sources = (
             harness.source_root
             / "scripts"
