@@ -1311,6 +1311,23 @@ def _verify_mixed_bot_and_idle_human(
         )
         time.sleep(0.25)
     final = sampler.sample_now("mixed-mode-complete")
+    final_host_bot = _bot_probe(host_pipe)
+    final_client_clean = _bot_probe(client_pipe)
+    if not _bot_is_driving(final_host_bot, host_participant_id):
+        raise RealFlowFailure(
+            f"host bot stopped at mixed-mode completion: {final_host_bot}"
+        )
+    _assert_clean_release(final_client_clean)
+    if (
+        final["host"]["scene"]["name"] != "testrun"
+        or final["clientB"]["scene"]["name"] != "testrun"
+        or float(final["host"]["player"]["hp"]) <= 0.0
+        or float(final["clientB"]["player"]["hp"]) <= 0.0
+    ):
+        raise RealFlowFailure(
+            "mixed bot/idle-human pair was unhealthy at completion: "
+            f"{final}"
+        )
     host_packet_delta = (
         final["host"]["multiplayer"]["packetsSent"]
         - started["host"]["multiplayer"]["packetsSent"]
@@ -1331,7 +1348,77 @@ def _verify_mixed_bot_and_idle_human(
         "clientBCleanThroughout": True,
         "hostPacketsSentDelta": host_packet_delta,
         "clientBPacketsReceivedDelta": client_packet_delta,
+        "finalHostHp": final["host"]["player"]["hp"],
+        "finalClientBHp": final["clientB"]["player"]["hp"],
         "samples": samples,
+    }
+
+
+def _run_bot_play_mixed_mode_preflight(
+    host: WindowsPeer,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    sampler: PairSampler,
+) -> dict[str, Any]:
+    activation_request = _set_bot_play(
+        host,
+        host_pipe,
+        enabled=True,
+        roster=[],
+    )
+    host_takeover = _wait_for_bot_state(
+        host_pipe,
+        _bot_is_driving,
+        timeout=15.0,
+        label="mixed-mode host local-player bot takeover",
+    )
+    idle_human = _wait_for_bot_state(
+        client_pipe,
+        lambda state: (
+            state.get("loaded") is True
+            and state.get("desired") is False
+            and state.get("active") is False
+            and state.get("takeover.active") is False
+            and state.get("takeover.clean") is True
+        ),
+        timeout=15.0,
+        label="mixed-mode idle-human client state",
+    )
+    proof = _verify_mixed_bot_and_idle_human(
+        sampler,
+        host_pipe,
+        client_pipe,
+        int(host_takeover["participant_id"]),
+    )
+    release_request = _set_bot_play(
+        host,
+        host_pipe,
+        enabled=False,
+        roster=[],
+    )
+    released = _wait_for_bot_state(
+        host_pipe,
+        lambda state: (
+            state.get("desired") is False
+            and state.get("active") is False
+            and state.get("takeover.active") is False
+            and state.get("takeover.clean") is True
+        ),
+        timeout=5.0,
+        label="mixed-mode host clean release",
+    )
+    return {
+        **proof,
+        "activationRequest": activation_request,
+        "hostTakeover": host_takeover,
+        "idleHumanState": _assert_clean_release(idle_human),
+        "releaseRequest": release_request,
+        "hostCleanRelease": _assert_clean_release(released),
+        "combatStarted": any(
+            int(sample["hostWave"]) > 0
+            or int(sample["clientBWave"]) > 0
+            for sample in proof["samples"]
+        ),
     }
 
 
@@ -1342,6 +1429,7 @@ def _run_bot_play_for_me(
     host_pipe: LuaPipe,
     client_pipe: LuaPipe,
     sampler: PairSampler,
+    mixed_mode: dict[str, Any],
 ) -> dict[str, Any]:
     if config.verify_through_wave < 4:
         raise RealFlowFailure(
@@ -1354,6 +1442,7 @@ def _run_bot_play_for_me(
         "targetCompletedWaves": config.verify_through_wave - 1,
         "settingsStartedDisabledForPhysicalMatchEntry": True,
         "syntheticTeamRoster": BOT_PLAY_TEAM_ROSTER[:2],
+        "mixedMode": mixed_mode,
     }
     result["damageObserversReset"] = _reset_damage_observations(
         host_pipe
@@ -1370,54 +1459,26 @@ def _run_bot_play_for_me(
         else 0
     )
     authority_log_partial = ""
-    activation_requests = {
+    result["activationRequests"] = {
         "host": _set_bot_play(
             host,
             host_pipe,
             enabled=True,
             roster=BOT_PLAY_TEAM_ROSTER[:2],
         ),
-    }
-    host_takeover = _wait_for_bot_state(
-        host_pipe,
-        _bot_is_driving,
-        timeout=15.0,
-        label="host local-player bot takeover",
-    )
-    initial_client_clean = _wait_for_bot_state(
-        client_pipe,
-        lambda state: (
-            state.get("loaded") is True
-            and state.get("desired") is False
-            and state.get("active") is False
-            and state.get("takeover.active") is False
-            and state.get("takeover.clean") is True
+        "clientB": _set_bot_play(
+            client,
+            client_pipe,
+            enabled=True,
+            roster=BOT_PLAY_TEAM_ROSTER[:2],
         ),
-        timeout=15.0,
-        label="initial idle-human client state",
-    )
-    result["initialIdleHumanState"] = _assert_clean_release(
-        initial_client_clean
-    )
-    result["mixedMode"] = _verify_mixed_bot_and_idle_human(
-        sampler,
-        host_pipe,
-        client_pipe,
-        int(host_takeover["participant_id"]),
-    )
-    activation_requests["clientB"] = _set_bot_play(
-        client,
-        client_pipe,
-        enabled=True,
-        roster=BOT_PLAY_TEAM_ROSTER[:2],
-    )
-    result["activationRequests"] = activation_requests
+    }
     result["activeTakeovers"] = {
         "host": _wait_for_bot_state(
             host_pipe,
             _bot_is_driving,
             timeout=15.0,
-            label="host takeover after mixed mode",
+            label="host local-player bot takeover",
         ),
         "clientB": _wait_for_bot_state(
             client_pipe,
@@ -2010,6 +2071,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         }
         sampler.sample_now("native-run-materialized")
 
+        bot_play_mixed_mode: dict[str, Any] | None = None
+        if config.bot_play_for_me:
+            bot_play_mixed_mode = _run_bot_play_mixed_mode_preflight(
+                host,
+                host_pipe,
+                client_pipe,
+                sampler,
+            )
+
         solomon_peer = (
             host if config.solomon_interactor == "host" else client
         )
@@ -2085,6 +2155,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         result["clientEnemyMaterialization"] = materialization
 
         if config.bot_play_for_me:
+            assert bot_play_mixed_mode is not None
             result["botPlayForMe"] = _run_bot_play_for_me(
                 config,
                 host,
@@ -2092,6 +2163,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 host_pipe,
                 client_pipe,
                 sampler,
+                bot_play_mixed_mode,
             )
             result["completedPhase"] = result["botPlayForMe"][
                 "completedPhase"
