@@ -93,12 +93,13 @@ after copying evidence home. A pre-existing remote stage is rejected.
 
 For the workstation20 Steam topology, the controller uses the granted
 temporary SSH boundary only to stage files and create short-lived scheduled
-tasks in the already logged-in interactive Steam session. The task worker can
-launch client B, send input to its exact staged game PID, and close processes
-whose executable paths are beneath the exact run root. It never logs out,
-changes Steam configuration, installs software, or returns persona/UI text in
-durable evidence. The run root is deleted after its telemetry and captures are
-copied home.
+tasks in the already logged-in interactive Steam session. Its stage must be a
+new direct profile child named `sd-<token>-stage`; the worker rejects every
+other parent and leaf. The task worker can launch client B, send input to its
+exact staged game PID, and close processes whose executable paths are beneath
+the exact run root. It never logs out, changes Steam configuration, installs
+software, or returns persona/UI text in durable evidence. The complete stage
+is deleted after its telemetry and captures are copied home.
 
 Lua and loader observability may read state. It may not initiate the match,
 teleport a player to Dig, trigger the Dig state machine, start waves, spawn an
@@ -157,9 +158,10 @@ that is pushed and merged.
   51611/51612, and brings its own GE-Proton and Xvfb payload. No package,
   firewall, service, production website/database, or `steamvnc` change is
   permitted.
-- ws20 work is confined to `%USERPROFILE%\sd-netrepro-stage`, uses exact
-  staged-path and PID ownership, performs no installation or machine
-  reconfiguration, and is cleaned after the run.
+- ws20 work is confined to one new direct profile child matching
+  `%USERPROFILE%\sd-<token>-stage`, uses exact staged-path and PID ownership,
+  performs no installation or machine reconfiguration, and deletes that
+  complete stage after the run.
 - A run fails closed if an executable path, PID, instance root, port, lobby ID,
   or cleanup target is ambiguous.
 

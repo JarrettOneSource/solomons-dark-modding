@@ -38,6 +38,13 @@ from tools._real_flow_e2e.evidence import (  # noqa: E402
     write_json,
     write_manifest,
 )
+from tools._real_flow_e2e.endurance import (  # noqa: E402
+    EnduranceAnomalyMonitor,
+    FighterStatsTracker,
+    effective_wave as endurance_wave,
+    is_capture_milestone,
+    terminal_game_over,
+)
 from tools._real_flow_e2e.runtime import (  # noqa: E402
     LuaPipe,
     RuntimeProbeError,
@@ -715,12 +722,20 @@ def _bot_settings_path(peer: WindowsPeer) -> Path:
 
 
 def _write_bot_settings(
-    peer: WindowsPeer,
+    peer: Any,
     *,
     enabled: bool,
     behavior: str = "skirmisher",
     roster: list[dict[str, str]] | None = None,
-) -> Path:
+) -> str:
+    values = {
+        "play_for_me": enabled,
+        "play_for_me_behavior": behavior,
+        "roster": roster or [],
+    }
+    remote_write = getattr(peer, "write_bot_settings", None)
+    if callable(remote_write):
+        return str(remote_write(mod_id=BOT_MOD_ID, values=values))
     path = _bot_settings_path(peer)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".json.bply-tmp")
@@ -732,11 +747,7 @@ def _write_bot_settings(
         json.dumps(
             {
                 "schemaVersion": 1,
-                "values": {
-                    "play_for_me": enabled,
-                    "play_for_me_behavior": behavior,
-                    "roster": roster or [],
-                },
+                "values": values,
             },
             indent=2,
             sort_keys=True,
@@ -745,7 +756,7 @@ def _write_bot_settings(
         encoding="utf-8",
     )
     temporary.replace(path)
-    return path
+    return str(path)
 
 
 def _targeted_execute(
@@ -841,7 +852,7 @@ print("error=" .. tostring(result.error or ""))
 
 
 def _set_bot_play(
-    peer: WindowsPeer,
+    peer: Any,
     pipe: LuaPipe,
     *,
     enabled: bool,
@@ -1422,6 +1433,447 @@ def _run_bot_play_mixed_mode_preflight(
     }
 
 
+def _living_enemy_count(state: dict[str, Any]) -> int:
+    return sum(
+        1
+        for enemy in state["nativeEnemies"]
+        if not enemy["dead"] and float(enemy["hp"]) > 0.0
+    )
+
+
+def _run_bot_play_endurance(
+    config: HarnessConfig,
+    host: WindowsPeer,
+    client: Any,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    sampler: PairSampler,
+) -> dict[str, Any]:
+    event_writer = JsonlWriter(
+        config.evidence_root / "endurance-events.jsonl"
+    )
+    damage_writer = JsonlWriter(
+        config.evidence_root / "endurance-damage.jsonl"
+    )
+    enemy_rows: list[dict[str, Any]] = []
+    player_rows: list[dict[str, Any]] = []
+    enemy_rows_written = 0
+    player_rows_written = 0
+
+    initial = sampler.sample_now("endurance-pre-activation")
+    participant_ids = {
+        role: (
+            int(initial[role]["multiplayer"]["localSteamId"])
+            or peer.participant_id
+        )
+        for role, peer in (
+            ("host", config.host),
+            ("clientB", config.client),
+        )
+    }
+    if (
+        min(participant_ids.values()) <= 0
+        or participant_ids["host"] == participant_ids["clientB"]
+    ):
+        raise RealFlowFailure(
+            "endurance could not resolve two distinct transport identities: "
+            f"{participant_ids}"
+        )
+
+    result: dict[str, Any] = {
+        "mode": "natural-game-over-or-wall-clock-limit",
+        "maxWallClockSeconds": config.endurance_max_seconds,
+        "syntheticTeamRoster": [],
+        "participantIdentity": {
+            role: {
+                "transportId": participant_ids[role],
+                "configuredId": peer.participant_id,
+            }
+            for role, peer in (
+                ("host", config.host),
+                ("clientB", config.client),
+            )
+        },
+    }
+    result["damageObserversReset"] = _reset_damage_observations(
+        host_pipe
+    )
+    authority_log_path = (
+        host.game_executable.parent
+        / ".sdmod"
+        / "logs"
+        / "solomondarkmodloader.log"
+    )
+    authority_log_offset = (
+        authority_log_path.stat().st_size
+        if authority_log_path.is_file()
+        else 0
+    )
+    authority_log_partial = ""
+
+    result["activationRequests"] = {
+        "host": _set_bot_play(
+            host,
+            host_pipe,
+            enabled=True,
+            roster=[],
+        ),
+        "clientB": _set_bot_play(
+            client,
+            client_pipe,
+            enabled=True,
+            roster=[],
+        ),
+    }
+    result["activeTakeovers"] = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            _bot_is_driving,
+            timeout=15.0,
+            label="endurance host local-player bot takeover",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            _bot_is_driving,
+            timeout=15.0,
+            label="endurance client local-player bot takeover",
+        ),
+    }
+    runtime_participant_ids = {
+        role: int(state["participant_id"])
+        for role, state in result["activeTakeovers"].items()
+    }
+    for role in ("host", "clientB"):
+        result["participantIdentity"][role]["runtimeSlotId"] = (
+            runtime_participant_ids[role]
+        )
+
+    sampler.set_phase("bot-play-endurance")
+    tracker = FighterStatsTracker(participant_ids)
+    monitor = EnduranceAnomalyMonitor()
+    started_monotonic = time.monotonic()
+    started_utc_ns = time.time_ns()
+    deadline = started_monotonic + config.endurance_max_seconds
+    captures: list[dict[str, Any]] = []
+    capture_errors: list[dict[str, Any]] = []
+    captured_milestones: set[int] = set()
+    missed_milestones: set[int] = set()
+    capture_attempts: dict[int, int] = {}
+    terminal_started: float | None = None
+    final_sample = initial
+    final_bots = result["activeTakeovers"]
+    termination_reason = ""
+    game_over_capture: dict[str, Any] | None = None
+
+    while True:
+        sample = sampler.sample_now("endurance-monitor")
+        final_sample = sample
+        for event in tracker.observe(sample):
+            event_writer.append(event)
+        _drain_damage_observations(
+            host_pipe,
+            enemy_rows,
+            player_rows,
+        )
+        (
+            authority_log_offset,
+            authority_log_partial,
+        ) = _drain_authority_damage_log(
+            authority_log_path,
+            authority_log_offset,
+            authority_log_partial,
+            enemy_rows,
+        )
+        while enemy_rows_written < len(enemy_rows):
+            damage_writer.append(
+                {"kind": "enemy", **enemy_rows[enemy_rows_written]}
+            )
+            enemy_rows_written += 1
+        while player_rows_written < len(player_rows):
+            damage_writer.append(
+                {"kind": "player", **player_rows[player_rows_written]}
+            )
+            player_rows_written += 1
+
+        bots = {
+            "host": _bot_probe(host_pipe),
+            "clientB": _bot_probe(client_pipe),
+        }
+        final_bots = bots
+        driving = {
+            role: _bot_is_driving(
+                bots[role],
+                runtime_participant_ids[role],
+            )
+            for role in ("host", "clientB")
+        }
+        for finding in monitor.observe(sample, bots, driving):
+            event_writer.append({"event": "finding", **finding})
+
+        converged_wave = min(
+            endurance_wave(sample["host"]),
+            endurance_wave(sample["clientB"]),
+        )
+        pending_milestones = [
+            wave
+            for wave in range(1, converged_wave + 1)
+            if is_capture_milestone(wave)
+            and wave not in captured_milestones
+            and wave not in missed_milestones
+        ]
+        for missed in (
+            wave for wave in pending_milestones if wave < converged_wave
+        ):
+            missed_milestones.add(missed)
+            capture_error = {
+                "kind": "milestone-capture-missed",
+                "milestoneWave": missed,
+                "observedWave": converged_wave,
+                "elapsedSeconds": sample["elapsedSeconds"],
+                "message": "wave advanced before a paired capture succeeded",
+            }
+            capture_errors.append(capture_error)
+            event_writer.append({"event": "capture-error", **capture_error})
+        pending_milestones = [
+            wave for wave in pending_milestones if wave == converged_wave
+        ]
+        if (
+            pending_milestones
+            and _living_enemy_count(sample["host"]) > 0
+            and _living_enemy_count(sample["clientB"]) > 0
+        ):
+            milestone = max(pending_milestones)
+            attempts = capture_attempts.get(milestone, 0) + 1
+            capture_attempts[milestone] = attempts
+            try:
+                capture = paired_windows_capture(
+                    config.source_root,
+                    host,
+                    client,
+                    config.evidence_root / "captures" / "endurance",
+                    label=f"wave-{milestone}",
+                )
+                assertions: dict[str, Any] = {}
+                for role in ("host", "clientB"):
+                    capture_path = Path(
+                        capture["captures"][role]["path"]
+                    )
+                    role_assertions: dict[str, Any] = {
+                        "bot": bots[role],
+                        "driving": driving[role],
+                    }
+                    if driving[role]:
+                        role_assertions["indicator"] = (
+                            _indicator_region_assertion(capture_path)
+                        )
+                    role_assertions["enemyRendered"] = (
+                        _native_enemy_render_assertion(
+                            sample[role],
+                            capture_path,
+                        )
+                        if role == "host"
+                        else rendered_enemy_assertion(
+                            sample[role],
+                            capture_path,
+                        )
+                    )
+                    assertions[role] = role_assertions
+                capture_row = {
+                    "milestoneWave": milestone,
+                    "observedHostWave": endurance_wave(sample["host"]),
+                    "observedClientBWave": endurance_wave(
+                        sample["clientB"]
+                    ),
+                    "sampleUtcNanoseconds": sample["utcNanoseconds"],
+                    "capture": capture,
+                    "assertions": assertions,
+                }
+                captures.append(capture_row)
+                captured_milestones.add(milestone)
+                event_writer.append(
+                    {
+                        "event": "milestone-capture",
+                        **capture_row,
+                    }
+                )
+            except (
+                EvidenceError,
+                RealFlowFailure,
+                WindowsHarnessError,
+                Ws20HarnessError,
+            ) as exc:
+                capture_error = {
+                    "kind": "milestone-capture-failure",
+                    "milestoneWave": milestone,
+                    "attempt": attempts,
+                    "elapsedSeconds": sample["elapsedSeconds"],
+                    "message": str(exc),
+                }
+                capture_errors.append(capture_error)
+                event_writer.append(
+                    {"event": "capture-error", **capture_error}
+                )
+
+        host_terminal = terminal_game_over(sample["host"])
+        client_terminal = terminal_game_over(sample["clientB"])
+        if host_terminal and client_terminal:
+            if terminal_started is None:
+                terminal_started = time.monotonic()
+                event_writer.append(
+                    {
+                        "event": "terminal-game-over-converged",
+                        "elapsedSeconds": sample["elapsedSeconds"],
+                        "hostWave": endurance_wave(sample["host"]),
+                        "clientBWave": endurance_wave(sample["clientB"]),
+                    }
+                )
+            surfaces_ready = all(
+                sample[role]["ui"]["surfaceId"] == "game_over"
+                for role in ("host", "clientB")
+            )
+            if surfaces_ready or time.monotonic() - terminal_started >= 4.0:
+                try:
+                    game_over_capture = paired_windows_capture(
+                        config.source_root,
+                        host,
+                        client,
+                        config.evidence_root / "captures" / "endurance",
+                        label=(
+                            "natural-game-over-wave-"
+                            f"{max(endurance_wave(sample['host']), endurance_wave(sample['clientB']))}"
+                        ),
+                    )
+                except (
+                    EvidenceError,
+                    WindowsHarnessError,
+                    Ws20HarnessError,
+                ) as exc:
+                    capture_error = {
+                        "kind": "game-over-capture-failure",
+                        "elapsedSeconds": sample["elapsedSeconds"],
+                        "message": str(exc),
+                    }
+                    capture_errors.append(capture_error)
+                    event_writer.append(
+                        {"event": "capture-error", **capture_error}
+                    )
+                termination_reason = "natural-game-over"
+                break
+        else:
+            terminal_started = None
+
+        if time.monotonic() >= deadline:
+            try:
+                game_over_capture = paired_windows_capture(
+                    config.source_root,
+                    host,
+                    client,
+                    config.evidence_root / "captures" / "endurance",
+                    label=f"wall-clock-limit-wave-{converged_wave}",
+                )
+            except (
+                EvidenceError,
+                WindowsHarnessError,
+                Ws20HarnessError,
+            ) as exc:
+                capture_error = {
+                    "kind": "wall-clock-capture-failure",
+                    "elapsedSeconds": sample["elapsedSeconds"],
+                    "message": str(exc),
+                }
+                capture_errors.append(capture_error)
+                event_writer.append(
+                    {"event": "capture-error", **capture_error}
+                )
+            termination_reason = "wall-clock-limit"
+            break
+        time.sleep(max(0.1, config.sampling_seconds))
+
+    _drain_damage_observations(
+        host_pipe,
+        enemy_rows,
+        player_rows,
+    )
+    (
+        authority_log_offset,
+        authority_log_partial,
+    ) = _drain_authority_damage_log(
+        authority_log_path,
+        authority_log_offset,
+        authority_log_partial,
+        enemy_rows,
+    )
+    while enemy_rows_written < len(enemy_rows):
+        damage_writer.append(
+            {"kind": "enemy", **enemy_rows[enemy_rows_written]}
+        )
+        enemy_rows_written += 1
+    while player_rows_written < len(player_rows):
+        damage_writer.append(
+            {"kind": "player", **player_rows[player_rows_written]}
+        )
+        player_rows_written += 1
+
+    elapsed_seconds = time.monotonic() - started_monotonic
+    findings = monitor.finish(float(final_sample["elapsedSeconds"]))
+    fighter_stats = tracker.result(enemy_rows, player_rows)
+    for role, stats in fighter_stats.items():
+        if stats["damageDealtEdges"] == 0:
+            findings.append(
+                {
+                    "id": f"F{len(findings) + 1:03d}",
+                    "kind": "fighter-no-authoritative-damage",
+                    "role": role,
+                    "evidence": stats,
+                    "ongoingAtEnd": True,
+                }
+            )
+    for capture_error in capture_errors:
+        findings.append(
+            {
+                "id": f"F{len(findings) + 1:03d}",
+                **capture_error,
+            }
+        )
+    if not captures:
+        raise RealFlowFailure(
+            "endurance produced no paired wave-milestone capture"
+        )
+
+    result.update(
+        {
+            "startedUtcNanoseconds": started_utc_ns,
+            "endedUtcNanoseconds": time.time_ns(),
+            "durationSeconds": elapsed_seconds,
+            "terminationReason": termination_reason,
+            "naturalGameOver": termination_reason == "natural-game-over",
+            "furthestWave": max(
+                stats["furthestWave"] for stats in fighter_stats.values()
+            ),
+            "fighterStats": fighter_stats,
+            "damageEventCounts": {
+                "enemy": len(enemy_rows),
+                "player": len(player_rows),
+            },
+            "damageEvidencePath": str(
+                config.evidence_root / "endurance-damage.jsonl"
+            ),
+            "milestoneCaptures": captures,
+            "captureErrors": capture_errors,
+            "gameOverOrLimitCapture": game_over_capture,
+            "findings": findings,
+            "finalBots": final_bots,
+            "finalState": final_sample,
+            "completedPhase": (
+                "bot-play-natural-game-over"
+                if termination_reason == "natural-game-over"
+                else "bot-play-90-minute-limit"
+            ),
+        }
+    )
+    return result
+
+
 def _run_bot_play_for_me(
     config: HarnessConfig,
     host: WindowsPeer,
@@ -1891,11 +2343,13 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     udp_exclusions = _udp_exclusion_inventory(ps, ports)
     assert_ports_free(ps, ports)
     connection: RemoteWindowsConnection | None = None
-    remote_before: dict[str, int] | None = None
+    remote_before: dict[str, int | bool] | None = None
+    remote_stage_claimed = False
     if is_ws20:
         connection = RemoteWindowsConnection(config.client)
         remote_before = connection.inventory()
         if remote_before != {
+            "stageRootExists": False,
             "ownedProcessCount": 0,
             "taskCount": 0,
             "interactiveSteamCount": 1,
@@ -1916,6 +2370,9 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     write_json(config.evidence_root / "safety" / "before.json", before)
 
     try:
+        if connection is not None:
+            connection.create_stage_root()
+            remote_stage_claimed = True
         host = prepare_windows_peer(config, config.host)
         if is_ws20:
             assert connection is not None
@@ -1927,11 +2384,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
     except BaseException:
         if connection is not None:
             try:
-                connection.remove_tree(
-                    connection.stage_root.rstrip("\\")
-                    + "\\r\\"
-                    + config.run_name
-                )
+                if remote_stage_claimed:
+                    connection.remove_stage_root()
             finally:
                 connection.close()
         if staging_root.is_dir():
@@ -2072,7 +2526,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         sampler.sample_now("native-run-materialized")
 
         bot_play_mixed_mode: dict[str, Any] | None = None
-        if config.bot_play_for_me:
+        if config.bot_play_for_me and not config.endurance_mode:
             bot_play_mixed_mode = _run_bot_play_mixed_mode_preflight(
                 host,
                 host_pipe,
@@ -2155,16 +2609,26 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         result["clientEnemyMaterialization"] = materialization
 
         if config.bot_play_for_me:
-            assert bot_play_mixed_mode is not None
-            result["botPlayForMe"] = _run_bot_play_for_me(
-                config,
-                host,
-                client,
-                host_pipe,
-                client_pipe,
-                sampler,
-                bot_play_mixed_mode,
-            )
+            if config.endurance_mode:
+                result["botPlayForMe"] = _run_bot_play_endurance(
+                    config,
+                    host,
+                    client,
+                    host_pipe,
+                    client_pipe,
+                    sampler,
+                )
+            else:
+                assert bot_play_mixed_mode is not None
+                result["botPlayForMe"] = _run_bot_play_for_me(
+                    config,
+                    host,
+                    client,
+                    host_pipe,
+                    client_pipe,
+                    sampler,
+                    bot_play_mixed_mode,
+                )
             result["completedPhase"] = result["botPlayForMe"][
                 "completedPhase"
             ]
@@ -2343,6 +2807,16 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                     f"{type(exc).__name__}: {exc}"
                 )
                 result["ok"] = False
+            try:
+                assert connection is not None
+                assert remote_stage_claimed
+                connection.remove_stage_root()
+                cleanup["clientBStageDeleted"] = True
+            except BaseException as exc:
+                cleanup["clientBStageDeleteError"] = (
+                    f"{type(exc).__name__}: {exc}"
+                )
+                result["ok"] = False
         try:
             if staging_root.is_dir():
                 shutil.rmtree(staging_root)
@@ -2374,6 +2848,7 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 },
             )
             expected_remote_after = {
+                "stageRootExists": False,
                 "ownedProcessCount": 0,
                 "taskCount": 0,
                 "interactiveSteamCount": 1,

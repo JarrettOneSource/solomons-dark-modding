@@ -1,22 +1,27 @@
 {
   "schemaVersion": 1,
-  "runName": "netrepro-ws20-yyyymmdd-hhmmss",
+  "runName": "bply-botendure-yyyymmdd-hhmmss",
   "topology": "steam_windows_ws20",
-  "sourceRoot": "/mnt/c/sd-netrepro-worktree",
+  "sourceRoot": "/mnt/c/sd-botendure-worktree",
   "packageRoot": "/replace/with/extracted/release/package",
   "gameDirectory": "/replace/with/original/game/directory",
-  "evidenceRoot": "/mnt/d/codex-evidence/netrepro/run-name",
+  "evidenceRoot": "/mnt/d/codex-evidence/botendure/run-name",
+  "localStagingRoot": "/mnt/c/sd-botendure-worktree/bply-botendure-stage",
   "directoryUrl": "https://solomondarker.com",
   "privacy": "friends",
   "expectedSourceSha": "0000000000000000000000000000000000000000",
   "timeoutSeconds": 180,
-  "samplingSeconds": 0.25,
+  "samplingSeconds": 2.0,
+  "verifyThroughWave": 1,
+  "botPlayForMe": true,
+  "enduranceMode": true,
+  "enduranceMaxSeconds": 5400,
   "host": {
     "platform": "windows_local",
-    "launcherScope": "netrepro-steam-host",
-    "instance": "netrepro-steam-host",
-    "playerName": "Host",
-    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-steam-host",
+    "launcherScope": "bply-endure-host",
+    "instance": "bply-endure-host",
+    "playerName": "Bot Endure host",
+    "pipeName": "SolomonDarkModLoader_LuaExec_bply-endure-host",
     "participantId": "0x3000000000000001",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
@@ -39,10 +44,10 @@
   },
   "client": {
     "platform": "windows_ssh",
-    "launcherScope": "netrepro-steam-client-b",
-    "instance": "netrepro-steam-client-b",
+    "launcherScope": "bply-endure-client-b",
+    "instance": "bply-endure-client-b",
     "playerName": "client B",
-    "pipeName": "SolomonDarkModLoader_LuaExec_netrepro-steam-client-b",
+    "pipeName": "SolomonDarkModLoader_LuaExec_bply-endure-client-b",
     "participantId": "0x3000000000000002",
     "loadoutElement": "fire",
     "loadoutDiscipline": "body",
@@ -51,15 +56,15 @@
     "remotePort": 0,
     "matchStartActions": [],
     "ssh": {
-      "executable": "ssh",
+      "executable": "/mnt/c/Windows/System32/OpenSSH/ssh.exe",
       "target": "workstation20.example",
       "username": "client-b",
       "keyPath": "/replace/with/temporary-access-key",
-      "stageRoot": "%USERPROFILE%\\sd-netrepro-stage"
+      "stageRoot": "%USERPROFILE%\\sd-botendure-stage"
     }
   },
   "metadata": {
     "brokerScope": "desktop-launcher Steam lobby and SDR",
-    "purpose": "host starts match and physically completes Solomon Dig"
+    "purpose": "two network players under Bot Play endurance"
   }
 }

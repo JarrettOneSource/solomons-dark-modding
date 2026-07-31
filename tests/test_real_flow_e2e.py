@@ -17,6 +17,12 @@ from tools._real_flow_e2e.evidence import (
     steam_transport_assertion,
     write_manifest,
 )
+from tools._real_flow_e2e.endurance import (
+    EnduranceAnomalyMonitor,
+    FighterStatsTracker,
+    is_capture_milestone,
+    terminal_game_over,
+)
 from tools._real_flow_e2e.runtime import (
     _merge_solomon_authority_state,
     cover_participant_with_real_input_once,
@@ -40,7 +46,7 @@ from tools._real_flow_e2e.windows import (
     close_exact_owned_processes,
     launch_environment,
 )
-from tools._real_flow_e2e.ws20 import Ws20Peer
+from tools._real_flow_e2e.ws20 import RemoteWindowsConnection, Ws20Peer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -284,6 +290,89 @@ class RealFlowE2ETests(unittest.TestCase):
             host["localPort"] = 51080
             client["remotePort"] = 51080
             with self.assertRaisesRegex(ConfigError, "at or above 51400"):
+                self._load_document(root, document)
+
+    def test_ws20_endurance_accepts_bot_takeover_and_ninety_minute_cap(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            document = self._config_document(root)
+            (root / "source/mods/bot-brain").mkdir(parents=True)
+            (root / "source/mods/bot-brain/manifest.json").touch()
+            document.update(
+                {
+                    "runName": "bply-botendure",
+                    "topology": "steam_windows_ws20",
+                    "botPlayForMe": True,
+                    "enduranceMode": True,
+                    "enduranceMaxSeconds": 5400,
+                    "localStagingRoot": str(
+                        root / "bply-botendure-stage"
+                    ),
+                    "verifyThroughWave": 1,
+                }
+            )
+            host = document["host"]
+            client = document["client"]
+            assert isinstance(host, dict)
+            assert isinstance(client, dict)
+            host.update(
+                {
+                    "launcherScope": "bply-endure-host",
+                    "instance": "bply-endure-host",
+                    "pipeName": (
+                        "SolomonDarkModLoader_LuaExec_bply-endure-host"
+                    ),
+                    "localPort": 0,
+                    "remotePort": 0,
+                    "remoteHost": "",
+                }
+            )
+            client.update(
+                {
+                    "platform": "windows_ssh",
+                    "launcherScope": "bply-endure-client",
+                    "instance": "bply-endure-client",
+                    "pipeName": (
+                        "SolomonDarkModLoader_LuaExec_bply-endure-client"
+                    ),
+                    "localPort": 0,
+                    "remotePort": 0,
+                    "remoteHost": "",
+                    "ssh": {
+                        "target": "workstation20.example",
+                        "username": "client-b",
+                        "keyPath": "/run/user/1000/ws20-key",
+                        "stageRoot": (
+                            r"%USERPROFILE%\sd-botendure-stage"
+                        ),
+                    },
+                }
+            )
+
+            config = self._load_document(root, document)
+
+            self.assertTrue(config.bot_play_for_me)
+            self.assertTrue(config.endurance_mode)
+            self.assertEqual(config.endurance_max_seconds, 5400)
+            self.assertEqual(
+                config.redacted()["client"]["sshStageRoot"],
+                r"%USERPROFILE%\sd-botendure-stage",
+            )
+
+            document["botPlayForMe"] = False
+            with self.assertRaisesRegex(
+                ConfigError,
+                "enduranceMode requires botPlayForMe",
+            ):
+                self._load_document(root, document)
+            document["botPlayForMe"] = True
+            document["enduranceMaxSeconds"] = 5401
+            with self.assertRaisesRegex(
+                ConfigError,
+                "enduranceMaxSeconds must be between 60 and 5400",
+            ):
                 self._load_document(root, document)
 
     def test_fieldbreak_example_drives_fresh_profile_to_dead_hawg(
@@ -819,7 +908,8 @@ class RealFlowE2ETests(unittest.TestCase):
                 peer["remoteHost"] = ""
             client["platform"] = "windows_ssh"
             client["ssh"] = {
-                "target": "temporary-user@workstation.example",
+                "target": "workstation20.example",
+                "username": "client-b",
                 "keyPath": "/run/user/1000/ws20-key",
                 "stageRoot": r"%USERPROFILE%\sd-netrepro-stage",
             }
@@ -834,10 +924,18 @@ class RealFlowE2ETests(unittest.TestCase):
                 redacted["client"]["sshStageRoot"],
                 r"%USERPROFILE%\sd-netrepro-stage",
             )
-            document["client"]["ssh"]["stageRoot"] = (  # type: ignore[index]
-                r"C:\Users\temporary-user\other"
+            document["client"]["ssh"]["target"] = (  # type: ignore[index]
+                "client-b@workstation20.example"
             )
-            with self.assertRaisesRegex(ConfigError, "sd-netrepro-stage"):
+            with self.assertRaisesRegex(ConfigError, "host-only target"):
+                self._load_document(root, document)
+            document["client"]["ssh"]["target"] = (  # type: ignore[index]
+                "workstation20.example"
+            )
+            document["client"]["ssh"]["stageRoot"] = (  # type: ignore[index]
+                r"C:\Users\client-b\other"
+            )
+            with self.assertRaisesRegex(ConfigError, "sd-<token>-stage"):
                 self._load_document(root, document)
 
     def test_repro_controller_contains_no_forbidden_start_seam(
@@ -1322,6 +1420,184 @@ class RealFlowE2ETests(unittest.TestCase):
             25,
         )
 
+    def test_runtime_state_includes_endurance_terminal_and_death_fields(
+        self,
+    ) -> None:
+        state = normalize_state(
+            {
+                "ui.surface_id": "game_over",
+                "game_over.command_epoch": "7",
+                "game_over.accepted_epoch": "7",
+                "game_over.run_nonce": "91",
+                "game_over.authority_participant_id": "1001",
+                "game_over.pending_dispatch": "false",
+                "game_over.dispatch_count": "1",
+                "spectator.active": "true",
+                "spectator.phase": "spectating",
+                "spectator.target_participant_id": "1002",
+                "barrier.active": "true",
+                "barrier.released": "true",
+                "barrier.timed_out": "false",
+                "barrier.run_nonce": "91",
+                "barrier.release_reason": "mutual-visibility",
+                "mp.participant_count": "1",
+                "participant.1.owner": "true",
+                "participant.1.hp": "0",
+                "participant.1.life_max": "2.5",
+                "participant.1.death_presentation_tick": "42",
+                "participant.1.presentation_flags": "59",
+            }
+        )
+
+        self.assertEqual(state["ui"]["surfaceId"], "game_over")
+        self.assertTrue(terminal_game_over(state))
+        state["gameOver"]["dispatchCount"] = 2
+        self.assertFalse(terminal_game_over(state))
+        self.assertEqual(state["deathSpectator"]["phase"], "spectating")
+        self.assertTrue(state["runLoadingBarrier"]["released"])
+        participant = state["multiplayer"]["participants"][0]
+        self.assertEqual(participant["life_max"], 2.5)
+        self.assertEqual(participant["death_presentation_tick"], 42)
+
+    def test_endurance_stats_count_death_respawn_and_damage_by_transport(
+        self,
+    ) -> None:
+        def sample(
+            *,
+            elapsed: float,
+            host_hp: float,
+            client_hp: float,
+            host_tick: int = 0,
+            client_tick: int = 0,
+        ) -> dict[str, object]:
+            def state(hp: float, tick: int, owner_id: int) -> dict[str, object]:
+                return {
+                    "wave": {"index": 3},
+                    "combat": {"waveIndex": 3},
+                    "world": {"waveIndex": 3},
+                    "player": {
+                        "valid": True,
+                        "x": elapsed,
+                        "y": 0.0,
+                        "hp": hp,
+                        "maxHp": 2.0,
+                    },
+                    "multiplayer": {
+                        "participants": [
+                            {
+                                "owner": True,
+                                "id": owner_id,
+                                "hp": hp,
+                                "life_max": 2.0,
+                                "death_presentation_tick": tick,
+                            }
+                        ]
+                    },
+                }
+
+            return {
+                "elapsedSeconds": elapsed,
+                "utcNanoseconds": round(elapsed * 1_000_000_000),
+                "host": state(host_hp, host_tick, 101),
+                "clientB": state(client_hp, client_tick, 202),
+            }
+
+        tracker = FighterStatsTracker({"host": 101, "clientB": 202})
+        tracker.observe(sample(elapsed=1.0, host_hp=2.0, client_hp=2.0))
+        deaths = tracker.observe(
+            sample(
+                elapsed=2.0,
+                host_hp=0.0,
+                client_hp=2.0,
+                host_tick=1,
+            )
+        )
+        respawns = tracker.observe(
+            sample(elapsed=4.0, host_hp=2.0, client_hp=2.0)
+        )
+        stats = tracker.result(
+            [
+                {
+                    "sourceParticipantId": 101,
+                    "damage": 0.75,
+                },
+                {
+                    "sourceParticipantId": 202,
+                    "damage": 0.5,
+                },
+            ],
+            [
+                {
+                    "targetParticipantId": 101,
+                    "damage": 1.0,
+                }
+            ],
+        )
+
+        self.assertEqual([row["event"] for row in deaths], ["death"])
+        self.assertEqual([row["event"] for row in respawns], ["respawn"])
+        self.assertEqual(stats["host"]["deaths"], 1)
+        self.assertEqual(stats["host"]["respawns"], 1)
+        self.assertEqual(stats["host"]["damageDealt"], 0.75)
+        self.assertEqual(stats["clientB"]["damageDealt"], 0.5)
+
+    def test_endurance_monitor_reports_transport_failure_immediately(
+        self,
+    ) -> None:
+        def state(*, failures: int) -> dict[str, object]:
+            return {
+                "wave": {"index": 1},
+                "combat": {"waveIndex": 1},
+                "world": {"waveIndex": 1},
+                "scene": {"name": "testrun"},
+                "player": {
+                    "valid": True,
+                    "x": 1.0,
+                    "y": 2.0,
+                    "hp": 2.0,
+                    "maxHp": 2.0,
+                },
+                "nativeEnemies": [],
+                "replicatedEnemies": [],
+                "gameOver": {
+                    "commandEpoch": 0,
+                    "acceptedEpoch": 0,
+                    "runNonce": 0,
+                    "authorityParticipantId": 0,
+                    "pendingDispatch": False,
+                    "dispatchCount": 0,
+                },
+                "multiplayer": {
+                    "participants": [],
+                    "transportReady": True,
+                    "sessionStatus": "ready",
+                    "packetsSent": 10,
+                    "packetsReceived": 10,
+                    "steamSendFailures": failures,
+                    "steamReliableSendFailures": 0,
+                    "lastSteamSendFailureResult": 25 if failures else 0,
+                },
+            }
+
+        monitor = EnduranceAnomalyMonitor()
+        findings = monitor.observe(
+            {
+                "elapsedSeconds": 1.0,
+                "host": state(failures=1),
+                "clientB": state(failures=0),
+            },
+            {
+                "host": {"brain.think_count": 1},
+                "clientB": {"brain.think_count": 1},
+            },
+            {"host": True, "clientB": True},
+        )
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["kind"], "steam-send-failure")
+        self.assertTrue(is_capture_milestone(5))
+        self.assertFalse(is_capture_milestone(4))
+
     def test_runtime_state_preserves_large_participant_ids(self) -> None:
         participant_id = 0x2B00000000000002
         state = normalize_state(
@@ -1789,6 +2065,132 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn(
             "[System.Convert]::FromBase64String",
             peer.connection.scripts[0],
+        )
+
+    def test_ws20_bot_settings_are_written_inside_the_owned_stage(
+        self,
+    ) -> None:
+        class FakeConnection:
+            stage_root = r"C:\Users\client-b\sd-botendure-stage"
+            stage_leaf = "sd-botendure-stage"
+
+            def __init__(self) -> None:
+                self.confined: list[str] = []
+                self.scripts: list[str] = []
+
+            def _require_confined(self, path: str) -> None:
+                self.confined.append(path)
+
+            def run_ps(self, script: str) -> str:
+                self.scripts.append(script)
+                return ""
+
+        peer = object.__new__(Ws20Peer)
+        peer.connection = FakeConnection()
+        peer.config = SimpleNamespace(instance="bply-endure-client")
+        peer.runtime_root = (
+            r"C:\Users\client-b\sd-botendure-stage\r\bply-run\runtime"
+        )
+
+        output = peer.write_bot_settings(
+            mod_id="bot.brain",
+            values={
+                "play_for_me": True,
+                "play_for_me_behavior": "skirmisher",
+                "roster": [],
+            },
+        )
+
+        self.assertEqual(len(peer.connection.confined), 1)
+        self.assertEqual(len(peer.connection.scripts), 1)
+        self.assertTrue(
+            output.startswith(
+                "%USERPROFILE%\\sd-botendure-stage\\"
+            )
+        )
+        self.assertIn("bot.brain.json", output)
+        self.assertIn("[System.IO.File]::Replace", peer.connection.scripts[0])
+        self.assertIn(".bply-tmp", peer.connection.scripts[0])
+
+    def test_ws20_stage_is_claimed_before_preparation_and_deleted_if_owned(
+        self,
+    ) -> None:
+        connection = object.__new__(RemoteWindowsConnection)
+        connection.stage_root = (
+            r"C:\Users\client-b\sd-botendure-stage"
+        )
+        connection.stage_leaf = "sd-botendure-stage"
+        scripts: list[str] = []
+        connection.run_ps = scripts.append  # type: ignore[method-assign]
+
+        connection.create_stage_root()
+
+        self.assertEqual(len(scripts), 1)
+        self.assertIn("staging root must be new", scripts[0])
+        self.assertIn(
+            "New-Item -ItemType Directory -Path $target",
+            scripts[0],
+        )
+        source = (
+            ROOT / "tools/verify_real_flow_e2e.py"
+        ).read_text(encoding="utf-8")
+        claim = source.index("connection.create_stage_root()")
+        prepare = source.index("Ws20Peer.prepare(config, connection)")
+        self.assertLess(claim, prepare)
+        self.assertIn(
+            "if remote_stage_claimed:\n"
+            "                    connection.remove_stage_root()",
+            source,
+        )
+
+    def test_ws20_windows_openssh_uses_separate_login_and_windows_paths(
+        self,
+    ) -> None:
+        connection = object.__new__(RemoteWindowsConnection)
+        connection.ssh = SimpleNamespace(
+            executable=(
+                "/mnt/c/Windows/System32/OpenSSH/ssh.exe"
+            ),
+            username="client-b",
+        )
+        connection.key_argument = r"C:\Users\User\.ssh\ws20-key"
+
+        ssh = connection._ssh_base()
+
+        self.assertEqual(
+            ssh[0],
+            "/mnt/c/Windows/System32/OpenSSH/ssh.exe",
+        )
+        self.assertEqual(ssh[ssh.index("-l") + 1], "client-b")
+        self.assertEqual(
+            connection._scp_executable(),
+            "/mnt/c/Windows/System32/OpenSSH/scp.exe",
+        )
+        with mock.patch(
+            "tools._real_flow_e2e.ws20.windows_path",
+            return_value=r"D:\evidence\capture.png",
+        ) as convert:
+            local = connection._local_scp_path(
+                Path("/mnt/d/evidence/capture.png")
+            )
+        self.assertEqual(local, r"D:\evidence\capture.png")
+        convert.assert_called_once()
+
+    def test_ws20_controller_accepts_only_a_safe_profile_stage_leaf(
+        self,
+    ) -> None:
+        controller = (
+            ROOT / "scripts/Invoke-RealFlowWindowsSession.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "^sd-[a-z0-9][a-z0-9-]{0,31}-stage$",
+            controller,
+        )
+        self.assertIn("GetDirectoryName($resolvedStageRoot)", controller)
+        self.assertNotIn(
+            'Join-Path $env:USERPROFILE "sd-netrepro-stage"',
+            controller,
         )
 
     def test_client_attack_precedes_paired_capture(self) -> None:

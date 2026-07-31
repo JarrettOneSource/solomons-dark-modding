@@ -176,6 +176,7 @@ class InputAction:
 class SshConfig:
     executable: str
     target: str
+    username: str = ""
     key_path: str = ""
     stage_root: str = ""
     display: str = ""
@@ -199,6 +200,11 @@ class SshConfig:
         return SshConfig(
             executable=executable,
             target=target,
+            username=_require_string(
+                row.get("username", ""),
+                f"{label}.username",
+                allow_empty=True,
+            ),
             key_path=_require_string(
                 row.get("keyPath", ""),
                 f"{label}.keyPath",
@@ -382,6 +388,8 @@ class HarnessConfig:
     timeout_seconds: float = 120.0
     sampling_seconds: float = 0.25
     bot_play_for_me: bool = False
+    endurance_mode: bool = False
+    endurance_max_seconds: float = 5400.0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
@@ -504,6 +512,13 @@ class HarnessConfig:
                 row.get("botPlayForMe", False),
                 "botPlayForMe",
             ),
+            endurance_mode=_require_bool(
+                row.get("enduranceMode", False),
+                "enduranceMode",
+            ),
+            endurance_max_seconds=float(
+                row.get("enduranceMaxSeconds", 5400.0)
+            ),
             metadata=_require_object(row.get("metadata", {}), "metadata"),
         )
         config.validate()
@@ -519,6 +534,14 @@ class HarnessConfig:
         if not 0.05 <= self.sampling_seconds <= 2.0:
             raise ConfigError(
                 "samplingSeconds must be between 0.05 and 2.0"
+            )
+        if not 60.0 <= self.endurance_max_seconds <= 5400.0:
+            raise ConfigError(
+                "enduranceMaxSeconds must be between 60 and 5400"
+            )
+        if self.endurance_mode and not self.bot_play_for_me:
+            raise ConfigError(
+                "enduranceMode requires botPlayForMe=true"
             )
         if not 0.0 < self.expected_water_contact_damage <= 10.0:
             raise ConfigError(
@@ -648,14 +671,25 @@ class HarnessConfig:
                 raise ConfigError(
                     "loopback_windows peers must target loopback"
                 )
-        if self.topology == "loopback_windows_botplay":
-            if not self.bot_play_for_me:
+        if (
+            self.topology == "loopback_windows_botplay"
+            and not self.bot_play_for_me
+        ):
+            raise ConfigError(
+                "loopback_windows_botplay requires botPlayForMe=true"
+            )
+        if self.bot_play_for_me:
+            if self.topology not in {
+                "loopback_windows_botplay",
+                "steam_windows_ws20",
+            }:
                 raise ConfigError(
-                    "loopback_windows_botplay requires botPlayForMe=true"
+                    "botPlayForMe requires loopback_windows_botplay or "
+                    "steam_windows_ws20"
                 )
             if self.local_staging_root is None:
                 raise ConfigError(
-                    "loopback_windows_botplay requires a short, dedicated "
+                    "botPlayForMe requires a short, dedicated "
                     "localStagingRoot"
                 )
             if not self.run_name.startswith("bply"):
@@ -681,14 +715,10 @@ class HarnessConfig:
                 raise ConfigError(
                     "bot-play source is missing mods/bot-brain"
                 )
-            if self.verify_through_wave < 4:
+            if not self.endurance_mode and self.verify_through_wave < 4:
                 raise ConfigError(
                     "bot-play acceptance requires verifyThroughWave >= 4"
                 )
-        elif self.bot_play_for_me:
-            raise ConfigError(
-                "botPlayForMe is confined to loopback_windows_botplay"
-            )
         if self.topology == "wan_udp_nfo":
             if self.host.platform != LOCAL_WINDOWS:
                 raise ConfigError(
@@ -748,22 +778,30 @@ class HarnessConfig:
                     "steam_windows_ws20 client is missing SSH configuration"
                 )
             normalized_stage = self.client.ssh.stage_root.replace("/", "\\")
-            if not (
-                normalized_stage.casefold()
-                == r"%userprofile%\sd-netrepro-stage".casefold()
-                or re.fullmatch(
-                    r"[A-Za-z]:\\Users\\[^\\]+\\sd-netrepro-stage",
-                    normalized_stage,
-                    flags=re.IGNORECASE,
-                )
-            ):
+            if re.fullmatch(
+                r"(?:%USERPROFILE%|[A-Za-z]:\\Users\\[^\\]+)\\"
+                r"sd-[a-z0-9][a-z0-9-]{0,31}-stage",
+                normalized_stage,
+                flags=re.IGNORECASE,
+            ) is None:
                 raise ConfigError(
-                    "steam_windows_ws20 is confined to "
-                    r"%USERPROFILE%\sd-netrepro-stage"
+                    "steam_windows_ws20 requires a dedicated "
+                    r"%USERPROFILE%\sd-<token>-stage root"
                 )
             if not self.client.ssh.key_path:
                 raise ConfigError(
                     "steam_windows_ws20 requires an SSH key path"
+                )
+            if (
+                not re.fullmatch(
+                    r"[A-Za-z0-9._-]{1,64}",
+                    self.client.ssh.username,
+                )
+                or "@" in self.client.ssh.target
+            ):
+                raise ConfigError(
+                    "steam_windows_ws20 requires a separate safe SSH "
+                    "username and a host-only target"
                 )
             if self.privacy != "friends":
                 raise ConfigError(
@@ -786,6 +824,14 @@ class HarnessConfig:
 
     def redacted(self) -> dict[str, Any]:
         def peer_value(peer: PeerConfig) -> dict[str, Any]:
+            ssh_stage_root = ""
+            if peer.ssh is not None:
+                ssh_stage_root = peer.ssh.stage_root
+                if peer.platform == WINDOWS_SSH:
+                    stage_leaf = ssh_stage_root.replace("/", "\\").rsplit(
+                        "\\", 1
+                    )[-1]
+                    ssh_stage_root = rf"%USERPROFILE%\{stage_leaf}"
             return {
                 "role": peer.role,
                 "platform": peer.platform,
@@ -803,11 +849,7 @@ class HarnessConfig:
                     action.__dict__ for action in peer.match_start_actions
                 ],
                 "sshConfigured": peer.ssh is not None,
-                "sshStageRoot": (
-                    r"%USERPROFILE%\sd-netrepro-stage"
-                    if peer.platform == WINDOWS_SSH and peer.ssh
-                    else (peer.ssh.stage_root if peer.ssh else "")
-                ),
+                "sshStageRoot": ssh_stage_root,
             }
 
         return {
@@ -845,6 +887,8 @@ class HarnessConfig:
             "timeoutSeconds": self.timeout_seconds,
             "samplingSeconds": self.sampling_seconds,
             "botPlayForMe": self.bot_play_for_me,
+            "enduranceMode": self.endurance_mode,
+            "enduranceMaxSeconds": self.endurance_max_seconds,
             "host": peer_value(self.host),
             "client": peer_value(self.client),
             "metadata": self.metadata,

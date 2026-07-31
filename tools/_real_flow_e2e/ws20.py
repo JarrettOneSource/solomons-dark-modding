@@ -101,6 +101,8 @@ class RemoteWindowsLuaBridge:
             "ServerAliveInterval=15",
             "-o",
             "ServerAliveCountMax=2",
+            "-l",
+            self.ssh.username,
         ]
         return arguments
 
@@ -391,24 +393,45 @@ class RemoteWindowsConnection:
         source_key = Path(self.ssh.key_path).expanduser().resolve()
         if not source_key.is_file():
             raise Ws20HarnessError("the configured ws20 SSH key is missing")
-        descriptor, copied_key = tempfile.mkstemp(
-            prefix="sd-netrepro-ws20-key.",
-            dir="/tmp",
-        )
-        os.close(descriptor)
-        self.key_path = Path(copied_key)
-        shutil.copyfile(source_key, self.key_path)
-        self.key_path.chmod(0o600)
+        self._temporary_key_path: Path | None = None
+        if Path(self.ssh.executable).name.casefold() == "ssh.exe":
+            self.key_path = source_key
+            self.key_argument = windows_path(source_key)
+        else:
+            descriptor, copied_key = tempfile.mkstemp(
+                prefix="sd-netrepro-ws20-key.",
+                dir="/tmp",
+            )
+            os.close(descriptor)
+            self.key_path = Path(copied_key)
+            self._temporary_key_path = self.key_path
+            shutil.copyfile(source_key, self.key_path)
+            self.key_path.chmod(0o600)
+            self.key_argument = str(self.key_path)
         self.stage_root = ""
+        normalized_stage = self.ssh.stage_root.replace("/", "\\")
+        stage_match = re.fullmatch(
+            r"(?:%USERPROFILE%|[A-Za-z]:\\Users\\[^\\]+)\\"
+            r"(sd-[a-z0-9][a-z0-9-]{0,31}-stage)",
+            normalized_stage,
+            flags=re.IGNORECASE,
+        )
+        if stage_match is None:
+            self.close()
+            raise Ws20HarnessError(
+                "workstation20 staging root is not a safe profile child"
+            )
+        self.stage_leaf = stage_match.group(1).lower()
         try:
             self.stage_root = self.run_ps(
-                """
-$expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
+                f"""
+$expected=Join-Path $env:USERPROFILE '{self.stage_leaf}'
 [Console]::Out.Write([System.IO.Path]::GetFullPath($expected).TrimEnd('\\'))
 """
             )
             if not re.fullmatch(
-                r"[A-Za-z]:\\Users\\[^\\]+\\sd-netrepro-stage",
+                r"[A-Za-z]:\\Users\\[^\\]+\\"
+                + re.escape(self.stage_leaf),
                 self.stage_root,
                 flags=re.IGNORECASE,
             ):
@@ -424,7 +447,7 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
             self.ssh.executable,
             "-T",
             "-i",
-            str(self.key_path),
+            self.key_argument,
             "-o",
             "BatchMode=yes",
             "-o",
@@ -433,12 +456,19 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
             "ServerAliveInterval=15",
             "-o",
             "ServerAliveCountMax=2",
+            "-l",
+            self.ssh.username,
         ]
 
     def _scp_executable(self) -> str:
         executable = Path(self.ssh.executable)
-        if executable.name == "ssh":
-            candidate = executable.with_name("scp")
+        if executable.name.casefold() in {"ssh", "ssh.exe"}:
+            candidate_name = (
+                "scp.exe"
+                if executable.name.casefold() == "ssh.exe"
+                else "scp"
+            )
+            candidate = executable.with_name(candidate_name)
             return str(candidate)
         return "scp"
 
@@ -447,7 +477,7 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
             self._scp_executable(),
             "-q",
             "-i",
-            str(self.key_path),
+            self.key_argument,
             "-o",
             "BatchMode=yes",
             "-o",
@@ -497,7 +527,7 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
         if stage_root:
             sanitized = re.sub(
                 re.escape(stage_root),
-                r"%USERPROFILE%\\sd-netrepro-stage",
+                rf"%USERPROFILE%\\{self.stage_leaf}",
                 sanitized,
                 flags=re.IGNORECASE,
             )
@@ -526,14 +556,20 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
     def _scp_path(path: str) -> str:
         return path.replace("\\", "/")
 
+    def _local_scp_path(self, path: Path) -> str:
+        if Path(self._scp_executable()).name.casefold() == "scp.exe":
+            return windows_path(path)
+        return str(path)
+
     def copy_file_to(self, source: Path, destination: str) -> None:
         if not source.is_file():
             raise Ws20HarnessError(f"upload source is missing: {source}")
         completed = subprocess.run(
             [
                 *self._scp_base(),
-                str(source),
-                f"{self.ssh.target}:{self._scp_path(destination)}",
+                self._local_scp_path(source),
+                f"{self.ssh.username}@{self.ssh.target}:"
+                f"{self._scp_path(destination)}",
             ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -560,8 +596,9 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
             [
                 *self._scp_base(),
                 "-r",
-                str(source),
-                f"{self.ssh.target}:{self._scp_path(destination_parent)}",
+                self._local_scp_path(source),
+                f"{self.ssh.username}@{self.ssh.target}:"
+                f"{self._scp_path(destination_parent)}",
             ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -584,8 +621,9 @@ $expected=Join-Path $env:USERPROFILE 'sd-netrepro-stage'
         completed = subprocess.run(
             [
                 *self._scp_base(),
-                f"{self.ssh.target}:{self._scp_path(source)}",
-                str(destination),
+                f"{self.ssh.username}@{self.ssh.target}:"
+                f"{self._scp_path(source)}",
+                self._local_scp_path(destination),
             ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -628,7 +666,60 @@ if(Test-Path -LiteralPath $target){{
 """
         )
 
-    def inventory(self) -> dict[str, int]:
+    def create_stage_root(self) -> None:
+        escaped_stage = self.stage_root.replace("'", "''")
+        escaped_leaf = self.stage_leaf.replace("'", "''")
+        self.run_ps(
+            f"""
+$target=[System.IO.Path]::GetFullPath('{escaped_stage}').TrimEnd('\\')
+$profile=[System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\\')
+if(-not [string]::Equals(
+    [System.IO.Path]::GetDirectoryName($target),
+    $profile,
+    [System.StringComparison]::OrdinalIgnoreCase) -or
+   -not [string]::Equals(
+    [System.IO.Path]::GetFileName($target),
+    '{escaped_leaf}',
+    [System.StringComparison]::OrdinalIgnoreCase)){{
+  throw 'Refusing to create a non-owned workstation20 staging root.'
+}}
+if(Test-Path -LiteralPath $target){{
+  throw 'The workstation20 staging root must be new.'
+}}
+New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
+if(-not (Test-Path -LiteralPath $target -PathType Container)){{
+  throw 'The workstation20 staging root was not created.'
+}}
+"""
+        )
+
+    def remove_stage_root(self) -> None:
+        escaped_stage = self.stage_root.replace("'", "''")
+        escaped_leaf = self.stage_leaf.replace("'", "''")
+        self.run_ps(
+            f"""
+$target=[System.IO.Path]::GetFullPath('{escaped_stage}').TrimEnd('\\')
+$profile=[System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\\')
+if(-not [string]::Equals(
+    [System.IO.Path]::GetDirectoryName($target),
+    $profile,
+    [System.StringComparison]::OrdinalIgnoreCase) -or
+   -not [string]::Equals(
+    [System.IO.Path]::GetFileName($target),
+    '{escaped_leaf}',
+    [System.StringComparison]::OrdinalIgnoreCase)){{
+  throw 'Refusing to delete a non-owned workstation20 staging root.'
+}}
+if(Test-Path -LiteralPath $target){{
+  & $env:ComSpec /d /c rd /s /q ('\\\\?\\' + $target)
+  if($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $target)){{
+    throw 'The exact workstation20 staging root remained after deletion.'
+  }}
+}}
+"""
+        )
+
+    def inventory(self) -> dict[str, int | bool]:
         escaped_stage = self.stage_root.replace("'", "''")
         result = self.run_ps_json(
             f"""
@@ -651,6 +742,7 @@ $steam=@(
     Where-Object {{ $_.SessionId -gt 0 }}
 )
 [ordered]@{{
+  stageRootExists=[bool](Test-Path -LiteralPath '{escaped_stage}')
   ownedProcessCount=$owned.Count
   taskCount=$tasks.Count
   interactiveSteamCount=$steam.Count
@@ -658,6 +750,7 @@ $steam=@(
 """
         )
         return {
+            "stageRootExists": bool(result.get("stageRootExists", False)),
             "ownedProcessCount": int(result.get("ownedProcessCount", 0)),
             "taskCount": int(result.get("taskCount", 0)),
             "interactiveSteamCount": int(
@@ -682,7 +775,7 @@ if(Test-Path -LiteralPath $path -PathType Leaf){{
         )
 
     def close(self) -> None:
-        key_path = getattr(self, "key_path", None)
+        key_path = getattr(self, "_temporary_key_path", None)
         if isinstance(key_path, Path):
             key_path.unlink(missing_ok=True)
 
@@ -717,6 +810,16 @@ class Ws20Peer:
         harness: HarnessConfig,
         connection: RemoteWindowsConnection,
     ) -> "Ws20Peer":
+        if connection.run_ps(
+            f"""
+[Console]::Out.Write(
+  [System.IO.Directory]::Exists(
+    '{connection.stage_root.replace("'", "''")}'))
+"""
+        ).casefold() != "true":
+            raise Ws20HarnessError(
+                "the owned workstation20 stage was not created"
+            )
         client = prepare_windows_peer(harness, harness.client)
         run_root = ntpath.join(
             connection.stage_root,
@@ -1046,10 +1149,63 @@ $values | ConvertTo-Json -Compress
             self._lua_pipe = RemoteWindowsLuaPipe(
                 self.config,
                 timeout_seconds=8.0,
-                key_path=str(self.connection.key_path),
+                key_path=self.connection.key_argument,
                 stage_root=self.connection.stage_root,
             )
         return self._lua_pipe
+
+    def write_bot_settings(
+        self,
+        *,
+        mod_id: str,
+        values: dict[str, Any],
+    ) -> str:
+        settings_path = ntpath.join(
+            self.runtime_root,
+            "instances",
+            self.config.instance,
+            "stage",
+            ".sdmod",
+            "mod-settings",
+            f"{mod_id}.json",
+        )
+        self.connection._require_confined(settings_path)
+        temporary_path = settings_path + ".bply-tmp"
+        payload = base64.b64encode(
+            (
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "values": values,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("utf-8")
+        ).decode("ascii")
+        escaped_settings = settings_path.replace("'", "''")
+        escaped_temporary = temporary_path.replace("'", "''")
+        escaped_parent = ntpath.dirname(settings_path).replace("'", "''")
+        self.connection.run_ps(
+            f"""
+$path='{escaped_settings}'
+$temporary='{escaped_temporary}'
+if(Test-Path -LiteralPath $temporary){{
+  throw 'Bot settings temporary path already exists.'
+}}
+New-Item -ItemType Directory -Path '{escaped_parent}' -Force | Out-Null
+[System.IO.File]::WriteAllBytes(
+  $temporary,
+  [System.Convert]::FromBase64String('{payload}'))
+if(Test-Path -LiteralPath $path -PathType Leaf){{
+  [System.IO.File]::Replace($temporary,$path,$null)
+}}else{{
+  [System.IO.File]::Move($temporary,$path)
+}}
+"""
+        )
+        return self._sanitized_path(settings_path)
 
     def send_key(self, key: str, hold_ms: int) -> str:
         detail = self._invoke(
@@ -1306,7 +1462,7 @@ $values | ConvertTo-Json -Compress
         prefix = self.connection.stage_root.rstrip("\\")
         if path.casefold().startswith(prefix.casefold()):
             return (
-                r"%USERPROFILE%\sd-netrepro-stage"
+                rf"%USERPROFILE%\{self.connection.stage_leaf}"
                 + path[len(prefix):]
             )
         return ntpath.basename(path)

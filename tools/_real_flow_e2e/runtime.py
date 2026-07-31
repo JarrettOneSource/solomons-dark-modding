@@ -96,7 +96,11 @@ local solomon = safe_call(
   sd.hub and sd.hub.get_solomon_dig_state)
 local camera = safe_call(sd.camera and sd.camera.get_state)
 local viewport = safe_call(sd.draw and sd.draw.get_viewport)
+local ui = safe_call(sd.ui and sd.ui.get_snapshot)
 local actors = safe_call(sd.world and sd.world.list_actors) or {}
+local terminal = mp and mp.game_over or {}
+local spectator = mp and mp.death_spectator or {}
+local barrier = mp and mp.run_loading_barrier or {}
 
 emit("scene.name", scene and (scene.name or scene.kind) or "")
 emit("scene.kind", scene and scene.kind or "")
@@ -107,6 +111,7 @@ emit("world.wave_index", world and world.wave_index or 0)
 emit("world.wave_counter", world and world.wave_counter or 0)
 emit("viewport.width", viewport and viewport.width or 0)
 emit("viewport.height", viewport and viewport.height or 0)
+emit("ui.surface_id", ui and ui.surface_id or "")
 emit("camera.available", camera and camera.available or false)
 emit(
   "camera.scene_available",
@@ -159,6 +164,22 @@ emit("mp.steam_reliable_send_failures",
   mp and mp.steam_reliable_send_failures or 0)
 emit("mp.last_steam_send_failure_result",
   mp and mp.last_steam_send_failure_result or 0)
+emit("game_over.command_epoch", terminal.command_epoch or 0)
+emit("game_over.accepted_epoch", terminal.accepted_epoch or 0)
+emit("game_over.run_nonce", terminal.run_nonce or 0)
+emit("game_over.authority_participant_id",
+  terminal.authority_participant_id or 0)
+emit("game_over.pending_dispatch", terminal.pending_dispatch or false)
+emit("game_over.dispatch_count", terminal.dispatch_count or 0)
+emit("spectator.active", spectator.active or false)
+emit("spectator.phase", spectator.phase or "")
+emit("spectator.target_participant_id",
+  spectator.target_participant_id or 0)
+emit("barrier.active", barrier.active or false)
+emit("barrier.released", barrier.released or false)
+emit("barrier.timed_out", barrier.timed_out or false)
+emit("barrier.run_nonce", barrier.run_nonce or 0)
+emit("barrier.release_reason", barrier.release_reason or "")
 local loading = mp and mp.loading_screen or nil
 emit("loading.active", loading and loading.active or false)
 emit("loading.flow", loading and loading.flow or 0)
@@ -187,6 +208,11 @@ for index, participant in ipairs(mp and mp.participants or {}) do
   emit(prefix .. ".x", participant.x or 0)
   emit(prefix .. ".y", participant.y or 0)
   emit(prefix .. ".hp", participant.life_current or 0)
+  emit(prefix .. ".life_max", participant.life_max or 0)
+  emit(prefix .. ".death_presentation_tick",
+    participant.death_presentation_tick or 0)
+  emit(prefix .. ".presentation_flags",
+    participant.presentation_flags or 0)
 end
 
 emit("solomon.valid", solomon and solomon.valid or false)
@@ -413,6 +439,7 @@ def _rows(
                 "y",
                 "heading",
                 "hp",
+                "life_max",
                 "max_hp",
                 "screen_x",
                 "screen_y",
@@ -467,6 +494,9 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
         "x",
         "y",
         "hp",
+        "life_max",
+        "death_presentation_tick",
+        "presentation_flags",
     )
     binding_fields = (
         "network_id",
@@ -494,6 +524,9 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
         "viewport": {
             "width": _integer(values, "viewport.width"),
             "height": _integer(values, "viewport.height"),
+        },
+        "ui": {
+            "surfaceId": values.get("ui.surface_id", ""),
         },
         "camera": {
             "available": _boolean(values, "camera.available"),
@@ -564,6 +597,34 @@ def normalize_state(values: dict[str, str]) -> dict[str, Any]:
                 "mp.participant_count",
                 participant_fields,
             ),
+        },
+        "gameOver": {
+            "commandEpoch": _integer(values, "game_over.command_epoch"),
+            "acceptedEpoch": _integer(values, "game_over.accepted_epoch"),
+            "runNonce": _integer(values, "game_over.run_nonce"),
+            "authorityParticipantId": _integer(
+                values, "game_over.authority_participant_id"
+            ),
+            "pendingDispatch": _boolean(
+                values, "game_over.pending_dispatch"
+            ),
+            "dispatchCount": _integer(
+                values, "game_over.dispatch_count"
+            ),
+        },
+        "deathSpectator": {
+            "active": _boolean(values, "spectator.active"),
+            "phase": values.get("spectator.phase", ""),
+            "targetParticipantId": _integer(
+                values, "spectator.target_participant_id"
+            ),
+        },
+        "runLoadingBarrier": {
+            "active": _boolean(values, "barrier.active"),
+            "released": _boolean(values, "barrier.released"),
+            "timedOut": _boolean(values, "barrier.timed_out"),
+            "runNonce": _integer(values, "barrier.run_nonce"),
+            "releaseReason": values.get("barrier.release_reason", ""),
         },
         "loadingScreen": {
             "active": _boolean(values, "loading.active"),

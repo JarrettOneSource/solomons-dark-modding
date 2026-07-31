@@ -21,11 +21,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$expectedStageRoot = Join-Path $env:USERPROFILE "sd-netrepro-stage"
-if (-not [string]::Equals(
-        [System.IO.Path]::GetFullPath($StageRoot).TrimEnd("\"),
-        [System.IO.Path]::GetFullPath($expectedStageRoot).TrimEnd("\"),
-        [System.StringComparison]::OrdinalIgnoreCase)) {
+$resolvedStageRoot = [System.IO.Path]::GetFullPath($StageRoot).TrimEnd("\")
+$resolvedProfile =
+    [System.IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd("\")
+$stageLeaf = [System.IO.Path]::GetFileName($resolvedStageRoot)
+if (
+    -not [string]::Equals(
+        [System.IO.Path]::GetDirectoryName($resolvedStageRoot),
+        $resolvedProfile,
+        [System.StringComparison]::OrdinalIgnoreCase) -or
+    $stageLeaf -notmatch '^sd-[a-z0-9][a-z0-9-]{0,31}-stage$'
+) {
     throw "The workstation20 controller is confined to the temporary account staging root."
 }
 foreach ($path in @($RequestPath, $ResultPath)) {
