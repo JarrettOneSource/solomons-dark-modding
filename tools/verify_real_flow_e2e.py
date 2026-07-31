@@ -1096,6 +1096,81 @@ def _indicator_region_assertion(capture_path: Path) -> dict[str, Any]:
         }
 
 
+def _native_enemy_render_assertion(
+    state: dict[str, Any],
+    capture_path: Path,
+) -> dict[str, Any]:
+    from PIL import Image, ImageStat
+
+    visible_enemies = [
+        enemy
+        for enemy in state["nativeEnemies"]
+        if enemy["screen_valid"]
+        and not enemy["dead"]
+        and float(enemy["hp"]) > 0.0
+    ]
+    if not visible_enemies:
+        raise RealFlowFailure(
+            "fighting screenshot has no visible living native enemy"
+        )
+    viewport = state["viewport"]
+    with Image.open(capture_path) as image:
+        rgb = image.convert("RGB")
+        scale_x = rgb.width / max(1, int(viewport["width"]))
+        scale_y = rgb.height / max(1, int(viewport["height"]))
+        candidates: list[dict[str, Any]] = []
+        for enemy in visible_enemies:
+            center_x = round(float(enemy["screen_x"]) * scale_x)
+            center_y = round(float(enemy["screen_y"]) * scale_y)
+            radius = max(
+                8,
+                min(48, round(24 * max(scale_x, scale_y))),
+            )
+            bounds = (
+                max(0, center_x - radius),
+                max(0, center_y - radius),
+                min(rgb.width, center_x + radius + 1),
+                min(rgb.height, center_y + radius + 1),
+            )
+            crop = rgb.crop(bounds)
+            channel_ranges = [
+                maximum - minimum
+                for minimum, maximum in crop.getextrema()
+            ]
+            standard_deviation = ImageStat.Stat(crop).stddev
+            candidates.append(
+                {
+                    "localActorAddress": int(enemy["address"]),
+                    "projection": [
+                        float(enemy["screen_x"]),
+                        float(enemy["screen_y"]),
+                    ],
+                    "cropBounds": list(bounds),
+                    "channelRanges": channel_ranges,
+                    "channelStandardDeviation": standard_deviation,
+                    "visuallyNonUniform": (
+                        max(channel_ranges) >= 12
+                        and max(standard_deviation) >= 3.0
+                    ),
+                }
+            )
+    accepted = [
+        row for row in candidates if row["visuallyNonUniform"]
+    ]
+    if not accepted:
+        raise RealFlowFailure(
+            "on-screen native enemy crops were visually uniform: "
+            + json.dumps(candidates, sort_keys=True)
+        )
+    return {
+        "capture": str(capture_path),
+        "viewport": viewport,
+        "imageSize": [rgb.width, rgb.height],
+        "candidates": candidates,
+        "accepted": accepted,
+    }
+
+
 def _bot_is_driving(
     state: dict[str, Any],
     participant_id: int | None = None,
@@ -1206,10 +1281,17 @@ def _run_bot_play_for_me(
 
     sampler.set_phase("both-local-players-bot-driven")
     deadline = time.monotonic() + config.timeout_seconds
-    screenshot: dict[str, Any] | None = None
-    screenshot_assertions: dict[str, Any] | None = None
-    screenshot_errors: list[str] = []
-    next_capture_at = time.monotonic()
+    screenshots: dict[str, dict[str, Any]] = {}
+    screenshot_assertions: dict[str, dict[str, Any]] = {}
+    screenshot_errors: dict[str, list[str]] = {
+        "host": [],
+        "clientB": [],
+    }
+    next_capture_at = {
+        "host": time.monotonic(),
+        "clientB": time.monotonic(),
+    }
+    capture_readiness: dict[str, dict[str, bool]] = {}
     final_sample: dict[str, Any] | None = None
     last_summary: dict[str, Any] = {}
     wave_samples: list[dict[str, Any]] = []
@@ -1246,57 +1328,81 @@ def _run_bot_play_for_me(
             "clientBBot": client_bot,
             "enemyDamageEdges": len(enemy_rows),
         }
-        if (
-            screenshot is None
-            and time.monotonic() >= next_capture_at
-            and int(host_bot.get("brain.cast_accepted", 0)) > 0
-            and int(client_bot.get("brain.cast_accepted", 0)) > 0
-            and _fighter_damage_present(
-                enemy_rows,
-                config.host.participant_id,
-            )
-            and _fighter_damage_present(
-                enemy_rows,
-                config.client.participant_id,
-            )
-            and _visible_living_enemy(sample["host"])
-            and _visible_living_enemy(sample["clientB"])
+        for (
+            role,
+            peer,
+            peer_state,
+            peer_bot,
+            peer_wave,
+        ) in (
+            (
+                "host",
+                config.host,
+                sample["host"],
+                host_bot,
+                host_wave,
+            ),
+            (
+                "clientB",
+                config.client,
+                sample["clientB"],
+                client_bot,
+                client_wave,
+            ),
         ):
+            readiness = {
+                "castAccepted": (
+                    int(peer_bot.get("brain.cast_accepted", 0)) > 0
+                ),
+                "authoritativeDamage": _fighter_damage_present(
+                    enemy_rows,
+                    peer.participant_id,
+                ),
+                "visibleLivingEnemy": _visible_living_enemy(
+                    peer_state
+                ),
+            }
+            capture_readiness[role] = readiness
+            if (
+                role in screenshots
+                or time.monotonic() < next_capture_at[role]
+                or not all(readiness.values())
+            ):
+                continue
             try:
                 candidate = paired_windows_capture(
                     config.source_root,
                     host,
                     client,
                     config.evidence_root / "screenshots",
-                    label=f"bot-fighting-wave-{min(host_wave, client_wave)}",
+                    label=f"bot-fighting-{role}-wave-{peer_wave}",
                 )
-                host_capture = Path(
-                    candidate["captures"]["host"]["path"]
-                )
-                client_capture = Path(
-                    candidate["captures"]["clientB"]["path"]
+                capture_path = Path(
+                    candidate["captures"][role]["path"]
                 )
                 assertions = {
-                    "hostIndicator": _indicator_region_assertion(
-                        host_capture
+                    "indicator": _indicator_region_assertion(
+                        capture_path
                     ),
-                    "clientBIndicator": _indicator_region_assertion(
-                        client_capture
+                    "enemyRendered": (
+                        _native_enemy_render_assertion(
+                            peer_state,
+                            capture_path,
+                        )
+                        if role == "host"
+                        else rendered_enemy_assertion(
+                            peer_state,
+                            capture_path,
+                        )
                     ),
-                    "clientBEnemyRendered": rendered_enemy_assertion(
-                        sample["clientB"],
-                        client_capture,
-                    ),
-                    "hostVisibleLivingEnemy": True,
-                    "clientBVisibleLivingEnemy": True,
-                    "hostBot": host_bot,
-                    "clientBBot": client_bot,
+                    "visibleLivingEnemy": True,
+                    "bot": peer_bot,
                 }
-                screenshot = candidate
-                screenshot_assertions = assertions
+                screenshots[role] = candidate
+                screenshot_assertions[role] = assertions
             except (EvidenceError, RealFlowFailure) as exc:
-                screenshot_errors.append(str(exc))
-                next_capture_at = time.monotonic() + 2.0
+                screenshot_errors[role].append(str(exc))
+                next_capture_at[role] = time.monotonic() + 2.0
         if (
             host_wave >= config.verify_through_wave
             and client_wave >= config.verify_through_wave
@@ -1332,10 +1438,14 @@ def _run_bot_play_for_me(
         enemy_rows,
         player_rows,
     )
-    if screenshot is None or screenshot_assertions is None:
+    missing_screenshots = sorted(
+        {"host", "clientB"} - screenshots.keys()
+    )
+    if missing_screenshots:
         raise RealFlowFailure(
-            "both bot-driven peers never produced an indicator-and-fighting "
-            f"capture: {screenshot_errors[-5:]}"
+            "bot-driven peers lacked independently asserted fighting "
+            f"captures: missing={missing_screenshots} "
+            f"readiness={capture_readiness} errors={screenshot_errors}"
         )
     final_bots = {
         "host": _bot_probe(host_pipe),
@@ -1362,7 +1472,7 @@ def _run_bot_play_for_me(
         enemy_rows,
         player_rows,
     )
-    result["pairedFightingCapture"] = screenshot
+    result["pairedFightingCapture"] = screenshots
     result["captureAssertions"] = screenshot_assertions
     result["captureAttemptErrors"] = screenshot_errors
 

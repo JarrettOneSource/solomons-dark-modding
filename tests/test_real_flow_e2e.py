@@ -27,6 +27,7 @@ from tools._real_flow_e2e.runtime import (
 )
 from tools.verify_real_flow_e2e import (
     _assert_clean_release,
+    _native_enemy_render_assertion,
     validate_living_wave_boundary,
     validate_stock_water_cast,
     validate_wave_convergence,
@@ -999,6 +1000,40 @@ class RealFlowE2ETests(unittest.TestCase):
                     "enemyHealthBarCandidates"
                 ][0]["signature"],
                 "enemy-health-bar",
+            )
+
+    def test_native_enemy_render_assertion_uses_local_screen_projection(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            capture = Path(directory) / "native-enemy.png"
+            image = Image.new("RGB", (100, 100), (20, 20, 20))
+            for y in range(45, 56):
+                for x in range(45, 56):
+                    image.putpixel(
+                        (x, y),
+                        (220, 180, 40) if (x + y) % 2 else (40, 80, 220),
+                    )
+            image.save(capture)
+            state = {
+                "viewport": {"width": 100, "height": 100},
+                "nativeEnemies": [
+                    {
+                        "address": 0x1234,
+                        "dead": False,
+                        "hp": 2.5,
+                        "screen_valid": True,
+                        "screen_x": 50.0,
+                        "screen_y": 50.0,
+                    }
+                ],
+            }
+
+            result = _native_enemy_render_assertion(state, capture)
+
+            self.assertEqual(
+                result["accepted"][0]["localActorAddress"],
+                0x1234,
             )
 
     def test_cleanup_accepts_a_process_that_exits_before_close(
