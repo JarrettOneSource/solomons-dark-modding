@@ -214,6 +214,8 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
     assert "actor_address" not in steering
     assert "actor_address" not in observation
     assert "sd.world.get_run_enemy_by_network_id" in local_player
+    assert "sd.world.list_actors" in local_player
+    assert "nearest_distance_squared" in local_player
 
     for token in (
         "assert(controller.debug.release_clean)",

@@ -63,16 +63,45 @@ local function resolve_target_actor(target)
   end
   local network_actor_id =
     tonumber(target.network_actor_id) or 0
-  if network_actor_id <= 0 then
+  if network_actor_id > 0 then
+    local ok, actor = pcall(
+      sd.world.get_run_enemy_by_network_id,
+      network_actor_id)
+    if ok and type(actor) == "table" then
+      return tonumber(actor.actor_address) or 0
+    end
+  end
+
+  local target_x = tonumber(target.x)
+  local target_y = tonumber(target.y)
+  if not finite_number(target_x) or
+      not finite_number(target_y) then
     return 0
   end
-  local ok, actor = pcall(
-    sd.world.get_run_enemy_by_network_id,
-    network_actor_id)
-  if ok and type(actor) == "table" then
-    return tonumber(actor.actor_address) or 0
+  local ok, actors = pcall(sd.world.list_actors)
+  if not ok or type(actors) ~= "table" then
+    return 0
   end
-  return 0
+  local nearest_address = 0
+  local nearest_distance_squared = math.huge
+  for _, actor in ipairs(actors) do
+    local address = tonumber(actor.actor_address) or 0
+    local x = tonumber(actor.x or actor.position_x)
+    local y = tonumber(actor.y or actor.position_y)
+    local hp = tonumber(actor.hp) or 0.0
+    if actor.tracked_enemy == true and
+        actor.dead ~= true and address > 0 and hp > 0.0 and
+        finite_number(x) and finite_number(y) then
+      local dx = x - target_x
+      local dy = y - target_y
+      local distance_squared = dx * dx + dy * dy
+      if distance_squared < nearest_distance_squared then
+        nearest_address = address
+        nearest_distance_squared = distance_squared
+      end
+    end
+  end
+  return nearest_address
 end
 
 function Handle:new(controller)

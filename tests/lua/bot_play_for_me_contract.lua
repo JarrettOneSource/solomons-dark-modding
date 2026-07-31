@@ -42,6 +42,26 @@ sd = {
       assert(network_actor_id == 77)
       return { actor_address = 9000 }
     end,
+    list_actors = function()
+      return {
+        {
+          actor_address = 9100,
+          tracked_enemy = true,
+          dead = false,
+          hp = 50.0,
+          x = 140.0,
+          y = 20.0,
+        },
+        {
+          actor_address = 9200,
+          tracked_enemy = true,
+          dead = false,
+          hp = 50.0,
+          x = 400.0,
+          y = 400.0,
+        },
+      }
+    end,
     request_loot_pickup = function(network_drop_id)
       calls.pickups[#calls.pickups + 1] = network_drop_id
       return true, 12
@@ -282,6 +302,13 @@ assert(controller.handle:cast(
   80,
   { network_actor_id = 77 }))
 assert(calls.bindings[#calls.bindings] == "belt_slot_2")
+assert(controller.handle:cast(
+  0,
+  140.0,
+  20.0,
+  80,
+  { network_actor_id = 0, x = 140.0, y = 20.0 }))
+assert(calls.targets[#calls.targets].actor == 9100)
 
 spectator_active = true
 event.tick_count = 3
