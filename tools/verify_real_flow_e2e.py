@@ -1489,6 +1489,7 @@ def _run_bot_play_for_me(
                 client_bot,
                 runtime_participant_ids["clientB"],
             )
+            and screenshots.keys() >= {"host", "clientB"}
         ):
             final_sample = sample
             break
