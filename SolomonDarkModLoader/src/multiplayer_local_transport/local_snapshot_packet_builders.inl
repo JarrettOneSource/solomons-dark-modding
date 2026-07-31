@@ -124,6 +124,9 @@ bool BuildLocalWorldSnapshot(
                 actor.actor_address,
                 actor.object_type_id,
                 &snapshot);
+            (void)PopulateRunEnemyCombatModifierSnapshot(
+                actor.actor_address,
+                &snapshot);
         }
         snapshot.anim_drive_state = actor.anim_drive_state;
         snapshot.position_x = actor.x;

@@ -1,6 +1,8 @@
 #include <cfloat>
 
 struct GameplayPathCircleObstacle {
+    uintptr_t source_address = 0;
+    std::uint32_t native_type_id = 0;
     float x = 0.0f;
     float y = 0.0f;
     float radius = 0.0f;
@@ -14,6 +16,19 @@ struct GameplayPathSegmentObstacle {
     float start_y = 0.0f;
     float end_x = 0.0f;
     float end_y = 0.0f;
+    std::uint32_t native_type_id = 0;
+    std::uint32_t mask = 0;
+    bool openable = false;
+    bool dynamic = false;
+};
+
+struct GameplayPathPolygonObstacle {
+    uintptr_t source_address = 0;
+    float bounds_x = 0.0f;
+    float bounds_y = 0.0f;
+    float bounds_w = 0.0f;
+    float bounds_h = 0.0f;
+    std::vector<SDModCollisionGeometryPoint> points;
 };
 
 struct GameplayPathGridSnapshot {
@@ -23,8 +38,11 @@ struct GameplayPathGridSnapshot {
     int height = 0;
     float cell_width = 0.0f;
     float cell_height = 0.0f;
+    std::vector<GameplayPathCircleObstacle> circle_obstacles;
     std::vector<GameplayPathCircleObstacle> static_circle_obstacles;
+    std::vector<GameplayPathSegmentObstacle> segment_obstacles;
     std::vector<GameplayPathSegmentObstacle> openable_segment_obstacles;
+    std::vector<GameplayPathPolygonObstacle> polygon_obstacles;
 };
 
 int GameplayPathCellPlacementSampleResolution() {
@@ -80,6 +98,41 @@ bool TryReadGameplayPathSegmentObstacle(
     return true;
 }
 
+bool TryReadGameplayPathDirectSegmentObstacle(
+    uintptr_t object_address,
+    std::size_t start_x_offset,
+    std::size_t start_y_offset,
+    std::size_t end_x_offset,
+    std::size_t end_y_offset,
+    GameplayPathSegmentObstacle* obstacle) {
+    if (object_address == 0 || obstacle == nullptr) {
+        return false;
+    }
+
+    GameplayPathSegmentObstacle read;
+    read.object_address = object_address;
+    if (!TryReadFiniteFloatField(
+            object_address,
+            start_x_offset,
+            &read.start_x) ||
+        !TryReadFiniteFloatField(
+            object_address,
+            start_y_offset,
+            &read.start_y) ||
+        !TryReadFiniteFloatField(
+            object_address,
+            end_x_offset,
+            &read.end_x) ||
+        !TryReadFiniteFloatField(
+            object_address,
+            end_y_offset,
+            &read.end_y)) {
+        return false;
+    }
+    *obstacle = read;
+    return true;
+}
+
 void CaptureGameplayPathSegmentObstaclePolicy(
     uintptr_t world_address,
     GameplayPathGridSnapshot* snapshot) {
@@ -89,19 +142,16 @@ void CaptureGameplayPathSegmentObstaclePolicy(
         kActorWorldSceneryObjectListOffset == 0 ||
         kPointerListCountOffset == 0 ||
         kPointerListItemsOffset == 0 ||
-        kGameplayPathOpenableSegmentBuilder == 0 ||
-        kGameplayPathOpenableSegmentBuilderVtableSlotOffset == 0 ||
-        kGameplayPathOpenableSegmentRecordOffset == 0) {
+        kGameplayPathOpenableSegmentObstacleMask == 0) {
         return;
     }
 
     auto& memory = ProcessMemory::Instance();
     const auto openable_builder_address =
-        memory.ResolveGameAddressOrZero(
-            kGameplayPathOpenableSegmentBuilder);
-    if (openable_builder_address == 0) {
-        return;
-    }
+        kGameplayPathOpenableSegmentBuilder != 0
+            ? memory.ResolveGameAddressOrZero(
+                  kGameplayPathOpenableSegmentBuilder)
+            : 0;
 
     const auto scenery_list_address =
         world_address + kActorWorldSceneryObjectListOffset;
@@ -123,39 +173,224 @@ void CaptureGameplayPathSegmentObstaclePolicy(
             static_cast<std::size_t>(scenery_count));
         for (std::int32_t index = 0; index < scenery_count; ++index) {
             uintptr_t object_address = 0;
-            uintptr_t vtable_address = 0;
-            uintptr_t collision_builder_address = 0;
-            uintptr_t segment_record_address = 0;
+            std::uint32_t native_type_id = 0;
             if (!memory.TryReadValue(
                     scenery_items_address +
                         static_cast<std::size_t>(index) *
                             sizeof(uintptr_t),
                     &object_address) ||
                 object_address == 0 ||
-                !memory.TryReadValue(
-                    object_address,
-                    &vtable_address) ||
-                vtable_address == 0 ||
-                !memory.TryReadValue(
-                    vtable_address +
-                        kGameplayPathOpenableSegmentBuilderVtableSlotOffset,
-                    &collision_builder_address) ||
-                collision_builder_address != openable_builder_address ||
                 !memory.TryReadField(
                     object_address,
-                    kGameplayPathOpenableSegmentRecordOffset,
-                    &segment_record_address) ||
-                segment_record_address == 0) {
+                    kGameObjectTypeIdOffset,
+                    &native_type_id) ||
+                (native_type_id != 3007 &&
+                 native_type_id != 3011 &&
+                 native_type_id != 3012)) {
                 continue;
             }
+
             GameplayPathSegmentObstacle obstacle;
-            if (TryReadGameplayPathSegmentObstacle(
-                    segment_record_address,
-                    &obstacle)) {
-                obstacle.object_address = object_address;
+            bool resolved = false;
+            if (native_type_id == 3007) {
+                resolved =
+                    TryReadGameplayPathDirectSegmentObstacle(
+                        object_address,
+                        kGameplayPathFenceGrateSegmentStartXOffset,
+                        kGameplayPathFenceGrateSegmentStartYOffset,
+                        kGameplayPathFenceGrateSegmentEndXOffset,
+                        kGameplayPathFenceGrateSegmentEndYOffset,
+                        &obstacle);
+            } else if (native_type_id == 3011) {
+                resolved =
+                    TryReadGameplayPathDirectSegmentObstacle(
+                        object_address,
+                        kGameplayPathBrokenFenceSegmentStartXOffset,
+                        kGameplayPathBrokenFenceSegmentStartYOffset,
+                        kGameplayPathBrokenFenceSegmentEndXOffset,
+                        kGameplayPathBrokenFenceSegmentEndYOffset,
+                        &obstacle);
+            } else if (
+                openable_builder_address != 0 &&
+                kGameplayPathOpenableSegmentBuilderVtableSlotOffset != 0 &&
+                kGameplayPathOpenableSegmentRecordOffset != 0) {
+                uintptr_t vtable_address = 0;
+                uintptr_t collision_builder_address = 0;
+                uintptr_t segment_record_address = 0;
+                resolved =
+                    memory.TryReadValue(
+                        object_address,
+                        &vtable_address) &&
+                    vtable_address != 0 &&
+                    memory.TryReadValue(
+                        vtable_address +
+                            kGameplayPathOpenableSegmentBuilderVtableSlotOffset,
+                        &collision_builder_address) &&
+                    collision_builder_address ==
+                        openable_builder_address &&
+                    memory.TryReadField(
+                        object_address,
+                        kGameplayPathOpenableSegmentRecordOffset,
+                        &segment_record_address) &&
+                    segment_record_address != 0 &&
+                    TryReadGameplayPathSegmentObstacle(
+                        segment_record_address,
+                        &obstacle);
+                if (resolved) {
+                    (void)memory.TryReadField(
+                        segment_record_address,
+                        kGameplayPathSegmentMaskOffset,
+                        &obstacle.mask);
+                    obstacle.openable = true;
+                    obstacle.dynamic = true;
+                }
+            }
+            if (!resolved) {
+                continue;
+            }
+
+            obstacle.object_address = object_address;
+            obstacle.native_type_id = native_type_id;
+            if (native_type_id != 3012) {
+                obstacle.mask =
+                    GameplayPathOpenableSegmentObstacleMask();
+            }
+            snapshot->segment_obstacles.push_back(obstacle);
+            if (obstacle.openable) {
                 snapshot->openable_segment_obstacles.push_back(
                     obstacle);
             }
+        }
+    }
+}
+
+void CaptureGameplayPathShapePolicy(
+    GameplayPathGridSnapshot* snapshot) {
+    if (snapshot == nullptr ||
+        snapshot->controller_address == 0 ||
+        kMovementControllerShapeCountOffset == 0 ||
+        kMovementControllerShapeListOffset == 0) {
+        return;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int32_t shape_count = 0;
+    uintptr_t shape_list_address = 0;
+    if (!memory.TryReadField(
+            snapshot->controller_address,
+            kMovementControllerShapeCountOffset,
+            &shape_count) ||
+        !memory.TryReadField(
+            snapshot->controller_address,
+            kMovementControllerShapeListOffset,
+            &shape_list_address) ||
+        shape_count <= 0 ||
+        static_cast<std::size_t>(shape_count) >
+            kGameplayPathMaxStaticCircleObstacles ||
+        shape_list_address == 0) {
+        return;
+    }
+
+    constexpr std::int32_t kMaximumShapePointCount = 4096;
+    for (std::int32_t index = 0;
+         index < shape_count;
+         ++index) {
+        uintptr_t shape_address = 0;
+        uintptr_t points_address = 0;
+        uintptr_t cached_points_address = 0;
+        std::int32_t point_count = 0;
+        if (!memory.TryReadValue(
+                shape_list_address +
+                    static_cast<std::size_t>(index) *
+                        sizeof(uintptr_t),
+                &shape_address) ||
+            shape_address == 0 ||
+            !memory.TryReadField(
+                shape_address,
+                kMovementShapePointsOffset,
+                &points_address) ||
+            !memory.TryReadField(
+                shape_address,
+                kMovementShapeCachedPointsOffset,
+                &cached_points_address) ||
+            !memory.TryReadField(
+                shape_address,
+                kMovementShapePointCountOffset,
+                &point_count) ||
+            point_count < 2 ||
+            point_count > kMaximumShapePointCount) {
+            continue;
+        }
+        const auto active_points_address =
+            points_address != 0
+                ? points_address
+                : cached_points_address;
+        if (active_points_address == 0 ||
+            !memory.IsReadableRange(
+                active_points_address,
+                static_cast<std::size_t>(point_count) *
+                    sizeof(float) * 2)) {
+            continue;
+        }
+
+        GameplayPathPolygonObstacle polygon;
+        polygon.source_address = shape_address;
+        if (!TryReadFiniteFloatField(
+                shape_address,
+                kMovementShapeBoundsXOffset,
+                &polygon.bounds_x) ||
+            !TryReadFiniteFloatField(
+                shape_address,
+                kMovementShapeBoundsYOffset,
+                &polygon.bounds_y) ||
+            !TryReadFiniteFloatField(
+                shape_address,
+                kMovementShapeBoundsWOffset,
+                &polygon.bounds_w) ||
+            !TryReadFiniteFloatField(
+                shape_address,
+                kMovementShapeBoundsHOffset,
+                &polygon.bounds_h)) {
+            continue;
+        }
+        polygon.points.reserve(
+            static_cast<std::size_t>(point_count));
+        bool points_valid = true;
+        for (std::int32_t point_index = 0;
+             point_index < point_count;
+             ++point_index) {
+            SDModCollisionGeometryPoint point;
+            const auto point_address =
+                active_points_address +
+                static_cast<std::size_t>(point_index) *
+                    sizeof(float) * 2;
+            if (!memory.TryReadValue(point_address, &point.x) ||
+                !memory.TryReadValue(
+                    point_address + sizeof(float),
+                    &point.y) ||
+                !std::isfinite(point.x) ||
+                !std::isfinite(point.y)) {
+                points_valid = false;
+                break;
+            }
+            polygon.points.push_back(point);
+        }
+        if (!points_valid) {
+            continue;
+        }
+        if (polygon.points.size() == 2) {
+            GameplayPathSegmentObstacle segment;
+            segment.record_address = shape_address;
+            segment.start_x = polygon.points[0].x;
+            segment.start_y = polygon.points[0].y;
+            segment.end_x = polygon.points[1].x;
+            segment.end_y = polygon.points[1].y;
+            segment.mask =
+                GameplayPathStaticCircleObstacleMask();
+            snapshot->segment_obstacles.push_back(segment);
+        } else {
+            snapshot->polygon_obstacles.push_back(
+                std::move(polygon));
         }
     }
 }
@@ -297,8 +532,11 @@ bool TryBuildGameplayPathGridSnapshot(
     snapshot->height = grid_height;
     snapshot->cell_width = cell_width;
     snapshot->cell_height = cell_height;
+    snapshot->circle_obstacles.clear();
     snapshot->static_circle_obstacles.clear();
+    snapshot->segment_obstacles.clear();
     snapshot->openable_segment_obstacles.clear();
+    snapshot->polygon_obstacles.clear();
 
     std::int32_t circle_count = 0;
     uintptr_t circle_list_address = 0;
@@ -311,6 +549,7 @@ bool TryBuildGameplayPathGridSnapshot(
             static_cast<std::size_t>(circle_count) < kGameplayPathMaxStaticCircleObstacles
                 ? static_cast<std::size_t>(circle_count)
                 : kGameplayPathMaxStaticCircleObstacles;
+        snapshot->circle_obstacles.reserve(clamped_count);
         snapshot->static_circle_obstacles.reserve(clamped_count);
         for (std::size_t index = 0; index < clamped_count; ++index) {
             uintptr_t circle_address = 0;
@@ -328,13 +567,6 @@ bool TryBuildGameplayPathGridSnapshot(
             if (!memory.TryReadField(circle_address, kMovementCircleMaskOffset, &mask)) {
                 continue;
             }
-            if ((mask & GameplayPathStaticCircleObstacleMask()) == 0) {
-                continue;
-            }
-            if ((mask & GameplayPathPushableCircleObstacleMask()) != 0) {
-                continue;
-            }
-
             float radius = -1.0f;
             if (!TryReadFiniteFloatField(circle_address, kMovementCircleRadiusOffset, &radius)) {
                 continue;
@@ -353,11 +585,27 @@ bool TryBuildGameplayPathGridSnapshot(
                 continue;
             }
 
-            snapshot->static_circle_obstacles.push_back(GameplayPathCircleObstacle{x, y, radius, mask});
+            GameplayPathCircleObstacle obstacle;
+            obstacle.source_address = circle_address;
+            obstacle.x = x;
+            obstacle.y = y;
+            obstacle.radius = radius;
+            obstacle.mask = mask;
+            (void)memory.TryReadField(
+                circle_address,
+                kMovementCircleObjectTypeOffset,
+                &obstacle.native_type_id);
+            snapshot->circle_obstacles.push_back(obstacle);
+            if ((mask & GameplayPathStaticCircleObstacleMask()) != 0 &&
+                (mask & GameplayPathPushableCircleObstacleMask()) == 0) {
+                snapshot->static_circle_obstacles.push_back(
+                    obstacle);
+            }
         }
     }
     CaptureGameplayPathSegmentObstaclePolicy(
         world_address,
         snapshot);
+    CaptureGameplayPathShapePolicy(snapshot);
     return true;
 }

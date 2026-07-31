@@ -57,6 +57,11 @@ local potion = sd.items.register({
   description = "A custom timed potion.",
   icon = {atlas = "green_potion", frame = 0},
   duration_ms = 180000,
+  policy_effects = {
+    synthetic_safe = false, -- this sample only prints; it does not apply HP
+    restores_hp_fraction = 0.25,
+    effect_duration_seconds = 180.0,
+  },
   consume_vfx = {
     kind = "spell_glow",
     color = {0.15, 1.0, 0.25, 1.0},
@@ -77,9 +82,29 @@ participant on every peer using the supplied finite RGBA color.
 
 Custom potions use peer-local native subtype reservations only to enter the
 stock inventory. Their descriptors add `consumable`, `description`, `icon`,
-`duration_ms`, `native_subtype`, and optional `consume_vfx` fields. The subtype
-is diagnostic local state. Network inventory, loot, pickup, and use messages
-carry the stable content ID and resolve that peer's subtype at the native edge.
+`duration_ms`, `native_subtype`, optional `consume_vfx`, and optional
+`policy_effects` fields. The subtype is diagnostic local state. Network
+inventory, loot, pickup, and use messages carry the stable content ID and
+resolve that peer's subtype at the native edge.
+
+`policy_effects` is the declaration consumed by learned synthetic
+participants. It accepts:
+
+- `synthetic_safe` (default `false`);
+- `restores_hp_fraction` and `restores_mana_fraction`, each `0..1`;
+- `damage_multiplier`, `0..16` with default `1`;
+- `cures_poison`;
+- `poison_immunity_duration_seconds`, `0..86400`;
+- `concentrates_all`; and
+- `effect_duration_seconds`, `0..86400`.
+
+The table is strict: unknown/positional fields, non-finite numbers, and a
+`synthetic_safe = true` declaration with no described effect are rejected.
+An undeclared or non-safe custom potion remains visible in inventory but
+`synthetic_use_supported` is false and learned use is masked. Declaring
+synthetic safety is an author contract: the authority-side `on_consume`/
+`item.consumed` behavior must implement the declared target-aware effect for
+the event's `participant_id`.
 
 Every accepted use also queues `item.consumed` on every peer:
 
@@ -90,7 +115,9 @@ end)
 ```
 
 `use_id` is deduplicated within the current participant session and run.
-`local_owner` is true only on the consuming process. This replicated event is
+For a synthetic participant, the simulation authority owns dispatch and
+replicates the event reliably to peers. `local_owner` is true only on the
+effect-owning process. This replicated event is
 the correct place to maintain effect state needed by an authority-side filter;
 the direct `on_consume` callback is the correct place for owner-local actions.
 
@@ -140,7 +167,7 @@ The returned table confirms queue acceptance, not native completion:
 | `local_target` | Whether the authority queued its own inventory mutation |
 
 The target owner resolves the registered name/type to its own recipe UID immediately
-before calling the stock inventory insertion routine on the gameplay pump. Protocol 88
+before calling the stock inventory insertion routine on the gameplay pump. Protocol 89
 carries only the authority ID, target ID, request ID, stable content ID, and optional
 color state; recipe UIDs and native addresses never cross the wire. Steam delivery is
 reliable, the receiver accepts the command only from its configured host, and bounded

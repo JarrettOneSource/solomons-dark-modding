@@ -201,6 +201,115 @@ build is authoritative. Frost Jet uses its progression-dependent native
 damage-query range. Other primaries, including Water-containing welds, use
 their actor selection's live pursuit range.
 
+## Semantic inventory details
+
+`sd.bots.get_inventory_details(participant_id)` joins replicated inventory,
+equipment, stable content identity, the pinned stock item catalog, and live
+native consumable timers:
+
+```lua
+{
+  participant_id = 4097,
+  run_nonce = 1234,
+  inventory_revision = 7,
+  equipment_revision = 2,
+  descriptors_resolved = true,
+  damage_x4_remaining_seconds = 0.0,
+  poison_immunity_remaining_seconds = 0.0,
+  all_concentration_remaining_seconds = 0.0,
+  timers_resolved = true,
+  potions = {
+    {
+      stock_subtype = 0,
+      content_id = 0,
+      identity_key = "stock:potion:health",
+      count = 3,
+      custom = false,
+      effect_resolved = true,
+      synthetic_use_supported = true,
+      restores_hp_fraction = 1.0,
+      restores_mana_fraction = 0.0,
+      damage_multiplier = 1.0,
+      cures_poison = false,
+      poison_immunity_duration_seconds = 0.0,
+      concentrates_all = false,
+      effect_duration_seconds = 0.0,
+    },
+  },
+  equipped = {
+    -- hat, robe, weapon, ring_1, ring_2, ring_3, amulet
+  },
+  summary = {
+    item_total_count = 0,
+    potion_count = 0,
+    equipment_count = 0,
+    sack_count = 0,
+    misc_count = 0,
+    perk_count = 0,
+    map_count = 0,
+    registered_custom_count = 0,
+    unknown_count = 0,
+  },
+}
+```
+
+Potion rows are ranked by count descending, then stable `identity_key`; Lua
+policy uses at most the first 12. Stock identity is subtype-based. Custom
+identity uses `content_id` and the registered mod/key when locally resolved;
+peer-local native subtype and live item UID are never exposed. Every
+replicated `inventory_items` row now also carries its stable `content_id`.
+
+Each of the seven equipment rows contains `slot`, `present`, `identity_key`,
+`recipe_name`, `catalog_index`, `catalog_resolved`, `rarity_id`, `level`,
+`set_complete`, four aggregate effect magnitudes, optional target kind/ID/
+magnitude, and `special_feature_present`. Unknown/generated identities stay
+present with `catalog_resolved = false`; callers must not infer missing
+effects.
+
+Static descriptors are cached by
+`(run_nonce, inventory_revision, equipment_revision, derived_stat_revision,
+statbook_revision)`. The three live timer fields are overlaid on every call.
+They are native 100-Hz counters converted to seconds.
+
+### `sd.bots.use_consumable(participant_id, selector)`
+
+The simulation authority may consume one ranked potion for a living
+Lua-controlled synthetic participant:
+
+```lua
+local details = assert(sd.bots.get_inventory_details(bot:participant_id()))
+local ok, result_or_error = sd.bots.use_consumable(
+  bot:participant_id(),
+  {
+    potion_slot = 1,
+    inventory_revision = details.inventory_revision,
+  })
+```
+
+On success the second result contains `{use_id, inventory_revision,
+stock_subtype, content_id}`. The selector is generation-safe: a changed
+inventory revision or ranking is rejected. The authority reserves exactly one
+stack and advances the revision before routing the native effect; the same
+selector cannot apply twice. The revised synthetic inventory snapshot and
+custom use event are reliable and peer-coherent. Errors are semantic and never
+include addresses or native exception codes.
+
+Synthetic stock action support is deliberately narrower than observation:
+
+| Subtype | Potion | Learned synthetic use |
+|---:|---|---|
+| 0 | Health | yes, participant-scoped native health delta |
+| 1 | Mana | yes, participant-scoped native mana delta |
+| 2 | Wizard Chug | no; observation-only |
+| 3 | Antidote | no; observation-only |
+| 4 | Mind Chug | no; observation-only |
+| 5 | Rejuvenation | yes, the two proven native vital paths |
+
+Subtypes 2 through 4 have only local-player or direct-field stock paths in the
+recovered binary. They are not emulated. A custom potion is actionable only
+when its registration declares nonempty `policy_effects` with
+`synthetic_safe = true`; otherwise it remains observable and masked off.
+
 ## Brain tick
 
 Bot brains use the existing runtime event service. Do not create a native

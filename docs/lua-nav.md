@@ -34,6 +34,49 @@ The returned table contains:
 
 No process, world, controller, actor, or cell-list addresses are part of the public table.
 
+### `sd.nav.get_collision_geometry(participant_id) -> table|nil, error?`
+
+Returns the exact collision primitives used by the live movement controller,
+resolved for one materialized participant's native radius and collision mask.
+Unlike `get_grid`, this is not a sampled raster:
+
+```lua
+local geometry, err = sd.nav.get_collision_geometry(bot:participant_id())
+assert(geometry, err)
+```
+
+The top-level table contains:
+
+- `valid`, `scene_epoch`, `run_nonce`, `static_revision`,
+  `dynamic_revision`, and `refresh_pending`;
+- `observer_radius`, `observer_radius_resolved`, and
+  `participant_collision_padding`;
+- `circles`, `segments`, and `polygons`; and
+- `participant_radii`, one
+  `{participant_id, radius, radius_resolved}` row per current participant.
+
+Every circle contains `{geometry_id, native_type_id, x, y, radius, mask,
+path_blocks, pushable, destructible, destructible_resolved, dynamic}`. Every
+segment contains `{geometry_id, native_type_id, start_x, start_y, end_x,
+end_y, mask, path_blocks, openable, destructible, destructible_resolved,
+dynamic}`. Every polygon contains `{geometry_id, native_type_id, bounds_x,
+bounds_y, bounds_w, bounds_h, path_blocks, destructible,
+destructible_resolved, dynamic, points}`, where each point is `{x, y}`.
+
+`geometry_id` is a scene-scoped semantic ID, not an address. Static and dynamic
+revisions advance only when their corresponding published geometry changes.
+Callers can cache accepted snapshots by
+`(scene_epoch, run_nonce, static_revision, dynamic_revision)`; the learned bot
+refreshes at roughly two-second cadence and adopts only
+`refresh_pending == false` snapshots.
+
+Wizard body circles are excluded from `circles`, including the observer's own
+body. Participant body radii are published separately so Lua can combine them
+with replicated participant positions without making the observer's occupied
+cell block itself. `destructible` is asserted only for a proven native type;
+when `destructible_resolved == false`, callers must not infer destructibility
+from masks.
+
 ### `sd.nav.test_segment(from_x, from_y, to_x, to_y) -> boolean`
 
 Synchronously tests a world-space segment against the current native path grid and the same
@@ -58,7 +101,7 @@ end
 
 ## Native behavior and multiplayer
 
-Both calls are read-only and execute locally. Placement samples use the live player's native
+All calls are read-only and execute locally. Placement samples use the live player's native
 collision radius/masks plus the recovered static-circle and participant-obstacle rules;
 segment tests use the same grid traversal and placement checks as bot path smoothing. The
 result is not replicated because each peer can safely query its local copy of the shared

@@ -136,6 +136,47 @@ bool IsReplicatedWorldSceneKind(WorldSceneKind scene_kind) {
         scene_kind == WorldSceneKind::Run;
 }
 
+template <typename ActorState>
+bool IsValidWorldActorCombatModifierState(
+    const ActorState& actor) {
+    constexpr std::uint8_t kCombatStatusFlags =
+        WorldActorStatusFlagSlowed |
+        WorldActorStatusFlagFrozen |
+        WorldActorStatusFlagPoisoned |
+        WorldActorStatusFlagWebbed;
+    const bool resolved =
+        (actor.status_flags &
+         WorldActorStatusFlagCombatModifiersResolved) != 0;
+    const std::int32_t durations[] = {
+        actor.slow_remaining_ticks,
+        actor.frozen_remaining_ticks,
+        actor.poison_remaining_ticks,
+        actor.webbed_remaining_ticks,
+    };
+    const std::uint8_t flags[] = {
+        WorldActorStatusFlagSlowed,
+        WorldActorStatusFlagFrozen,
+        WorldActorStatusFlagPoisoned,
+        WorldActorStatusFlagWebbed,
+    };
+    for (std::size_t index = 0;
+         index < std::size(durations);
+         ++index) {
+        if (durations[index] < 0 ||
+            durations[index] > 100000 ||
+            (((actor.status_flags & flags[index]) != 0) !=
+             (durations[index] > 0))) {
+            return false;
+        }
+    }
+    return resolved ||
+        (((actor.status_flags & kCombatStatusFlags) == 0) &&
+         std::all_of(
+             std::begin(durations),
+             std::end(durations),
+             [](std::int32_t value) { return value == 0; }));
+}
+
 bool IsValidWorldSnapshotActorPacketState(
     const WorldActorSnapshotPacketState& actor) {
     if (actor.network_actor_id == 0 ||
@@ -150,6 +191,9 @@ bool IsValidWorldSnapshotActorPacketState(
         return false;
     }
     if (!ValidateNativeMinionPacketState(actor)) {
+        return false;
+    }
+    if (!IsValidWorldActorCombatModifierState(actor)) {
         return false;
     }
 
@@ -191,7 +235,9 @@ bool IsValidWorldSnapshotActorPacketState(
         return false;
     }
     if (!turn_undead_state_valid) {
-        return true;
+        return actor.turn_undead_duration_ticks == 0 &&
+            actor.turn_undead_flee_heading == 0.0f &&
+            actor.turn_undead_activation_scalar == 0.0f;
     }
     return IsTurnUndeadEligibleRunEnemyType(actor.native_type_id) &&
         actor.turn_undead_duration_ticks >= 0 &&

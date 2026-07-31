@@ -534,6 +534,9 @@ struct SyntheticParticipantTransportState {
     std::uint64_t session_nonce = 0;
     std::uint64_t last_state_send_ms = 0;
     std::uint64_t last_frame_send_ms = 0;
+    std::uint64_t last_inventory_send_ms = 0;
+    std::uint32_t last_inventory_revision = 0;
+    bool inventory_sent = false;
     std::uint32_t next_cast_sequence = 1;
     std::uint32_t next_loot_pickup_sequence = 1;
     bool primary_cast_active = false;
@@ -1566,6 +1569,11 @@ void ResetRemoteParticipantSessionEpoch(
     bool preserve_session_nonce_history = false);
 bool BuildLocalParticipantInventorySnapshotPacket(
     ParticipantInventorySnapshotPacket* packet);
+bool BuildParticipantInventorySnapshotPacket(
+    const ParticipantInfo& participant,
+    std::uint64_t participant_id,
+    std::uint64_t participant_session_nonce,
+    ParticipantInventorySnapshotPacket* packet);
 bool BuildLocalParticipantProgressionBookSnapshotPacket(
     ParticipantProgressionBookSnapshotPacket* packet);
 void SendLocalParticipantProgressionSnapshots(
@@ -2034,6 +2042,18 @@ bool QueueLocalLuaConsumableUse(
     std::uint64_t* use_id,
     std::string* error_message) {
     return QueueLocalLuaConsumableUseInternal(
+        content_id,
+        use_id,
+        error_message);
+}
+
+bool PublishAuthoritativeLuaConsumableUse(
+    std::uint64_t participant_id,
+    std::uint64_t content_id,
+    std::uint64_t use_id,
+    std::string* error_message) {
+    return PublishAuthoritativeLuaConsumableUseInternal(
+        participant_id,
         content_id,
         use_id,
         error_message);

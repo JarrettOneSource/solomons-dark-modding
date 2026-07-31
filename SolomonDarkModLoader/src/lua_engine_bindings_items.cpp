@@ -19,6 +19,8 @@ constexpr std::size_t kLuaMaximumItemRecipeNameBytes = 128;
 constexpr std::size_t kLuaItemColorStateBytes =
     multiplayer::kParticipantVisualLinkColorBlockBytes;
 
+#include "lua_engine_bindings_items/policy_effects_push.inl"
+
 struct ItemTypeBinding {
     std::string_view name;
     std::uint32_t native_type_id;
@@ -47,7 +49,7 @@ bool IsKnownItemRegistrationField(std::string_view field) {
     return field == "key" || field == "name" || field == "type" ||
         field == "description" || field == "icon" ||
         field == "duration_ms" || field == "on_consume" ||
-        field == "consume_vfx";
+        field == "consume_vfx" || field == "policy_effects";
 }
 
 bool IsKnownItemGrantOptionField(std::string_view field) {
@@ -181,12 +183,13 @@ std::string ReadRequiredItemString(
 }
 
 void RejectRecipeOnlyItemExtras(lua_State* state, int table_index) {
-    constexpr std::array<const char*, 5> potion_only_fields = {{
+    constexpr std::array<const char*, 6> potion_only_fields = {{
         "description",
         "icon",
         "duration_ms",
         "on_consume",
         "consume_vfx",
+        "policy_effects",
     }};
     for (const auto* field : potion_only_fields) {
         lua_getfield(state, table_index, field);
@@ -315,6 +318,9 @@ void PushItemDefinition(lua_State* state, const LuaItemDefinition& definition) {
             lua_setfield(state, -2, "color");
             lua_setfield(state, -2, "consume_vfx");
         }
+        PushConsumablePolicyEffects(
+            state,
+            definition.policy_effects);
         lua_pushboolean(state, 1);
         lua_setfield(state, -2, "available");
         return;

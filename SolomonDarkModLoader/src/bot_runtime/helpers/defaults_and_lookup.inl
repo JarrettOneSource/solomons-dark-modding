@@ -175,6 +175,44 @@ CachedParticipantLoadoutDetails* FindCachedParticipantLoadoutDetails(
     return it == g_loadout_details_cache.end() ? nullptr : &(*it);
 }
 
+bool BotInventoryRevisionTuplesEqual(
+    const BotInventoryRevisionTuple& left,
+    const BotInventoryRevisionTuple& right) {
+    return left.run_nonce == right.run_nonce &&
+        left.inventory_revision == right.inventory_revision &&
+        left.equipment_revision == right.equipment_revision &&
+        left.derived_stat_revision ==
+            right.derived_stat_revision &&
+        left.statbook_revision == right.statbook_revision;
+}
+
+CachedParticipantInventoryDetails*
+FindCachedParticipantInventoryDetails(
+    std::uint64_t participant_id) {
+    const auto it = std::find_if(
+        g_inventory_details_cache.begin(),
+        g_inventory_details_cache.end(),
+        [&](const CachedParticipantInventoryDetails& cached) {
+            return cached.participant_id == participant_id;
+        });
+    return it == g_inventory_details_cache.end()
+        ? nullptr
+        : &*it;
+}
+
+void InvalidateParticipantInventoryDetailsLocked(
+    std::uint64_t participant_id) {
+    g_inventory_details_cache.erase(
+        std::remove_if(
+            g_inventory_details_cache.begin(),
+            g_inventory_details_cache.end(),
+            [&](const CachedParticipantInventoryDetails& cached) {
+                return cached.participant_id ==
+                    participant_id;
+            }),
+        g_inventory_details_cache.end());
+}
+
 ActiveBotWeldBuild* FindActiveBotWeldBuild(
     std::uint64_t participant_id) {
     const auto it = std::find_if(
@@ -201,6 +239,7 @@ void InvalidateParticipantLoadoutDetailsLocked(
 void RemoveParticipantLoadoutStateLocked(
     std::uint64_t participant_id) {
     InvalidateParticipantLoadoutDetailsLocked(participant_id);
+    InvalidateParticipantInventoryDetailsLocked(participant_id);
     g_active_bot_weld_builds.erase(
         std::remove_if(
             g_active_bot_weld_builds.begin(),

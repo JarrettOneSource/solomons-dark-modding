@@ -10,6 +10,43 @@ bool TryResolveNativeItemRecipeByName(
         error_message);
 }
 
+bool TryResolveNativeItemRecipeIdentityByUid(
+    std::uint32_t recipe_uid,
+    std::uint32_t expected_item_type_id,
+    std::string* recipe_name,
+    std::uint32_t* resolved_item_type_id,
+    std::string* error_message) {
+    if (recipe_name != nullptr) {
+        recipe_name->clear();
+    }
+    if (resolved_item_type_id != nullptr) {
+        *resolved_item_type_id = 0;
+    }
+    uintptr_t recipe_address = 0;
+    std::uint32_t native_type_id = 0;
+    if (recipe_name == nullptr ||
+        !TryResolveNativeItemRecipe(
+            recipe_uid,
+            expected_item_type_id,
+            &recipe_address,
+            &native_type_id,
+            error_message) ||
+        !TryReadNativeItemRecipeName(
+            recipe_address,
+            recipe_name)) {
+        if (error_message != nullptr &&
+            error_message->empty()) {
+            *error_message =
+                "The native item recipe name is unavailable.";
+        }
+        return false;
+    }
+    if (resolved_item_type_id != nullptr) {
+        *resolved_item_type_id = native_type_id;
+    }
+    return true;
+}
+
 bool QueueLuaItemGrantToLocalInventory(
     std::uint64_t authority_participant_id,
     std::uint64_t request_id,

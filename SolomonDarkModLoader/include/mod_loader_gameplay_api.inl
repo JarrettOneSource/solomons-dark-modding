@@ -113,6 +113,12 @@ bool TryResolveNativeItemRecipeByName(
     std::uint32_t expected_item_type_id,
     std::uint32_t* recipe_uid,
     std::string* error_message);
+bool TryResolveNativeItemRecipeIdentityByUid(
+    std::uint32_t recipe_uid,
+    std::uint32_t expected_item_type_id,
+    std::string* recipe_name,
+    std::uint32_t* resolved_item_type_id,
+    std::string* error_message);
 bool QueueLuaItemGrantToLocalInventory(
     std::uint64_t authority_participant_id,
     std::uint64_t request_id,
@@ -132,6 +138,10 @@ bool IsArenaCombatActorType(std::uint32_t object_type_id);
 bool TryGetSceneState(SDModSceneState* state);
 bool TryGetSharedHubSceneState(SDModSceneState* state);
 bool TryListSceneActors(std::vector<SDModSceneActorState>* actors);
+bool TryListTransientSceneActors(
+    std::vector<SDModSceneActorState>* actors);
+std::uint64_t ResolveSemanticDamageSourceParticipantId(
+    uintptr_t source_address);
 bool TryListSharedHubActors(std::vector<SDModSceneActorState>* actors);
 bool TryGetSolomonDigState(SDModSolomonDigState* state);
 bool TryListGameplayOpenableObstacles(
@@ -161,6 +171,10 @@ bool TryReconcileParticipantConcentrationRuntimeSelections(
     std::int32_t entry_b,
     std::string* error_message);
 bool TryGetGameplayNavGridState(SDModGameplayNavGridState* state, int subdivisions = 1);
+bool TryGetGameplayCollisionGeometryState(
+    std::uint64_t participant_id,
+    SDModCollisionGeometryState* state,
+    std::string* error_message);
 bool TryTestGameplayNavSegment(
     float from_x,
     float from_y,
@@ -175,6 +189,17 @@ void FlushNavGridSnapshotOnSceneUnload();
 bool TryGetParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);
+bool TryGetParticipantPickupRange(
+    std::uint64_t participant_id,
+    float* pickup_range);
+bool TryGetParticipantConsumableState(
+    std::uint64_t participant_id,
+    SDModParticipantConsumableState* state);
+bool TryApplyParticipantStockConsumable(
+    std::uint64_t participant_id,
+    std::int32_t stock_subtype,
+    SDModParticipantStockConsumableResult* result,
+    std::string* error_message);
 bool TryRefreshParticipantGameplayState(
     std::uint64_t participant_id,
     SDModParticipantGameplayState* state);

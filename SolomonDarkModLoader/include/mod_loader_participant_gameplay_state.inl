@@ -77,3 +77,26 @@ struct SDModParticipantGameplayState {
     SDModEquipVisualLaneState secondary_visual_lane;
     SDModEquipVisualLaneState attachment_visual_lane;
 };
+
+struct SDModParticipantConsumableState {
+    bool available = false;
+    std::uint64_t participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    float hp = 0.0f;
+    float max_hp = 0.0f;
+    float mp = 0.0f;
+    float max_mp = 0.0f;
+    float damage_x4_remaining_seconds = 0.0f;
+    float poison_immunity_remaining_seconds = 0.0f;
+    float all_concentration_remaining_seconds = 0.0f;
+    bool timers_resolved = false;
+};
+
+struct SDModParticipantStockConsumableResult {
+    bool applied = false;
+    std::int32_t stock_subtype = -1;
+    float hp_before = 0.0f;
+    float hp_after = 0.0f;
+    float mp_before = 0.0f;
+    float mp_after = 0.0f;
+};

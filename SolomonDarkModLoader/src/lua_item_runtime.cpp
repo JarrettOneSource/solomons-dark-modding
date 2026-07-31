@@ -56,6 +56,28 @@ bool IsValidVfxColor(const std::array<float, 4>& color) {
         });
 }
 
+bool IsValidPolicyEffects(
+    const LuaConsumablePolicyEffects& effects) {
+    const auto valid_fraction = [](float value) {
+        return std::isfinite(value) &&
+            value >= 0.0f && value <= 1.0f;
+    };
+    const auto valid_duration = [](float value) {
+        return std::isfinite(value) &&
+            value >= 0.0f &&
+            value <= 24.0f * 60.0f * 60.0f;
+    };
+    return valid_fraction(effects.restores_hp_fraction) &&
+        valid_fraction(effects.restores_mana_fraction) &&
+        std::isfinite(effects.damage_multiplier) &&
+        effects.damage_multiplier >= 0.0f &&
+        effects.damage_multiplier <= 16.0f &&
+        valid_duration(
+            effects.poison_immunity_duration_seconds) &&
+        valid_duration(effects.effect_duration_seconds) &&
+        (!effects.synthetic_safe || effects.declared);
+}
+
 int CaptureNativeVfxSehCode(
     EXCEPTION_POINTERS* exception_pointers,
     DWORD* exception_code) {
@@ -305,6 +327,12 @@ bool RegisterLuaConsumableDefinition(
         SetError(
             error_message,
             "Consumable VFX metadata is invalid.");
+        return false;
+    }
+    if (!IsValidPolicyEffects(definition.policy_effects)) {
+        SetError(
+            error_message,
+            "Consumable policy effect metadata is invalid.");
         return false;
     }
 

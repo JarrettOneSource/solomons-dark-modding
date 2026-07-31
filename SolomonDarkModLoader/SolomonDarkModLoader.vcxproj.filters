@@ -122,6 +122,9 @@
     <ClInclude Include="include\bot_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\bot_runtime_inventory_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\bot_spawn_placement.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -231,6 +234,9 @@
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\mod_loader_gameplay_api.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="include\mod_loader_collision_geometry_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="include\fresh_save_tutorial_bypass.h">
@@ -407,6 +413,9 @@
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
+    <ClInclude Include="src\gameplay_seams\address_storage_pathfinding.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\hit_feedback_storage.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
@@ -482,6 +491,12 @@
     <ClInclude Include="src\bot_runtime\helpers\dispatch_queues.inl">
       <Filter>Header Files\Bot Runtime\Helpers</Filter>
     </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\inventory_catalog.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\helpers\inventory_details.inl">
+      <Filter>Header Files\Bot Runtime\Helpers</Filter>
+    </ClInclude>
     <ClInclude Include="src\bot_runtime\helpers\loadout_details.inl">
       <Filter>Header Files\Bot Runtime\Helpers</Filter>
     </ClInclude>
@@ -507,6 +522,12 @@
       <Filter>Header Files\Bot Runtime</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\casting_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\consumable_use_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\inventory_details_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\lifecycle_api.inl">
@@ -1163,6 +1184,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_participant_consumables.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
@@ -1221,6 +1245,15 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_transient_actors.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_damage_source.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_collision_geometry.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl">
@@ -1541,6 +1574,12 @@
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\hazard_snapshot_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\hazard_snapshot_registry.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_cast_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1578,6 +1617,15 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_bots\inventory_bindings.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_consumables\policy_effects.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_items\policy_effects_push.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl">

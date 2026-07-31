@@ -123,7 +123,7 @@ not consult local selection, input cooldowns, or player mana.
 
 `sd.spells.cast(key_or_id, options)` queues `on_cast` on the selected wizard's
 simulation owner. A client may select only itself; the host may also select a
-connected remote participant. Offline casts execute locally. Protocol 88 sends
+connected remote participant. Offline casts execute locally. Protocol 89 sends
 host commands reliably with authority, owner, request, and content identities;
 the receiving owner authenticates the host and deduplicates the request.
 
@@ -170,7 +170,7 @@ mods can use the semantic state to present an effect with `sd.draw`.
 This generic content-ID-based effect snapshot channel is shared by every
 registered definition.
 
-Protocol 88 carries at most 256 logical effects, four effects per fragment,
+Protocol 89 carries at most 256 logical effects, four effects per fragment,
 with deterministic content and owner identities. The owner publishes the
 snapshot; a host authenticates and relays remote-owner fragments. A completed
 generation replaces that owner's previous generation atomically, and an empty
@@ -183,6 +183,63 @@ Only transform, timing, identity, and the bounded 128-byte `data` value cross
 the network. `on_cast`, `on_tick`, and `on_hit` callbacks continue to run only
 on the simulation owner; remote peers consume presentation state and never
 replay gameplay behavior.
+
+## Replicated hostile hazards
+
+`sd.world.get_replicated_hazards()` is the address-free authority census for
+hostile projectiles, damaging areas, and beams. It is separate from
+`get_replicated_spell_effects()`, which is an owner-keyed player presentation
+feed, and from Air-chain presentation.
+
+The result is `nil` until a valid authority snapshot exists. Otherwise it is:
+
+```lua
+{
+  valid = true,
+  authority_participant_id = 1,
+  received_ms = 0,
+  sequence = 0,
+  scene_epoch = 0,
+  run_nonce = 0,
+  hazard_count = 0,
+  hazard_total_count = 0,
+  truncated = false,
+  hazards = {
+    {
+      hazard_id = 1,
+      native_type_id = 0x7DA,
+      active = true,
+      hostile = true,
+      type_known = true,
+      kind = "projectile", -- projectile|area|beam|unknown
+      source_participant_id = 0,
+      source_network_actor_id = 0,
+      target_participant_id = 0,
+      target_network_actor_id = 0,
+      x = 0.0, y = 0.0, radius = 0.0, heading = 0.0,
+      motion_resolved = true,
+      motion_x = 0.0, motion_y = 0.0,
+      lifetime_resolved = false,
+      remaining_ticks = 0,
+      remaining_seconds = 0.0,
+      homing = false,
+    },
+  },
+}
+```
+
+Protocol 89 carries at most 32 hazards per snapshot and reports the untruncated
+total. `hazard_id` is stable only for that hazard's current scene/run lifetime.
+Source, target, motion, and lifetime fields use explicit resolution semantics;
+zero is not an inferred identity or duration.
+
+The frozen registry classifies 38 hostile families from the retail 46-class
+projectile/effect corpus and excludes proven support, presentation, loot, and
+summon actors. A hostile effect-band class absent from that registry remains
+visible with `type_known = false`; an unknown threat is never silently dropped.
+Pure presentation, friendly/self effects, and summons represented by actor
+rows are not hazards. No actor address, effect address, pointer, or exception
+detail appears in this API.
 
 ## Authored picker and native boundary
 

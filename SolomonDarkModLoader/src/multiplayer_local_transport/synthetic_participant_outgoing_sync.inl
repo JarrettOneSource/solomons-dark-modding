@@ -84,5 +84,38 @@ void SendSyntheticParticipantState(std::uint64_t now_ms) {
                 transport_state->last_frame_send_ms = now_ms;
             }
         }
+
+        const bool inventory_due =
+            !transport_state->inventory_sent ||
+            transport_state->last_inventory_revision !=
+                participant.owned_progression
+                    .inventory_revision ||
+            transport_state->last_inventory_send_ms == 0 ||
+            now_ms <
+                transport_state->last_inventory_send_ms ||
+            now_ms -
+                    transport_state->last_inventory_send_ms >=
+                kParticipantProgressionReliableCheckpointIntervalMs;
+        if (!endpoints.empty() && inventory_due) {
+            ParticipantInventorySnapshotPacket packet{};
+            if (BuildParticipantInventorySnapshotPacket(
+                    participant,
+                    participant.participant_id,
+                    transport_state->session_nonce,
+                    &packet)) {
+                for (const auto& endpoint : endpoints) {
+                    SendBufferToEndpoint(
+                        &packet,
+                        ParticipantInventorySnapshotPacketWireSize(
+                            packet.item_count),
+                        endpoint,
+                        SteamNetworkSendMode::ReliableNoNagle);
+                }
+                transport_state->inventory_sent = true;
+                transport_state->last_inventory_revision =
+                    packet.inventory_revision;
+                transport_state->last_inventory_send_ms = now_ms;
+            }
+        }
     }
 }

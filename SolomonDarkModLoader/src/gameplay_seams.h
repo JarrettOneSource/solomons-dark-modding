@@ -31,6 +31,7 @@ extern uintptr_t kArenaLightCollectionFinalize;
 extern uintptr_t kActorWorldTick;
 extern uintptr_t kPlayerActorActionManagerTick;
 extern uintptr_t kPlayerActorEnsureProgressionHandle;
+extern uintptr_t kPlayerActorApplyHealthDelta;
 extern uintptr_t kPlayerActorApplyManaDelta;
 extern uintptr_t kPlayerActorDtor;
 extern uintptr_t kPlayerActorVtable28;

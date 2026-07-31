@@ -493,14 +493,27 @@ bool ValidateLootPickupRequest(
         return reject("invalid_positions", LootPickupResultCode::Rejected);
     }
 
-    const auto& derived_stats = participant->owned_progression.derived_stats;
-    if (!derived_stats.valid ||
-        !std::isfinite(derived_stats.pickup_range) ||
-        derived_stats.pickup_range <= 0.0f) {
+    const auto& derived_stats =
+        participant->owned_progression.derived_stats;
+    float pickup_range =
+        derived_stats.valid
+            ? derived_stats.pickup_range
+            : 0.0f;
+    if ((!std::isfinite(pickup_range) ||
+         pickup_range <= 0.0f) &&
+        host_synthetic_ingress) {
+        (void)sdmod::TryGetParticipantPickupRange(
+            participant->participant_id,
+            &pickup_range);
+    }
+    if (!std::isfinite(pickup_range) ||
+        pickup_range <= 0.0f) {
         return reject("participant_pickup_range_unavailable", LootPickupResultCode::Rejected);
     }
     const float range_limit =
-        StockLootBehaviorDistance(drop_kind, derived_stats.pickup_range);
+        StockLootBehaviorDistance(
+            drop_kind,
+            pickup_range);
     if (!std::isfinite(range_limit) || range_limit <= 0.0f) {
         return reject("participant_pickup_range_invalid", LootPickupResultCode::Rejected);
     }

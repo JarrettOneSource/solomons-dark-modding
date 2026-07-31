@@ -50,6 +50,10 @@ extern std::size_t kProgressionMeditationIdleElapsedTicksOffset;
 extern std::size_t kProgressionMeditationRecoveryRampTicksOffset;
 extern std::size_t kProgressionMeditationRecoveryBonusOffset;
 extern std::size_t kProgressionDamageX4RemainingTicksOffset;
+extern std::size_t
+    kProgressionAllConcentrationRemainingTicksOffset;
+extern std::size_t
+    kProgressionPoisonImmunityRemainingTicksOffset;
 extern std::size_t kProgressionHagathaPerkListOffset;
 extern std::size_t kProgressionHagathaPerkCountOffset;
 extern std::size_t kProgressionHagathaPerkFlagBaseOffset;
@@ -105,6 +109,14 @@ extern std::size_t kGameplayPathPushableCircleObstacleMask;
 extern std::size_t kGameplayPathOpenableSegmentObstacleMask;
 extern std::size_t kGameplayPathOpenableSegmentBuilderVtableSlotOffset;
 extern std::size_t kGameplayPathOpenableSegmentRecordOffset;
+extern std::size_t kGameplayPathFenceGrateSegmentStartXOffset;
+extern std::size_t kGameplayPathFenceGrateSegmentStartYOffset;
+extern std::size_t kGameplayPathFenceGrateSegmentEndXOffset;
+extern std::size_t kGameplayPathFenceGrateSegmentEndYOffset;
+extern std::size_t kGameplayPathBrokenFenceSegmentStartXOffset;
+extern std::size_t kGameplayPathBrokenFenceSegmentStartYOffset;
+extern std::size_t kGameplayPathBrokenFenceSegmentEndXOffset;
+extern std::size_t kGameplayPathBrokenFenceSegmentEndYOffset;
 extern std::size_t kGameplayPathSegmentStartXOffset;
 extern std::size_t kGameplayPathSegmentStartYOffset;
 extern std::size_t kGameplayPathSegmentEndXOffset;

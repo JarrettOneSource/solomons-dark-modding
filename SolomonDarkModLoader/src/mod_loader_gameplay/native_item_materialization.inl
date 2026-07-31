@@ -39,6 +39,42 @@ bool TryReadNativeItemRecipeNameEquals(
            actual_name == expected_name;
 }
 
+bool TryReadNativeItemRecipeName(
+    uintptr_t recipe_address,
+    std::string* recipe_name) {
+    if (recipe_name != nullptr) {
+        recipe_name->clear();
+    }
+    if (recipe_address == 0 || recipe_name == nullptr ||
+        kItemRecipeDefinitionNameOffset == 0 ||
+        kNativeStringDataOffset == 0 ||
+        kNativeStringLengthOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto string_address =
+        recipe_address + kItemRecipeDefinitionNameOffset;
+    uintptr_t text_address = 0;
+    std::int32_t text_length = 0;
+    if (!memory.TryReadField(
+            string_address,
+            kNativeStringDataOffset,
+            &text_address) ||
+        !memory.TryReadField(
+            string_address,
+            kNativeStringLengthOffset,
+            &text_length) ||
+        text_address == 0 || text_length <= 0 ||
+        text_length > 128) {
+        return false;
+    }
+    return memory.TryReadCString(
+        text_address,
+        static_cast<std::size_t>(text_length) + 1,
+        recipe_name);
+}
+
 bool CallItemRecipeCloneSafe(
     uintptr_t clone_address,
     uintptr_t recipe_address,

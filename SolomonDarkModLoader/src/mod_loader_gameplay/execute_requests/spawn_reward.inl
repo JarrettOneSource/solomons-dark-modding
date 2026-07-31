@@ -140,9 +140,35 @@ bool ExecuteSpawnPotionRewardNow(
     float y,
     std::string* error_message) {
     const bool is_lua_consumable = kind == "lua_consumable";
-    const bool is_health_potion = kind == "health_potion" || kind == "life_potion" || kind == "potion0";
-    const bool is_mana_potion = kind == "mana_potion" || kind == "mp_potion" || kind == "potion1" || kind == "potion";
-    if (!is_lua_consumable && !is_health_potion && !is_mana_potion) {
+    int stock_potion_slot = -1;
+    if (kind == "health_potion" ||
+        kind == "life_potion" ||
+        kind == "potion0") {
+        stock_potion_slot = 0;
+    } else if (
+        kind == "mana_potion" ||
+        kind == "mp_potion" ||
+        kind == "potion1" ||
+        kind == "potion") {
+        stock_potion_slot = 1;
+    } else if (
+        kind == "wizard_chug" ||
+        kind == "potion2") {
+        stock_potion_slot = 2;
+    } else if (
+        kind == "antidote" ||
+        kind == "potion3") {
+        stock_potion_slot = 3;
+    } else if (
+        kind == "mind_chug" ||
+        kind == "potion4") {
+        stock_potion_slot = 4;
+    } else if (
+        kind == "rejuvenation" ||
+        kind == "potion5") {
+        stock_potion_slot = 5;
+    }
+    if (!is_lua_consumable && stock_potion_slot < 0) {
         return false;
     }
     if (is_lua_consumable &&
@@ -174,12 +200,9 @@ bool ExecuteSpawnPotionRewardNow(
         return true;
     }
 
-    int potion_slot = is_lua_consumable
+    const int potion_slot = is_lua_consumable
         ? amount
-        : (is_mana_potion ? 1 : 0);
-    if (!is_lua_consumable && (amount == 0 || amount == 1)) {
-        potion_slot = amount;
-    }
+        : stock_potion_slot;
     DWORD exception_code = 0;
     if (!CallDebugSpawnPotionDropSafe(
             spawn_function_address,
@@ -571,7 +594,7 @@ bool ExecuteSpawnRewardNow(std::string_view kind, int amount, float x, float y, 
     }
     if (kind != "gold") {
         if (error_message != nullptr) {
-            *error_message = "Supported rewards are gold, health_orb/mana_orb, health_potion/mana_potion, item with a stock recipe UID, bonus_skill, random_skill, and damage_x4.";
+            *error_message = "Supported rewards are gold, health_orb/mana_orb, stock potion0..potion5 aliases, item with a stock recipe UID, bonus_skill, random_skill, and damage_x4.";
         }
         return false;
     }

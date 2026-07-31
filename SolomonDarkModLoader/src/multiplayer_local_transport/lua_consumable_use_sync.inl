@@ -108,6 +108,86 @@ bool QueueLocalLuaConsumableUseInternal(
     return true;
 }
 
+bool PublishAuthoritativeLuaConsumableUseInternal(
+    std::uint64_t participant_id,
+    std::uint64_t content_id,
+    std::uint64_t use_id,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    const auto fail = [&](const char* message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+    if (error_message == nullptr ||
+        participant_id == 0 || use_id == 0 ||
+        !IsLuaConsumableUseContentRegistered(content_id)) {
+        return fail(
+            "Authoritative consumable use requires participant, content, and use identities.");
+    }
+    if (g_local_transport.initialized &&
+        !g_local_transport.is_host) {
+        return fail(
+            "Only the simulation authority may publish a participant consumable use.");
+    }
+
+    const auto runtime = SnapshotRuntimeState();
+    const auto* participant =
+        FindParticipant(runtime, participant_id);
+    if (participant == nullptr ||
+        !IsRemoteParticipant(*participant) ||
+        !IsLuaControlledParticipant(*participant)) {
+        return fail(
+            "The consumable target is not an authority-owned synthetic participant.");
+    }
+    auto* transport =
+        EnsureSyntheticParticipantTransportState(participant_id);
+    if (transport == nullptr ||
+        transport->session_nonce == 0) {
+        return fail(
+            "The synthetic participant has no active transport epoch.");
+    }
+    if (!RememberLuaConsumableUse(
+            participant_id,
+            transport->session_nonce,
+            use_id)) {
+        return fail(
+            "The consumable use identity was already applied.");
+    }
+
+    LuaConsumableUsePacket packet{};
+    packet.header = MakePacketHeader(
+        PacketKind::LuaConsumableUse,
+        g_local_transport.next_sequence++);
+    packet.participant_id = participant_id;
+    packet.participant_session_nonce =
+        transport->session_nonce;
+    packet.use_id = use_id;
+    packet.content_id = content_id;
+    packet.run_nonce = participant->runtime.run_nonce;
+
+    DispatchLuaConsumableUse(
+        content_id,
+        participant_id,
+        use_id,
+        true);
+    for (const auto& endpoint : BuildKnownSendEndpoints()) {
+        SendPacketToEndpoint(
+            packet,
+            endpoint,
+            SteamNetworkSendMode::ReliableNoNagle);
+    }
+    Log(
+        "lua_items: published authoritative consumable use. participant_id=" +
+        std::to_string(participant_id) +
+        " use_id=" + std::to_string(use_id) +
+        " content_id=" + std::to_string(content_id));
+    return true;
+}
+
 std::vector<QueuedLuaConsumableUse>
 TakeQueuedLuaConsumableUses() {
     std::lock_guard<std::mutex> lock(g_local_transport_event_mutex);

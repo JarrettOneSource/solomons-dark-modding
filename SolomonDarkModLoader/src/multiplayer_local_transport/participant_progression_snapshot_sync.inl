@@ -1,14 +1,12 @@
 // Change-gated reliable inventory and progression-book snapshots.
 
-bool BuildLocalParticipantInventorySnapshotPacket(
+bool BuildParticipantInventorySnapshotPacket(
+    const ParticipantInfo& participant,
+    std::uint64_t participant_id,
+    std::uint64_t participant_session_nonce,
     ParticipantInventorySnapshotPacket* packet) {
-    if (packet == nullptr) {
-        return false;
-    }
-
-    const auto runtime_state = SnapshotRuntimeState();
-    const auto* local = FindLocalParticipant(runtime_state);
-    if (local == nullptr) {
+    if (packet == nullptr || participant_id == 0 ||
+        participant_session_nonce == 0) {
         return false;
     }
 
@@ -16,22 +14,22 @@ bool BuildLocalParticipantInventorySnapshotPacket(
     built.header = MakePacketHeader(
         PacketKind::ParticipantInventorySnapshot,
         g_local_transport.next_sequence++);
-    built.participant_id = g_local_transport.local_peer_id;
+    built.participant_id = participant_id;
     built.participant_session_nonce =
-        g_local_transport.local_session_nonce;
+        participant_session_nonce;
     built.inventory_revision =
-        local->owned_progression.inventory_revision;
+        participant.owned_progression.inventory_revision;
     const auto item_count = (std::min)(
-        local->owned_progression.inventory_items.size(),
+        participant.owned_progression.inventory_items.size(),
         static_cast<std::size_t>(
             kParticipantInventorySnapshotMaxItems));
     built.item_count =
         static_cast<std::uint16_t>(item_count);
     built.item_total_count =
-        local->owned_progression.inventory_item_total_count;
+        participant.owned_progression.inventory_item_total_count;
     built.snapshot_flags =
-        local->owned_progression.inventory_truncated ||
-            local->owned_progression.inventory_items.size() >
+        participant.owned_progression.inventory_truncated ||
+            participant.owned_progression.inventory_items.size() >
                 kParticipantInventorySnapshotMaxItems
             ? ParticipantInventorySnapshotFlagTruncated
             : 0;
@@ -39,7 +37,7 @@ bool BuildLocalParticipantInventorySnapshotPacket(
          index < item_count;
          ++index) {
         const auto& item =
-            local->owned_progression.inventory_items[index];
+            participant.owned_progression.inventory_items[index];
         auto& packet_item = built.items[index];
         packet_item.type_id = item.type_id;
         packet_item.recipe_uid = item.recipe_uid;
@@ -52,6 +50,18 @@ bool BuildLocalParticipantInventorySnapshotPacket(
     }
     *packet = built;
     return true;
+}
+
+bool BuildLocalParticipantInventorySnapshotPacket(
+    ParticipantInventorySnapshotPacket* packet) {
+    const auto runtime_state = SnapshotRuntimeState();
+    const auto* local = FindLocalParticipant(runtime_state);
+    return local != nullptr &&
+        BuildParticipantInventorySnapshotPacket(
+            *local,
+            g_local_transport.local_peer_id,
+            g_local_transport.local_session_nonce,
+            packet);
 }
 
 bool BuildLocalParticipantProgressionBookSnapshotPacket(

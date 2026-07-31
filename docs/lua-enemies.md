@@ -93,12 +93,48 @@ do not execute the authority loot policy.
 
 ## Multiplayer identity and events
 
-Protocol 88 carries the positive 63-bit content ID and the effective common spawn
+Protocol 89 carries the positive 63-bit content ID and the effective common spawn
 config to each registered enemy's world snapshot. A client materializes the
 same semantic stock class through the same exact-spawn path, applies the
 authority's effective constructor values, and then follows normal snapshot
 health, transform, status, target, and death reconciliation. Raw actor/config
 addresses never cross the wire.
+
+### Replicated combat status
+
+Every `sd.world.get_replicated_actors()` row carries semantic combat modifier
+state alongside its existing identity, heading, animation, transform, vitals,
+and Turn-Undead fields:
+
+```lua
+{
+  combat_status_resolved = true,
+  slowed = false,
+  slow_remaining_ticks = 0,
+  slow_remaining_seconds = 0.0,
+  frozen = false,
+  frozen_remaining_ticks = 0,
+  frozen_remaining_seconds = 0.0,
+  poisoned = false,
+  poison_remaining_ticks = 0,
+  poison_remaining_seconds = 0.0,
+  webbed = false,
+  webbed_remaining_ticks = 0,
+  webbed_remaining_seconds = 0.0,
+  turn_undead_resolved = true,
+  turn_undead = false,
+  turn_undead_remaining_ticks = 0,
+  turn_undead_remaining_seconds = 0.0,
+}
+```
+
+The authority joins the native modifier list into four proven semantic
+families: Cold/Circle slow, Ring Ice freeze, poison, and web. Native timers
+advance at 100 ticks per second; the wire retains bounded ticks and Lua
+publishes both units. When `combat_status_resolved` is false, the four
+booleans and zero durations are not evidence that no status is active.
+Unknown modifier classes remain unclassified instead of exposing raw factory
+IDs or native list addresses.
 
 `enemy.spawned` and `enemy.death` now include `content_id` on every peer. It is
 zero for stock enemies and the deterministic registered ID for a Lua enemy.
@@ -119,7 +155,7 @@ py tools/verify_lua_enemies_multiplayer.py --launch-pair --confirm-mutation
 The verifier stages only the enemy registry lab and primes the retail wave
 spawner in an isolated zero-enemy combat mode. It proves that the client cannot
 author a spawn; the host constructs exactly one registered enemy with the
-requested HP, speed, and scale; protocol 88 preserves its content ID and
+requested HP, speed, and scale; protocol 89 preserves its content ID and
 effective constructor values; and the client binds a peer-local actor of the
 same stock class. It then kills that actor through the native death path and
 requires one matching `enemy.spawned` and `enemy.death` notification on each

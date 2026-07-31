@@ -5,5 +5,7 @@
 #include "public_api/casting_api.inl"
 #include "public_api/snapshots_api.inl"
 #include "public_api/loadout_details_api.inl"
+#include "public_api/inventory_details_api.inl"
+#include "public_api/consumable_use_api.inl"
 #include "public_api/skill_choices_api.inl"
 #include "public_api/scene_intents_api.inl"

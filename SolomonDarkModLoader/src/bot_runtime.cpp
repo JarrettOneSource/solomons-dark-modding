@@ -2,6 +2,7 @@
 
 #include "gameplay_seams.h"
 #include "logger.h"
+#include "lua_item_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
@@ -11,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -139,6 +141,20 @@ struct ActiveBotWeldBuild {
     std::int32_t build_id = -1;
 };
 
+struct BotInventoryRevisionTuple {
+    std::uint32_t run_nonce = 0;
+    std::uint32_t inventory_revision = 0;
+    std::uint32_t equipment_revision = 0;
+    std::uint32_t derived_stat_revision = 0;
+    std::uint32_t statbook_revision = 0;
+};
+
+struct CachedParticipantInventoryDetails {
+    std::uint64_t participant_id = 0;
+    BotInventoryRevisionTuple revisions;
+    BotInventoryDetails details;
+};
+
 std::mutex g_bot_runtime_mutex;
 bool g_bot_runtime_initialized = false;
 std::uint64_t g_next_bot_id = kFirstLuaControlledParticipantId;
@@ -156,6 +172,9 @@ std::vector<PendingBotSkillChoice> g_pending_skill_choices;
 std::vector<BotManaReserveState> g_bot_mana_reserves;
 std::vector<CachedParticipantLoadoutDetails> g_loadout_details_cache;
 std::vector<ActiveBotWeldBuild> g_active_bot_weld_builds;
+std::vector<CachedParticipantInventoryDetails>
+    g_inventory_details_cache;
+std::uint64_t g_next_consumable_use_id = 1;
 
 constexpr float kBotArrivalThreshold = 0.5f;
 constexpr float kBotManaReadinessEpsilon = 0.001f;

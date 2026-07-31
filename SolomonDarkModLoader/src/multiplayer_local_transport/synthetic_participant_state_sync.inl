@@ -131,6 +131,9 @@ bool RegisterSyntheticParticipantTransportInternal(
     }
     transport_state->last_state_send_ms = 0;
     transport_state->last_frame_send_ms = 0;
+    transport_state->last_inventory_send_ms = 0;
+    transport_state->last_inventory_revision = 0;
+    transport_state->inventory_sent = false;
     return true;
 }
 

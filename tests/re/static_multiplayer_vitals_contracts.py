@@ -62,7 +62,7 @@ def test_local_participant_hit_feedback_is_event_owned_and_presentation_only() -
     design = _read("docs/design/hit-feedback-2026-07-28.md")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 88;",
+        "constexpr std::uint16_t kProtocolVersion = 89;",
         "ParticipantHitFeedback = 33",
         "struct ParticipantHitFeedbackPacket",
         "std::uint32_t event_sequence;",
@@ -286,7 +286,7 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 88;",
+        "constexpr std::uint16_t kProtocolVersion = 89;",
         "ParticipantVitalsCorrectionFlagMagicShieldState",
         "std::uint8_t correction_flags;",
         "float magic_shield_absorb_remaining;",

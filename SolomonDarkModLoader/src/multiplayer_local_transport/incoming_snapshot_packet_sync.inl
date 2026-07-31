@@ -69,6 +69,14 @@ WorldSnapshotRuntimeInfo BuildWorldSnapshotRuntimeInfo(
             packet_actor.turn_undead_flee_heading;
         actor.turn_undead_activation_scalar =
             packet_actor.turn_undead_activation_scalar;
+        actor.slow_remaining_ticks =
+            packet_actor.slow_remaining_ticks;
+        actor.frozen_remaining_ticks =
+            packet_actor.frozen_remaining_ticks;
+        actor.poison_remaining_ticks =
+            packet_actor.poison_remaining_ticks;
+        actor.webbed_remaining_ticks =
+            packet_actor.webbed_remaining_ticks;
         const auto& packet_minion =
             packet_actor.native_minion;
         auto& minion = actor.native_minion_state;
@@ -450,6 +458,7 @@ void ApplyLootSnapshotPacket(
 
 #include "multiplayer_local_transport/spell_effect_sync.inl"
 #include "multiplayer_local_transport/air_chain_sync.inl"
+#include "multiplayer_local_transport/hazard_snapshot_sync.inl"
 #include "multiplayer_local_transport/participant_vitals_authority.inl"
 
 using TransportPacketBuffer =

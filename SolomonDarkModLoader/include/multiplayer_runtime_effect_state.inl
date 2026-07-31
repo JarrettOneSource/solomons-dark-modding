@@ -186,6 +186,7 @@ struct RuntimeState {
     std::vector<WorldSnapshotRuntimeInfo> world_snapshot_history;
     WorldSnapshotApplyRuntimeInfo world_snapshot_apply;
     LootSnapshotRuntimeInfo loot_snapshot;
+    HazardSnapshotRuntimeInfo hazard_snapshot;
     std::vector<SpellEffectSnapshotRuntimeInfo> spell_effect_snapshots;
     SpellEffectApplyRuntimeInfo spell_effect_apply;
     AirChainSnapshotRuntimeInfo local_air_chain_capture;

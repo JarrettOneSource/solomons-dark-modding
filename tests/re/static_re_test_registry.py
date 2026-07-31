@@ -37,6 +37,13 @@ from static_lua_ml_bot_contracts import (
     test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
     test_ml_bot_is_simulation_timed_local_and_native_action_routed,
 )
+from static_ml_bot_v3_native_seams_contracts import (
+    test_ml_bot_v3_collision_geometry_is_exact_semantic_and_address_free,
+    test_ml_bot_v3_consumable_use_is_reserved_exactly_once_and_native_routed,
+    test_ml_bot_v3_enemy_statuses_are_semantic_bounded_and_replicated,
+    test_ml_bot_v3_hazards_include_unknown_hostile_classes_without_addresses,
+    test_ml_bot_v3_inventory_details_are_revision_cached_and_content_identified,
+)
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
 )
@@ -452,6 +459,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua navigation is bounded, read-only, and native-backed",
         test_lua_nav_is_bounded_read_only_and_native_backed,
+    ),
+    (
+        "ML bot v3 collision geometry is exact, semantic, and address-free",
+        test_ml_bot_v3_collision_geometry_is_exact_semantic_and_address_free,
+    ),
+    (
+        "ML bot v3 enemy statuses are semantic, bounded, and replicated",
+        test_ml_bot_v3_enemy_statuses_are_semantic_bounded_and_replicated,
+    ),
+    (
+        "ML bot v3 hazards include unknown hostile classes without addresses",
+        test_ml_bot_v3_hazards_include_unknown_hostile_classes_without_addresses,
+    ),
+    (
+        "ML bot v3 inventory details are revision-cached and content-identified",
+        test_ml_bot_v3_inventory_details_are_revision_cached_and_content_identified,
+    ),
+    (
+        "ML bot v3 consumable use is reserved exactly once and native-routed",
+        test_ml_bot_v3_consumable_use_is_reserved_exactly_once_and_native_routed,
     ),
     (
         "Lua scene control is semantic, authority-owned, and participant-local",

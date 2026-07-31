@@ -72,6 +72,8 @@ struct BotLoadoutDetails {
     bool pending_weld_build_id_resolved = false;
 };
 
+#include "bot_runtime_inventory_state.inl"
+
 constexpr float kBotManaReserveEnterRatio = 0.10f;
 constexpr float kBotManaReserveExitRatio = 0.80f;
 
@@ -363,6 +365,13 @@ bool ReadParticipantSnapshot(std::uint64_t participant_id, BotSnapshot* snapshot
 bool ReadParticipantLoadoutDetails(
     std::uint64_t participant_id,
     BotLoadoutDetails* details);
+bool ReadParticipantInventoryDetails(
+    std::uint64_t participant_id,
+    BotInventoryDetails* details);
+bool UseParticipantConsumable(
+    const BotUseConsumableRequest& request,
+    BotUseConsumableResult* result,
+    std::string* error_message);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);

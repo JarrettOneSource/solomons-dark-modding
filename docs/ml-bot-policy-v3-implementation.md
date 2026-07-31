@@ -1393,3 +1393,95 @@ participant-scoped native path, stop that seam for owner adjudication.
     actor/hazard IDs, velocity history, telegraph state, and event-duration
     choice credit close the demonstrated gaps. Recommendation: keep recurrence
     out of v3 as chartered.
+
+## I. Phase V3-2 implementation record
+
+The charter adjudications supersede the open decisions in H. Phase V3-2
+implemented only the five approved native seams:
+
+1. `sd.nav.get_collision_geometry(participant_id)` publishes exact native
+   circles, fixed and moving segments, polygons, observer/participant radii,
+   scene-scoped semantic IDs, and separate static/dynamic revisions. Fixed
+   FenceGrate and BrokenFenceGrate endpoints come from their class-owned
+   working fields; moving Gate lines come from their retained collision
+   records. Wizard bodies are excluded from the primitive list and participant
+   radii are published separately.
+2. `sd.world.get_replicated_actors()` rows now carry resolved slow, frozen,
+   poison, web, and existing Turn-Undead state in native ticks and seconds.
+   Protocol 89 owns the bounded semantic wire fields.
+3. `sd.world.get_replicated_hazards()` unions and deduplicates the world
+   transient list with gameplay buckets. It classifies all 38 frozen hostile
+   families, retains unknown hostile effect-band actors with
+   `type_known=false`, and exposes no address or exception data.
+4. `sd.bots.get_inventory_details(participant_id)` joins replicated inventory
+   and equipment to stable content identity, catalog/effect summaries, and
+   native timers. Static rows are cached by `(run_nonce, inventory_revision,
+   equipment_revision, derived_stat_revision, statbook_revision)` while live
+   timers are overlaid on each call. Replicated inventory rows now marshal
+   `content_id`.
+5. `sd.bots.use_consumable(participant_id, selector)` reserves one ranked
+   stack against an exact inventory revision, advances the authoritative
+   revision once, routes only proven participant-scoped native effects, and
+   publishes reliable inventory/use state. A stale selector cannot reapply
+   the effect.
+
+### Live acceptance
+
+The fresh end-to-end probe used three disposable procedural runs with seeds
+`0x2A0FC5AA`, `0x11111111`, and `0x22222222`:
+
+- exact policy patch: 27,648 samples, zero mismatches;
+- exact policy rays: 36,860 samples, zero mismatches;
+- ray clearance: 4,604 distances, MAE 0 and maximum error 0;
+- wider dense placement diagnostic: 154,803 samples, six conservative
+  false-blocks and zero false-opens, an aggregate 0.00387589% error. All six
+  occurred outside the policy patch/ray samples in the first seed.
+
+The former 4.47-5.95% policy error class is therefore eliminated. Every run
+also published hundreds of circles, fixed/moving segments, polygons, the
+observer radius, and two participant-radius rows. Pushable Goodies remained
+nonblocking and Gate segments remained openable.
+
+The modifier probe observed clean false baselines followed by slow
+`5425 ticks / 54.25 s`, frozen `5203 / 52.03 s`, poison
+`5004 / 50.04 s`, and web `4814 / 48.14 s`; the native factory poison path
+also surfaced before the classifier sweep. The hazard probe captured real
+Archer Arrow, DemonSkull EyeLaser, and DireFaculty RainOfBones production,
+with concurrent maxima of seven projectiles, one area, and two beams. Its
+synthetic unknown hostile row remained visible with `type_known=false`.
+
+All six stock potion subtypes survived pickup-to-ledger round trips with six
+distinct drop IDs and monotonic inventory revisions. Inventory details
+returned six stock/content/identity rows, seven equipment slots, and native
+timer conversions of 60 seconds Damage x4, 10 seconds poison immunity, and
+30 seconds all-concentration. Synthetic use proved:
+
+| Subtype | Result |
+| ---: | --- |
+| 0 Health | one stack and one revision consumed; HP restored through the participant-scoped native path |
+| 1 Mana | one stack and one revision consumed; mana restored through the participant-scoped native path |
+| 2 Wizard Chug | rejected without stack, timer, or revision mutation |
+| 3 Antidote | rejected without stack, timer, or revision mutation |
+| 4 Mind Chug | rejected without stack, timer, or revision mutation |
+| 5 Rejuvenation | one stack and one revision consumed; HP and mana restored through the two native paths |
+
+Repeating each successful selector was rejected as stale. Runtime vitals
+matched the native result and the local player's HP/MP stayed unchanged.
+Subtypes 2-4 therefore lose learned actions exactly as adjudicated: the retail
+binary exposes only local-player or direct-field paths, not a proven
+participant-scoped native effect route.
+
+### Verification
+
+- clean Win32 Release loader rebuild: zero warnings and zero errors;
+- source organization: 672 fragments;
+- static RE contracts: 306/306;
+- Python unittest discovery: 526/526;
+- live v3 native-seam probe: passed, with all public-table forbidden-key
+  checks at zero and no address, pointer, SEH, exception code, or hexadecimal
+  diagnostic in public errors.
+
+The ordinary `dist/launcher` DLL was held by an unrelated process that could
+not be touched under the environment guardrails. Verification therefore used
+a worktree-local launcher publish with the byte-identical clean Release DLL;
+the native build and launched binary hashes matched.

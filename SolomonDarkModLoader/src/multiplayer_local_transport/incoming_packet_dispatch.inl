@@ -478,6 +478,32 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (kind == PacketKind::HazardSnapshot &&
+            received >= static_cast<int>(
+                kHazardSnapshotPacketPrefixBytes) &&
+            received <= static_cast<int>(
+                sizeof(HazardSnapshotPacket))) {
+            HazardSnapshotPacket packet{};
+            std::memcpy(
+                &packet,
+                packet_buffer.data(),
+                static_cast<std::size_t>(received));
+            if (!IsValidHeader(
+                    packet.header,
+                    PacketKind::HazardSnapshot) ||
+                !IsValidHazardSnapshotPacketWireSize(
+                    static_cast<std::size_t>(received),
+                    packet.hazard_count)) {
+                continue;
+            }
+            g_local_transport.packets_received += 1;
+            ApplyHazardSnapshotPacket(
+                packet,
+                from,
+                now_ms);
+            continue;
+        }
+
         if (kind == PacketKind::AirChainSnapshot &&
             received == static_cast<int>(sizeof(AirChainSnapshotPacket))) {
             AirChainSnapshotPacket packet{};
@@ -649,7 +675,6 @@ void DispatchReceivedPacket(
             ApplyLuaUiActionRequestPacket(packet, from, now_ms);
             continue;
         }
-
         if (kind == PacketKind::LevelUpBarrier &&
             received >= static_cast<int>(
                 kLevelUpBarrierPacketPrefixBytes) &&

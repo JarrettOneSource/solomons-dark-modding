@@ -6,7 +6,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 88;
+constexpr std::uint16_t kProtocolVersion = 89;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -23,6 +23,7 @@ constexpr std::uint32_t kLootSnapshotMaxDrops = 64;
 constexpr std::uint32_t kLevelUpOfferMaxOptions = 8;
 constexpr std::uint32_t kLevelUpWaitStatusMaxParticipants = 250;
 constexpr std::uint32_t kSpellEffectSnapshotMaxEffects = 32;
+constexpr std::uint32_t kHazardSnapshotMaxHazards = 32;
 constexpr std::uint32_t kAirChainSnapshotMaxTargets = 8;
 constexpr std::uint32_t kSecondaryLoadoutSlotCount = 8;
 constexpr std::uint32_t kLuaModStreamFragmentPayloadBytes = 1024;
@@ -77,6 +78,7 @@ enum class PacketKind : std::uint16_t {
     ParticipantProgressionBookSnapshot = 31,
     WaveSummary = 32,
     ParticipantHitFeedback = 33,
+    HazardSnapshot = 34,
 };
 
 enum ParticipantStateFlag : std::uint8_t {
@@ -254,6 +256,11 @@ enum WorldActorPresentationFlags : std::uint16_t {
 enum WorldActorStatusFlags : std::uint8_t {
     WorldActorStatusFlagTurnUndeadStateValid = 1 << 0,
     WorldActorStatusFlagTurnUndeadActive = 1 << 1,
+    WorldActorStatusFlagCombatModifiersResolved = 1 << 2,
+    WorldActorStatusFlagSlowed = 1 << 3,
+    WorldActorStatusFlagFrozen = 1 << 4,
+    WorldActorStatusFlagPoisoned = 1 << 5,
+    WorldActorStatusFlagWebbed = 1 << 6,
 };
 
 enum LuaEnemySpawnSnapshotFlags : std::uint8_t {
@@ -271,7 +278,16 @@ constexpr std::uint8_t kLuaEnemySpawnSnapshotKnownFlags =
 
 constexpr std::uint8_t kWorldActorStatusKnownFlags =
     WorldActorStatusFlagTurnUndeadStateValid |
-    WorldActorStatusFlagTurnUndeadActive;
+    WorldActorStatusFlagTurnUndeadActive |
+    WorldActorStatusFlagCombatModifiersResolved |
+    WorldActorStatusFlagSlowed |
+    WorldActorStatusFlagFrozen |
+    WorldActorStatusFlagPoisoned |
+    WorldActorStatusFlagWebbed;
+
+// Modifier durations and skill cooldown rows advance on the 100 Hz native
+// gameplay clock. Wire values remain ticks; Lua gets both ticks and seconds.
+constexpr float kWorldActorStatusTicksPerSecond = 100.0f;
 
 inline bool IsTurnUndeadEligibleRunEnemyType(std::uint32_t native_type_id) {
     switch (native_type_id) {
@@ -317,6 +333,34 @@ enum SpellEffectStateFlags : std::uint16_t {
     SpellEffectStateFlagEmberRuntime = 1 << 4,
     SpellEffectStateFlagFirewalkerRuntime = 1 << 5,
 };
+
+enum class HazardKind : std::uint8_t {
+    Unknown = 0,
+    Projectile = 1,
+    Area = 2,
+    Beam = 3,
+};
+
+enum HazardSnapshotFlags : std::uint16_t {
+    HazardSnapshotFlagTruncated = 1 << 0,
+};
+
+enum HazardStateFlags : std::uint16_t {
+    HazardStateFlagActive = 1 << 0,
+    HazardStateFlagHostile = 1 << 1,
+    HazardStateFlagTypeKnown = 1 << 2,
+    HazardStateFlagMotionResolved = 1 << 3,
+    HazardStateFlagLifetimeResolved = 1 << 4,
+    HazardStateFlagHoming = 1 << 5,
+};
+
+constexpr std::uint16_t kHazardStateKnownFlags =
+    HazardStateFlagActive |
+    HazardStateFlagHostile |
+    HazardStateFlagTypeKnown |
+    HazardStateFlagMotionResolved |
+    HazardStateFlagLifetimeResolved |
+    HazardStateFlagHoming;
 
 enum AirChainSnapshotFlags : std::uint8_t {
     AirChainSnapshotFlagActive = 1 << 0,
@@ -1247,6 +1291,10 @@ struct WorldActorSnapshotPacketState {
     std::int32_t turn_undead_duration_ticks;
     float turn_undead_flee_heading;
     float turn_undead_activation_scalar;
+    std::int32_t slow_remaining_ticks;
+    std::int32_t frozen_remaining_ticks;
+    std::int32_t poison_remaining_ticks;
+    std::int32_t webbed_remaining_ticks;
     std::uint8_t student_visual_state[kWorldActorStudentVisualStateBytes];
     std::uint32_t student_book_palette_count;
     StudentBookPaletteEntryPacketState
@@ -1300,6 +1348,10 @@ struct WorldActorMotionPacketState {
     std::int32_t turn_undead_duration_ticks;
     float turn_undead_flee_heading;
     float turn_undead_activation_scalar;
+    std::int32_t slow_remaining_ticks;
+    std::int32_t frozen_remaining_ticks;
+    std::int32_t poison_remaining_ticks;
+    std::int32_t webbed_remaining_ticks;
     std::uint32_t native_minion_age;
     std::int16_t native_minion_attack_timer;
     std::int16_t native_minion_attack_cooldown;
@@ -1459,6 +1511,53 @@ struct AirChainTargetPacketState {
     float target_x;
     float target_y;
 };
+
+struct HazardPacketState {
+    std::uint64_t hazard_id;
+    std::uint64_t source_participant_id;
+    std::uint64_t source_network_actor_id;
+    std::uint64_t target_participant_id;
+    std::uint64_t target_network_actor_id;
+    std::uint32_t native_type_id;
+    std::uint16_t flags;
+    HazardKind kind;
+    std::uint8_t reserved = 0;
+    float position_x;
+    float position_y;
+    float radius;
+    float heading;
+    float motion_x;
+    float motion_y;
+    std::int32_t remaining_ticks;
+};
+
+struct HazardSnapshotPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint32_t run_nonce;
+    std::uint32_t scene_epoch;
+    std::uint8_t hazard_count;
+    std::uint8_t hazard_total_count;
+    std::uint16_t snapshot_flags;
+    HazardPacketState hazards[kHazardSnapshotMaxHazards];
+};
+
+constexpr std::size_t kHazardSnapshotPacketPrefixBytes =
+    offsetof(HazardSnapshotPacket, hazards);
+
+constexpr std::size_t HazardSnapshotPacketWireSize(
+    std::uint8_t hazard_count) {
+    return kHazardSnapshotPacketPrefixBytes +
+           static_cast<std::size_t>(hazard_count) *
+               sizeof(HazardPacketState);
+}
+
+constexpr bool IsValidHazardSnapshotPacketWireSize(
+    std::size_t received_bytes,
+    std::uint8_t hazard_count) {
+    return hazard_count <= kHazardSnapshotMaxHazards &&
+           received_bytes == HazardSnapshotPacketWireSize(hazard_count);
+}
 
 struct AirChainSnapshotPacket {
     PacketHeader header;
@@ -1832,11 +1931,11 @@ static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40,
               "Unexpected named hub NPC presentation size");
 static_assert(sizeof(NativeMinionPacketState) == 56,
               "Unexpected native minion packet state size");
-static_assert(sizeof(WorldActorSnapshotPacketState) == 384, "Unexpected world actor snapshot size");
-static_assert(sizeof(WorldSnapshotPacket) == 1200, "Unexpected world snapshot packet size");
-static_assert(sizeof(WorldActorMotionPacketState) == 108,
+static_assert(sizeof(WorldActorSnapshotPacketState) == 400, "Unexpected world actor snapshot size");
+static_assert(sizeof(WorldSnapshotPacket) == 1248, "Unexpected world snapshot packet size");
+static_assert(sizeof(WorldActorMotionPacketState) == 124,
               "Unexpected world actor motion size");
-static_assert(sizeof(WorldMotionSnapshotPacket) == 1128,
+static_assert(sizeof(WorldMotionSnapshotPacket) == 1288,
               "Unexpected world motion snapshot packet size");
 static_assert(sizeof(LootDropSnapshotPacketState) == 120, "Unexpected loot drop snapshot size");
 static_assert(sizeof(LootSnapshotPacket) == 7712, "Unexpected loot snapshot packet size");
@@ -1859,6 +1958,18 @@ static_assert(SpellEffectSnapshotPacketWireSize(
               "A full spell effect snapshot must consume the packet buffer exactly");
 static_assert(sizeof(AirChainTargetPacketState) == 28, "Unexpected Air chain target packet size");
 static_assert(sizeof(AirChainSnapshotPacket) == 260, "Unexpected Air chain snapshot packet size");
+static_assert(sizeof(HazardPacketState) == 76,
+              "Unexpected hazard packet state size");
+static_assert(kHazardSnapshotPacketPrefixBytes == 32,
+              "Unexpected hazard snapshot packet prefix size");
+static_assert(sizeof(HazardSnapshotPacket) == 2464,
+              "Unexpected hazard snapshot packet size");
+static_assert(HazardSnapshotPacketWireSize(0) ==
+                  kHazardSnapshotPacketPrefixBytes,
+              "Empty hazard snapshot must only contain its fixed prefix");
+static_assert(HazardSnapshotPacketWireSize(kHazardSnapshotMaxHazards) ==
+                  sizeof(HazardSnapshotPacket),
+              "A full hazard snapshot must consume the packet buffer exactly");
 static_assert(sizeof(ParticipantVitalsCorrectionPacket) == 88, "Unexpected participant vitals correction packet size");
 static_assert(sizeof(ParticipantHitReactionState) == 28, "Unexpected participant hit reaction size");
 static_assert(sizeof(ParticipantHitFeedbackPacket) == 80, "Unexpected participant hit feedback packet size");

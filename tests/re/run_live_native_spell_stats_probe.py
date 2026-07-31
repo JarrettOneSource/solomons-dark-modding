@@ -46,7 +46,12 @@ ACTIVE_BOTS_CONFIG_PATH = (
     ROOT / "mods" / "lua_bots" / "config" / "active_bots.txt"
 )
 SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
-MOD_LAUNCHER = ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe"
+MOD_LAUNCHER = Path(
+    os.environ.get(
+        "SDMOD_PROBE_LAUNCHER_PATH",
+        ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe",
+    )
+)
 if os.name == "nt":
     GAME_DIRECTORY = Path(
         "C:/Users/User/Documents/GitHub/SB Modding/"

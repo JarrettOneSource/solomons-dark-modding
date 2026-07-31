@@ -36,7 +36,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
     )
 
     required_tokens = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 88;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 89;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotActorsPerFragment = 3;"),
         (protocol_text, "constexpr std::uint32_t kWorldSnapshotMaxLogicalActors = 512;"),
         (protocol_text, "std::uint32_t snapshot_id;"),
@@ -49,7 +49,7 @@ def test_world_snapshots_are_complete_mtu_sized_generations() -> str:
             protocol_text,
             "WorldActorSnapshotPacketState actors[kWorldSnapshotActorsPerFragment];",
         ),
-        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1200"),
+        (protocol_text, "static_assert(sizeof(WorldSnapshotPacket) == 1248"),
         (fragmentation_text, "struct CompleteWorldSnapshotPacketState"),
         (fragmentation_text, "struct PendingWorldSnapshotAssembly"),
         (fragmentation_text, "struct PendingWorldSnapshotAssemblies"),
@@ -460,8 +460,8 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 88;"),
-        (compatibility_materializer_text, "CurrentProtocolVersion = 88;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 89;"),
+        (compatibility_materializer_text, "CurrentProtocolVersion = 89;"),
         (protocol_text, "SessionCapabilityHostAuthority"),
         (protocol_text, "struct SessionHelloPacket"),
         (protocol_text, "struct SessionHelloAckPacket"),

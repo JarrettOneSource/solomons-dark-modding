@@ -217,6 +217,7 @@ void TickLocalTransport(std::uint64_t now_ms) {
     SendQueuedCastEvents(now_ms);
     SendAirChainSnapshots(now_ms);
     SendSpellEffectSnapshot(now_ms);
+    SendHazardSnapshot(now_ms);
     SendLocalEnemyDamageClaims();
     finish_stage("outbound_casts");
     SendQueuedHostParticipantVitalsCorrections(now_ms);

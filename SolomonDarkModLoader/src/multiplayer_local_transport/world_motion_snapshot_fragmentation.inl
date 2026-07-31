@@ -68,6 +68,14 @@ WorldActorMotionPacketState BuildWorldActorMotionPacketState(
         actor.turn_undead_flee_heading;
     motion.turn_undead_activation_scalar =
         actor.turn_undead_activation_scalar;
+    motion.slow_remaining_ticks =
+        actor.slow_remaining_ticks;
+    motion.frozen_remaining_ticks =
+        actor.frozen_remaining_ticks;
+    motion.poison_remaining_ticks =
+        actor.poison_remaining_ticks;
+    motion.webbed_remaining_ticks =
+        actor.webbed_remaining_ticks;
     motion.native_minion_age =
         actor.native_minion.native_age;
     motion.native_minion_attack_timer =
@@ -165,6 +173,9 @@ bool IsValidWorldActorMotionPacketState(
         (actor.status_flags & ~kWorldActorStatusKnownFlags) != 0) {
         return false;
     }
+    if (!IsValidWorldActorCombatModifierState(actor)) {
+        return false;
+    }
 
     const bool turn_undead_state_valid =
         (actor.status_flags &
@@ -176,7 +187,9 @@ bool IsValidWorldActorMotionPacketState(
         return false;
     }
     if (!turn_undead_state_valid) {
-        return true;
+        return actor.turn_undead_duration_ticks == 0 &&
+            actor.turn_undead_flee_heading == 0.0f &&
+            actor.turn_undead_activation_scalar == 0.0f;
     }
     return actor.turn_undead_duration_ticks >= 0 &&
         actor.turn_undead_duration_ticks <= 100000 &&
@@ -342,6 +355,14 @@ void ApplyWorldActorMotionPacketState(
         motion.turn_undead_flee_heading;
     actor->turn_undead_activation_scalar =
         motion.turn_undead_activation_scalar;
+    actor->slow_remaining_ticks =
+        motion.slow_remaining_ticks;
+    actor->frozen_remaining_ticks =
+        motion.frozen_remaining_ticks;
+    actor->poison_remaining_ticks =
+        motion.poison_remaining_ticks;
+    actor->webbed_remaining_ticks =
+        motion.webbed_remaining_ticks;
     actor->native_minion.native_age =
         motion.native_minion_age;
     actor->native_minion.attack_timer =

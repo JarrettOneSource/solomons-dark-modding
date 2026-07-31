@@ -181,6 +181,229 @@ int LuaNavGetGrid(lua_State* state) {
     return 1;
 }
 
+void PushCollisionGeometry(
+    lua_State* state,
+    const SDModCollisionGeometryState& geometry) {
+    lua_createtable(state, 0, 14);
+    lua_pushboolean(state, geometry.valid ? 1 : 0);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(geometry.scene_epoch));
+    lua_setfield(state, -2, "scene_epoch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(geometry.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(geometry.static_revision));
+    lua_setfield(state, -2, "static_revision");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(geometry.dynamic_revision));
+    lua_setfield(state, -2, "dynamic_revision");
+    lua_pushboolean(state, geometry.refresh_pending ? 1 : 0);
+    lua_setfield(state, -2, "refresh_pending");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(geometry.observer_radius));
+    lua_setfield(state, -2, "observer_radius");
+    lua_pushboolean(
+        state,
+        geometry.observer_radius_resolved ? 1 : 0);
+    lua_setfield(state, -2, "observer_radius_resolved");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            geometry.participant_collision_padding));
+    lua_setfield(state, -2, "participant_collision_padding");
+
+    lua_createtable(
+        state,
+        static_cast<int>(geometry.circles.size()),
+        0);
+    lua_Integer output_index = 1;
+    for (const auto& circle : geometry.circles) {
+        lua_createtable(state, 0, 12);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(circle.geometry_id));
+        lua_setfield(state, -2, "geometry_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(circle.native_type_id));
+        lua_setfield(state, -2, "native_type_id");
+        lua_pushnumber(state, circle.x);
+        lua_setfield(state, -2, "x");
+        lua_pushnumber(state, circle.y);
+        lua_setfield(state, -2, "y");
+        lua_pushnumber(state, circle.radius);
+        lua_setfield(state, -2, "radius");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(circle.mask));
+        lua_setfield(state, -2, "mask");
+        lua_pushboolean(state, circle.path_blocks ? 1 : 0);
+        lua_setfield(state, -2, "path_blocks");
+        lua_pushboolean(state, circle.pushable ? 1 : 0);
+        lua_setfield(state, -2, "pushable");
+        lua_pushboolean(state, circle.destructible ? 1 : 0);
+        lua_setfield(state, -2, "destructible");
+        lua_pushboolean(
+            state,
+            circle.destructible_resolved ? 1 : 0);
+        lua_setfield(state, -2, "destructible_resolved");
+        lua_pushboolean(state, circle.dynamic ? 1 : 0);
+        lua_setfield(state, -2, "dynamic");
+        lua_rawseti(state, -2, output_index++);
+    }
+    lua_setfield(state, -2, "circles");
+
+    lua_createtable(
+        state,
+        static_cast<int>(geometry.segments.size()),
+        0);
+    output_index = 1;
+    for (const auto& segment : geometry.segments) {
+        lua_createtable(state, 0, 14);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(segment.geometry_id));
+        lua_setfield(state, -2, "geometry_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(segment.native_type_id));
+        lua_setfield(state, -2, "native_type_id");
+        lua_pushnumber(state, segment.start_x);
+        lua_setfield(state, -2, "start_x");
+        lua_pushnumber(state, segment.start_y);
+        lua_setfield(state, -2, "start_y");
+        lua_pushnumber(state, segment.end_x);
+        lua_setfield(state, -2, "end_x");
+        lua_pushnumber(state, segment.end_y);
+        lua_setfield(state, -2, "end_y");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(segment.mask));
+        lua_setfield(state, -2, "mask");
+        lua_pushboolean(state, segment.path_blocks ? 1 : 0);
+        lua_setfield(state, -2, "path_blocks");
+        lua_pushboolean(state, segment.openable ? 1 : 0);
+        lua_setfield(state, -2, "openable");
+        lua_pushboolean(state, segment.destructible ? 1 : 0);
+        lua_setfield(state, -2, "destructible");
+        lua_pushboolean(
+            state,
+            segment.destructible_resolved ? 1 : 0);
+        lua_setfield(state, -2, "destructible_resolved");
+        lua_pushboolean(state, segment.dynamic ? 1 : 0);
+        lua_setfield(state, -2, "dynamic");
+        lua_rawseti(state, -2, output_index++);
+    }
+    lua_setfield(state, -2, "segments");
+
+    lua_createtable(
+        state,
+        static_cast<int>(geometry.polygons.size()),
+        0);
+    output_index = 1;
+    for (const auto& polygon : geometry.polygons) {
+        lua_createtable(state, 0, 13);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(polygon.geometry_id));
+        lua_setfield(state, -2, "geometry_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(polygon.native_type_id));
+        lua_setfield(state, -2, "native_type_id");
+        lua_pushnumber(state, polygon.bounds_x);
+        lua_setfield(state, -2, "bounds_x");
+        lua_pushnumber(state, polygon.bounds_y);
+        lua_setfield(state, -2, "bounds_y");
+        lua_pushnumber(state, polygon.bounds_w);
+        lua_setfield(state, -2, "bounds_w");
+        lua_pushnumber(state, polygon.bounds_h);
+        lua_setfield(state, -2, "bounds_h");
+        lua_pushboolean(state, polygon.path_blocks ? 1 : 0);
+        lua_setfield(state, -2, "path_blocks");
+        lua_pushboolean(state, polygon.destructible ? 1 : 0);
+        lua_setfield(state, -2, "destructible");
+        lua_pushboolean(
+            state,
+            polygon.destructible_resolved ? 1 : 0);
+        lua_setfield(state, -2, "destructible_resolved");
+        lua_pushboolean(state, polygon.dynamic ? 1 : 0);
+        lua_setfield(state, -2, "dynamic");
+        lua_createtable(
+            state,
+            static_cast<int>(polygon.points.size()),
+            0);
+        lua_Integer point_index = 1;
+        for (const auto& point : polygon.points) {
+            lua_createtable(state, 0, 2);
+            lua_pushnumber(state, point.x);
+            lua_setfield(state, -2, "x");
+            lua_pushnumber(state, point.y);
+            lua_setfield(state, -2, "y");
+            lua_rawseti(state, -2, point_index++);
+        }
+        lua_setfield(state, -2, "points");
+        lua_rawseti(state, -2, output_index++);
+    }
+    lua_setfield(state, -2, "polygons");
+
+    lua_createtable(
+        state,
+        static_cast<int>(geometry.participant_radii.size()),
+        0);
+    output_index = 1;
+    for (const auto& participant :
+         geometry.participant_radii) {
+        lua_createtable(state, 0, 3);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(participant.participant_id));
+        lua_setfield(state, -2, "participant_id");
+        lua_pushnumber(state, participant.radius);
+        lua_setfield(state, -2, "radius");
+        lua_pushboolean(
+            state,
+            participant.radius_resolved ? 1 : 0);
+        lua_setfield(state, -2, "radius_resolved");
+        lua_rawseti(state, -2, output_index++);
+    }
+    lua_setfield(state, -2, "participant_radii");
+}
+
+int LuaNavGetCollisionGeometry(lua_State* state) {
+    if ((!lua_isinteger(state, 1) &&
+         !lua_isnumber(state, 1)) ||
+        lua_tointeger(state, 1) <= 0) {
+        return luaL_error(
+            state,
+            "sd.nav.get_collision_geometry expects a positive participant_id");
+    }
+    const auto participant_id =
+        static_cast<std::uint64_t>(lua_tointeger(state, 1));
+    SDModCollisionGeometryState geometry;
+    std::string error_message;
+    if (!TryGetGameplayCollisionGeometryState(
+            participant_id,
+            &geometry,
+            &error_message)) {
+        lua_pushnil(state);
+        lua_pushlstring(
+            state,
+            error_message.data(),
+            error_message.size());
+        return 2;
+    }
+    PushCollisionGeometry(state, geometry);
+    return 1;
+}
+
 int LuaNavTestSegment(lua_State* state) {
     const auto from_x = CheckFiniteFloat(state, 1, "from_x");
     const auto from_y = CheckFiniteFloat(state, 2, "from_y");
@@ -216,8 +439,12 @@ void RegisterLuaRngBindings(lua_State* state) {
 }
 
 void RegisterLuaNavBindings(lua_State* state) {
-    lua_createtable(state, 0, 2);
+    lua_createtable(state, 0, 3);
     RegisterFunction(state, &LuaNavGetGrid, "get_grid");
+    RegisterFunction(
+        state,
+        &LuaNavGetCollisionGeometry,
+        "get_collision_geometry");
     RegisterFunction(state, &LuaNavTestSegment, "test_segment");
     lua_setfield(state, -2, "nav");
 }

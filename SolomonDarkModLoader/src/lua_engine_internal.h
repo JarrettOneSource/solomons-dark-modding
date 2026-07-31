@@ -90,6 +90,7 @@ struct LuaItemDefinition {
     std::int32_t native_subtype = -1;
     LuaConsumableVfxKind consume_vfx_kind = LuaConsumableVfxKind::None;
     std::array<float, 4> consume_vfx_color = {0.25f, 1.0f, 0.35f, 1.0f};
+    LuaConsumablePolicyEffects policy_effects;
     int on_consume_reference = -2;
     bool consumable = false;
 };

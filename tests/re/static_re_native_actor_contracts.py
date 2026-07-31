@@ -928,10 +928,12 @@ def test_openable_obstacle_path_policy_uses_native_collision_classes() -> str:
         "CaptureGameplayPathSegmentObstaclePolicy",
         "kGameplayPathOpenableSegmentBuilderVtableSlotOffset",
         "kGameplayPathOpenableSegmentRecordOffset",
-        "collision_builder_address != openable_builder_address",
+        "collision_builder_address ==",
+        "obstacle.openable",
         "TryReadGameplayPathSegmentObstacle",
         "snapshot->openable_segment_obstacles.push_back",
-        "(mask & GameplayPathPushableCircleObstacleMask()) != 0",
+        "(mask &",
+        "GameplayPathPushableCircleObstacleMask()) == 0",
         "snapshot->static_circle_obstacles.push_back",
     ):
         if token not in grid_text:

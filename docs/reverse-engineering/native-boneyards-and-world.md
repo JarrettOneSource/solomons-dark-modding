@@ -473,6 +473,35 @@ ticks. Gate is therefore dynamic collidable scenery, not a two-frame prop.
 Renderer `0x005ECE40` composes DeadHawg records 7 and 8 around the moving
 segment.
 
+### Exact collision-geometry RAM ABI
+
+The world-owned movement controller is at world `+0x378`. Its address-free
+static geometry comes from three native representations rather than the
+quantized path grid:
+
+| Primitive | Controller/object layout | Native evidence |
+| --- | --- | --- |
+| circles | controller count/list `+0xA0/+0xAC`; entry type `+0x08`, mask `+0x14`, center `+0x18/+0x1C`, radius `+0x30` | placement tests `0x00523C90` and `0x005238C0` consume this controller state |
+| shapes | controller count/list `+0x28/+0x34`; shape points/cache `+0x00/+0x04`, bounds `+0x08/+0x0C/+0x10/+0x14`, point count `+0x38`; points are packed float pairs | the controller's native shape vector is consulted by the same placement path |
+| scenery segments | world scenery list `+0x87C4`, with class-specific endpoints or a retained collision record | the setup/build functions below pass those endpoints to the native `0x100` segment registrar |
+
+`FenceGrate::collision_setup (0x005E8650)` passes fixed endpoints at
+`+0x140/+0x144` and `+0x148/+0x14C` directly to the registrar and does not
+retain its returned record. `BrokenFenceGrate::collision_setup (0x005ECD30)`
+does the same with `+0x150/+0x154` and `+0x158/+0x15C`. A `Gate` is different:
+vtable slot `+0x64` resolves to moving builder `0x005ED4D0`, and its current
+segment record remains at `+0x1C8`. Consequently fixed grates must be read
+from their working endpoints, while gates must be read from their live
+retained records.
+
+Participant bodies are not static scenery. Their collision radius is actor
+`+0x30`; observation geometry must publish participant radii separately and
+exclude the observing actor from its own obstacle set. Native masks distinguish
+static circles (`0x00000004`), pushable circles (`0x00002000`), and openable
+segments (`0x00000100`). This exact primitive union is sufficient to reproduce
+the bot patch and clearance rays without rebuilding or sampling the native
+grid at observation cadence.
+
 ### Walls and rails
 
 Wall constructor `0x005F88B0` creates type 3013 with multiple point arrays,

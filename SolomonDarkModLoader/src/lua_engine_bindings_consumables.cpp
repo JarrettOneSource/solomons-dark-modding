@@ -15,6 +15,8 @@ namespace {
 
 constexpr std::size_t kLuaMaximumItemDescriptionBytes = 1024;
 
+#include "lua_engine_bindings_consumables/policy_effects.inl"
+
 void ReadConsumableVfx(
     lua_State* state,
     int table_index,
@@ -292,6 +294,8 @@ void PopulateLuaConsumableItemDefinition(
         table_index,
         &consume_vfx_kind,
         &consume_vfx_color);
+    const auto policy_effects =
+        ReadConsumablePolicyEffects(state, table_index);
 
     lua_getfield(state, table_index, "on_consume");
     if (!lua_isfunction(state, -1)) {
@@ -313,6 +317,7 @@ void PopulateLuaConsumableItemDefinition(
     runtime_definition.duration_ms = duration_ms;
     runtime_definition.consume_vfx_kind = consume_vfx_kind;
     runtime_definition.consume_vfx_color = consume_vfx_color;
+    runtime_definition.policy_effects = policy_effects;
 
     LuaConsumableDefinition registered;
     std::string consumable_error;
@@ -337,6 +342,7 @@ void PopulateLuaConsumableItemDefinition(
     definition->native_subtype = registered.native_subtype;
     definition->consume_vfx_kind = consume_vfx_kind;
     definition->consume_vfx_color = consume_vfx_color;
+    definition->policy_effects = policy_effects;
     definition->consumable = true;
     lua_getfield(state, table_index, "on_consume");
     definition->on_consume_reference =

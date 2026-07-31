@@ -76,6 +76,35 @@ Common native services used by these objects are:
 | `0x00642090` | collect actors intersecting a circle for a group-mask query |
 | `0x00642280` | collect actors intersecting a rectangle for a group-mask query |
 
+### World registration and complete hazard enumeration
+
+Projectile/effect actors do not all enter the same world-side collection.
+`0x0063E5B0` appends the actor to the transient list at
+`ActorWorld +0x8B70` and writes the owning world to actor `+0x58`.
+`0x0063F6D0` is a separate gameplay-slot/group registrar. Treating the latter
+as the only registration path loses ordinary transient projectiles.
+
+Concrete creation sites prove both paths:
+
+| Creator | Dispatch | Created actor | Registration |
+| --- | ---: | --- | --- |
+| `Archer` | `0x00477B90`, event `0x11` | `Arrow` `0x7DA` | transient attach `0x0063E5B0` |
+| `DemonSkull` | `0x00498180`, event `0x1A` | `EyeLaser` `0x7FF` | transient attach `0x0063E5B0` |
+| `DireFaculty` | `0x004804D0`, event `0x20`, selector 0 | `RainOfBones` `0x801` | gameplay-slot registration |
+
+An address-free hazard census must therefore union the transient list and
+gameplay buckets, then deduplicate the same actor when a lifecycle path makes
+it visible through both sources.
+
+Of the 46 factory classes in the catalog below, 38 are damaging projectile,
+area, or beam hazards. The eight known non-hazard classes are
+`MagicCircle` `0x7EA`, `Gravestone` `0x7ED`, `Fire_Goodguy` `0x7EE`,
+`PlaneOrb` `0x7EF`, `Leviathan` `0x7F2`, `Golem` `0x7F4`, `Bonus` `0x7F6`,
+and `OffscreenMagic` `0x80F`. The first-party hazard registry classifies the
+other catalog entries by behavior. A hostile actor in the effect type band
+that is not in either pinned set must remain observable as an unknown hazard;
+absence from the known table is not evidence that it is harmless.
+
 Contact is a two-stage ABI, not a direct `target->damage(amount)` call. A spell
 first clears and seeds globals at `0x0081C6E0..0x0081C6F8` through
 `0x006246F0`; fields select damage, flags, source, and optional modifier data.

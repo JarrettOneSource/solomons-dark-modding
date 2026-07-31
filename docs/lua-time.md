@@ -75,7 +75,7 @@ state.
 ## Multiplayer contract
 
 Offline play and the multiplayer host are simulation authorities. Only they may
-call `set_scale` or `step`. Protocol 88 repeats the authority's scale and
+call `set_scale` or `step`. Protocol 89 repeats the authority's scale and
 revision in normal state checkpoints and participant frames, so late joiners
 converge without replaying historical steps.
 

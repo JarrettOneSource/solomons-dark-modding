@@ -384,6 +384,8 @@ struct SDModGameplayNavGridState {
     std::vector<SDModGameplayNavCellState> cells;
 };
 
+#include "mod_loader_collision_geometry_state.inl"
+
 struct SDModReplicatedLootPresentationState {
     bool valid = false;
     std::uint64_t network_drop_id = 0;

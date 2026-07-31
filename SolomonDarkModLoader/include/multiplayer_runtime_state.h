@@ -455,6 +455,10 @@ struct WorldActorSnapshot {
     std::int32_t turn_undead_duration_ticks = 0;
     float turn_undead_flee_heading = 0.0f;
     float turn_undead_activation_scalar = 0.0f;
+    std::int32_t slow_remaining_ticks = 0;
+    std::int32_t frozen_remaining_ticks = 0;
+    std::int32_t poison_remaining_ticks = 0;
+    std::int32_t webbed_remaining_ticks = 0;
     std::array<std::uint8_t, kWorldActorStudentVisualStateBytes> student_visual_state = {};
     std::uint32_t student_book_palette_count = 0;
     std::array<StudentBookPaletteEntryState, kWorldActorStudentBookPaletteMaxEntries>

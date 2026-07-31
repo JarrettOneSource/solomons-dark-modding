@@ -503,6 +503,71 @@ bool PopulateRunEnemyTransientStatusSnapshot(
     return true;
 }
 
+bool PopulateRunEnemyCombatModifierSnapshot(
+    uintptr_t actor_address,
+    WorldActorSnapshotPacketState* snapshot) {
+    if (actor_address == 0 || snapshot == nullptr) {
+        return false;
+    }
+
+    std::vector<SDModNativeModifierState> modifiers;
+    if (!TryListNativeActorModifiers(actor_address, &modifiers)) {
+        return false;
+    }
+
+    snapshot->status_flags |=
+        WorldActorStatusFlagCombatModifiersResolved;
+    for (const auto& modifier : modifiers) {
+        const auto remaining_ticks =
+            (std::clamp)(
+                modifier.duration_ticks,
+                std::int32_t{0},
+                std::int32_t{100000});
+        switch (modifier.type_id) {
+        case 0x1B69: // ColdSlowModifier.
+        case 0x1B70: // CircleSlowModifier.
+            snapshot->slow_remaining_ticks =
+                (std::max)(
+                    snapshot->slow_remaining_ticks,
+                    remaining_ticks);
+            if (remaining_ticks > 0) {
+                snapshot->status_flags |= WorldActorStatusFlagSlowed;
+            }
+            break;
+        case 0x1B6F: // RingIceModifier.
+            snapshot->frozen_remaining_ticks =
+                (std::max)(
+                    snapshot->frozen_remaining_ticks,
+                    remaining_ticks);
+            if (remaining_ticks > 0) {
+                snapshot->status_flags |= WorldActorStatusFlagFrozen;
+            }
+            break;
+        case 0x1B72: // PoisonModifier.
+            snapshot->poison_remaining_ticks =
+                (std::max)(
+                    snapshot->poison_remaining_ticks,
+                    remaining_ticks);
+            if (remaining_ticks > 0) {
+                snapshot->status_flags |= WorldActorStatusFlagPoisoned;
+            }
+            break;
+        case 0x1B79: // WebbedModifier.
+            snapshot->webbed_remaining_ticks =
+                (std::max)(
+                    snapshot->webbed_remaining_ticks,
+                    remaining_ticks);
+            if (remaining_ticks > 0) {
+                snapshot->status_flags |= WorldActorStatusFlagWebbed;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return true;
+}
+
 void PruneRecentRunEnemyDeathSnapshots(std::uint64_t now_ms) {
     for (auto it = g_local_transport.recent_run_enemy_deaths_by_network_id.begin();
          it != g_local_transport.recent_run_enemy_deaths_by_network_id.end();) {

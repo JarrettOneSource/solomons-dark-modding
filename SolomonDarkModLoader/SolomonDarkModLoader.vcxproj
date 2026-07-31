@@ -87,6 +87,7 @@
     <ClInclude Include="include\binary_layout.h" />
     <ClInclude Include="include\binary_layout_internal.h" />
     <ClInclude Include="include\bot_runtime.h" />
+    <ClInclude Include="include\bot_runtime_inventory_state.inl" />
     <ClInclude Include="include\bot_spawn_placement.h" />
     <ClInclude Include="include\bot_stuck_progress.h" />
     <ClInclude Include="include\d3d9_end_scene_hook.h" />
@@ -118,6 +119,7 @@
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
     <ClInclude Include="include\mod_loader_public_api.inl" />
     <ClInclude Include="include\mod_loader_gameplay_api.inl" />
+    <ClInclude Include="include\mod_loader_collision_geometry_state.inl" />
     <ClInclude Include="include\fresh_save_tutorial_bypass.h" />
     <ClInclude Include="include\headless_simulation.h" />
     <ClInclude Include="include\launch_audio_disable.h" />
@@ -175,6 +177,7 @@
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
+    <ClInclude Include="src\gameplay_seams\address_storage_pathfinding.inl" />
     <ClInclude Include="src\gameplay_seams\hit_feedback_storage.inl" />
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl" />
     <ClInclude Include="src\gameplay_seams\public_api.inl" />
@@ -271,6 +274,8 @@
     <ClInclude Include="src\bot_runtime\helpers\controller_motion.inl" />
     <ClInclude Include="src\bot_runtime\helpers\defaults_and_lookup.inl" />
     <ClInclude Include="src\bot_runtime\helpers\dispatch_queues.inl" />
+    <ClInclude Include="src\bot_runtime\helpers\inventory_catalog.inl" />
+    <ClInclude Include="src\bot_runtime\helpers\inventory_details.inl" />
     <ClInclude Include="src\bot_runtime\helpers\loadout_details.inl" />
     <ClInclude Include="src\bot_runtime\helpers\pending_scheduling.inl" />
     <ClInclude Include="src\bot_runtime\helpers\request_validation.inl" />
@@ -280,6 +285,8 @@
     <ClInclude Include="src\bot_runtime\helpers\state_mutation.inl" />
     <ClInclude Include="src\bot_runtime\public_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\casting_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\consumable_use_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\inventory_details_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\lifecycle_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\loadout_details_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\movement_api.inl" />
@@ -442,6 +449,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_hub.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_inventory.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_participant_consumables.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_authoritative_local_player_death.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_death_presentation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_respawn.inl" />
@@ -462,6 +470,9 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl" />
     <ClInclude Include="src\mod_loader_gameplay\inventory_snapshot_tree.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_state_getters.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_transient_actors.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_damage_source.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_collision_geometry.inl" />
     <ClInclude Include="src\mod_loader_gameplay\native_inventory_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\test_blank_boneyard_reconciliation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\replicated_loot_reconciliation.inl" />
@@ -560,6 +571,8 @@
     <ClInclude Include="src\multiplayer_local_transport\run_exit_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\skill_config_and_packet_helpers.inl" />
     <ClInclude Include="src\multiplayer_local_transport\spell_effect_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\hazard_snapshot_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\hazard_snapshot_registry.inl" />
     <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_cast_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_outgoing_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\synthetic_participant_state_sync.inl" />
@@ -573,6 +586,9 @@
     <ClInclude Include="src\multiplayer_steam_session\public_lifecycle.inl" />
     <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl" />
     <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl" />
+    <ClInclude Include="src\lua_engine_bindings_bots\inventory_bindings.inl" />
+    <ClInclude Include="src\lua_engine_bindings_consumables\policy_effects.inl" />
+    <ClInclude Include="src\lua_engine_bindings_items\policy_effects_push.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
     <ClInclude Include="src\mod_loader\startup_status_snapshot.inl" />

@@ -1133,10 +1133,11 @@ bool TryBuildSceneActorState(
     return true;
 }
 
-void AppendTransientRewardActors(
+void AppendTransientSceneActors(
     const SceneContextSnapshot& scene_context,
     std::unordered_set<uintptr_t>* seen,
-    std::vector<SDModSceneActorState>* actors) {
+    std::vector<SDModSceneActorState>* actors,
+    bool rewards_only) {
     if (seen == nullptr ||
         actors == nullptr ||
         scene_context.world_address == 0 ||
@@ -1172,11 +1173,23 @@ void AppendTransientRewardActors(
         if (!TryBuildSceneActorState(actor_address, scene_context, true, false, -1, &actor_state)) {
             continue;
         }
-        if (actor_state.object_type_id == 0x07DB ||
+        if (!rewards_only ||
+            actor_state.object_type_id == 0x07DB ||
             actor_state.object_type_id == 0x07F6) {
             actors->push_back(actor_state);
         }
     }
+}
+
+void AppendTransientRewardActors(
+    const SceneContextSnapshot& scene_context,
+    std::unordered_set<uintptr_t>* seen,
+    std::vector<SDModSceneActorState>* actors) {
+    AppendTransientSceneActors(
+        scene_context,
+        seen,
+        actors,
+        true);
 }
 
 bool TryListSceneActorsForContext(
@@ -1209,7 +1222,10 @@ bool TryListSceneActorsForContext(
         }
     }
 
-    AppendTransientRewardActors(scene_context, &seen, actors);
+    AppendTransientRewardActors(
+        scene_context,
+        &seen,
+        actors);
 
     if (include_tracked_enemies) {
         std::vector<SDModTrackedEnemyState> tracked_enemies;

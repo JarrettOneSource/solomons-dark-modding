@@ -80,7 +80,7 @@ def test_local_udp_ingress_and_wire_framing_are_bounded() -> str:
         "participant_hit_feedback_sync.inl"
     )
 
-    assert "constexpr std::uint16_t kProtocolVersion = 88;" in protocol
+    assert "constexpr std::uint16_t kProtocolVersion = 89;" in protocol
     for token in (
         "kLocalUdpMaximumDatagramBytes = 1200",
         "kLocalUdpMaximumLogicalPacketBytes = 8192",
@@ -446,7 +446,7 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
     workflow = _read(".github/workflows/lua-authoring-contracts.yml")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 88;",
+        "constexpr std::uint16_t kProtocolVersion = 89;",
         "ParticipantFrame = 20",
         "struct ParticipantFramePacket",
         "static_assert(sizeof(ParticipantFramePacket) == 374",
@@ -464,8 +464,8 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "kWorldMotionSnapshotActorsPerFragment = 10",
         "struct WorldActorMotionPacketState",
         "struct WorldMotionSnapshotPacket",
-        "static_assert(sizeof(WorldActorMotionPacketState) == 108",
-        "static_assert(sizeof(WorldMotionSnapshotPacket) == 1128",
+        "static_assert(sizeof(WorldActorMotionPacketState) == 124",
+        "static_assert(sizeof(WorldMotionSnapshotPacket) == 1288",
     ):
         assert token in protocol, f"run-world motion protocol lacks: {token}"
 

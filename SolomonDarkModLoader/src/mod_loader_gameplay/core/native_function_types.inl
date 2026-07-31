@@ -19,6 +19,8 @@ using WebbedModifierTickFn = void(__thiscall*)(void* self);
 using DamageContextResetFn = void(__thiscall*)(void* self);
 using StaffEffectResolverFn = void(__thiscall*)(void* self, std::uint32_t variant);
 using NativeSpellEffectCtorFn = uintptr_t(__thiscall*)(void* self);
+using PlayerActorApplyHealthDeltaFn =
+    std::uint8_t(__thiscall*)(void* self, float delta);
 using PlayerActorApplyManaDeltaFn = std::uint8_t(__thiscall*)(void* self, float delta, std::uint8_t allow_prompt);
 using PlayerActorDtorFn = void(__thiscall*)(void* self, char free_flag);
 using PuppetManagerDeletePuppetFn = void(__thiscall*)(void* self, void* actor);

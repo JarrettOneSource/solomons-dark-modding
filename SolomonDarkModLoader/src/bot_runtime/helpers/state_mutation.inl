@@ -57,6 +57,8 @@ void ResetPendingState() {
     g_bot_mana_reserves.clear();
     g_loadout_details_cache.clear();
     g_active_bot_weld_builds.clear();
+    g_inventory_details_cache.clear();
+    g_next_consumable_use_id = 1;
     g_next_cast_sequence = 1;
     g_next_entity_sync_generation = 1;
     g_next_movement_intent_revision = 1;

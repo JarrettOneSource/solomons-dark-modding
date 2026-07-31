@@ -38,6 +38,41 @@ struct LootSnapshotRuntimeInfo {
     std::vector<LootDropSnapshot> drops;
 };
 
+struct HazardSnapshot {
+    std::uint64_t hazard_id = 0;
+    std::uint32_t native_type_id = 0;
+    bool active = false;
+    bool hostile = false;
+    bool type_known = false;
+    HazardKind kind = HazardKind::Unknown;
+    std::uint64_t source_participant_id = 0;
+    std::uint64_t source_network_actor_id = 0;
+    std::uint64_t target_participant_id = 0;
+    std::uint64_t target_network_actor_id = 0;
+    float position_x = 0.0f;
+    float position_y = 0.0f;
+    float radius = 0.0f;
+    float heading = 0.0f;
+    bool motion_resolved = false;
+    float motion_x = 0.0f;
+    float motion_y = 0.0f;
+    bool lifetime_resolved = false;
+    std::int32_t remaining_ticks = 0;
+    bool homing = false;
+};
+
+struct HazardSnapshotRuntimeInfo {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t received_ms = 0;
+    std::uint32_t sequence = 0;
+    std::uint32_t scene_epoch = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t hazard_total_count = 0;
+    bool truncated = false;
+    std::vector<HazardSnapshot> hazards;
+};
+
 struct SpellEffectSnapshot {
     std::uint32_t effect_serial = 0;
     std::uint32_t cast_sequence = 0;

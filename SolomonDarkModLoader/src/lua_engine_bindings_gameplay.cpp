@@ -148,7 +148,7 @@ void PushSceneActorState(lua_State* state, const SDModSceneActorState& actor) {
 }
 
 void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSnapshot& actor) {
-    lua_createtable(state, 0, 69);
+    lua_createtable(state, 0, 91);
     lua_pushinteger(state, static_cast<lua_Integer>(actor.network_actor_id));
     lua_setfield(state, -2, "network_actor_id");
     lua_pushinteger(state, static_cast<lua_Integer>(actor.native_type_id));
@@ -370,6 +370,96 @@ void PushReplicatedWorldActor(lua_State* state, const multiplayer::WorldActorSna
     lua_setfield(state, -2, "hp");
     lua_pushnumber(state, static_cast<lua_Number>(actor.max_hp));
     lua_setfield(state, -2, "max_hp");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagCombatModifiersResolved) != 0);
+    lua_setfield(state, -2, "combat_status_resolved");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagSlowed) != 0);
+    lua_setfield(state, -2, "slowed");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.slow_remaining_ticks));
+    lua_setfield(state, -2, "slow_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.slow_remaining_ticks /
+            multiplayer::kWorldActorStatusTicksPerSecond));
+    lua_setfield(state, -2, "slow_remaining_seconds");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagFrozen) != 0);
+    lua_setfield(state, -2, "frozen");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.frozen_remaining_ticks));
+    lua_setfield(state, -2, "frozen_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.frozen_remaining_ticks /
+            multiplayer::kWorldActorStatusTicksPerSecond));
+    lua_setfield(state, -2, "frozen_remaining_seconds");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagPoisoned) != 0);
+    lua_setfield(state, -2, "poisoned");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.poison_remaining_ticks));
+    lua_setfield(state, -2, "poison_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.poison_remaining_ticks /
+            multiplayer::kWorldActorStatusTicksPerSecond));
+    lua_setfield(state, -2, "poison_remaining_seconds");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagWebbed) != 0);
+    lua_setfield(state, -2, "webbed");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.webbed_remaining_ticks));
+    lua_setfield(state, -2, "webbed_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.webbed_remaining_ticks /
+            multiplayer::kWorldActorStatusTicksPerSecond));
+    lua_setfield(state, -2, "webbed_remaining_seconds");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagTurnUndeadStateValid) != 0);
+    lua_setfield(state, -2, "turn_undead_resolved");
+    lua_pushboolean(
+        state,
+        (actor.status_flags &
+         multiplayer::WorldActorStatusFlagTurnUndeadActive) != 0);
+    lua_setfield(state, -2, "turn_undead");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            actor.turn_undead_duration_ticks));
+    lua_setfield(state, -2, "turn_undead_remaining_ticks");
+    lua_pushnumber(
+        state,
+        static_cast<lua_Number>(
+            actor.turn_undead_duration_ticks /
+            multiplayer::kWorldActorStatusTicksPerSecond));
+    lua_setfield(state, -2, "turn_undead_remaining_seconds");
     PushPositionTable(state, actor.position_x, actor.position_y);
     lua_setfield(state, -2, "position");
 }
@@ -1671,6 +1761,213 @@ int LuaWorldGetReplicatedLoot(lua_State* state) {
     return 1;
 }
 
+const char* LuaHazardKindLabel(
+    multiplayer::HazardKind kind) {
+    switch (kind) {
+    case multiplayer::HazardKind::Projectile:
+        return "projectile";
+    case multiplayer::HazardKind::Area:
+        return "area";
+    case multiplayer::HazardKind::Beam:
+        return "beam";
+    default:
+        return "unknown";
+    }
+}
+
+int LuaWorldGetReplicatedHazards(lua_State* state) {
+    const auto runtime =
+        multiplayer::SnapshotRuntimeState();
+    const auto& snapshot =
+        runtime.hazard_snapshot;
+    if (!snapshot.valid) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 10);
+    lua_pushboolean(state, 1);
+    lua_setfield(state, -2, "valid");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.authority_participant_id));
+    lua_setfield(
+        state,
+        -2,
+        "authority_participant_id");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.received_ms));
+    lua_setfield(state, -2, "received_ms");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.sequence));
+    lua_setfield(state, -2, "sequence");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.scene_epoch));
+    lua_setfield(state, -2, "scene_epoch");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.run_nonce));
+    lua_setfield(state, -2, "run_nonce");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.hazards.size()));
+    lua_setfield(state, -2, "hazard_count");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            snapshot.hazard_total_count));
+    lua_setfield(
+        state,
+        -2,
+        "hazard_total_count");
+    lua_pushboolean(
+        state,
+        snapshot.truncated ? 1 : 0);
+    lua_setfield(state, -2, "truncated");
+
+    lua_createtable(
+        state,
+        static_cast<int>(
+            snapshot.hazards.size()),
+        0);
+    int lua_index = 1;
+    for (const auto& hazard :
+         snapshot.hazards) {
+        lua_createtable(state, 0, 24);
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard.hazard_id));
+        lua_setfield(state, -2, "hazard_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard.native_type_id));
+        lua_setfield(
+            state,
+            -2,
+            "native_type_id");
+        lua_pushboolean(
+            state,
+            hazard.active ? 1 : 0);
+        lua_setfield(state, -2, "active");
+        lua_pushboolean(
+            state,
+            hazard.hostile ? 1 : 0);
+        lua_setfield(state, -2, "hostile");
+        lua_pushboolean(
+            state,
+            hazard.type_known ? 1 : 0);
+        lua_setfield(
+            state,
+            -2,
+            "type_known");
+        lua_pushstring(
+            state,
+            LuaHazardKindLabel(hazard.kind));
+        lua_setfield(state, -2, "kind");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard
+                    .source_participant_id));
+        lua_setfield(
+            state,
+            -2,
+            "source_participant_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard
+                    .source_network_actor_id));
+        lua_setfield(
+            state,
+            -2,
+            "source_network_actor_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard
+                    .target_participant_id));
+        lua_setfield(
+            state,
+            -2,
+            "target_participant_id");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard
+                    .target_network_actor_id));
+        lua_setfield(
+            state,
+            -2,
+            "target_network_actor_id");
+        lua_pushnumber(state, hazard.position_x);
+        lua_setfield(state, -2, "x");
+        lua_pushnumber(state, hazard.position_y);
+        lua_setfield(state, -2, "y");
+        lua_pushnumber(state, hazard.radius);
+        lua_setfield(state, -2, "radius");
+        lua_pushnumber(state, hazard.heading);
+        lua_setfield(state, -2, "heading");
+        lua_pushboolean(
+            state,
+            hazard.motion_resolved ? 1 : 0);
+        lua_setfield(
+            state,
+            -2,
+            "motion_resolved");
+        lua_pushnumber(state, hazard.motion_x);
+        lua_setfield(state, -2, "motion_x");
+        lua_pushnumber(state, hazard.motion_y);
+        lua_setfield(state, -2, "motion_y");
+        lua_pushboolean(
+            state,
+            hazard.lifetime_resolved ? 1 : 0);
+        lua_setfield(
+            state,
+            -2,
+            "lifetime_resolved");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                hazard.remaining_ticks));
+        lua_setfield(
+            state,
+            -2,
+            "remaining_ticks");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(
+                hazard.remaining_ticks) /
+                100.0);
+        lua_setfield(
+            state,
+            -2,
+            "remaining_seconds");
+        lua_pushboolean(
+            state,
+            hazard.homing ? 1 : 0);
+        lua_setfield(state, -2, "homing");
+        lua_rawseti(
+            state,
+            -2,
+            static_cast<lua_Integer>(
+                lua_index++));
+    }
+    lua_setfield(state, -2, "hazards");
+    return 1;
+}
+
 int LuaWorldGetReplicatedSpellEffects(lua_State* state) {
     const auto runtime = multiplayer::SnapshotRuntimeState();
     lua_createtable(state, 0, 3);
@@ -2246,6 +2543,7 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaWorldGetReplicatedActors, "get_replicated_actors");
     RegisterFunction(state, &LuaWorldGetRunEnemyByNetworkId, "get_run_enemy_by_network_id");
     RegisterFunction(state, &LuaWorldGetReplicatedLoot, "get_replicated_loot");
+    RegisterFunction(state, &LuaWorldGetReplicatedHazards, "get_replicated_hazards");
     RegisterFunction(state, &LuaWorldGetReplicatedSpellEffects, "get_replicated_spell_effects");
     RegisterFunction(state, &LuaWorldGetReplicatedAirChains, "get_replicated_air_chains");
     RegisterFunction(state, &LuaWorldRequestLootPickup, "request_loot_pickup");

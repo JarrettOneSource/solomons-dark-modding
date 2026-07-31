@@ -93,6 +93,11 @@ bool QueueLocalLuaConsumableUse(
     std::uint64_t content_id,
     std::uint64_t* use_id,
     std::string* error_message);
+bool PublishAuthoritativeLuaConsumableUse(
+    std::uint64_t participant_id,
+    std::uint64_t content_id,
+    std::uint64_t use_id,
+    std::string* error_message);
 bool QueueOwnerRoutedLuaRegisteredSpellCast(
     std::uint64_t content_id,
     std::uint64_t requested_owner_participant_id,

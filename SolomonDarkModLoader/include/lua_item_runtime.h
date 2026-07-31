@@ -20,6 +20,18 @@ enum class LuaConsumableVfxKind : std::uint8_t {
     SpellGlow = 1,
 };
 
+struct LuaConsumablePolicyEffects {
+    bool declared = false;
+    bool synthetic_safe = false;
+    float restores_hp_fraction = 0.0f;
+    float restores_mana_fraction = 0.0f;
+    float damage_multiplier = 1.0f;
+    bool cures_poison = false;
+    float poison_immunity_duration_seconds = 0.0f;
+    bool concentrates_all = false;
+    float effect_duration_seconds = 0.0f;
+};
+
 struct LuaConsumableDefinition {
     std::uint64_t content_id = 0;
     std::string mod_id;
@@ -32,6 +44,7 @@ struct LuaConsumableDefinition {
     std::int32_t native_subtype = -1;
     LuaConsumableVfxKind consume_vfx_kind = LuaConsumableVfxKind::None;
     std::array<float, 4> consume_vfx_color = {0.25f, 1.0f, 0.35f, 1.0f};
+    LuaConsumablePolicyEffects policy_effects;
 };
 
 struct LuaLootPoolEntry {

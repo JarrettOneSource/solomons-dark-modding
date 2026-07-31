@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace sdmod::detail {
 namespace {
@@ -611,10 +612,12 @@ int LuaBotsGetPrimaryAttackWindow(lua_State* state) {
     return 1;
 }
 
+#include "lua_engine_bindings_bots/inventory_bindings.inl"
+
 }  // namespace
 
 void RegisterLuaBotBindings(lua_State* state) {
-    lua_createtable(state, 0, 22);
+    lua_createtable(state, 0, 24);
     RegisterFunction(state, &LuaBotsSpawn, "spawn");
     RegisterFunction(state, &LuaBotsList, "list");
     RegisterFunction(state, &LuaBotsCreate, "create");
@@ -637,6 +640,8 @@ void RegisterLuaBotBindings(lua_State* state) {
     RegisterFunction(state, &LuaBotsResolvePrimaryEntry, "resolve_primary_entry");
     RegisterFunction(state, &LuaBotsGetLoadoutDetails, "get_loadout_details");
     RegisterFunction(state, &LuaBotsGetPrimaryAttackWindow, "get_primary_attack_window");
+    RegisterFunction(state, &LuaBotsGetInventoryDetails, "get_inventory_details");
+    RegisterFunction(state, &LuaBotsUseConsumable, "use_consumable");
     lua_setfield(state, -2, "bots");
 }
 
