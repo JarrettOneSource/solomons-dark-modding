@@ -602,7 +602,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     ):
         assert token in run_lifecycle_api
     for token in (
-        "queued.allow_direct_arena_spawn",
+        "return request.allow_direct_arena_spawn ||",
         "manual_enemy_spawner_test_mode.load",
         "multiplayer::IsLuaModSimulationAuthority()",
         "direct arena spawn requires simulation authority.",

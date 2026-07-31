@@ -376,7 +376,6 @@ class HarnessConfig:
     local_staging_root: Path | None
     proton_archive: Path | None
     directory_url: str
-    client_directory_url: str | None
     privacy: Literal["friends", "public"]
     expected_source_sha: str
     host: PeerConfig
@@ -440,21 +439,6 @@ class HarnessConfig:
             raise ConfigError(
                 "directoryUrl must use HTTPS or an explicit loopback HTTP URL"
             )
-        client_directory_url = None
-        if row.get("clientDirectoryUrl") is not None:
-            client_directory_url = _require_string(
-                row.get("clientDirectoryUrl"),
-                "clientDirectoryUrl",
-            ).rstrip("/")
-            if not (
-                client_directory_url.startswith("https://")
-                or client_directory_url.startswith("http://127.0.0.1")
-                or client_directory_url.startswith("http://localhost")
-            ):
-                raise ConfigError(
-                    "clientDirectoryUrl must use HTTPS or an explicit "
-                    "loopback HTTP URL"
-                )
         solomon_interactor = _require_string(
             row.get("solomonInteractor", "host"),
             "solomonInteractor",
@@ -498,7 +482,6 @@ class HarnessConfig:
                 base,
             ),
             directory_url=directory_url.rstrip("/"),
-            client_directory_url=client_directory_url,
             privacy=privacy,
             expected_source_sha=_require_string(
                 row.get("expectedSourceSha"),
@@ -916,7 +899,6 @@ class HarnessConfig:
                 else ""
             ),
             "directoryUrl": self.directory_url,
-            "clientDirectoryUrl": self.client_directory_url or "",
             "privacy": self.privacy,
             "expectedSourceSha": self.expected_source_sha,
             "solomonInteractor": self.solomon_interactor,

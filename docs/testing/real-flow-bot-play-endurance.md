@@ -15,12 +15,12 @@ and defaults to `skirmisher`. `enduranceMaxSeconds` is bounded from 60
 through 5,400 seconds; reaching the cap ends the owned staged processes
 cleanly, while a mutually accepted native Game Over ends the run naturally.
 
-For a workstation that cannot reach the directory service, set
-`clientDirectoryUrl` to an explicit loopback URL so only the client-side
-production offline-fallback path fails locally instead of contacting the
-filtered website. The HomePC host retains `directoryUrl`. Join by Steam lobby
-ID and keep the exact host mod set pre-staged; unpublished mods are never
-downloaded.
+Both peers use the production `directoryUrl`. Preflight must verify that the
+workstation lobby and mod-update endpoints return application JSON before the
+launcher starts; an HTTP success carrying a filter page is not sufficient.
+The launcher performs its normal website update, announce, and join-manifest
+flow. Keep unpublished mods in the exact hash-checked prestage so no publication
+or account change is required.
 `reuseWs20Prestage` may be set only for the workstation20 topology after the
 stage has been hash-checked and contains `prestage/launcher` plus
 `prestage/game`. The run still deletes that exact owned stage during cleanup.

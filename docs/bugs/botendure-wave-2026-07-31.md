@@ -375,6 +375,31 @@ budget, and local/game Lua errors remain immediately fatal. Setup,
 materialization, and non-endurance probes retain their existing fail-closed
 behavior.
 
+## Environmental resolution: workstation website block removed
+
+The owner confirmed that workstation20 had been blocking
+`solomondarker.com` throughout the failed runs and removed the block. The
+recorded before probe returned HTTP 200 with a DNSFilter `Website Filtered`
+HTML page. The after probe returns HTTP 200 application JSON from both
+`/api/lobbies` and the launcher's `/api/mods/updates` POST, with the empty mod
+request producing an empty update list.
+
+This validates the original environmental classification and may also explain
+the r17 SSH/Lua-bridge outage if the workstation policy affected other network
+paths. The client-only loopback directory override has been removed completely.
+Both peers now use the production directory URL and must complete the normal
+website update, lobby announce, and join-manifest path. Lua Bots 1.2.0 remains
+in the exact prestage because it is deliberately unpublished.
+
+The r17 authoritative ledger was also reconciled before retrying. All 575
+positive rows map to the two replicated fighter identities: the host dealt 30
+damage across 30 enemy edges, while the client dealt none. R17 therefore fails
+the per-fighter applied-damage requirement independently of its later probe
+timeout. The endurance tracker had compared these rows with transport IDs;
+damage rows carry replicated participant IDs. Endurance attribution now derives
+each fighter's replicated identity from the other peer's sole remote participant
+view, while retaining transport IDs separately for transport evidence.
+
 ## Rerun requirement
 
 The product failure fixes, remote staging fix, and bounded endurance probe

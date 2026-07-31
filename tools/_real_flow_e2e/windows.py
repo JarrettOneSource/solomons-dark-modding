@@ -238,12 +238,7 @@ def prepare_windows_peer(
     settings_path = settings_root / "settings.json"
     settings = {
         "gameDirectory": windows_path(harness.game_directory),
-        "directoryUrl": (
-            harness.client_directory_url
-            if peer.role == "client"
-            and harness.client_directory_url is not None
-            else harness.directory_url
-        ),
+        "directoryUrl": harness.directory_url,
         "activeSaveSlot": 0,
         "showStockTutorial": False,
         "disableAudio": True,

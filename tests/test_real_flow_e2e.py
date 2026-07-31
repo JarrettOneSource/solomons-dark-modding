@@ -46,6 +46,7 @@ from tools.verify_real_flow_e2e import (
     _assert_clean_release,
     _drain_authority_damage_log,
     _native_enemy_render_assertion,
+    _replicated_damage_participant_ids,
     _try_endurance_probe_bundle,
     validate_living_wave_boundary,
     validate_stock_water_cast,
@@ -629,7 +630,6 @@ class RealFlowE2ETests(unittest.TestCase):
                     "enduranceMode": True,
                     "enduranceMaxSeconds": 5400,
                     "reuseWs20Prestage": True,
-                    "clientDirectoryUrl": "http://127.0.0.1:1",
                     "localStagingRoot": str(
                         root / "bply-botendure-stage"
                     ),
@@ -682,10 +682,6 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertEqual(config.endurance_max_seconds, 5400)
             self.assertTrue(config.reuse_ws20_prestage)
             self.assertEqual(
-                config.client_directory_url,
-                "http://127.0.0.1:1",
-            )
-            self.assertEqual(
                 config.directory_url,
                 "https://solomondarker.com",
             )
@@ -693,22 +689,18 @@ class RealFlowE2ETests(unittest.TestCase):
                 "tools._real_flow_e2e.windows.windows_path",
                 side_effect=lambda path: rf"C:\stage\{path.name}",
             ):
-                host_peer = prepare_windows_peer(config, config.host)
-                client_peer = prepare_windows_peer(config, config.client)
-            host_settings = json.loads(
-                (host_peer.settings_root / "settings.json").read_text()
-            )
-            client_settings = json.loads(
-                (client_peer.settings_root / "settings.json").read_text()
-            )
-            self.assertEqual(
-                host_settings["directoryUrl"],
-                "https://solomondarker.com",
-            )
-            self.assertEqual(
-                client_settings["directoryUrl"],
-                "http://127.0.0.1:1",
-            )
+                peers = (
+                    prepare_windows_peer(config, config.host),
+                    prepare_windows_peer(config, config.client),
+                )
+            for peer in peers:
+                settings = json.loads(
+                    (peer.settings_root / "settings.json").read_text()
+                )
+                self.assertEqual(
+                    settings["directoryUrl"],
+                    "https://solomondarker.com",
+                )
             self.assertEqual(
                 config.redacted()["client"]["sshStageRoot"],
                 r"%USERPROFILE%\sd-botendure-stage",
@@ -1827,7 +1819,53 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(participant["life_max"], 2.5)
         self.assertEqual(participant["death_presentation_tick"], 42)
 
-    def test_endurance_stats_count_death_respawn_and_damage_by_transport(
+    def test_replicated_damage_ids_map_each_fighter_from_other_peer_view(
+        self,
+    ) -> None:
+        sample = {
+            "host": {
+                "multiplayer": {
+                    "participants": [
+                        {
+                            "id": 1,
+                            "kind": "LocalHuman",
+                            "owner": True,
+                        },
+                        {
+                            "id": 0x2B00000000000002,
+                            "kind": "RemoteParticipant",
+                            "owner": False,
+                        },
+                    ]
+                }
+            },
+            "clientB": {
+                "multiplayer": {
+                    "participants": [
+                        {
+                            "id": 1,
+                            "kind": "LocalHuman",
+                            "owner": True,
+                        },
+                        {
+                            "id": 0x2B00000000000001,
+                            "kind": "RemoteParticipant",
+                            "owner": False,
+                        },
+                    ]
+                }
+            },
+        }
+
+        self.assertEqual(
+            _replicated_damage_participant_ids(sample),
+            {
+                "host": 0x2B00000000000001,
+                "clientB": 0x2B00000000000002,
+            },
+        )
+
+    def test_endurance_stats_count_death_respawn_and_damage_by_participant(
         self,
     ) -> None:
         def sample(

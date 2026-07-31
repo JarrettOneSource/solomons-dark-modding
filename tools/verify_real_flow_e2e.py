@@ -1569,6 +1569,37 @@ def _try_endurance_probe_bundle(
     }, outage.recovered(elapsed_seconds=elapsed_seconds)
 
 
+def _replicated_damage_participant_ids(
+    sample: dict[str, Any],
+) -> dict[str, int]:
+    def remote_participant_id(viewer: str) -> int:
+        participants = sample[viewer]["multiplayer"]["participants"]
+        candidates = [
+            int(participant["id"])
+            for participant in participants
+            if participant.get("kind") == "RemoteParticipant"
+            and not bool(participant.get("owner"))
+            and int(participant["id"]) > 0
+        ]
+        if len(candidates) != 1:
+            raise RealFlowFailure(
+                "endurance expected exactly one replicated remote fighter in "
+                f"the {viewer} view, found {len(candidates)}"
+            )
+        return candidates[0]
+
+    participant_ids = {
+        "host": remote_participant_id("clientB"),
+        "clientB": remote_participant_id("host"),
+    }
+    if participant_ids["host"] == participant_ids["clientB"]:
+        raise RealFlowFailure(
+            "endurance resolved the same replicated participant identity for "
+            "both fighters"
+        )
+    return participant_ids
+
+
 def _run_bot_play_endurance(
     config: HarnessConfig,
     host: WindowsPeer,
@@ -1590,7 +1621,7 @@ def _run_bot_play_endurance(
     player_rows_written = 0
 
     initial = sampler.sample_now("endurance-pre-activation")
-    participant_ids = {
+    transport_ids = {
         role: (
             int(initial[role]["multiplayer"]["localSteamId"])
             or peer.participant_id
@@ -1601,13 +1632,14 @@ def _run_bot_play_endurance(
         )
     }
     if (
-        min(participant_ids.values()) <= 0
-        or participant_ids["host"] == participant_ids["clientB"]
+        min(transport_ids.values()) <= 0
+        or transport_ids["host"] == transport_ids["clientB"]
     ):
         raise RealFlowFailure(
             "endurance could not resolve two distinct transport identities: "
-            f"{participant_ids}"
+            f"{transport_ids}"
         )
+    damage_participant_ids = _replicated_damage_participant_ids(initial)
 
     result: dict[str, Any] = {
         "mode": "natural-game-over-or-wall-clock-limit",
@@ -1616,8 +1648,9 @@ def _run_bot_play_endurance(
         "syntheticTeamRoster": [],
         "participantIdentity": {
             role: {
-                "transportId": participant_ids[role],
+                "transportId": transport_ids[role],
                 "configuredId": peer.participant_id,
+                "replicatedParticipantId": damage_participant_ids[role],
             }
             for role, peer in (
                 ("host", config.host),
@@ -1675,7 +1708,7 @@ def _run_bot_play_endurance(
         )
 
     sampler.set_phase("bot-play-endurance")
-    tracker = FighterStatsTracker(participant_ids)
+    tracker = FighterStatsTracker(damage_participant_ids)
     monitor = EnduranceAnomalyMonitor()
     started_monotonic = time.monotonic()
     started_utc_ns = time.time_ns()
