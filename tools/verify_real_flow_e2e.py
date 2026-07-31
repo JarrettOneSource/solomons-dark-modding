@@ -1265,6 +1265,76 @@ def _fighter_damage_present(
     )
 
 
+def _verify_mixed_bot_and_idle_human(
+    sampler: PairSampler,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    host_participant_id: int,
+) -> dict[str, Any]:
+    sampler.set_phase("mixed-host-bot-client-idle-human")
+    started = sampler.sample_now("mixed-mode-start")
+    samples: list[dict[str, Any]] = []
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        sample = sampler.sample_now("mixed-mode-idle-human")
+        host_bot = _bot_probe(host_pipe)
+        client_clean = _bot_probe(client_pipe)
+        if not _bot_is_driving(host_bot, host_participant_id):
+            raise RealFlowFailure(
+                f"host bot stopped during mixed mode: {host_bot}"
+            )
+        _assert_clean_release(client_clean)
+        if (
+            sample["host"]["scene"]["name"] != "testrun"
+            or sample["clientB"]["scene"]["name"] != "testrun"
+            or float(sample["host"]["player"]["hp"]) <= 0.0
+            or float(sample["clientB"]["player"]["hp"]) <= 0.0
+        ):
+            raise RealFlowFailure(
+                "mixed bot/idle-human pair became unhealthy: "
+                f"{sample}"
+            )
+        samples.append(
+            {
+                "utcNanoseconds": sample["utcNanoseconds"],
+                "hostWave": effective_wave_index(sample["host"]),
+                "clientBWave": effective_wave_index(sample["clientB"]),
+                "hostHp": sample["host"]["player"]["hp"],
+                "clientBHp": sample["clientB"]["player"]["hp"],
+                "hostPacketsSent": (
+                    sample["host"]["multiplayer"]["packetsSent"]
+                ),
+                "clientBPacketsReceived": (
+                    sample["clientB"]["multiplayer"]["packetsReceived"]
+                ),
+            }
+        )
+        time.sleep(0.25)
+    final = sampler.sample_now("mixed-mode-complete")
+    host_packet_delta = (
+        final["host"]["multiplayer"]["packetsSent"]
+        - started["host"]["multiplayer"]["packetsSent"]
+    )
+    client_packet_delta = (
+        final["clientB"]["multiplayer"]["packetsReceived"]
+        - started["clientB"]["multiplayer"]["packetsReceived"]
+    )
+    if host_packet_delta <= 0 or client_packet_delta <= 0:
+        raise RealFlowFailure(
+            "mixed mode starved the idle human peer of session traffic: "
+            f"hostDelta={host_packet_delta} clientDelta={client_packet_delta}"
+        )
+    return {
+        "durationSeconds": 5.0,
+        "hostBotDriven": True,
+        "clientBIdleHuman": True,
+        "clientBCleanThroughout": True,
+        "hostPacketsSentDelta": host_packet_delta,
+        "clientBPacketsReceivedDelta": client_packet_delta,
+        "samples": samples,
+    }
+
+
 def _run_bot_play_for_me(
     config: HarnessConfig,
     host: WindowsPeer,
@@ -1300,26 +1370,54 @@ def _run_bot_play_for_me(
         else 0
     )
     authority_log_partial = ""
-    result["activationRequests"] = {
+    activation_requests = {
         "host": _set_bot_play(
             host,
             host_pipe,
             enabled=True,
             roster=BOT_PLAY_TEAM_ROSTER[:2],
         ),
-        "clientB": _set_bot_play(
-            client,
-            client_pipe,
-            enabled=True,
-            roster=BOT_PLAY_TEAM_ROSTER[:2],
-        ),
     }
+    host_takeover = _wait_for_bot_state(
+        host_pipe,
+        _bot_is_driving,
+        timeout=15.0,
+        label="host local-player bot takeover",
+    )
+    initial_client_clean = _wait_for_bot_state(
+        client_pipe,
+        lambda state: (
+            state.get("loaded") is True
+            and state.get("desired") is False
+            and state.get("active") is False
+            and state.get("takeover.active") is False
+            and state.get("takeover.clean") is True
+        ),
+        timeout=15.0,
+        label="initial idle-human client state",
+    )
+    result["initialIdleHumanState"] = _assert_clean_release(
+        initial_client_clean
+    )
+    result["mixedMode"] = _verify_mixed_bot_and_idle_human(
+        sampler,
+        host_pipe,
+        client_pipe,
+        int(host_takeover["participant_id"]),
+    )
+    activation_requests["clientB"] = _set_bot_play(
+        client,
+        client_pipe,
+        enabled=True,
+        roster=BOT_PLAY_TEAM_ROSTER[:2],
+    )
+    result["activationRequests"] = activation_requests
     result["activeTakeovers"] = {
         "host": _wait_for_bot_state(
             host_pipe,
             _bot_is_driving,
             timeout=15.0,
-            label="host local-player bot takeover",
+            label="host takeover after mixed mode",
         ),
         "clientB": _wait_for_bot_state(
             client_pipe,
@@ -1656,75 +1754,6 @@ def _run_bot_play_for_me(
         _bot_probe(client_pipe),
         after_human_input=True,
     )
-
-    sampler.set_phase("mixed-host-bot-client-idle-human")
-    mixed_started = sampler.sample_now("mixed-mode-start")
-    mixed_samples: list[dict[str, Any]] = []
-    mixed_deadline = time.monotonic() + 5.0
-    while time.monotonic() < mixed_deadline:
-        sample = sampler.sample_now("mixed-mode-idle-human")
-        host_bot = _bot_probe(host_pipe)
-        client_clean = _bot_probe(client_pipe)
-        if not _bot_is_driving(
-            host_bot,
-            runtime_participant_ids["host"],
-        ):
-            raise RealFlowFailure(
-                f"host bot stopped during mixed mode: {host_bot}"
-            )
-        _assert_clean_release(
-            client_clean,
-            after_human_input=True,
-        )
-        if (
-            sample["host"]["scene"]["name"] != "testrun"
-            or sample["clientB"]["scene"]["name"] != "testrun"
-            or float(sample["host"]["player"]["hp"]) <= 0.0
-            or float(sample["clientB"]["player"]["hp"]) <= 0.0
-        ):
-            raise RealFlowFailure(
-                "mixed bot/idle-human pair became unhealthy: "
-                f"{sample}"
-            )
-        mixed_samples.append(
-            {
-                "utcNanoseconds": sample["utcNanoseconds"],
-                "hostWave": effective_wave_index(sample["host"]),
-                "clientBWave": effective_wave_index(sample["clientB"]),
-                "hostHp": sample["host"]["player"]["hp"],
-                "clientBHp": sample["clientB"]["player"]["hp"],
-                "hostPacketsSent": (
-                    sample["host"]["multiplayer"]["packetsSent"]
-                ),
-                "clientBPacketsReceived": (
-                    sample["clientB"]["multiplayer"]["packetsReceived"]
-                ),
-            }
-        )
-        time.sleep(0.25)
-    mixed_final = sampler.sample_now("mixed-mode-complete")
-    host_packet_delta = (
-        mixed_final["host"]["multiplayer"]["packetsSent"]
-        - mixed_started["host"]["multiplayer"]["packetsSent"]
-    )
-    client_packet_delta = (
-        mixed_final["clientB"]["multiplayer"]["packetsReceived"]
-        - mixed_started["clientB"]["multiplayer"]["packetsReceived"]
-    )
-    if host_packet_delta <= 0 or client_packet_delta <= 0:
-        raise RealFlowFailure(
-            "mixed mode starved the idle human peer of session traffic: "
-            f"hostDelta={host_packet_delta} clientDelta={client_packet_delta}"
-        )
-    result["mixedMode"] = {
-        "durationSeconds": 5.0,
-        "hostBotDriven": True,
-        "clientBIdleHuman": True,
-        "clientBCleanThroughout": True,
-        "hostPacketsSentDelta": host_packet_delta,
-        "clientBPacketsReceivedDelta": client_packet_delta,
-        "samples": mixed_samples,
-    }
 
     result["hostToggleOffRequest"] = _set_bot_play(
         host,
