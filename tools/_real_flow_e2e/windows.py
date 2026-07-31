@@ -313,7 +313,7 @@ def prepare_windows_peer(
                     "values": {
                         "play_for_me": False,
                         "play_for_me_behavior": "skirmisher",
-                        "roster": BOT_PLAY_TEAM_ROSTER[:2],
+                        "roster": [],
                     },
                 },
                 indent=2,
