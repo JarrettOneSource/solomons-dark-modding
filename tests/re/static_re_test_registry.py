@@ -617,7 +617,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_ml_bot_v3_phase3_lua_contract_is_pinned,
     ),
     (
-        "ML bot v2 Phase 5 rotation and live acceptance are pinned",
+        "ML bot v3 Phase 5 rotation and live acceptance are pinned",
         test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned,
     ),
     (

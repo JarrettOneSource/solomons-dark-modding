@@ -989,6 +989,7 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
     trainer = _read("tools/train_bot_policy.py")
     live = _read("tools/verify_ml_bot_live.py")
     scripted = _read("tools/verify_lua_bot_brain.py")
+    fixture = _read("tests/lua/ml_bot_policy_contract.lua")
     launcher = _read("scripts/Launch-LocalSoloSession.ps1")
     brain = _read("mods/bot-brain/scripts/brain.lua")
     binding = _read(
@@ -1076,6 +1077,12 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         '"trajectory_participant_count"',
         '"trajectory_counts"',
         '"policy_generation_advanced"',
+        '"choice_complete_intervals"',
+        '"choice_update_records"',
+        "--validation-native-choice-event",
+        "session.trigger_validation_choice_event(",
+        '"live-training-report.json"',
+        'f"episode-{iteration:04d}.json"',
         "candidate not in run_seeds",
         "max_participants=composition.participant_count + 1",
     ):
@@ -1091,11 +1098,39 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         assert token in launcher, f"solo layout plumbing lacks {token}"
 
     for token in (
+        'DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"',
         "observation_count",
         "observation_finite",
         "movement_mask_mismatches",
         "target_mask_mismatches",
-        "cast_mask_mismatches",
+        "ability_mask_mismatches",
+        "aim_mask_mismatches",
+        "def _run_geometry_spot_audit(",
+        '"patch_mismatches": 0',
+        '"ray_mismatches": 0',
+        "def _select_procedural_survival_layout(",
+        '"native_miss_walkable": False',
+        "enemy_status_resolved_count",
+        "enemy_telegraph_known_count",
+        "hazard_observation_count",
+        "def _run_hazard_dodge_check(",
+        "policy hazard dodge accepted",
+        "def _run_small_obstacle_clearance_check(",
+        "policy exact-obstacle clearance accepted",
+        "def _run_lead_and_status_check(",
+        "policy lead cast accepted",
+        "policy center-mask cast accepted",
+        "def _apply_one_weld(",
+        'OPTION_DESCRIPTOR_NAMES.index("is_weld")',
+        "session.drain_choice_rollouts(",
+        "def _run_potion_action_checks(",
+        '(0, "Health")',
+        '(1, "Mana")',
+        '(5, "Rejuvenation")',
+        '(2, "Wizard Chug")',
+        '(3, "Antidote")',
+        '(4, "Mind Chug")',
+        "policy potion accepted",
         "actor-ID target persistence after enemy re-sort",
         "primary_welded",
         "pickup observation block population",
@@ -1105,7 +1140,24 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         "policy target selected",
         "policy secondary accepted",
     ):
-        assert token in live, f"Phase-5 live verifier lacks {token}"
+        assert token in live, f"v3 Phase-5 live verifier lacks {token}"
+    for token in (
+        "movement_mask=",
+        "target_mask=",
+        "ability_mask=",
+        "aim_mask=",
+        "selected_log_components=",
+        "movement_entropy=",
+        "target_entropy=",
+        "ability_entropy=",
+        "aim_entropy=",
+        "choice_normalized_entropy=",
+        "tensor_shapes=",
+        "main_trajectory_masks=",
+        "choice_trajectory_shape=",
+        "choice_trajectory_duration=",
+    ):
+        assert token in fixture, f"v3 round-trip fixture lacks {token}"
     offline_solo = live.split(
         "def _verify_offline_solo_ally_zero(", 1
     )[1].split("def verify(", 1)[0]
@@ -1140,6 +1192,9 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         "'respawn_bot'",
         "and wave >= 1",
         'result["primaryPrime"] = _prime_scripted_primary()',
+        "SCRIPTED_BOT_GOD_MODE",
+        "BOT_DEATH_CONFIRMATION_SECONDS",
+        'result["scriptedBotGodMode"]',
     ):
         assert token in scripted, (
             f"scripted-bot regression verifier lacks {token}"
@@ -1182,9 +1237,24 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
     assert "host_synthetic_ingress &&" in pickup_authority
     assert "IsLuaControlledParticipant(*participant)" in pickup_authority
     assert "memory.pickup_request_accepted[pickup_id] ~= true" in brain
+    assert "god_mode=True" in _read(
+        "tools/verify_mod_settings_lifecycle.py"
+    )
+    assert "kind = kind" in _read(
+        "mods/bot-brain/scripts/policy_hazards.lua"
+    )
+    for token in (
+        "hazard_dodge_accepted",
+        "exact_obstacle_clearance_accepted",
+        "lead_cast_accepted",
+        "center_mask_cast_accepted",
+        "policy skill choice accepted mode=",
+        "policy potion accepted slot=",
+    ):
+        assert token in brain, f"v3 behavior evidence lacks {token}"
 
     return (
         "Phase 5 pins disposable seeded episodes, config-driven solo/mixed/"
-        "multi-learned rotation, participant-grouped PPO, strict live v2 "
-        "behavior checks, and semantic host pickup ingress"
+        "multi-learned rotation, participant-grouped main plus SMDP PPO, "
+        "strict live v3 behavior checks, and semantic authority ingress"
     )

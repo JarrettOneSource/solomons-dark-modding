@@ -154,6 +154,7 @@ function Resolver:capture(
             math.max(
               number(hazard.remaining_seconds),
               0.0) or 0.0,
+        kind = kind,
         kind_projectile = kind == "projectile",
         kind_area = kind == "area",
         kind_beam = kind == "beam",

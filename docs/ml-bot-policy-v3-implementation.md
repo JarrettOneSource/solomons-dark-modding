@@ -1669,3 +1669,130 @@ chunked atomic runtime swap, and fixed-input inference parity for every head,
 both values, and the option scorer. Final repository suite counts are recorded
 as 528/528 Python unittests, 306/306 static RE contracts, and 672 checked
 source/header fragments.
+
+## L. Phase V3-5 implementation record
+
+Phase V3-5 closes the learned-live gate without changing the 1,279-value
+layout, 56-value option descriptor, model shape, action set, reward, or checked
+in seed weights. Runtime acceptance uses forced policy parameters only to make
+each behavioral assertion deterministic; every observation, mask, native
+action, and resulting state transition remains the production path.
+
+### Contract fixtures and verifiers
+
+The Lua/Python parity fixture now compares all ordered observation, descriptor,
+and action names; every parameter tensor shape; all four masks; selected-head
+log-probability components and their composite; per-head entropy; main value;
+choice mask, probability, entropy, normalized entropy, log probability, and
+value; both version-3 trajectory shapes; and strict v1/v2 rejection errors.
+The bridge fixture also retains scripted choice rows through transport and
+proves that they cannot enter a learned choice batch.
+
+`verify_ml_bot_live.py` uses disposable worktree-local sessions and checks:
+
+- exactly 1,279 finite values at observation version 3, with exact live
+  movement, target, target-conditioned ability, and family-conditioned aim
+  masks;
+- a collision spot audit over 48 patch cells and 64 ray samples against
+  `sd.nav.test_segment`, with zero mismatches and a walkable observing-bot
+  cell;
+- replicated enemy species, combat-status, and telegraph rows; actor-ID target
+  persistence across a slot re-sort; known hostile hazard population; solo
+  ally count zero and authority/team counts one/two;
+- a learned choice generation, native apply, weld build-1000 promotion, and a
+  trainable choice-event-v3 record with duration/reward count 11; and
+- ranked inventory/potion rows, permanent masks for Wizard Chug, Antidote, and
+  Mind Chug, and exactly one native use/revision/stack transition for Health,
+  Mana, and Rejuvenation.
+
+The scripted verifier samples the same v3 geometry, enemy, hazard, inventory,
+and no-address contracts while retaining its original replicated combat gate.
+Its declared god-mode run now sustains scripted bot vitals on both isolated
+replicas. A two-second death confirmation prevents a single snapshot in which
+`sd.bots.list()` is transiently empty from being mislabeled as a death; a
+persistent disappearance still fails. The settings/profile verifier likewise
+uses god mode because it measures guardian, striker, and skirmisher behavior,
+not survival against a random stock wave.
+
+### Live behavior evidence
+
+The final learned-live report is
+`runtime/v3-phase5/live-33073130.json` (runtime evidence, not committed):
+
+- exact geometry: 407 circles, 10 segments, 18 polygons, 48/48 patch and
+  64/64 ray samples correct. The bot moved away from radius-8 geometry 374,
+  from distance 98.316 to 208.113, even though the v2 cell sample reported the
+  location open: `policy exact-obstacle clearance accepted geometry_id=374
+  slot=2 radius=8.0 clearance=65.3155804356 movement=west`;
+- projectile dodge: known Arrow hazard 2 occupied hazard slot 1 and caused a
+  perpendicular east move with 3.210 units of observed displacement:
+  `policy hazard dodge accepted hazard_id=2 slot=1 movement=east
+  time_to_contact=0.0`;
+- straight-projectile lead: a released stock Skeleton produced normalized
+  target velocity `(-0.355737,-0.035518)` and the Fire projectile selected
+  northwest offset `(-42.426407,-42.426407)`, with positive lead dot 16.600:
+  `policy lead cast accepted target=281474976710658 aim=northwest ...`;
+- homing mask: Ether primary exposed `100000000` and cast only at center:
+  `policy center-mask cast accepted ability=primary
+  target=281474976710657`;
+- learned build: option 52 was selected from a real weld offer and promoted
+  build 1000: `policy skill choice accepted mode=learned generation=3
+  option_id=52`;
+- potion actions: Health, Mana, and Rejuvenation each changed count 1 to 0,
+  advanced inventory revision once, returned use IDs 1/2/3, and converged to
+  the expected native HP/MP values. Their corresponding log lines are
+  `policy potion accepted slot=1 use_id=1`, `slot=1 use_id=2`, and
+  `slot=1 use_id=3`; and
+- the existing v2 checks still passed: target selection, an actor-ID-preserved
+  slot 1 to slot 2 re-sort, a secondary accepted at 593.226 beyond the 431.594
+  primary window, and one gold pickup credited exactly once.
+
+The stock Arrow family does not currently resolve a participant target or
+positive contact time, so this sample reports `targeting_self=false` and
+`time_to_contact=0`. The verifier independently proves a known hostile Arrow,
+its source lane, a clear perpendicular movement action, native retrigger, and
+bot displacement; it does not invent the two unresolved fields.
+
+Fresh scripted-live evidence is also green. The profile lifecycle observed
+guardian Ward engaging human participant 1 at distance 238.323 with 38 moves,
+striker Spark with 26 casts and 32 moves, and a live skirmisher reload. The
+replicated wave verifier reached wave 6 with both peers alive, 23/23 accepted
+casts, 4,346.774 path units, 14 status-resolved/telegraph enemies, and all v3
+semantic seams valid.
+
+### Disposable dual-stream PPO smoke
+
+One three-episode invocation rotates `solo-learned`, `mixed-skirmisher`, and
+`multi-learned-2` on fresh native seeds/observed nonces 366588449, 784326015,
+and 941597147. Every episode records the stock layout hash
+`fe2e01b0ab62f644c3e5bf53f71df3a41968b95c8e22fa44c1d1250ba08cdb5b`,
+composition, participant IDs, trajectory counts, losses, and buffer-drop
+counts in an atomic `episode-NNNN.json`; the complete report is
+`runtime/v3-phase5/ppo-final-33075001/live-training-report.json`.
+
+| Composition | Main rows | Learned participants | Main policy/value loss | Choice intervals | Choice policy/value loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| solo learned | 134 | 1 | 0.117395 / 0.003521 | 1 | -0.184081 / 0.034163 |
+| learned + skirmisher | 129 | 1 | 0.055703 / 0.001111 | 1 | -0.144840 / 0.022177 |
+| two learned | 132 (66 + 66) | 2 | 0.309937 / 0.003250 | 2 | 0.002321 / 0.000976 |
+
+All losses and entropies are finite; both trajectory buffers report zero
+drops. Each episode atomically exported JSON/Lua checkpoints and advanced the
+runtime generation through the chunked hot-reload path. Natural combat in the
+bounded curriculum arena produced no level-up after 2,053 decisions because
+that arena does not award progression. Acceptance therefore uses the explicit
+`--validation-native-choice-event` option: it invokes one debug-only native
+level-up, then leaves learned option scoring, native application, reward
+duration, terminal close, bridge transport, and SMDP PPO untouched. The option
+is off by default and ordinary training never synthesizes progression.
+
+### Final verification and deviations
+
+The exact candidate passes a clean Release build with zero warnings/errors,
+537/537 Python unittests, 306/306 static RE contracts, and 672 checked
+source/header fragments. The only contract-level evidence limitation is the
+unresolved Arrow target and contact-time pair described above. The stock
+boneyard is the only supplied layout, so layout-override plumbing remains
+validated but a multi-layout quality corpus remains non-blocking as
+adjudicated. No v3 layout, descriptor, head, action, reward, or native seam
+changed in this phase.

@@ -22,6 +22,31 @@ local function print_probabilities(label, probabilities)
   print(label .. "=" .. table.concat(values, ","))
 end
 
+local function bits(mask)
+  local values = {}
+  for index, value in ipairs(mask) do
+    values[index] = value and "1" or "0"
+  end
+  return table.concat(values)
+end
+
+local function entropy(probabilities)
+  local result = 0.0
+  for _, probability in ipairs(probabilities) do
+    if probability > 0.0 then
+      result = result - probability * math.log(probability)
+    end
+  end
+  return result
+end
+
+local function tensor_shape(value)
+  if type(value[1]) == "table" then
+    return tostring(#value) .. "x" .. tostring(#value[1])
+  end
+  return tostring(#value)
+end
+
 local spec = load_module("mods/bot-brain/scripts/policy_spec.lua")
 local policy = load_module("mods/bot-brain/scripts/policy.lua")
 local weights = load_module("mods/bot-brain/scripts/policy_weights.lua")
@@ -113,6 +138,10 @@ print("ability_action=" .. tostring(decision.ability_action))
 print("aim_action=" .. tostring(decision.aim_action))
 print(string.format("log_probability=%.17g", decision.log_probability))
 print(string.format("value=%.17g", decision.value))
+print("movement_mask=" .. bits(movement_mask))
+print("target_mask=" .. bits(target_mask))
+print("ability_mask=" .. bits(selected_ability_mask))
+print("aim_mask=" .. bits(selected_aim_mask))
 print_probabilities(
   "movement_probabilities", decision.movement_probabilities)
 print_probabilities(
@@ -120,12 +149,54 @@ print_probabilities(
 print_probabilities(
   "ability_probabilities", decision.ability_probabilities)
 print_probabilities("aim_probabilities", decision.aim_probabilities)
+print(string.format(
+  "movement_entropy=%.17g",
+  entropy(decision.movement_probabilities)))
+print(string.format(
+  "target_entropy=%.17g",
+  entropy(decision.target_probabilities)))
+print(string.format(
+  "ability_entropy=%.17g",
+  entropy(decision.ability_probabilities)))
+print(string.format(
+  "aim_entropy=%.17g",
+  entropy(decision.aim_probabilities)))
+print(string.format(
+  "selected_log_components=%.17g,%.17g,%.17g,%.17g",
+  math.log(decision.movement_probability),
+  math.log(decision.target_probability),
+  math.log(decision.ability_probability),
+  math.log(decision.aim_probability)))
 print("choice_action=" .. tostring(choice.choice_action))
 print(string.format("choice_value=%.17g", choice.value))
 print(
   string.format(
     "choice_log_probability=%.17g", choice.log_probability))
 print_probabilities("choice_probabilities", choice.probabilities)
+local choice_entropy = entropy(choice.probabilities)
+print(string.format("choice_entropy=%.17g", choice_entropy))
+print(string.format(
+  "choice_normalized_entropy=%.17g",
+  choice_entropy / math.log(2)))
+print("choice_mask=" .. bits(choice_mask))
+
+local shapes = {}
+for _, name in ipairs({
+  "input_weight", "input_bias",
+  "hidden_weight", "hidden_bias",
+  "movement_weight", "movement_bias",
+  "target_weight", "target_bias",
+  "ability_weight", "ability_bias",
+  "aim_weight", "aim_bias",
+  "value_weight", "value_bias",
+  "choice_option_weight", "choice_option_bias",
+  "choice_score_weight", "choice_score_bias",
+  "choice_value_weight", "choice_value_bias",
+}) do
+  shapes[#shapes + 1] =
+    name .. ":" .. tensor_shape(weights.parameters[name])
+end
+print("tensor_shapes=" .. table.concat(shapes, ","))
 
 for _, version in ipairs({1, 2}) do
   local ok, error_message = pcall(function()
@@ -168,6 +239,19 @@ local capture = {
   },
 }
 controller:enable({seed = 123, capacity = 128})
+controller:record_choice(
+  context,
+  {
+    generation = 7,
+    simulation_tick = 5,
+    observation = observation,
+    option_descriptors = descriptors,
+    option_mask = choice_mask,
+    metrics = capture.metrics,
+  },
+  choice,
+  "learned",
+  true)
 controller:record(context, capture, decision, 10)
 local reset = controller:clear_main()
 assert(reset.enabled == true)
@@ -186,11 +270,50 @@ local finished = controller:finish_episode()
 assert(finished.enabled == false)
 assert(finished.buffered == 1)
 local drained = controller:drain(1)
+local choice_drained = controller:drain_choices(1, true)
 assert(#drained.records == 1)
 assert(drained.records[1].trajectory_version == 3)
 assert(#drained.records[1].observation == 1279)
 assert(#drained.records[1].ability_mask == 22)
 assert(#drained.records[1].aim_mask == 9)
 assert(drained.records[1].done == true)
+assert(#choice_drained.records == 1)
+local choice_record = choice_drained.records[1]
+assert(choice_record.choice_trajectory_version == 3)
+assert(#choice_record.observation == 1279)
+assert(#choice_record.option_descriptors == 3)
+assert(#choice_record.option_descriptors[1] == 56)
+assert(#choice_record.option_mask == 3)
+assert(choice_record.duration_steps == 2)
+assert(#choice_record.rewards == 2)
+assert(choice_record.done == true)
+assert(choice_record.choice_mode == "learned")
+assert(choice_record.trainable == true)
+assert(choice_record.accepted == true)
 print("main_only_reset_ok=true")
 print("training_ring_ok=true")
+print("main_trajectory_version=" ..
+  tostring(drained.records[1].trajectory_version))
+print("main_trajectory_masks=" ..
+  bits(drained.records[1].movement_mask) .. "," ..
+  bits(drained.records[1].target_mask) .. "," ..
+  bits(drained.records[1].ability_mask) .. "," ..
+  bits(drained.records[1].aim_mask))
+print(string.format(
+  "main_trajectory_log_value=%.17g,%.17g",
+  drained.records[1].old_log_probability,
+  drained.records[1].old_value))
+print("choice_trajectory_version=" ..
+  tostring(choice_record.choice_trajectory_version))
+print("choice_trajectory_shape=" ..
+  tostring(#choice_record.observation) .. "," ..
+  tostring(#choice_record.option_descriptors) .. "," ..
+  tostring(#choice_record.option_descriptors[1]))
+print("choice_trajectory_mask=" .. bits(choice_record.option_mask))
+print(string.format(
+  "choice_trajectory_log_values=%.17g,%.17g,%.17g",
+  choice_record.old_log_probability,
+  choice_record.old_value,
+  choice_record.next_value))
+print("choice_trajectory_duration=" ..
+  tostring(choice_record.duration_steps))

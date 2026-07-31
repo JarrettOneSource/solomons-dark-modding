@@ -606,7 +606,11 @@ def verify_lifecycle(
             client_port=CLIENT_PORT,
             temporary_host_profile=True,
             kill_existing=False,
-            god_mode=False,
+            # This verifier measures roster/profile behavior, not survival.
+            # Keep both human wards and scripted bots alive so a random stock
+            # wave cannot erase the guardian reference before the predicate is
+            # sampled.
+            god_mode=True,
             tile_windows=False,
             allow_focus_steal=False,
             exact_mod_id=EXACT_MOD_ID,

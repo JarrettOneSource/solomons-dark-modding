@@ -36,6 +36,7 @@ DEFAULT_RUN_TIMEOUT_SECONDS = 900.0
 SAMPLE_INTERVAL_SECONDS = 1.0
 TIMELINE_INTERVAL_SECONDS = 2.0
 WAVE_FIVE_STABILITY_SECONDS = 2.0
+BOT_DEATH_CONFIRMATION_SECONDS = 2.0
 BOT_ARENA_SEPARATION_DISTANCE = 600.0
 ARENA_TRANSITION_TIMEOUT_SECONDS = 180.0
 
@@ -150,6 +151,8 @@ end
 local snapshot = sd.world.get_replicated_actors()
 local live_enemies = 0
 local enemies_targeting_bot = 0
+local status_resolved_enemies = 0
+local telegraph_fields_present = 0
 for _, actor in ipairs(snapshot and snapshot.actors or {}) do
   if actor.tracked_enemy == true and actor.dead ~= true and
       (tonumber(actor.hp) or 0) > 0.0 then
@@ -157,10 +160,68 @@ for _, actor in ipairs(snapshot and snapshot.actors or {}) do
     if tonumber(actor.target_participant_id) == participant_id then
       enemies_targeting_bot = enemies_targeting_bot + 1
     end
+    if actor.combat_status_resolved == true then
+      status_resolved_enemies = status_resolved_enemies + 1
+    end
+    if actor.anim_drive_state ~= nil and actor.heading ~= nil then
+      telegraph_fields_present = telegraph_fields_present + 1
+    end
   end
 end
 emit("world.live_enemies", live_enemies)
 emit("world.enemies_targeting_bot", enemies_targeting_bot)
+emit("world.status_resolved_enemies", status_resolved_enemies)
+emit("world.telegraph_fields_present", telegraph_fields_present)
+
+local hazards = sd.world.get_replicated_hazards() or {}
+emit("world.hazards_valid", hazards.valid == true)
+emit("world.hazard_count", hazards.hazard_count or 0)
+local geometry = participant_id > 0 and
+  sd.nav.get_collision_geometry(participant_id) or nil
+emit("nav.geometry_valid", geometry and geometry.valid == true)
+emit("nav.refresh_pending",
+  geometry and geometry.refresh_pending == true or false)
+emit("nav.circle_count", geometry and #geometry.circles or 0)
+emit("nav.segment_count", geometry and #geometry.segments or 0)
+emit("nav.polygon_count", geometry and #geometry.polygons or 0)
+local self_walkable = false
+if bot ~= nil then
+  local ok, x, y = pcall(function() return bot:position() end)
+  local test_ok, accepted = pcall(
+    sd.nav.test_segment,
+    tonumber(x) or 0,
+    tonumber(y) or 0,
+    tonumber(x) or 0,
+    tonumber(y) or 0)
+  self_walkable = ok and test_ok and accepted == true
+end
+emit("nav.self_walkable", self_walkable)
+local inventory = participant_id > 0 and
+  sd.bots.get_inventory_details(participant_id) or nil
+emit("inventory.valid", type(inventory) == "table")
+emit("inventory.descriptors_resolved",
+  inventory and inventory.descriptors_resolved == true)
+emit("inventory.equipment_rows",
+  inventory and #inventory.equipped or 0)
+local forbidden_inventory_keys = 0
+local function inspect_inventory(value, seen)
+  if type(value) ~= "table" or seen[value] then return end
+  seen[value] = true
+  for key, child in pairs(value) do
+    if type(key) == "string" then
+      local lowered = string.lower(key)
+      if string.find(lowered, "address", 1, true) or
+          string.find(lowered, "pointer", 1, true) or
+          string.find(lowered, "exception", 1, true) or
+          string.find(lowered, "seh", 1, true) then
+        forbidden_inventory_keys = forbidden_inventory_keys + 1
+      end
+    end
+    inspect_inventory(child, seen)
+  end
+end
+inspect_inventory(inventory, {})
+emit("inventory.forbidden_keys", forbidden_inventory_keys)
 
 local debug_state = rawget(_G, "bot_brain_debug")
 local policy = type(debug_state) == "table" and
@@ -182,6 +243,10 @@ emit("policy.ability_actions",
   policy.ability_action_size or 0)
 emit("policy.aim_actions",
   policy.aim_action_size or 0)
+emit("policy.option_descriptor_size",
+  policy.option_descriptor_size or 0)
+emit("policy.choice_hidden_size",
+  policy.choice_hidden_size or 0)
 for _, key in ipairs({
   "authority",
   "active",
@@ -293,6 +358,10 @@ def _pair_bot_ready(
         and _integer(host, "policy.target_actions") == 9
         and _integer(host, "policy.ability_actions") == 22
         and _integer(host, "policy.aim_actions") == 9
+        and _integer(host, "policy.option_descriptor_size") == 56
+        and _integer(host, "policy.choice_hidden_size") == 128
+        and _integer(client, "policy.option_descriptor_size") == 56
+        and _integer(client, "policy.choice_hidden_size") == 128
     )
 
 
@@ -464,6 +533,50 @@ emit("error", ready and "" or
 """
 
 
+SCRIPTED_BOT_GOD_MODE = r"""
+local hp_offset = assert(
+  sd.debug.layout_offset('progression_hp'))
+local max_hp_offset = assert(
+  sd.debug.layout_offset('progression_max_hp'))
+local mp_offset = assert(
+  sd.debug.layout_offset('progression_mp'))
+local max_mp_offset = assert(
+  sd.debug.layout_offset('progression_max_mp'))
+
+local function sustain()
+  local applied = 0
+  for _, bot in ipairs(sd.bots.list() or {}) do
+    local state = sd.bots.get_participant_state(
+      bot:participant_id()) or {}
+    local progression = tonumber(
+      state.progression_runtime_state_address) or 0
+    if progression > 0 then
+      local max_hp = tonumber(sd.debug.read_float(
+        progression + max_hp_offset)) or 0
+      local max_mp = tonumber(sd.debug.read_float(
+        progression + max_mp_offset)) or 0
+      if max_hp > 0 then
+        sd.debug.write_float(progression + hp_offset, max_hp)
+      end
+      if max_mp > 0 then
+        sd.debug.write_float(progression + mp_offset, max_mp)
+      end
+      applied = applied + 1
+    end
+  end
+  return applied
+end
+if not _G.__sdmod_bot_brain_acceptance_godmode then
+  sd.events.on('runtime.tick', function()
+    sustain()
+  end)
+  _G.__sdmod_bot_brain_acceptance_godmode = true
+end
+print('registered=true')
+print('initial_apply=' .. tostring(sustain()))
+"""
+
+
 def _prime_scripted_primary() -> dict[str, str]:
     values = local_sync.parse_key_values(
         local_sync.lua(
@@ -482,6 +595,31 @@ def _prime_scripted_primary() -> dict[str, str]:
             f"could not prime the scripted bot primary: {values}"
         )
     return values
+
+
+def _enable_scripted_bot_god_mode() -> dict[str, dict[str, str]]:
+    results: dict[str, dict[str, str]] = {}
+    for role, pipe_name in (
+        ("host", HOST_PIPE),
+        ("client", CLIENT_PIPE),
+    ):
+        values = local_sync.parse_key_values(
+            local_sync.lua(
+                pipe_name,
+                SCRIPTED_BOT_GOD_MODE,
+                timeout=10.0,
+            )
+        )
+        if (
+            values.get("registered") != "true"
+            or _integer(values, "initial_apply") < 1
+        ):
+            raise BotBrainAcceptanceFailure(
+                f"could not protect the {role} scripted bot replica: "
+                f"{values}"
+            )
+        results[role] = values
+    return results
 
 
 def _finite_position(
@@ -872,6 +1010,11 @@ def _monitor_run(
     last_views: dict[str, dict[str, str]] = {}
     consecutive_query_failures = 0
     previous_cast_accepted = 0
+    death_since: float | None = None
+    maximum_status_resolved_enemies = 0
+    maximum_telegraph_fields_present = 0
+    maximum_hazard_count = 0
+    v3_seams_seen = False
 
     while time.monotonic() - started < timeout_seconds:
         elapsed = time.monotonic() - started
@@ -912,6 +1055,29 @@ def _monitor_run(
         cast_accepted = _integer(host, "brain.cast_accepted")
         cast_advanced = cast_accepted > previous_cast_accepted
         highest_wave = max(highest_wave, wave)
+        maximum_status_resolved_enemies = max(
+            maximum_status_resolved_enemies,
+            _integer(host, "world.status_resolved_enemies"),
+        )
+        maximum_telegraph_fields_present = max(
+            maximum_telegraph_fields_present,
+            _integer(host, "world.telegraph_fields_present"),
+        )
+        maximum_hazard_count = max(
+            maximum_hazard_count,
+            _integer(host, "world.hazard_count"),
+        )
+        v3_seams_seen = v3_seams_seen or (
+            host.get("world.hazards_valid") == "true"
+            and host.get("nav.geometry_valid") == "true"
+            and host.get("nav.refresh_pending") == "false"
+            and host.get("nav.self_walkable") == "true"
+            and _integer(host, "nav.circle_count") > 0
+            and host.get("inventory.valid") == "true"
+            and host.get("inventory.descriptors_resolved") == "true"
+            and _integer(host, "inventory.equipment_rows") == 7
+            and _integer(host, "inventory.forbidden_keys") == 0
+        )
         host_position = (
             _number(host, "bot.x", math.nan),
             _number(host, "bot.y", math.nan),
@@ -929,10 +1095,20 @@ def _monitor_run(
 
         host_hp = _number(host, "bot.hp")
         client_hp = _number(client, "bot.hp")
-        if wave > 0 and (
+        death_observed = wave > 0 and (
             host_hp <= 0.0
             or client_hp <= 0.0
             or host.get("brain.mode") == "dead"
+        )
+        if death_observed:
+            if death_since is None:
+                death_since = time.monotonic()
+        else:
+            death_since = None
+        if (
+            death_since is not None
+            and time.monotonic() - death_since
+            >= BOT_DEATH_CONFIRMATION_SECONDS
         ):
             return {
                 "success": False,
@@ -960,6 +1136,16 @@ def _monitor_run(
                 "offerChoices": offer_choices,
                 "harnessKitePathDistance": harness_kite_distance,
                 "lastViews": last_views,
+                "v3LiveMaxima": {
+                    "statusResolvedEnemies": (
+                        maximum_status_resolved_enemies
+                    ),
+                    "telegraphFieldsPresent": (
+                        maximum_telegraph_fields_present
+                    ),
+                    "hazardCount": maximum_hazard_count,
+                    "semanticSeamsSeen": v3_seams_seen,
+                },
             }
 
         if (
@@ -1010,6 +1196,16 @@ def _monitor_run(
                     "screenshots": screenshots,
                     "harnessKitePathDistance": harness_kite_distance,
                     "lastViews": last_views,
+                    "v3LiveMaxima": {
+                        "statusResolvedEnemies": (
+                            maximum_status_resolved_enemies
+                        ),
+                        "telegraphFieldsPresent": (
+                            maximum_telegraph_fields_present
+                        ),
+                        "hazardCount": maximum_hazard_count,
+                        "semanticSeamsSeen": v3_seams_seen,
+                    },
                 }
         else:
             wave_five_since = None
@@ -1027,6 +1223,12 @@ def _monitor_run(
         "screenshots": screenshots,
         "harnessKitePathDistance": harness_kite_distance,
         "lastViews": last_views,
+        "v3LiveMaxima": {
+            "statusResolvedEnemies": maximum_status_resolved_enemies,
+            "telegraphFieldsPresent": maximum_telegraph_fields_present,
+            "hazardCount": maximum_hazard_count,
+            "semanticSeamsSeen": v3_seams_seen,
+        },
     }
 
 
@@ -1113,6 +1315,9 @@ def verify_one_run(
             label="bot brain participant in the shared run",
         )
         result["runEntry"] = run_views
+        result["scriptedBotGodMode"] = (
+            _enable_scripted_bot_god_mode()
+        )
 
         start = local_sync.parse_key_values(
             local_sync.lua(
@@ -1142,6 +1347,16 @@ print("waves=" ..
             timeout_seconds=timeout_seconds,
         )
         result.update(monitored)
+        v3_maxima = monitored.get("v3LiveMaxima", {})
+        if (
+            v3_maxima.get("semanticSeamsSeen") is not True
+            or int(v3_maxima.get("statusResolvedEnemies", 0)) <= 0
+            or int(v3_maxima.get("telegraphFieldsPresent", 0)) <= 0
+        ):
+            raise BotBrainAcceptanceFailure(
+                "scripted run did not retain the v3 semantic nav/enemy/"
+                f"inventory contract: {v3_maxima}"
+            )
         if not monitored["success"]:
             raise BotBrainAcceptanceFailure(
                 "autonomous run failed: "

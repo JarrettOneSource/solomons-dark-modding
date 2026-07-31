@@ -161,7 +161,15 @@ Choice batches accumulate complete intervals across disposable sessions until
 scorer, and choice value. Main and choice optimizers have independent Adam
 state. Every checkpoint contains all parameters and choice-coverage state;
 JSON and Lua files are each written through a temporary file and atomically
-replaced before chunked hot reload.
+replaced before chunked hot reload. Each live episode also writes an atomic
+`episode-NNNN.json`; `live-training-report.json` records the complete seed,
+nonce, layout, composition, participant, trajectory, loss, and reload evidence.
+
+For acceptance-only SMDP plumbing, `--validation-native-choice-event` invokes
+one debug native level-up per episode. The learned scorer still chooses and
+applies the option and the ordinary choice-event-v3 path owns duration, reward,
+terminal close, transport, and PPO. The switch is off by default and should
+not be used for normal training.
 
 Main entropy coefficients are movement 0.01, target 0.02, ability 0.01, and
 aim 0.01. Target receives twice the pressure because `keep_current` is often
@@ -173,8 +181,8 @@ current temperature persist in checkpoint metadata.
 
 ## Known limitations
 
-- The v3 seed is only a deterministic bootstrap. Learned-live behavior and
-  end-to-end dual-stream smoke remain the V3-5 acceptance gate.
+- The v3 seed and short V3-5 PPO smoke are pipeline validation, not a learned
+  competence claim.
 - Wizard Chug, Antidote, and Mind Chug cannot be selected until a proven
   synthetic participant native effect path exists.
 - Equipment is observed but cannot be equipped by the policy.
@@ -183,6 +191,9 @@ current temperature persist in checkpoint metadata.
 - Native descriptor coverage remains explicit: unresolved secondary
   range/cooldown fields are not invented, and native action validation remains
   authoritative.
+- Stock Arrow hazards currently expose neither a resolved target participant
+  nor a positive time to contact. They remain observable as known hostile
+  projectiles; Lua and verifiers do not invent those fields.
 - The controlled one-enemy arena is curriculum plumbing, not a competence
   evaluation. Normal waves, elites, broader builds, and a multi-layout corpus
   belong to later evaluation.

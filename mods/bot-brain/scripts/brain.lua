@@ -517,6 +517,73 @@ local function issue_policy_movement(
       context.debug.destination_y = target.y
       context.debug.last_error = ""
       memory.last_move_ms = now_ms
+
+      for hazard_index = 1,
+          math.min(
+            #capture.hazards,
+            context.shared.policy_spec.hazard_slot_count) do
+        local hazard = capture.hazards[hazard_index]
+        if type(hazard) == "table" and
+            hazard.type_known == true and
+            hazard.kind == "projectile" and
+            memory.last_logged_hazard_id ~= hazard.hazard_id then
+          memory.last_logged_hazard_id = hazard.hazard_id
+          context.debug.hazard_dodge_accepted =
+            context.debug.hazard_dodge_accepted + 1
+          context.debug.last_hazard_dodge_id = hazard.hazard_id
+          context.debug.last_hazard_slot = hazard_index
+          context.debug.last_hazard_type_known =
+            hazard.type_known == true
+          context.debug.last_hazard_targeting_self =
+            hazard.targeting_self == true
+          context.debug.last_hazard_time_to_contact =
+            tonumber(hazard.time_to_contact) or 0.0
+          context.shared.log(
+            context,
+            "policy hazard dodge accepted hazard_id=" ..
+            tostring(hazard.hazard_id) ..
+            " slot=" .. tostring(hazard_index) ..
+            " movement=" .. tostring(action.name) ..
+            " time_to_contact=" ..
+            tostring(hazard.time_to_contact))
+          break
+        end
+      end
+
+      memory.logged_obstacle_ids =
+        memory.logged_obstacle_ids or {}
+      for obstacle_index = 1,
+          math.min(
+            #capture.obstacles,
+            context.shared.policy_spec.obstacle_slot_count) do
+        local obstacle = capture.obstacles[obstacle_index]
+        local geometry_id = tostring(obstacle.geometry_id or "")
+        local clearance_direction =
+          action.x * obstacle.normal_dx +
+            action.y * obstacle.normal_dy
+        if obstacle.kind == "circle" and
+            obstacle.radius <= 30.0 and
+            string.find(
+              geometry_id,
+              "participant:",
+              1,
+              true) ~= 1 and
+            clearance_direction > 0.5 and
+            memory.logged_obstacle_ids[geometry_id] ~= true then
+          memory.logged_obstacle_ids[geometry_id] = true
+          context.debug.exact_obstacle_clearance_accepted =
+            context.debug.exact_obstacle_clearance_accepted + 1
+          context.debug.last_exact_obstacle_id = geometry_id
+          context.shared.log(
+            context,
+            "policy exact-obstacle clearance accepted geometry_id=" ..
+            geometry_id ..
+            " slot=" .. tostring(obstacle_index) ..
+            " radius=" .. tostring(obstacle.radius) ..
+            " clearance=" .. tostring(obstacle.clearance) ..
+            " movement=" .. tostring(action.name))
+        end
+      end
     else
       context.debug.last_error =
         tostring(
@@ -569,6 +636,12 @@ local function issue_policy_ability(
         type(result_or_error) == "table" and
           tonumber(result_or_error.use_id) or 0
       context.debug.last_error = ""
+      context.shared.log(
+        context,
+        "policy potion accepted slot=" ..
+        tostring(action.potion_slot) ..
+        " use_id=" ..
+        tostring(context.debug.last_potion_use_id))
     else
       context.debug.last_error = tostring(
         ok and result_or_error or accepted or
@@ -603,6 +676,54 @@ local function issue_policy_ability(
     context.debug.last_aim_y = aim_y
     context.debug.last_aim_offset_x = aim_x - target.x
     context.debug.last_aim_offset_y = aim_y - target.y
+    local lead_dot =
+      context.debug.last_aim_offset_x *
+        (tonumber(target.velocity_dx) or 0.0) +
+      context.debug.last_aim_offset_y *
+        (tonumber(target.velocity_dy) or 0.0)
+    if decision.aim_action ~= 0 and lead_dot > 0.0 and
+        memory.last_logged_lead_target_id ~= target.network_actor_id then
+      memory.last_logged_lead_target_id = target.network_actor_id
+      context.debug.lead_cast_accepted =
+        context.debug.lead_cast_accepted + 1
+      context.debug.last_lead_aim_offset_x =
+        context.debug.last_aim_offset_x
+      context.debug.last_lead_aim_offset_y =
+        context.debug.last_aim_offset_y
+      context.debug.last_lead_velocity_dx =
+        tonumber(target.velocity_dx) or 0.0
+      context.debug.last_lead_velocity_dy =
+        tonumber(target.velocity_dy) or 0.0
+      context.shared.log(
+        context,
+        "policy lead cast accepted target=" ..
+        tostring(target.network_actor_id) ..
+        " aim=" .. tostring(decision.aim.name) ..
+        " offset_x=" ..
+        tostring(context.debug.last_aim_offset_x) ..
+        " offset_y=" ..
+        tostring(context.debug.last_aim_offset_y) ..
+        " velocity_dx=" .. tostring(target.velocity_dx) ..
+        " velocity_dy=" .. tostring(target.velocity_dy))
+    end
+    local center_only = decision.aim_mask[1] == true
+    for mask_index = 2, #decision.aim_mask do
+      center_only = center_only and
+        decision.aim_mask[mask_index] ~= true
+    end
+    if decision.aim_action == 0 and center_only and
+        memory.last_logged_center_mask_ability ~=
+          decision.ability_action then
+      memory.last_logged_center_mask_ability =
+        decision.ability_action
+      context.debug.center_mask_cast_accepted =
+        context.debug.center_mask_cast_accepted + 1
+      context.shared.log(
+        context,
+        "policy center-mask cast accepted ability=" ..
+        tostring(action.name) ..
+        " target=" .. tostring(target.network_actor_id))
+    end
     if action.skill_slot > 0 and
         target.in_primary_range ~= true then
       context.debug.secondary_beyond_primary_accepted =
@@ -706,7 +827,7 @@ local function think_with_policy(
       frame.simulation_tick,
       capture.metrics)
   if choice_event ~= nil then
-    shared.policy_skill_choices:handle(
+    local choice_applied = shared.policy_skill_choices:handle(
       context,
       choice_event,
       shared.skill_choice_mode,
@@ -716,6 +837,16 @@ local function think_with_policy(
         return select_scripted_skill(context, options)
       end,
       shared.policy_training.enabled == true)
+    if choice_applied == true then
+      shared.log(
+        context,
+        "policy skill choice accepted mode=" ..
+        tostring(shared.skill_choice_mode) ..
+        " generation=" ..
+        tostring(context.debug.skill_choice_generation) ..
+        " option_id=" ..
+        tostring(context.debug.skill_choice_option_id))
+    end
   end
   local selected_target = nil
   local target_switched = false
@@ -774,6 +905,11 @@ local function think_with_policy(
   context.debug.policy_loadout = capture.loadout
   context.debug.policy_snapshot = capture.snapshot
   context.debug.policy_selected_target = selected_target
+  context.debug.policy_enemy_slots = capture.enemy_slots
+  context.debug.policy_obstacles = capture.obstacles
+  context.debug.policy_hazards = capture.hazards
+  context.debug.policy_inventory = capture.inventory
+  context.debug.policy_allies = capture.allies
   context.debug.policy_capture_target_id =
     capture.current_target and
       capture.current_target.network_actor_id or 0
@@ -1025,10 +1161,29 @@ function brain.new(row, roster_index, shared, steering)
       potion_use_accepted = 0,
       last_potion_slot = 0,
       last_potion_use_id = 0,
+      hazard_dodge_accepted = 0,
+      last_hazard_dodge_id = 0,
+      last_hazard_slot = 0,
+      last_hazard_type_known = false,
+      last_hazard_targeting_self = false,
+      last_hazard_time_to_contact = 0.0,
+      exact_obstacle_clearance_accepted = 0,
+      last_exact_obstacle_id = "",
+      lead_cast_accepted = 0,
+      last_lead_aim_offset_x = 0.0,
+      last_lead_aim_offset_y = 0.0,
+      last_lead_velocity_dx = 0.0,
+      last_lead_velocity_dy = 0.0,
+      center_mask_cast_accepted = 0,
       last_aim_x = 0.0,
       last_aim_y = 0.0,
       last_aim_offset_x = 0.0,
       last_aim_offset_y = 0.0,
+      policy_enemy_slots = {},
+      policy_obstacles = {},
+      policy_hazards = {},
+      policy_inventory = {},
+      policy_allies = {},
       last_error = "",
     },
   }

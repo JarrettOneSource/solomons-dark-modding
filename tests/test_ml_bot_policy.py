@@ -57,6 +57,7 @@ from ml_bot.model import (  # noqa: E402
 )
 from train_bot_policy import (  # noqa: E402
     MAX_LIVE_ROLLOUT_STEPS,
+    _atomic_json,
     concatenate_choice_batches,
     partition_choice_records,
     partition_rollout_records,
@@ -686,6 +687,67 @@ class MlBotPolicyTests(unittest.TestCase):
         )
         self.assertIn("sd.rng.set_seed(requested)", calls[0])
 
+    def test_validation_choice_event_uses_native_level_up_and_learned_apply(
+        self,
+    ) -> None:
+        session = object.__new__(SoloSession)
+        calls: list[str] = []
+        statuses = iter(
+            (
+                {
+                    "learned_skill_choices_accepted": "4",
+                    "last_skill_choice_generation": "7",
+                    "last_skill_choice_option_id": "12",
+                },
+                {
+                    "learned_skill_choices_accepted": "5",
+                    "last_skill_choice_generation": "8",
+                    "last_skill_choice_option_id": "52",
+                },
+            )
+        )
+        session.status = lambda: next(statuses)
+
+        def fake_lua(code: str, *, timeout: float = 15.0) -> str:
+            del timeout
+            calls.append(code)
+            return (
+                "accepted=true\n"
+                "pending_before=false\n"
+                "level_before=3\n"
+                "target_level=4\n"
+                "target_experience=410\n"
+            )
+
+        session.lua = fake_lua
+        result = session.trigger_validation_choice_event(41)
+        self.assertEqual(
+            result,
+            {
+                "participant_id": 41,
+                "level_before": 3,
+                "target_level": 4,
+                "target_experience": 410,
+                "accepted_before": 4,
+                "accepted_after": 5,
+                "generation": 8,
+                "option_id": 52,
+            },
+        )
+        self.assertIn("sd.bots.debug_sync_level_up", calls[0])
+        self.assertIn("choices_before.pending ~= true", calls[0])
+
+    def test_live_training_report_is_written_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "live-training-report.json"
+            _atomic_json(path, {"status": "ok", "episodes": 3})
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")),
+                {"status": "ok", "episodes": 3},
+            )
+            self.assertTrue(path.read_bytes().endswith(b"\n"))
+            self.assertEqual(list(path.parent.glob(".*.tmp-*")), [])
+
     def test_lua_python_contract_and_inference_parity(self) -> None:
         values = self._run_lua(LUA_CONTRACT)
         self.assertEqual(values["observation_count"], "1279")
@@ -720,6 +782,14 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(values["v2_rejected"], "true")
         self.assertEqual(values["main_only_reset_ok"], "true")
         self.assertEqual(values["training_ring_ok"], "true")
+        self.assertIn(
+            "policy v1/v2 artifacts are incompatible",
+            values["v1_error"],
+        )
+        self.assertIn(
+            "policy v1/v2 artifacts are incompatible",
+            values["v2_error"],
+        )
 
         policy = load_model(MODEL)
         observation = np.asarray(
@@ -741,6 +811,22 @@ class MlBotPolicyTests(unittest.TestCase):
             [[(index + ability_action) % 4 != 0 for index in range(1, 10)]]
         )
         aim_mask[0, 0] = True
+        self.assertEqual(
+            values["movement_mask"],
+            "".join("1" if value else "0" for value in movement_mask[0]),
+        )
+        self.assertEqual(
+            values["target_mask"],
+            "".join("1" if value else "0" for value in target_mask[0]),
+        )
+        self.assertEqual(
+            values["ability_mask"],
+            "".join("1" if value else "0" for value in ability_mask[0]),
+        )
+        self.assertEqual(
+            values["aim_mask"],
+            "".join("1" if value else "0" for value in aim_mask[0]),
+        )
         main = policy.act(
             observation,
             movement_mask,
@@ -769,6 +855,28 @@ class MlBotPolicyTests(unittest.TestCase):
             main.log_probabilities[0], float(values["log_probability"]), places=10
         )
         self.assertAlmostEqual(main.values[0], float(values["value"]), places=10)
+        selected_components = np.fromstring(
+            values["selected_log_components"], sep=","
+        )
+        self.assertEqual(selected_components.shape, (4,))
+        self.assertAlmostEqual(
+            float(np.sum(selected_components)),
+            float(values["log_probability"]),
+            places=10,
+        )
+        for head, probabilities in (
+            ("movement", main.movement_probabilities[0]),
+            ("target", main.target_probabilities[0]),
+            ("ability", main.ability_probabilities[0]),
+            ("aim", main.aim_probabilities[0]),
+        ):
+            positive = probabilities[probabilities > 0.0]
+            expected_entropy = -float(np.sum(positive * np.log(positive)))
+            self.assertAlmostEqual(
+                expected_entropy,
+                float(values[f"{head}_entropy"]),
+                places=10,
+            )
 
         descriptors = np.asarray(
             [
@@ -799,6 +907,67 @@ class MlBotPolicyTests(unittest.TestCase):
             float(values["choice_log_probability"]),
             places=10,
         )
+        self.assertEqual(values["choice_mask"], "101")
+        positive_choice = choice.probabilities[0][
+            choice.probabilities[0] > 0.0
+        ]
+        choice_entropy = -float(
+            np.sum(positive_choice * np.log(positive_choice))
+        )
+        self.assertAlmostEqual(
+            choice_entropy, float(values["choice_entropy"]), places=10
+        )
+        self.assertAlmostEqual(
+            choice_entropy / math.log(2.0),
+            float(values["choice_normalized_entropy"]),
+            places=10,
+        )
+
+        lua_shapes = dict(
+            field.split(":", 1)
+            for field in values["tensor_shapes"].split(",")
+        )
+        python_shapes = {
+            name: "x".join(str(value) for value in parameter.shape)
+            for name, parameter in policy.parameter_arrays().items()
+        }
+        self.assertEqual(lua_shapes, python_shapes)
+
+        self.assertEqual(values["main_trajectory_version"], "3")
+        self.assertEqual(
+            values["main_trajectory_masks"],
+            ",".join(
+                (
+                    values["movement_mask"],
+                    values["target_mask"],
+                    values["ability_mask"],
+                    values["aim_mask"],
+                )
+            ),
+        )
+        main_log_value = np.fromstring(
+            values["main_trajectory_log_value"], sep=","
+        )
+        np.testing.assert_allclose(
+            main_log_value,
+            [main.log_probabilities[0], main.values[0]],
+            rtol=2e-10,
+            atol=2e-12,
+        )
+        self.assertEqual(values["choice_trajectory_version"], "3")
+        self.assertEqual(values["choice_trajectory_shape"], "1279,3,56")
+        self.assertEqual(values["choice_trajectory_mask"], "101")
+        self.assertEqual(values["choice_trajectory_duration"], "2")
+        choice_log_values = np.fromstring(
+            values["choice_trajectory_log_values"], sep=","
+        )
+        np.testing.assert_allclose(
+            choice_log_values[:2],
+            [choice.log_probabilities[0], choice.values[0]],
+            rtol=2e-10,
+            atol=2e-12,
+        )
+        self.assertEqual(choice_log_values[2], 0.0)
 
     def test_phase3_contract_fixture_stays_green(self) -> None:
         values = self._run_lua(LUA_PHASE3)

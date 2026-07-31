@@ -37,10 +37,16 @@ DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"
 DEFAULT_LUA = (
     ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
 )
-DEFAULT_GAME_DIRECTORY = Path(
-    "C:/Users/User/Documents/GitHub/SB Modding/"
-    "Solomon Dark/SolomonDarkAbandonware"
-)
+if os.name == "nt":
+    DEFAULT_GAME_DIRECTORY = Path(
+        "C:/Users/User/Documents/GitHub/SB Modding/"
+        "Solomon Dark/SolomonDarkAbandonware"
+    )
+else:
+    DEFAULT_GAME_DIRECTORY = Path(
+        "/mnt/c/Users/User/Documents/GitHub/SB Modding/"
+        "Solomon Dark/SolomonDarkAbandonware"
+    )
 DEFAULT_LAUNCHER = (
     ROOT / "dist" / "launcher" / "SolomonDarkModLauncher.exe"
 )
@@ -598,6 +604,19 @@ def _atomic_checkpoint(
         temporary_lua.unlink(missing_ok=True)
 
 
+def _atomic_json(path: Path, value: object) -> None:
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        temporary.write_text(
+            json.dumps(value, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _mean_ppo_metrics(metrics: Sequence[object]) -> dict[str, float]:
     names = (
         "policy_loss",
@@ -841,6 +860,15 @@ def live_ppo(args: argparse.Namespace) -> int:
                 raise BridgeError(
                     "materialized learned participants do not match "
                     "the composition"
+                )
+
+            validation_choice_event = None
+            if args.validation_native_choice_event:
+                validation_choice_event = (
+                    session.trigger_validation_choice_event(
+                        learned_participant_ids[0],
+                        timeout=args.startup_timeout,
+                    )
                 )
 
             requested_records = args.rollout_steps
@@ -1096,6 +1124,9 @@ def live_ppo(args: argparse.Namespace) -> int:
                 ),
                 "choice_temperature": policy.choice_temperature,
                 "choice_coverage_complete": choice_coverage.complete,
+                "validation_native_choice_event": (
+                    validation_choice_event
+                ),
                 "episode_ids": sorted(
                     {
                         record.episode_id
@@ -1128,6 +1159,11 @@ def live_ppo(args: argparse.Namespace) -> int:
             ):
                 raise BridgeError("live trajectory buffer dropped records")
             reports.append(report)
+            _atomic_json(
+                output_directory
+                / f"episode-{iteration:04d}.json",
+                report,
+            )
             print(json.dumps(report, sort_keys=True))
         finally:
             if launch is not None:
@@ -1159,6 +1195,7 @@ def live_ppo(args: argparse.Namespace) -> int:
         "final_model": str(final_model),
         "final_lua": str(final_lua),
     }
+    _atomic_json(output_directory / "live-training-report.json", result)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
@@ -1273,6 +1310,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--minimum-choice-batch",
         type=int,
         default=32,
+    )
+    live_parser.add_argument(
+        "--validation-native-choice-event",
+        action="store_true",
+        help=(
+            "trigger one debug-only native level-up per episode so an "
+            "acceptance smoke can train a real learned choice interval; "
+            "never enabled during ordinary training"
+        ),
     )
     live_parser.add_argument(
         "--maximum-gradient-norm",

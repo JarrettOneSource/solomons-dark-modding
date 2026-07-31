@@ -513,17 +513,36 @@ print('move_accepted=' .. tostring(debug.move_accepted or 0))
 print('cast_accepted=' .. tostring(debug.cast_accepted or 0))
 local learned_ids = {}
 local learned_count = 0
+local learned_skill_choices_accepted = 0
+local last_skill_choice_generation = 0
+local last_skill_choice_option_id = -1
 for _, row in ipairs(debug.bots or {}) do
   if tostring(row.behavior or '') == 'learned' and
       (tonumber(row.participant_id) or 0) > 0 then
     learned_count = learned_count + 1
     learned_ids[#learned_ids + 1] =
       tostring(row.participant_id)
+    learned_skill_choices_accepted =
+      learned_skill_choices_accepted +
+      (tonumber(row.skill_choices_accepted) or 0)
+    local generation =
+      tonumber(row.skill_choice_generation) or 0
+    if generation >= last_skill_choice_generation then
+      last_skill_choice_generation = generation
+      last_skill_choice_option_id =
+        tonumber(row.skill_choice_option_id) or -1
+    end
   end
 end
 print('learned_bot_count=' .. tostring(learned_count))
 print('learned_participant_ids=' ..
   table.concat(learned_ids, ','))
+print('learned_skill_choices_accepted=' .. tostring(
+  learned_skill_choices_accepted))
+print('last_skill_choice_generation=' .. tostring(
+  last_skill_choice_generation))
+print('last_skill_choice_option_id=' .. tostring(
+  last_skill_choice_option_id))
 """
 
 RUN_READY_STATUS = r"""
@@ -2448,6 +2467,104 @@ print('choices_applied=' .. tostring(choices_applied))
                 f"learned participant status is inconsistent: {values}"
             )
         return result
+
+    def trigger_validation_choice_event(
+        self,
+        participant_id: int,
+        *,
+        timeout: float = 15.0,
+    ) -> dict[str, int]:
+        """Trigger one real native level-up for an acceptance smoke.
+
+        This deliberately uses the loader's debug-only native level-sync seam;
+        it is never part of ordinary training.  The learned Lua manager still
+        owns option scoring and application, and the resulting interval enters
+        the normal choice-event-v3 transport.
+        """
+        if participant_id <= 0:
+            raise ValueError("participant_id must be positive")
+        if timeout <= 0.0:
+            raise ValueError("timeout must be positive")
+        before = self.status()
+        accepted_before = int(
+            before.get("learned_skill_choices_accepted", "0")
+        )
+        values = local_sync.parse_key_values(
+            self.lua(
+                f"""
+local participant_id = {int(participant_id)}
+local choices_before =
+  sd.bots.get_skill_choices(participant_id) or {{}}
+local state = sd.bots.get_state(participant_id) or {{}}
+local progression =
+  tonumber(state.progression_runtime_state_address) or 0
+local player = sd.player.get_state() or {{}}
+local source_progression =
+  tonumber(player.progression_address) or 0
+local level_offset = assert(
+  sd.debug.layout_offset('progression_level'))
+local next_xp_offset = assert(
+  sd.debug.layout_offset('progression_next_xp_threshold'))
+local level = progression > 0 and
+  (tonumber(sd.debug.read_i32(
+    progression + level_offset)) or 0) or 0
+local next_xp = progression > 0 and
+  (tonumber(sd.debug.read_float(
+    progression + next_xp_offset)) or 0) or 0
+local target_level = level + 1
+local target_experience = math.ceil(next_xp + 10.0)
+local accepted = choices_before.pending ~= true and
+  progression > 0 and source_progression > 0 and
+  level > 0 and next_xp > 0 and
+  sd.bots.debug_sync_level_up({{
+    level = target_level,
+    experience = target_experience,
+    source_progression_address = source_progression,
+  }}) == true
+print('accepted=' .. tostring(accepted == true))
+print('pending_before=' .. tostring(
+  choices_before.pending == true))
+print('level_before=' .. tostring(level))
+print('target_level=' .. tostring(target_level))
+print('target_experience=' .. tostring(target_experience))
+""",
+                timeout=10.0,
+            )
+        )
+        if values.get("accepted") != "true":
+            raise BridgeError(
+                "native validation level-up was rejected: "
+                f"{values}"
+            )
+        deadline = time.monotonic() + timeout
+        last = before
+        while time.monotonic() < deadline:
+            last = self.status()
+            accepted_after = int(
+                last.get("learned_skill_choices_accepted", "0")
+            )
+            if accepted_after > accepted_before:
+                return {
+                    "participant_id": participant_id,
+                    "level_before": int(values["level_before"]),
+                    "target_level": int(values["target_level"]),
+                    "target_experience": int(
+                        values["target_experience"]
+                    ),
+                    "accepted_before": accepted_before,
+                    "accepted_after": accepted_after,
+                    "generation": int(
+                        last.get("last_skill_choice_generation", "0")
+                    ),
+                    "option_id": int(
+                        last.get("last_skill_choice_option_id", "-1")
+                    ),
+                }
+            time.sleep(0.1)
+        raise BridgeError(
+            "learned policy did not apply the native validation choice: "
+            f"{last}"
+        )
 
     def enable_training(
         self,
