@@ -322,6 +322,20 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
                 after=after,
             )
 
+    def test_peer_local_visual_types_do_not_replace_spell_identity(
+        self,
+    ) -> None:
+        before = equipped_primary_pair()
+        before["host"]["observer"]["primary_visual_type_id"] = "7006"
+        after = copy.deepcopy(before)
+
+        result = verifier.assert_equipped_primary_persisted(
+            before=before,
+            after=after,
+        )
+
+        self.assertEqual(result["host"]["current_spell_id"], "1011")
+
     def test_owner_observer_primary_disagreement_is_rejected(self) -> None:
         before = equipped_primary_pair()
         before["client"]["observer"]["current_spell_id"] = "1012"

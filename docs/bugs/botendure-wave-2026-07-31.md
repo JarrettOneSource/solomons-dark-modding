@@ -483,7 +483,9 @@ untouched. The focused verifier now keeps its wave-1 survivor alive across the
 natural wave-2 boundary. It captures both fighters' owned loadout, full
 spellbook fingerprint, resolved primary details, raw native current-spell ID,
 and primary visual identity from owner and observer views before the death and
-after the respawn, then requires exact persistence and cross-peer agreement.
+after the respawn. It requires each view to preserve those fields and requires
+cross-peer agreement for the semantic spell, build, and spellbook fields;
+peer-local equipment visual-lane types are not used as spell identity.
 
 R18's final artifact copy was interrupted after the live captures and exact
 owned-process cleanup. Its host log, timelines, ledgers, screenshots, semantic

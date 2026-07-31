@@ -271,6 +271,11 @@ PRIMARY_PERSISTENCE_KEYS = (
     "details_build_resolved",
     "primary_visual_type_id",
 )
+PRIMARY_CROSS_PEER_KEYS = tuple(
+    key
+    for key in PRIMARY_PERSISTENCE_KEYS
+    if key != "primary_visual_type_id"
+)
 
 
 def _number(values: Mapping[str, str], key: str) -> float:
@@ -578,7 +583,7 @@ def assert_equipped_primary_persisted(
 
         disagreed = [
             key
-            for key in PRIMARY_PERSISTENCE_KEYS
+            for key in PRIMARY_CROSS_PEER_KEYS
             if after_views["owner"].get(key)
             != after_views["observer"].get(key)
         ]
