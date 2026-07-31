@@ -545,6 +545,8 @@ def _launcher_instance_prefix(
     digest = hashlib.sha256(
         evidence_prefix.encode("utf-8")
     ).hexdigest()[:8]
+    if evidence_prefix.startswith("bply"):
+        return f"bply-{digest}{role_group}"
     return f"g{digest}{role_group}"
 
 

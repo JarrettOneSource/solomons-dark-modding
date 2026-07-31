@@ -54,6 +54,10 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
                 "m",
             ),
         )
+        self.assertRegex(
+            verifier._launcher_instance_prefix("bply-game-over", "m"),
+            r"^bply-[0-9a-f]{8}m$",
+        )
         with self.assertRaisesRegex(ValueError, "unsupported"):
             verifier._launcher_instance_prefix(
                 evidence_prefix,
