@@ -325,6 +325,32 @@ budget. Targeted live probes retain bounded startup evidence, while a held
 primary can no longer grow the loader log at frame rate. This is a diagnostic
 volume fix only; it does not change input, cast, damage, or network ownership.
 
+## Product finding: delayed client snapshots outlived the stock spawner
+
+The next real Steam run reached the shared lobby, both native run scenes, both
+Bot Play takeovers, and replicated authority wave 2. Recurrent receive stalls
+delayed the client's usable enemy snapshots until its suppressed stock wave
+spawner had stopped ticking. The client then held ten live authoritative enemy
+identities but never created a local binding: `bound=[] native=[]`.
+
+The retained client log contains 462 queued replicated materialization requests
+and 128 gameplay-pump failures with `stock wave spawner became unavailable`.
+It contains no exact-spawn dispatch or completion. The last of 148
+host-authoritative spawner suppressions preceded the failed catch-up burst by
+more than two minutes. Paired screenshots show a live combat presentation, but
+the semantic native enemy roster remained empty, so the client Bot Brain had no
+usable local target and died without a respawn.
+
+Replicated catch-up already uses the exact stock-class construction routine.
+That routine resolves the active arena and exact stock constructor directly;
+the remembered spawner contributes only the dispatch opportunity. The repair
+allows the gameplay pump to invoke that existing routine after the spawner has
+expired only when the queued request is a non-frozen, active-wave request with
+a nonzero authority network actor ID and this peer is the transport client.
+Public Lua spawning remains host/offline-authority-only, manual direct spawning
+still requires explicit test mode and simulation authority, and host wave
+ownership is unchanged.
+
 ## Rerun requirement
 
 The product failure fixes and remote staging fix must be rebuilt together and

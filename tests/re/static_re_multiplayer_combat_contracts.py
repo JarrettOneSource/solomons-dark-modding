@@ -546,6 +546,37 @@ def test_replicated_manual_run_enemy_materialization_is_client_bounded() -> str:
         raise StaticReTestFailure(
             "replicated manual enemy materialization is missing bounded-client token(s): " +
             ", ".join(missing))
+    direct_start = run_lifecycle_hooks_text.find(
+        "TryDispatchDirectManualRunEnemySpawnWithoutSpawner()")
+    direct_end = run_lifecycle_hooks_text.find(
+        "TryDispatchManualRunEnemySpawnFromSpawner(",
+        direct_start,
+    )
+    if direct_start == -1 or direct_end == -1:
+        raise StaticReTestFailure(
+            "replicated client catch-up direct-dispatch boundary is missing")
+    direct_body = run_lifecycle_hooks_text[direct_start:direct_end]
+    direct_required = (
+        "const bool local_transport_client =",
+        "multiplayer::IsLocalTransportClient()",
+        "request.network_actor_id != 0",
+        "request.allow_active_waves",
+        "!request.freeze_on_spawn",
+        "const bool replicated_client_catchup =",
+        "if (!replicated_client_catchup)",
+        "manual_enemy_spawner_test_mode.load(",
+        "multiplayer::IsLuaModSimulationAuthority()",
+        "dispatching replicated client catch-up",
+        "directly without a remembered stock spawner",
+        "DispatchExactRunEnemySpawn(request, 0)",
+    )
+    direct_missing = [
+        token for token in direct_required if token not in direct_body
+    ]
+    if direct_missing:
+        raise StaticReTestFailure(
+            "replicated client catch-up without a live spawner is missing "
+            "ownership guard(s): " + ", ".join(direct_missing))
     return "replicated manual run enemy materialization stays client/test-mode bounded and public API remains host-authoritative"
 
 

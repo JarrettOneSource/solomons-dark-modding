@@ -395,6 +395,17 @@ ManualRunEnemySpawnerDispatchResult TryDispatchManualRunEnemySpawnFromSpawner(
 
 ManualRunEnemySpawnerDispatchResult
 TryDispatchDirectManualRunEnemySpawnWithoutSpawner() {
+    const bool local_transport_client =
+        multiplayer::IsLocalTransportClient();
+    const auto can_dispatch_without_spawner =
+        [local_transport_client](const ManualRunEnemySpawnRequest& request) {
+            return request.allow_direct_arena_spawn ||
+                (!request.allow_direct_arena_spawn &&
+                 request.network_actor_id != 0 &&
+                 request.allow_active_waves &&
+                 !request.freeze_on_spawn &&
+                 local_transport_client);
+        };
     ManualRunEnemySpawnRequest request;
     {
         std::lock_guard<std::mutex> lock(g_manual_run_enemy_spawn_mutex);
@@ -403,7 +414,8 @@ TryDispatchDirectManualRunEnemySpawnWithoutSpawner() {
         }
 
         if (g_have_pending_manual_run_enemy_spawn &&
-            g_pending_manual_run_enemy_spawn.allow_direct_arena_spawn) {
+            can_dispatch_without_spawner(
+                g_pending_manual_run_enemy_spawn)) {
             request = g_pending_manual_run_enemy_spawn;
             g_pending_manual_run_enemy_spawn = ManualRunEnemySpawnRequest{};
             g_have_pending_manual_run_enemy_spawn = false;
@@ -411,9 +423,7 @@ TryDispatchDirectManualRunEnemySpawnWithoutSpawner() {
             const auto found = std::find_if(
                 g_queued_run_enemy_spawns.begin(),
                 g_queued_run_enemy_spawns.end(),
-                [](const ManualRunEnemySpawnRequest& queued) {
-                    return queued.allow_direct_arena_spawn;
-                });
+                can_dispatch_without_spawner);
             if (found == g_queued_run_enemy_spawns.end()) {
                 return ManualRunEnemySpawnerDispatchResult::NoRequest;
             }
@@ -425,25 +435,44 @@ TryDispatchDirectManualRunEnemySpawnWithoutSpawner() {
         g_have_active_manual_run_enemy_spawn = true;
     }
 
-    if (!g_state.manual_enemy_spawner_test_mode.load(std::memory_order_acquire)) {
-        CompleteManualRunEnemySpawnFailure(
-            request,
-            "direct arena spawn requires manual enemy spawner test mode.");
-        return ManualRunEnemySpawnerDispatchResult::Handled;
-    }
-    if (!multiplayer::IsLuaModSimulationAuthority()) {
-        CompleteManualRunEnemySpawnFailure(
-            request,
-            "direct arena spawn requires simulation authority.");
-        return ManualRunEnemySpawnerDispatchResult::Handled;
+    const bool replicated_client_catchup =
+        !request.allow_direct_arena_spawn &&
+        request.network_actor_id != 0 &&
+        request.allow_active_waves &&
+        !request.freeze_on_spawn &&
+        local_transport_client;
+    if (!replicated_client_catchup) {
+        if (!g_state.manual_enemy_spawner_test_mode.load(
+                std::memory_order_acquire)) {
+            CompleteManualRunEnemySpawnFailure(
+                request,
+                "direct arena spawn requires manual enemy spawner test mode.");
+            return ManualRunEnemySpawnerDispatchResult::Handled;
+        }
+        if (!multiplayer::IsLuaModSimulationAuthority()) {
+            CompleteManualRunEnemySpawnFailure(
+                request,
+                "direct arena spawn requires simulation authority.");
+            return ManualRunEnemySpawnerDispatchResult::Handled;
+        }
     }
 
-    Log(
-        "manual run enemy spawn: dispatching exact stock class directly from "
-        "the gameplay pump. request_id=" +
-        std::to_string(request.request_id) +
-        " type_id=" + std::to_string(request.type_id) +
-        " requested_pos=(" + std::to_string(request.x) + "," +
-        std::to_string(request.y) + ")");
+    if (replicated_client_catchup) {
+        Log(
+            "manual run enemy spawn: dispatching replicated client catch-up "
+            "directly without a remembered stock spawner. request_id=" +
+            std::to_string(request.request_id) +
+            " network_actor_id=" +
+            std::to_string(request.network_actor_id) +
+            " type_id=" + std::to_string(request.type_id));
+    } else {
+        Log(
+            "manual run enemy spawn: dispatching exact stock class directly "
+            "from the gameplay pump. request_id=" +
+            std::to_string(request.request_id) +
+            " type_id=" + std::to_string(request.type_id) +
+            " requested_pos=(" + std::to_string(request.x) + "," +
+            std::to_string(request.y) + ")");
+    }
     return DispatchExactRunEnemySpawn(request, 0);
 }
