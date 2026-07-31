@@ -65,6 +65,57 @@ bool TryReadRunLifecycleRoundedXp(uintptr_t progression_address, int* experience
     return true;
 }
 
+bool TryReadRunLifecycleRoundedNextXp(
+    uintptr_t progression_address,
+    int* next_experience) {
+    if (next_experience == nullptr) {
+        return false;
+    }
+    *next_experience = 0;
+    if (progression_address == 0) {
+        return false;
+    }
+
+    float next_xp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionNextXpThresholdOffset,
+            &next_xp) ||
+        !std::isfinite(next_xp) ||
+        next_xp < 0.0f) {
+        return false;
+    }
+    *next_experience = static_cast<int>(std::lround(next_xp));
+    return true;
+}
+
+std::uint64_t FindNaturalSyntheticParticipantForProgression(
+    uintptr_t progression_address) {
+    if (progression_address == 0 ||
+        !multiplayer::IsLuaModSimulationAuthority()) {
+        return 0;
+    }
+
+    const auto runtime = multiplayer::SnapshotRuntimeState();
+    for (const auto& participant : runtime.participants) {
+        if (!multiplayer::IsLuaControlledParticipant(participant) ||
+            !participant.runtime.valid ||
+            !participant.runtime.in_run) {
+            continue;
+        }
+        SDModParticipantGameplayState gameplay_state;
+        if (TryGetParticipantGameplayState(
+                participant.participant_id,
+                &gameplay_state) &&
+            gameplay_state.available &&
+            gameplay_state.progression_runtime_state_address ==
+                progression_address) {
+            return participant.participant_id;
+        }
+    }
+    return 0;
+}
+
 void RememberEnemyType(uintptr_t enemy_address, int enemy_type) {
     if (enemy_address == 0) {
         return;

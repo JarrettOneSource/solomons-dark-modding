@@ -22,7 +22,7 @@ TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-from ml_bot import spec  # noqa: E402
+from ml_bot import spec, waves  # noqa: E402
 from ml_bot.bridge import (  # noqa: E402
     MAX_CHOICE_ROLLOUTS_PER_RESPONSE,
     MAX_ROLLOUTS_PER_RESPONSE,
@@ -58,11 +58,13 @@ from ml_bot.model import (  # noqa: E402
 from train_bot_policy import (  # noqa: E402
     MAX_LIVE_ROLLOUT_STEPS,
     _atomic_json,
+    build_parser,
     concatenate_choice_batches,
     partition_choice_records,
     partition_rollout_records,
     prepare_choice_batch,
     prepare_rollout_batch,
+    resolve_rollout_timeout,
 )
 
 
@@ -663,6 +665,106 @@ class MlBotPolicyTests(unittest.TestCase):
             ["solo-learned", "multi-learned-2"],
         )
 
+    def test_wave_mode_and_rollout_timeout_defaults_are_training_safe(
+        self,
+    ) -> None:
+        args = build_parser().parse_args(["live-ppo"])
+        self.assertEqual(args.episode_mode, "waves")
+        self.assertIsNone(args.rollout_timeout)
+        self.assertEqual(resolve_rollout_timeout(960, None), 180.0)
+        self.assertEqual(resolve_rollout_timeout(1024, None), 188.0)
+        self.assertEqual(resolve_rollout_timeout(8192, None), 1084.0)
+        self.assertEqual(resolve_rollout_timeout(8192, 321.5), 321.5)
+        with self.assertRaisesRegex(ValueError, "rollout-steps"):
+            resolve_rollout_timeout(0, None)
+        with self.assertRaisesRegex(ValueError, "rollout-timeout"):
+            resolve_rollout_timeout(1024, math.inf)
+
+    def test_wave_session_requires_the_stock_temporary_profile(self) -> None:
+        session = SoloSession(
+            instance="wave-fixture",
+            max_participants=2,
+            episode_mode="waves",
+        )
+        self.assertEqual(session.episode_mode, "waves")
+        self.assertFalse(session.fresh_install)
+        curriculum = SoloSession(
+            instance="curriculum-fixture",
+            max_participants=2,
+        )
+        self.assertTrue(curriculum.fresh_install)
+        with self.assertRaisesRegex(ValueError, "temporary profile"):
+            SoloSession(
+                instance="invalid-wave-fixture",
+                max_participants=2,
+                episode_mode="waves",
+                fresh_install=True,
+            )
+
+    def test_stock_wave_gate_is_selected_from_exact_openable_geometry(
+        self,
+    ) -> None:
+        gate = waves._select_gate(
+            (100.0, 100.0),
+            (100.0, 1000.0),
+            [
+                {
+                    "geometry_id": 7,
+                    "start_x": 80.0,
+                    "start_y": 500.0,
+                    "end_x": 120.0,
+                    "end_y": 500.0,
+                },
+                {
+                    "geometry_id": 8,
+                    "start_x": 500.0,
+                    "start_y": 400.0,
+                    "end_x": 520.0,
+                    "end_y": 400.0,
+                },
+            ],
+        )
+        self.assertEqual(gate["midpoint"], (100.0, 500.0))
+        self.assertEqual(gate["route_unit"], (-0.0, 1.0))
+        self.assertEqual(gate["geometry_ids"], [7])
+
+    def test_natural_choice_gate_requires_xp_and_learned_acceptance(
+        self,
+    ) -> None:
+        session = object.__new__(SoloSession)
+        session.participant_progression = lambda _ids: [
+            {
+                "participant_id": 41,
+                "level": 2,
+                "experience": 100,
+                "choice_pending": 0,
+                "choice_generation": 3,
+            }
+        ]
+        session.status = lambda: {
+            "learned_skill_choices_seen": "1",
+            "learned_skill_choices_accepted": "1",
+        }
+        result = session.wait_for_natural_choice(
+            (41,),
+            (
+                {
+                    "participant_id": 41,
+                    "level": 1,
+                    "experience": 0,
+                },
+            ),
+            initial_status={
+                "learned_skill_choices_seen": "0",
+                "learned_skill_choices_accepted": "0",
+            },
+            timeout=1.0,
+        )
+        self.assertEqual(result["level_delta"], 1)
+        self.assertEqual(result["experience_delta"], 100)
+        self.assertEqual(result["native_choices_seen_delta"], 1)
+        self.assertEqual(result["learned_choices_accepted_delta"], 1)
+
     def test_seed_round_trip_uses_native_rng_contract(self) -> None:
         session = object.__new__(SoloSession)
         calls: list[str] = []
@@ -975,6 +1077,9 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(values["finite"], "true")
         self.assertEqual(values["trajectory_v3"], "true")
         self.assertEqual(values["permanent_potion_masks"], "true")
+        self.assertEqual(values["idle_live_enemy_reward"], "0.0")
+        self.assertEqual(values["idle_choice_duration_steps"], "1")
+        self.assertEqual(values["xp_scale"], "25.0")
 
     def _run_lua(self, script: Path) -> dict[str, str]:
         lua = shutil.which("lua")

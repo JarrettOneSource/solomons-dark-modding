@@ -303,6 +303,28 @@ private:
     std::unique_lock<std::recursive_mutex> lock_;
 };
 
+bool CanInstallParticipantConcentrationContext(
+    const ParticipantEntityBinding* binding) {
+    if (binding == nullptr ||
+        !binding->concentration_selection_valid) {
+        return false;
+    }
+
+    if (binding->controller_kind ==
+        multiplayer::ParticipantControllerKind::Native) {
+        return true;
+    }
+
+    // Host-owned Lua participants have independent native progression just
+    // like remote humans. Their native rolls, applies, and progression
+    // refreshes must run with their replicated Concentrate lanes installed;
+    // a client-side synthetic mirror remains packet-driven and may not claim
+    // that authority.
+    return binding->controller_kind ==
+               multiplayer::ParticipantControllerKind::LuaBrain &&
+           multiplayer::IsLocalTransportHost();
+}
+
 struct ScopedParticipantConcentrationContext {
     const ParticipantEntityBinding* binding = nullptr;
     bool requested = false;
@@ -318,11 +340,7 @@ struct ScopedParticipantConcentrationContext {
     explicit ScopedParticipantConcentrationContext(
         const ParticipantEntityBinding* binding_in)
         : binding(binding_in),
-          requested(
-              binding_in != nullptr &&
-              binding_in->concentration_selection_valid &&
-              binding_in->controller_kind ==
-                  multiplayer::ParticipantControllerKind::Native) {
+          requested(CanInstallParticipantConcentrationContext(binding_in)) {
         if (!requested) {
             return;
         }

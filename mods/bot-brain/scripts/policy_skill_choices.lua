@@ -414,6 +414,17 @@ function Manager:handle(
     error("invalid policy skill_choice_mode " .. tostring(mode))
   end
 
+  context.debug.skill_choices_seen =
+    (tonumber(context.debug.skill_choices_seen) or 0) + 1
+  if type(context.shared) == "table" and
+      type(context.shared.log) == "function" then
+    context.shared.log(
+      context,
+      "native skill choice pending mode=" .. tostring(mode) ..
+      " generation=" .. tostring(event.generation) ..
+      " options=" .. tostring(#event.options))
+  end
+
   local decision
   if mode == "learned" then
     if type(runtime) ~= "table" or

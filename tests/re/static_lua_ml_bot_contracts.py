@@ -397,17 +397,20 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         assert token in training, (
             f"trajectory v3 writer lacks {token}"
         )
-    # Reward coefficients stay byte-for-byte represented as the audited v2
-    # formula; v3 adds no target-, hazard-, item-, or choice-shaped term.
+    # V3-7 removes passive survival reward and adds only native XP progress;
+    # damage, self-vitals, wave, death, and clamp coefficients remain fixed.
     for token in (
-        "local reward = 0.002",
+        "local XP_SCALE = 25.0",
+        "local reward = 0.0",
         "reward = reward + hp_delta * 1.25",
+        "reward = reward + xp_delta / XP_SCALE",
         "(previous_ratio - current_ratio) * 0.65",
         "math.min(wave_delta, 1) * 1.5",
         "reward = reward - 2.0",
         "math.max(-4.0, math.min(4.0, reward))",
     ):
         assert token in training
+    assert "local reward = 0.002" not in training
     assert "target" not in training[
         training.index("function Controller:reward("):
         training.index("function Controller:finish_pending(")
@@ -435,12 +438,16 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "choice_duration_steps=2",
         "scripted_choice_excluded=true",
         "trajectory_v3=true",
+        "idle_live_enemy_reward=",
+        "idle_choice_duration_steps=",
+        "xp_scale=",
     ):
         assert token in fixture
     return (
         "V3 Phase 3 pins 1279 ordered observations, exact cached geometry, "
         "four action masks, inventory and hazard semantics, and separate "
-        "main and choice-event trajectories without changing the reward"
+        "main and choice-event trajectories with the V3-7 XP-only progress "
+        "reward and zero passive survival reward"
     )
 
 
@@ -1079,8 +1086,8 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         '"policy_generation_advanced"',
         '"choice_complete_intervals"',
         '"choice_update_records"',
-        "--validation-native-choice-event",
-        "session.trigger_validation_choice_event(",
+        '"choice_intervals"',
+        '"natural_progression_gate"',
         '"live-training-report.json"',
         'f"episode-{iteration:04d}.json"',
         "candidate not in run_seeds",
@@ -1257,4 +1264,166 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         "Phase 5 pins disposable seeded episodes, config-driven solo/mixed/"
         "multi-learned rotation, participant-grouped main plus SMDP PPO, "
         "strict live v3 behavior checks, and semantic authority ingress"
+    )
+
+
+def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
+    bridge = _read("tools/ml_bot/bridge.py")
+    waves = _read("tools/ml_bot/waves.py")
+    trainer = _read("tools/train_bot_policy.py")
+    brain = _read("mods/bot-brain/scripts/brain.lua")
+    choices = _read("mods/bot-brain/scripts/policy_skill_choices.lua")
+    training = _read("mods/bot-brain/scripts/policy_training.lua")
+    observation = _read("mods/bot-brain/scripts/policy_observation.lua")
+    damage_dispatch = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "badguy_damage_hook.inl"
+    )
+    damage_hook = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "synthetic_stock_xp_hook.inl"
+    )
+    level_hooks = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "enemy_death_reward_level_up_hooks.inl"
+    )
+    skill_dispatch = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "skill_choices_api.inl"
+    )
+    skill_api = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "natural_skill_choices_api.inl"
+    )
+    bot_lifecycle = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "lifecycle_api.inl"
+    )
+    concentration = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "scene_and_animation_gameplay_state.inl"
+    )
+    layout = _read("config/binary-layout.ini")
+
+    for token in (
+        'episode_mode: str = "curriculum"',
+        '"waves episodes require an isolated temporary profile"',
+        "def start_stock_wave_episode(",
+        "def participant_progression(",
+        "def wait_for_natural_choice(",
+        '"stock waves did not produce natural learned progression',
+        '"learned_skill_choices_seen"',
+    ):
+        assert token in bridge, f"V3-6 bridge lacks {token}"
+
+    for token in (
+        "sd.nav.get_collision_geometry",
+        "row.openable == true",
+        "sd.nav.test_segment",
+        "sd.input.hold_movement_frames",
+        "sd.hub.trigger_solomon_dig()",
+        '"transition": "stock_solomon_dig"',
+        "cell_x * subdivisions + sample_x",
+        "cell_y * subdivisions + sample_y",
+    ):
+        assert token in waves, f"V3-6 retail route lacks {token}"
+    for forbidden in (
+        "sd.gameplay.start_waves",
+        "sd.world.spawn_enemy",
+        "sd.bots.debug_sync_level_up",
+    ):
+        assert forbidden not in waves
+
+    _require_in_order(
+        trainer,
+        "session.start_stock_wave_episode(",
+        "session.wait_for_natural_choice(",
+        "session.clear_main_training_stream()",
+        "session.wait_for_rollouts(",
+        "session.finish_training_episode()",
+        "session.drain_choice_rollouts(choice_count)",
+        "choice_ppo_epochs(",
+    )
+    for token in (
+        'choices=("waves", "curriculum")',
+        'default="waves"',
+        'fresh_install=args.episode_mode == "curriculum"',
+        "def resolve_rollout_timeout(",
+        "60.0 + rollout_steps / 10.0 * 1.25",
+        "timeout=rollout_timeout",
+        '"rollout_timeout_source"',
+        '"progression_before"',
+        '"progression_after"',
+        '"learned_skill_choices_seen_delta"',
+        '"learned_skill_choices_accepted_delta"',
+        '"choice_intervals"',
+    ):
+        assert token in trainer, f"V3-6 trainer lacks {token}"
+    assert "--validation-native-choice-event" not in trainer
+    assert "session.trigger_validation_choice_event(" not in trainer
+    assert "target_slot > 3" not in waves
+    assert "skill_choices_seen = 0" in brain
+    assert "native skill choice pending mode=" in choices
+    assert "choice interval closed mode=" in training
+    assert "duration_steps=" in training
+    assert "reward_sum=" in training
+
+    for token in (
+        "native_kill_result == 0",
+        "hp_after > 0.0f",
+        "level_before_route != capture.level_before",
+        "std::fabs(xp_before_route - capture.xp_before) > 0.0001f",
+        "capture.base_reward * capture.gameplay_multiplier",
+        "CallNativeExperienceGainSafe(",
+        "credited_xp=",
+    ):
+        assert token in damage_hook, f"V3-6 stock XP route lacks {token}"
+    assert '#include "synthetic_stock_xp_hook.inl"' in damage_dispatch
+    for token in (
+        "FindNaturalSyntheticParticipantForProgression(",
+        "UpdateParticipantLevelProfileState(",
+        "PublishNaturalParticipantLevelUp(",
+    ):
+        assert token in level_hooks, f"V3-6 progression hook lacks {token}"
+    for token in (
+        "RunWithParticipantConcentrationContext(",
+        "RollNativeSkillChoiceOptions(",
+        "pending_choice->generation = g_next_skill_choice_generation++",
+        "pending_choice->pending_weld_build_id",
+    ):
+        assert token in skill_api, f"V3-6 natural choice path lacks {token}"
+    assert '#include "natural_skill_choices_api.inl"' in skill_dispatch
+    for token in (
+        "concentration_selection_valid = true",
+        "concentration_entry_a = -1",
+        "concentration_entry_b = -1",
+        "concentration_revision = 1",
+    ):
+        assert token in bot_lifecycle, (
+            f"V3-6 initial Concentrate state lacks {token}"
+        )
+    assert "ParticipantControllerKind::LuaBrain" in concentration
+    assert "multiplayer::IsLocalTransportHost()" in concentration
+    for token in (
+        "gameplay_player_progression_handle=0x1654",
+        "gameplay_experience_multiplier=0x1AB8",
+        "enemy_experience_reward=0x178",
+        "experience_gain=0x00680AD8",
+        "level_up=0x0067C250",
+    ):
+        assert token in layout, f"V3-6 native XP evidence lacks {token}"
+
+    assert "participant and participant.experience_current" in observation
+    for token in (
+        "local XP_SCALE = 25.0",
+        "local reward = 0.0",
+        "reward = reward + xp_delta / XP_SCALE",
+        "pending.rewards[#pending.rewards + 1] = reward",
+    ):
+        assert token in training, f"V3-7 reward path lacks {token}"
+    assert "local reward = 0.002" not in training
+    return (
+        "V3-6 makes isolated stock waves the training default, routes "
+        "synthetic-attributed stock XP through owned native progression, "
+        "fails closed on natural choices, and V3-7 removes passive reward"
     )

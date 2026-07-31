@@ -265,6 +265,7 @@ local self_participant = {
   mana_max = 100.0,
   move_speed = 350.0,
   level = 5,
+  experience_current = 10,
   owned_progression = {
     ability_loadout = {
       primary_entry_index = 16,
@@ -877,6 +878,41 @@ end
 local controller =
   training_module.new(spec, fake_runtime)
 controller:enable({seed = 123, capacity = 128})
+local idle_previous = {
+  hp_ratio = 0.75,
+  mana_ratio = 0.5,
+  wave = 4,
+  alive = true,
+  experience = 10,
+  enemy_count = 1,
+  enemy_health = {[101] = 0.8},
+}
+local idle_current = {
+  hp_ratio = 0.75,
+  mana_ratio = 0.5,
+  wave = 4,
+  alive = true,
+  experience = 10,
+  enemy_count = 1,
+  enemy_health = {[101] = 0.8},
+}
+local idle_reward = controller:reward(
+  idle_previous,
+  idle_current,
+  false)
+assert(idle_reward == 0.0)
+local idle_choice_context = {
+  policy_choice_pending = {
+    duration_steps = 0,
+    rewards = {},
+  },
+}
+controller:accumulate_choice_reward(
+  idle_choice_context,
+  idle_reward)
+assert(idle_choice_context.policy_choice_pending.duration_steps == 1)
+assert(#idle_choice_context.policy_choice_pending.rewards == 1)
+assert(idle_choice_context.policy_choice_pending.rewards[1] == 0.0)
 local training_context = {
   participant_id = 42,
   last_skill_choice_generation = -1,
@@ -918,6 +954,7 @@ local main_capture = {
     mana_ratio = 1.0,
     wave = 1,
     alive = true,
+    experience = 10,
     enemy_count = 1,
     enemy_health = {[101] = 1.0},
   },
@@ -940,6 +977,7 @@ main_capture.metrics = {
   mana_ratio = 0.9,
   wave = 1,
   alive = true,
+  experience = 15,
   enemy_count = 1,
   enemy_health = {[101] = 0.8},
 }
@@ -953,6 +991,7 @@ main_capture.metrics = {
   mana_ratio = 0.8,
   wave = 2,
   alive = true,
+  experience = 15,
   enemy_count = 0,
   enemy_health = {},
 }
@@ -1023,6 +1062,7 @@ scripted_controller:terminal(
     mana_ratio = 0.0,
     wave = 2,
     alive = false,
+    experience = 15,
     enemy_count = 0,
     enemy_health = {},
   })
@@ -1055,3 +1095,7 @@ print("choice_generation_exactly_once=true")
 print("choice_duration_steps=2")
 print("scripted_choice_excluded=true")
 print("trajectory_v3=true")
+print("idle_live_enemy_reward=" .. tostring(idle_reward))
+print("idle_choice_duration_steps=" ..
+  tostring(idle_choice_context.policy_choice_pending.duration_steps))
+print("xp_scale=" .. tostring(training_module.XP_SCALE))

@@ -1796,3 +1796,203 @@ boneyard is the only supplied layout, so layout-override plumbing remains
 validated but a multi-layout quality corpus remains non-blocking as
 adjudicated. No v3 layout, descriptor, head, action, reward, or native seam
 changed in this phase.
+
+## M. Phase V3-6 natural-XP wave training
+
+This phase supersedes only V3-5's acceptance-only validation-choice smoke.
+V3-6 does not change policy v3's observation, action, model, reward, or
+trajectory contracts. Section N records the subsequently approved V3-7 reward
+change; it deliberately keeps the version-3 trajectory schema.
+
+### XP root cause
+
+Two independent conditions made the curriculum incapable of producing a
+natural learned choice:
+
+1. The trainer launched every episode with `-FreshInstall`. The solo launcher
+   translates that switch to `--fresh-install`; without it, the same
+   disposable staging path uses `--temporary-profile`
+   (`scripts/Launch-LocalSoloSession.ps1:191-201`). Fresh-install deliberately
+   passes no retail profile into temporary-profile preparation, whereas the
+   ordinary temporary profile copies the retail app-data tree
+   (`SolomonDarkModLauncher/src/Launch/IsolatedProfileBootstrapper.cs:18-26,
+   71-101`). Stage mirroring also excludes the top-level `sandbox` directory
+   when that mode is selected
+   (`SolomonDarkModLauncher/src/Staging/FileTreeMirror.cs:11-29,46-54`). In a
+   fresh owned probe, `start_testrun` therefore materialized only participant
+   actors: `Solomon_Dig` type `0x1391`, the Lantern, the stock survival state,
+   and a functioning wave spawner were absent. Calling the wave start seam
+   could not create a wave. Repeating the probe with the isolated temporary
+   profile materialized actor types 5009/5010 and the player immediately.
+
+2. The curriculum manager does not ask the retail wave spawner for a wave. It
+   repeatedly requests exact type-1001 enemies with
+   `allow_direct_arena_spawn=true`
+   (`tools/ml_bot/bridge.py:666-770`). That request calls the stock exact-group
+   constructor directly, including a null spawner in the no-spawner path
+   (`SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/
+   manual_enemy_spawning.inl:278-319,396-448`), while manual-spawner test mode
+   suppresses the normal wave tick
+   (`SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/
+   wave_spawn_filter.inl:327-362`). The native XP hook can observe XP only if
+   stock code actually invokes the native experience-gain function
+   (`SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/
+   enemy_death_reward_level_up_hooks.inl:122-164`). In the owned curriculum
+   probe, the learned bot killed successive exact enemies and their HP cycled
+   through death, but its profile remained level 1 / XP 0 and the
+   `xp.gaining` callback count remained exactly zero. The failure is upstream
+   of synthetic profile sync or pending-choice handling: the direct death has
+   no active stock-wave reward context and never enters native XP gain.
+
+Giving that arena XP would require either reconstructing the stock wave reward
+bookkeeping around exact spawns or inventing a second XP/kill-attribution
+path. The former is the retail wave path; the latter would no longer prove
+native progression. There is no cheap, correct curriculum patch. Curriculum
+therefore remains intentionally XP-free, and wave episodes are the honest
+choice-training environment. A final explicit curriculum-mode probe confirmed
+level 1 / XP 0 before and after 261 collected combat decisions, with zero
+native or learned choice events.
+
+### Wave episode and progression gate
+
+`live-ppo --episode-mode waves` is now the default. Each disposable session
+uses the isolated temporary profile, idle preset, and the existing stock
+survival state. The address-free wave router reads exact openable collision
+segments, drives physical slot-0 input through the gate, approaches Solomon,
+invokes `sd.hub.trigger_solomon_dig`, and waits for a positive native wave and
+live-enemy count. It never calls `start_waves`, directly spawns an enemy, or
+writes a transform. `--episode-mode curriculum` retains the fresh-install
+direct arena for targeted drills.
+
+Training is active before the retail wave starts and before any natural XP or
+choice event can occur. For waves, the trainer snapshots every learned
+profile, starts the retail wave, and refuses to collect a batch until all of
+these facts are observed in the same episode:
+
+- aggregate learned XP or level increases;
+- at least one new native pending-choice generation reaches the learned
+  manager; and
+- at least one learned choice is accepted.
+
+The remaining divergence is inside the retail reward helper itself. Ghidra
+shows `0x0063E7D0` dispatching `Badguy::Contact` through vtable slot `+0x4C`,
+testing its nonzero return at `0x0063E80A`, reading the enemy reward at
+`enemy+0x178` at `0x0063E829`, and calling helper `0x005C8880`. That helper
+multiplies the reward by `gameplay+0x1AB8` but resolves the progression through
+the hard-wired slot-0 handle at `gameplay+0x1654`. The recovered fields are
+named in `config/binary-layout.ini:1312-1315,1836`; the loader's native
+ExperienceGain and LevelUp entry points are pinned there at
+`config/binary-layout.ini:1928-1929`.
+
+Consequently, real waves invoke the correct kill/reward path but do not route
+its XP to a host-owned synthetic killer by themselves. The authority-side
+damage hook now captures the synthetic source's owned progression and the
+stock reward inputs before dispatch, then forwards only when the exact native
+kill return is nonzero, post-contact HP is nonpositive, and that progression
+has not already changed. It calls the same native ExperienceGain routine with
+native scaling enabled; the normal XP and LevelUp hooks update the replicated
+participant profile. A natural synthetic LevelUp then rolls native options in
+that participant's scoped Concentrate context and publishes one
+generation-scoped pending choice. New synthetic progressions begin with the
+real empty Concentrate selection `(-1,-1)`; host-owned Lua participants may
+install it for their narrow roll/apply window, while client mirrors remain
+packet-driven. The normal learned manager scores and applies the offer.
+Episode finalization closes the choice interval with `trainable`, `accepted`,
+duration, reward count, and reward sum before SMDP PPO.
+
+### Rollout timeout
+
+An omitted `--rollout-timeout` now resolves to
+`max(180, 60 + rollout_steps / 10 * 1.25)` seconds: worst-case one-learned-bot
+10-Hz collection, 25 percent headroom, and 60 seconds of allowance. An
+explicit value remains an exact override. The resulting timeout and source are
+written to checkpoint metadata and every episode/report JSON. At the transport
+ceiling, 8,192 requested steps now receive 1,084 seconds instead of the old
+fixed 180 seconds.
+
+### V3-6 live evidence
+
+The final post-build disposable episode was
+`ml-v37-final-smoke-0731b-e0001`, with audio disabled, requested/observed native
+seed and run nonce `772072821`, stock layout SHA-256
+`fe2e01b0ab62f644c3e5bf53f71df3a41968b95c8e22fa44c1d1250ba08cdb5b`,
+and composition `solo-learned`. The physical route acquired Solomon, invoked
+the stock conversation, and entered wave 1 with nine live/spawned stock
+enemies. Learned progression moved from level 1 / XP 0 to the collection gate
+at level 2 / XP 92, then to level 2 / XP 140. The exact authority lines were:
+
+```text
+[bots] natural synthetic level-up choices pending. participant_id=1152921504606851072 generation=1 level=2 xp=92 next_xp=160 requested_choice_count=3 option_count=3 options=[35,50,49]
+[bots] synthetic stock XP routed. participant_id=1152921504606851072 wave=9 enemy_type=1001 base_reward=3.825000 gameplay_multiplier=1.000000 native_amount=3.825000 level_before=1 level_after=2 xp_before=87.974991 xp_after=91.799988 credited_xp=3.824997
+[bot-brain] roster=1 name=Learner 1 element=fire behavior=learned discipline=arcane native skill choice pending mode=learned generation=1 options=3
+[bot-brain] roster=1 name=Learner 1 element=fire behavior=learned discipline=arcane policy skill choice accepted mode=learned generation=1 option_id=35
+[bot-brain] roster=1 name=Learner 1 element=fire behavior=learned discipline=arcane choice interval closed mode=learned trainable=true accepted=true duration_steps=519 reward_sum=396.14
+```
+
+The updated-reward smoke trained 517 main rows and one complete natural choice
+interval (`duration_steps=reward_count=519`, `reward_sum=396.14`). Main policy
+and value losses were finite at `0.2900690866454867` and
+`169.40483129402406`; choice policy and value losses were finite at
+`-82.9435917130743` and `6760.121099500875`. Chunked hot reload advanced the
+policy to generation 3, with 623 learned decisions and 621 accepted movement
+requests. The omitted timeout resolved through the autoscale path to 180
+seconds for the 512-step request.
+
+The clean Release build completed with zero warnings and zero errors. Final
+repository gates are 541/541 Python tests, 307/307 static RE contracts, and
+675 checked source/header fragments. Fresh scripted-live verification remained
+green: the skirmisher reached wave 6 alive at 50/50 HP with 32/32 accepted
+casts, while the profile verifier exercised guardian, striker, and skirmisher
+behavior without a reconciliation error. Runtime evidence is retained outside
+the repository under `/mnt/d/codex-evidence/ml-bot-v37/`.
+
+## N. Phase V3-7 reward semantics
+
+The flat `+0.002` decision tick is removed. Merely remaining alive, including
+while live enemies are unchanged, earns no reward. The controller retains the
+approved dense enemy-HP-drop coefficient `0.65`, self-HP delta coefficient
+`1.25`, positive wave transition `+1.5`, terminal death `-2.0`, and clamp
+`[-4,4]`. It adds only positive participant progression:
+
+```text
+xp_reward = max(0, experience_current - experience_previous) / XP_SCALE
+XP_SCALE = 25
+```
+
+`experience_current` is the replicated participant field already refreshed by
+the authority-owned native ExperienceGain path. It is copied into each pending
+main-record reward context. `Controller:finish_pending` computes one reward
+and passes that exact scalar to `accumulate_choice_reward`, so the choice SMDP
+stream inherits the main per-step stream without a second reward mechanism.
+
+### Stock-wave calibration
+
+An owned disposable episode used native seed/run nonce `29271575`, stock
+layout SHA-256
+`fe2e01b0ab62f644c3e5bf53f71df3a41968b95c8e22fa44c1d1250ba08cdb5b`,
+composition `solo-learned`, and the real wave route. The authority log recorded
+every learned-attributed stock kill as `(wave, enemy type, base reward, native
+amount, XP before, XP after, credited XP)`. Waves 1–10 produced:
+
+| Wave | Learned-attributed kills | Credited XP per kill |
+|---:|---:|---:|
+| 1 | 4 | 3.825000 |
+| 2 | 7 | 3.825000–3.825001 |
+| 3 | 6 | 3.825001 |
+| 4 | 0 | — |
+| 5 | 0 | — |
+| 6 | 3 | 3.824997 |
+| 7 | 0 | — |
+| 8 | 19 | 3.442497–3.824997 |
+| 9 | 0 | — |
+| 10 | 0 | — |
+
+Across the 39 kills, credited XP was `3.442497–3.825001`, median `3.824997`
+and mean `3.677884`. `XP_SCALE=25` maps the median early kill to `0.15299988`,
+inside the owner's `0.1–0.2` target. The exact zero-reward fixture holds HP,
+XP, wave, and one live enemy's HP constant, obtains reward `0.0`, then appends
+that same `0.0` to a choice interval while advancing its duration by one.
+
+This is a semantic discontinuity for future reward curves. No model,
+observation, trajectory, or serialization shape changes, so there is no
+version bump.

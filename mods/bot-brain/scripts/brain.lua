@@ -1080,6 +1080,7 @@ function brain.new(row, roster_index, shared, steering)
       movement_candidates_blocked = 0,
       cast_issued = 0,
       cast_accepted = 0,
+      skill_choices_seen = 0,
       skill_choices_accepted = 0,
       kite_path_distance = 0.0,
       nearest_enemy_distance = 0.0,

@@ -1769,6 +1769,8 @@ function observation.capture(builder, context, frame)
       mana_ratio = mana_ratio,
       wave = wave_number,
       alive = hp_ratio > 0.0,
+      experience = number(
+        participant and participant.experience_current),
       enemy_count = #enemies,
       enemy_health = enemy_health(enemies),
     },

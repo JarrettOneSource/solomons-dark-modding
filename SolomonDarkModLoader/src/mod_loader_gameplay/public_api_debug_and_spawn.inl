@@ -66,11 +66,9 @@ bool RunWithParticipantConcentrationContext(
     }
 
     auto* binding = FindParticipantEntity(participant_id);
-    if (binding == nullptr ||
-        binding->controller_kind != multiplayer::ParticipantControllerKind::Native ||
-        !binding->concentration_selection_valid) {
+    if (!CanInstallParticipantConcentrationContext(binding)) {
         return fail(
-            "Participant Concentrate context requires a materialized native participant selection.");
+            "Participant Concentrate context requires a materialized, authority-owned participant selection.");
     }
 
     ScopedParticipantConcentrationContext context(binding);

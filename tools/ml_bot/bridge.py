@@ -22,6 +22,7 @@ import verify_local_multiplayer_sync as local_sync
 from . import spec
 from .compositions import TeamComposition, build_roster
 from .model import BotPolicy, render_lua_weights
+from .waves import start_stock_wave_episode as route_stock_wave_episode
 
 ROOT = Path(__file__).resolve().parents[2]
 # The native Lua-exec pipe rejects responses above 1 MiB. Sixteen worst-case
@@ -513,6 +514,7 @@ print('move_accepted=' .. tostring(debug.move_accepted or 0))
 print('cast_accepted=' .. tostring(debug.cast_accepted or 0))
 local learned_ids = {}
 local learned_count = 0
+local learned_skill_choices_seen = 0
 local learned_skill_choices_accepted = 0
 local last_skill_choice_generation = 0
 local last_skill_choice_option_id = -1
@@ -522,6 +524,9 @@ for _, row in ipairs(debug.bots or {}) do
     learned_count = learned_count + 1
     learned_ids[#learned_ids + 1] =
       tostring(row.participant_id)
+    learned_skill_choices_seen =
+      learned_skill_choices_seen +
+      (tonumber(row.skill_choices_seen) or 0)
     learned_skill_choices_accepted =
       learned_skill_choices_accepted +
       (tonumber(row.skill_choices_accepted) or 0)
@@ -537,6 +542,8 @@ end
 print('learned_bot_count=' .. tostring(learned_count))
 print('learned_participant_ids=' ..
   table.concat(learned_ids, ','))
+print('learned_skill_choices_seen=' .. tostring(
+  learned_skill_choices_seen))
 print('learned_skill_choices_accepted=' .. tostring(
   learned_skill_choices_accepted))
 print('last_skill_choice_generation=' .. tostring(
@@ -806,6 +813,8 @@ class SoloSession:
         boneyard_override: Path | None = None,
         multiplayer_transport: bool = True,
         weld_preference: str = "auto",
+        episode_mode: str = "curriculum",
+        fresh_install: bool | None = None,
     ) -> None:
         self.instance = instance
         self.game_directory = game_directory
@@ -822,6 +831,18 @@ class SoloSession:
         self.boneyard_override = boneyard_override
         self.multiplayer_transport = multiplayer_transport
         self.weld_preference = weld_preference
+        if episode_mode not in {"waves", "curriculum"}:
+            raise ValueError("episode_mode must be waves or curriculum")
+        self.episode_mode = episode_mode
+        self.fresh_install = (
+            episode_mode == "curriculum"
+            if fresh_install is None
+            else fresh_install
+        )
+        if episode_mode == "waves" and self.fresh_install:
+            raise ValueError(
+                "waves episodes require an isolated temporary profile"
+            )
         self.pipe_name = f"SolomonDarkModLoader_LuaExec_{instance}"
         self.launch_result: dict[str, Any] | None = None
         self.process_ids: list[int] = []
@@ -968,7 +989,11 @@ class SoloSession:
             "-Instance",
             self.instance,
             "-Preset",
-            f"map_create_{self.element}_{self.discipline}_hub",
+            (
+                "idle"
+                if self.episode_mode == "waves"
+                else f"map_create_{self.element}_{self.discipline}_hub"
+            ),
             "-RuntimeRoot",
             _path_for_powershell(self.runtime_root),
             "-LocalPort",
@@ -985,7 +1010,6 @@ class SoloSession:
             _path_for_powershell(self.game_directory),
             "-LauncherPath",
             _path_for_powershell(self.launcher_path),
-            "-FreshInstall",
             "-ExactModIds",
             "bot.brain",
             "-ProcessIdOutputPath",
@@ -993,6 +1017,8 @@ class SoloSession:
             "-ResultOutputPath",
             _path_for_powershell(result_path),
         ]
+        if self.fresh_install:
+            arguments.append("-FreshInstall")
         if not self.multiplayer_transport:
             arguments.append("-DisableMultiplayerTransport")
         if self.boneyard_override is not None:
@@ -2428,6 +2454,196 @@ print('choices_applied=' .. tostring(choices_applied))
                 f"could not register the training arena manager: {manager}"
             )
         return manager
+
+    def start_stock_wave_episode(
+        self,
+        observer_participant_id: int,
+        *,
+        timeout: float = 180.0,
+    ) -> dict[str, object]:
+        if self.episode_mode != "waves":
+            raise BridgeError(
+                "stock wave routing requires a waves episode session"
+            )
+
+        def run_values(source: str, request_timeout: float) -> dict[str, str]:
+            return local_sync.parse_key_values(
+                self.lua(source, timeout=request_timeout)
+            )
+
+        return route_stock_wave_episode(
+            run_values,
+            observer_participant_id,
+            timeout=timeout,
+        )
+
+    def participant_progression(
+        self,
+        participant_ids: Sequence[int],
+    ) -> list[dict[str, int]]:
+        ids = tuple(int(value) for value in participant_ids)
+        if not ids or any(value <= 0 for value in ids):
+            raise ValueError("participant_ids must contain positive IDs")
+        rows = ",".join(str(value) for value in ids)
+        values = local_sync.parse_key_values(
+            self.lua(
+                f"""
+local ids = {{{rows}}}
+for index, id in ipairs(ids) do
+  local state = sd.bots.get_participant_state(id) or {{}}
+  local profile = state.profile or {{}}
+  local choices = sd.bots.get_skill_choices(id) or {{}}
+  local prefix = 'participant.' .. tostring(index) .. '.'
+  print(prefix .. 'id=' .. tostring(id))
+  print(prefix .. 'available=' .. tostring(
+    tonumber(state.id) == id))
+  print(prefix .. 'level=' .. tostring(profile.level or 0))
+  print(prefix .. 'experience=' ..
+    tostring(profile.experience or 0))
+  print(prefix .. 'pending=' ..
+    tostring(choices.pending == true))
+  print(prefix .. 'choice_generation=' ..
+    tostring(choices.generation or 0))
+end
+""",
+                timeout=10.0,
+            )
+        )
+        result: list[dict[str, int]] = []
+        for index, participant_id in enumerate(ids, start=1):
+            prefix = f"participant.{index}."
+            if (
+                values.get(prefix + "available") != "true"
+                or int(values.get(prefix + "id", "0")) != participant_id
+            ):
+                raise BridgeError(
+                    "participant progression is unavailable: "
+                    f"id={participant_id} values={values}"
+                )
+            level = int(float(values.get(prefix + "level", "0")))
+            experience = int(
+                float(values.get(prefix + "experience", "0"))
+            )
+            if level <= 0 or experience < 0:
+                raise BridgeError(
+                    "participant progression is invalid: "
+                    f"id={participant_id} level={level} "
+                    f"experience={experience}"
+                )
+            result.append(
+                {
+                    "participant_id": participant_id,
+                    "level": level,
+                    "experience": experience,
+                    "choice_pending": int(
+                        values.get(prefix + "pending") == "true"
+                    ),
+                    "choice_generation": int(
+                        float(
+                            values.get(
+                                prefix + "choice_generation",
+                                "0",
+                            )
+                        )
+                    ),
+                }
+            )
+        return result
+
+    def wait_for_natural_choice(
+        self,
+        participant_ids: Sequence[int],
+        before: Sequence[Mapping[str, int]],
+        *,
+        initial_status: Mapping[str, str],
+        timeout: float = 300.0,
+    ) -> dict[str, object]:
+        if not math.isfinite(timeout) or timeout <= 0.0:
+            raise ValueError("timeout must be finite and positive")
+        ids = tuple(int(value) for value in participant_ids)
+        baseline = {
+            int(row["participant_id"]): {
+                "level": int(row["level"]),
+                "experience": int(row["experience"]),
+            }
+            for row in before
+        }
+        if set(ids) != set(baseline):
+            raise ValueError(
+                "natural-choice baseline does not match participant IDs"
+            )
+        initial_seen = int(
+            initial_status.get("learned_skill_choices_seen", "0")
+        )
+        initial_accepted = int(
+            initial_status.get("learned_skill_choices_accepted", "0")
+        )
+        deadline = time.monotonic() + timeout
+        maximum_level = {
+            participant_id: baseline[participant_id]["level"]
+            for participant_id in ids
+        }
+        maximum_experience = {
+            participant_id: baseline[participant_id]["experience"]
+            for participant_id in ids
+        }
+        last: dict[str, object] = {}
+        while time.monotonic() < deadline:
+            progression = self.participant_progression(ids)
+            status = self.status()
+            for row in progression:
+                participant_id = row["participant_id"]
+                maximum_level[participant_id] = max(
+                    maximum_level[participant_id], row["level"]
+                )
+                maximum_experience[participant_id] = max(
+                    maximum_experience[participant_id],
+                    row["experience"],
+                )
+            level_delta = sum(
+                maximum_level[participant_id]
+                - baseline[participant_id]["level"]
+                for participant_id in ids
+            )
+            experience_delta = sum(
+                maximum_experience[participant_id]
+                - baseline[participant_id]["experience"]
+                for participant_id in ids
+            )
+            seen_delta = (
+                int(status.get("learned_skill_choices_seen", "0"))
+                - initial_seen
+            )
+            accepted_delta = (
+                int(
+                    status.get(
+                        "learned_skill_choices_accepted",
+                        "0",
+                    )
+                )
+                - initial_accepted
+            )
+            last = {
+                "before": list(before),
+                "current": progression,
+                "maximum_level": maximum_level,
+                "maximum_experience": maximum_experience,
+                "level_delta": level_delta,
+                "experience_delta": experience_delta,
+                "native_choices_seen_delta": seen_delta,
+                "learned_choices_accepted_delta": accepted_delta,
+            }
+            if (
+                (experience_delta > 0 or level_delta > 0)
+                and seen_delta > 0
+                and accepted_delta > 0
+            ):
+                return last
+            time.sleep(0.2)
+        raise BridgeError(
+            "stock waves did not produce natural learned progression and "
+            f"a native choice within {timeout:.1f}s: {last}"
+        )
 
     def wait_for_training_enemy(
         self,

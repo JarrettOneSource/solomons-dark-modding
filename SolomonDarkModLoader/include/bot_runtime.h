@@ -373,6 +373,17 @@ bool UseParticipantConsumable(
     BotUseConsumableResult* result,
     std::string* error_message);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
+bool PublishNaturalParticipantLevelUp(
+    std::uint64_t participant_id,
+    uintptr_t progression_address,
+    std::int32_t level,
+    std::int32_t experience,
+    std::string* error_message);
+void UpdateParticipantLevelProfileState(
+    std::uint64_t participant_id,
+    int level,
+    int experience,
+    int next_experience);
 bool ReadBotSkillChoices(std::uint64_t bot_id, BotSkillChoiceSnapshot* snapshot);
 bool ChooseBotSkill(const BotSkillChoiceRequest& request, std::string* error_message);
 bool SyncParticipantProgressionToSharedLevelUp(

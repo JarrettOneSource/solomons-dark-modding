@@ -663,6 +663,21 @@ def _mean_choice_metrics(metrics: Sequence[object]) -> dict[str, float]:
     return result
 
 
+def resolve_rollout_timeout(
+    rollout_steps: int,
+    explicit_timeout: float | None,
+) -> float:
+    """Allow 25% headroom over the worst-case 10 Hz single-bot cadence."""
+
+    if rollout_steps <= 0:
+        raise ValueError("rollout-steps must be positive")
+    if explicit_timeout is not None:
+        if not math.isfinite(explicit_timeout) or explicit_timeout <= 0.0:
+            raise ValueError("rollout-timeout must be finite and positive")
+        return explicit_timeout
+    return max(180.0, 60.0 + rollout_steps / 10.0 * 1.25)
+
+
 def live_ppo(args: argparse.Namespace) -> int:
     from ml_bot.bridge import BridgeError, SoloSession
     from ml_bot.compositions import (
@@ -687,8 +702,15 @@ def live_ppo(args: argparse.Namespace) -> int:
             "rollout-steps exceeds the strict choice-event transport bound "
             f"of {MAX_LIVE_ROLLOUT_STEPS}"
         )
-    if args.rollout_timeout <= 0.0:
-        raise ValueError("rollout-timeout must be positive")
+    rollout_timeout = resolve_rollout_timeout(
+        args.rollout_steps,
+        args.rollout_timeout,
+    )
+    if (
+        not math.isfinite(args.wave_startup_timeout)
+        or args.wave_startup_timeout <= 0.0
+    ):
+        raise ValueError("wave-startup-timeout must be finite and positive")
     if args.learning_rate <= 0.0 or args.choice_learning_rate <= 0.0:
         raise ValueError("main and choice learning rates must be positive")
     for name in (
@@ -785,6 +807,8 @@ def live_ppo(args: argparse.Namespace) -> int:
             discipline=args.discipline,
             boneyard_override=boneyard,
             multiplayer_transport=True,
+            episode_mode=args.episode_mode,
+            fresh_install=args.episode_mode == "curriculum",
         )
         launch: dict[str, object] | None = None
         try:
@@ -800,16 +824,25 @@ def live_ppo(args: argparse.Namespace) -> int:
             generation = session.load_policy(policy)
             seed_round_trip = session.set_run_seed(requested_seed)
             session.enable_god_mode()
+            if args.episode_mode == "waves":
+                session.write_composition(composition)
+                session.wait_for_composition(
+                    expected_bot_count=composition.participant_count,
+                    expected_learned_count=composition.learned_count,
+                    timeout=args.startup_timeout,
+                )
             session.start_test_run(timeout=args.startup_timeout)
-            session.prepare_training_combat(
-                timeout=args.startup_timeout
-            )
+            if args.episode_mode == "curriculum":
+                session.prepare_training_combat(
+                    timeout=args.startup_timeout
+                )
             session.clear_training()
             session.enable_training(
                 seed=requested_seed,
                 capacity=50000,
             )
-            session.write_composition(composition)
+            if args.episode_mode == "curriculum":
+                session.write_composition(composition)
             session.wait_for_composition(
                 expected_bot_count=composition.participant_count,
                 expected_learned_count=composition.learned_count,
@@ -834,19 +867,14 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "native run identity does not match the requested seed: "
                     f"requested={requested_seed} observed={run_identity}"
                 )
-            session.start_training_arena(
-                timeout=args.startup_timeout
-            )
-            session.wait_for_training_enemy(
-                timeout=args.startup_timeout
-            )
-            session.clear_main_training_stream()
-            initial_status = session.status()
-            if initial_status.get("clock_source") != "simulation":
+            episode_start_status = session.status()
+            if episode_start_status.get("clock_source") != "simulation":
                 raise BridgeError(
                     "live trainer requires the simulation-time policy clock"
                 )
-            if int(initial_status.get("simulation_tick", "0")) <= 0:
+            if int(
+                episode_start_status.get("simulation_tick", "0")
+            ) <= 0:
                 raise BridgeError(
                     "live trainer did not observe a simulation tick"
                 )
@@ -862,21 +890,41 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "the composition"
                 )
 
-            validation_choice_event = None
-            if args.validation_native_choice_event:
-                validation_choice_event = (
-                    session.trigger_validation_choice_event(
-                        learned_participant_ids[0],
-                        timeout=args.startup_timeout,
-                    )
+            progression_before = session.participant_progression(
+                learned_participant_ids
+            )
+            wave_start: dict[str, object] | None = None
+            natural_progression: dict[str, object] | None = None
+            if args.episode_mode == "waves":
+                wave_start = session.start_stock_wave_episode(
+                    learned_participant_ids[0],
+                    timeout=args.wave_startup_timeout,
+                )
+                natural_progression = session.wait_for_natural_choice(
+                    learned_participant_ids,
+                    progression_before,
+                    initial_status=episode_start_status,
+                    timeout=args.wave_startup_timeout,
+                )
+            else:
+                session.start_training_arena(
+                    timeout=args.startup_timeout
+                )
+                session.wait_for_training_enemy(
+                    timeout=args.startup_timeout
                 )
 
+            session.clear_main_training_stream()
+            collection_initial_status = session.status()
             requested_records = args.rollout_steps
             collection_status = session.wait_for_rollouts(
                 requested_records,
-                timeout=args.rollout_timeout,
+                timeout=rollout_timeout,
             )
             finished_status = session.finish_training_episode()
+            progression_after = session.participant_progression(
+                learned_participant_ids
+            )
             main_count = int(finished_status.get("buffered", "0"))
             choice_count = int(
                 finished_status.get("choice_buffered", "0")
@@ -895,6 +943,17 @@ def live_ppo(args: argparse.Namespace) -> int:
             choice_records, scripted_choice_records = (
                 partition_choice_records(all_choice_records)
             )
+            if args.episode_mode == "waves" and not choice_records:
+                raise BridgeError(
+                    "wave episode produced no complete natural learned "
+                    "choice interval"
+                )
+            if args.episode_mode == "waves" and not any(
+                record.accepted for record in choice_records
+            ):
+                raise BridgeError(
+                    "wave episode did not apply a natural learned choice"
+                )
             session.clear_training()
             training_records, bootstrap_records = (
                 partition_rollout_records(
@@ -1009,8 +1068,12 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "live_training_seed": args.seed,
                     "live_native_run_seed": requested_seed,
                     "live_training_iteration": iteration,
+                    "live_training_episode_mode": args.episode_mode,
                     "live_training_rollout_steps": len(
                         training_records
+                    ),
+                    "live_training_rollout_timeout_seconds": (
+                        rollout_timeout
                     ),
                     "live_training_composition": composition.name,
                     "movement_entropy_coefficient": (
@@ -1063,7 +1126,7 @@ def live_ppo(args: argparse.Namespace) -> int:
                     )
                 )
                 - int(
-                    initial_status.get(
+                    collection_initial_status.get(
                         "policy_decision_count",
                         "0",
                     )
@@ -1071,7 +1134,12 @@ def live_ppo(args: argparse.Namespace) -> int:
             )
             movement_delta = (
                 int(final_status.get("move_accepted", "0"))
-                - int(initial_status.get("move_accepted", "0"))
+                - int(
+                    collection_initial_status.get(
+                        "move_accepted",
+                        "0",
+                    )
+                )
             )
             if decision_delta <= 0 or movement_delta <= 0:
                 raise BridgeError(
@@ -1094,6 +1162,18 @@ def live_ppo(args: argparse.Namespace) -> int:
                 "instance": episode_instance,
                 "process_id": (
                     launch.get("processId") if launch else None
+                ),
+                "episode_mode": args.episode_mode,
+                "profile_mode": (
+                    "fresh-install"
+                    if args.episode_mode == "curriculum"
+                    else "isolated-temporary-profile"
+                ),
+                "rollout_timeout_seconds": rollout_timeout,
+                "rollout_timeout_source": (
+                    "explicit"
+                    if args.rollout_timeout is not None
+                    else "rollout-steps-autoscale"
                 ),
                 "requested_seed": requested_seed,
                 "seed_round_trip": seed_round_trip,
@@ -1124,8 +1204,49 @@ def live_ppo(args: argparse.Namespace) -> int:
                 ),
                 "choice_temperature": policy.choice_temperature,
                 "choice_coverage_complete": choice_coverage.complete,
-                "validation_native_choice_event": (
-                    validation_choice_event
+                "choice_intervals": [
+                    {
+                        "participant_id": record.participant_id,
+                        "generation": record.generation,
+                        "duration_steps": record.duration_steps,
+                        "reward_count": len(record.rewards),
+                        "reward_sum": float(sum(record.rewards)),
+                        "trainable": record.trainable,
+                        "accepted": record.accepted,
+                    }
+                    for record in choice_records
+                ],
+                "progression_before": progression_before,
+                "progression_after": progression_after,
+                "natural_progression_gate": natural_progression,
+                "wave_start": wave_start,
+                "learned_skill_choices_seen_delta": (
+                    int(
+                        final_status.get(
+                            "learned_skill_choices_seen",
+                            "0",
+                        )
+                    )
+                    - int(
+                        episode_start_status.get(
+                            "learned_skill_choices_seen",
+                            "0",
+                        )
+                    )
+                ),
+                "learned_skill_choices_accepted_delta": (
+                    int(
+                        final_status.get(
+                            "learned_skill_choices_accepted",
+                            "0",
+                        )
+                    )
+                    - int(
+                        episode_start_status.get(
+                            "learned_skill_choices_accepted",
+                            "0",
+                        )
+                    )
                 ),
                 "episode_ids": sorted(
                     {
@@ -1184,6 +1305,13 @@ def live_ppo(args: argparse.Namespace) -> int:
         "status": "ok",
         "instance_prefix": instance,
         "headless": not args.visible,
+        "episode_mode": args.episode_mode,
+        "rollout_timeout_seconds": rollout_timeout,
+        "rollout_timeout_source": (
+            "explicit"
+            if args.rollout_timeout is not None
+            else "rollout-steps-autoscale"
+        ),
         "environment_episode_count": len(reports),
         "requested_seeds": run_seeds,
         "distinct_seed_count": len(set(run_seeds)),
@@ -1312,15 +1440,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=32,
     )
     live_parser.add_argument(
-        "--validation-native-choice-event",
-        action="store_true",
-        help=(
-            "trigger one debug-only native level-up per episode so an "
-            "acceptance smoke can train a real learned choice interval; "
-            "never enabled during ordinary training"
-        ),
-    )
-    live_parser.add_argument(
         "--maximum-gradient-norm",
         type=float,
         default=0.5,
@@ -1371,7 +1490,33 @@ def build_parser() -> argparse.ArgumentParser:
         default=49781,
     )
     live_parser.add_argument("--startup-timeout", type=float, default=45.0)
-    live_parser.add_argument("--rollout-timeout", type=float, default=180.0)
+    live_parser.add_argument(
+        "--wave-startup-timeout",
+        type=float,
+        default=300.0,
+        help=(
+            "maximum seconds for stock Solomon routing plus the first "
+            "natural XP-backed learned choice"
+        ),
+    )
+    live_parser.add_argument(
+        "--rollout-timeout",
+        type=float,
+        default=None,
+        help=(
+            "explicit rollout collection timeout in seconds; default is "
+            "max(180, 60 + rollout_steps / 10 * 1.25)"
+        ),
+    )
+    live_parser.add_argument(
+        "--episode-mode",
+        choices=("waves", "curriculum"),
+        default="waves",
+        help=(
+            "stock XP-bearing waves (default) or the direct-spawn, "
+            "XP-free curriculum drill"
+        ),
+    )
     live_parser.add_argument(
         "--element",
         choices=("fire", "water", "earth", "air", "ether"),

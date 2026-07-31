@@ -16,6 +16,12 @@ For owned automation, `scripts/Launch-LocalSoloSession.ps1` accepts
 SHA-256 values plus the staged path. Omitting the parameter keeps the stock
 layout.
 
+ML policy training selects the launcher profile deliberately. Default
+`--episode-mode waves` uses the disposable temporary profile so the staged
+stock survival save and Solomon/wave setpiece are present. Targeted
+`--episode-mode curriculum` uses `-FreshInstall`; that profile excludes source
+sandbox data and the direct-spawn arena does not award stock XP.
+
 ## Contract
 
 Headless mode:

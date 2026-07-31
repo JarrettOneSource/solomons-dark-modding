@@ -175,6 +175,7 @@
     <ClInclude Include="include\x86_hook.h" />
     <ClInclude Include="src\gameplay_seams.h" />
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
+    <ClInclude Include="src\gameplay_seams\address_storage_enemy.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_pathfinding.inl" />
@@ -292,6 +293,7 @@
     <ClInclude Include="src\bot_runtime\public_api\movement_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\natural_skill_choices_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choice_application.inl" />
     <ClInclude Include="src\bot_runtime\public_api\bot_skill_choice_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\snapshots_api.inl" />
@@ -428,6 +430,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_hit_feedback_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\synthetic_stock_xp_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_enemy_damage_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_player_damage_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\packet_enemy_damage_suppression.inl" />

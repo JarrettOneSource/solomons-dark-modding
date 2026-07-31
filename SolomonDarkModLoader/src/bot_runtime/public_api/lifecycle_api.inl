@@ -147,6 +147,15 @@ bool CreateBot(
         participant->transport_connected = true;
         participant->transport_using_relay = false;
         ApplyCharacterProfile(participant, request.character_profile);
+        // A synthetic participant owns an independent native progression but
+        // has no Concentrate selections at creation. Publish that real
+        // initial state instead of leaving ownership unresolved: native skill
+        // rolls must never borrow whatever process-global lanes slot 0 happens
+        // to have installed when this participant levels naturally.
+        participant->owned_progression.concentration_selection_valid = true;
+        participant->owned_progression.concentration_entry_a = -1;
+        participant->owned_progression.concentration_entry_b = -1;
+        participant->owned_progression.concentration_revision = 1;
         ApplySceneIntent(participant, sync_scene_intent);
         if (sync_has_transform) {
             ApplyTransform(

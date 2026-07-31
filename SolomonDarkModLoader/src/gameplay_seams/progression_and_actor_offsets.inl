@@ -163,6 +163,7 @@ extern std::size_t kEnemyConfigOffset;
 extern std::size_t kEnemyTypeOffset;
 extern std::size_t kEnemyMaxHpOffset;
 extern std::size_t kEnemyCurrentHpOffset;
+extern std::size_t kEnemyExperienceRewardOffset;
 extern std::size_t kSpellDirectionXOffset;
 extern std::size_t kSpellDirectionYOffset;
 extern std::size_t kActorPrimarySkillIdOffset;

@@ -131,6 +131,9 @@ void __fastcall HookExperienceGain(
     }
 
     const auto progression_address = reinterpret_cast<uintptr_t>(self);
+    const auto synthetic_participant_id =
+        FindNaturalSyntheticParticipantForProgression(
+            progression_address);
     float current_xp = 0.0f;
     const bool have_current_xp =
         progression_address != 0 &&
@@ -149,7 +152,7 @@ void __fastcall HookExperienceGain(
         filter_context.participant_id =
             IsLocalPlayerProgressionForRunLifecycle(progression_address)
                 ? multiplayer::GetLocalTransportParticipantId()
-                : 0;
+                : synthetic_participant_id;
         filter_context.current_xp = current_xp;
         filter_context.amount = amount;
         filter_context.apply_native_scaling = apply_native_scaling != 0;
@@ -161,6 +164,28 @@ void __fastcall HookExperienceGain(
     }
 
     original(self, amount, apply_native_scaling);
+    if (synthetic_participant_id != 0) {
+        int level = 0;
+        int experience = 0;
+        int next_experience = 0;
+        auto& memory = ProcessMemory::Instance();
+        if (memory.TryReadField(
+                progression_address,
+                kProgressionLevelOffset,
+                &level) &&
+            TryReadRunLifecycleRoundedXp(
+                progression_address,
+                &experience) &&
+            TryReadRunLifecycleRoundedNextXp(
+                progression_address,
+                &next_experience)) {
+            multiplayer::UpdateParticipantLevelProfileState(
+                synthetic_participant_id,
+                level,
+                experience,
+                next_experience);
+        }
+    }
 }
 
 void __fastcall HookDropSpawned(
@@ -197,6 +222,9 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
     int pending_before = 0;
     const bool have_pending_before = TryReadPendingLevelKind(&pending_before);
     const auto local_player_level_up = IsLocalPlayerProgressionForRunLifecycle(progression_address);
+    const auto synthetic_participant_id =
+        FindNaturalSyntheticParticipantForProgression(
+            progression_address);
     const bool suppress_client_local_level_up =
         local_player_level_up && multiplayer::IsLocalTransportClient();
     // Both host and client suppress the native modal skill picker for their own
@@ -291,6 +319,23 @@ void __fastcall HookLevelUp(void* self, void* unused_edx) {
                 HexString(progression_address) +
                 " level=" + std::to_string(level_after) +
                 " xp=" + std::to_string(xp_after));
+        }
+        if (synthetic_participant_id != 0) {
+            std::string publish_error;
+            if (!multiplayer::PublishNaturalParticipantLevelUp(
+                    synthetic_participant_id,
+                    progression_address,
+                    level_after,
+                    xp_after,
+                    &publish_error)) {
+                Log(
+                    "[bots] natural synthetic level-up publication failed. "
+                    "participant_id=" +
+                    std::to_string(synthetic_participant_id) +
+                    " level=" + std::to_string(level_after) +
+                    " xp=" + std::to_string(xp_after) +
+                    " error=" + publish_error);
+            }
         }
         return;
     }

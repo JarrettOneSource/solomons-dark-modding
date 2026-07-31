@@ -181,6 +181,8 @@ void UpdateParticipantLevelProfileState(
     }
 }
 
+#include "natural_skill_choices_api.inl"
+
 struct LocalSharedLevelUpVitalsSnapshot {
     bool health_valid = false;
     bool mana_valid = false;

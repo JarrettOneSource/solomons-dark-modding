@@ -125,12 +125,25 @@ observed run nonce, layout hash, composition, and learned participant IDs.
 Composition sizes come from `tools/ml_bot/team-compositions.json`; no parser or
 training loop assumes the current participant cap.
 
-Training is enabled before learned participants materialize, so their native
-skill offers are captured instead of being consumed by trainer priming. Once
-the curriculum arena is ready, setup-time main rows are cleared while their
-already-closed rewards/durations remain in the open choice interval; choice
-state is never reset. Every learned participant sharing the policy emits two
-streams:
+`waves` is the default episode mode. It launches an isolated temporary profile
+with the stock survival save, physically routes slot 0 through the exact
+openable gate geometry, and invokes the real Solomon Dig conversation. It does
+not call `start_waves`, spawn an enemy, or synthesize XP. The stock wave
+spawner, enemy death reward, participant-owned synthetic progression, and
+native skill-offer paths therefore remain intact. The retail reward helper is
+hard-wired to slot 0, so the loader forwards a confirmed synthetic-attributed
+stock kill through the same native ExperienceGain function on that
+participant's own progression. Collection fails closed
+unless learned progression increases and the learned choice head sees and
+accepts a natural pending choice. `--episode-mode curriculum` retains the
+direct-spawn, XP-free one-enemy arena for targeted observation/action drills;
+it is not suitable for choice-head training.
+
+Training is enabled before the stock wave begins, so every natural XP and
+native skill-offer event is captured. After the first XP-backed learned
+choice, setup-time main rows are cleared while the open choice interval and
+its duration rewards are preserved; choice state is never reset. Every
+learned participant sharing the policy emits two streams:
 
 - main trajectory-v3: observations, four masks/actions, composite old log
   probability, value, reward, and terminal state; and
@@ -146,6 +159,27 @@ training label. The trainer never sends an open interval to choice PPO. Main
 rows drain in 16-record frames and choice intervals one at a time so the
 expanded v3 payload stays below the loader's fixed 1-MiB Lua-exec response
 limit. Live rollouts are bounded to 8,192 steps for the same reason.
+
+The reward stream has no passive survival term. One policy decision receives
+only the existing health/damage, wave, and terminal signals plus positive
+native XP progress:
+
+```text
+reward = 1.25 * self_hp_ratio_delta
+       + 0.65 * summed_enemy_hp_ratio_drop
+       + max(0, xp_delta) / 25
+       + 1.5 * min(max(wave_delta, 0), 1)
+       - 2.0 when terminal and dead
+reward = clamp(reward, -4, 4)
+```
+
+`XP_SCALE=25` comes from a stock-wave calibration over waves 1–10: 39
+learned-attributed kills credited 3.442497–3.825001 XP, median 3.824997, so a
+typical early kill contributes 0.153 reward. An unchanged bot facing live
+enemies earns exactly zero. Choice-event intervals continue to consume the
+same per-decision rewards without a separate shaping path. This changes the
+meaning of all future reward curves but does not change the trajectory schema
+or its version.
 
 Main PPO uses ordinary per-participant GAE and four clipped policy heads. The
 choice stream uses the adjudicated semi-Markov calculation for duration `d`:
@@ -165,11 +199,11 @@ replaced before chunked hot reload. Each live episode also writes an atomic
 `episode-NNNN.json`; `live-training-report.json` records the complete seed,
 nonce, layout, composition, participant, trajectory, loss, and reload evidence.
 
-For acceptance-only SMDP plumbing, `--validation-native-choice-event` invokes
-one debug native level-up per episode. The learned scorer still chooses and
-applies the option and the ordinary choice-event-v3 path owns duration, reward,
-terminal close, transport, and PPO. The switch is off by default and should
-not be used for normal training.
+Without an explicit `--rollout-timeout`, collection allows
+`max(180, 60 + rollout_steps / 10 * 1.25)` seconds. This covers the worst-case
+single-learned-bot 10-Hz record cadence with 25 percent headroom and 60 seconds
+of session allowance; the explicit flag remains an exact override. For
+example, 1,024 steps allow 188 seconds and 8,192 steps allow 1,084 seconds.
 
 Main entropy coefficients are movement 0.01, target 0.02, ability 0.01, and
 aim 0.01. Target receives twice the pressure because `keep_current` is often
@@ -194,9 +228,9 @@ current temperature persist in checkpoint metadata.
 - Stock Arrow hazards currently expose neither a resolved target participant
   nor a positive time to contact. They remain observable as known hostile
   projectiles; Lua and verifiers do not invent those fields.
-- The controlled one-enemy arena is curriculum plumbing, not a competence
-  evaluation. Normal waves, elites, broader builds, and a multi-layout corpus
-  belong to later evaluation.
+- The controlled one-enemy arena intentionally has no stock XP reward context
+  and is curriculum plumbing only. Default training uses stock waves; broader
+  builds and a multi-layout corpus remain evaluation work.
 
 ## Install a trained checkpoint
 

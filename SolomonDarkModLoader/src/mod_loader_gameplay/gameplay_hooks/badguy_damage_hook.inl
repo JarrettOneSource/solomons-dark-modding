@@ -554,6 +554,8 @@ bool IsAuthorizedAuthoritySyntheticFireballDamage(
     return true;
 }
 
+#include "synthetic_stock_xp_hook.inl"
+
 #include "packet_enemy_damage_suppression.inl"
 
 std::uint8_t __fastcall HookBadguyDamage(
@@ -612,6 +614,10 @@ std::uint8_t __fastcall HookBadguyDamage(
             std::to_string(target_network_actor_id));
     }
 
+    const auto synthetic_stock_xp_capture =
+        CaptureSyntheticStockXpBeforeDamage(
+            actor_address,
+            context_source);
     const auto local_damage_capture =
         CaptureLocalReplicatedEnemyDamageBeforeNativeCall(actor_address);
     const auto call_original = [&]() {
@@ -626,6 +632,10 @@ std::uint8_t __fastcall HookBadguyDamage(
         ObserveLocalReplicatedEnemyDamageAfterNativeCall(
             actor_address,
             local_damage_capture);
+        RouteSyntheticStockXpAfterDamage(
+            actor_address,
+            result,
+            synthetic_stock_xp_capture);
         return result;
     };
     std::uint32_t native_type_id = 0;

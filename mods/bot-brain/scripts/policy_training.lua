@@ -2,6 +2,12 @@ local training = {}
 local Controller = {}
 Controller.__index = Controller
 
+-- V3-7 calibration, stock wave seed 29271575: 39 learned-attributed kills
+-- observed through waves 1-10. Credited XP ranged 3.442497..3.825001 with
+-- median 3.824997, so 25 maps the typical early kill to 0.153 reward.
+local XP_SCALE = 25.0
+training.XP_SCALE = XP_SCALE
+
 local function copy_array(value)
   local result = {}
   for index, item in ipairs(value or {}) do
@@ -37,6 +43,7 @@ local function copy_metrics(value)
     mana_ratio = value.mana_ratio,
     wave = value.wave,
     alive = value.alive,
+    experience = value.experience,
     enemy_count = value.enemy_count,
     enemy_health = enemy_health,
   }
@@ -96,11 +103,16 @@ function Controller:discard_pending()
 end
 
 function Controller:reward(previous, current, terminal)
-  local reward = 0.002
+  local reward = 0.0
   local hp_delta =
     (current.hp_ratio or 0.0) -
     (previous.hp_ratio or 0.0)
   reward = reward + hp_delta * 1.25
+  local xp_delta = math.max(
+    0.0,
+    (current.experience or 0.0) -
+      (previous.experience or 0.0))
+  reward = reward + xp_delta / XP_SCALE
   for actor_id, previous_ratio in
       pairs(previous.enemy_health or {}) do
     local current_ratio =
@@ -191,6 +203,22 @@ function Controller:finish_choice(
   pending.next_value = terminal == true and
     0.0 or tonumber(next_value) or 0.0
   pending.done = terminal == true
+  local reward_sum = 0.0
+  for _, reward in ipairs(pending.rewards or {}) do
+    reward_sum = reward_sum + (tonumber(reward) or 0.0)
+  end
+  if type(context.shared) == "table" and
+      type(context.shared.log) == "function" then
+    context.shared.log(
+      context,
+      "choice interval closed mode=" ..
+      tostring(pending.choice_mode) ..
+      " trainable=" .. tostring(pending.trainable == true) ..
+      " accepted=" .. tostring(pending.accepted == true) ..
+      " duration_steps=" ..
+      tostring(pending.duration_steps or 0) ..
+      " reward_sum=" .. tostring(reward_sum))
+  end
   append_bounded(self, "choice", pending)
   context.policy_choice_pending = nil
 end
@@ -249,6 +277,7 @@ function Controller:terminal(context, metrics)
     mana_ratio = 0.0,
     wave = 0,
     alive = false,
+    experience = 0.0,
     enemy_count = 0,
     enemy_health = {},
   }
