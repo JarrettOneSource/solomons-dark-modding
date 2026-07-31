@@ -98,9 +98,46 @@ run actor is valid. The host remains under physical control through the
 required Solomon interaction, is armed immediately afterward while still
 alive, and only then does the harness wait for paired enemy materialization.
 
+## Product finding: one held primary input became tick-rate network casts
+
+The first full dual-takeover run reached wave 2, then the client stopped
+receiving host gameplay. The host remained ready and continued receiving the
+client while the client timed the host out, lost its replicated enemies, and
+diverged at full health. The host continued under Bot Play until its local run
+ended in death. With the peers split, the client remained in wave 2 and no
+natural Game Over boundary could converge.
+
+The host log explains the transport collapse. Bot Brain accepted 530 casts,
+but the native pure-primary hook queued 15,771 casts. During the final second
+alone, native queue IDs 15,741 through 15,771 were created and cast sequences
+5,195 through 5,223 were sent. Every new event replaced the preceding active
+cast, so the sender emitted reliable release and press edges at tick rate. The
+host's captured Steam telemetry reached 197,459 pending reliable bytes and a
+95th-percentile queue time of 807,510 microseconds; the runtime reported
+sustained backpressure with 618 reliable messages queued.
+
+`HookPurePrimarySpellStart` is a stock sustained-primary boundary and can run
+on every game tick while the same mouse press remains held. Its multiplayer
+capture path deduplicated only identical millisecond timestamps. The native
+dispatcher path already atomically claimed the observed mouse-left edge, but
+the pure-primary path bypassed that ownership rule. A single three-frame Bot
+Play press therefore generated roughly 30 cast sequences instead of one.
+
+The correction makes both native primary capture routes validate and claim
+the same physical or injected mouse-left edge. Whichever native route proves
+the cast first owns the one network sequence; further stock ticks and the
+other route are ignored until the next real input edge. This preserves
+repeated Bot Play presses and held-input updates without limiting the queue or
+dropping reliable packets after the defect has already occurred.
+
+The same run also had a four-minute one-way Steam route interruption before
+combat and before either takeover was active. It recovered without a process
+restart. That event cannot be attributed to the primary-cast amplification;
+it remains a distinct external-transport observation for the corrected rerun.
+
 ## Rerun requirement
 
-The product failure fix and remote staging fix must be rebuilt together and
+The product failure fixes and remote staging fix must be rebuilt together and
 rerun through the same real launcher, lobby, and Steam flow. Completion
 requires both Bot Play takeovers to become active through the mod setting,
 live state and transport sampling throughout the match, milestone screenshots

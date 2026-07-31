@@ -1060,16 +1060,13 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    std::uint64_t edge_serial = 0;
-    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary) {
-        edge_serial = GetGameplayMouseLeftEdgeSerial();
-        const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
-        if (edge_serial == 0 ||
-            edge_tick_ms == 0 ||
-            now_ms < edge_tick_ms ||
-            now_ms - edge_tick_ms > kLocalPrimaryCastEdgeCaptureWindowMs) {
-            return false;
-        }
+    const auto edge_serial = GetGameplayMouseLeftEdgeSerial();
+    const auto edge_tick_ms = GetGameplayMouseLeftEdgeTickMs();
+    if (edge_serial == 0 ||
+        edge_tick_ms == 0 ||
+        now_ms < edge_tick_ms ||
+        now_ms - edge_tick_ms > kLocalPrimaryCastEdgeCaptureWindowMs) {
+        return false;
     }
 
     ResolvedPrimaryCastDescriptor primary_descriptor{};
@@ -1143,24 +1140,15 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
             std::memory_order_acquire) == 0) {
         return false;
     }
-    if (capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&
-        !TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
+    // HookPurePrimarySpellStart may run every stock tick while one press is
+    // held. Both native capture routes therefore share the same edge claim:
+    // one physical or injected press owns one multiplayer cast sequence.
+    if (!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)) {
         return false;
     }
     if (native_dispatcher_manual_cast &&
         !TryConsumeManualSpawnerPrimaryCastAllowance()) {
         return false;
-    }
-
-    if (capture_kind == LocalPrimaryCastCaptureKind::PurePrimaryStart) {
-        static std::atomic<uintptr_t> s_last_pure_primary_actor{0};
-        static std::atomic<std::uint64_t> s_last_pure_primary_tick_ms{0};
-        if (s_last_pure_primary_actor.load(std::memory_order_acquire) == actor_address &&
-            s_last_pure_primary_tick_ms.load(std::memory_order_acquire) == now_ms) {
-            return false;
-        }
-        s_last_pure_primary_actor.store(actor_address, std::memory_order_release);
-        s_last_pure_primary_tick_ms.store(now_ms, std::memory_order_release);
     }
 
     const auto native_queue_id = multiplayer::QueueLocalSpellCastEvent(

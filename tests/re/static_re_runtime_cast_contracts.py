@@ -442,7 +442,7 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
         (input_queue_text, "input_queue", "last_mouse_right_hold_player_tick_generation.store("),
         (input_queue_text, "input_queue", "const auto queued_frames ="),
         (input_queue_text, "input_queue", "static_cast<std::uint64_t>(queued_frames) * 50"),
-        (player_control_text, "player_control", "capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&"),
+        (player_control_text, "player_control", "const auto edge_serial = GetGameplayMouseLeftEdgeSerial();"),
         (player_control_text, "player_control", "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"),
     )
     missing = [
@@ -472,12 +472,30 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
         raise StaticReTestFailure(
             "player-tick mouse-hold consumer must serve exactly left and right injection")
 
-    if player_control_text.count(
+    capture_start = player_control_text.find(
+        "bool QueueLocalPlayerPrimaryCastForMultiplayer(")
+    capture_end = player_control_text.find(
+        "void __fastcall HookPurePrimarySpellStart(", capture_start)
+    if capture_start == -1 or capture_end == -1:
+        raise StaticReTestFailure("local primary multiplayer capture body was not found")
+    capture_body = player_control_text[capture_start:capture_end]
+    if capture_body.count(
             "!TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)") != 1:
         raise StaticReTestFailure(
-            "only the native dispatcher-primary capture may claim the synthetic input edge")
+            "native primary capture must claim exactly one synthetic input edge")
+    if (
+        "s_last_pure_primary_tick_ms" in capture_body
+        or "s_last_pure_primary_actor" in capture_body
+        or "std::uint64_t edge_serial = 0" in capture_body
+        or (
+            "capture_kind == LocalPrimaryCastCaptureKind::NativeDispatcherPrimary &&\n"
+            "        !TryClaimGameplayMouseLeftPrimaryCastEdge(edge_serial)"
+        ) in capture_body
+    ):
+        raise StaticReTestFailure(
+            "pure-primary capture can still amplify one held input edge into tick-rate casts")
 
-    return "queued left/right mouse holds consume once per player tick and preserve repeated primaries"
+    return "queued mouse holds preserve repeated presses without tick-rate primary amplification"
 
 
 def test_remote_held_input_casts_defer_lifecycle_to_sender_input() -> str:
