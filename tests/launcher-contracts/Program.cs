@@ -2741,7 +2741,7 @@ static async Task TestAutomaticModUpdatesAsync()
             handler.RequestedIds.SequenceEqual(["tests.auto-update"]),
             "website updater requested the wrong installed mod");
         Require(
-            handler.LoaderVersion == "0.1.0-beta.26",
+            handler.LoaderVersion == "0.1.0-beta.27",
             "website updater omitted the current loader version");
         var updated = ModDiscovery.DiscoverRoot(currentRoot);
         Require(updated.Manifest.Version == "1.1.0", "installed manifest version did not advance");
@@ -3447,7 +3447,7 @@ static async Task TestWebsiteLobbyPreflightAsync()
         Require(handler.JoinManifestRequests == 1, "preflight did not request the join manifest once");
         Require(handler.ResolveRequests == 1, "preflight did not resolve the missing package once");
         Require(
-            handler.ResolveLoaderVersion == "0.1.0-beta.26",
+            handler.ResolveLoaderVersion == "0.1.0-beta.27",
             "preflight resolution omitted the current loader version");
         Require(handler.DownloadRequests == 1, "preflight did not download the missing package once");
         Require(
