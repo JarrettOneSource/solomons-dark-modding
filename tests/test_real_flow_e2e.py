@@ -2038,7 +2038,11 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertNotIn('-Name "Ready"', start_client)
         self.assertEqual(start_client.count('-Name "Host Game"'), 2)
-        self.assertEqual(start_client.count('-Name "Join Game"'), 1)
+        self.assertEqual(start_client.count('-Name "Join Game"'), 2)
+        self.assertLess(
+            start_client.index("Set-LauncherLobbyId"),
+            start_client.index('-Name "Join Game"'),
+        )
         self.assertIn('-Name "Launch Game"', start_client)
 
     def test_ws20_safe_path_guard_covers_every_bot_runtime_file(

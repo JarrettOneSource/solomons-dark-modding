@@ -54,6 +54,19 @@ limit. The exact uploaded launcher directory is renamed only inside the
 newly-owned stage, and all existing confinement and exact-path cleanup rules
 remain in force.
 
+## Harness finding: lobby ID entry can asynchronously rebuild Join Game
+
+The first corrected-path rerun reached both launcher UIs, but client B's
+controller tried to invoke `Join Game` immediately after setting the lobby ID.
+The launcher was still applying the new value and temporarily had no visible,
+enabled Join Game button. The preceding run succeeded only because its UI
+update completed inside that timing window.
+
+The controller now waits for a newly visible, enabled Join Game boundary after
+setting the lobby ID, then invokes that exact button. This preserves the
+neutral Host Game readiness check before the lobby ID exists and removes the
+remaining render-timing race without using coordinates or a product seam.
+
 ## Rerun requirement
 
 The product failure fix and remote staging fix must be rebuilt together and

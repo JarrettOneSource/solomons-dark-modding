@@ -304,6 +304,10 @@ function Start-Client {
         Set-LauncherLobbyId `
             -ProcessId $launcher.Id `
             -LobbyId ([uint64]$Request.LobbyId)
+        Wait-Ui `
+            -ProcessId $launcher.Id `
+            -Name "Join Game" `
+            -TimeoutSeconds ([int]$Request.TimeoutSeconds) | Out-Null
         Invoke-UiButton -ProcessId $launcher.Id -Name "Join Game"
     } else {
         $launcher = Get-Process -Id $existing.ProcessId
