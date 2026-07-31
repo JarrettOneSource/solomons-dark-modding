@@ -126,7 +126,7 @@ def _write_initial_settings(evidence_root: Path) -> Path:
             {
                 "schemaVersion": 1,
                 "values": {
-                    "play_for_me": True,
+                    "play_for_me": False,
                     "play_for_me_behavior": "skirmisher",
                     "roster": [],
                 },
@@ -350,6 +350,26 @@ print("combat_active=" ..
     raise SoloBotPlayFailure(
         "solo run never reached the stock pre-wave start window: "
         f"{last}"
+    )
+
+
+def _wait_live_wave(
+    pipe: LuaPipe,
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = pipe.state()
+        if (
+            last["scene"]["name"] == "testrun"
+            and effective_wave_index(last) >= 1
+            and len(last["nativeEnemies"]) > 0
+        ):
+            return last
+        time.sleep(0.1)
+    raise SoloBotPlayFailure(
+        f"stock solo wave 1 never became live: {last}"
     )
 
 
@@ -595,11 +615,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         initial_bot = _bot_probe(pipe)
         if (
             initial_bot.get("loaded") is not True
-            or initial_bot.get("desired") is not True
+            or initial_bot.get("desired") is not False
             or initial_bot.get("active") is not False
         ):
             raise SoloBotPlayFailure(
-                f"solo bot mod did not load waiting for the run: {initial_bot}"
+                "solo bot mod did not load disabled for the mid-session "
+                f"takeover: {initial_bot}"
             )
         result["initialBot"] = initial_bot
         result["startRun"] = _request_until_true(
@@ -614,7 +635,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             45.0,
         )
         result["runReady"] = _wait_run_ready(pipe, 45.0)
-        prewave_bot = _wait_for_bot_state(
+        result["waveStart"] = _request_until_true(
+            pipe,
+            "sd.gameplay.start_waves()",
+            timeout=20.0,
+            label="stock wave start request",
+        )
+        result["stockWaveBeforeTakeover"] = _wait_live_wave(
+            pipe,
+            30.0,
+        )
+        result["toggleOnRequest"] = _set_bot_play(
+            peer,
+            pipe,
+            enabled=True,
+        )
+        active_bot = _wait_for_bot_state(
             pipe,
             lambda state: (
                 state.get("loaded") is True
@@ -624,17 +660,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 and int(state.get("participant_id", 0)) > 0
             ),
             timeout=10.0,
-            label="solo pre-wave takeover",
+            label="solo mid-session takeover",
         )
-        runtime_participant_id = int(prewave_bot["participant_id"])
-        result["prewaveBot"] = prewave_bot
+        runtime_participant_id = int(active_bot["participant_id"])
+        result["activeBot"] = active_bot
         result["runtimeParticipantId"] = runtime_participant_id
-        result["waveStart"] = _request_until_true(
-            pipe,
-            "sd.gameplay.start_waves()",
-            timeout=20.0,
-            label="stock wave start request",
-        )
         result["damageObserversReset"] = (
             _reset_damage_observations(
                 pipe,
