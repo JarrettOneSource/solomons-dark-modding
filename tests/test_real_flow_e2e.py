@@ -239,7 +239,8 @@ class RealFlowE2ETests(unittest.TestCase):
                 {
                     "launcherScope": "bply-host",
                     "instance": "bply-host",
-                    "pipeName": "bply-host",
+                    "pipeName":
+                        "SolomonDarkModLoader_LuaExec_bply-host",
                     "localPort": 51411,
                     "remotePort": 51412,
                 }
@@ -248,7 +249,8 @@ class RealFlowE2ETests(unittest.TestCase):
                 {
                     "launcherScope": "bply-client",
                     "instance": "bply-client",
-                    "pipeName": "bply-client",
+                    "pipeName":
+                        "SolomonDarkModLoader_LuaExec_bply-client",
                     "localPort": 51412,
                     "remotePort": 51411,
                 }
@@ -257,6 +259,10 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertTrue(config.bot_play_for_me)
             self.assertEqual(config.host.local_port, 51411)
             self.assertEqual(config.client.local_port, 51412)
+            self.assertEqual(
+                config.host.pipe_name,
+                "SolomonDarkModLoader_LuaExec_bply-host",
+            )
             environment = launch_environment(
                 config,
                 SimpleNamespace(config=config.host),

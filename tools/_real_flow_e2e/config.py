@@ -631,14 +631,19 @@ class HarnessConfig:
                     "bot-play runName must use the bply prefix"
                 )
             for peer in (self.host, self.client):
+                expected_pipe_name = (
+                    "SolomonDarkModLoader_LuaExec_"
+                    f"{peer.instance}"
+                )
                 if (
                     not peer.launcher_scope.startswith("bply")
                     or not peer.instance.startswith("bply")
-                    or not peer.pipe_name.casefold().startswith("bply")
+                    or peer.pipe_name != expected_pipe_name
                 ):
                     raise ConfigError(
-                        "bot-play launcher scopes, instances, and pipe names "
-                        "must use the bply prefix"
+                        "bot-play launcher scopes and instances must use "
+                        "the bply prefix, and each pipeName must be the "
+                        "launcher's exact canonical instance pipe"
                     )
             if not (self.source_root / "mods/bot-brain/manifest.json").is_file():
                 raise ConfigError(
