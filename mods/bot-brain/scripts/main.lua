@@ -74,11 +74,13 @@ local policy_observation =
   assert(require_mod("scripts/policy_observation.lua"))
 local policy_training_module =
   assert(require_mod("scripts/policy_training.lua"))
-
--- V3-3 owns the complete Lua contract but intentionally has no learned
--- inference artifact. The strict v3 runtime and weights land together in
--- V3-4; a v2 model is never adapted or loaded into this contract.
-local policy_runtime = nil
+local policy_module = assert(require_mod("scripts/policy.lua"))
+local policy_weights =
+  assert(require_mod("scripts/policy_weights.lua"))
+local policy_runtime = policy_module.new(
+  policy_spec,
+  policy_weights,
+  20260730)
 local policy_geometry =
   policy_geometry_module.new(policy_spec)
 local policy_spell_descriptors =
@@ -108,24 +110,9 @@ local policy_training =
   policy_training_module.new(policy_spec, policy_runtime)
 
 local function policy_status()
-  return {
-    available = false,
-    version = policy_spec.model_version,
-    observation_version =
-      policy_spec.observation_version,
-    observation_size =
-      #policy_spec.observation_names,
-    architecture = policy_spec.architecture,
-    hidden_sizes = policy_spec.hidden_sizes,
-    movement_action_size =
-      #policy_spec.movement_actions,
-    target_action_size = #policy_spec.target_actions,
-    ability_action_size =
-      #policy_spec.ability_actions,
-    aim_action_size = #policy_spec.aim_actions,
-    reason =
-      "strict v3 policy runtime and weights arrive in Phase V3-4",
-  }
+  local status = policy_runtime:status()
+  status.available = true
+  return status
 end
 
 local shared = {

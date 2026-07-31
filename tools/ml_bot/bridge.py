@@ -24,7 +24,13 @@ from .compositions import TeamComposition, build_roster
 from .model import BotPolicy, render_lua_weights
 
 ROOT = Path(__file__).resolve().parents[2]
-MAX_ROLLOUTS_PER_RESPONSE = 256
+# The native Lua-exec pipe rejects responses above 1 MiB. Sixteen worst-case
+# finite 1279-value main rows stay below half that ceiling after JSON framing.
+MAX_ROLLOUTS_PER_RESPONSE = 16
+# A choice interval also carries up to sixteen 56-value option rows and a
+# variable reward sequence. Drain one complete interval per response so team
+# size never multiplies that payload inside one pipe frame.
+MAX_CHOICE_ROLLOUTS_PER_RESPONSE = 1
 POLICY_LOAD_CHUNK_BYTES = 512 * 1024
 RUN_READY_STABILITY_SECONDS = 0.35
 BOT_MATERIALIZATION_GRACE_SECONDS = 15.0
@@ -71,14 +77,38 @@ class RolloutRecord:
     observation: list[float]
     movement_mask: list[bool]
     target_mask: list[bool]
-    cast_mask: list[bool]
+    ability_mask: list[bool]
+    aim_mask: list[bool]
     movement_action: int
     target_action: int
-    cast_action: int
+    ability_action: int
+    aim_action: int
     old_log_probability: float
     old_value: float
     reward: float
     done: bool
+
+
+@dataclass(frozen=True)
+class ChoiceRolloutRecord:
+    choice_trajectory_version: int
+    episode_id: int
+    participant_id: int
+    generation: int
+    simulation_tick: int
+    observation: list[float]
+    option_descriptors: list[list[float]]
+    option_mask: list[bool]
+    selected_option: int
+    old_log_probability: float
+    old_value: float
+    next_value: float
+    duration_steps: int
+    rewards: list[float]
+    done: bool
+    choice_mode: str
+    trainable: bool
+    accepted: bool
 
 
 def _path_for_powershell(path: Path) -> str:
@@ -163,6 +193,18 @@ def _floats(value: str, expected: int, label: str) -> list[float]:
     return result
 
 
+def _float_rows(value: str, expected_columns: int) -> list[list[float]]:
+    if not value:
+        raise BridgeError("choice option descriptors are empty")
+    rows = [
+        _floats(row, expected_columns, "choice option descriptor")
+        for row in value.split(";")
+    ]
+    if len(rows) > spec.MAX_CHOICE_OPTIONS:
+        raise BridgeError("choice option count exceeds the v3 bound")
+    return rows
+
+
 def _participant_ids(value: str) -> tuple[int, ...]:
     if not value:
         return ()
@@ -187,11 +229,11 @@ def parse_rollout_output(
         if not line.startswith("R\t"):
             continue
         fields = line.split("\t")
-        if len(fields) != 16:
+        if len(fields) != 18:
             raise BridgeError(
                 f"rollout frame has {len(fields)} fields"
             )
-        if fields[11] not in ("0", "1"):
+        if fields[12] not in ("0", "1"):
             raise BridgeError("rollout done flag must be 0 or 1")
         try:
             record = RolloutRecord(
@@ -201,42 +243,48 @@ def parse_rollout_output(
                 simulation_tick=int(fields[4]),
                 movement_action=int(fields[5]),
                 target_action=int(fields[6]),
-                cast_action=int(fields[7]),
-                old_log_probability=float(fields[8]),
-                old_value=float(fields[9]),
-                reward=float(fields[10]),
-                done=fields[11] == "1",
+                ability_action=int(fields[7]),
+                aim_action=int(fields[8]),
+                old_log_probability=float(fields[9]),
+                old_value=float(fields[10]),
+                reward=float(fields[11]),
+                done=fields[12] == "1",
                 observation=_floats(
-                    fields[12],
+                    fields[13],
                     len(spec.OBSERVATION_NAMES),
                     "observation",
                 ),
                 movement_mask=_bits(
-                    fields[13],
+                    fields[14],
                     len(spec.MOVEMENT_ACTION_NAMES),
                     "movement",
                 ),
                 target_mask=_bits(
-                    fields[14],
+                    fields[15],
                     len(spec.TARGET_ACTION_NAMES),
                     "target",
                 ),
-                cast_mask=_bits(
-                    fields[15],
-                    len(spec.CAST_ACTION_NAMES),
-                    "cast",
+                ability_mask=_bits(
+                    fields[16],
+                    len(spec.ABILITY_ACTION_NAMES),
+                    "ability",
+                ),
+                aim_mask=_bits(
+                    fields[17],
+                    len(spec.AIM_ACTION_NAMES),
+                    "aim",
                 ),
             )
         except ValueError as error:
             raise BridgeError("rollout frame contains an invalid number") from error
         if record.trajectory_version != spec.TRAJECTORY_VERSION:
-            if record.trajectory_version == 1:
+            if record.trajectory_version in (1, 2):
                 raise BridgeError(
-                    "trajectory-v1 frames are incompatible with the strict "
-                    "trajectory-v2 bridge"
+                    "trajectory-v1/v2 frames are incompatible with the "
+                    "strict trajectory-v3 bridge"
                 )
             raise BridgeError(
-                "rollout trajectory version does not match trajectory-v2"
+                "rollout trajectory version does not match trajectory-v3"
             )
         if not (
             math.isfinite(record.old_log_probability)
@@ -248,18 +296,112 @@ def parse_rollout_output(
             raise BridgeError("rollout movement action is outside the policy head")
         if not 0 <= record.target_action < len(spec.TARGET_ACTION_NAMES):
             raise BridgeError("rollout target action is outside the policy head")
-        if not 0 <= record.cast_action < len(spec.CAST_ACTION_NAMES):
-            raise BridgeError("rollout cast action is outside the policy head")
+        if not 0 <= record.ability_action < len(spec.ABILITY_ACTION_NAMES):
+            raise BridgeError("rollout ability action is outside the policy head")
+        if not 0 <= record.aim_action < len(spec.AIM_ACTION_NAMES):
+            raise BridgeError("rollout aim action is outside the policy head")
         if not record.movement_mask[record.movement_action]:
             raise BridgeError("rollout selected a masked movement action")
         if not record.target_mask[record.target_action]:
             raise BridgeError("rollout selected a masked target action")
-        if not record.cast_mask[record.cast_action]:
-            raise BridgeError("rollout selected a masked cast action")
+        if not record.ability_mask[record.ability_action]:
+            raise BridgeError("rollout selected a masked ability action")
+        if not record.aim_mask[record.aim_action]:
+            raise BridgeError("rollout selected a masked aim action")
         records.append(record)
     if len(records) != expected_count:
         raise BridgeError(
             f"drained {len(records)} rollouts, expected {expected_count}"
+        )
+    return records
+
+
+def parse_choice_rollout_output(
+    output: str,
+    *,
+    expected_count: int,
+) -> list[ChoiceRolloutRecord]:
+    records: list[ChoiceRolloutRecord] = []
+    for line in output.splitlines():
+        if not line.startswith("C\t"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != 19:
+            raise BridgeError(
+                f"choice rollout frame has {len(fields)} fields"
+            )
+        if any(fields[index] not in ("0", "1") for index in (11, 12, 13)):
+            raise BridgeError("choice rollout flags must be 0 or 1")
+        try:
+            descriptors = _float_rows(
+                fields[17], len(spec.OPTION_DESCRIPTOR_NAMES)
+            )
+            rewards = (
+                []
+                if fields[18] == ""
+                else _floats(
+                    fields[18], int(fields[10]), "choice rewards"
+                )
+            )
+            record = ChoiceRolloutRecord(
+                choice_trajectory_version=int(fields[1]),
+                episode_id=int(fields[2]),
+                participant_id=int(fields[3]),
+                generation=int(fields[4]),
+                simulation_tick=int(fields[5]),
+                selected_option=int(fields[6]),
+                old_log_probability=float(fields[7]),
+                old_value=float(fields[8]),
+                next_value=float(fields[9]),
+                duration_steps=int(fields[10]),
+                done=fields[11] == "1",
+                trainable=fields[12] == "1",
+                accepted=fields[13] == "1",
+                choice_mode=fields[14],
+                observation=_floats(
+                    fields[15], len(spec.OBSERVATION_NAMES), "observation"
+                ),
+                option_mask=_bits(
+                    fields[16], len(descriptors), "choice option"
+                ),
+                option_descriptors=descriptors,
+                rewards=rewards,
+            )
+        except ValueError as error:
+            raise BridgeError(
+                "choice rollout frame contains an invalid number"
+            ) from error
+        if record.choice_trajectory_version != spec.CHOICE_TRAJECTORY_VERSION:
+            if record.choice_trajectory_version in (1, 2):
+                raise BridgeError(
+                    "choice trajectory-v1/v2 is incompatible with the "
+                    "strict choice-event-v3 bridge"
+                )
+            raise BridgeError("choice rollout version does not match v3")
+        if record.choice_mode not in ("learned", "scripted"):
+            raise BridgeError("choice rollout mode is invalid")
+        if record.duration_steps < 0 or len(record.rewards) != record.duration_steps:
+            raise BridgeError("choice rollout duration/reward count mismatch")
+        if not all(
+            math.isfinite(value)
+            for value in (
+                record.old_log_probability,
+                record.old_value,
+                record.next_value,
+                *record.rewards,
+            )
+        ):
+            raise BridgeError("choice rollout contains a non-finite scalar")
+        if not 0 <= record.selected_option < len(record.option_mask):
+            raise BridgeError("choice selected option is outside its offer")
+        if not record.option_mask[record.selected_option]:
+            raise BridgeError("choice selected a masked option")
+        if record.trainable != (record.choice_mode == "learned"):
+            raise BridgeError("choice trainable flag disagrees with mode")
+        records.append(record)
+    if len(records) != expected_count:
+        raise BridgeError(
+            f"drained {len(records)} choice rollouts, expected {expected_count}"
         )
     return records
 
@@ -349,6 +491,14 @@ print('capacity=' .. tostring(status.capacity or 0))
 print('buffered=' .. tostring(status.buffered or 0))
 print('dropped=' .. tostring(status.dropped or 0))
 print('recorded=' .. tostring(status.recorded or 0))
+print('choice_buffered=' .. tostring(
+  status.choice_buffered or 0))
+print('choice_dropped=' .. tostring(
+  status.choice_dropped or 0))
+print('choice_recorded=' .. tostring(
+  status.choice_recorded or 0))
+print('scripted_choice_excluded=' .. tostring(
+  status.scripted_choice_excluded or 0))
 print('generation=' .. tostring(
   status.policy and status.policy.generation or 0))
 print('clock_source=' .. tostring(debug.clock_source or ''))
@@ -1134,6 +1284,7 @@ print('ready=' .. tostring(
                     "kite_radius": 340,
                     "offense_enabled": True,
                     "policy_weld_preference": self.weld_preference,
+                    "skill_choice_mode": "learned",
                     "roster": roster,
                     "think_profile": "standard",
                 },
@@ -2339,6 +2490,25 @@ print('buffered=' .. tostring(status.buffered))
             raise BridgeError(f"could not disable policy training: {values}")
         return values
 
+    def finish_training_episode(self) -> dict[str, str]:
+        values = local_sync.parse_key_values(
+            self.lua(
+                """
+local status = assert(
+  rawget(_G, 'bot_policy_training')).finish_episode()
+print('enabled=' .. tostring(status.enabled))
+print('buffered=' .. tostring(status.buffered))
+print('choice_buffered=' .. tostring(status.choice_buffered))
+""",
+                timeout=10.0,
+            )
+        )
+        if values.get("enabled") != "false":
+            raise BridgeError(
+                f"could not finish policy training episode: {values}"
+            )
+        return values
+
     def clear_training(self) -> dict[str, str]:
         return local_sync.parse_key_values(
             self.lua(
@@ -2348,10 +2518,38 @@ local status = assert(
 print('buffered=' .. tostring(status.buffered))
 print('dropped=' .. tostring(status.dropped))
 print('recorded=' .. tostring(status.recorded))
+print('choice_buffered=' .. tostring(status.choice_buffered))
+print('choice_dropped=' .. tostring(status.choice_dropped))
+print('choice_recorded=' .. tostring(status.choice_recorded))
 """,
                 timeout=10.0,
             )
         )
+
+    def clear_main_training_stream(self) -> dict[str, str]:
+        values = local_sync.parse_key_values(
+            self.lua(
+                """
+local status = assert(
+  rawget(_G, 'bot_policy_training')).clear_main()
+print('enabled=' .. tostring(status.enabled))
+print('buffered=' .. tostring(status.buffered))
+print('recorded=' .. tostring(status.recorded))
+print('choice_buffered=' .. tostring(status.choice_buffered))
+print('choice_recorded=' .. tostring(status.choice_recorded))
+""",
+                timeout=10.0,
+            )
+        )
+        if (
+            values.get("enabled") != "true"
+            or values.get("buffered") != "0"
+            or values.get("recorded") != "0"
+        ):
+            raise BridgeError(
+                f"could not reset main training stream: {values}"
+            )
+        return values
 
     def load_policy(self, policy: BotPolicy) -> int:
         source = render_lua_weights(policy)
@@ -2405,7 +2603,7 @@ local source = table.concat(staging.parts)
 _G.__sdmod_ml_policy_staging = nil
 local loader, load_error = load(
   source,
-  '@ml-bot-policy-v2-hot-reload',
+  '@ml-bot-policy-v3-hot-reload',
   't',
   _ENV)
 assert(loader, load_error)
@@ -2475,9 +2673,13 @@ for _, record in ipairs(drained.records or {{}}) do
   for index, value in ipairs(record.target_mask or {{}}) do
     target_mask[index] = value and '1' or '0'
   end
-  local cast_mask = {{}}
-  for index, value in ipairs(record.cast_mask or {{}}) do
-    cast_mask[index] = value and '1' or '0'
+  local ability_mask = {{}}
+  for index, value in ipairs(record.ability_mask or {{}}) do
+    ability_mask[index] = value and '1' or '0'
+  end
+  local aim_mask = {{}}
+  for index, value in ipairs(record.aim_mask or {{}}) do
+    aim_mask[index] = value and '1' or '0'
   end
   print(table.concat({{
     'R',
@@ -2487,7 +2689,8 @@ for _, record in ipairs(drained.records or {{}}) do
     tostring(record.simulation_tick),
     tostring(record.movement_action),
     tostring(record.target_action),
-    tostring(record.cast_action),
+    tostring(record.ability_action),
+    tostring(record.aim_action),
     string.format('%.17g', record.old_log_probability),
     string.format('%.17g', record.old_value),
     string.format('%.17g', record.reward),
@@ -2495,7 +2698,8 @@ for _, record in ipairs(drained.records or {{}}) do
     table.concat(observation, ','),
     table.concat(movement_mask),
     table.concat(target_mask),
-    table.concat(cast_mask)
+    table.concat(ability_mask),
+    table.concat(aim_mask)
   }}, '\\t'))
 end
 print('buffered=' .. tostring(
@@ -2514,4 +2718,100 @@ print('buffered=' .. tostring(
                 MAX_ROLLOUTS_PER_RESPONSE,
             )
             records.extend(self._drain_rollout_chunk(chunk_count))
+        return records
+
+    def wait_for_choice_rollouts(
+        self,
+        count: int,
+        *,
+        timeout: float,
+    ) -> dict[str, str]:
+        deadline = time.monotonic() + timeout
+        last: dict[str, str] = {}
+        while time.monotonic() < deadline:
+            last = self.status()
+            if int(last.get("choice_buffered", "0")) >= count:
+                return last
+            time.sleep(0.2)
+        raise BridgeError(
+            f"timed out waiting for {count} choice rollouts: {last}"
+        )
+
+    def _drain_choice_rollout_chunk(
+        self,
+        count: int,
+    ) -> list[ChoiceRolloutRecord]:
+        if count <= 0 or count > MAX_CHOICE_ROLLOUTS_PER_RESPONSE:
+            raise ValueError(
+                "choice rollout chunk count must be between 1 and "
+                f"{MAX_CHOICE_ROLLOUTS_PER_RESPONSE}"
+            )
+        code = f"""
+local api = assert(rawget(_G, 'bot_policy_training'))
+-- Include tagged scripted events in the transport so count continues to mean
+-- the exact number of buffered records consumed. The trainer partitions the
+-- strict mode/trainable fields and never admits scripted rows to choice PPO.
+local drained = api.drain_choices({int(count)}, true)
+for _, record in ipairs(drained.records or {{}}) do
+  local observation = {{}}
+  for index, value in ipairs(record.observation or {{}}) do
+    observation[index] = string.format('%.17g', value)
+  end
+  local option_mask = {{}}
+  for index, value in ipairs(record.option_mask or {{}}) do
+    option_mask[index] = value and '1' or '0'
+  end
+  local descriptors = {{}}
+  for row_index, row in ipairs(record.option_descriptors or {{}}) do
+    local values = {{}}
+    for column, value in ipairs(row) do
+      values[column] = string.format('%.17g', value)
+    end
+    descriptors[row_index] = table.concat(values, ',')
+  end
+  local rewards = {{}}
+  for index, value in ipairs(record.rewards or {{}}) do
+    rewards[index] = string.format('%.17g', value)
+  end
+  print(table.concat({{
+    'C',
+    tostring(record.choice_trajectory_version),
+    tostring(record.episode_id),
+    tostring(record.participant_id),
+    tostring(record.generation),
+    tostring(record.simulation_tick),
+    tostring(record.selected_option),
+    string.format('%.17g', record.old_log_probability),
+    string.format('%.17g', record.old_value),
+    string.format('%.17g', record.next_value),
+    tostring(record.duration_steps),
+    record.done and '1' or '0',
+    record.trainable and '1' or '0',
+    record.accepted and '1' or '0',
+    tostring(record.choice_mode),
+    table.concat(observation, ','),
+    table.concat(option_mask),
+    table.concat(descriptors, ';'),
+    table.concat(rewards, ',')
+  }}, '\t'))
+end
+print('choice_buffered=' .. tostring(
+  drained.status and drained.status.choice_buffered or 0))
+"""
+        output = self.lua(code, timeout=30.0)
+        return parse_choice_rollout_output(output, expected_count=count)
+
+    def drain_choice_rollouts(
+        self,
+        count: int,
+    ) -> list[ChoiceRolloutRecord]:
+        if count <= 0:
+            raise ValueError("choice rollout count must be positive")
+        records: list[ChoiceRolloutRecord] = []
+        while len(records) < count:
+            chunk_count = min(
+                count - len(records),
+                MAX_CHOICE_ROLLOUTS_PER_RESPONSE,
+            )
+            records.extend(self._drain_choice_rollout_chunk(chunk_count))
         return records

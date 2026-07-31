@@ -542,6 +542,7 @@ return {
   choice_trajectory_version = 3,
   architecture = "mlp-tanh-four-head-v3",
   hidden_sizes = {512, 256},
+  choice_hidden_size = 128,
   observation_names = observation_names,
   option_descriptor_names = option_descriptor_names,
 

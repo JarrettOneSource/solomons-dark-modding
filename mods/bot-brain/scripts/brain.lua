@@ -705,9 +705,7 @@ local function think_with_policy(
       frame.skill_choices,
       frame.simulation_tick,
       capture.metrics)
-  if choice_event ~= nil and
-      (shared.skill_choice_mode == "scripted" or
-       shared.policy_runtime ~= nil) then
+  if choice_event ~= nil then
     shared.policy_skill_choices:handle(
       context,
       choice_event,
@@ -719,19 +717,6 @@ local function think_with_policy(
       end,
       shared.policy_training.enabled == true)
   end
-  if shared.policy_runtime == nil then
-    context.debug.mode = "learned_unavailable"
-    context.debug.policy_observation_version =
-      shared.policy_spec.observation_version
-    context.debug.policy_observation_count =
-      #capture.values
-    context.debug.policy_observation_finite = true
-    context.debug.policy_observation = capture.values
-    context.debug.last_error =
-      "strict v3 policy runtime and weights arrive in Phase V3-4"
-    return nil
-  end
-
   local selected_target = nil
   local target_switched = false
   local decision = shared.policy_runtime:forward(

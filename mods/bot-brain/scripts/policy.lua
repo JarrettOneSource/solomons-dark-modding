@@ -13,7 +13,7 @@ end
 
 local function validate_names(actual, expected, label)
   if type(actual) ~= "table" or #actual ~= #expected then
-    fail(label .. " names do not match the policy-v2 contract")
+    fail(label .. " names do not match the policy-v3 contract")
   end
   for index, expected_name in ipairs(expected) do
     if actual[index] ~= expected_name then
@@ -67,20 +67,27 @@ local function validate_parameter_names(parameters)
     movement_bias = true,
     target_weight = true,
     target_bias = true,
-    cast_weight = true,
-    cast_bias = true,
+    ability_weight = true,
+    ability_bias = true,
+    aim_weight = true,
+    aim_bias = true,
     value_weight = true,
     value_bias = true,
+    choice_option_weight = true,
+    choice_option_bias = true,
+    choice_score_weight = true,
+    choice_score_bias = true,
+    choice_value_weight = true,
+    choice_value_bias = true,
   }
   for name in pairs(parameters) do
     if required[name] ~= true then
-      fail(
-        "unexpected policy-v2 parameter " .. tostring(name))
+      fail("unexpected policy-v3 parameter " .. tostring(name))
     end
     required[name] = nil
   end
   for name in pairs(required) do
-    fail("missing policy-v2 parameter " .. tostring(name))
+    fail("missing policy-v3 parameter " .. tostring(name))
   end
 end
 
@@ -88,14 +95,16 @@ local function validate_weights(spec, candidate)
   if type(candidate) ~= "table" then
     fail("model must be a table")
   end
-  if candidate.version == 1 or
+  if candidate.version == 1 or candidate.version == 2 or
       candidate.observation_version == 1 or
+      candidate.observation_version == 2 or
       candidate.architecture == "mlp-tanh-two-head-v1" or
-      candidate.hidden_size == 48 or
-      candidate.observation_size == 87 then
+      candidate.architecture == "mlp-tanh-three-head-v2" or
+      candidate.observation_size == 87 or
+      candidate.observation_size == 395 then
     fail(
-      "policy v1 artifacts are incompatible with the strict " ..
-      "policy-v2 loader")
+      "policy v1/v2 artifacts are incompatible with the strict " ..
+      "policy-v3 loader")
   end
   if candidate.format ~= spec.model_format then
     fail("format must be " .. tostring(spec.model_format))
@@ -103,7 +112,7 @@ local function validate_weights(spec, candidate)
   if candidate.version ~= spec.model_version then
     fail(
       "version must be " .. tostring(spec.model_version) ..
-      "; policy v1 and other versions are not supported")
+      "; policy v1/v2 and other versions are not supported")
   end
   if candidate.observation_version ~= spec.observation_version then
     fail(
@@ -119,7 +128,10 @@ local function validate_weights(spec, candidate)
   local second_hidden_size = spec.hidden_sizes[2]
   local movement_size = #spec.movement_actions
   local target_size = #spec.target_actions
-  local cast_size = #spec.cast_actions
+  local ability_size = #spec.ability_actions
+  local aim_size = #spec.aim_actions
+  local descriptor_size = #spec.option_descriptor_names
+  local choice_hidden_size = spec.choice_hidden_size
   if candidate.observation_size ~= observation_size or
       type(candidate.hidden_sizes) ~= "table" or
       #candidate.hidden_sizes ~= 2 or
@@ -127,11 +139,16 @@ local function validate_weights(spec, candidate)
       candidate.hidden_sizes[2] ~= second_hidden_size or
       candidate.movement_action_size ~= movement_size or
       candidate.target_action_size ~= target_size or
-      candidate.cast_action_size ~= cast_size or
-      candidate.value_size ~= 1 then
+      candidate.ability_action_size ~= ability_size or
+      candidate.aim_action_size ~= aim_size or
+      candidate.value_size ~= 1 or
+      candidate.option_descriptor_size ~= descriptor_size or
+      candidate.choice_hidden_size ~= choice_hidden_size or
+      candidate.choice_value_size ~= 1 then
     fail(
-      "declared policy-v2 tensor shape must be 395 -> 192 -> 96 " ..
-      "with movement 9, target 9, cast 10, and value 1")
+      "declared policy-v3 tensor shape must be 1279 -> 512 -> 256 " ..
+      "with movement 9, target 9, ability 22, aim 9, value 1, " ..
+      "and a 56 -> 128 shared choice scorer")
   end
   validate_names(
     candidate.observation_names,
@@ -146,9 +163,26 @@ local function validate_weights(spec, candidate)
     action_names(spec.target_actions),
     "target action")
   validate_names(
-    candidate.cast_action_names,
-    action_names(spec.cast_actions),
-    "cast action")
+    candidate.ability_action_names,
+    action_names(spec.ability_actions),
+    "ability action")
+  validate_names(
+    candidate.aim_action_names,
+    action_names(spec.aim_actions),
+    "aim action")
+  validate_names(
+    candidate.option_descriptor_names,
+    spec.option_descriptor_names,
+    "choice option descriptor")
+
+  local temperature = candidate.choice_temperature
+  if temperature ~= spec.choice_exploration_temperature and
+      temperature ~= spec.choice_final_temperature then
+    fail(
+      "choice_temperature must be " ..
+      tostring(spec.choice_exploration_temperature) .. " or " ..
+      tostring(spec.choice_final_temperature))
+  end
 
   local parameters = candidate.parameters
   if type(parameters) ~= "table" then
@@ -192,14 +226,23 @@ local function validate_weights(spec, candidate)
     target_size,
     "parameters.target_bias")
   validate_matrix(
-    parameters.cast_weight,
-    cast_size,
+    parameters.ability_weight,
+    ability_size,
     second_hidden_size,
-    "parameters.cast_weight")
+    "parameters.ability_weight")
   validate_vector(
-    parameters.cast_bias,
-    cast_size,
-    "parameters.cast_bias")
+    parameters.ability_bias,
+    ability_size,
+    "parameters.ability_bias")
+  validate_matrix(
+    parameters.aim_weight,
+    aim_size,
+    second_hidden_size,
+    "parameters.aim_weight")
+  validate_vector(
+    parameters.aim_bias,
+    aim_size,
+    "parameters.aim_bias")
   validate_vector(
     parameters.value_weight,
     second_hidden_size,
@@ -208,6 +251,31 @@ local function validate_weights(spec, candidate)
     parameters.value_bias,
     1,
     "parameters.value_bias")
+  validate_matrix(
+    parameters.choice_option_weight,
+    choice_hidden_size,
+    second_hidden_size + descriptor_size,
+    "parameters.choice_option_weight")
+  validate_vector(
+    parameters.choice_option_bias,
+    choice_hidden_size,
+    "parameters.choice_option_bias")
+  validate_vector(
+    parameters.choice_score_weight,
+    choice_hidden_size,
+    "parameters.choice_score_weight")
+  validate_vector(
+    parameters.choice_score_bias,
+    1,
+    "parameters.choice_score_bias")
+  validate_vector(
+    parameters.choice_value_weight,
+    second_hidden_size,
+    "parameters.choice_value_weight")
+  validate_vector(
+    parameters.choice_value_bias,
+    1,
+    "parameters.choice_value_bias")
   if candidate.metadata ~= nil and
       type(candidate.metadata) ~= "table" then
     fail("metadata must be a table")
@@ -250,16 +318,20 @@ local function logits(inputs, weights, biases)
   return output
 end
 
-local function masked_softmax(values, mask, label)
+local function masked_softmax(values, mask, label, temperature)
   if type(mask) ~= "table" or #mask ~= #values then
     fail(label .. " mask shape mismatch")
+  end
+  local divisor = temperature or 1.0
+  if not finite_number(divisor) or divisor <= 0.0 then
+    fail(label .. " temperature must be positive and finite")
   end
   local maximum = -math.huge
   local legal_count = 0
   for index, value in ipairs(values) do
     if mask[index] == true then
       legal_count = legal_count + 1
-      maximum = math.max(maximum, value)
+      maximum = math.max(maximum, value / divisor)
     end
   end
   if legal_count == 0 then
@@ -270,7 +342,7 @@ local function masked_softmax(values, mask, label)
   local total = 0.0
   for index, value in ipairs(values) do
     if mask[index] == true then
-      local probability = math.exp(value - maximum)
+      local probability = math.exp(value / divisor - maximum)
       probabilities[index] = probability
       total = total + probability
     else
@@ -293,6 +365,30 @@ local function argmax(probabilities)
     end
   end
   return best_index
+end
+
+local function scalar_value(inputs, weights, bias)
+  local value = bias[1]
+  for index = 1, #inputs do
+    value = value + weights[index] * inputs[index]
+  end
+  return value
+end
+
+function Runtime:encode(observation)
+  validate_vector(
+    observation,
+    #self.spec.observation_names,
+    "observation")
+  local parameters = self.weights.parameters
+  local first_hidden = dense_tanh(
+    observation,
+    parameters.input_weight,
+    parameters.input_bias)
+  return dense_tanh(
+    first_hidden,
+    parameters.hidden_weight,
+    parameters.hidden_bias)
 end
 
 function Runtime:random_unit()
@@ -332,6 +428,7 @@ function Runtime:status()
   return {
     format = self.spec.model_format,
     version = self.spec.model_version,
+    observation_version = self.spec.observation_version,
     architecture = self.spec.architecture,
     observation_size = #self.spec.observation_names,
     hidden_sizes = {
@@ -340,8 +437,13 @@ function Runtime:status()
     },
     movement_action_size = #self.spec.movement_actions,
     target_action_size = #self.spec.target_actions,
-    cast_action_size = #self.spec.cast_actions,
+    ability_action_size = #self.spec.ability_actions,
+    aim_action_size = #self.spec.aim_actions,
     value_size = 1,
+    option_descriptor_size = #self.spec.option_descriptor_names,
+    choice_hidden_size = self.weights.choice_hidden_size,
+    choice_value_size = 1,
+    choice_temperature = self.weights.choice_temperature,
     generation = self.generation,
     metadata = self.weights.metadata,
   }
@@ -351,35 +453,28 @@ function Runtime:forward(
     observation,
     movement_mask,
     target_mask,
-    cast_mask_builder,
+    ability_mask_builder,
+    aim_mask_builder,
     stochastic)
-  validate_vector(
-    observation,
-    #self.spec.observation_names,
-    "observation")
-  if type(cast_mask_builder) ~= "function" then
-    fail("cast mask builder must be a function")
+  if type(ability_mask_builder) ~= "function" then
+    fail("ability mask builder must be a function")
+  end
+  if type(aim_mask_builder) ~= "function" then
+    fail("aim mask builder must be a function")
   end
 
   local parameters = self.weights.parameters
-  local first_hidden = dense_tanh(
-    observation,
-    parameters.input_weight,
-    parameters.input_bias)
-  local second_hidden = dense_tanh(
-    first_hidden,
-    parameters.hidden_weight,
-    parameters.hidden_bias)
+  local hidden = self:encode(observation)
   local movement_probabilities = masked_softmax(
     logits(
-      second_hidden,
+      hidden,
       parameters.movement_weight,
       parameters.movement_bias),
     movement_mask,
     "movement")
   local target_probabilities = masked_softmax(
     logits(
-      second_hidden,
+      hidden,
       parameters.target_weight,
       parameters.target_bias),
     target_mask,
@@ -391,48 +486,126 @@ function Runtime:forward(
     self:sample(target_probabilities) or
     argmax(target_probabilities)
 
-  local cast_mask = cast_mask_builder(target_index - 1)
-  local cast_probabilities = masked_softmax(
+  local ability_mask = ability_mask_builder(target_index - 1)
+  local ability_probabilities = masked_softmax(
     logits(
-      second_hidden,
-      parameters.cast_weight,
-      parameters.cast_bias),
-    cast_mask,
-    "cast")
-  local cast_index = stochastic == true and
-    self:sample(cast_probabilities) or
-    argmax(cast_probabilities)
+      hidden,
+      parameters.ability_weight,
+      parameters.ability_bias),
+    ability_mask,
+    "ability")
+  local ability_index = stochastic == true and
+    self:sample(ability_probabilities) or
+    argmax(ability_probabilities)
 
-  local value = parameters.value_bias[1]
-  for index = 1, #second_hidden do
-    value =
-      value + parameters.value_weight[index] * second_hidden[index]
-  end
-  local movement_probability =
-    movement_probabilities[movement_index]
-  local target_probability =
-    target_probabilities[target_index]
-  local cast_probability =
-    cast_probabilities[cast_index]
+  local aim_mask = aim_mask_builder(ability_index - 1)
+  local aim_probabilities = masked_softmax(
+    logits(
+      hidden,
+      parameters.aim_weight,
+      parameters.aim_bias),
+    aim_mask,
+    "aim")
+  local aim_index = stochastic == true and
+    self:sample(aim_probabilities) or
+    argmax(aim_probabilities)
+
+  local movement_probability = movement_probabilities[movement_index]
+  local target_probability = target_probabilities[target_index]
+  local ability_probability = ability_probabilities[ability_index]
+  local aim_probability = aim_probabilities[aim_index]
   return {
     movement_action = movement_index - 1,
     target_action = target_index - 1,
-    cast_action = cast_index - 1,
+    ability_action = ability_index - 1,
+    aim_action = aim_index - 1,
     movement = self.spec.movement_actions[movement_index],
     target = self.spec.target_actions[target_index],
-    cast = self.spec.cast_actions[cast_index],
+    ability = self.spec.ability_actions[ability_index],
+    aim = self.spec.aim_actions[aim_index],
     log_probability =
       math.log(movement_probability) +
       math.log(target_probability) +
-      math.log(cast_probability),
-    value = value,
+      math.log(ability_probability) +
+      math.log(aim_probability),
+    value = scalar_value(
+      hidden,
+      parameters.value_weight,
+      parameters.value_bias),
     movement_probability = movement_probability,
     target_probability = target_probability,
-    cast_probability = cast_probability,
+    ability_probability = ability_probability,
+    aim_probability = aim_probability,
     movement_probabilities = movement_probabilities,
     target_probabilities = target_probabilities,
-    cast_probabilities = cast_probabilities,
-    cast_mask = cast_mask,
+    ability_probabilities = ability_probabilities,
+    aim_probabilities = aim_probabilities,
+    ability_mask = ability_mask,
+    aim_mask = aim_mask,
+    generation = self.generation,
+  }
+end
+
+function Runtime:forward_choice(
+    observation,
+    option_descriptors,
+    option_mask,
+    stochastic)
+  if type(option_descriptors) ~= "table" or
+      #option_descriptors == 0 or
+      #option_descriptors > self.spec.max_choice_options then
+    fail(
+      "choice options must contain between 1 and " ..
+      tostring(self.spec.max_choice_options) .. " descriptors")
+  end
+  if type(option_mask) ~= "table" or
+      #option_mask ~= #option_descriptors then
+    fail("choice option mask shape mismatch")
+  end
+
+  local hidden = self:encode(observation)
+  local parameters = self.weights.parameters
+  local scores = {}
+  for option_index, descriptor in ipairs(option_descriptors) do
+    validate_vector(
+      descriptor,
+      #self.spec.option_descriptor_names,
+      "choice option descriptor " .. tostring(option_index - 1))
+    local joined = {}
+    for index, value in ipairs(hidden) do
+      joined[index] = value
+    end
+    local offset = #hidden
+    for index, value in ipairs(descriptor) do
+      joined[offset + index] = value
+    end
+    local option_hidden = dense_tanh(
+      joined,
+      parameters.choice_option_weight,
+      parameters.choice_option_bias)
+    scores[option_index] = scalar_value(
+      option_hidden,
+      parameters.choice_score_weight,
+      parameters.choice_score_bias)
+  end
+  local probabilities = masked_softmax(
+    scores,
+    option_mask,
+    "choice option",
+    self.weights.choice_temperature)
+  local selected_index = stochastic == true and
+    self:sample(probabilities) or argmax(probabilities)
+  local selected_probability = probabilities[selected_index]
+  return {
+    choice_action = selected_index - 1,
+    log_probability = math.log(selected_probability),
+    choice_probability = selected_probability,
+    probabilities = probabilities,
+    value = scalar_value(
+      hidden,
+      parameters.choice_value_weight,
+      parameters.choice_value_bias),
+    temperature = self.weights.choice_temperature,
     generation = self.generation,
   }
 end

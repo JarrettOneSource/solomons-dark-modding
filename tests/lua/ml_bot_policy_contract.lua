@@ -6,12 +6,28 @@ local function load_module(relative_path)
   return chunk()
 end
 
+local function action_names(actions)
+  local names = {}
+  for index, action in ipairs(actions) do
+    names[index] = action.name
+  end
+  return names
+end
+
+local function print_probabilities(label, probabilities)
+  local values = {}
+  for index, value in ipairs(probabilities) do
+    values[index] = string.format("%.17g", value)
+  end
+  print(label .. "=" .. table.concat(values, ","))
+end
+
 local spec = load_module("mods/bot-brain/scripts/policy_spec.lua")
 local policy = load_module("mods/bot-brain/scripts/policy.lua")
 local weights = load_module("mods/bot-brain/scripts/policy_weights.lua")
 local training = load_module("mods/bot-brain/scripts/policy_training.lua")
 
-local runtime = policy.new(spec, weights)
+local runtime = policy.new(spec, weights, 20260730)
 local observation = {}
 for index = 1, #spec.observation_names do
   observation[index] = ((index * 37) % 101 - 50) / 50
@@ -24,90 +40,115 @@ local target_mask = {}
 for index = 1, #spec.target_actions do
   target_mask[index] = index % 4 ~= 0
 end
-local selected_cast_mask = nil
+local selected_ability_mask = nil
+local selected_aim_mask = nil
 local decision = runtime:forward(
   observation,
   movement_mask,
   target_mask,
   function(target_action)
     local mask = {}
-    for index = 1, #spec.cast_actions do
-      mask[index] = (index + target_action) % 4 ~= 0
+    for index = 1, #spec.ability_actions do
+      mask[index] = (index + target_action) % 5 ~= 0
     end
     mask[1] = true
-    selected_cast_mask = mask
+    selected_ability_mask = mask
+    return mask
+  end,
+  function(ability_action)
+    local mask = {}
+    for index = 1, #spec.aim_actions do
+      mask[index] = (index + ability_action) % 4 ~= 0
+    end
+    mask[1] = true
+    selected_aim_mask = mask
     return mask
   end,
   false)
 
+local descriptors = {}
+for row = 1, 3 do
+  descriptors[row] = {}
+  for column = 1, #spec.option_descriptor_names do
+    descriptors[row][column] =
+      ((row * (column + 4)) % 29 - 14) / 14
+  end
+end
+local choice_mask = {true, false, true}
+local choice = runtime:forward_choice(
+  observation,
+  descriptors,
+  choice_mask,
+  false)
+
+print("observation_count=" .. tostring(#spec.observation_names))
 print("observation_names=" .. table.concat(spec.observation_names, ","))
-local movement_names = {}
-for index, action in ipairs(spec.movement_actions) do
-  movement_names[index] = action.name
-end
-print("movement_names=" .. table.concat(movement_names, ","))
-local target_names = {}
-for index, action in ipairs(spec.target_actions) do
-  target_names[index] = action.name
-end
-print("target_names=" .. table.concat(target_names, ","))
-local cast_names = {}
-for index, action in ipairs(spec.cast_actions) do
-  cast_names[index] = action.name
-end
-print("cast_names=" .. table.concat(cast_names, ","))
 print(
-  "hidden_sizes=" ..
-  tostring(spec.hidden_sizes[1]) .. "," ..
+  "option_descriptor_count=" ..
+  tostring(#spec.option_descriptor_names))
+print(
+  "option_descriptor_names=" ..
+  table.concat(spec.option_descriptor_names, ","))
+print(
+  "movement_names=" ..
+  table.concat(action_names(spec.movement_actions), ","))
+print(
+  "target_names=" ..
+  table.concat(action_names(spec.target_actions), ","))
+print(
+  "ability_names=" ..
+  table.concat(action_names(spec.ability_actions), ","))
+print(
+  "aim_names=" ..
+  table.concat(action_names(spec.aim_actions), ","))
+print(
+  "hidden_sizes=" .. tostring(spec.hidden_sizes[1]) .. "," ..
   tostring(spec.hidden_sizes[2]))
+print(
+  "choice_hidden_size=" ..
+  tostring(runtime:status().choice_hidden_size))
 print("movement_action=" .. tostring(decision.movement_action))
 print("target_action=" .. tostring(decision.target_action))
-print("cast_action=" .. tostring(decision.cast_action))
+print("ability_action=" .. tostring(decision.ability_action))
+print("aim_action=" .. tostring(decision.aim_action))
 print(string.format("log_probability=%.17g", decision.log_probability))
 print(string.format("value=%.17g", decision.value))
+print_probabilities(
+  "movement_probabilities", decision.movement_probabilities)
+print_probabilities(
+  "target_probabilities", decision.target_probabilities)
+print_probabilities(
+  "ability_probabilities", decision.ability_probabilities)
+print_probabilities("aim_probabilities", decision.aim_probabilities)
+print("choice_action=" .. tostring(choice.choice_action))
+print(string.format("choice_value=%.17g", choice.value))
+print(
+  string.format(
+    "choice_log_probability=%.17g", choice.log_probability))
+print_probabilities("choice_probabilities", choice.probabilities)
 
-local function print_probabilities(label, probabilities)
-  local values = {}
-  for index, value in ipairs(probabilities) do
-    values[index] = string.format("%.17g", value)
-  end
-  print(label .. "=" .. table.concat(values, ","))
+for _, version in ipairs({1, 2}) do
+  local ok, error_message = pcall(function()
+    policy.new(spec, {
+      format = "solomon-dark-bot-policy",
+      version = version,
+      observation_version = version,
+      architecture = version == 1 and
+        "mlp-tanh-two-head-v1" or
+        "mlp-tanh-three-head-v2",
+      observation_size = version == 1 and 87 or 395,
+    })
+  end)
+  assert(ok == false)
+  assert(
+    string.find(
+      tostring(error_message),
+      "policy v1/v2 artifacts are incompatible",
+      1,
+      true) ~= nil)
+  print("v" .. tostring(version) .. "_rejected=true")
+  print("v" .. tostring(version) .. "_error=" .. tostring(error_message))
 end
-
-print_probabilities(
-  "movement_probabilities",
-  decision.movement_probabilities)
-print_probabilities(
-  "target_probabilities",
-  decision.target_probabilities)
-print_probabilities(
-  "cast_probabilities",
-  decision.cast_probabilities)
-local cast_mask_bits = {}
-for index, value in ipairs(selected_cast_mask) do
-  cast_mask_bits[index] = value and "1" or "0"
-end
-print("cast_mask=" .. table.concat(cast_mask_bits))
-
-local v1_ok, v1_error = pcall(function()
-  policy.new(spec, {
-    format = "solomon-dark-bot-policy",
-    version = 1,
-    observation_version = 1,
-    architecture = "mlp-tanh-two-head-v1",
-    observation_size = 87,
-    hidden_size = 48,
-  })
-end)
-assert(v1_ok == false)
-assert(
-  string.find(
-    tostring(v1_error),
-    "policy v1 artifacts are incompatible",
-    1,
-    true) ~= nil)
-print("v1_rejected=true")
-print("v1_error=" .. tostring(v1_error))
 
 local controller = training.new(spec, runtime)
 local context = {participant_id = 42}
@@ -115,7 +156,8 @@ local capture = {
   values = observation,
   movement_mask = movement_mask,
   target_mask = target_mask,
-  cast_mask = selected_cast_mask,
+  ability_mask = selected_ability_mask,
+  aim_mask = selected_aim_mask,
   metrics = {
     hp_ratio = 1.0,
     mana_ratio = 1.0,
@@ -127,6 +169,10 @@ local capture = {
 }
 controller:enable({seed = 123, capacity = 128})
 controller:record(context, capture, decision, 10)
+local reset = controller:clear_main()
+assert(reset.enabled == true)
+assert(reset.buffered == 0)
+assert(reset.recorded == 0)
 capture.metrics = {
   hp_ratio = 1.0,
   mana_ratio = 0.9,
@@ -136,36 +182,15 @@ capture.metrics = {
   enemy_health = {[7] = 0.8},
 }
 controller:record(context, capture, decision, 20)
-capture.metrics = {
-  hp_ratio = 1.0,
-  mana_ratio = 0.8,
-  wave = 2,
-  alive = true,
-  enemy_count = 0,
-  enemy_health = {},
-}
-controller:record(context, capture, decision, 30)
-local before = controller:status()
-assert(before.buffered == 2)
-assert(before.recorded == 2)
-assert(before.dropped == 0)
-local drained = controller:drain(2)
-assert(#drained.records == 2)
-assert(drained.records[1].simulation_tick == 10)
-assert(drained.records[2].simulation_tick == 20)
-assert(#drained.records[1].target_mask == 9)
-assert(
-  drained.records[1].target_action ==
-  decision.target_action)
-assert(#drained.records[1].cast_mask == 10)
-assert(drained.records[1].reward > 0)
-assert(drained.records[2].reward > drained.records[1].reward)
-assert(controller:status().buffered == 0)
-capture.metrics.hp_ratio = 0.0
-capture.metrics.alive = false
-controller:terminal(context, capture.metrics)
-local terminal = controller:drain(1)
-assert(#terminal.records == 1)
-assert(terminal.records[1].done == true)
-assert(terminal.records[1].reward < -3.0)
+local finished = controller:finish_episode()
+assert(finished.enabled == false)
+assert(finished.buffered == 1)
+local drained = controller:drain(1)
+assert(#drained.records == 1)
+assert(drained.records[1].trajectory_version == 3)
+assert(#drained.records[1].observation == 1279)
+assert(#drained.records[1].ability_mask == 22)
+assert(#drained.records[1].aim_mask == 9)
+assert(drained.records[1].done == true)
+print("main_only_reset_ok=true")
 print("training_ring_ok=true")

@@ -1576,3 +1576,96 @@ verifier now starts stock waves after entering its test run; numeric parsing
 preserves decimal string participant IDs before any floating-point conversion;
 and primary priming accepts an already-active requested Fireball instead of
 requiring the verifier itself to select it from an offer.
+
+## K. Phase V3-4 implementation record
+
+Phase V3-4 is the strict runtime/trainer cutover. The historical v1 and v2 JSON
+files remain historical inputs only; neither runtime accepts them and no old
+weights, rollouts, or scripted skill-choice labels seed v3.
+
+### Runtime and artifact
+
+- `policy.lua` validates the exact 1,279 -> 512 -> 256 trunk, four masked
+  9/9/22/9 main heads, main value, and all choice-scorer tensors. Main
+  inference selects target before target-conditioned ability, then ability
+  before family-conditioned aim. Its composite log probability is the sum of
+  the four selected-head logs.
+- The choice scorer shares the 256-value state latent. Each offered 56-value
+  descriptor is concatenated with that latent and passed through one 128-unit
+  tanh option layer, followed by a shared scalar score. Masked softmax is over
+  the offered set and a separate choice value reads the shared state. The
+  128-unit option width is the only implementation-time concretization not
+  fixed numerically by the adjudication; it adds no observation/action delta.
+- `models/bot-brain/policy-v3.json` and `policy_weights.lua` are exact exports
+  of one parameter map. Hot reload transfers the larger Lua artifact in
+  512-KiB tokenized chunks, then compiles and validates the full candidate
+  before one runtime swap. Main now installs the v3 runtime at startup; the
+  V3-3 unavailable branch is removed.
+- Both loaders explicitly classify model/observation versions 1 and 2,
+  architectures `mlp-tanh-two-head-v1` and `mlp-tanh-three-head-v2`, and the
+  old 87/395 observation shapes as incompatible. There is no adapter or shim.
+
+### Main PPO and choice-event SMDP PPO
+
+- Python mirrors every ordered observation, descriptor, action name, parameter
+  name, tensor shape, and dynamic choice temperature. NumPy inference and Lua
+  inference are compared on one fixed 1,279-value input for all four main
+  heads/value and on a masked three-option scorer/value input.
+- Main PPO trains all four heads with a composite old log probability and
+  reports movement, target, ability, and aim entropy separately. Defaults are
+  0.01, 0.02, 0.01, and 0.01 respectively.
+- Choice PPO uses complete variable-duration intervals only. For interval
+  duration `d`, it applies the frozen discounted interval return,
+  `gamma^d` value bootstrap, and `(gamma lambda)^d` advantage recursion.
+  Entropy coefficient 0.05 is normalized per row by `log(valid options)`; a
+  one-option row has zero normalized entropy.
+- Choice softmax temperature starts at 1.25. Coverage registers every offered
+  semantic family and weld-pair key and counts selected keys. It changes to
+  1.0 only when every registered key has at least 20 selections. Coverage and
+  the active temperature persist in checkpoint metadata.
+- Live collection is enabled before learned participants materialize so native
+  choice offers enter training. Trainer-side scripted progression priming is
+  removed. Once the curriculum arena is ready, a main-only reset finishes and
+  clears setup rows while preserving the open choice interval and its duration
+  rewards. A new episode-finalization edge terminalizes pending main and choice
+  records before drain; scripted rows stay tagged through bridge transport and
+  are partitioned out before choice batching. Main responses are limited to
+  16 records and choice responses to one interval; live rollouts are capped at
+  8,192 steps so worst-case finite text remains below the loader's fixed
+  1-MiB response ceiling. Complete choice intervals accumulate across
+  disposable sessions until the configured minimum batch (default 32).
+- Main and choice Adam states are independent while both update the shared
+  trunk. Every learned participant in the composition contributes main and
+  choice records. Checkpoints include both streams' parameters and are written
+  through temporary JSON/Lua files before atomic replacement and hot reload.
+
+### Bootstrap and limitations
+
+The deterministic v3 expert chooses an enemy first, derives target-conditioned
+spell legality, selects potions from vitals and ranked possession, and derives
+free aim from target velocity plus hazard context. It produces no option-choice
+labels. The checked-in 6,000-sample, 20-epoch seed achieved held-out accuracies:
+
+| Head | Accuracy |
+| --- | ---: |
+| movement | 0.8850 |
+| target | 0.7617 |
+| ability | 0.7175 |
+| aim | 0.9158 |
+| joint | 0.4583 |
+
+The seed is initialization, not a competence claim. Wizard Chug, Antidote,
+and Mind Chug remain observed/permanently masked; equipment remains
+observation-only. Learned-live dual-stream behavior is deliberately left to
+the V3-5 smoke and verifier gate.
+
+### Verification
+
+The deterministic suite proves exact Lua/Python name and tensor agreement,
+finite bootstrap and PPO updates for both streams, duration-zero and positive
+SMDP intervals, normalized choice entropy, the coverage temperature gate,
+strict v1/v2 rejection in both loaders, byte-identical JSON-to-Lua export,
+chunked atomic runtime swap, and fixed-input inference parity for every head,
+both values, and the option scorer. Final repository suite counts are recorded
+as 528/528 Python unittests, 306/306 static RE contracts, and 672 checked
+source/header fragments.

@@ -266,7 +266,7 @@ function Controller:enable(options)
   if type(self.runtime) ~= "table" or
       type(self.runtime.set_seed) ~= "function" then
     error(
-      "strict v3 policy runtime is unavailable until Phase V3-4")
+      "strict v3 policy runtime is unavailable")
   end
   local capacity = math.floor(
     tonumber(options.capacity) or self.capacity)
@@ -283,6 +283,19 @@ function Controller:disable()
   return self:status()
 end
 
+function Controller:finish_episode()
+  if self.enabled ~= true then
+    return self:status()
+  end
+  for context in pairs(self.contexts) do
+    local metrics = context.policy_pending and
+      context.policy_pending.metrics or nil
+    self:terminal(context, metrics)
+  end
+  self.enabled = false
+  return self:status()
+end
+
 function Controller:clear()
   self:discard_pending()
   self.main_buffer = {}
@@ -296,6 +309,21 @@ function Controller:clear()
   self.choice_dropped = 0
   self.choice_recorded = 0
   self.scripted_choice_excluded = 0
+  return self:status()
+end
+
+function Controller:clear_main()
+  for context in pairs(self.contexts) do
+    local pending = context.policy_pending
+    if pending ~= nil then
+      self:finish_pending(context, pending.metrics, false)
+    end
+  end
+  self.main_buffer = {}
+  self.main_head = 1
+  self.main_tail = 0
+  self.main_dropped = 0
+  self.main_recorded = 0
   return self:status()
 end
 
@@ -358,7 +386,7 @@ function Controller:load_parameters(candidate)
   if type(self.runtime) ~= "table" or
       type(self.runtime.load) ~= "function" then
     error(
-      "strict v3 policy runtime is unavailable until Phase V3-4")
+      "strict v3 policy runtime is unavailable")
   end
   local generation = self.runtime:load(candidate)
   return {
@@ -376,7 +404,7 @@ function Controller:runtime_status()
     available = false,
     version = self.spec.model_version,
     reason =
-      "strict v3 policy runtime and weights arrive in Phase V3-4",
+      "strict v3 policy runtime is unavailable",
   }
 end
 
@@ -424,8 +452,14 @@ function training.new(spec, runtime)
     disable = function()
       return controller:disable()
     end,
+    finish_episode = function()
+      return controller:finish_episode()
+    end,
     clear = function()
       return controller:clear()
+    end,
+    clear_main = function()
+      return controller:clear_main()
     end,
     drain = function(max_records)
       return controller:drain(max_records)

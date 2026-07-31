@@ -151,14 +151,14 @@ excluded from choice batches. Training records a main trajectory-v3 stream and
 a separate variable-duration choice-event-v3 SMDP stream while retaining the
 v2 combat reward formula unchanged.
 
-Phase V3-3 deliberately activates no learned inference artifact:
-`policy.lua`, `policy_weights.lua`, the Python mirror, and v3 model are replaced
-together in V3-4. The Lua layer reports a clear unavailable reason and never
-adapts or loads the historical v1/v2 weights still present in the tree. Once
-the strict v3 runtime is installed, inference remains local—no Python, GPU, or
-network service—and all movement, casts, pickups, and consumable uses continue
-through native participant rails. See [`ml-bot.md`](ml-bot.md) for the
-currently released v2 training workflow.
+The strict v3 runtime loads the checked-in 1,279 -> 512 -> 256 artifact and its
+9/9/22/9 main heads at mod startup. Pending native skill choices use the same
+state trunk plus a shared 128-unit scorer over each 56-value option descriptor.
+Lua and Python reject historical v1/v2 artifacts without a shim. Inference
+remains local—no Python, GPU, or network service—and all movement, casts,
+pickups, and consumable uses continue through native participant rails. See
+[`ml-bot.md`](ml-bot.md) for bootstrap, dual-stream PPO/SMDP training, entropy,
+temperature, and hot-reload details.
 
 ## Diagnostics and acceptance
 

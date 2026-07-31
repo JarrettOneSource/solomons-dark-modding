@@ -327,7 +327,6 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "shared.policy_observation.capture(",
         "shared.policy_skill_choices:capture(",
         "shared.policy_skill_choices:handle(",
-        "if shared.policy_runtime == nil then",
         "shared.policy_runtime:forward(",
         "shared.policy_observation.build_ability_mask(",
         "shared.policy_observation.build_aim_mask(",
@@ -345,7 +344,7 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "sd.world.request_loot_pickup",
         "selected_target",
         "enemies = all_enemies",
-        'shared.skill_choice_mode == "scripted"',
+        "shared.skill_choice_mode,",
         "shared.policy_inventory.use",
         "shared.policy_observation.aim_point(",
         "decision.ability_action",
@@ -366,11 +365,9 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "policy_training.lua",
     ):
         assert f'"scripts/{script}"' in main
-    assert "local policy_runtime = nil" in main
-    assert 'require_mod("scripts/policy.lua")' not in main
-    assert 'require_mod("scripts/policy_weights.lua")' not in main
-    assert "a v2 model is never adapted or loaded" in main
-    assert "strict v3 policy runtime and weights arrive in Phase V3-4" in main
+    assert "local policy_runtime = policy_module.new(" in main
+    assert 'require_mod("scripts/policy.lua")' in main
+    assert 'require_mod("scripts/policy_weights.lua")' in main
     assert 'sd.settings.get("skill_choice_mode")' in main
     assert 'sd.settings.get("policy_weld_preference")' in main
     assert "policy_geometry:reset(nil)" in main
@@ -447,7 +444,7 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
     )
 
 
-def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
+def _legacy_ml_bot_v2_runtime_contract() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
     model = json.loads(_read("models/bot-brain/policy-v2.json"))
     historical_v1 = json.loads(
@@ -790,6 +787,196 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         "The v3 Lua layer keeps the simulation clock and native action rails "
         "while the unloaded v2 artifact and bridge remain strict historical "
         "inputs until the v3 runtime lands"
+    )
+
+
+def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
+    model = json.loads(_read("models/bot-brain/policy-v3.json"))
+    historical_v1 = json.loads(_read("models/bot-brain/policy-v1.json"))
+    historical_v2 = json.loads(_read("models/bot-brain/policy-v2.json"))
+    lua_spec = _read("mods/bot-brain/scripts/policy_spec.lua")
+    lua_policy = _read("mods/bot-brain/scripts/policy.lua")
+    lua_main = _read("mods/bot-brain/scripts/main.lua")
+    lua_training = _read("mods/bot-brain/scripts/policy_training.lua")
+    python_spec = _read("tools/ml_bot/spec.py")
+    python_model = _read("tools/ml_bot/model.py")
+    bridge = _read("tools/ml_bot/bridge.py")
+    expert = _read("tools/ml_bot/expert.py")
+    trainer = _read("tools/train_bot_policy.py")
+    fixture = _read("tests/lua/ml_bot_policy_contract.lua")
+
+    assert historical_v1["version"] == 1
+    assert historical_v2["version"] == 2
+    assert model["version"] == 3
+    assert model["observation_version"] == 3
+    assert model["architecture"] == "mlp-tanh-four-head-v3"
+    assert model["observation_size"] == 1279
+    assert model["hidden_sizes"] == [512, 256]
+    assert model["movement_action_size"] == 9
+    assert model["target_action_size"] == 9
+    assert model["ability_action_size"] == 22
+    assert model["aim_action_size"] == 9
+    assert model["option_descriptor_size"] == 56
+    assert model["choice_hidden_size"] == 128
+    assert model["choice_value_size"] == 1
+    assert model["choice_temperature"] in (1.25, 1.0)
+    assert len(model["observation_names"]) == 1279
+    assert len(model["option_descriptor_names"]) == 56
+    assert set(model["parameters"]) == {
+        "input_weight",
+        "input_bias",
+        "hidden_weight",
+        "hidden_bias",
+        "movement_weight",
+        "movement_bias",
+        "target_weight",
+        "target_bias",
+        "ability_weight",
+        "ability_bias",
+        "aim_weight",
+        "aim_bias",
+        "value_weight",
+        "value_bias",
+        "choice_option_weight",
+        "choice_option_bias",
+        "choice_score_weight",
+        "choice_score_bias",
+        "choice_value_weight",
+        "choice_value_bias",
+    }
+
+    for token in (
+        "MODEL_VERSION = 3",
+        "OBSERVATION_VERSION = 3",
+        "TRAJECTORY_VERSION = 3",
+        "CHOICE_TRAJECTORY_VERSION = 3",
+        'ARCHITECTURE = "mlp-tanh-four-head-v3"',
+        "HIDDEN_SIZES = (512, 256)",
+        "CHOICE_HIDDEN_SIZE = 128",
+        "if len(names) != 1279:",
+        "ABILITY_ACTION_NAMES = (",
+        "AIM_ACTION_NAMES = (",
+        "CHOICE_ENTROPY_COEFFICIENT = 0.05",
+        "CHOICE_EXPLORATION_TEMPERATURE = 1.25",
+        "CHOICE_COVERAGE_THRESHOLD = 20",
+        "v1/v2 artifacts are incompatible",
+    ):
+        assert token in python_spec
+    for token in (
+        "model_version = 3",
+        "architecture = \"mlp-tanh-four-head-v3\"",
+        "hidden_sizes = {512, 256}",
+        "choice_hidden_size = 128",
+        "choice_entropy_coefficient = 0.05",
+        "choice_exploration_temperature = 1.25",
+        "choice_coverage_threshold = 20",
+    ):
+        assert token in lua_spec
+
+    for token in (
+        "class ChoiceForwardPass:",
+        "class ChoicePpoMetrics:",
+        "class ChoiceCoverage:",
+        "ability_probabilities: Array",
+        "aim_probabilities: Array",
+        "def forward_choice(",
+        "def smdp_advantage_estimate(",
+        "def choice_ppo_batch(",
+        "def choice_ppo_epochs(",
+        "normalized_entropy",
+        "CHOICE_ENTROPY_COEFFICIENT",
+        "self.choice_temperature",
+    ):
+        assert token in python_model
+    for token in (
+        "policy v1/v2 artifacts are incompatible",
+        "parameters.ability_weight",
+        "parameters.aim_weight",
+        "parameters.choice_option_weight",
+        "function Runtime:forward_choice(",
+        "ability_mask_builder(target_index - 1)",
+        "aim_mask_builder(ability_index - 1)",
+        "math.log(ability_probability)",
+        "math.log(aim_probability)",
+        "self.weights.choice_temperature",
+    ):
+        assert token in lua_policy
+    for token in (
+        'require_mod("scripts/policy.lua")',
+        'require_mod("scripts/policy_weights.lua")',
+        "local policy_runtime = policy_module.new(",
+        "status.available = true",
+    ):
+        assert token in lua_main
+    for token in (
+        "function Controller:finish_episode()",
+        "function Controller:clear_main()",
+        "ability_mask = copy_mask(capture.ability_mask)",
+        "aim_mask = copy_mask(capture.aim_mask)",
+        "choice_trajectory_version",
+        "duration_steps",
+        "drain_choices",
+    ):
+        assert token in lua_training
+
+    for token in (
+        "class ChoiceRolloutRecord:",
+        "def parse_choice_rollout_output(",
+        "def finish_training_episode(",
+        "def clear_main_training_stream(",
+        "def drain_choice_rollouts(",
+        "api.drain_choices({int(count)}, true)",
+        "MAX_ROLLOUTS_PER_RESPONSE = 16",
+        "MAX_CHOICE_ROLLOUTS_PER_RESPONSE = 1",
+        "@ml-bot-policy-v3-hot-reload",
+        "trajectory-v1/v2 frames are incompatible",
+        "choice trajectory-v1/v2 is incompatible",
+    ):
+        assert token in bridge
+    for token in (
+        "Target-, aim-, and potion-aware semantic expert",
+        "ability_masks: Array",
+        "aim_masks: Array",
+        "PERMANENTLY_MASKED_POTIONS",
+        "Native skill choices are never",
+        "_choose_target(enemies, current_slot)",
+        "_choose_ability(",
+    ):
+        assert token in expert
+    for token in (
+        "def prepare_choice_batch(",
+        "def partition_choice_records(",
+        "def concatenate_choice_batches(",
+        "MAX_LIVE_ROLLOUT_STEPS = 8192",
+        "smdp_advantage_estimate(",
+        "choice_ppo_epochs(",
+        "ChoiceCoverage.from_dict(",
+        "session.finish_training_episode()",
+        "session.clear_main_training_stream()",
+        "session.drain_choice_rollouts(choice_count)",
+        "choice batches",
+        "choice_complete_intervals",
+        "scripted_choice_events_excluded",
+        "choice_temperature",
+        "choice_coverage",
+        "session.load_policy(policy)",
+        "_atomic_checkpoint(",
+    ):
+        assert token in trainer
+    assert "session.prime_learned_progression(" not in trainer
+    for token in (
+        "observation_names=",
+        "option_descriptor_names=",
+        "choice_probabilities",
+        "policy v1/v2 artifacts are incompatible",
+        "main_only_reset_ok=true",
+        "training_ring_ok=true",
+    ):
+        assert token in fixture
+    return (
+        "Policy v3 pins the 1279 -> 512 -> 256 four-head runtime, shared "
+        "56-value choice scorer, strict old-artifact rejection, and complete "
+        "main plus SMDP choice training streams"
     )
 
 

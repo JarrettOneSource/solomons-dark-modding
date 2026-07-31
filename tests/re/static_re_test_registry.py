@@ -35,7 +35,7 @@ from static_lua_ml_bot_contracts import (
     test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned,
     test_ml_bot_v3_phase3_lua_contract_is_pinned,
     test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
-    test_ml_bot_is_simulation_timed_local_and_native_action_routed,
+    test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned,
 )
 from static_ml_bot_v3_native_seams_contracts import (
     test_ml_bot_v3_collision_geometry_is_exact_semantic_and_address_free,
@@ -605,8 +605,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_bot_loadout_details_are_cached_address_free_and_observation_safe,
     ),
     (
-        "Learned Lua bot is simulation-timed and native action-routed",
-        test_ml_bot_is_simulation_timed_local_and_native_action_routed,
+        "ML bot v3 runtime and dual-stream trainer are pinned",
+        test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned,
     ),
     (
         "ML bot v2 native loadout schema is semantic and complete",

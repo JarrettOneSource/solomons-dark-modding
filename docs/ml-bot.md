@@ -1,117 +1,116 @@
 # Learned bot
 
-Lua Bots 1.1 includes a learned policy that controls a real synthetic player
-slot. It chooses movement, a persisted enemy target, and attacks; the existing
-native bot rails perform movement, mana/cooldown checks, spell casts, damage,
-death, replication, and collision. It is not an overlay, aim suggestion, or
-external process.
+Lua Bots includes a learned policy that controls a real synthetic participant.
+It chooses movement, a persisted enemy target, one mutually-exclusive ability,
+and an aim offset. Native participant rails still own movement validation,
+mana/cooldown checks, spell and consumable effects, damage, death, replication,
+and collision.
 
 ## Use it in a normal game
 
-Enable **Lua Bots** in the launcher, open its mod settings, and add or edit a
-row under **Bot roster**:
+Enable **Lua Bots**, add a row under **Bot roster**, set **Behavior** to
+**Learned — ML movement and casting**, and choose its element and Discipline.
+The bundled policy runs inside the mod's Lua state. Players do not need Python,
+NumPy, a GPU, a model service, an account, or an internet connection. Learned
+and scripted rows may coexist. Learned decisions occur every 100 ms of
+simulation time; **Scripted bot cadence** affects only scripted behaviors.
 
-1. set **Behavior** to **Learned — ML movement and casting**;
-2. choose the bot's element and native Discipline;
-3. leave **Cast at enemies** enabled; and
-4. launch normally.
+## Policy v3 contract
 
-The bundled policy runs entirely in the mod's Lua state. Players do not need
-Python, NumPy, a GPU, a model server, an account, or an internet connection.
-The host makes decisions and clients receive ordinary participant movement and
-cast traffic. Scripted Skirmisher, Guardian, and Striker rows can coexist with
-Learned rows.
+The main policy has four masked heads:
 
-The learned policy decides every 100 ms of simulation time. The launcher's
-**Scripted bot cadence** setting therefore affects only the three scripted
-behaviors.
+- movement: idle or eight compass directions (9);
+- target: keep the actor-ID-persisted target or choose one of eight enemy
+  slots (9);
+- ability: none, primary, eight secondaries, or twelve count-ranked potion
+  slots (22); and
+- aim: center or eight 60-world-unit compass offsets (9).
 
-## What policy v2 controls
+Lua selects the target before rebuilding ability legality against that target,
+then rebuilds the aim mask against the selected ability. The composite action
+log probability is the sum of all four selected-head log probabilities.
+Movement uses `sd.nav.test_segment` only for its action mask. Native action
+rails remain the final validators.
 
-Policy v2 has three masked action heads:
+The policy receives exactly 1,279 ordered values. Positions 1-395 preserve the
+v2 prefix. Blocks J-Q append participant potion timers; enemy identity,
+facing, telegraphs, and statuses; persisted-target motion/facing; eight exact
+collision primitives; twelve hostile hazards; twelve ranked potion types;
+seven equipped-item summaries; and bounded inventory taxonomy totals. Unknown
+hostile hazards remain present with `type_known=0`. Inventory counts use
+`log1p(min(count, 99)) / log(100)`. The canonical order is duplicated and
+tested between `policy_spec.lua` and `tools/ml_bot/spec.py`.
 
-- idle or one of eight compass movement directions;
-- keep the persisted target or select one of eight nearest-enemy slots; and
-- no cast, class primary, or one of eight loaded secondary slots.
+Wizard Chug, Antidote, and Mind Chug are observable but permanently action
+masked because no participant-scoped native effect route was proven. Health,
+Mana, and Rejuvenation use proven native participant paths. A custom potion is
+actionable only when its registration declares synthetic-safe
+`policy_effects`. Equipment remains observation-only.
 
-Lua samples movement and target first. It persists the selected enemy by
-`network_actor_id`, rebuilds the cast mask against that enemy, and then samples
-the cast. Blocked movement directions are rejected with
-`sd.nav.test_segment`. Cast legality uses offense/cast state plus per-slot
-occupancy, affordability, resolved cooldown/readiness, and the selected
-target's range. Unknown native secondary range is deliberately not guessed;
-the native cast rail remains the final validator.
+Aim offsets are available only to proven heading, point, line, and area spell
+families. None, potions, homing, beam/cone, toggle, self, and radial families
+are center-only.
 
-The policy receives exactly 395 ordered values. They cover self vitals;
-the active primary and eight secondary descriptors; eight enemies with
-actor-ID velocity history; the persisted target; cached clearance rays and a
-7x7 egocentric walkability patch; four replicated pickups; four nearest
-in-run allies; cap-independent enemy/ally aggregates; arena, history, weld,
-and progression-derived combat features. The canonical order is
-`tools/ml_bot/spec.py` and
-`mods/bot-brain/scripts/policy_spec.lua`.
+Fixed scales are source-evidenced contract constants rather than fitted batch
+statistics. Important values include mana 2,000, HP 1,000, velocity 1,000,
+cooldown/status lifetime 60 seconds, range 1,000, radius 100, hazard contact
+10 seconds, skill damage 500, skill duration 30 seconds, and count saturation
+99. The complete list and evidence comments live in `policy_spec.lua`.
 
-Normalization is fixed by the versioned contract, never fitted from a batch:
+## Runtime and strict versioning
 
-- mana: 2000;
-- HP: 1000;
-- velocity: 1000 world units/second;
-- cooldown: 60 seconds;
-- range: 1000 world units; and
-- radius: 100 world units.
+Architecture `mlp-tanh-four-head-v3` is:
 
-The mana and HP ceilings cover catalogued native upgrades and stock charms.
-The velocity ceiling covers the fastest native movement envelope measured by
-the speed probe. The cooldown ceiling is the live-proven Teleport cap.
-Evidence comments live beside the constants in `policy_spec.lua`.
+1. 1,279 inputs;
+2. shared tanh layers of 512 and 256 units;
+3. masked 9/9/22/9 main heads and one scalar main value; and
+4. a shared skill-option scorer.
 
-The deterministic skill manager remains separate from the learned heads. It
-recognizes Spell Welding option 52 and honors
-`policy_weld_preference=prefer|avoid|auto`. Nearby host-owned pickups are also
-requested by a rate-limited scripted assist; the learned action is navigating
-to the observed drop.
+At a pending native choice, the scorer joins the shared 256-value state latent
+with each 56-value semantic option descriptor, applies one 128-unit tanh
+option layer, and produces a shared scalar score. Masked softmax works over the
+offered set, so option order and count do not change the parameter shape. A
+separate scalar choice value uses the shared state latent.
 
-## Runtime architecture and strict versioning
+Model, observation, main trajectory, and choice trajectory versions are all
+3. Lua and Python validate every ordered name, tensor dimension, parameter
+name, temperature, and finite value. Historical v1 and v2 JSON artifacts stay
+in source history; both loaders reject either version explicitly. There is no
+adapter, migration shim, or reuse of old weights or data.
 
-Architecture `mlp-tanh-three-head-v2` is a feed-forward actor-critic:
+The checked-in runtime files are generated from one parameter map:
 
-1. 395 inputs;
-2. tanh layers of 192 and 96 units;
-3. masked movement logits (9), target logits (9), and cast logits (10); and
-4. one scalar value output used by training.
+- `models/bot-brain/policy-v3.json`; and
+- `mods/bot-brain/scripts/policy_weights.lua`.
 
-The joint action log probability is the sum of all three selected-head log
-probabilities. Model, observation, and trajectory versions are all 2. Lua and
-Python validate every ordered name, declared shape, parameter name, and finite
-value. Historical v1 JSON remains in source control, but both loaders reject
-v1 artifacts explicitly; there is no migration shim.
+The Lua artifact is larger than v2, so hot reload stages 512-KiB chunks under a
+unique token. Lua compiles and validates the complete candidate before one
+runtime swap and generation advance. A transfer failure clears staging without
+changing the active policy.
 
-## Bootstrap and validate a model
+## Bootstrap and validation
 
-Training uses Python and NumPy, but game-time inference does not. From a
-Windows terminal in the repository:
+From a repository terminal:
 
 ```powershell
 py -3 tools/train_bot_policy.py bootstrap
 py -3 tools/train_bot_policy.py validate
 ```
 
-Bootstrap generation is deterministic and starts from fresh v2 initialization.
-Its semantic expert chooses an enemy slot from the eight enemy observations
-first, then derives a target-conditioned cast. It does not reuse v1 weights,
-trajectories, data, or wrapper-selected target labels. Held-out movement,
-target, cast, and three-head joint gates write:
+Bootstrap starts from fresh v3 initialization. Its deterministic semantic
+expert selects an enemy slot first, derives target-conditioned spell legality,
+chooses potion use from vitals and ranked possession, and labels aim from
+target velocity and hazard context. It emits no skill-choice labels: the
+retired scripted manager is never choice-head ground truth.
 
-- `models/bot-brain/policy-v2.json`, the trainer checkpoint; and
-- `mods/bot-brain/scripts/policy_weights.lua`, the player runtime model.
+The checked-in seed used 6,000 samples and 20 epochs. Held-out accuracies are
+movement 0.8850, target 0.7617, ability 0.7175, aim 0.9158, and four-head joint
+0.4583. These are initialization checks, not a gameplay competence claim.
+Main and choice value heads start at zero.
 
-The JSON checkpoint and Lua export are generated from one parameter map and
-the contract tests require the checked-in Lua file to equal a fresh export of
-the checked-in JSON file.
+## Live PPO and choice SMDP training
 
-## Train with live PPO
-
-Build the launcher and native loader first, then run:
+Build the launcher and loader first, then run:
 
 ```powershell
 py -3 tools/train_bot_policy.py live-ppo `
@@ -120,115 +119,75 @@ py -3 tools/train_bot_policy.py live-ppo `
   --rollout-steps 1024
 ```
 
-Each environment episode owns a new staged one-process local-authority
-session with only `bot.brain` enabled. By default it launches headless,
-disables audio, keeps the stock 10 ms fixed simulation step, and batches
-unchanged steps as fast as the machine allows. Learned decisions remain
-exactly 100 ms apart in simulation time regardless of wall-clock
-acceleration. The session is closed after that episode; the trainer never
-reuses a run by automating Leave Game.
+Each environment episode owns a disposable headless authority session with
+audio disabled. It receives a fresh native seed and logs the requested seed,
+observed run nonce, layout hash, composition, and learned participant IDs.
+Composition sizes come from `tools/ml_bot/team-compositions.json`; no parser or
+training loop assumes the current participant cap.
 
-Every episode receives a distinct native run seed. The trainer sets and reads
-it back in the hub, then verifies that the in-run participant `run_nonce`
-equals it. Its JSON episode line includes `requested_seed`,
-`seed_round_trip`, `observed_run_nonce`, `observed_run_seed`,
-`layout_sha256`, the full composition, learned participant IDs, and
-per-participant trajectory counts.
+Training is enabled before learned participants materialize, so their native
+skill offers are captured instead of being consumed by trainer priming. Once
+the curriculum arena is ready, setup-time main rows are cleared while their
+already-closed rewards/durations remain in the open choice interval; choice
+state is never reset. Every learned participant sharing the policy emits two
+streams:
 
-Team compositions are data-driven in
-`tools/ml_bot/team-compositions.json`. The default rotation includes solo,
-mixed scripted teams that rotate Skirmisher/Guardian/Striker, and
-multi-learned teams sharing the current weights. Every authority-side learned
-participant writes trajectory v2, and PPO/GAE partitions by
-`(episode_id, participant_id)`. The parser has no participant maximum; the
-checked-in active sizes fit the current native lobby, while larger mixed and
-multi-learned rows can be added to the config when the cap-raise workstream
-lands.
+- main trajectory-v3: observations, four masks/actions, composite old log
+  probability, value, reward, and terminal state; and
+- choice-event-v3: frozen observation, variable option rows/mask, selected
+  option, old log probability/value, next choice value, duration, per-step
+  rewards, acceptance, and terminal state.
 
-The live trainer uses a controlled curriculum arena. It enables the existing
-manual-enemy test mode, keeps stock wave production suppressed, and asks the
-game's exact stock enemy constructor for one ordinary type-1001 enemy with no
-elite modifiers. The bot's primary spell is unlocked through native level-up
-offers and `sd.bots.choose_skill`; the trainer does not write a spell directly
-into its loadout.
+The episode-finalization API closes pending main and choice intervals before
+drain. Scripted choice events stay tagged `trainable=false` through bridge
+transport, then are partitioned out before choice PPO batching. This keeps
+mixed-team drain counts exact without turning the scripted manager into a
+training label. The trainer never sends an open interval to choice PPO. Main
+rows drain in 16-record frames and choice intervals one at a time so the
+expanded v3 payload stays below the loader's fixed 1-MiB Lua-exec response
+limit. Live rollouts are bounded to 8,192 steps for the same reason.
 
-For each environment episode/update the trainer:
+Main PPO uses ordinary per-participant GAE and four clipped policy heads. The
+choice stream uses the adjudicated semi-Markov calculation for duration `d`:
 
-1. launches a disposable session and verifies its seed, run nonce, staged
-   Boneyard hash, and configured composition;
-2. collects strict trajectory-v2 observations, three masks, three actions,
-   composite old log probabilities, values, rewards, and simulation ticks;
-3. computes participant-trajectory-local generalized advantage estimates;
-4. applies clipped three-head PPO with finite and gradient checks;
-5. atomically replaces each JSON/Lua checkpoint file; and
-6. stages the large Lua export in sub-1-MiB pipe chunks, validates/commits it
-   as one runtime candidate, and verifies generation advance.
-
-Default entropy coefficients are movement `0.01`, target `0.02`, and cast
-`0.01`. The target bonus is intentionally doubled because `keep_current` is
-often legal and otherwise becomes an easy early attractor. PPO reports each
-head's entropy independently as well as their sum.
-
-Checkpoints are written under `runtime/ml-training/<instance>/`; the source
-model is not overwritten. Cleanup targets only the exact process launched and
-registered by that session.
-
-Repeat `--composition` to select and order a subset. Repeat
-`--boneyard-layout` to cycle owner-approved `.boneyard` files. Omit the latter
-to use the stock layout with fresh native seeds. The solo launcher validates
-each override, stages it through
-`SDMOD_TEST_SURVIVAL_BONEYARD_OVERRIDE`, and publishes both requested and
-staged SHA-256 values.
-
-A short release-gate smoke is:
-
-```powershell
-py -3 tools/train_bot_policy.py live-ppo `
-  --iterations 2 `
-  --rollout-steps 64 `
-  --epochs 1 `
-  --batch-size 32 `
-  --composition solo-learned `
-  --composition multi-learned-2 `
-  --boneyard-layout `
-    "C:\path\to\SolomonDarkAbandonware\data\levels\survival.boneyard"
+```text
+R = sum(k=0..d-1) gamma^k reward[k]
+delta = R + gamma^d (1-done) V_next - V
+A = delta + (gamma lambda)^d (1-done) A_next
 ```
 
-The 2026-07-29 release gate ran that two-episode shape with native
-seed/run-nonce pairs `56933477` and `990726269`. The solo episode collected
-64 trajectory-v2 rows from one learned participant; the two-learned episode
-collected 32 rows from each participant. Both updates remained finite,
-exported matching JSON/Lua checkpoints, completed chunked hot reload, and
-advanced the runtime policy generation. The live behavior verifier separately
-proved target selection, movement, weld activation, a secondary cast beyond
-the primary window, and exactly one pickup credit.
+Choice batches accumulate complete intervals across disposable sessions until
+`--minimum-choice-batch` (default 32), then update the shared trunk, option
+scorer, and choice value. Main and choice optimizers have independent Adam
+state. Every checkpoint contains all parameters and choice-coverage state;
+JSON and Lua files are each written through a temporary file and atomically
+replaced before chunked hot reload.
+
+Main entropy coefficients are movement 0.01, target 0.02, ability 0.01, and
+aim 0.01. Target receives twice the pressure because `keep_current` is often
+legal. Choice entropy is 0.05 after normalization by `log(valid option count)`;
+a one-option event contributes zero normalized entropy. Choice softmax starts
+at temperature 1.25. It changes to 1.0 only after every observed offered
+family and weld-pair key has been selected at least 20 times. Coverage and the
+current temperature persist in checkpoint metadata.
 
 ## Known limitations
 
-- Native secondary range or cooldown coverage is incomplete for some entries.
-  Unresolved range skips only that slot's range gate; unresolved cooldown uses
-  the accepted global-readiness fallback. Both remain explicitly unresolved
-  in the loadout API.
-- Only four nearest allies and eight nearest enemies have per-slot features,
-  although aggregate counts use the full configured participant/world state.
-  No Lua participant-cap assumption is made.
-- There is no learned skill-upgrade/weld head, aim-offset head, recurrent
-  state, item consume/equip action, or inventory-transfer action.
+- The v3 seed is only a deterministic bootstrap. Learned-live behavior and
+  end-to-end dual-stream smoke remain the V3-5 acceptance gate.
+- Wizard Chug, Antidote, and Mind Chug cannot be selected until a proven
+  synthetic participant native effect path exists.
+- Equipment is observed but cannot be equipped by the policy.
+- The main trunk is feed-forward; actor-ID persistence and velocity histories
+  are maintained in Lua, not recurrent model state.
+- Native descriptor coverage remains explicit: unresolved secondary
+  range/cooldown fields are not invented, and native action validation remains
+  authoritative.
 - The controlled one-enemy arena is curriculum plumbing, not a competence
-  evaluation. It omits normal wave cadence, elites, and broad builds.
-- The current native four-participant lobby limits a one-owner session to
-  three synthetic teammates. Thus the checked-in runnable rotation reaches
-  one learned plus two scripted bots or three learned bots. Composition
-  parsing and observation/training loops contain no such ceiling; the
-  contract's one-learned-plus-three-scripted and four-learned cases become
-  runnable when the separate cap-raise lands.
-- Fresh native seeds vary stock procedural generation. A diverse,
-  owner-approved Boneyard fixture corpus has not yet been supplied; multi-file
-  layout cycling is implemented but remains a non-blocking future input.
+  evaluation. Normal waves, elites, broader builds, and a multi-layout corpus
+  belong to later evaluation.
 
 ## Install a trained checkpoint
-
-Validate and export the selected checkpoint:
 
 ```powershell
 py -3 tools/train_bot_policy.py validate `
@@ -237,17 +196,10 @@ py -3 tools/train_bot_policy.py validate `
 
 Copy-Item `
   runtime/ml-training/<instance>/policy-final.json `
-  models/bot-brain/policy-v2.json
+  models/bot-brain/policy-v3.json
 ```
 
-Keep the JSON and Lua files from the same checkpoint. Rebuild or repackage Lua
-Bots after replacement.
-
-## Contracts
-
-The complete action/model/trajectory schema is documented in
-[`design/ml-bot-policy-contract.md`](design/ml-bot-policy-contract.md).
-Numerical, Lua-parity, PPO, ring-buffer, serialization, and strict-version
-coverage lives in `tests/test_ml_bot_policy.py`,
-`tests/lua/ml_bot_policy_contract.lua`, and
+Keep JSON and Lua exports from the same checkpoint. Contract, numerical PPO,
+SMDP, strict-version, serialization, and inference-parity coverage lives in
+`tests/test_ml_bot_policy.py`, `tests/lua/ml_bot_policy_contract.lua`, and
 `tests/re/static_lua_ml_bot_contracts.py`.

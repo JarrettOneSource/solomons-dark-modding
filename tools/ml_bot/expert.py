@@ -1,4 +1,9 @@
-"""Deterministic target-first semantic expert for policy-v2 bootstrap."""
+"""Target-, aim-, and potion-aware semantic expert for v3 bootstrap only.
+
+The expert labels the four main action heads. Native skill choices are never
+labelled here: the option scorer learns exclusively from choice-event-v3 SMDP
+records, so the retired scripted skill manager cannot become ground truth.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +15,7 @@ import numpy as np
 from . import spec
 
 Array = np.ndarray
-FEATURE = {
-    name: index
-    for index, name in enumerate(spec.OBSERVATION_NAMES)
-}
+FEATURE = {name: index for index, name in enumerate(spec.OBSERVATION_NAMES)}
 
 
 @dataclass(frozen=True)
@@ -21,20 +23,19 @@ class ExpertDataset:
     observations: Array
     movement_masks: Array
     target_masks: Array
-    cast_masks: Array
+    ability_masks: Array
+    aim_masks: Array
     movement_actions: Array
     target_actions: Array
-    cast_actions: Array
+    ability_actions: Array
+    aim_actions: Array
 
     def subset(self, indices: Array) -> "ExpertDataset":
         return ExpertDataset(
-            observations=self.observations[indices],
-            movement_masks=self.movement_masks[indices],
-            target_masks=self.target_masks[indices],
-            cast_masks=self.cast_masks[indices],
-            movement_actions=self.movement_actions[indices],
-            target_actions=self.target_actions[indices],
-            cast_actions=self.cast_actions[indices],
+            **{
+                name: getattr(self, name)[indices]
+                for name in self.__dataclass_fields__
+            }
         )
 
 
@@ -42,43 +43,70 @@ def _set(row: Array, name: str, value: float) -> None:
     row[FEATURE[name]] = value
 
 
-def _random_unit(rng: np.random.Generator) -> tuple[float, float]:
-    angle = rng.uniform(-math.pi, math.pi)
-    return math.cos(angle), math.sin(angle)
-
-
-def _direction_action(x: float, y: float, movement_mask: Array) -> int:
+def _unit(x: float, y: float) -> tuple[float, float]:
     length = math.hypot(x, y)
-    if length <= 1e-9:
+    if length <= 1e-12:
+        return 0.0, 0.0
+    return x / length, y / length
+
+
+def _direction_action(x: float, y: float, mask: Array) -> int:
+    x, y = _unit(x, y)
+    if x == 0.0 and y == 0.0:
         return 0
-    x /= length
-    y /= length
-    best_action = 0
-    best_alignment = -math.inf
+    best = 0
+    alignment = -math.inf
     for action, (direction_x, direction_y) in enumerate(
         spec.MOVEMENT_DIRECTIONS
     ):
-        if action == 0 or not movement_mask[action]:
+        if action == 0 or not mask[action]:
             continue
-        alignment = x * direction_x + y * direction_y
-        if alignment > best_alignment:
-            best_action = action
-            best_alignment = alignment
-    return best_action
+        candidate = x * direction_x + y * direction_y
+        if candidate > alignment:
+            best = action
+            alignment = candidate
+    return best
 
 
-def _target_score(enemy: dict[str, float]) -> float:
-    # Low-health enemies dominate, then distance and inward velocity. The
-    # score depends only on Block D values available to the target head.
-    closing_speed = -(
-        enemy["dx"] * enemy["velocity_dx"]
-        + enemy["dy"] * enemy["velocity_dy"]
-    )
-    return (
-        0.90 * enemy["hp_ratio"]
-        + 0.08 * enemy["distance"]
-        - 0.02 * closing_speed
-    )
+def _make_enemy(
+    row: Array,
+    slot: int,
+    rng: np.random.Generator,
+) -> dict[str, float]:
+    angle = rng.uniform(-math.pi, math.pi)
+    distance = rng.uniform(0.08, 1.0)
+    dx, dy = math.cos(angle), math.sin(angle)
+    hp = rng.uniform(0.05, 1.0)
+    velocity_x, velocity_y = rng.uniform(-0.75, 0.75, size=2)
+    prefix = f"enemy_{slot}_"
+    values = {
+        "present": 1.0,
+        "dx": dx,
+        "dy": dy,
+        "distance_scaled": distance,
+        "hp_ratio": hp,
+        "radius_scaled": rng.uniform(0.1, 0.8),
+        "velocity_dx": velocity_x,
+        "velocity_dy": velocity_y,
+        "in_primary_range": float(distance <= 0.5),
+        "is_current_target": 0.0,
+        "facing_dx": rng.uniform(-1.0, 1.0),
+        "facing_dy": rng.uniform(-1.0, 1.0),
+        "winding_up": float(rng.random() < 0.15),
+        "attack_active": float(rng.random() < 0.12),
+    }
+    for suffix, value in values.items():
+        _set(row, prefix + suffix, value)
+    return {
+        "slot": float(slot),
+        "dx": dx,
+        "dy": dy,
+        "distance": distance,
+        "hp": hp,
+        "velocity_x": velocity_x,
+        "velocity_y": velocity_y,
+        "winding_up": values["winding_up"],
+    }
 
 
 def _choose_target(
@@ -87,294 +115,176 @@ def _choose_target(
 ) -> tuple[int, dict[str, float] | None]:
     if not enemies:
         return 0, None
-    best = min(enemies, key=_target_score)
+
+    def score(enemy: dict[str, float]) -> float:
+        return (
+            0.72 * enemy["hp"]
+            + 0.24 * enemy["distance"]
+            - 0.04 * enemy["winding_up"]
+        )
+
+    selected = min(enemies, key=score)
     if current_slot is not None:
         current = enemies[current_slot - 1]
-        if _target_score(current) <= _target_score(best) + 0.055:
+        if score(current) <= score(selected) + 0.04:
             return 0, current
-    return int(best["slot"]), best
+    return int(selected["slot"]), selected
 
 
-def _suggested_movement(
-    *,
-    hp_ratio: float,
-    movement_target: dict[str, float] | None,
-    threat: dict[str, float] | None,
-    primary_range: float,
-    edge_pressure: float,
-    center_x: float,
-    center_y: float,
-) -> tuple[float, float]:
-    if hp_ratio < 0.30 and threat is not None:
-        return -threat["dx"], -threat["dy"]
-    if edge_pressure > 0.82:
-        return center_x, center_y
-    if movement_target is None:
-        return 0.0, 0.0
-    if movement_target["distance"] > primary_range * 0.88:
-        return movement_target["dx"], movement_target["dy"]
-    if (
-        threat is not None
-        and movement_target["distance"] < primary_range * 0.42
-    ):
-        return -threat["dx"], -threat["dy"]
-    if threat is not None:
-        return -movement_target["dy"], movement_target["dx"]
-    return 0.0, 0.0
-
-
-def _set_target_summary(
-    row: Array,
-    target: dict[str, float] | None,
-    primary_minimum: float,
-    primary_range: float,
-) -> None:
-    _set(row, "primary_min_range_scaled", primary_minimum)
-    _set(row, "primary_max_range_scaled", primary_range)
+def _set_target(row: Array, target: dict[str, float] | None) -> None:
     if target is None:
         return
-    contact = max(target["distance"] - target["radius"], 0.0)
     _set(row, "target_present", 1.0)
     _set(row, "target_dx", target["dx"])
     _set(row, "target_dy", target["dy"])
     _set(row, "target_distance_scaled", target["distance"])
-    _set(row, "target_contact_distance_scaled", contact)
-    _set(row, "target_hp_ratio", target["hp_ratio"])
-    _set(row, "target_radius_scaled", target["radius"])
-    _set(
-        row,
-        "target_in_primary_range",
-        float(primary_minimum <= contact <= primary_range),
-    )
+    _set(row, "target_contact_distance_scaled", target["distance"])
+    _set(row, "target_hp_ratio", target["hp"])
+    _set(row, "target_in_primary_range", float(target["distance"] <= 0.5))
+    _set(row, "target_velocity_dx", target["velocity_x"])
+    _set(row, "target_velocity_dy", target["velocity_y"])
 
 
-def _set_secondary_descriptors(
+def _set_secondaries(
     row: Array,
-    *,
     rng: np.random.Generator,
+    target: dict[str, float] | None,
     mana_ratio: float,
-    current_target: dict[str, float] | None,
-) -> list[dict[str, float | bool]]:
-    secondary_count = int(rng.integers(0, 9))
-    secondaries: list[dict[str, float | bool]] = []
+) -> tuple[list[bool], list[bool]]:
+    legal: list[bool] = []
+    free_aim: list[bool] = []
+    count = int(rng.integers(1, 9))
     for slot in range(1, 9):
         prefix = f"secondary_{slot}_"
-        occupied = slot <= secondary_count
-        descriptor: dict[str, float | bool] = {
-            "occupied": occupied,
-            "range": 0.0,
-            "ready": False,
-            "affordable": False,
-        }
+        occupied = slot <= count
+        ready = occupied and rng.random() < 0.86
+        mana_cost = rng.uniform(0.015, 0.28)
+        affordable = occupied and mana_ratio >= mana_cost
+        spell_range = rng.uniform(0.18, 0.95)
+        in_range = target is not None and target["distance"] <= spell_range
+        is_legal = bool(ready and affordable and in_range)
+        is_free = occupied and rng.random() < 0.42
+        legal.append(is_legal)
+        free_aim.append(is_free)
         if occupied:
-            element = int(rng.integers(0, 5))
-            mana_cost = rng.uniform(0.015, 0.22)
-            spell_range = rng.uniform(0.12, 0.72)
-            ready = rng.random() < 0.82
-            affordable = mana_ratio >= mana_cost
-            descriptor.update(
-                {
-                    "range": spell_range,
-                    "ready": ready,
-                    "affordable": affordable,
-                }
-            )
             _set(row, prefix + "occupied", 1.0)
-            for element_index, name in enumerate(
-                ("fire", "water", "earth", "air", "ether")
-            ):
-                _set(
-                    row,
-                    prefix + "element_" + name,
-                    float(element_index == element),
-                )
-            _set(row, prefix + "band_index_scaled", rng.uniform(0.0, 1.0))
+            _set(row, prefix + "band_index_scaled", slot / 8.0)
             _set(row, prefix + "mana_cost_scaled", mana_cost)
             _set(row, prefix + "range_scaled", spell_range)
             _set(row, prefix + "cooldown_scaled", rng.uniform(0.0, 1.0))
             _set(row, prefix + "ready", float(ready))
             _set(row, prefix + "affordable", float(affordable))
-            in_current_range = (
-                current_target is not None
-                and current_target["distance"] <= spell_range
-            )
-            _set(
-                row,
-                prefix + "in_range_of_target",
-                float(in_current_range),
-            )
-        secondaries.append(descriptor)
-    return secondaries
+            _set(row, prefix + "in_range_of_target", float(in_range))
+    return legal, free_aim
 
 
-def _build_cast_mask(
-    *,
-    selected: dict[str, float] | None,
-    cast_ready: bool,
-    primary_affordable: bool,
-    primary_minimum: float,
-    primary_range: float,
-    secondaries: list[dict[str, float | bool]],
-) -> Array:
-    mask = np.zeros(len(spec.CAST_ACTION_NAMES), dtype=np.bool_)
-    mask[0] = True
-    if selected is None or not cast_ready:
-        return mask
-    contact = max(selected["distance"] - selected["radius"], 0.0)
-    mask[1] = (
-        primary_affordable
-        and primary_minimum <= contact <= primary_range
-    )
-    for slot, secondary in enumerate(secondaries, start=1):
-        mask[slot + 1] = bool(
-            secondary["occupied"]
-            and secondary["ready"]
-            and secondary["affordable"]
-            and selected["distance"] <= float(secondary["range"])
-        )
-    return mask
+POTION_TYPES = (
+    "stock_health",
+    "stock_mana",
+    "stock_wizard_chug",
+    "stock_antidote",
+    "stock_mind_chug",
+    "stock_rejuvenation",
+    "custom",
+)
+PERMANENTLY_MASKED_POTIONS = {
+    "stock_wizard_chug",
+    "stock_antidote",
+    "stock_mind_chug",
+}
 
 
-def _choose_cast(
+def _set_potions(
     row: Array,
-    mask: Array,
-    selected: dict[str, float] | None,
+    rng: np.random.Generator,
+) -> tuple[list[str | None], list[bool]]:
+    slots: list[str | None] = []
+    legal: list[bool] = []
+    count = int(rng.integers(0, 13))
+    for slot in range(1, 13):
+        prefix = f"potion_{slot}_"
+        if slot > count:
+            slots.append(None)
+            legal.append(False)
+            continue
+        potion_type = POTION_TYPES[int(rng.integers(0, len(POTION_TYPES)))]
+        slots.append(potion_type)
+        actionable = potion_type not in PERMANENTLY_MASKED_POTIONS
+        legal.append(actionable)
+        _set(row, prefix + "present", 1.0)
+        _set(row, prefix + "count_scaled", rng.uniform(0.12, 1.0))
+        _set(row, prefix + potion_type, 1.0)
+        if potion_type in ("stock_health", "stock_rejuvenation"):
+            _set(row, prefix + "restores_hp_fraction", 0.5)
+        if potion_type in ("stock_mana", "stock_rejuvenation"):
+            _set(row, prefix + "restores_mana_fraction", 0.5)
+        if potion_type == "custom":
+            _set(row, prefix + "custom_effect_known", 1.0)
+            if rng.random() < 0.5:
+                _set(row, prefix + "restores_hp_fraction", 0.35)
+            else:
+                _set(row, prefix + "restores_mana_fraction", 0.35)
+    _set(row, "potion_type_count_scaled", count / 12.0)
+    _set(row, "potion_total_count_scaled", min(count / 12.0, 1.0))
+    return slots, legal
+
+
+def _choose_ability(
+    *,
+    row: Array,
+    target: dict[str, float] | None,
+    hp_ratio: float,
+    mana_ratio: float,
+    secondary_legal: list[bool],
+    potion_types: list[str | None],
+    potion_legal: list[bool],
+    ability_mask: Array,
 ) -> int:
-    if selected is None:
+    if hp_ratio < 0.38:
+        for slot, (kind, legal) in enumerate(
+            zip(potion_types, potion_legal, strict=True), start=1
+        ):
+            if legal and kind in ("stock_health", "stock_rejuvenation", "custom"):
+                if row[FEATURE[f"potion_{slot}_restores_hp_fraction"]] > 0.0:
+                    return 9 + slot
+    if mana_ratio < 0.28:
+        for slot, (kind, legal) in enumerate(
+            zip(potion_types, potion_legal, strict=True), start=1
+        ):
+            if legal and kind in ("stock_mana", "stock_rejuvenation", "custom"):
+                if row[FEATURE[f"potion_{slot}_restores_mana_fraction"]] > 0.0:
+                    return 9 + slot
+    if target is None:
         return 0
-    use_secondary = (
-        row[FEATURE["self_mana_ratio"]] > 0.58
-        and selected["hp_ratio"] > 0.36
-        and row[FEATURE["wave_scaled"]] > 0.06
-    )
-    if use_secondary:
-        for action in range(2, len(spec.CAST_ACTION_NAMES)):
-            if mask[action]:
-                return action
-    if mask[1]:
+    legal_slots = [
+        slot for slot, legal in enumerate(secondary_legal, start=1) if legal
+    ]
+    if legal_slots:
+        # The selected enemy is known before this range-aware ability choice.
+        # A stable lowest-slot tie-break keeps bootstrap supervision learnable;
+        # PPO remains free to discover stronger spell-specific preferences.
+        return 1 + legal_slots[0]
+    if ability_mask[1]:
         return 1
-    for action in range(2, len(spec.CAST_ACTION_NAMES)):
-        if mask[action]:
-            return action
     return 0
 
 
-def _set_environment_features(
+def _set_hazard(
     row: Array,
-    *,
     rng: np.random.Generator,
-    enemies: list[dict[str, float]],
-    movement_target: dict[str, float] | None,
-    hp_ratio: float,
-    primary_range: float,
 ) -> tuple[float, float]:
-    for direction in (
-        "east",
-        "southeast",
-        "south",
-        "southwest",
-        "west",
-        "northwest",
-        "north",
-        "northeast",
-    ):
-        _set(row, f"clearance_{direction}_scaled", rng.uniform(0.1, 1.0))
-    for patch_row in range(1, 8):
-        for column in range(1, 8):
-            if patch_row != 4 or column != 4:
-                _set(
-                    row,
-                    f"walkability_patch_row_{patch_row}_col_{column}",
-                    float(rng.random() > 0.14),
-                )
-
-    pickup_count = int(rng.integers(0, 7))
-    for slot in range(1, 5):
-        prefix = f"pickup_{slot}_"
-        if slot > pickup_count:
-            continue
-        pickup_x, pickup_y = _random_unit(rng)
-        _set(row, prefix + "present", 1.0)
-        _set(row, prefix + "dx", pickup_x)
-        _set(row, prefix + "dy", pickup_y)
-        _set(row, prefix + "distance_scaled", rng.uniform(0.02, 0.9))
-        kind = int(rng.integers(0, 4))
-        for kind_index, name in enumerate(
-            ("gold", "health_orb", "mana_orb", "item_carrier")
-        ):
-            _set(
-                row,
-                prefix + "type_" + name,
-                float(kind_index == kind),
-            )
-    _set(row, "pickup_count_scaled", pickup_count / 8.0)
-
-    ally_count = int(rng.integers(0, 9))
-    for slot in range(1, 5):
-        prefix = f"ally_{slot}_"
-        if slot > ally_count:
-            continue
-        ally_x, ally_y = _random_unit(rng)
-        intent_x, intent_y = _random_unit(rng)
-        _set(row, prefix + "present", 1.0)
-        _set(row, prefix + "dx", ally_x)
-        _set(row, prefix + "dy", ally_y)
-        _set(row, prefix + "distance_scaled", rng.uniform(0.03, 1.0))
-        _set(row, prefix + "hp_ratio", rng.uniform(0.05, 1.0))
-        _set(row, prefix + "mana_ratio", rng.uniform(0.0, 1.0))
-        _set(row, prefix + "alive", float(rng.random() > 0.08))
-        _set(row, prefix + "is_human", float(rng.random() < 0.45))
-        _set(row, prefix + "intent_dx", intent_x)
-        _set(row, prefix + "intent_dy", intent_y)
-    _set(row, "ally_count_scaled", ally_count / 50.0)
-
-    threat_count = sum(enemy["distance"] < 0.34 for enemy in enemies)
-    _set(row, "enemy_count_scaled", len(enemies) / 16.0)
-    _set(row, "threat_count_scaled", threat_count / 8.0)
-    nearest = enemies[0] if enemies else None
-    if nearest is not None:
-        _set(row, "nearest_enemy_dx", nearest["dx"])
-        _set(row, "nearest_enemy_dy", nearest["dy"])
-        _set(row, "nearest_enemy_distance_scaled", nearest["distance"])
-    threat = next(
-        (enemy for enemy in enemies if enemy["distance"] < 0.34),
-        None,
-    )
-    if threat is not None:
-        _set(row, "nearest_threat_dx", threat["dx"])
-        _set(row, "nearest_threat_dy", threat["dy"])
-        _set(row, "nearest_threat_distance_scaled", threat["distance"])
-        _set(row, "escape_dx", -threat["dx"])
-        _set(row, "escape_dy", -threat["dy"])
-
-    arena_x = rng.uniform(-1.0, 1.0)
-    arena_y = rng.uniform(-1.0, 1.0)
-    center_length = max(math.hypot(arena_x, arena_y), 1e-9)
-    center_x = -arena_x / center_length
-    center_y = -arena_y / center_length
-    edge_pressure = max(abs(arena_x), abs(arena_y))
-    _set(row, "arena_center_dx", center_x)
-    _set(row, "arena_center_dy", center_y)
-    _set(
-        row,
-        "arena_center_distance_scaled",
-        min(center_length * 0.55, 1.0),
-    )
-    _set(row, "arena_x_normalized", arena_x)
-    _set(row, "arena_y_normalized", arena_y)
-    _set(row, "edge_pressure", edge_pressure)
-    suggested_x, suggested_y = _suggested_movement(
-        hp_ratio=hp_ratio,
-        movement_target=movement_target,
-        threat=threat,
-        primary_range=primary_range,
-        edge_pressure=edge_pressure,
-        center_x=center_x,
-        center_y=center_y,
-    )
-    _set(row, "suggested_move_dx", suggested_x)
-    _set(row, "suggested_move_dy", suggested_y)
-    return suggested_x, suggested_y
+    if rng.random() >= 0.55:
+        return 0.0, 0.0
+    angle = rng.uniform(-math.pi, math.pi)
+    dx, dy = math.cos(angle), math.sin(angle)
+    _set(row, "hazard_1_present", 1.0)
+    _set(row, "hazard_1_type_known", float(rng.random() < 0.85))
+    _set(row, "hazard_1_dx", dx)
+    _set(row, "hazard_1_dy", dy)
+    _set(row, "hazard_1_distance_scaled", rng.uniform(0.02, 0.45))
+    _set(row, "hazard_1_time_to_contact_scaled", rng.uniform(0.0, 0.5))
+    _set(row, "hazard_count_scaled", rng.uniform(0.05, 0.5))
+    return dx, dy
 
 
 def generate_expert_dataset(
@@ -383,238 +293,109 @@ def generate_expert_dataset(
     rng: np.random.Generator,
 ) -> ExpertDataset:
     if count <= 0:
-        raise ValueError("expert sample count must be positive")
-
-    observations = np.zeros(
-        (count, len(spec.OBSERVATION_NAMES)),
-        dtype=np.float64,
-    )
-    movement_masks = np.ones(
-        (count, len(spec.MOVEMENT_ACTION_NAMES)),
-        dtype=np.bool_,
-    )
-    target_masks = np.zeros(
-        (count, len(spec.TARGET_ACTION_NAMES)),
-        dtype=np.bool_,
-    )
-    cast_masks = np.zeros(
-        (count, len(spec.CAST_ACTION_NAMES)),
-        dtype=np.bool_,
-    )
+        raise ValueError("expert dataset count must be positive")
+    observations = np.zeros((count, len(spec.OBSERVATION_NAMES)))
+    movement_masks = np.ones((count, len(spec.MOVEMENT_ACTION_NAMES)), dtype=np.bool_)
+    target_masks = np.zeros((count, len(spec.TARGET_ACTION_NAMES)), dtype=np.bool_)
+    ability_masks = np.zeros((count, len(spec.ABILITY_ACTION_NAMES)), dtype=np.bool_)
+    aim_masks = np.zeros((count, len(spec.AIM_ACTION_NAMES)), dtype=np.bool_)
     movement_actions = np.zeros(count, dtype=np.int64)
     target_actions = np.zeros(count, dtype=np.int64)
-    cast_actions = np.zeros(count, dtype=np.int64)
+    ability_actions = np.zeros(count, dtype=np.int64)
+    aim_actions = np.zeros(count, dtype=np.int64)
 
     for index, row in enumerate(observations):
-        hp_ratio = rng.uniform(0.06, 1.0)
-        mana_ratio = rng.uniform(0.0, 1.0)
-        max_mana = rng.uniform(50.0, 1625.0)
-        max_hp = rng.uniform(50.0, 875.0)
+        hp_ratio = rng.uniform(0.08, 1.0)
+        mana_ratio = rng.uniform(0.05, 1.0)
         _set(row, "self_hp_ratio", hp_ratio)
         _set(row, "self_mana_ratio", mana_ratio)
-        _set(row, "self_level_scaled", rng.uniform(0.03, 0.8))
-        _set(row, "wave_scaled", rng.uniform(0.0, 0.75))
-        _set(row, "self_move_speed_scaled", rng.uniform(0.12, 0.85))
-        _set(row, "self_moving", float(rng.random() < 0.75))
-        cast_active = rng.random() < 0.08
-        cast_ready = not cast_active and rng.random() < 0.88
-        _set(row, "self_cast_active", float(cast_active))
-        _set(row, "self_cast_ready", float(cast_ready))
-        _set(row, "self_poisoned", float(rng.random() < 0.12))
-        _set(row, "self_webbed", float(rng.random() < 0.08))
-        _set(row, "self_damage_x4", float(rng.random() < 0.06))
-        _set(row, "self_status_active", float(rng.random() < 0.20))
-        _set(row, "self_mana_current_scaled", mana_ratio * max_mana / 2000.0)
-        _set(row, "self_mana_max_scaled", max_mana / 2000.0)
-        _set(row, "self_hp_max_scaled", max_hp / 1000.0)
-
-        primary_element = int(rng.integers(0, 5))
-        for element_index, name in enumerate(
-            ("fire", "water", "earth", "air", "ether")
-        ):
-            _set(
-                row,
-                "primary_element_" + name,
-                float(element_index == primary_element),
-            )
-            _set(
-                row,
-                "element_" + name,
-                float(element_index == primary_element),
-            )
-        welded = rng.random() < 0.18
-        primary_cost = rng.uniform(0.015, 0.16)
-        primary_minimum = rng.uniform(0.0, 0.05)
-        primary_range = rng.uniform(0.18, 0.62)
-        primary_affordable = mana_ratio >= primary_cost
-        _set(row, "primary_welded", float(welded))
-        _set(row, "primary_build_index_scaled", rng.uniform(0.0, 0.9))
-        _set(row, "primary_mana_cost_scaled", primary_cost)
-        _set(row, "primary_range_min_scaled", primary_minimum)
-        _set(row, "primary_range_max_scaled", primary_range)
-        _set(row, "primary_affordable", float(primary_affordable))
+        _set(row, "self_mana_current_scaled", mana_ratio)
+        _set(row, "self_cast_ready", 1.0)
+        _set(row, "primary_affordable", float(mana_ratio >= 0.08))
+        _set(row, "primary_max_range_scaled", 0.5)
+        _set(row, "enemy_count_scaled", 0.0)
 
         enemy_count = int(rng.integers(0, 9))
-        enemies: list[dict[str, float]] = []
-        distances = sorted(rng.uniform(0.03, 1.0, size=enemy_count))
-        for slot, distance in enumerate(distances, start=1):
-            direction_x, direction_y = _random_unit(rng)
-            velocity_x, velocity_y = rng.uniform(-0.45, 0.45, size=2)
-            radius = rng.uniform(0.01, 0.09)
-            enemy = {
-                "slot": float(slot),
-                "dx": direction_x,
-                "dy": direction_y,
-                "distance": float(distance),
-                "hp_ratio": float(rng.uniform(0.04, 1.0)),
-                "radius": radius,
-                "velocity_dx": float(velocity_x),
-                "velocity_dy": float(velocity_y),
-            }
-            enemies.append(enemy)
-
-        current_slot = None
-        if enemies and rng.random() < 0.58:
-            current_slot = int(rng.integers(1, len(enemies) + 1))
-        current_target = (
-            enemies[current_slot - 1]
-            if current_slot is not None
+        enemies = [
+            _make_enemy(row, slot, rng) for slot in range(1, enemy_count + 1)
+        ]
+        _set(row, "enemy_count_scaled", enemy_count / 8.0)
+        current_slot = (
+            int(rng.integers(1, enemy_count + 1))
+            if enemy_count > 0 and rng.random() < 0.48
             else None
         )
-        for enemy in enemies:
-            slot = int(enemy["slot"])
-            prefix = f"enemy_{slot}_"
-            contact = max(enemy["distance"] - enemy["radius"], 0.0)
-            _set(row, prefix + "present", 1.0)
-            _set(row, prefix + "dx", enemy["dx"])
-            _set(row, prefix + "dy", enemy["dy"])
-            _set(row, prefix + "distance_scaled", enemy["distance"])
-            _set(row, prefix + "hp_ratio", enemy["hp_ratio"])
-            _set(row, prefix + "radius_scaled", enemy["radius"])
-            _set(row, prefix + "velocity_dx", enemy["velocity_dx"])
-            _set(row, prefix + "velocity_dy", enemy["velocity_dy"])
-            _set(
-                row,
-                prefix + "in_primary_range",
-                float(primary_minimum <= contact <= primary_range),
-            )
-            _set(
-                row,
-                prefix + "is_current_target",
-                float(slot == current_slot),
-            )
-
-        # Block E contains only the persisted pre-decision target. The target
-        # label below is derived from Block D, never copied from this wrapper
-        # summary, which prevents v1 wrapper-selected target supervision.
-        _set_target_summary(
-            row,
-            current_target,
-            primary_minimum,
-            primary_range,
-        )
-        target_masks[index, 0] = current_target is not None or not enemies
-        for enemy in enemies:
-            target_masks[index, int(enemy["slot"])] = True
-        target_action, selected = _choose_target(enemies, current_slot)
+        if current_slot is not None:
+            _set(row, f"enemy_{current_slot}_is_current_target", 1.0)
+        target_masks[index, 0] = True
+        if enemy_count:
+            target_masks[index, 1 : enemy_count + 1] = True
+        target_action, target = _choose_target(enemies, current_slot)
         target_actions[index] = target_action
+        _set_target(row, target)
 
-        secondaries = _set_secondary_descriptors(
-            row,
-            rng=rng,
-            mana_ratio=mana_ratio,
-            current_target=current_target,
+        secondary_legal, free_aim = _set_secondaries(
+            row, rng, target, mana_ratio
         )
-        cast_masks[index] = _build_cast_mask(
-            selected=selected,
-            cast_ready=cast_ready,
-            primary_affordable=primary_affordable,
-            primary_minimum=primary_minimum,
-            primary_range=primary_range,
-            secondaries=secondaries,
+        potion_types, potion_legal = _set_potions(row, rng)
+        ability_masks[index, 0] = True
+        ability_masks[index, 1] = bool(
+            target is not None and mana_ratio >= 0.08 and target["distance"] <= 0.5
         )
-        cast_actions[index] = _choose_cast(
-            row,
-            cast_masks[index],
-            selected,
-        )
-
-        for action in range(1, len(spec.MOVEMENT_ACTION_NAMES)):
-            if rng.random() < 0.08:
-                movement_masks[index, action] = False
-        suggested_x, suggested_y = _set_environment_features(
-            row,
-            rng=rng,
-            enemies=enemies,
-            movement_target=(
-                current_target
-                if current_target is not None
-                else (enemies[0] if enemies else None)
-            ),
+        for slot, legal in enumerate(secondary_legal, start=2):
+            ability_masks[index, slot] = legal
+        for slot, legal in enumerate(potion_legal, start=10):
+            ability_masks[index, slot] = legal
+        ability = _choose_ability(
+            row=row,
+            target=target,
             hp_ratio=hp_ratio,
-            primary_range=primary_range,
+            mana_ratio=mana_ratio,
+            secondary_legal=secondary_legal,
+            potion_types=potion_types,
+            potion_legal=potion_legal,
+            ability_mask=ability_masks[index],
         )
-        movement_actions[index] = _direction_action(
-            suggested_x,
-            suggested_y,
-            movement_masks[index],
+        ability_actions[index] = ability
+
+        hazard_x, hazard_y = _set_hazard(row, rng)
+        aim_masks[index, 0] = True
+        aim_x = aim_y = 0.0
+        if 2 <= ability <= 9 and free_aim[ability - 2]:
+            aim_masks[index, :] = True
+            assert target is not None
+            aim_x = target["velocity_x"] * 0.72 - hazard_x * 0.38
+            aim_y = target["velocity_y"] * 0.72 - hazard_y * 0.38
+        aim_actions[index] = _direction_action(
+            aim_x, aim_y, aim_masks[index]
         )
 
-        discipline = int(rng.integers(0, 3))
-        for discipline_index, name in enumerate(("mind", "body", "arcane")):
-            _set(
-                row,
-                "discipline_" + name,
-                float(discipline_index == discipline),
-            )
-        _set(row, "hp_delta", rng.uniform(-0.35, 0.12))
-        _set(row, "mana_delta", rng.uniform(-0.4, 0.25))
-        _set(row, "target_hp_delta", rng.uniform(-0.4, 0.02))
-        _set(row, "enemy_count_delta", rng.uniform(-0.5, 0.5))
-        previous_action = int(
-            rng.integers(0, len(spec.MOVEMENT_ACTION_NAMES))
-        )
-        previous_x, previous_y = spec.MOVEMENT_DIRECTIONS[previous_action]
-        _set(row, "previous_move_dx", previous_x)
-        _set(row, "previous_move_dy", previous_y)
-        _set(row, "previous_cast_primary", float(rng.random() < 0.25))
-        _set(row, "previous_cast_secondary", float(rng.random() < 0.12))
-        _set(row, "time_since_damage_scaled", rng.uniform(0.0, 1.0))
-        _set(row, "time_since_cast_scaled", rng.uniform(0.0, 1.0))
-        _set(row, "time_since_move_scaled", rng.uniform(0.0, 1.0))
-        _set(
-            row,
-            "previous_target_action_scaled",
-            rng.integers(0, 9) / 8.0,
-        )
-        _set(row, "previous_target_switched", float(rng.random() < 0.42))
-        _set(row, "has_spell_welding_skill", float(welded))
-        _set(row, "weld_offer_pending", float(rng.random() < 0.03))
-        _set(
-            row,
-            "offensive_damage_multiplier_scaled",
-            rng.uniform(0.15, 0.8),
-        )
-        _set(
-            row,
-            "offensive_mana_multiplier_scaled",
-            rng.uniform(0.15, 0.8),
-        )
-        _set(row, "cast_speed_multiplier_scaled", rng.uniform(0.15, 0.8))
-        _set(
-            row,
-            "secondary_recharge_multiplier_scaled",
-            rng.uniform(0.15, 0.8),
+        if hp_ratio < 0.30 and enemies:
+            move_x, move_y = -enemies[0]["dx"], -enemies[0]["dy"]
+        elif target is not None and target["distance"] > 0.48:
+            move_x, move_y = target["dx"], target["dy"]
+        elif hazard_x != 0.0 or hazard_y != 0.0:
+            move_x, move_y = -hazard_x, -hazard_y
+        elif target is not None:
+            move_x, move_y = -target["dy"], target["dx"]
+        else:
+            move_x = move_y = 0.0
+        _set(row, "suggested_move_dx", move_x)
+        _set(row, "suggested_move_dy", move_y)
+        movement_actions[index] = _direction_action(
+            move_x, move_y, movement_masks[index]
         )
 
     return ExpertDataset(
         observations=observations,
         movement_masks=movement_masks,
         target_masks=target_masks,
-        cast_masks=cast_masks,
+        ability_masks=ability_masks,
+        aim_masks=aim_masks,
         movement_actions=movement_actions,
         target_actions=target_actions,
-        cast_actions=cast_actions,
+        ability_actions=ability_actions,
+        aim_actions=aim_actions,
     )
 
 
@@ -625,10 +406,12 @@ def split_dataset(
     validation_fraction: float = 0.2,
 ) -> tuple[ExpertDataset, ExpertDataset]:
     count = dataset.observations.shape[0]
+    if count < 2:
+        raise ValueError("expert split requires at least two samples")
     if not 0.0 < validation_fraction < 1.0:
-        raise ValueError("validation_fraction must be between zero and one")
-    validation_count = max(1, int(round(count * validation_fraction)))
+        raise ValueError("validation_fraction must be in (0, 1)")
     order = rng.permutation(count)
+    validation_count = max(1, min(count - 1, round(count * validation_fraction)))
     return (
         dataset.subset(order[validation_count:]),
         dataset.subset(order[:validation_count]),
