@@ -567,6 +567,75 @@ class RealFlowE2ETests(unittest.TestCase):
 
         self.assertTrue(shared_hub_views_converged(host, client))
 
+    def test_shared_hub_wait_matches_native_local_slots_by_owner(
+        self,
+    ) -> None:
+        def participant(
+            *,
+            participant_id: int,
+            name: str,
+            owner: bool,
+            x: float,
+            y: float,
+        ) -> dict[str, object]:
+            return {
+                "id": participant_id,
+                "name": name,
+                "owner": owner,
+                "connected": True,
+                "ready": True,
+                "in_run": False,
+                "scene_kind": "SharedHub",
+                "x": x,
+                "y": y,
+            }
+
+        common = {
+            "scene": {"kind": "hub"},
+            "loadingScreen": {"active": False},
+            "multiplayer": {
+                "sessionState": "in-hub",
+                "sessionStatus": "Ready",
+                "participantCount": 2,
+            },
+        }
+        host = json.loads(json.dumps(common))
+        client = json.loads(json.dumps(common))
+        host["multiplayer"]["participants"] = [  # type: ignore[index]
+            participant(
+                participant_id=1,
+                name="FUN DENIER",
+                owner=True,
+                x=952.5,
+                y=163.6,
+            ),
+            participant(
+                participant_id=0x2B00000000000002,
+                name="Bply Client",
+                owner=False,
+                x=951.1,
+                y=164.5,
+            ),
+        ]
+        client["multiplayer"]["participants"] = [  # type: ignore[index]
+            participant(
+                participant_id=1,
+                name="FUN DENIER",
+                owner=True,
+                x=951.1,
+                y=164.5,
+            ),
+            participant(
+                participant_id=0x2B00000000000001,
+                name="Bply Host",
+                owner=False,
+                x=952.5,
+                y=163.6,
+            ),
+        ]
+
+        self.assertTrue(shared_hub_views_converged(host, client))
+
     def test_nfo_config_requires_exact_stage_ports_and_own_proton(
         self,
     ) -> None:
@@ -1045,6 +1114,20 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(
             state["multiplayer"]["lastSteamSendFailureResult"],
             25,
+        )
+
+    def test_runtime_state_preserves_large_participant_ids(self) -> None:
+        participant_id = 0x2B00000000000002
+        state = normalize_state(
+            {
+                "mp.participant_count": "1",
+                "participant.1.id": str(participant_id),
+            }
+        )
+
+        self.assertEqual(
+            state["multiplayer"]["participants"][0]["id"],
+            participant_id,
         )
 
     def test_runtime_state_includes_native_camera_projection(

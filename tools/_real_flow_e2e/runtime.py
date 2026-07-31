@@ -414,9 +414,12 @@ def _rows(
                     row[field] = 0.0
             else:
                 try:
-                    row[field] = int(float(value or 0))
+                    row[field] = int(value or 0)
                 except ValueError:
-                    row[field] = 0
+                    try:
+                        row[field] = int(float(value or 0))
+                    except ValueError:
+                        row[field] = 0
         rows.append(row)
     return rows
 
@@ -952,18 +955,60 @@ def shared_hub_views_converged(
             return False
         participant_views.append(participants)
 
-    if participant_views[0].keys() != participant_views[1].keys():
-        return False
-    return all(
-        _distance(
-            float(participant_views[0][participant_name]["x"]),
-            float(participant_views[0][participant_name]["y"]),
-            float(participant_views[1][participant_name]["x"]),
-            float(participant_views[1][participant_name]["y"]),
+    if participant_views[0].keys() == participant_views[1].keys():
+        return all(
+            _distance(
+                float(participant_views[0][participant_name]["x"]),
+                float(participant_views[0][participant_name]["y"]),
+                float(participant_views[1][participant_name]["x"]),
+                float(participant_views[1][participant_name]["y"]),
+            )
+            <= 4.0
+            for participant_name in participant_views[0]
         )
-        <= 4.0
-        for participant_name in participant_views[0]
-    )
+
+    if all(len(view) == 2 for view in participant_views):
+        owner_views = [
+            [
+                participant
+                for participant in view.values()
+                if participant.get("owner") is True
+            ]
+            for view in participant_views
+        ]
+        remote_views = [
+            [
+                participant
+                for participant in view.values()
+                if participant.get("owner") is False
+            ]
+            for view in participant_views
+        ]
+        if all(
+            len(owners) == 1 and len(remotes) == 1
+            for owners, remotes in zip(owner_views, remote_views)
+        ):
+            host_owner = owner_views[0][0]
+            host_remote = remote_views[0][0]
+            client_owner = owner_views[1][0]
+            client_remote = remote_views[1][0]
+            return (
+                _distance(
+                    float(host_owner["x"]),
+                    float(host_owner["y"]),
+                    float(client_remote["x"]),
+                    float(client_remote["y"]),
+                )
+                <= 4.0
+                and _distance(
+                    float(host_remote["x"]),
+                    float(host_remote["y"]),
+                    float(client_owner["x"]),
+                    float(client_owner["y"]),
+                )
+                <= 4.0
+            )
+    return False
 
 
 def execute_actions(
