@@ -389,7 +389,6 @@ print("released=" .. tostring(loading.released or false))
             last.get("in_run") == "true"
             and run_nonce > 0
             and last.get("active") == "true"
-            and last.get("released") == "false"
         ):
             return last
         time.sleep(0.05)
