@@ -1,9 +1,8 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.27
+# Solomon Dark Multiplayer Beta v0.1.0-beta.28
 
-- FIXED — After a Game Over, players are no longer stuck looking dead in the lobby, hub, or next run. Ending a run now fully resets every participant's life, death, vitality, status, combat, and presentation state while preserving their profile and connected session. Within-run corpse rendering and dead-only wave-boundary respawn are unchanged.
-- NEW — The launcher now shows staged connection progress from Join, Launch, or Host through mod sync, game staging, lobby connection, handshake, session preparation, world loading, and hub arrival. Real loader errors replace the progress message.
+- NEW — The framework now lets a mod claim the local player's gameplay controls through the same stock control-brain seam used by bots. Claims are owner-scoped and exclusive; release or mod unload clears movement, mouse, bindings, cast intent, and targets before returning full control, and mods can show a local on-screen takeover indicator without adding network state.
+- Hardened the full real-flow end-to-end harness and corrected Game Over and fresh-run scoping so stock loading transitions, new run nonces, and isolated verifier instances are handled consistently.
 - KNOWN BEHAVIOR — Water damage remains the stock value per contact; rapid multi-target, multi-frame contact aggregation can appear as larger single hits.
-- Permanent regression coverage now includes the staggered two-peer Game Over session-semantics verifier while retaining the focused wave-boundary respawn verifier.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
