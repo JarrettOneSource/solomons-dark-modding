@@ -1460,7 +1460,8 @@ def _run_bot_play_for_me(
         "attempts": movement_attempts,
     }
     result["clientStillCleanAfterHumanInput"] = _assert_clean_release(
-        _bot_probe(client_pipe)
+        _bot_probe(client_pipe),
+        after_human_input=True,
     )
 
     sampler.set_phase("mixed-host-bot-client-idle-human")
@@ -1478,7 +1479,10 @@ def _run_bot_play_for_me(
             raise RealFlowFailure(
                 f"host bot stopped during mixed mode: {host_bot}"
             )
-        _assert_clean_release(client_clean)
+        _assert_clean_release(
+            client_clean,
+            after_human_input=True,
+        )
         if (
             sample["host"]["scene"]["name"] != "testrun"
             or sample["clientB"]["scene"]["name"] != "testrun"
