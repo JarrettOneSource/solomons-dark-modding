@@ -1300,7 +1300,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_dead_client_spectates_alive_players_with_local_camera_and_hud,
     ),
     (
-        "wave completion respawns only dead owners from reliable host command",
+        "wave boundary respawns only dead owners from reliable host command",
         test_wave_completion_respawns_only_dead_owners_from_host_command,
     ),
     (

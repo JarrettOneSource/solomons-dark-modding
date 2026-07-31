@@ -86,7 +86,7 @@ struct HostWaveRespawnState {
     float spawn_x = 0.0f;
     float spawn_y = 0.0f;
     std::uint32_t run_nonce = 0;
-    std::int32_t last_completed_wave = 0;
+    std::int32_t last_published_boundary_wave = 0;
     std::uint32_t next_epoch = 1;
     WaveRespawnCommand command;
 };
@@ -319,6 +319,18 @@ void CaptureHostWaveRespawnSpawnIfNeeded() {
         std::to_string(world.player_spawn_y) + ")");
 }
 
+std::int32_t SnapshotEligibleWaveRespawnBoundary() {
+    const auto completed_wave = SnapshotLastCompletedWave();
+    const auto summary = SnapshotWaveSummary();
+    const auto started_wave_boundary =
+        summary.valid && summary.wave > 1
+            ? summary.wave - 1
+            : 0;
+    return completed_wave > started_wave_boundary
+        ? completed_wave
+        : started_wave_boundary;
+}
+
 void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
     if (!g_local_transport.is_host) {
         return;
@@ -328,10 +340,10 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
         return;
     }
 
-    const auto completed_wave = SnapshotLastCompletedWave();
-    if (completed_wave <= 0 ||
-        completed_wave ==
-            g_host_wave_respawn.last_completed_wave) {
+    const auto boundary_wave =
+        SnapshotEligibleWaveRespawnBoundary();
+    if (boundary_wave <=
+        g_host_wave_respawn.last_published_boundary_wave) {
         return;
     }
 
@@ -340,10 +352,11 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
         epoch = g_host_wave_respawn.next_epoch++;
     }
     RetirePreRespawnHostParticipantVitalsCorrections();
-    g_host_wave_respawn.last_completed_wave = completed_wave;
+    g_host_wave_respawn.last_published_boundary_wave =
+        boundary_wave;
     g_host_wave_respawn.command = WaveRespawnCommand{
         epoch,
-        completed_wave,
+        boundary_wave,
         g_host_wave_respawn.run_nonce,
         g_host_wave_respawn.spawn_x,
         g_host_wave_respawn.spawn_y,
@@ -351,11 +364,11 @@ void RefreshHostWaveRespawnCommand(std::uint64_t now_ms) {
     Log(
         "Multiplayer host published wave respawn. epoch=" +
         std::to_string(epoch) +
-        " wave=" + std::to_string(completed_wave));
+        " wave=" + std::to_string(boundary_wave));
     (void)TryApplyWaveRespawnCommand(
         g_host_wave_respawn.command,
         now_ms,
-        "host_wave_completion");
+        "host_wave_boundary");
 }
 
 void RetryHostWaveRespawnCommand(std::uint64_t now_ms) {

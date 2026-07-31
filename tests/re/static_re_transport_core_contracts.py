@@ -1111,7 +1111,7 @@ def test_dead_client_spectates_alive_players_with_local_camera_and_hud() -> str:
 
 
 def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
-    """Each process acknowledges the host epoch but mutates only a dead owner."""
+    """Each process acknowledges a boundary but mutates only a dead owner."""
 
     protocol_text = read_text(MULTIPLAYER_PROTOCOL)
     transport_text = read_text(
@@ -1163,7 +1163,11 @@ def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
         )
 
     for token in (
+        "SnapshotEligibleWaveRespawnBoundary()",
         "SnapshotLastCompletedWave()",
+        "SnapshotWaveSummary()",
+        "summary.wave - 1",
+        "last_published_boundary_wave",
         "CaptureHostWaveRespawnSpawnIfNeeded",
         "world.player_spawn_valid",
         "world.player_spawn_x",
@@ -1199,7 +1203,7 @@ def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
         )
 
     return (
-        "wave completion publishes one authenticated host epoch over fast and "
+        "each wave boundary publishes one authenticated host epoch over fast and "
         "reliable packets, acknowledges living owners without mutation, and "
         "revives only dead local and host-owned synthetic players"
     )
@@ -1253,6 +1257,13 @@ def test_wave_boundary_respawn_has_staged_save_two_owner_live_regression() -> st
         "_set_run_generation_seed(",
         "sd.rng.set_seed",
         "_hold_wave_one_on_single_enemy(",
+        "_assert_held_wave_one_enemy_survived_boundary(",
+        "assert_equipped_primary_persisted(",
+        "progression_current_spell_id",
+        "sd.bots.get_loadout_details",
+        "equipped_primary_before_boundary",
+        "equipped_primary_after_respawn",
+        "wave_boundary_after_death_seconds",
         "_wait_for_solomon_materialized_during_run_loading(",
         "sd.hub.get_solomon_dig_state",
         '"all-participants-ready"',

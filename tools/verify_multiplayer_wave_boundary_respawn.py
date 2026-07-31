@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify living-player preservation and dead-player wave respawn."""
+"""Verify natural wave-boundary respawn and equipped-primary persistence."""
 
 from __future__ import annotations
 
@@ -162,6 +162,110 @@ emit("live_seen", #live)
 emit("held_actor", held)
 emit("triggered", triggered)
 """
+HELD_WAVE_ONE_ENEMY_PROBE = r"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local held = tonumber(_G.__fb25_wave_one_survivor) or 0
+local found = nil
+for _, actor in ipairs(sd.world.list_actors() or {}) do
+  if tonumber(actor.actor_address) == held then
+    found = actor
+    break
+  end
+end
+local hp_offset = sd.debug.layout_offset("enemy_current_hp")
+local hp = held ~= 0 and hp_offset ~= nil and
+  sd.debug.read_float(held + hp_offset) or 0
+emit("held_actor", held)
+emit("found", found ~= nil)
+emit("tracked_enemy", found and found.tracked_enemy or false)
+emit("dead", found == nil or found.dead == true)
+emit("hp", hp)
+"""
+EQUIPPED_PRIMARY_STATE_PROBE = r"""
+local participant_id = __PARTICIPANT_ID__
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local multiplayer = assert(sd.runtime.get_multiplayer_state())
+local participant = nil
+for _, candidate in ipairs(multiplayer.participants or {}) do
+  if tonumber(candidate.participant_id) == participant_id then
+    participant = candidate
+    break
+  end
+end
+local is_owner = participant ~= nil and
+  participant.kind == "LocalHuman"
+local player = is_owner and sd.player.get_state() or nil
+local gameplay = not is_owner and
+  sd.bots.get_participant_state(participant_id) or nil
+local progression = tonumber(
+  is_owner and player and player.progression_address or
+  gameplay and gameplay.progression_runtime_state_address) or 0
+local visual = is_owner and player or gameplay
+local owned = participant and participant.owned_progression or nil
+local ability = owned and owned.ability_loadout or nil
+local details = sd.bots.get_loadout_details(participant_id)
+local primary = details and details.primary or nil
+local spellbook_rows = {}
+for _, row in ipairs(owned and owned.spellbook_entries or {}) do
+  table.insert(spellbook_rows, table.concat({
+    tonumber(row.entry_index) or -1,
+    tonumber(row.internal_id) or -1,
+    tonumber(row.active) or 0,
+    tonumber(row.visible) or 0,
+    tonumber(row.category) or 0,
+    tonumber(row.statbook_max_level) or -1,
+  }, ","))
+end
+table.sort(spellbook_rows)
+local current_spell_id = -1
+if progression ~= 0 then
+  local offset = sd.debug.layout_offset("progression_current_spell_id")
+  if offset ~= nil then
+    current_spell_id = tonumber(
+      sd.debug.read_i32(progression + offset)) or -1
+  end
+end
+emit("participant_present", participant ~= nil)
+emit("owner_view", is_owner)
+emit("progression_address", progression)
+emit("ability_present", ability ~= nil)
+emit("primary_entry", ability and ability.primary_entry_index or -1)
+emit("combo_entry", ability and ability.primary_combo_entry_index or -1)
+emit("current_spell_id", current_spell_id)
+emit("spellbook_count", owned and owned.spellbook_entry_count or 0)
+emit("spellbook_total_count",
+  owned and owned.spellbook_entry_total_count or 0)
+emit("spellbook_truncated", owned and owned.spellbook_truncated or false)
+emit("spellbook_fingerprint", table.concat(spellbook_rows, ";"))
+emit("details_present", details ~= nil)
+emit("details_primary_entry", primary and primary.entry_id or -1)
+emit("details_combo_entry", primary and primary.combo_entry_id or -1)
+emit("details_build_id", primary and primary.build_id or -1)
+emit("details_build_resolved",
+  primary and primary.build_id_resolved or false)
+emit("primary_visual_type_id",
+  visual and visual.primary_visual_lane and
+    visual.primary_visual_lane.current_object_type_id or 0)
+"""
+
+PRIMARY_PERSISTENCE_KEYS = (
+    "primary_entry",
+    "combo_entry",
+    "current_spell_id",
+    "spellbook_count",
+    "spellbook_total_count",
+    "spellbook_truncated",
+    "spellbook_fingerprint",
+    "details_primary_entry",
+    "details_combo_entry",
+    "details_build_id",
+    "details_build_resolved",
+    "primary_visual_type_id",
+)
 
 
 def _number(values: Mapping[str, str], key: str) -> float:
@@ -342,6 +446,141 @@ def _query_views(
             participant_id,
         ),
     }
+
+
+def _query_equipped_primary_view(
+    pipe_name: str,
+    participant_id: int,
+) -> dict[str, str]:
+    return parse_key_values(
+        lua(
+            pipe_name,
+            EQUIPPED_PRIMARY_STATE_PROBE.replace(
+                "__PARTICIPANT_ID__",
+                str(participant_id),
+            ),
+            timeout=8.0,
+        )
+    )
+
+
+def _query_equipped_primary_views(
+    *,
+    owner_pipe: str,
+    observer_pipe: str,
+    participant_id: int,
+) -> dict[str, dict[str, str]]:
+    return {
+        "owner": _query_equipped_primary_view(
+            owner_pipe,
+            participant_id,
+        ),
+        "observer": _query_equipped_primary_view(
+            observer_pipe,
+            participant_id,
+        ),
+    }
+
+
+def _assert_valid_equipped_primary_view(
+    values: Mapping[str, str],
+    *,
+    label: str,
+    owner_view: bool,
+) -> None:
+    if (
+        values.get("participant_present") != "true"
+        or values.get("owner_view")
+        != ("true" if owner_view else "false")
+        or _integer(values, "progression_address") == 0
+        or values.get("ability_present") != "true"
+        or _integer(values, "primary_entry") < 0
+        or _integer(values, "combo_entry") < 0
+        or _integer(values, "current_spell_id") <= 0
+        or _integer(values, "spellbook_count") <= 0
+        or _integer(values, "spellbook_total_count") <= 0
+        or values.get("spellbook_truncated") != "false"
+        or not values.get("spellbook_fingerprint")
+        or values.get("details_present") != "true"
+        or values.get("details_build_resolved") != "true"
+        or _integer(values, "details_primary_entry")
+        != _integer(values, "primary_entry")
+        or _integer(values, "details_combo_entry")
+        != _integer(values, "combo_entry")
+        or _integer(values, "details_build_id") < 0
+        or _integer(values, "primary_visual_type_id") <= 0
+    ):
+        raise VerifyFailure(
+            f"{label} did not expose an equipped native primary: "
+            f"{dict(values)}"
+        )
+
+
+def assert_equipped_primary_persisted(
+    *,
+    before: Mapping[str, Mapping[str, Mapping[str, str]]],
+    after: Mapping[str, Mapping[str, Mapping[str, str]]],
+) -> dict[str, Any]:
+    if set(before) != {"host", "client"} or set(after) != {
+        "host",
+        "client",
+    }:
+        raise VerifyFailure(
+            "equipped-primary samples must contain host and client"
+        )
+
+    retained: dict[str, Any] = {}
+    for fighter in ("host", "client"):
+        before_views = before[fighter]
+        after_views = after[fighter]
+        if set(before_views) != {"owner", "observer"} or set(
+            after_views
+        ) != {"owner", "observer"}:
+            raise VerifyFailure(
+                f"{fighter} equipped-primary samples lack both peer views"
+            )
+        for view, owner_view in (("owner", True), ("observer", False)):
+            before_view = before_views[view]
+            after_view = after_views[view]
+            _assert_valid_equipped_primary_view(
+                before_view,
+                label=f"{fighter} {view} before boundary",
+                owner_view=owner_view,
+            )
+            _assert_valid_equipped_primary_view(
+                after_view,
+                label=f"{fighter} {view} after boundary",
+                owner_view=owner_view,
+            )
+            changed = [
+                key
+                for key in PRIMARY_PERSISTENCE_KEYS
+                if before_view.get(key) != after_view.get(key)
+            ]
+            if changed:
+                raise VerifyFailure(
+                    f"{fighter} {view} equipped primary changed across "
+                    f"the respawn boundary: keys={changed} "
+                    f"before={dict(before_view)} after={dict(after_view)}"
+                )
+
+        disagreed = [
+            key
+            for key in PRIMARY_PERSISTENCE_KEYS
+            if after_views["owner"].get(key)
+            != after_views["observer"].get(key)
+        ]
+        if disagreed:
+            raise VerifyFailure(
+                f"{fighter} equipped primary did not converge on both "
+                f"peers after respawn: keys={disagreed} "
+                f"views={dict(after_views)}"
+            )
+        retained[fighter] = {
+            key: after_views["owner"].get(key, "")
+            for key in PRIMARY_PERSISTENCE_KEYS
+        }
+    return retained
 
 
 def _spawn_from_owner(
@@ -676,7 +915,7 @@ def assert_living_participant_unchanged(
         != expected_wave
     ):
         raise VerifyFailure(
-            "living participant did not acknowledge the completed-wave epoch"
+            "living participant did not acknowledge the wave-boundary epoch"
         )
     for key in ("last_respawn_x", "last_respawn_y"):
         if abs(
@@ -904,39 +1143,28 @@ def _hold_wave_one_on_single_enemy(
     )
 
 
-def _trigger_wave_one_completion(
+def _assert_held_wave_one_enemy_survived_boundary(
     host_pipe: str,
-    *,
-    timeout: float = 15.0,
-) -> list[dict[str, str]]:
-    deadline = time.monotonic() + timeout
-    attempts: list[dict[str, str]] = []
-    while time.monotonic() < deadline:
-        wave = parse_key_values(
-            lua(host_pipe, death.WAVE_STATE_PROBE, timeout=8.0)
+) -> dict[str, str]:
+    values = parse_key_values(
+        lua(
+            host_pipe,
+            HELD_WAVE_ONE_ENEMY_PROBE,
+            timeout=8.0,
         )
-        wave_index = _integer(wave, "wave")
-        if wave_index == 1 and wave.get("phase") == "completed":
-            return attempts
-        if wave_index >= 2:
-            if attempts:
-                return attempts
-            raise VerifyFailure(
-                "wave 1 advanced before the controlled completion trigger"
-            )
-        killed = parse_key_values(
-            lua(
-                host_pipe,
-                death.KILL_LIVE_WAVE_ENEMIES,
-                timeout=8.0,
-            )
-        )
-        attempts.append({**wave, **killed})
-        time.sleep(0.1)
-    raise VerifyFailure(
-        "wave 1 did not complete after native enemy death triggers; "
-        f"attempts={attempts[-5:]}"
     )
+    if (
+        _integer(values, "held_actor") == 0
+        or values.get("found") != "true"
+        or values.get("tracked_enemy") != "true"
+        or values.get("dead") != "false"
+        or _number(values, "hp") <= 0.0
+    ):
+        raise VerifyFailure(
+            "wave-1 survivor did not remain alive across the natural "
+            f"wave-2 boundary: {values}"
+        )
+    return values
 
 
 def _wait_for_run_loading_started(
@@ -1342,6 +1570,21 @@ def run_live_verification(
                 observer_pipe=host_pipe,
                 participant_id=CLIENT_ID,
             )
+            equipped_primary_before = {
+                "host": _query_equipped_primary_views(
+                    owner_pipe=host_pipe,
+                    observer_pipe=client_pipe,
+                    participant_id=HOST_ID,
+                ),
+                "client": _query_equipped_primary_views(
+                    owner_pipe=client_pipe,
+                    observer_pipe=host_pipe,
+                    participant_id=CLIENT_ID,
+                ),
+            }
+            result["equipped_primary_before_boundary"] = (
+                equipped_primary_before
+            )
 
             result["client_survival_hold_disabled"] = (
                 _set_survival_hold(
@@ -1396,15 +1639,11 @@ def run_live_verification(
                 "dead_client": client_death_views,
             }
 
-            result["wave_one_enemy_death_triggers"] = (
-                _trigger_wave_one_completion(
-                    host_pipe,
-                )
-            )
             host_after_owner = _wait_for_local_respawn_epoch(
                 host_pipe,
                 previous_epoch=previous_host_epoch,
                 expected_wave=1,
+                timeout=20.0,
             )
             client_after_owner = death._wait_for_values(
                 client_pipe,
@@ -1413,8 +1652,16 @@ def run_live_verification(
                     previous_epoch=previous_client_epoch,
                     expected_wave=1,
                 ),
-                timeout=8.0,
-                description="dead client wave-1 respawn",
+                timeout=20.0,
+                description=(
+                    "dead client natural wave-2-boundary respawn"
+                ),
+            )
+            result["client_survival_hold_reenabled"] = (
+                _set_survival_hold(
+                    client_pipe,
+                    enabled=True,
+                )
             )
             living_after = {
                 "owner": host_after_owner,
@@ -1435,7 +1682,7 @@ def run_live_verification(
                 "living_host": living_after,
                 "dead_client": dead_after,
             }
-            result["wave_completed_after_death_seconds"] = (
+            result["wave_boundary_after_death_seconds"] = (
                 time.monotonic() - death_started_at
             )
             result["living_host_unchanged"] = (
@@ -1456,6 +1703,32 @@ def run_live_verification(
                 _wait_for_wave_two_convergence(
                     host_pipe,
                     client_pipe,
+                )
+            )
+            result["wave_one_survivor_after_boundary"] = (
+                _assert_held_wave_one_enemy_survived_boundary(
+                    host_pipe,
+                )
+            )
+            equipped_primary_after = {
+                "host": _query_equipped_primary_views(
+                    owner_pipe=host_pipe,
+                    observer_pipe=client_pipe,
+                    participant_id=HOST_ID,
+                ),
+                "client": _query_equipped_primary_views(
+                    owner_pipe=client_pipe,
+                    observer_pipe=host_pipe,
+                    participant_id=CLIENT_ID,
+                ),
+            }
+            result["equipped_primary_after_respawn"] = (
+                equipped_primary_after
+            )
+            result["equipped_primary_persistence"] = (
+                assert_equipped_primary_persisted(
+                    before=equipped_primary_before,
+                    after=equipped_primary_after,
                 )
             )
             result["ok"] = True

@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-Status: second corrective pass complete; exact-SHA owner-topology rerun pending
+Status: r18 live forensics complete; wave-boundary respawn correction under gate
 
 ## Scope
 
@@ -400,11 +400,104 @@ damage rows carry replicated participant IDs. Endurance attribution now derives
 each fighter's replicated identity from the other peer's sole remote participant
 view, while retaining transport IDs separately for transport evidence.
 
+## Owner observation: bare staff did not mean the primary was absent
+
+While r18 was still live, the workstation presentation appeared to have only a
+bare wooden staff. Paired D3D9 backbuffers preserved that presentation before
+the workstation fighter's recorded death. A semantic capture then read both
+fighters from both peers while the workstation fighter was dead and
+spectating.
+
+The workstation fighter still had owned primary entry 16, combo entry 16,
+native current-spell ID 1011, resolved build 16, and all 83 spellbook rows. Its
+own process and the host's remote participant clone agreed on those values and
+on the primary, secondary, and attachment equipment identities. The host also
+had a native-backed equipped primary. The workstation fighter was at 0/50 HP;
+both peers still reported respawn epoch zero while the authority wave had
+advanced to seven.
+
+The lost-primary hypothesis is therefore falsified. The bare-staff frame is a
+real presentation observation, but it is not evidence that the per-actor
+spellbook or equipped-primary state was empty. The alternative that this seat
+never received a loadout is also falsified. No respawn had occurred, so there
+was no post-respawn spell restoration that could hide a loss.
+
+The paired screenshots and full role-mapped spellbook/loadout capture are under
+`runs/steam-r18/captures/live-loadout-forensics` and
+`runs/steam-r18/live-loadout-forensics` in the evidence root.
+
+## Damage correlation: client progress stopped before death
+
+R17's reconciled authority ledger contains 30 host enemy-damage edges totaling
+30 damage and no workstation enemy-damage edge at all. Its only workstation
+death occurred at 187.402 seconds; the host continued applying enemy damage for
+another 1,295.346 seconds. Death cannot explain why that seat dealt zero.
+
+R18 contains 29 host enemy-damage edges totaling 29 damage and six workstation
+authority-log claims totaling five damage. The recovered workstation rows do
+not carry monotonic timestamps, so they are bounded by adjacent timestamped
+ledger rows rather than assigned point estimates. The last possible row was no
+later than 1,372.779 seconds. The fighter died at 2,103.640 seconds, at least
+730.861 seconds later. The host continued applying damage for another 167.139
+seconds after that death.
+
+This rejects death as the cause of the workstation fighter's offensive stall.
+The primary was present, but its applied-damage efficacy had already stopped
+for more than twelve minutes. That remains a distinct Bot Brain combat-policy
+finding and must still satisfy the brief's per-fighter applied-damage gate on
+the next endurance run.
+
+The redacted correlation, conversion method, conservative timing bounds, and
+hypothesis verdicts are recorded in
+`runs/steam-r18/r17-r18-damage-death-respawn-correlation.json`.
+
+## Product finding: completion-only respawn publication can starve
+
+The systematic respawn failure is in the host publication boundary. R17 and
+r18 each captured the Arena spawn point, but neither host log contains a
+published or applied wave-respawn command. Both timelines advanced through
+later authority wave numbers while the dead workstation fighter remained
+spectating at respawn epoch zero. Neither timeline sampled a wave summary in
+the `completed` phase.
+
+`RefreshHostWaveRespawnCommand` published only when
+`SnapshotLastCompletedWave()` advanced. That durable latch advances when a
+tracked wave has no remaining spawns and no living tracked enemies. The stock
+production schedule can start wave N while enemies attributed to older waves
+remain alive. Under that overlap, later wave numbers are real boundaries, but
+no tracked wave is fully cleared, so the completion latch and respawn command
+can starve indefinitely.
+
+The prior fieldbreak25 verifier concealed this production shape. It held one
+wave-1 enemy alive, killed the workstation fighter, then explicitly killed the
+last enemy before waiting for respawn. It proved the fully-cleared path but
+never asserted that a natural wave-2 start respawns a dead owner while the held
+wave-1 enemy remains alive. It also asserted HP, position, grid registration,
+and actor identity without reading the native current spell.
+
+The correction defines the eligible boundary as the newer of the durable
+completed wave and `current wave - 1`. Publication remains host-only,
+monotonic, authenticated, and idempotent; it changes only when a command is
+eligible, and the existing same-actor primitive still leaves living owners
+untouched. The focused verifier now keeps its wave-1 survivor alive across the
+natural wave-2 boundary. It captures both fighters' owned loadout, full
+spellbook fingerprint, resolved primary details, raw native current-spell ID,
+and primary visual identity from owner and observer views before the death and
+after the respawn, then requires exact persistence and cross-peer agreement.
+
+R18's final artifact copy was interrupted after the live captures and exact
+owned-process cleanup. Its host log, timelines, ledgers, screenshots, semantic
+captures, result, and clean after-receipt are preserved; its client runtime log
+is unavailable. The missing client log does not affect the paired semantic
+loadout proof or the host-side absence of respawn publication.
+
 ## Rerun requirement
 
-The product failure fixes, remote staging fix, and bounded endurance probe
-continuity must be rebuilt together and rerun through the same real launcher,
-lobby, and Steam flow. Completion requires both Bot Play takeovers to become
-active through the mod setting, live state and transport sampling throughout
-the match, milestone screenshots from both peers, and either natural Game Over
-or the 90-minute endurance cap.
+The product failure fixes, restored website flow, corrected damage attribution,
+bounded endurance probe continuity, and wave-boundary respawn correction must
+be rebuilt together and rerun through the same real launcher, lobby, and Steam
+flow. Completion requires both Bot Play takeovers to become active through the
+mod setting, positive authoritative enemy damage from each fighter, live state
+and transport sampling throughout the match, milestone screenshots from both
+peers, equipped-primary persistence after every observed respawn, and either
+natural Game Over or the 90-minute endurance cap.

@@ -267,7 +267,10 @@ def test_wave_respawn_applies_same_actor_contract_to_synthetic_participants() ->
         wave,
         "host wave-respawn participant application",
         (
+            "SnapshotEligibleWaveRespawnBoundary()",
             "SnapshotLastCompletedWave()",
+            "SnapshotWaveSummary()",
+            "summary.wave - 1",
             "TryRespawnHostOwnedSyntheticParticipantsAt(",
             "command.epoch",
             "command.run_nonce",

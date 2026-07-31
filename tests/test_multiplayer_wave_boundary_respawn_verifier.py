@@ -84,6 +84,46 @@ def observer_state(
     }
 
 
+def equipped_primary_state(
+    *,
+    owner_view: bool,
+    primary_entry: int = 16,
+    combo_entry: int = 16,
+    current_spell_id: int = 1011,
+) -> dict[str, str]:
+    return {
+        "participant_present": "true",
+        "owner_view": "true" if owner_view else "false",
+        "progression_address": str(
+            0x301000 if owner_view else 0x401000
+        ),
+        "ability_present": "true",
+        "primary_entry": str(primary_entry),
+        "combo_entry": str(combo_entry),
+        "current_spell_id": str(current_spell_id),
+        "spellbook_count": "83",
+        "spellbook_total_count": "83",
+        "spellbook_truncated": "false",
+        "spellbook_fingerprint": "16,65537,1,1,257,25",
+        "details_present": "true",
+        "details_primary_entry": str(primary_entry),
+        "details_combo_entry": str(combo_entry),
+        "details_build_id": str(primary_entry),
+        "details_build_resolved": "true",
+        "primary_visual_type_id": "7005",
+    }
+
+
+def equipped_primary_pair() -> dict[str, dict[str, dict[str, str]]]:
+    return {
+        fighter: {
+            "owner": equipped_primary_state(owner_view=True),
+            "observer": equipped_primary_state(owner_view=False),
+        }
+        for fighter in ("host", "client")
+    }
+
+
 class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
     def test_ports_and_generated_prefix_stay_in_the_fb25_group(self) -> None:
         self.assertEqual(
@@ -256,6 +296,64 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
                 after_respawn=after,
             )
 
+    def test_equipped_primary_persists_on_both_peer_views(self) -> None:
+        before = equipped_primary_pair()
+        after = copy.deepcopy(before)
+
+        result = verifier.assert_equipped_primary_persisted(
+            before=before,
+            after=after,
+        )
+
+        self.assertEqual(result["host"]["primary_entry"], "16")
+        self.assertEqual(result["client"]["current_spell_id"], "1011")
+
+    def test_missing_current_spell_after_respawn_is_rejected(self) -> None:
+        before = equipped_primary_pair()
+        after = copy.deepcopy(before)
+        after["client"]["owner"]["current_spell_id"] = "-1"
+
+        with self.assertRaisesRegex(
+            local.VerifyFailure,
+            "did not expose an equipped native primary",
+        ):
+            verifier.assert_equipped_primary_persisted(
+                before=before,
+                after=after,
+            )
+
+    def test_owner_observer_primary_disagreement_is_rejected(self) -> None:
+        before = equipped_primary_pair()
+        before["client"]["observer"]["current_spell_id"] = "1012"
+        after = copy.deepcopy(before)
+
+        with self.assertRaisesRegex(
+            local.VerifyFailure,
+            "did not converge on both peers",
+        ):
+            verifier.assert_equipped_primary_persisted(
+                before=before,
+                after=after,
+            )
+
+    def test_primary_probe_reads_owned_book_and_native_spell(self) -> None:
+        with mock.patch.object(
+            verifier,
+            "lua",
+            return_value="participant_present=true\ncurrent_spell_id=1011",
+        ) as lua:
+            result = verifier._query_equipped_primary_view(
+                "host-pipe",
+                42,
+            )
+
+        code = lua.call_args.args[1]
+        self.assertEqual(result["current_spell_id"], "1011")
+        self.assertIn("participant_id = 42", code)
+        self.assertIn("owned.spellbook_entries", code)
+        self.assertIn('layout_offset("progression_current_spell_id")', code)
+        self.assertIn("sd.bots.get_loadout_details", code)
+
     def test_wave_two_requires_both_peers_live_and_not_completed(
         self,
     ) -> None:
@@ -315,33 +413,41 @@ class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
         self.assertEqual(result["observed"], expected)
         self.assertIn("sd.rng.set_seed", lua.call_args.args[1])
 
-    def test_wave_one_completion_never_kills_wave_two(self) -> None:
-        with (
-            mock.patch.object(
-                verifier,
-                "lua",
-                side_effect=[
-                    (
-                        "wave=1\nphase=clearing\n"
-                        "remaining_to_spawn=0\nalive=1\nkilled=4"
-                    ),
-                    "attempted=1\ntriggered=1",
-                    (
-                        "wave=2\nphase=spawning\n"
-                        "remaining_to_spawn=5\nalive=0\nkilled=0"
-                    ),
-                ],
-            ) as lua,
-            mock.patch.object(verifier.time, "sleep"),
+    def test_wave_one_survivor_must_remain_alive_after_boundary(self) -> None:
+        with mock.patch.object(
+            verifier,
+            "lua",
+            return_value=(
+                "held_actor=1234\nfound=true\ntracked_enemy=true\n"
+                "dead=false\nhp=1000000"
+            ),
         ):
-            attempts = verifier._trigger_wave_one_completion(
-                "host-pipe",
-                timeout=1.0,
+            result = (
+                verifier._assert_held_wave_one_enemy_survived_boundary(
+                    "host-pipe"
+                )
             )
 
-        self.assertEqual(attempts[0]["wave"], "1")
-        self.assertEqual(attempts[0]["triggered"], "1")
-        self.assertEqual(lua.call_count, 3)
+        self.assertEqual(result["held_actor"], "1234")
+
+    def test_dead_wave_one_survivor_rejects_completion_based_gate(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            verifier,
+            "lua",
+            return_value=(
+                "held_actor=1234\nfound=true\ntracked_enemy=true\n"
+                "dead=true\nhp=0"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                local.VerifyFailure,
+                "did not remain alive",
+            ):
+                verifier._assert_held_wave_one_enemy_survived_boundary(
+                    "host-pipe"
+                )
 
     def test_wave_one_hold_leaves_one_stock_enemy(self) -> None:
         with (
