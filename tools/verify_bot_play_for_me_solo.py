@@ -42,7 +42,10 @@ from tools._real_flow_e2e.windows import (  # noqa: E402
     windows_path,
     windows_processes,
 )
-from tools.verify_local_multiplayer_sync import extract_json  # noqa: E402
+from tools.verify_local_multiplayer_sync import (  # noqa: E402
+    extract_json,
+    parse_key_values,
+)
 from tools.verify_real_flow_e2e import (  # noqa: E402
     BOT_MOD_ID,
     _assert_clean_release,
@@ -276,6 +279,77 @@ def _wait_scene(
     raise SoloBotPlayFailure(
         f"solo did not reach {scene_name}: last={last} "
         f"error={last_error!r}"
+    )
+
+
+def _wait_run_ready(
+    pipe: LuaPipe,
+    timeout: float,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(
+            pipe.execute(
+                """
+local scene = sd.world.get_scene()
+local combat = sd.gameplay.get_combat_state()
+local player = sd.player.get_state()
+local runtime = sd.runtime.get_multiplayer_state()
+local loading = runtime and runtime.run_loading_barrier or {}
+local participant = nil
+for _, row in ipairs(runtime and runtime.participants or {}) do
+  if row.kind == "LocalHuman" and row.controller_kind == "Native" then
+    participant = row
+    break
+  end
+end
+print("scene=" .. tostring(scene and scene.name or ""))
+print("transitioning=" ..
+  tostring(scene and scene.transitioning or false))
+print("world_id=" .. tostring(scene and scene.world_id or 0))
+print("actor_address=" ..
+  tostring(player and player.actor_address or 0))
+print("participant_id=" ..
+  tostring(participant and participant.participant_id or 0))
+print("runtime_valid=" ..
+  tostring(participant and participant.runtime_valid or false))
+print("in_run=" ..
+  tostring(participant and participant.in_run or false))
+print("barrier_released=" ..
+  tostring(loading and loading.released or false))
+print("combat_wave=" ..
+  tostring(combat and combat.wave_index or -1))
+print("combat_active=" ..
+  tostring(combat and combat.active or false))
+"""
+            )
+        )
+        try:
+            world_id = int(last.get("world_id", "0"), 0)
+            actor_address = int(last.get("actor_address", "0"), 0)
+            participant_id = int(last.get("participant_id", "0"), 0)
+            combat_wave = int(last.get("combat_wave", "-1"), 0)
+        except ValueError:
+            time.sleep(0.1)
+            continue
+        if (
+            last.get("scene") == "testrun"
+            and last.get("transitioning") == "false"
+            and world_id > 0
+            and actor_address > 0
+            and participant_id > 0
+            and last.get("runtime_valid") == "true"
+            and last.get("in_run") == "true"
+            and last.get("barrier_released") == "true"
+            and combat_wave == 0
+            and last.get("combat_active") == "false"
+        ):
+            return last
+        time.sleep(0.1)
+    raise SoloBotPlayFailure(
+        "solo run never reached the stock pre-wave start window: "
+        f"{last}"
     )
 
 
@@ -539,6 +613,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "testrun",
             45.0,
         )
+        result["runReady"] = _wait_run_ready(pipe, 45.0)
+        prewave_bot = _wait_for_bot_state(
+            pipe,
+            lambda state: (
+                state.get("loaded") is True
+                and state.get("desired") is True
+                and state.get("active") is True
+                and state.get("takeover.active") is True
+                and int(state.get("participant_id", 0)) > 0
+            ),
+            timeout=10.0,
+            label="solo pre-wave takeover",
+        )
+        runtime_participant_id = int(prewave_bot["participant_id"])
+        result["prewaveBot"] = prewave_bot
+        result["runtimeParticipantId"] = runtime_participant_id
         result["waveStart"] = _request_until_true(
             pipe,
             "sd.gameplay.start_waves()",
@@ -614,11 +704,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 )
             if (
                 wave >= args.target_wave
-                and _bot_is_driving(bot, PARTICIPANT_ID)
+                and _bot_is_driving(bot, runtime_participant_id)
                 and int(bot.get("brain.move_accepted", 0)) > 0
                 and int(bot.get("brain.cast_accepted", 0)) > 0
                 and any(
-                    row["sourceParticipantId"] == PARTICIPANT_ID
+                    row["sourceParticipantId"] == runtime_participant_id
                     and row["damage"] > 0.0
                     for row in enemy_rows
                 )
@@ -642,30 +732,32 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         result["finalBot"] = final_bot
         result["fightingCapture"] = screenshot
         result["damageMetrics"] = {
-            "participantId": PARTICIPANT_ID,
+            "participantId": runtime_participant_id,
             "damageDealt": sum(
                 row["damage"]
                 for row in enemy_rows
-                if row["sourceParticipantId"] == PARTICIPANT_ID
+                if row["sourceParticipantId"] == runtime_participant_id
             ),
             "damageDealtEdges": len(
                 [
                     row
                     for row in enemy_rows
-                    if row["sourceParticipantId"] == PARTICIPANT_ID
+                    if row["sourceParticipantId"]
+                    == runtime_participant_id
                     and row["damage"] > 0.0
                 ]
             ),
             "damageTaken": sum(
                 row["damage"]
                 for row in player_rows
-                if row["targetParticipantId"] == PARTICIPANT_ID
+                if row["targetParticipantId"] == runtime_participant_id
             ),
             "damageTakenEdges": len(
                 [
                     row
                     for row in player_rows
-                    if row["targetParticipantId"] == PARTICIPANT_ID
+                    if row["targetParticipantId"]
+                    == runtime_participant_id
                     and row["damage"] > 0.0
                 ]
             ),
