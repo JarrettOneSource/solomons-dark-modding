@@ -510,26 +510,30 @@ bool TryGetLocalPlayerControlTakeoverState(
             gameplay_address,
             kGameplayCastIntentOffset,
             &state->cast_intent);
+        uintptr_t local_actor_address = 0;
         (void)TryResolvePlayerActorForSlot(
             gameplay_address,
             0,
-            &state->actor_address);
-        if (state->actor_address != 0) {
+            &local_actor_address);
+        if (state->active) {
+            state->actor_address = local_actor_address;
+        }
+        if (local_actor_address != 0) {
             (void)memory.TryReadField(
-                state->actor_address,
+                local_actor_address,
                 kActorPrimarySkillIdOffset,
                 &state->primary_skill_id);
             (void)memory.TryReadField(
-                state->actor_address,
+                local_actor_address,
                 kActorPreviousSkillIdOffset,
                 &state->previous_skill_id);
             (void)memory.TryReadField(
-                state->actor_address,
+                local_actor_address,
                 kActorCurrentTargetActorOffset,
                 &state->current_target_actor_address);
             uintptr_t selection_pointer = 0;
             if (memory.TryReadField(
-                    state->actor_address,
+                    local_actor_address,
                     kActorAnimationSelectionStateOffset,
                     &selection_pointer) &&
                 selection_pointer != 0) {
@@ -549,6 +553,7 @@ bool TryGetLocalPlayerControlTakeoverState(
     state->clean =
         !state->active &&
         state->owner_mod_id.empty() &&
+        state->actor_address == 0 &&
         !state->target_valid &&
         state->target_actor_address == 0 &&
         state->pending_movement_frames == 0 &&

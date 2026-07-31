@@ -103,6 +103,9 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "pending_movement_frames.store(" in input_api
     assert "pending_injected_keyboard_control_frames.store(" in input_api
     assert "local_player_takeover_target_actor.store(" in input_api
+    assert "if (state->active)" in input_api
+    assert "state->actor_address = local_actor_address;" in input_api
+    assert "state->actor_address == 0" in input_api
     assert "state->clean =" in input_api
 
     assert "IsLocalPlayerControlTakeoverActive()" in local_input
