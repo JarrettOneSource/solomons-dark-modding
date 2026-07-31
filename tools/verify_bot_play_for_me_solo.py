@@ -33,6 +33,7 @@ from tools._real_flow_e2e.runtime import (  # noqa: E402
     effective_wave_index,
 )
 from tools._real_flow_e2e.windows import (  # noqa: E402
+    BOT_PLAY_TEAM_ROSTER,
     PowerShell,
     WindowsHarnessError,
     assert_ports_free,
@@ -121,6 +122,7 @@ def _stage_package(
 def _write_initial_settings(
     evidence_root: Path,
     behavior: str,
+    roster: list[dict[str, str]],
 ) -> Path:
     path = evidence_root / "inputs" / "bot.brain.initial.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,7 +133,7 @@ def _write_initial_settings(
                 "values": {
                     "play_for_me": False,
                     "play_for_me_behavior": behavior,
-                    "roster": [],
+                    "roster": roster,
                 },
             },
             indent=2,
@@ -155,6 +157,7 @@ def _launch(
     unused_remote_port: int,
     element: str,
     discipline: str,
+    max_participants: int,
 ) -> dict[str, Any]:
     ledger = evidence_root / "safety" / "process-ledger.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -201,6 +204,8 @@ def _launch(
         windows_path(settings_path),
         "-LuaExecTargetModId",
         BOT_MOD_ID,
+        "-MaxParticipants",
+        str(max_participants),
         "-ProcessIdOutputPath",
         windows_path(ledger),
     ]
@@ -615,6 +620,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     settings_path = _write_initial_settings(
         args.evidence_root,
         args.behavior,
+        BOT_PLAY_TEAM_ROSTER[:args.bot_teammates],
     )
     launch: dict[str, Any] = {}
     process_id = 0
@@ -638,6 +644,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "behavior": args.behavior,
         "element": args.element,
         "discipline": args.discipline,
+        "runSeed": args.run_seed,
+        "maxParticipants": max(2, 1 + args.bot_teammates),
+        "syntheticTeamRoster": (
+            BOT_PLAY_TEAM_ROSTER[:args.bot_teammates]
+        ),
         "targetWaveAlive": args.target_wave,
     }
     cleanup: dict[str, Any] = {}
@@ -653,6 +664,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             unused_remote_port=args.unused_remote_port,
             element=args.element,
             discipline=args.discipline,
+            max_participants=max(2, 1 + args.bot_teammates),
         )
         result["launch"] = launch
         if launch.get("audioDisabled") is not True:
@@ -684,6 +696,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 f"takeover: {initial_bot}"
             )
         result["initialBot"] = initial_bot
+        result["runSeedRequest"] = _request_until_true(
+            pipe,
+            (
+                f"sd.rng.set_seed({args.run_seed}) == "
+                f"{args.run_seed}"
+            ),
+            timeout=10.0,
+            label="deterministic stock run seed",
+        )
         result["startRun"] = _request_until_true(
             pipe,
             "sd.hub.start_match()",
@@ -715,6 +736,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             pipe,
             enabled=True,
             behavior=args.behavior,
+            roster=BOT_PLAY_TEAM_ROSTER[:args.bot_teammates],
         )
         active_bot = _wait_for_bot_state(
             pipe,
@@ -731,6 +753,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         runtime_participant_id = int(active_bot["participant_id"])
         result["activeBot"] = active_bot
         result["runtimeParticipantId"] = runtime_participant_id
+        result["transportParticipantId"] = PARTICIPANT_ID
         result["damageObserversReset"] = (
             _reset_damage_observations(
                 pipe,
@@ -745,6 +768,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         screenshot: dict[str, Any] | None = None
         final_state: dict[str, Any] | None = None
         final_bot: dict[str, Any] | None = None
+        death_events: list[dict[str, Any]] = []
+        respawn_events: list[dict[str, Any]] = []
+        was_alive = True
         deadline = time.monotonic() + args.timeout_seconds
         while time.monotonic() < deadline:
             state = pipe.state()
@@ -784,6 +810,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "damageEdges": len(enemy_rows),
             }
             samples.append(sample)
+            alive = float(state["player"]["hp"]) > 0.0
+            if was_alive and not alive:
+                death_events.append(sample)
+            elif not was_alive and alive:
+                respawn_events.append(sample)
+            was_alive = alive
             if (
                 screenshot is None
                 and wave >= 2
@@ -805,21 +837,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 )
                 screenshot["visibleLivingEnemy"] = True
                 screenshot["botState"] = bot
-            if (
-                state["scene"]["name"] != "testrun"
-                or float(state["player"]["hp"]) <= 0.0
-            ):
+            if state["scene"]["name"] != "testrun":
                 raise SoloBotPlayFailure(
-                    "solo bot died or left the run before wave "
+                    "solo bot party left the run before wave "
                     f"{args.target_wave}: {sample}"
                 )
             if (
                 wave >= args.target_wave
+                and alive
                 and _bot_is_driving(bot, runtime_participant_id)
                 and int(bot.get("brain.move_accepted", 0)) > 0
                 and int(bot.get("brain.cast_accepted", 0)) > 0
                 and any(
-                    row["sourceParticipantId"] == runtime_participant_id
+                    row["sourceParticipantId"] == PARTICIPANT_ID
                     and row["damage"] > 0.0
                     for row in enemy_rows
                 )
@@ -828,6 +858,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 final_bot = bot
                 break
             time.sleep(0.25)
+        result["stockLifecycle"] = {
+            "deathEvents": death_events,
+            "respawnEvents": respawn_events,
+        }
         if final_state is None or final_bot is None:
             raise SoloBotPlayFailure(
                 "solo takeover did not reach wave "
@@ -842,32 +876,32 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         result["finalBot"] = final_bot
         result["fightingCapture"] = screenshot
         result["damageMetrics"] = {
-            "participantId": runtime_participant_id,
+            "runtimeSlotId": runtime_participant_id,
+            "transportParticipantId": PARTICIPANT_ID,
             "damageDealt": sum(
                 row["damage"]
                 for row in enemy_rows
-                if row["sourceParticipantId"] == runtime_participant_id
+                if row["sourceParticipantId"] == PARTICIPANT_ID
             ),
             "damageDealtEdges": len(
                 [
                     row
                     for row in enemy_rows
                     if row["sourceParticipantId"]
-                    == runtime_participant_id
+                    == PARTICIPANT_ID
                     and row["damage"] > 0.0
                 ]
             ),
             "damageTaken": sum(
                 row["damage"]
                 for row in player_rows
-                if row["targetParticipantId"] == runtime_participant_id
+                if row["targetParticipantId"] == PARTICIPANT_ID
             ),
             "damageTakenEdges": len(
                 [
                     row
                     for row in player_rows
-                    if row["targetParticipantId"]
-                    == runtime_participant_id
+                    if row["targetParticipantId"] == PARTICIPANT_ID
                     and row["damage"] > 0.0
                 ]
             ),
@@ -880,6 +914,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             pipe,
             enabled=False,
             behavior=args.behavior,
+            roster=BOT_PLAY_TEAM_ROSTER[:args.bot_teammates],
         )
         released = _wait_for_bot_state(
             pipe,
@@ -1083,6 +1118,25 @@ def parse_args() -> argparse.Namespace:
         choices=("mind", "body", "arcane"),
         default="mind",
     )
+    parser.add_argument(
+        "--bot-teammates",
+        type=int,
+        choices=range(0, 4),
+        default=3,
+        help=(
+            "existing synthetic teammates used by the solo wave gate; "
+            "defaults to the proven three-bot roster"
+        ),
+    )
+    parser.add_argument(
+        "--run-seed",
+        type=lambda value: int(value, 0),
+        default=0x0AD0633B,
+        help=(
+            "authority-owned native run-generation seed; defaults to the "
+            "recorded wave-21 acceptance layout"
+        ),
+    )
     parser.add_argument("--timeout-seconds", type=float, default=600.0)
     args = parser.parse_args()
     args.package_root = args.package_root.resolve()
@@ -1105,6 +1159,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("solo ports must be distinct and at or above 51400")
     if args.target_wave < 5:
         parser.error("target wave must be at least 5")
+    if not 1 <= args.run_seed <= 0x3FFFFFFF:
+        parser.error("run seed must be in the range 1..0x3fffffff")
     return args
 
 

@@ -55,6 +55,7 @@ from tools._real_flow_e2e.runtime import (  # noqa: E402
     wait_shared_hub,
 )
 from tools._real_flow_e2e.windows import (  # noqa: E402
+    BOT_PLAY_TEAM_ROSTER,
     PowerShell,
     WindowsHarnessError,
     WindowsPeer,
@@ -710,6 +711,7 @@ def _write_bot_settings(
     *,
     enabled: bool,
     behavior: str = "skirmisher",
+    roster: list[dict[str, str]] | None = None,
 ) -> Path:
     path = _bot_settings_path(peer)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -725,7 +727,7 @@ def _write_bot_settings(
                 "values": {
                     "play_for_me": enabled,
                     "play_for_me_behavior": behavior,
-                    "roster": [],
+                    "roster": roster or [],
                 },
             },
             indent=2,
@@ -836,15 +838,18 @@ def _set_bot_play(
     *,
     enabled: bool,
     behavior: str = "skirmisher",
+    roster: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     path = _write_bot_settings(
         peer,
         enabled=enabled,
         behavior=behavior,
+        roster=roster,
     )
     return {
         "enabled": enabled,
         "behavior": behavior,
+        "roster": roster or [],
         "settingsPath": str(path),
         "reload": _reload_bot_settings(pipe),
     }
@@ -1079,8 +1084,9 @@ def _indicator_region_assertion(capture_path: Path) -> dict[str, Any]:
 
 def _bot_is_driving(
     state: dict[str, Any],
-    participant_id: int,
+    participant_id: int | None = None,
 ) -> bool:
+    runtime_participant_id = int(state.get("participant_id", 0))
     return (
         state.get("loaded") is True
         and state.get("desired") is True
@@ -1088,7 +1094,11 @@ def _bot_is_driving(
         and state.get("takeover.active") is True
         and state.get("takeover.clean") is False
         and state.get("takeover.owner_mod_id") == BOT_MOD_ID
-        and int(state.get("participant_id", 0)) == participant_id
+        and runtime_participant_id > 0
+        and (
+            participant_id is None
+            or runtime_participant_id == participant_id
+        )
         and int(state.get("takeover.actor_address", 0)) > 0
         and state.get("focus_active") is False
     )
@@ -1132,37 +1142,52 @@ def _run_bot_play_for_me(
     result: dict[str, Any] = {
         "targetCompletedWaves": config.verify_through_wave - 1,
         "settingsStartedDisabledForPhysicalMatchEntry": True,
+        "syntheticTeamRoster": BOT_PLAY_TEAM_ROSTER[:2],
     }
     result["damageObserversReset"] = _reset_damage_observations(
         host_pipe
     )
     result["activationRequests"] = {
-        "host": _set_bot_play(host, host_pipe, enabled=True),
+        "host": _set_bot_play(
+            host,
+            host_pipe,
+            enabled=True,
+            roster=BOT_PLAY_TEAM_ROSTER[:2],
+        ),
         "clientB": _set_bot_play(
             client,
             client_pipe,
             enabled=True,
+            roster=BOT_PLAY_TEAM_ROSTER[:2],
         ),
     }
     result["activeTakeovers"] = {
         "host": _wait_for_bot_state(
             host_pipe,
-            lambda state: _bot_is_driving(
-                state,
-                config.host.participant_id,
-            ),
+            _bot_is_driving,
             timeout=15.0,
             label="host local-player bot takeover",
         ),
         "clientB": _wait_for_bot_state(
             client_pipe,
-            lambda state: _bot_is_driving(
-                state,
-                config.client.participant_id,
-            ),
+            _bot_is_driving,
             timeout=15.0,
             label="client local-player bot takeover",
         ),
+    }
+    runtime_participant_ids = {
+        role: int(state["participant_id"])
+        for role, state in result["activeTakeovers"].items()
+    }
+    result["participantIdentity"] = {
+        "host": {
+            "runtimeSlotId": runtime_participant_ids["host"],
+            "transportId": config.host.participant_id,
+        },
+        "clientB": {
+            "runtimeSlotId": runtime_participant_ids["clientB"],
+            "transportId": config.client.participant_id,
+        },
     }
 
     sampler.set_phase("both-local-players-bot-driven")
@@ -1265,11 +1290,11 @@ def _run_bot_play_for_me(
             and float(sample["clientB"]["player"]["hp"]) > 0.0
             and _bot_is_driving(
                 host_bot,
-                config.host.participant_id,
+                runtime_participant_ids["host"],
             )
             and _bot_is_driving(
                 client_bot,
-                config.client.participant_id,
+                runtime_participant_ids["clientB"],
             )
         ):
             final_sample = sample
@@ -1332,6 +1357,7 @@ def _run_bot_play_for_me(
         client,
         client_pipe,
         enabled=False,
+        roster=BOT_PLAY_TEAM_ROSTER[:2],
     )
     client_released = _wait_for_bot_state(
         client_pipe,
@@ -1433,7 +1459,7 @@ def _run_bot_play_for_me(
         client_clean = _bot_probe(client_pipe)
         if not _bot_is_driving(
             host_bot,
-            config.host.participant_id,
+            runtime_participant_ids["host"],
         ):
             raise RealFlowFailure(
                 f"host bot stopped during mixed mode: {host_bot}"
@@ -1493,6 +1519,7 @@ def _run_bot_play_for_me(
         host,
         host_pipe,
         enabled=False,
+        roster=BOT_PLAY_TEAM_ROSTER[:2],
     )
     host_released = _wait_for_bot_state(
         host_pipe,

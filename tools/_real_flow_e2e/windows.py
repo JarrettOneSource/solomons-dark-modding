@@ -18,6 +18,26 @@ class WindowsHarnessError(RuntimeError):
 
 OBSERVER_MOD_ID = "tool.real_flow_e2e_observer"
 BOT_PLAY_MOD_ID = "bot.brain"
+BOT_PLAY_TEAM_ROSTER = [
+    {
+        "name": "Ember",
+        "element": "fire",
+        "discipline": "arcane",
+        "behavior": "skirmisher",
+    },
+    {
+        "name": "Brook",
+        "element": "water",
+        "discipline": "mind",
+        "behavior": "striker",
+    },
+    {
+        "name": "Gale",
+        "element": "air",
+        "discipline": "body",
+        "behavior": "skirmisher",
+    },
+]
 
 
 def ps_quote(value: str) -> str:
@@ -292,7 +312,7 @@ def prepare_windows_peer(
                     "values": {
                         "play_for_me": False,
                         "play_for_me_behavior": "skirmisher",
-                        "roster": [],
+                        "roster": BOT_PLAY_TEAM_ROSTER[:2],
                     },
                 },
                 indent=2,
@@ -477,6 +497,8 @@ def launch_environment(
                 ),
             }
         )
+        if harness.topology == "loopback_windows_botplay":
+            environment["SDMOD_MULTIPLAYER_MAX_PARTICIPANTS"] = "4"
     else:
         environment["SDMOD_MULTIPLAYER_TRANSPORT"] = "steam"
         environment["SDMOD_MULTIPLAYER_ROLE"] = config.role

@@ -35,6 +35,7 @@ from tools._real_flow_e2e.windows import (
     ProcessRecord,
     WindowsHarnessError,
     close_exact_owned_processes,
+    launch_environment,
 )
 from tools._real_flow_e2e.ws20 import Ws20Peer
 
@@ -212,6 +213,14 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertTrue(config.bot_play_for_me)
             self.assertEqual(config.host.local_port, 51411)
             self.assertEqual(config.client.local_port, 51412)
+            environment = launch_environment(
+                config,
+                SimpleNamespace(config=config.host),
+            )
+            self.assertEqual(
+                environment["SDMOD_MULTIPLAYER_MAX_PARTICIPANTS"],
+                "4",
+            )
 
             host["localPort"] = 51080
             client["remotePort"] = 51080
