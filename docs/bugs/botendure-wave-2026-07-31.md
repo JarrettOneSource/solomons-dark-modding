@@ -80,6 +80,24 @@ checks that both transaction paths are new, performs the atomic replacement,
 and deletes the backup after success. The first-write path remains an atomic
 same-volume move. No game or launcher seam was added.
 
+## Harness finding: client takeover was armed after combat began
+
+The following run reached the real match with both peers healthy at the
+Solomon completion boundary. The harness then waited for enemy
+materialization before requesting either takeover. In less than 1.3 seconds,
+client B fell from 50 HP to 41 HP. The settings request reached Bot Brain while
+combat continued, but client B died before the controller could acquire a
+living local player. Bot Brain correctly retained `desired=true` and remained
+inactive for the dead player.
+
+This was an endurance sequencing defect, not a reason to weaken Bot Brain's
+dead-player guard. The real-flow endurance path now prearms client B through
+the normal mod setting while both peers are still in the shared hub. The
+client remains inactive and clean in the hub, then takes over as soon as its
+run actor is valid. The host remains under physical control through the
+required Solomon interaction, is armed immediately afterward while still
+alive, and only then does the harness wait for paired enemy materialization.
+
 ## Rerun requirement
 
 The product failure fix and remote staging fix must be rebuilt together and

@@ -2314,19 +2314,53 @@ class RealFlowE2ETests(unittest.TestCase):
         source = (
             ROOT / "tools/verify_real_flow_e2e.py"
         ).read_text(encoding="utf-8")
-        materialized = source.index(
-            'result["clientEnemyMaterialization"] = materialization'
+        run_body = source.split(
+            "def run(config: HarnessConfig", 1
+        )[1]
+        materialized = run_body.index(
+            'result["clientEnemyMaterialization"] = ('
         )
-        damage = source.index(
+        damage = run_body.index(
             'sampler.set_phase("client-real-water-damage")',
             materialized,
         )
-        capture = source.index(
+        capture = run_body.index(
             'sampler.set_phase("paired-render-capture")',
             materialized,
         )
 
         self.assertLess(damage, capture)
+
+    def test_endurance_prearms_client_before_match_and_host_before_enemy_wait(
+        self,
+    ) -> None:
+        source = (
+            ROOT / "tools" / "verify_real_flow_e2e.py"
+        ).read_text(encoding="utf-8")
+        run_body = source.split(
+            "def run(config: HarnessConfig", 1
+        )[1]
+
+        client_prearm = run_body.index(
+            'sampler.set_phase("bot-play-client-prearm")'
+        )
+        match_start = run_body.index(
+            'sampler.set_phase("match-start")'
+        )
+        endurance_start = run_body.index(
+            'result["botPlayForMe"] = _run_bot_play_endurance('
+        )
+        ordinary_enemy_wait = run_body.index(
+            'result["clientEnemyMaterialization"] = (',
+            endurance_start,
+        )
+
+        self.assertLess(client_prearm, match_start)
+        self.assertLess(endurance_start, ordinary_enemy_wait)
+        self.assertIn(
+            '"clientB": client_prearm_request',
+            source,
+        )
 
     def test_stock_water_cast_requires_exact_contacts_and_peer_hp(
         self,

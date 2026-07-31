@@ -1441,6 +1441,32 @@ def _living_enemy_count(state: dict[str, Any]) -> int:
     )
 
 
+def _wait_for_client_enemy_materialization(
+    config: HarnessConfig,
+    sampler: PairSampler,
+) -> dict[str, Any]:
+    sampler.set_phase("first-enemy-spawn")
+    enemy_state = sampler.sample_now("first-enemy-wait-start")
+    deadline = time.monotonic() + config.timeout_seconds
+    materialization_error = ""
+    while time.monotonic() < deadline:
+        enemy_state = sampler.sample_now("first-enemy-wait")
+        if (
+            len(enemy_state["host"]["nativeEnemies"]) > 0
+            and len(enemy_state["clientB"]["replicatedEnemies"]) > 0
+        ):
+            try:
+                return _assert_client_enemy_materialization(enemy_state)
+            except RealFlowFailure as exc:
+                materialization_error = str(exc)
+        time.sleep(0.2)
+    raise RealFlowFailure(
+        "the real flow produced no aligned host/native and "
+        "client/materialized replicated enemies; "
+        f"last={materialization_error!r}"
+    )
+
+
 def _run_bot_play_endurance(
     config: HarnessConfig,
     host: WindowsPeer,
@@ -1448,6 +1474,7 @@ def _run_bot_play_endurance(
     host_pipe: LuaPipe,
     client_pipe: LuaPipe,
     sampler: PairSampler,
+    client_prearm_request: dict[str, Any],
 ) -> dict[str, Any]:
     event_writer = JsonlWriter(
         config.evidence_root / "endurance-events.jsonl"
@@ -1518,12 +1545,7 @@ def _run_bot_play_endurance(
             enabled=True,
             roster=[],
         ),
-        "clientB": _set_bot_play(
-            client,
-            client_pipe,
-            enabled=True,
-            roster=[],
-        ),
+        "clientB": client_prearm_request,
     }
     result["activeTakeovers"] = {
         "host": _wait_for_bot_state(
@@ -1547,6 +1569,10 @@ def _run_bot_play_endurance(
         result["participantIdentity"][role]["runtimeSlotId"] = (
             runtime_participant_ids[role]
         )
+
+    result["clientEnemyMaterialization"] = (
+        _wait_for_client_enemy_materialization(config, sampler)
+    )
 
     sampler.set_phase("bot-play-endurance")
     tracker = FighterStatsTracker(participant_ids)
@@ -2486,6 +2512,32 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 "input for the native Start Match flow"
             )
 
+        endurance_client_prearm: dict[str, Any] | None = None
+        if config.bot_play_for_me and config.endurance_mode:
+            sampler.set_phase("bot-play-client-prearm")
+            prearm_request = _set_bot_play(
+                client,
+                client_pipe,
+                enabled=True,
+                roster=[],
+            )
+            prearm_state = _wait_for_bot_state(
+                client_pipe,
+                lambda state: (
+                    state.get("loaded") is True
+                    and state.get("desired") is True
+                    and state.get("active") is False
+                    and state.get("takeover.active") is False
+                ),
+                timeout=15.0,
+                label="endurance client takeover prearm in shared hub",
+            )
+            endurance_client_prearm = {
+                "request": prearm_request,
+                "state": prearm_state,
+            }
+            result["enduranceClientPrearm"] = endurance_client_prearm
+
         sampler.set_phase("match-start")
         result["hostMatchStartActions"] = execute_actions(
             config.source_root,
@@ -2578,57 +2630,41 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 + ", ".join(dead_at_completion)
             )
 
-        sampler.set_phase("first-enemy-spawn")
-        enemy_state = sampler.sample_now("first-enemy-wait-start")
-        deadline = time.monotonic() + config.timeout_seconds
-        materialization: dict[str, Any] | None = None
-        materialization_error = ""
-        while time.monotonic() < deadline:
-            enemy_state = sampler.sample_now("first-enemy-wait")
-            if (
-                len(enemy_state["host"]["nativeEnemies"]) > 0
-                and len(enemy_state["clientB"]["replicatedEnemies"]) > 0
-            ):
-                try:
-                    materialization = (
-                        _assert_client_enemy_materialization(
-                            enemy_state
-                        )
-                    )
-                    break
-                except RealFlowFailure as exc:
-                    materialization_error = str(exc)
-            time.sleep(0.2)
-        else:
-            raise RealFlowFailure(
-                "the real flow produced no aligned host/native and "
-                "client/materialized replicated enemies; "
-                f"last={materialization_error!r}"
+        if config.bot_play_for_me and config.endurance_mode:
+            assert endurance_client_prearm is not None
+            result["botPlayForMe"] = _run_bot_play_endurance(
+                config,
+                host,
+                client,
+                host_pipe,
+                client_pipe,
+                sampler,
+                endurance_client_prearm["request"],
             )
-        assert materialization is not None
-        result["clientEnemyMaterialization"] = materialization
+            result["clientEnemyMaterialization"] = result[
+                "botPlayForMe"
+            ]["clientEnemyMaterialization"]
+            result["completedPhase"] = result["botPlayForMe"][
+                "completedPhase"
+            ]
+            result["ok"] = True
+            return result
+
+        result["clientEnemyMaterialization"] = (
+            _wait_for_client_enemy_materialization(config, sampler)
+        )
 
         if config.bot_play_for_me:
-            if config.endurance_mode:
-                result["botPlayForMe"] = _run_bot_play_endurance(
-                    config,
-                    host,
-                    client,
-                    host_pipe,
-                    client_pipe,
-                    sampler,
-                )
-            else:
-                assert bot_play_mixed_mode is not None
-                result["botPlayForMe"] = _run_bot_play_for_me(
-                    config,
-                    host,
-                    client,
-                    host_pipe,
-                    client_pipe,
-                    sampler,
-                    bot_play_mixed_mode,
-                )
+            assert bot_play_mixed_mode is not None
+            result["botPlayForMe"] = _run_bot_play_for_me(
+                config,
+                host,
+                client,
+                host_pipe,
+                client_pipe,
+                sampler,
+                bot_play_mixed_mode,
+            )
             result["completedPhase"] = result["botPlayForMe"][
                 "completedPhase"
             ]
