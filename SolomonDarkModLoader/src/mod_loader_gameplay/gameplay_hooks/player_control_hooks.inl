@@ -414,6 +414,12 @@ void __fastcall HookPlayerControlBrainUpdate(
     const bool local_player_takeover_active =
         local_player_takeover_requested &&
         current_actor_matches_local_player;
+    const bool local_player_takeover_primary_cast_active =
+        local_player_takeover_active &&
+        (g_gameplay_keyboard_injection.pending_mouse_left_frames.load(
+             std::memory_order_acquire) > 0 ||
+         g_gameplay_keyboard_injection.injected_mouse_left_active.load(
+             std::memory_order_acquire));
     const auto pending_manual_spawner_primary_allowances =
         g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.load(
             std::memory_order_acquire);
@@ -632,9 +638,68 @@ void __fastcall HookPlayerControlBrainUpdate(
         }
     };
     const auto apply_local_player_takeover_target = [&]() {
-        if (local_player_takeover_active) {
-            (void)ApplyPinnedLocalPlayerControlTakeoverTarget(
-                actor_address);
+        if (!local_player_takeover_active ||
+            !ApplyPinnedLocalPlayerControlTakeoverTarget(
+                actor_address)) {
+            return;
+        }
+
+        uintptr_t target_actor_address = 0;
+        float target_x = 0.0f;
+        float target_y = 0.0f;
+        float actor_x = 0.0f;
+        float actor_y = 0.0f;
+        if (!TryGetLocalPlayerControlTakeoverTarget(
+                &target_actor_address,
+                &target_x,
+                &target_y) ||
+            !TryReadFiniteFloatField(
+                actor_address,
+                kActorPositionXOffset,
+                &actor_x) ||
+            !TryReadFiniteFloatField(
+                actor_address,
+                kActorPositionYOffset,
+                &actor_y) ||
+            !TryReadFiniteFloatField(
+                target_actor_address,
+                kActorPositionXOffset,
+                &target_x) ||
+            !TryReadFiniteFloatField(
+                target_actor_address,
+                kActorPositionYOffset,
+                &target_y)) {
+            return;
+        }
+        const auto delta_x = target_x - actor_x;
+        const auto delta_y = target_y - actor_y;
+        const auto distance =
+            std::sqrt(delta_x * delta_x + delta_y * delta_y);
+        if (!std::isfinite(distance) || distance <= 0.0001f) {
+            return;
+        }
+        const auto control_x = delta_x / distance;
+        const auto control_y = delta_y / distance;
+        (void)write_vector2(param3, control_x, control_y);
+        ApplyWizardActorFacingState(
+            actor_address,
+            NormalizeWizardActorHeadingForWrite(
+                static_cast<float>(
+                    std::atan2(control_y, control_x) *
+                        kWizardHeadingRadiansToDegrees +
+                    90.0f)));
+        if (local_player_takeover_primary_cast_active &&
+            selection_pointer != 0) {
+            // The stock primary startup reads this selection-brain lane even
+            // though takeover movement itself remains owner-authored.
+            (void)memory.TryWriteValue<float>(
+                selection_pointer +
+                    kActorControlBrainMoveInputXOffset,
+                control_x);
+            (void)memory.TryWriteValue<float>(
+                selection_pointer +
+                    kActorControlBrainMoveInputYOffset,
+                control_y);
         }
     };
 
@@ -672,13 +737,16 @@ void __fastcall HookPlayerControlBrainUpdate(
 
     // Forward the local movement sample after the stock selection brain runs.
     // That brain may replace param2 with pursuit movement while it maintains
-    // the pinned cast target. Takeover owns the sample, including an explicit
-    // zero; manual-spawner real-key tests retain their proven non-zero path.
+    // the pinned cast target. The proven slot-zero primary path is stationary
+    // during its held startup; otherwise takeover owns the sampled movement,
+    // including an explicit zero. Manual-spawner real-key tests retain their
+    // proven non-zero path.
     if (local_player_takeover_active ||
         manual_spawner_native_keyboard_control_active) {
         float native_move_x = 0.0f;
         float native_move_y = 0.0f;
-        if (TryReadFiniteFloatField(
+        if (!local_player_takeover_primary_cast_active &&
+            TryReadFiniteFloatField(
                 current_gameplay_address,
                 kGameplayLocalMovementInputXOffset,
                 &native_move_x) &&
@@ -700,6 +768,8 @@ void __fastcall HookPlayerControlBrainUpdate(
                  magnitude_squared > 0.000001f)) {
                 (void)write_vector2(param2, native_move_x, native_move_y);
             }
+        } else if (local_player_takeover_primary_cast_active) {
+            (void)write_vector2(param2, 0.0f, 0.0f);
         }
     }
 
