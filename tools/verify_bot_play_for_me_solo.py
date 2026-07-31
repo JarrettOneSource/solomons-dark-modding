@@ -353,6 +353,51 @@ print("combat_active=" ..
     )
 
 
+def _wait_run_loading_started(
+    pipe: LuaPipe,
+    timeout: float,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(
+            pipe.execute(
+                """
+local runtime = sd.runtime.get_multiplayer_state()
+local loading = runtime and runtime.run_loading_barrier or {}
+local participant = nil
+for _, row in ipairs(runtime and runtime.participants or {}) do
+  if row.kind == "LocalHuman" and row.controller_kind == "Native" then
+    participant = row
+    break
+  end
+end
+print("in_run=" ..
+  tostring(participant and participant.in_run or false))
+print("run_nonce=" ..
+  tostring(participant and participant.run_nonce or 0))
+print("active=" .. tostring(loading.active or false))
+print("released=" .. tostring(loading.released or false))
+"""
+            )
+        )
+        try:
+            run_nonce = int(last.get("run_nonce", "0"), 0)
+        except ValueError:
+            run_nonce = 0
+        if (
+            last.get("in_run") == "true"
+            and run_nonce > 0
+            and last.get("active") == "true"
+            and last.get("released") == "false"
+        ):
+            return last
+        time.sleep(0.05)
+    raise SoloBotPlayFailure(
+        f"stock solo run loading never started: {last}"
+    )
+
+
 def _wait_live_wave(
     pipe: LuaPipe,
     timeout: float,
@@ -625,9 +670,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         result["initialBot"] = initial_bot
         result["startRun"] = _request_until_true(
             pipe,
-            "sd.hub.start_testrun()",
+            "sd.hub.start_match()",
             timeout=30.0,
-            label="stock solo run request",
+            label="stock solo Start Match request",
+        )
+        result["runLoadingStarted"] = _wait_run_loading_started(
+            pipe,
+            20.0,
         )
         result["runMaterialized"] = _wait_scene(
             pipe,
