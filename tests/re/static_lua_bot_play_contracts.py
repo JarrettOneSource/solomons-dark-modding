@@ -116,6 +116,15 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "movement_x = 0.0f" in local_input
     assert "IsLocalPlayerControlTakeoverActive()" in control
     assert "ApplyPinnedLocalPlayerControlTakeoverTarget(" in control
+    _require_in_order(
+        control,
+        "original(self, param2, param3);",
+        "if (local_player_takeover_active ||",
+        "(void)write_vector2(param2, native_move_x, native_move_y);",
+        "float raw_move_x_after = 0.0f;",
+    )
+    assert "local_player_takeover_requested" in control
+    assert "current_actor_matches_local_player" in control
     assert "IsLocalPlayerControlTakeoverActive()" in mouse
     assert "TryGetLocalPlayerControlTakeoverTarget(" in cast
     assert "world_point[0] = takeover_target_x" in cast

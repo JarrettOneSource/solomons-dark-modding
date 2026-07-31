@@ -398,15 +398,22 @@ void __fastcall HookPlayerControlBrainUpdate(
     uintptr_t current_local_actor_address = 0;
     const bool manual_spawner_test_mode =
         IsRunLifecycleManualEnemySpawnerTestModeEnabled();
-    const bool current_actor_is_local_player =
-        manual_spawner_test_mode &&
+    const bool local_player_takeover_requested =
+        publication_actor_slot == 0 &&
+        IsLocalPlayerControlTakeoverActive();
+    const bool current_actor_matches_local_player =
+        (manual_spawner_test_mode ||
+         local_player_takeover_requested) &&
         TryResolveCurrentGameplayScene(&current_gameplay_address) &&
         current_gameplay_address != 0 &&
         TryResolvePlayerActorForSlot(current_gameplay_address, 0, &current_local_actor_address) &&
         current_local_actor_address == actor_address;
+    const bool current_actor_is_local_player =
+        manual_spawner_test_mode &&
+        current_actor_matches_local_player;
     const bool local_player_takeover_active =
-        publication_actor_slot == 0 &&
-        IsLocalPlayerControlTakeoverActive();
+        local_player_takeover_requested &&
+        current_actor_matches_local_player;
     const auto pending_manual_spawner_primary_allowances =
         g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.load(
             std::memory_order_acquire);
@@ -663,12 +670,12 @@ void __fastcall HookPlayerControlBrainUpdate(
         (void)write_vector2(param3, 0.0f, 0.0f);
     }
 
-    // Manual-spawner mode normally owns and suppresses local control so combat
-    // fixtures remain deterministic. An explicit native-control allowance is
-    // used by real-key behavior tests: forward only the movement vector that
-    // the stock input sampler actually observed, leaving acceleration, speed
-    // limiting, collision, and replication on the native path.
-    if (manual_spawner_native_keyboard_control_active) {
+    // Forward the local movement sample after the stock selection brain runs.
+    // That brain may replace param2 with pursuit movement while it maintains
+    // the pinned cast target. Takeover owns the sample, including an explicit
+    // zero; manual-spawner real-key tests retain their proven non-zero path.
+    if (local_player_takeover_active ||
+        manual_spawner_native_keyboard_control_active) {
         float native_move_x = 0.0f;
         float native_move_y = 0.0f;
         if (TryReadFiniteFloatField(
@@ -681,12 +688,16 @@ void __fastcall HookPlayerControlBrainUpdate(
                 &native_move_y)) {
             const auto magnitude_squared =
                 native_move_x * native_move_x + native_move_y * native_move_y;
-            if (std::isfinite(magnitude_squared) && magnitude_squared > 0.000001f) {
-                if (magnitude_squared > 1.0f) {
-                    const auto inverse_magnitude = 1.0f / std::sqrt(magnitude_squared);
-                    native_move_x *= inverse_magnitude;
-                    native_move_y *= inverse_magnitude;
-                }
+            if (std::isfinite(magnitude_squared) &&
+                magnitude_squared > 1.0f) {
+                const auto inverse_magnitude =
+                    1.0f / std::sqrt(magnitude_squared);
+                native_move_x *= inverse_magnitude;
+                native_move_y *= inverse_magnitude;
+            }
+            if (local_player_takeover_active ||
+                (std::isfinite(magnitude_squared) &&
+                 magnitude_squared > 0.000001f)) {
                 (void)write_vector2(param2, native_move_x, native_move_y);
             }
         }
