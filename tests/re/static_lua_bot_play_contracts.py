@@ -220,6 +220,7 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
         "sd.input.set_local_player_takeover_target",
         "sd.input.hold_movement_frames",
         "sd.input.hold_mouse_left_frames",
+        "LOCAL_PRIMARY_HOLD_FRAMES = 3",
         "sd.input.press_binding",
         "sd.runtime.choose_level_up_option",
         "sd.world.request_loot_pickup(network_drop_id)",

@@ -5,6 +5,10 @@ Controller.__index = Controller
 local Handle = {}
 Handle.__index = Handle
 
+-- This is the proven slot-zero automation pulse. Input hold frames are
+-- consumed by the stock player tick, not by the Lua runtime scheduler.
+local LOCAL_PRIMARY_HOLD_FRAMES = 3
+
 local ELEMENT_BANDS = {
   { name = "ether", minimum = 8, maximum = 15 },
   { name = "fire", minimum = 16, maximum = 23 },
@@ -175,7 +179,7 @@ function Handle:stop()
   return true
 end
 
-function Handle:cast(skill_slot, target_x, target_y, hold_ms, target)
+function Handle:cast(skill_slot, target_x, target_y, _hold_ms, target)
   skill_slot = tonumber(skill_slot)
   target_x = tonumber(target_x)
   target_y = tonumber(target_y)
@@ -199,14 +203,9 @@ function Handle:cast(skill_slot, target_x, target_y, hold_ms, target)
   end
 
   if skill_slot == 0 then
-    local tick_interval_ms =
-      math.max(self.controller.tick_interval_ms, 1.0)
-    local hold_frames = math.max(
-      math.ceil((tonumber(hold_ms) or 80.0) / tick_interval_ms),
-      1)
     local ok, result = pcall(
       sd.input.hold_mouse_left_frames,
-      hold_frames)
+      LOCAL_PRIMARY_HOLD_FRAMES)
     if not ok or result ~= true then
       return false, tostring(result)
     end
@@ -277,7 +276,6 @@ function Controller:new(
     runtime = nil,
     destination_x = nil,
     destination_y = nil,
-    tick_interval_ms = 10.0,
     last_state_sample_ms = -1000,
     handle = nil,
     context = nil,
@@ -552,8 +550,6 @@ end
 
 function Controller:tick(now_ms, event)
   self:update_toggle_key()
-  self.tick_interval_ms =
-    math.max(tonumber(event.tick_interval_ms) or 10.0, 1.0)
   local participant = self:update_runtime_state()
   local can_drive, reason = self:can_drive(participant)
   if not self.desired or not can_drive then
