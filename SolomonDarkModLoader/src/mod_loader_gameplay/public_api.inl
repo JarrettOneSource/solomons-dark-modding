@@ -2,6 +2,7 @@
 #include "public_api_bot_spawn_placement.inl"
 #include "public_api_keyboard_injection.inl"
 #include "public_api_input_queueing.inl"
+#include "public_api_local_player_takeover.inl"
 #include "public_api_gameplay_action_queues.inl"
 #include "public_api_native_enemy_death_probe.inl"
 #include "public_api_native_experience_gain_probe.inl"

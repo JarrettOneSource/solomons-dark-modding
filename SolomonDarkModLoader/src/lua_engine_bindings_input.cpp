@@ -400,6 +400,7 @@ int LuaInputSetNativeControlAllowanceFrames(lua_State* state) {
     return 1;
 }
 
+#include "lua_engine_bindings_input/local_player_takeover.inl"
 int LuaInputPinManualPrimaryTarget(lua_State* state) {
     const auto raw = luaL_checkinteger(state, 1);
     if (raw <= 0) {
@@ -518,7 +519,7 @@ int LuaInputQueueLocalEnemyDamageClaim(lua_State* state) {
 }  // namespace
 
 void RegisterLuaInputBindings(lua_State* state) {
-    lua_createtable(state, 0, 16);
+    lua_createtable(state, 0, 19);
     RegisterFunction(state, &LuaInputPressKey, "press_key");
     RegisterFunction(state, &LuaInputPressBinding, "press_binding");
     RegisterFunction(state, &LuaInputPressScancode, "press_scancode");
@@ -530,6 +531,18 @@ void RegisterLuaInputBindings(lua_State* state) {
         state,
         &LuaInputSetNativeControlAllowanceFrames,
         "set_native_control_allowance_frames");
+    RegisterFunction(
+        state,
+        &LuaInputSetLocalPlayerTakeover,
+        "set_local_player_takeover");
+    RegisterFunction(
+        state,
+        &LuaInputSetLocalPlayerTakeoverTarget,
+        "set_local_player_takeover_target");
+    RegisterFunction(
+        state,
+        &LuaInputGetLocalPlayerTakeoverState,
+        "get_local_player_takeover_state");
     RegisterFunction(state, &LuaInputPinManualPrimaryTarget, "pin_manual_primary_target");
     RegisterFunction(state, &LuaInputClearMouseLeft, "clear_mouse_left");
     RegisterFunction(state, &LuaInputClearMouseRight, "clear_mouse_right");

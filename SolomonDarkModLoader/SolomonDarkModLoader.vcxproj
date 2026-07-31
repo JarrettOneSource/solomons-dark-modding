@@ -459,6 +459,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_experience_gain_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_native_minions.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_takeover.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl" />
@@ -576,6 +577,7 @@
     <ClInclude Include="src\multiplayer_steam_session\public_lifecycle.inl" />
     <ClInclude Include="src\multiplayer_steam_session\state_and_helpers.inl" />
     <ClInclude Include="src\lua_engine_bindings_bots\participant_handle_bindings.inl" />
+    <ClInclude Include="src\lua_engine_bindings_input\local_player_takeover.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
     <ClInclude Include="src\mod_loader\startup_status_snapshot.inl" />

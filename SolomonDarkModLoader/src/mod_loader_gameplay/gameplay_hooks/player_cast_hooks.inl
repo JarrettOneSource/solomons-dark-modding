@@ -217,6 +217,18 @@ void* __fastcall HookSecondaryCursorWorldProjection(
     }
 
     void* result = original(self, output_point, screen_x, screen_y);
+    uintptr_t takeover_target_actor = 0;
+    float takeover_target_x = 0.0f;
+    float takeover_target_y = 0.0f;
+    if (result != nullptr &&
+        TryGetLocalPlayerControlTakeoverTarget(
+            &takeover_target_actor,
+            &takeover_target_x,
+            &takeover_target_y)) {
+        auto* world_point = static_cast<float*>(result);
+        world_point[0] = takeover_target_x;
+        world_point[1] = takeover_target_y;
+    }
     auto* active = g_local_secondary_cursor_projection_capture;
     if (active == nullptr ||
         active->capture == nullptr ||
@@ -685,5 +697,4 @@ void __fastcall HookPurePrimaryAttackDispatch(void* self, void* /*unused_edx*/) 
         HexString(static_cast<uintptr_t>(expected_projectile_type)) +
         " projectile_actor=" + HexString(emitted_projectile_actor));
 }
-
 #include "player_cast_hooks_effect_and_dispatch.inl"

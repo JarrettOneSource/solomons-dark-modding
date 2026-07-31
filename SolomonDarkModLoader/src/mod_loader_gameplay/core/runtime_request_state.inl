@@ -268,6 +268,13 @@ struct GameplayKeyboardInjectionState {
     std::atomic<std::uint32_t> pending_manual_spawner_primary_cast_allowances{0};
     std::atomic<std::uint64_t> manual_spawner_primary_cast_control_grace_until_ms{0};
     std::atomic<uintptr_t> manual_spawner_primary_target_actor{0};
+    std::mutex local_player_takeover_mutex;
+    std::string local_player_takeover_owner_mod_id;
+    std::atomic<bool> local_player_takeover_active{false};
+    std::atomic<uintptr_t> local_player_takeover_target_actor{0};
+    std::atomic<float> local_player_takeover_target_x{0.0f};
+    std::atomic<float> local_player_takeover_target_y{0.0f};
+    std::atomic<bool> local_player_takeover_target_valid{false};
     std::atomic<bool> injected_mouse_left_active{false};
     std::atomic<bool> injected_mouse_right_active{false};
     std::atomic<std::uint32_t> pending_hub_start_match_requests{0};

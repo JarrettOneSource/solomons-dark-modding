@@ -391,6 +391,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
     }
     if (IsGameplayKeyboardInjectionInitialized()) {
         capabilities.emplace_back("input.keyboard.inject");
+        capabilities.emplace_back("input.local_player.takeover");
         capabilities.emplace_back("events.filters.damage");
         capabilities.emplace_back("events.filters.mana");
         capabilities.emplace_back("events.filters.spell_cast");
@@ -492,6 +493,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaDrawFrameForMod(mod->descriptor.id);
     ClearLuaSpriteAtlasesForMod(mod->descriptor.id);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
+    ClearLocalPlayerControlTakeoverForMod(mod->descriptor.id);
     ClearLuaEnemyAiRuntimeForMod(mod);
     ResetLuaAudioRuntimeForMod(mod);
     ClearLuaUiBindingsForMod(mod);
@@ -685,7 +687,6 @@ bool QueueLuaExecRequestAsync(
 }
 
 #include "lua_exec_wait.inl"
-
 namespace detail {
 namespace {
 

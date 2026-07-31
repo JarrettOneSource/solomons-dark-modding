@@ -191,6 +191,32 @@ struct SDModPlayerState {
     SDModEquipVisualLaneState attachment_visual_lane;
 };
 
+struct SDModLocalPlayerControlTakeoverState {
+    bool active = false;
+    bool clean = false;
+    std::string owner_mod_id;
+    uintptr_t actor_address = 0;
+    uintptr_t target_actor_address = 0;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    bool target_valid = false;
+    float movement_input_x = 0.0f;
+    float movement_input_y = 0.0f;
+    float pending_movement_x = 0.0f;
+    float pending_movement_y = 0.0f;
+    std::uint32_t pending_movement_frames = 0;
+    std::uint32_t pending_mouse_left_frames = 0;
+    std::uint32_t pending_mouse_right_frames = 0;
+    std::uint32_t pending_scancode_count = 0;
+    std::uint32_t pending_native_control_frames = 0;
+    std::uint8_t cast_intent = 0;
+    std::int32_t primary_skill_id = 0;
+    std::int32_t previous_skill_id = 0;
+    uintptr_t current_target_actor_address = 0;
+    float control_brain_move_x = 0.0f;
+    float control_brain_move_y = 0.0f;
+};
+
 struct SDModLocalManaDeltaObservation {
     bool armed = false;
     bool valid = false;

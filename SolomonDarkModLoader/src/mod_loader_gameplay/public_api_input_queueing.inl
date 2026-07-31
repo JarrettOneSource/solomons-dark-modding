@@ -71,6 +71,9 @@ bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_m
 }
 
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address) {
+    if (ApplyPinnedLocalPlayerControlTakeoverTarget(actor_address)) {
+        return true;
+    }
     if (!IsRunLifecycleManualEnemySpawnerTestModeEnabled() ||
         !IsActorCurrentLocalPlayerSlotZero(actor_address) ||
         !IsManualSpawnerPrimaryCastControlGraceActive()) {

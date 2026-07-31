@@ -1074,6 +1074,28 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
     g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
         0,
         std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection
+                .local_player_takeover_mutex);
+        g_gameplay_keyboard_injection
+            .local_player_takeover_owner_mod_id.clear();
+    }
+    g_gameplay_keyboard_injection.local_player_takeover_active.store(
+        false,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_actor.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_x.store(
+        0.0f,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_y.store(
+        0.0f,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_valid.store(
+        false,
+        std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.store(0, std::memory_order_release);
@@ -1278,6 +1300,28 @@ void ShutdownGameplayKeyboardInjection() {
         std::memory_order_release);
     g_gameplay_keyboard_injection.manual_spawner_primary_target_actor.store(
         0,
+        std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection
+                .local_player_takeover_mutex);
+        g_gameplay_keyboard_injection
+            .local_player_takeover_owner_mod_id.clear();
+    }
+    g_gameplay_keyboard_injection.local_player_takeover_active.store(
+        false,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_actor.store(
+        0,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_x.store(
+        0.0f,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_y.store(
+        0.0f,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.local_player_takeover_target_valid.store(
+        false,
         std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_left_active.store(false, std::memory_order_release);
     g_gameplay_keyboard_injection.injected_mouse_right_active.store(false, std::memory_order_release);

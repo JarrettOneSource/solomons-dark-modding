@@ -404,6 +404,9 @@ void __fastcall HookPlayerControlBrainUpdate(
         current_gameplay_address != 0 &&
         TryResolvePlayerActorForSlot(current_gameplay_address, 0, &current_local_actor_address) &&
         current_local_actor_address == actor_address;
+    const bool local_player_takeover_active =
+        publication_actor_slot == 0 &&
+        IsLocalPlayerControlTakeoverActive();
     const auto pending_manual_spawner_primary_allowances =
         g_gameplay_keyboard_injection.pending_manual_spawner_primary_cast_allowances.load(
             std::memory_order_acquire);
@@ -621,6 +624,12 @@ void __fastcall HookPlayerControlBrainUpdate(
                 " control=(" + std::to_string(control_x) + "," + std::to_string(control_y) + ")");
         }
     };
+    const auto apply_local_player_takeover_target = [&]() {
+        if (local_player_takeover_active) {
+            (void)ApplyPinnedLocalPlayerControlTakeoverTarget(
+                actor_address);
+        }
+    };
 
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
@@ -632,6 +641,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     // provide the current target-facing vector before the original runs. Re-pin
     // after the original too because stock may clear the cached target fields.
     seed_selection_target();
+    apply_local_player_takeover_target();
     apply_manual_spawner_local_primary_control();
     apply_face_control();
     if (manual_spawner_scripted_local_primary_control) {
@@ -719,6 +729,7 @@ void __fastcall HookPlayerControlBrainUpdate(
     }
 
     seed_selection_target();
+    apply_local_player_takeover_target();
     apply_manual_spawner_local_primary_control();
     apply_face_control();
 

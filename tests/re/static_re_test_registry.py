@@ -31,6 +31,9 @@ from static_lua_bot_brain_contracts import (
     test_lua_bot_brain_late_join_waits_for_complete_host_settings,
     test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
 )
+from static_lua_bot_play_contracts import (
+    test_lua_local_player_takeover_is_owner_scoped_and_stock_routed,
+)
 from static_lua_ml_bot_contracts import (
     test_ml_bot_phase3_observation_masks_and_assists_are_pinned,
     test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned,

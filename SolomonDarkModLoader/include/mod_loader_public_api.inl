@@ -24,6 +24,25 @@ bool QueueGameplayMovementHoldFrames(
 bool SetGameplayNativeControlAllowanceFrames(
     std::uint32_t frames,
     std::string* error_message);
+bool SetLocalPlayerControlTakeover(
+    std::string_view owner_mod_id,
+    bool enabled,
+    std::string* error_message);
+bool SetLocalPlayerControlTakeoverTarget(
+    std::string_view owner_mod_id,
+    uintptr_t target_actor_address,
+    float target_x,
+    float target_y,
+    std::string* error_message);
+bool IsLocalPlayerControlTakeoverActive();
+bool TryGetLocalPlayerControlTakeoverTarget(
+    uintptr_t* target_actor_address,
+    float* target_x,
+    float* target_y);
+bool ApplyPinnedLocalPlayerControlTakeoverTarget(uintptr_t actor_address);
+bool TryGetLocalPlayerControlTakeoverState(
+    SDModLocalPlayerControlTakeoverState* state);
+bool ClearLocalPlayerControlTakeoverForMod(std::string_view owner_mod_id);
 bool PinManualSpawnerPrimaryTarget(uintptr_t actor_address, std::string* error_message);
 bool ApplyPinnedManualSpawnerPrimaryTarget(uintptr_t actor_address);
 bool ApplyNativePrimaryTargetHandle(

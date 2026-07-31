@@ -71,18 +71,22 @@ bool ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(
 
 void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
     const auto self_address = reinterpret_cast<uintptr_t>(self);
+    const bool local_player_takeover_active =
+        IsLocalPlayerControlTakeoverActive();
     if (self_address != 0) {
         g_gameplay_keyboard_injection.input_state_address.store(
             self_address,
             std::memory_order_release);
-        if (g_gameplay_keyboard_injection.injected_mouse_left_active.load(
-                std::memory_order_acquire) &&
+        if ((local_player_takeover_active ||
+             g_gameplay_keyboard_injection.injected_mouse_left_active.load(
+                 std::memory_order_acquire)) &&
             g_gameplay_keyboard_injection.pending_mouse_left_frames.load(
                 std::memory_order_acquire) == 0) {
             (void)ClearRawGameplayMouseLeft(self_address);
         }
-        if (g_gameplay_keyboard_injection.injected_mouse_right_active.load(
-                std::memory_order_acquire) &&
+        if ((local_player_takeover_active ||
+             g_gameplay_keyboard_injection.injected_mouse_right_active.load(
+                 std::memory_order_acquire)) &&
             g_gameplay_keyboard_injection.pending_mouse_right_frames.load(
                 std::memory_order_acquire) == 0) {
             (void)ClearRawGameplayMouseRight(self_address);
@@ -110,6 +114,35 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
         live_buffer_index < kGameplayInputBufferCount) {
         const auto live_mouse_button_offset = static_cast<std::size_t>(
             live_buffer_index * kGameplayInputBufferStride + kGameplayMouseLeftButtonOffset);
+        const auto live_mouse_right_offset = static_cast<std::size_t>(
+            live_buffer_index * kGameplayInputBufferStride +
+            kGameplayMouseRightButtonOffset);
+        if (local_player_takeover_active) {
+            const std::uint8_t released = 0;
+            if (g_gameplay_keyboard_injection.pending_mouse_left_frames.load(
+                    std::memory_order_acquire) == 0) {
+                (void)ProcessMemory::Instance().TryWriteField(
+                    self_address,
+                    live_mouse_button_offset,
+                    released);
+                uintptr_t gameplay_address = 0;
+                if (TryResolveCurrentGameplayScene(
+                        &gameplay_address) &&
+                    gameplay_address != 0) {
+                    (void)ProcessMemory::Instance().TryWriteField(
+                        gameplay_address,
+                        kGameplayCastIntentOffset,
+                        released);
+                }
+            }
+            if (g_gameplay_keyboard_injection.pending_mouse_right_frames.load(
+                    std::memory_order_acquire) == 0) {
+                (void)ProcessMemory::Instance().TryWriteField(
+                    self_address,
+                    live_mouse_right_offset,
+                    released);
+            }
+        }
         std::uint8_t mouse_left = 0;
         const bool is_pressed =
             ProcessMemory::Instance().TryReadField(self_address, live_mouse_button_offset, &mouse_left) &&
@@ -120,9 +153,6 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
             RecordGameplayMouseLeftEdge();
         }
 
-        const auto live_mouse_right_offset = static_cast<std::size_t>(
-            live_buffer_index * kGameplayInputBufferStride +
-            kGameplayMouseRightButtonOffset);
         std::uint8_t mouse_right = 0;
         const bool right_is_pressed =
             ProcessMemory::Instance().TryReadField(
