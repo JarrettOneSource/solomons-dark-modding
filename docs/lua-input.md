@@ -28,6 +28,10 @@ player tick, primary casts enter the native control-brain path, and secondary
 casts use the player's live belt binding and stock dispatcher. Multiplayer
 authority and replication are unchanged.
 
+When a stock run has not materialized the local actor's control brain yet, the
+takeover claim initializes it through the game's own player-actor initializer
+before accepting bot commands. Existing live control brains are left intact.
+
 Call `sd.input.set_local_player_takeover(false)` before returning control to
 the player. Release clears pending movement, mouse holds, binding edges, cast
 intent, targets, and control-brain movement. The loader performs the same

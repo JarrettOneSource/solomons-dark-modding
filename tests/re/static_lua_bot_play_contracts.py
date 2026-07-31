@@ -89,7 +89,16 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "bool SetLocalPlayerControlTakeover(",
         "if (!enabled)",
         "local_player_takeover_active.store(",
+        "EnsureLocalPlayerControlBrainForTakeover(",
         "ClearLocalPlayerControlTakeoverInputState(",
+    )
+    _require_in_order(
+        input_api,
+        "bool EnsureLocalPlayerControlBrainForTakeover(",
+        "kActorControlBrainMoveInputYOffset +",
+        "kPlayerActorInitializeControlBrain",
+        "CallPlayerActorInitializeControlBrainSafe(",
+        "control_brain_is_live(control_brain_address)",
     )
     assert "pending_movement_frames.store(" in input_api
     assert "pending_injected_keyboard_control_frames.store(" in input_api

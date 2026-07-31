@@ -102,6 +102,86 @@ void ClearLocalPlayerControlTakeoverInputState() {
     }
 }
 
+bool EnsureLocalPlayerControlBrainForTakeover(
+    std::string* error_message) {
+    uintptr_t gameplay_address = 0;
+    uintptr_t actor_address = 0;
+    if (!TryResolveCurrentGameplayScene(&gameplay_address) ||
+        gameplay_address == 0 ||
+        !TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &actor_address) ||
+        actor_address == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local player actor is not available for takeover.";
+        }
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto control_brain_size =
+        kActorControlBrainMoveInputYOffset +
+        sizeof(float);
+    const auto control_brain_is_live =
+        [&](uintptr_t control_brain_address) {
+            return
+                control_brain_address != 0 &&
+                memory.IsReadableRange(
+                    control_brain_address,
+                    control_brain_size) &&
+                memory.IsWritableRange(
+                    control_brain_address,
+                    control_brain_size);
+        };
+
+    uintptr_t control_brain_address = 0;
+    if (memory.TryReadField(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            &control_brain_address) &&
+        control_brain_is_live(control_brain_address)) {
+        return true;
+    }
+
+    const auto initialize_address =
+        memory.ResolveGameAddressOrZero(
+            kPlayerActorInitializeControlBrain);
+    DWORD exception_code = 0;
+    if (initialize_address == 0 ||
+        !CallPlayerActorInitializeControlBrainSafe(
+            initialize_address,
+            actor_address,
+            &exception_code) ||
+        !memory.TryReadField(
+            actor_address,
+            kActorAnimationSelectionStateOffset,
+            &control_brain_address) ||
+        !control_brain_is_live(control_brain_address)) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Stock local control brain could not be initialized";
+            if (exception_code != 0) {
+                *error_message +=
+                    " (SEH 0x" +
+                    HexString(exception_code) +
+                    ")";
+            }
+            *error_message += ".";
+        }
+        return false;
+    }
+
+    Log(
+        "[lua] initialized missing stock local control brain for takeover. "
+        "actor=" +
+        HexString(actor_address) +
+        " control_brain=" +
+        HexString(control_brain_address));
+    return true;
+}
+
 bool SetLocalPlayerControlTakeover(
     std::string_view owner_mod_id,
     bool enabled,
@@ -158,6 +238,11 @@ bool SetLocalPlayerControlTakeover(
         }
     }
 
+    if (enabled &&
+        !EnsureLocalPlayerControlBrainForTakeover(
+            error_message)) {
+        return false;
+    }
     ClearLocalPlayerControlTakeoverInputState();
 
     {
