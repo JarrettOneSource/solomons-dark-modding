@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import select
 import shutil
 import subprocess
 import sys
@@ -194,7 +195,7 @@ def _launch(
     environment = os.environ.copy()
     environment["SDMOD_DISABLE_AUDIO"] = "1"
     environment["SDMOD_ENABLE_AUDIO"] = "0"
-    completed = subprocess.run(
+    process = subprocess.Popen(
         command,
         cwd=ROOT,
         text=True,
@@ -203,20 +204,56 @@ def _launch(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=environment,
-        timeout=120,
-        check=False,
+        bufsize=1,
     )
-    parsed = extract_json(completed.stdout)
-    if (
-        completed.returncode != 0
-        or parsed is None
-        or parsed.get("success") is not True
-    ):
-        raise SoloBotPlayFailure(
-            "isolated solo launcher failed: "
-            f"exit={completed.returncode} output={completed.stdout}"
-        )
-    return parsed
+    assert process.stdout is not None
+    parsed: dict[str, Any] | None = None
+    output = ""
+    try:
+        deadline = time.monotonic() + 120.0
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    output += line
+                    parsed = extract_json(output)
+                    if parsed is not None:
+                        break
+                elif process.poll() is not None:
+                    break
+            if process.poll() is not None:
+                output += process.stdout.read()
+                parsed = extract_json(output)
+                break
+        if parsed is None or parsed.get("success") is not True:
+            raise SoloBotPlayFailure(
+                "isolated solo launcher failed: "
+                f"exit={process.poll()} output={output}"
+            )
+        return parsed
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
+def _ledger_process_id(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    try:
+        document = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    if not isinstance(document, dict):
+        return 0
+    try:
+        return int(document.get("processId", 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _wait_scene(
@@ -431,7 +468,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     settings_path = _write_initial_settings(args.evidence_root)
     launch: dict[str, Any] = {}
     process_id = 0
-    expected_executable = ""
+    expected_executable = windows_path(
+        runtime_root
+        / "instances"
+        / args.instance
+        / "stage"
+        / "SolomonDark.exe"
+    )
     peer: Any = None
     primary_error: BaseException | None = None
     result: dict[str, Any] = {
@@ -462,13 +505,6 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 f"solo launch did not disable audio: {launch}"
             )
         process_id = int(launch["processId"])
-        expected_executable = windows_path(
-            runtime_root
-            / "instances"
-            / args.instance
-            / "stage"
-            / "SolomonDark.exe"
-        )
         result["ownedProcess"] = _exact_process(
             ps,
             process_id,
@@ -723,6 +759,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         }
         return result
     finally:
+        if process_id <= 0:
+            process_id = _ledger_process_id(
+                args.evidence_root / "safety" / "process-ledger.json"
+            )
+            if process_id > 0:
+                cleanup["recoveredProcessId"] = process_id
         if process_id > 0 and expected_executable:
             try:
                 cleanup["processStop"] = _stop_exact_process(
