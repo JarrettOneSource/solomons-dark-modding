@@ -153,6 +153,8 @@ def _launch(
     instance: str,
     local_port: int,
     unused_remote_port: int,
+    element: str,
+    discipline: str,
 ) -> dict[str, Any]:
     ledger = evidence_root / "safety" / "process-ledger.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -168,7 +170,7 @@ def _launch(
         "-Instance",
         instance,
         "-Preset",
-        "map_create_fire_mind_hub",
+        f"map_create_{element}_{discipline}_hub",
         "-RuntimeRoot",
         windows_path(runtime_root),
         "-LocalPort",
@@ -189,6 +191,10 @@ def _launch(
         ),
         "-FreshInstall",
         "-QuickStart",
+        "-QuickStartElement",
+        element,
+        "-QuickStartDiscipline",
+        discipline,
         "-ExactModIds",
         BOT_MOD_ID,
         "-BotSettingsPath",
@@ -630,6 +636,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "participantId": PARTICIPANT_ID,
         "audioDisabledRequired": True,
         "behavior": args.behavior,
+        "element": args.element,
+        "discipline": args.discipline,
         "targetWaveAlive": args.target_wave,
     }
     cleanup: dict[str, Any] = {}
@@ -643,6 +651,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             instance=args.instance,
             local_port=args.local_port,
             unused_remote_port=args.unused_remote_port,
+            element=args.element,
+            discipline=args.discipline,
         )
         result["launch"] = launch
         if launch.get("audioDisabled") is not True:
@@ -1060,8 +1070,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--behavior",
         choices=("skirmisher", "guardian", "striker", "learned"),
-        default="striker",
+        default="skirmisher",
         help="existing bot-brain policy used for the acceptance run",
+    )
+    parser.add_argument(
+        "--element",
+        choices=("fire", "water", "earth", "air", "ether"),
+        default="air",
+    )
+    parser.add_argument(
+        "--discipline",
+        choices=("mind", "body", "arcane"),
+        default="mind",
     )
     parser.add_argument("--timeout-seconds", type=float, default=600.0)
     args = parser.parse_args()
