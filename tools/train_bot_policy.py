@@ -54,6 +54,10 @@ DEFAULT_LAUNCHER = (
 # interval. At 17 significant digits, this bound plus the maximum observation
 # and option descriptors remains below the loader's 1-MiB response ceiling.
 MAX_LIVE_ROLLOUT_STEPS = 8192
+# A bootstrap policy can take several minutes to earn its first credited kill.
+# This window measures only whether any XP reaches learned progression; it is
+# deliberately not a time budget for earning a full level or skill choice.
+DEFAULT_WAVE_INTEGRATION_TIMEOUT_SECONDS = 300.0
 
 
 def _batch(
@@ -493,6 +497,52 @@ def partition_choice_records(
     return learned, scripted
 
 
+def validate_natural_choice_proof_records(
+    records: Sequence[object],
+    *,
+    required: bool,
+) -> None:
+    """Keep the strict natural-choice gate acceptance-only."""
+
+    if not required:
+        return
+    if not records:
+        raise ValueError(
+            "natural-choice acceptance proof produced no complete learned "
+            "choice interval"
+        )
+    if not any(record.accepted for record in records):
+        raise ValueError(
+            "natural-choice acceptance proof did not apply its learned "
+            "choice"
+        )
+
+
+def progression_experience_deltas(
+    before: Sequence[Mapping[str, int]],
+    after: Sequence[Mapping[str, int]],
+) -> dict[str, int]:
+    """Return exact per-participant episode XP deltas, rejecting rollback."""
+
+    baseline = {
+        int(row["participant_id"]): int(row["experience"])
+        for row in before
+    }
+    current = {
+        int(row["participant_id"]): int(row["experience"])
+        for row in after
+    }
+    if set(baseline) != set(current):
+        raise ValueError("episode progression participant set changed")
+    deltas = {
+        str(participant_id): current[participant_id] - experience
+        for participant_id, experience in baseline.items()
+    }
+    if any(delta < 0 for delta in deltas.values()):
+        raise ValueError(f"episode progression rolled back: {deltas}")
+    return deltas
+
+
 def concatenate_choice_batches(
     batches: Sequence[dict[str, object]],
 ) -> dict[str, np.ndarray]:
@@ -679,7 +729,11 @@ def resolve_rollout_timeout(
 
 
 def live_ppo(args: argparse.Namespace) -> int:
-    from ml_bot.bridge import BridgeError, SoloSession
+    from ml_bot.bridge import (
+        BridgeError,
+        SoloSession,
+        WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA,
+    )
     from ml_bot.compositions import (
         load_compositions,
         select_compositions,
@@ -890,22 +944,47 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "the composition"
                 )
 
+            party_participant_ids = session.in_run_participant_ids()
+            if len(party_participant_ids) != (
+                composition.participant_count + 1
+            ):
+                raise BridgeError(
+                    "in-run party does not match local player plus the "
+                    f"configured composition: {party_participant_ids}"
+                )
+            party_progression_before = session.participant_progression(
+                party_participant_ids
+            )
+
             progression_before = session.participant_progression(
                 learned_participant_ids
             )
             wave_start: dict[str, object] | None = None
-            natural_progression: dict[str, object] | None = None
+            wave_integration: dict[str, object] | None = None
+            natural_choice_proof: dict[str, object] | None = None
+            natural_choice_proof_required = (
+                args.require_natural_choice_proof and iteration == 1
+            )
             if args.episode_mode == "waves":
                 wave_start = session.start_stock_wave_episode(
                     learned_participant_ids[0],
                     timeout=args.wave_startup_timeout,
                 )
-                natural_progression = session.wait_for_natural_choice(
+                wave_integration = session.wait_for_wave_integration(
                     learned_participant_ids,
                     progression_before,
                     initial_status=episode_start_status,
                     timeout=args.wave_startup_timeout,
                 )
+                if natural_choice_proof_required:
+                    natural_choice_proof = (
+                        session.wait_for_natural_choice_proof(
+                            learned_participant_ids,
+                            progression_before,
+                            initial_status=episode_start_status,
+                            timeout=args.wave_startup_timeout,
+                        )
+                    )
             else:
                 session.start_training_arena(
                     timeout=args.startup_timeout
@@ -925,6 +1004,32 @@ def live_ppo(args: argparse.Namespace) -> int:
             progression_after = session.participant_progression(
                 learned_participant_ids
             )
+            party_progression_after = session.participant_progression(
+                party_participant_ids
+            )
+            episode_experience_deltas = progression_experience_deltas(
+                progression_before,
+                progression_after,
+            )
+            party_experience_deltas = progression_experience_deltas(
+                party_progression_before,
+                party_progression_after,
+            )
+            party_progression_signatures = {
+                (int(row["level"]), int(row["experience"]))
+                for row in party_progression_after
+            }
+            party_progression_synchronized = (
+                len(party_progression_signatures) == 1
+            )
+            if (
+                args.episode_mode == "waves"
+                and not party_progression_synchronized
+            ):
+                raise BridgeError(
+                    "shared party progression diverged after the episode: "
+                    f"{party_progression_after}"
+                )
             main_count = int(finished_status.get("buffered", "0"))
             choice_count = int(
                 finished_status.get("choice_buffered", "0")
@@ -943,17 +1048,13 @@ def live_ppo(args: argparse.Namespace) -> int:
             choice_records, scripted_choice_records = (
                 partition_choice_records(all_choice_records)
             )
-            if args.episode_mode == "waves" and not choice_records:
-                raise BridgeError(
-                    "wave episode produced no complete natural learned "
-                    "choice interval"
-                )
-            if args.episode_mode == "waves" and not any(
-                record.accepted for record in choice_records
-            ):
-                raise BridgeError(
-                    "wave episode did not apply a natural learned choice"
-                )
+            validate_natural_choice_proof_records(
+                choice_records,
+                required=(
+                    args.episode_mode == "waves"
+                    and natural_choice_proof_required
+                ),
+            )
             session.clear_training()
             training_records, bootstrap_records = (
                 partition_rollout_records(
@@ -1069,6 +1170,9 @@ def live_ppo(args: argparse.Namespace) -> int:
                     "live_native_run_seed": requested_seed,
                     "live_training_iteration": iteration,
                     "live_training_episode_mode": args.episode_mode,
+                    "live_training_natural_choice_proof_required": (
+                        natural_choice_proof_required
+                    ),
                     "live_training_rollout_steps": len(
                         training_records
                     ),
@@ -1187,6 +1291,9 @@ def live_ppo(args: argparse.Namespace) -> int:
                 "learned_participant_ids": list(
                     learned_participant_ids
                 ),
+                "party_participant_ids": list(
+                    party_participant_ids
+                ),
                 "trajectory_participant_count": len(
                     trajectory_counts
                 ),
@@ -1204,6 +1311,9 @@ def live_ppo(args: argparse.Namespace) -> int:
                 ),
                 "choice_temperature": policy.choice_temperature,
                 "choice_coverage_complete": choice_coverage.complete,
+                "natural_choice_proof_required": (
+                    natural_choice_proof_required
+                ),
                 "choice_intervals": [
                     {
                         "participant_id": record.participant_id,
@@ -1218,7 +1328,31 @@ def live_ppo(args: argparse.Namespace) -> int:
                 ],
                 "progression_before": progression_before,
                 "progression_after": progression_after,
-                "natural_progression_gate": natural_progression,
+                "party_progression_before": party_progression_before,
+                "party_progression_after": party_progression_after,
+                "party_experience_deltas": party_experience_deltas,
+                "party_progression_synchronized": (
+                    party_progression_synchronized
+                ),
+                "wave_integration_gate": wave_integration,
+                "wave_integration_min_experience_delta": (
+                    WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA
+                ),
+                "wave_experience_delta": (
+                    int(wave_integration["experience_delta"])
+                    if wave_integration is not None
+                    else 0
+                ),
+                "episode_experience_deltas": (
+                    episode_experience_deltas
+                ),
+                "episode_experience_delta_total": sum(
+                    episode_experience_deltas.values()
+                ),
+                "natural_choice_proof": natural_choice_proof,
+                "training_owner_level_up_choices": list(
+                    session.training_owner_level_up_choices
+                ),
                 "wave_start": wave_start,
                 "learned_skill_choices_seen_delta": (
                     int(
@@ -1306,6 +1440,9 @@ def live_ppo(args: argparse.Namespace) -> int:
         "instance_prefix": instance,
         "headless": not args.visible,
         "episode_mode": args.episode_mode,
+        "natural_choice_proof_required": (
+            args.require_natural_choice_proof
+        ),
         "rollout_timeout_seconds": rollout_timeout,
         "rollout_timeout_source": (
             "explicit"
@@ -1317,6 +1454,9 @@ def live_ppo(args: argparse.Namespace) -> int:
         "distinct_seed_count": len(set(run_seeds)),
         "composition_names": [
             report["composition"]["name"] for report in reports
+        ],
+        "wave_experience_deltas": [
+            report["wave_experience_delta"] for report in reports
         ],
         "iterations": reports,
         "elapsed_wall_seconds": time.monotonic() - started_at,
@@ -1493,10 +1633,19 @@ def build_parser() -> argparse.ArgumentParser:
     live_parser.add_argument(
         "--wave-startup-timeout",
         type=float,
-        default=300.0,
+        default=DEFAULT_WAVE_INTEGRATION_TIMEOUT_SECONDS,
         help=(
-            "maximum seconds for stock Solomon routing plus the first "
-            "natural XP-backed learned choice"
+            "per-operation ceiling for stock Solomon routing and the "
+            "positive-XP integration guard; also bounds the optional "
+            "natural-choice acceptance proof"
+        ),
+    )
+    live_parser.add_argument(
+        "--require-natural-choice-proof",
+        action="store_true",
+        help=(
+            "one-time acceptance probe: require a natural level-up, learned "
+            "native choice apply, and complete interval in the first episode"
         ),
     )
     live_parser.add_argument(

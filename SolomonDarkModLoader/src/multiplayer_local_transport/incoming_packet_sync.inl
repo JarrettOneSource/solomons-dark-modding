@@ -466,6 +466,12 @@ void ApplyParticipantFrameToRuntime(
     participant->runtime.movement_intent_y = normalized.movement_intent_y;
     participant->runtime.experience_current = packet.experience_current;
     participant->runtime.experience_next = packet.experience_next;
+    // Owner-authored frame packets cannot roll back the host-authored shared
+    // party total. Both host mirrors and clients retain the latest reliable
+    // shared-progression snapshot for this run.
+    ApplySharedProgressionToParticipantRuntime(
+        packet.run_nonce,
+        &participant->runtime);
     participant->runtime.anim_drive_state = packet.anim_drive_state;
     participant->runtime.presentation_flags =
         packet.presentation_flags &

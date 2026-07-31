@@ -1,3 +1,189 @@
+struct SharedProgressionNativeSnapshot {
+    bool valid = false;
+    std::int32_t level = 0;
+    float experience = 0.0f;
+    std::int32_t next_experience = 0;
+};
+
+SharedProgressionNativeSnapshot ReadSharedProgressionNativeSnapshot(
+    uintptr_t progression_address) {
+    SharedProgressionNativeSnapshot snapshot;
+    auto& memory = ProcessMemory::Instance();
+    snapshot.valid =
+        progression_address != 0 &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionLevelOffset,
+            &snapshot.level) &&
+        memory.TryReadField(
+            progression_address,
+            kProgressionXpOffset,
+            &snapshot.experience) &&
+        TryReadRunLifecycleRoundedNextXp(
+            progression_address,
+            &snapshot.next_experience) &&
+        snapshot.level > 0 &&
+        std::isfinite(snapshot.experience) &&
+        snapshot.experience >= 0.0f &&
+        snapshot.next_experience > 0;
+    return snapshot;
+}
+
+bool CallSharedProgressionExperienceGainSafe(
+    uintptr_t function_address,
+    uintptr_t progression_address,
+    float amount) {
+    if (function_address == 0 || progression_address == 0) {
+        return false;
+    }
+    const auto function =
+        reinterpret_cast<ExperienceGainFn>(function_address);
+    __try {
+        function(
+            reinterpret_cast<void*>(progression_address),
+            amount,
+            1);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void CompleteSharedKillProgressionTransaction(
+    const multiplayer::SharedKillExperienceCredit& credit,
+    float expected_native_amount,
+    uintptr_t local_progression_address,
+    const SharedProgressionNativeSnapshot& local_before) {
+    constexpr float kExperienceDeltaEpsilon = 0.0001f;
+    uintptr_t canonical_progression_address = 0;
+    SharedProgressionNativeSnapshot canonical_after;
+    float experience_before = 0.0f;
+    const char* canonical_source = "stock_slot0";
+
+    const auto local_after =
+        ReadSharedProgressionNativeSnapshot(local_progression_address);
+    if (local_before.valid &&
+        local_after.valid &&
+        local_after.experience >
+            local_before.experience + kExperienceDeltaEpsilon) {
+        canonical_progression_address = local_progression_address;
+        canonical_after = local_after;
+        experience_before = local_before.experience;
+    } else if (credit.source_progression_address != 0) {
+        canonical_progression_address =
+            credit.source_progression_address;
+        canonical_after = ReadSharedProgressionNativeSnapshot(
+            canonical_progression_address);
+        experience_before = credit.source_experience_before;
+        if (!canonical_after.valid ||
+            canonical_after.experience <=
+                experience_before + kExperienceDeltaEpsilon) {
+            const auto experience_gain_address =
+                ProcessMemory::Instance().ResolveGameAddressOrZero(
+                    kExperienceGain);
+            if (experience_gain_address == 0 ||
+                !CallSharedProgressionExperienceGainSafe(
+                    experience_gain_address,
+                    canonical_progression_address,
+                    expected_native_amount)) {
+                Log(
+                    "Multiplayer shared kill XP killer progression call failed. "
+                    "killer_participant_id=" +
+                    std::to_string(credit.participant_id) +
+                    " run_nonce=" +
+                    std::to_string(credit.run_nonce));
+                return;
+            }
+            canonical_after = ReadSharedProgressionNativeSnapshot(
+                canonical_progression_address);
+        }
+        canonical_source = "killer_progression";
+    }
+
+    if (!canonical_after.valid ||
+        canonical_progression_address == 0 ||
+        canonical_after.experience <=
+            experience_before + kExperienceDeltaEpsilon) {
+        Log(
+            "Multiplayer shared kill XP native result unavailable. "
+            "killer_participant_id=" +
+            std::to_string(credit.participant_id) +
+            " run_nonce=" + std::to_string(credit.run_nonce));
+        return;
+    }
+
+    const auto credited_experience =
+        canonical_after.experience - experience_before;
+    multiplayer::SyncInRunParticipantsToSharedProgression(
+        credit.run_nonce,
+        canonical_after.level,
+        canonical_after.experience,
+        canonical_after.next_experience,
+        canonical_progression_address);
+    multiplayer::ObserveParticipantKillExperienceRewardAttribution(
+        credit.participant_id,
+        credited_experience);
+    multiplayer::PublishAuthoritativeSharedProgression(
+        credit.participant_id,
+        credit.run_nonce,
+        canonical_after.level,
+        canonical_after.experience,
+        canonical_after.next_experience);
+    Log(
+        "Multiplayer shared kill XP applied. killer_participant_id=" +
+        std::to_string(credit.participant_id) +
+        " run_nonce=" + std::to_string(credit.run_nonce) +
+        " wave=" + std::to_string(credit.wave) +
+        " enemy_type=" + std::to_string(credit.enemy_type) +
+        " base_reward=" + std::to_string(credit.base_reward) +
+        " gameplay_multiplier=" +
+        std::to_string(credit.gameplay_multiplier) +
+        " canonical_source=" + canonical_source +
+        " level=" + std::to_string(canonical_after.level) +
+        " xp_before=" + std::to_string(experience_before) +
+        " xp_after=" +
+        std::to_string(canonical_after.experience) +
+        " next_xp=" +
+        std::to_string(canonical_after.next_experience) +
+        " killer_credited_xp=" +
+        std::to_string(credited_experience));
+}
+
+void __fastcall HookNativeApplyDamage(
+    void* self,
+    void* /*unused_edx*/,
+    void* target_actor) {
+    const auto original =
+        GetX86HookTrampoline<NativeApplyDamageFn>(
+            g_state.hooks[kHookNativeApplyDamage]);
+    if (original == nullptr) {
+        return;
+    }
+
+    uintptr_t local_progression_address = 0;
+    SDModPlayerState local_player;
+    if (TryGetPlayerState(&local_player) && local_player.valid) {
+        local_progression_address = local_player.progression_address;
+    }
+    const auto local_before =
+        ReadSharedProgressionNativeSnapshot(local_progression_address);
+
+    original(self, target_actor);
+
+    multiplayer::SharedKillExperienceCredit credit;
+    float expected_native_amount = 0.0f;
+    if (!multiplayer::ConsumeSharedKillExperienceCredit(
+            &credit,
+            &expected_native_amount)) {
+        return;
+    }
+    CompleteSharedKillProgressionTransaction(
+        credit,
+        expected_native_amount,
+        local_progression_address,
+        local_before);
+}
+
 int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
     const auto original = GetX86HookTrampoline<EnemyDeathFn>(g_state.hooks[kHookEnemyDeath]);
     if (original == nullptr) {

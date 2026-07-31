@@ -198,7 +198,7 @@ def test_ml_bot_v3_hazards_include_unknown_hostile_classes_without_addresses() -
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 89;",
+        "constexpr std::uint16_t kProtocolVersion = 90;",
         "constexpr std::uint32_t kHazardSnapshotMaxHazards = 32;",
         "HazardStateFlagHostile",
         "HazardStateFlagTypeKnown",
@@ -267,7 +267,7 @@ def test_ml_bot_v3_hazards_include_unknown_hostile_classes_without_addresses() -
     for forbidden in ('"address"', '"pointer"', '"exception"', '"seh"'):
         assert forbidden not in lua_api
     return (
-        "Protocol 89 carries 38 classified hostile hazard families and "
+        "Protocol 90 carries 38 classified hostile hazard families and "
         "surfaces unclassified hostile effect-band actors with type_known=false"
     )
 

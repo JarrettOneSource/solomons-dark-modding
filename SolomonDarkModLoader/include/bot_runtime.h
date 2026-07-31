@@ -315,6 +315,17 @@ struct BotSnapshot {
     std::vector<BotSkillChoiceOption> skill_choice_options;
 };
 
+struct SharedKillExperienceCredit {
+    std::uint64_t participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::int32_t wave = 0;
+    std::uint32_t enemy_type = 0;
+    float base_reward = 0.0f;
+    float gameplay_multiplier = 0.0f;
+    uintptr_t source_progression_address = 0;
+    float source_experience_before = 0.0f;
+};
+
 bool InitializeBotRuntime();
 void ShutdownBotRuntime();
 bool IsBotRuntimeInitialized();
@@ -371,6 +382,29 @@ bool ReadParticipantInventoryDetails(
 bool UseParticipantConsumable(
     const BotUseConsumableRequest& request,
     BotUseConsumableResult* result,
+    std::string* error_message);
+void ArmSharedKillExperienceCredit(
+    const SharedKillExperienceCredit& credit,
+    float expected_native_amount);
+bool ConsumeSharedKillExperienceCredit(
+    SharedKillExperienceCredit* credit,
+    float* expected_native_amount);
+void ObserveParticipantEnemyDamageRewardAttribution(
+    std::uint64_t participant_id,
+    double hp_ratio_damage);
+void ObserveParticipantKillExperienceRewardAttribution(
+    std::uint64_t participant_id,
+    double experience);
+void SyncInRunParticipantsToSharedProgression(
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    float experience,
+    std::int32_t next_experience,
+    uintptr_t source_progression_address);
+bool SyncLocalPlayerProgressionToSharedSnapshot(
+    std::int32_t level,
+    float experience,
+    std::int32_t next_experience,
     std::string* error_message);
 void SyncBotsToSharedLevelUp(std::int32_t level, std::int32_t experience, uintptr_t source_progression_address = 0);
 bool PublishNaturalParticipantLevelUp(

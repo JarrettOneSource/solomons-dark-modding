@@ -119,6 +119,13 @@ player state, advances the gold revision when that value changes, and
 tests can prove loot pickup work is targeting participant state instead of
 silently falling back to the stock global economy.
 
+Participant runtime rows also expose two address-free, host-authoritative ML
+diagnostic counters: `reward_attributed_experience` and
+`reward_attributed_enemy_hp_ratio_damage`. They are monotonic only within the
+matching run nonce and are zero otherwise. These are not progression totals:
+they advance solely from that participant's native kill credit and authoritative
+damage-source edges, respectively.
+
 The first concrete pickup paths are host-authorized gold, health/mana orbs, and
 item/potion carrier drops.
 A connected client sends `LootPickupRequest` for a host-owned drop id; the host
@@ -140,10 +147,18 @@ native remote equipment presentation, and mirrored progression/stat/skill/
 spellbook state.
 
 Shared experience and level-up choices follow the same participant-owned rule.
-The host owns the shared XP/level event. When the host levels, it synchronizes
-each connected native participant's materialized progression to the shared level,
-rolls that participant's native skill-picker options against that participant's
-current book state, and sends a private `LevelUpOffer`. A non-host client
+The host owns the shared XP total. A confirmed kill by any in-run participant
+enters the retail reward helper once on the host's slot-0 progression, preserving
+stock level/bonus scaling. The resulting exact level, floating-point XP, and
+next threshold become the run-scoped canonical snapshot. The host synchronizes
+every materialized participant progression through native `level_up`, preserves
+live vitals, and publishes a reliable `SharedProgressionPacket`; owner-authored
+frames cannot roll the snapshot back. Only the killer's separate ML attribution
+counter advances.
+
+When that shared total crosses a threshold, the host rolls each participant's
+native skill-picker options against that participant's current book state and
+sends a private `LevelUpOffer`. A non-host client
 suppresses its local native level-up picker/event while connected, exposes the
 host offer through `sd.runtime.get_multiplayer_state()`, and submits a selected
 option through `sd.runtime.choose_level_up_option(...)`. The host accepts only an
@@ -262,6 +277,8 @@ Messages and the explicit local-UDP test backend:
   inventory/spellbook/statbook deltas
 - reliable level-up offer/choice/result packets for host-authored shared XP
   level-up choices
+- reliable run-scoped shared-progression snapshots carrying the exact canonical
+  level, floating-point XP, next threshold, and killer identity
 
 Protocol v50 authenticates Steam lobby members with the lobby ID, Steam identity,
 session nonce, required capability bits, and deterministic staged-build manifest

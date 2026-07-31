@@ -131,18 +131,29 @@ openable gate geometry, and invokes the real Solomon Dig conversation. It does
 not call `start_waves`, spawn an enemy, or synthesize XP. The stock wave
 spawner, enemy death reward, participant-owned synthetic progression, and
 native skill-offer paths therefore remain intact. The retail reward helper is
-hard-wired to slot 0, so the loader forwards a confirmed synthetic-attributed
-stock kill through the same native ExperienceGain function on that
-participant's own progression. Collection fails closed
-unless learned progression increases and the learned choice head sees and
-accepts a natural pending choice. `--episode-mode curriculum` retains the
+hard-wired to slot 0. The host now lets that one stock call compute the
+canonical scaled XP total, then synchronizes the exact level/XP/next-threshold
+snapshot into every in-run participant's owned native progression. Any
+participant's kill therefore advances the party and produces the ordinary
+per-participant native choice flow at the same level cadence. Collection's
+normal integration guard requires only a positive learned-participant XP delta;
+an episode without a level or choice remains valid. The opt-in
+`--require-natural-choice-proof` acceptance probe additionally requires one
+natural level, learned choice apply, and complete choice interval in the first
+episode only. `--episode-mode curriculum` retains the
 direct-spawn, XP-free one-enemy arena for targeted observation/action drills;
 it is not suitable for choice-head training.
 
+The disposable trainer owner's stock slot levels with the party and can open
+the host-self native picker. In headless collection, the bridge selects its
+first native-valid option and waits for the multiplayer level-up barrier to
+clear. That trainer-owned selection is logged separately and never becomes a
+learned choice event, scripted label, or PPO batch row.
+
 Training is enabled before the stock wave begins, so every natural XP and
-native skill-offer event is captured. After the first XP-backed learned
-choice, setup-time main rows are cleared while the open choice interval and
-its duration rewards are preserved; choice state is never reset. Every
+native skill-offer event is captured. After the positive-XP integration gate,
+setup-time main rows are cleared while any open choice interval and its
+duration rewards are preserved; choice state is never reset. Every
 learned participant sharing the policy emits two streams:
 
 - main trajectory-v3: observations, four masks/actions, composite old log
@@ -162,12 +173,12 @@ limit. Live rollouts are bounded to 8,192 steps for the same reason.
 
 The reward stream has no passive survival term. One policy decision receives
 only the existing health/damage, wave, and terminal signals plus positive
-native XP progress:
+killer-attributed native XP progress:
 
 ```text
 reward = 1.25 * self_hp_ratio_delta
-       + 0.65 * summed_enemy_hp_ratio_drop
-       + max(0, xp_delta) / 25
+       + 0.65 * own_source_enemy_hp_ratio_damage
+       + max(0, own_kill_xp_delta) / 25
        + 1.5 * min(max(wave_delta, 0), 1)
        - 2.0 when terminal and dead
 reward = clamp(reward, -4, 4)
@@ -176,8 +187,10 @@ reward = clamp(reward, -4, 4)
 `XP_SCALE=25` comes from a stock-wave calibration over waves 1–10: 39
 learned-attributed kills credited 3.442497–3.825001 XP, median 3.824997, so a
 typical early kill contributes 0.153 reward. An unchanged bot facing live
-enemies earns exactly zero. Choice-event intervals continue to consume the
-same per-decision rewards without a separate shaping path. This changes the
+enemies earns exactly zero. Shared XP from a teammate still advances the bot's
+level and choices, but neither that XP nor teammate-sourced enemy damage enters
+its reward counters. Choice-event intervals continue to consume the same
+per-decision rewards without a separate shaping path. This changes the
 meaning of all future reward curves but does not change the trajectory schema
 or its version.
 
@@ -198,6 +211,8 @@ JSON and Lua files are each written through a temporary file and atomically
 replaced before chunked hot reload. Each live episode also writes an atomic
 `episode-NNNN.json`; `live-training-report.json` records the complete seed,
 nonce, layout, composition, participant, trajectory, loss, and reload evidence.
+Per-episode JSON also records the exact final XP delta for every learned
+participant and the aggregate positive-XP guard result.
 
 Without an explicit `--rollout-timeout`, collection allows
 `max(180, 60 + rollout_steps / 10 * 1.25)` seconds. This covers the worst-case

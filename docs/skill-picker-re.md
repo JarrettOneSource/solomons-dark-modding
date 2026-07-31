@@ -21,6 +21,32 @@ dialog and it does not assign runtime primary or belt inputs. See
 - `progression + 0x70/0x74`: HP/current max
 - `progression + 0x7C/0x80`: MP/current max
 
+The decompiled loop indexes one process-global float table at
+`0x008096F8` by the newly selected level; it does not consult participant,
+element, Discipline, or book state. The first entries are:
+
+| Level/index | Threshold |
+|---:|---:|
+| 0 | 0 |
+| 1 | 90 |
+| 2 | 160 |
+| 3 | 275 |
+| 4 | 390 |
+| 5 | 520 |
+| 6 | 650 |
+| 7 | 800 |
+| 8 | 1060 |
+| 9 | 1300 |
+| 10 | 1600 |
+
+`0x0067C250` repeats while current XP is strictly greater than the current
+next threshold, increments the level, moves that threshold to `+0x38`, and
+loads the following table entry into `+0x3C`. Threshold composition is
+therefore identical for every participant progression. Multiplayer shared XP
+can safely run stock reward scaling once, then synchronize the exact canonical
+level, floating-point XP, and next-threshold snapshot; independently applying
+the reward to every progression would incorrectly repeat native scaling.
+
 The routine only increments the pending picker count for local player-style
 progressions (`progression + 0x40 == 0`). Non-local/bot progressions can level,
 but they do not get native UI pick state.

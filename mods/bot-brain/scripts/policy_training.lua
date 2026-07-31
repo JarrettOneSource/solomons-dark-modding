@@ -34,18 +34,15 @@ end
 
 local function copy_metrics(value)
   value = type(value) == "table" and value or {}
-  local enemy_health = {}
-  for actor_id, ratio in pairs(value.enemy_health or {}) do
-    enemy_health[actor_id] = ratio
-  end
   return {
     hp_ratio = value.hp_ratio,
     mana_ratio = value.mana_ratio,
     wave = value.wave,
     alive = value.alive,
-    experience = value.experience,
+    attributed_experience = value.attributed_experience,
+    attributed_enemy_hp_ratio_damage =
+      value.attributed_enemy_hp_ratio_damage,
     enemy_count = value.enemy_count,
-    enemy_health = enemy_health,
   }
 end
 
@@ -108,20 +105,16 @@ function Controller:reward(previous, current, terminal)
     (current.hp_ratio or 0.0) -
     (previous.hp_ratio or 0.0)
   reward = reward + hp_delta * 1.25
-  local xp_delta = math.max(
+  local attributed_xp_delta = math.max(
     0.0,
-    (current.experience or 0.0) -
-      (previous.experience or 0.0))
-  reward = reward + xp_delta / XP_SCALE
-  for actor_id, previous_ratio in
-      pairs(previous.enemy_health or {}) do
-    local current_ratio =
-      (current.enemy_health or {})[actor_id] or 0.0
-    if current_ratio < previous_ratio then
-      reward =
-        reward + (previous_ratio - current_ratio) * 0.65
-    end
-  end
+    (current.attributed_experience or 0.0) -
+      (previous.attributed_experience or 0.0))
+  reward = reward + attributed_xp_delta / XP_SCALE
+  local attributed_damage_delta = math.max(
+    0.0,
+    (current.attributed_enemy_hp_ratio_damage or 0.0) -
+      (previous.attributed_enemy_hp_ratio_damage or 0.0))
+  reward = reward + attributed_damage_delta * 0.65
   local wave_delta =
     (current.wave or 0) - (previous.wave or 0)
   if wave_delta > 0 then
@@ -277,9 +270,9 @@ function Controller:terminal(context, metrics)
     mana_ratio = 0.0,
     wave = 0,
     alive = false,
-    experience = 0.0,
+    attributed_experience = 0.0,
+    attributed_enemy_hp_ratio_damage = 0.0,
     enemy_count = 0,
-    enemy_health = {},
   }
   self:finish_pending(context, metrics, true)
   self:finish_choice(context, 0.0, true)

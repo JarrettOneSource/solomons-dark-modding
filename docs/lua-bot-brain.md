@@ -148,8 +148,12 @@ Each pending native skill generation freezes the full observation plus one
 scores the variable option set; scripted mode keeps the deterministic v2
 selector and its weld preference for A/B runs. Scripted events are tagged and
 excluded from choice batches. Training records a main trajectory-v3 stream and
-a separate variable-duration choice-event-v3 SMDP stream while retaining the
-v2 combat reward formula unchanged.
+a separate variable-duration choice-event-v3 SMDP stream. The reward has no
+passive survival tick: self-HP, wave, and death terms are unchanged, while XP
+and enemy-HP-damage terms consume host-authoritative counters attributed to
+that participant's own kills and damage edges. Shared party XP still advances
+every in-run progression and choice cadence, but teammate work pays no learned
+reward.
 
 The strict v3 runtime loads the checked-in 1,279 -> 512 -> 256 artifact and its
 9/9/22/9 main heads at mod startup. Pending native skill choices use the same

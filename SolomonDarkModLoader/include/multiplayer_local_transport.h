@@ -374,6 +374,12 @@ bool SetRemoteNativeProgressionReconcileSuppressedForTest(
     std::uint64_t participant_id,
     bool suppressed);
 bool ShouldSuppressLocalLevelUpFanout();
+void PublishAuthoritativeSharedProgression(
+    std::uint64_t killer_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    float experience,
+    std::int32_t experience_next);
 bool QueueLocalLevelUpChoice(
     std::uint64_t offer_id,
     std::int32_t option_index,

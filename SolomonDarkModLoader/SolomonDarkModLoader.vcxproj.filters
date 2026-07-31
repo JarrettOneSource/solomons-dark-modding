@@ -530,6 +530,9 @@
     <ClInclude Include="src\bot_runtime\public_api\consumable_use_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\combat_reward_attribution_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\inventory_details_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
@@ -543,6 +546,9 @@
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl">
+      <Filter>Header Files\Bot Runtime\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bot_runtime\public_api\shared_progression_api.inl">
       <Filter>Header Files\Bot Runtime\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl">
@@ -1154,7 +1160,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\synthetic_stock_xp_hook.inl">
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\shared_stock_xp_hook.inl">
       <Filter>Header Files\Gameplay\Gameplay Hooks</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_enemy_damage_observation.inl">
@@ -1461,6 +1467,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\shared_progression_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl">

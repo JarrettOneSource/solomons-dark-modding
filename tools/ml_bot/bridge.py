@@ -35,6 +35,22 @@ MAX_CHOICE_ROLLOUTS_PER_RESPONSE = 1
 POLICY_LOAD_CHUNK_BYTES = 512 * 1024
 RUN_READY_STABILITY_SECONDS = 0.35
 BOT_MATERIALIZATION_GRACE_SECONDS = 15.0
+# One integer XP point is sufficient to prove that a confirmed stock-wave kill
+# reached the learned participant through shared progression. Requiring a
+# level or choice here would measure bootstrap-policy competence, not
+# integration.
+WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA = 1
+# The opt-in acceptance proof is intentionally stricter: it must observe one
+# natural level transition and one pending/accepted learned choice event.
+NATURAL_CHOICE_PROOF_MIN_LEVEL_DELTA = 1
+NATURAL_CHOICE_PROOF_MIN_EVENT_DELTA = 1
+WAVE_PROGRESSION_POLL_INTERVAL_SECONDS = 0.2
+# Shared progression also levels the trainer-owned slot-0 participant. Its
+# stock picker holds the simulation barrier until answered, so the headless
+# harness selects the first native-valid option for that non-learned owner.
+# This never enters either learned choice stream or supplies a scripted label.
+TRAINING_OWNER_LEVEL_UP_RESOLVE_TIMEOUT_SECONDS = 10.0
+TRAINING_OWNER_LEVEL_UP_POLL_INTERVAL_SECONDS = 0.05
 PRIMARY_ENTRY_BY_ELEMENT = {
     "fire": 0x10,
     "water": 0x20,
@@ -550,6 +566,30 @@ print('last_skill_choice_generation=' .. tostring(
   last_skill_choice_generation))
 print('last_skill_choice_option_id=' .. tostring(
   last_skill_choice_option_id))
+local multiplayer = sd.runtime.get_multiplayer_state() or {}
+local local_participant_id = 0
+for _, participant in ipairs(multiplayer.participants or {}) do
+  if participant.is_owner == true then
+    local_participant_id =
+      tonumber(participant.participant_id) or 0
+    break
+  end
+end
+local offer = multiplayer.active_level_up_offer or {}
+local level_up_wait = multiplayer.level_up_wait_status or {}
+print('local_participant_id=' .. tostring(local_participant_id))
+print('level_up_pause_active=' .. tostring(
+  level_up_wait.pause_active == true))
+print('level_up_offer_valid=' .. tostring(offer.valid == true))
+print('level_up_offer_submitted=' .. tostring(
+  offer.selection_submitted == true))
+print('level_up_offer_id=' .. tostring(offer.offer_id or 0))
+print('level_up_offer_authority=' .. tostring(
+  offer.authority_participant_id or 0))
+print('level_up_offer_target=' .. tostring(
+  offer.target_participant_id or 0))
+print('level_up_offer_option_count=' .. tostring(
+  offer.option_count or 0))
 """
 
 RUN_READY_STATUS = r"""
@@ -847,6 +887,7 @@ class SoloSession:
         self.launch_result: dict[str, Any] | None = None
         self.process_ids: list[int] = []
         self.launch_wrapper_process: subprocess.Popen[bytes] | None = None
+        self.training_owner_level_up_choices: list[dict[str, int]] = []
 
     @property
     def stage_root(self) -> Path:
@@ -2489,17 +2530,26 @@ print('choices_applied=' .. tostring(choices_applied))
             self.lua(
                 f"""
 local ids = {{{rows}}}
+local multiplayer = sd.runtime.get_multiplayer_state() or {{}}
+local runtime_by_id = {{}}
+for _, row in ipairs(multiplayer.participants or {{}}) do
+  runtime_by_id[tonumber(row.participant_id) or 0] = row
+end
 for index, id in ipairs(ids) do
   local state = sd.bots.get_participant_state(id) or {{}}
   local profile = state.profile or {{}}
+  local runtime = runtime_by_id[id] or {{}}
   local choices = sd.bots.get_skill_choices(id) or {{}}
   local prefix = 'participant.' .. tostring(index) .. '.'
   print(prefix .. 'id=' .. tostring(id))
   print(prefix .. 'available=' .. tostring(
-    tonumber(state.id) == id))
-  print(prefix .. 'level=' .. tostring(profile.level or 0))
+    tonumber(state.id) == id or
+    tonumber(runtime.participant_id) == id))
+  print(prefix .. 'level=' .. tostring(
+    profile.level or runtime.level or 0))
   print(prefix .. 'experience=' ..
-    tostring(profile.experience or 0))
+    tostring(profile.experience or
+      runtime.experience_current or 0))
   print(prefix .. 'pending=' ..
     tostring(choices.pending == true))
   print(prefix .. 'choice_generation=' ..
@@ -2550,13 +2600,14 @@ end
             )
         return result
 
-    def wait_for_natural_choice(
+    def _wait_for_wave_progression(
         self,
         participant_ids: Sequence[int],
         before: Sequence[Mapping[str, int]],
         *,
         initial_status: Mapping[str, str],
-        timeout: float = 300.0,
+        timeout: float,
+        require_natural_choice_proof: bool,
     ) -> dict[str, object]:
         if not math.isfinite(timeout) or timeout <= 0.0:
             raise ValueError("timeout must be finite and positive")
@@ -2570,7 +2621,7 @@ end
         }
         if set(ids) != set(baseline):
             raise ValueError(
-                "natural-choice baseline does not match participant IDs"
+                "wave-progression baseline does not match participant IDs"
             )
         initial_seen = int(
             initial_status.get("learned_skill_choices_seen", "0")
@@ -2591,6 +2642,14 @@ end
         while time.monotonic() < deadline:
             progression = self.participant_progression(ids)
             status = self.status()
+            if status.get("level_up_pause_active") == "true":
+                self.wait_for_training_owner_level_up_barrier(
+                    timeout=min(
+                        TRAINING_OWNER_LEVEL_UP_RESOLVE_TIMEOUT_SECONDS,
+                        max(deadline - time.monotonic(), 0.01),
+                    )
+                )
+                status = self.status()
             for row in progression:
                 participant_id = row["participant_id"]
                 maximum_level[participant_id] = max(
@@ -2633,16 +2692,63 @@ end
                 "native_choices_seen_delta": seen_delta,
                 "learned_choices_accepted_delta": accepted_delta,
             }
+            integration_healthy = (
+                experience_delta >=
+                WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA
+            )
+            acceptance_proven = (
+                level_delta >= NATURAL_CHOICE_PROOF_MIN_LEVEL_DELTA
+                and seen_delta >= NATURAL_CHOICE_PROOF_MIN_EVENT_DELTA
+                and accepted_delta >= NATURAL_CHOICE_PROOF_MIN_EVENT_DELTA
+            )
             if (
-                (experience_delta > 0 or level_delta > 0)
-                and seen_delta > 0
-                and accepted_delta > 0
+                acceptance_proven
+                if require_natural_choice_proof
+                else integration_healthy
             ):
                 return last
-            time.sleep(0.2)
+            time.sleep(WAVE_PROGRESSION_POLL_INTERVAL_SECONDS)
+        if require_natural_choice_proof:
+            raise BridgeError(
+                "natural-choice acceptance proof did not observe a learned "
+                "level-up and accepted native choice within "
+                f"{timeout:.1f}s: {last}"
+            )
         raise BridgeError(
-            "stock waves did not produce natural learned progression and "
-            f"a native choice within {timeout:.1f}s: {last}"
+            "stock-wave integration produced no learned participant XP "
+            f"within {timeout:.1f}s: {last}"
+        )
+
+    def wait_for_wave_integration(
+        self,
+        participant_ids: Sequence[int],
+        before: Sequence[Mapping[str, int]],
+        *,
+        initial_status: Mapping[str, str],
+        timeout: float,
+    ) -> dict[str, object]:
+        return self._wait_for_wave_progression(
+            participant_ids,
+            before,
+            initial_status=initial_status,
+            timeout=timeout,
+            require_natural_choice_proof=False,
+        )
+
+    def wait_for_natural_choice_proof(
+        self,
+        participant_ids: Sequence[int],
+        before: Sequence[Mapping[str, int]],
+        *,
+        initial_status: Mapping[str, str],
+        timeout: float,
+    ) -> dict[str, object]:
+        return self._wait_for_wave_progression(
+            participant_ids,
+            before,
+            initial_status=initial_status,
+            timeout=timeout,
+            require_natural_choice_proof=True,
         )
 
     def wait_for_training_enemy(
@@ -2672,6 +2778,92 @@ end
             self.lua(STATUS, timeout=10.0)
         )
 
+    def _resolve_training_owner_level_up_offer(
+        self,
+        status: Mapping[str, str],
+    ) -> dict[str, int] | None:
+        if (
+            status.get("level_up_offer_valid") != "true"
+            or status.get("level_up_offer_submitted") == "true"
+        ):
+            return None
+        offer_id = int(status.get("level_up_offer_id", "0"))
+        option_count = int(
+            status.get("level_up_offer_option_count", "0")
+        )
+        local_participant_id = int(
+            status.get("local_participant_id", "0")
+        )
+        target_participant_id = int(
+            status.get("level_up_offer_target", "0")
+        )
+        authority_participant_id = int(
+            status.get("level_up_offer_authority", "0")
+        )
+        if (
+            offer_id <= 0
+            or option_count <= 0
+            or local_participant_id <= 0
+            or authority_participant_id <= 0
+            or target_participant_id != authority_participant_id
+        ):
+            raise BridgeError(
+                "training owner level-up offer is malformed: "
+                f"{dict(status)}"
+            )
+        values = local_sync.parse_key_values(
+            self.lua(
+                f"""
+local ok, result = pcall(
+  sd.runtime.choose_level_up_option,
+  {{offer_id={offer_id}, option_index=1}})
+print('pcall_ok=' .. tostring(ok))
+print('result=' .. tostring(result))
+""",
+                timeout=7.5,
+            )
+        )
+        if (
+            values.get("pcall_ok") != "true"
+            or values.get("result") != "true"
+        ):
+            raise BridgeError(
+                "training owner native level-up choice failed: "
+                f"offer_id={offer_id} response={values}"
+            )
+        record = {
+            "participant_id": local_participant_id,
+            "target_participant_id": target_participant_id,
+            "offer_id": offer_id,
+            "option_index": 1,
+            "option_count": option_count,
+        }
+        self.training_owner_level_up_choices.append(record)
+        return record
+
+    def wait_for_training_owner_level_up_barrier(
+        self,
+        *,
+        timeout: float = TRAINING_OWNER_LEVEL_UP_RESOLVE_TIMEOUT_SECONDS,
+    ) -> list[dict[str, int]]:
+        if not math.isfinite(timeout) or timeout <= 0.0:
+            raise ValueError("timeout must be finite and positive")
+        deadline = time.monotonic() + timeout
+        resolved: list[dict[str, int]] = []
+        last: dict[str, str] = {}
+        while time.monotonic() < deadline:
+            last = self.status()
+            if last.get("level_up_pause_active") != "true":
+                return resolved
+            choice = self._resolve_training_owner_level_up_offer(last)
+            if choice is not None:
+                resolved.append(choice)
+            time.sleep(TRAINING_OWNER_LEVEL_UP_POLL_INTERVAL_SECONDS)
+        raise BridgeError(
+            "training owner level-up barrier did not clear: "
+            f"{last}"
+        )
+
     def learned_participant_ids(self) -> tuple[int, ...]:
         values = self.status()
         result = _participant_ids(
@@ -2682,6 +2874,31 @@ end
             raise BridgeError(
                 f"learned participant status is inconsistent: {values}"
             )
+        return result
+
+    def in_run_participant_ids(self) -> tuple[int, ...]:
+        values = local_sync.parse_key_values(
+            self.lua(
+                """
+local multiplayer = sd.runtime.get_multiplayer_state() or {}
+local ids = {}
+for _, row in ipairs(multiplayer.participants or {}) do
+  local id = tonumber(row.participant_id) or 0
+  if id > 0 and row.runtime_valid == true and row.in_run == true then
+    ids[#ids + 1] = id
+  end
+end
+table.sort(ids)
+local text = {}
+for index, id in ipairs(ids) do text[index] = tostring(id) end
+print('participant_ids=' .. table.concat(text, ','))
+""",
+                timeout=10.0,
+            )
+        )
+        result = _participant_ids(values.get("participant_ids", ""))
+        if not result:
+            raise BridgeError("no in-run participants are available")
         return result
 
     def trigger_validation_choice_event(
@@ -2977,6 +3194,14 @@ print('generation=' .. tostring(result.generation))
         last: dict[str, str] = {}
         while time.monotonic() < deadline:
             last = self.status()
+            if last.get("level_up_pause_active") == "true":
+                self.wait_for_training_owner_level_up_barrier(
+                    timeout=min(
+                        TRAINING_OWNER_LEVEL_UP_RESOLVE_TIMEOUT_SECONDS,
+                        max(deadline - time.monotonic(), 0.01),
+                    )
+                )
+                continue
             if int(last.get("buffered", "0")) >= count:
                 return last
             time.sleep(0.2)

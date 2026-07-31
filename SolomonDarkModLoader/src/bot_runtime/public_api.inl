@@ -7,5 +7,6 @@
 #include "public_api/loadout_details_api.inl"
 #include "public_api/inventory_details_api.inl"
 #include "public_api/consumable_use_api.inl"
+#include "public_api/combat_reward_attribution_api.inl"
 #include "public_api/skill_choices_api.inl"
 #include "public_api/scene_intents_api.inl"

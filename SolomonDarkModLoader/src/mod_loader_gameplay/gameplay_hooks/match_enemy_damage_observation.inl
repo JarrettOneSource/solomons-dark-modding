@@ -6,16 +6,6 @@ struct EnemyDamageCapture {
 EnemyDamageCapture CaptureEnemyDamageBeforeNativeCall(
     uintptr_t target_actor_address) {
     EnemyDamageCapture capture;
-    {
-        std::lock_guard<std::mutex> lock(
-            g_enemy_damage_observation_mutex);
-        if (!g_enemy_damage_observation_armed ||
-            g_enemy_damage_observations.size() >=
-                kMaximumMatchDamageObservations) {
-            return capture;
-        }
-    }
-
     auto& hook_state = g_gameplay_keyboard_injection;
     if (target_actor_address == 0 ||
         hook_state.damage_context_source_address == 0) {
@@ -101,6 +91,20 @@ void ObserveEnemyDamageAfterNativeCall(
     if (!std::isfinite(observation.hp_delta) ||
         observation.hp_delta <= 0.0f) {
         return;
+    }
+    // Reward attribution consumes the same authoritative post-contact edge as
+    // combat verification. Clamp overkill at zero HP so solo reward remains
+    // identical to the former observed-health-ratio decrease.
+    const auto applied_hp_damage =
+        (std::min)(
+            observation.hp_delta,
+            (std::max)(observation.target_hp_before, 0.0f));
+    if (applied_hp_damage > 0.0f &&
+        observation.target_max_hp > 0.0f) {
+        multiplayer::ObserveParticipantEnemyDamageRewardAttribution(
+            observation.source_participant_id,
+            static_cast<double>(applied_hp_damage) /
+                static_cast<double>(observation.target_max_hp));
     }
     observation.monotonic_ms =
         static_cast<std::uint64_t>(GetTickCount64());

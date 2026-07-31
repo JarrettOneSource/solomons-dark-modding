@@ -1408,7 +1408,7 @@ implemented only the five approved native seams:
    radii are published separately.
 2. `sd.world.get_replicated_actors()` rows now carry resolved slow, frozen,
    poison, web, and existing Turn-Undead state in native ticks and seconds.
-   Protocol 89 owns the bounded semantic wire fields.
+   Protocol 90 owns the bounded semantic wire fields.
 3. `sd.world.get_replicated_hazards()` unions and deduplicates the world
    transient list with gameplay buckets. It classifies all 38 frozen hostile
    families, retains unknown hostile effect-band actors with
@@ -1802,7 +1802,10 @@ changed in this phase.
 This phase supersedes only V3-5's acceptance-only validation-choice smoke.
 V3-6 does not change policy v3's observation, action, model, reward, or
 trajectory contracts. Section N records the subsequently approved V3-7 reward
-change; it deliberately keeps the version-3 trajectory schema.
+change; it deliberately keeps the version-3 trajectory schema. Section O is
+the definitive V3-8 multiplayer progression, attribution, and normal-campaign
+guard behavior; the original V3-6 acceptance evidence below is retained as a
+reproducible historical proof.
 
 ### XP root cause
 
@@ -1865,14 +1868,13 @@ writes a transform. `--episode-mode curriculum` retains the fresh-install
 direct arena for targeted drills.
 
 Training is active before the retail wave starts and before any natural XP or
-choice event can occur. For waves, the trainer snapshots every learned
-profile, starts the retail wave, and refuses to collect a batch until all of
-these facts are observed in the same episode:
-
-- aggregate learned XP or level increases;
-- at least one new native pending-choice generation reaches the learned
-  manager; and
-- at least one learned choice is accepted.
+choice event can occur. The original acceptance probe required XP, a level,
+and an accepted learned choice in one episode. V3-8 separates that competence
+proof from normal integration health: ordinary campaigns proceed after an
+aggregate learned `experience_delta >= 1`, while
+`--require-natural-choice-proof` enables the strict level/choice assertion for
+the first episode only. Complete choice intervals continue to accumulate
+across episodes; episodes without a choice are valid.
 
 The remaining divergence is inside the retail reward helper itself. Ghidra
 shows `0x0063E7D0` dispatching `Badguy::Contact` through vtable slot `+0x4C`,
@@ -1884,21 +1886,15 @@ named in `config/binary-layout.ini:1312-1315,1836`; the loader's native
 ExperienceGain and LevelUp entry points are pinned there at
 `config/binary-layout.ini:1928-1929`.
 
-Consequently, real waves invoke the correct kill/reward path but do not route
-its XP to a host-owned synthetic killer by themselves. The authority-side
-damage hook now captures the synthetic source's owned progression and the
-stock reward inputs before dispatch, then forwards only when the exact native
-kill return is nonzero, post-contact HP is nonpositive, and that progression
-has not already changed. It calls the same native ExperienceGain routine with
-native scaling enabled; the normal XP and LevelUp hooks update the replicated
-participant profile. A natural synthetic LevelUp then rolls native options in
-that participant's scoped Concentrate context and publishes one
-generation-scoped pending choice. New synthetic progressions begin with the
-real empty Concentrate selection `(-1,-1)`; host-owned Lua participants may
-install it for their narrow roll/apply window, while client mirrors remain
-packet-driven. The normal learned manager scores and applies the offer.
-Episode finalization closes the choice interval with `trainable`, `accepted`,
-duration, reward count, and reward sum before SMDP PPO.
+Consequently, real waves invoke the correct kill/reward path but stock routes
+that reward only to slot 0. V3-6 first closed the learned-bot XP gap by routing
+a confirmed synthetic killer through its owned native progression. V3-8
+replaces that narrow route with the game-wide shared progression transaction
+described in Section O. Natural level-up still rolls each participant's native
+options in its scoped Concentrate context, and the normal learned manager
+scores and applies learned offers. Episode finalization closes every complete
+choice interval with `trainable`, `accepted`, duration, reward count, and
+reward sum before SMDP PPO.
 
 ### Rollout timeout
 
@@ -1950,20 +1946,24 @@ the repository under `/mnt/d/codex-evidence/ml-bot-v37/`.
 
 The flat `+0.002` decision tick is removed. Merely remaining alive, including
 while live enemies are unchanged, earns no reward. The controller retains the
-approved dense enemy-HP-drop coefficient `0.65`, self-HP delta coefficient
+approved dense own-damage coefficient `0.65`, self-HP delta coefficient
 `1.25`, positive wave transition `+1.5`, terminal death `-2.0`, and clamp
-`[-4,4]`. It adds only positive participant progression:
+`[-4,4]`. V3-8 makes both combat inputs source-attributed:
 
 ```text
-xp_reward = max(0, experience_current - experience_previous) / XP_SCALE
+xp_reward = max(0, attributed_kill_xp_current - previous) / XP_SCALE
+damage_reward = max(0, attributed_enemy_hp_ratio_damage_current - previous) * 0.65
 XP_SCALE = 25
 ```
 
-`experience_current` is the replicated participant field already refreshed by
-the authority-owned native ExperienceGain path. It is copied into each pending
-main-record reward context. `Controller:finish_pending` computes one reward
-and passes that exact scalar to `accumulate_choice_reward`, so the choice SMDP
-stream inherits the main per-step stream without a second reward mechanism.
+The two monotonic counters are host-authoritative and reset by run nonce. The
+kill-XP counter advances only for the native damage source that achieved the
+kill; the damage counter consumes the same authoritative
+`source_participant_id` / target HP before/after edge used by botcombat
+verification. Shared party XP never advances either counter.
+`Controller:finish_pending` computes one reward and passes that exact scalar to
+`accumulate_choice_reward`, so the choice SMDP stream inherits the main
+per-step stream without a second reward mechanism.
 
 ### Stock-wave calibration
 
@@ -1993,6 +1993,161 @@ inside the owner's `0.1–0.2` target. The exact zero-reward fixture holds HP,
 XP, wave, and one live enemy's HP constant, obtains reward `0.0`, then appends
 that same `0.0` to a choice interval while advancing its duration by one.
 
+The V3-8 team fixture additionally advances shared progression by four XP
+without advancing either attribution counter and obtains reward `0.0`. Its
+solo-own-kill twin advances attributed XP by four and attributed enemy HP ratio
+damage by `0.2`, producing exactly `4/25 + 0.2*0.65 = 0.29`, identical to the
+pre-attribution solo formula for that edge.
+
 This is a semantic discontinuity for future reward curves. No model,
 observation, trajectory, or serialization shape changes, so there is no
 version bump.
+
+## O. Phase V3-8 shared progression, attribution, and campaign guard
+
+### Stock root cause and threshold composition
+
+The native damage dispatcher at `0x0063E7D0` calls the enemy contact method at
+vtable `+0x4C`; only a nonzero result enters the stock reward block. That block
+reads `enemy+0x178` and calls `0x005C8880`. The helper multiplies by
+`gameplay+0x1AB8`, then always calls `ExperienceGain` on the slot-0 progression
+at `gameplay+0x1654`. The damage source is absent from that final lookup. This
+is why a remote or synthetic participant can own the lethal edge while retail
+XP still advances only the host progression.
+
+`ExperienceGain` at the hooked post-gate entry `0x00680AD8` applies native
+level/bonus scaling once, adds the result at `progression+0x34`, and invokes
+`level_up` at `0x0067C250` when appropriate. The latter indexes one global
+float threshold table at `0x008096F8`; the first values are `0, 90, 160, 275,
+390, 520, 650, 800, 1060, 1300, 1600`. It does not vary by participant,
+element, Discipline, or book. Exact threshold evidence and the strict
+greater-than loop are recorded in `docs/skill-picker-re.md`. Applying the
+reward independently to every participant would repeat native scaling and
+could drift. The canonical transaction therefore lets stock mutate slot 0
+once and mirrors the exact resulting snapshot.
+
+### Host-authoritative shared transaction
+
+`shared_stock_xp_hook.inl` captures the authoritative damage source participant,
+run nonce, wave, enemy type, base reward, and gameplay multiplier before the
+contact call. It arms a short-lived credit only after the exact native lethal
+return and nonpositive post-contact HP. The five-byte wrapper at the outer
+`0x0063E7D0` damage dispatcher snapshots slot 0 before calling the unmodified
+dispatcher, then consumes the credit synchronously after the contact and stock
+reward block return. If stock advanced slot 0, that exact native result is
+canonical. The headless host path can fail stock's local-player eligibility
+gates even though the synthetic killer is valid; in that case the wrapper
+calls the proven native `ExperienceGain` once on the killer's owned progression
+and uses its result as canonical. It never applies the input amount separately
+to every participant. The existing `HookExperienceGain` remains the ordinary
+filter/observation hook and does not own this transaction.
+
+The host then:
+
+1. updates every in-run participant's runtime/profile snapshot;
+2. synchronizes each materialized nonlocal progression through native
+   `level_up`, under that participant's Concentrate context, and restores live
+   HP/MP after the native refresh;
+3. retains the exact float XP rather than independently rounding/rewarding;
+4. lets the existing native per-participant option roll and synchronized
+   level-up barrier produce choices; and
+5. publishes protocol-90 `SharedProgressionPacket` reliably with authority,
+   killer, run nonce, revision, level, float XP, and next threshold.
+
+Clients accept the packet only from their configured authority and for their
+active run, reject stale sequence/revision state, synchronize their local
+native progression, and update participant rows. Later owner-authored state or
+frame packets are overlaid with the retained shared snapshot and cannot roll
+the total backward. No Lua-facing address or exception code is exposed.
+
+### Learned reward attribution
+
+Shared progression and learned reward are intentionally separate. The host
+maintains two monotonic, run-scoped counters per participant:
+`reward_attributed_experience` and
+`reward_attributed_enemy_hp_ratio_damage`. The first advances only for the
+killer identified by the consumed native kill credit and uses the actual
+post-scaling XP delta. The second advances from the authoritative botcombat
+damage edge's `source_participant_id`, HP before/after, and maximum HP; overkill
+is clamped at zero HP so solo behavior matches the former snapshot decrease.
+The damage layer's local-human source identity is the transport peer ID, while
+the owned participant-framework row is the stable local ID 1. Shared kill and
+reward lookup normalize that one representation boundary; remote-human and
+synthetic IDs already match their participant rows.
+Lua publishes zero until the counter's run nonce matches the participant's
+current run. `policy_training.lua` differences only these counters. A learned
+bot therefore receives shared levels and offers when a teammate kills, but
+earns neither XP nor damage reward for the teammate's work.
+
+### Normal guard versus acceptance proof
+
+The normal wave integration guard is explicitly
+`WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA = 1`, polled every `0.2` seconds within
+the `300`-second startup/integration window. It measures only whether stock
+waves can move learned progression. Level-up and choice events are not required
+per episode. `--require-natural-choice-proof` is the one-time stricter path:
+the first episode must observe level delta at least one, one native learned
+choice, one accepted learned choice, and a complete accepted interval. Every
+episode log records the gate result plus final per-learned-participant and total
+XP deltas. Rollout timeout remains independently autoscaled from requested
+steps unless explicitly overridden.
+
+Shared progression also levels the disposable trainer owner's stock slot. Its
+native picker participates in the same pause barrier but is not controlled by
+the learned policy. While collecting headless trajectories, the bridge resolves
+that host-self offer through `sd.runtime.choose_level_up_option` using the first
+native-valid option, records the resolution separately, and waits for the
+barrier to clear. This choice is trainer-owned, never emitted as a learned or
+scripted choice event, and cannot enter either PPO batch.
+
+### V3-8 acceptance evidence
+
+The final exact tree rebuilt the loader and all launcher surfaces in Release;
+the loader reported zero warnings and zero errors. The complete gates passed
+546/546 Python tests, 308/308 static RE contracts, and 678 checked source/header
+fragments. The deterministic Lua fixture produced:
+
+- teammate progression `level 1 -> 2`, `experience 89 -> 92`, with both
+  attribution counters unchanged and reward exactly `0.0`;
+- the same solo own-kill edge with four attributed XP and `0.2` attributed HP
+  ratio damage, yielding exactly `4/25 + 0.2*0.65 = 0.29`; and
+- an idle bot with a live enemy and no attributed edge yielding exactly `0.0`,
+  including the unchanged per-step choice-interval accumulator.
+
+The one-time natural acceptance run is
+`runtime/evidence/v38-final-choice-0731i/live-training-report.json`. Seed and
+observed nonce `661733774` ran one learned bot with guardian and striker. The
+normal integration gate passed at eight XP without demanding a level or
+choice. At the native boundary, the canonical snapshot moved from
+`87.974991` XP at level 1 to `91.799988` XP at level 2 against threshold 90.
+The native log then showed pending offers for learned, guardian, striker, and
+host-self progressions; the learned bot accepted generation 2 option 64,
+guardian generation 4 option 32, striker generation 6 option 42, and the
+trainer resolved host-self option 21. The barrier completed with
+`timed_out=0`. All four party rows finished synchronized at rounded XP 95 and
+level 2. The learned choice interval was `trainable=true`, `accepted=true`,
+duration/reward count 40, and reward sum `0.0`; finite SMDP policy/value losses
+were `0.0 / 0.0`, and finite main policy/value losses were `0.0 / 0.0`. The
+zero-reward result is expected for this interval: teammates supplied the
+shared progression while the learned participant had no attributed kill or
+damage edge.
+
+The ordinary no-override smoke is
+`runtime/evidence/v38-final-default-0731h/live-training-report.json`. Two
+disposable episodes completed on seed/nonces `830849934` and `884979204`,
+rotating `solo-learned` then `mixed-skirmisher`. Both positive-XP gates passed
+at delta 4; final learned deltas were 11 and 8, with every in-run party row
+synchronized to the same value. Neither episode leveled or produced a choice,
+which is valid in normal campaign mode. Main policy/value losses were finite:
+`0.0887129229996 / 0.289422446510` and
+`0.0464687056305 / 0.443288686016`. Both recorded the default
+`rollout-steps-autoscale` timeout source at 180 seconds.
+
+Finally, `runtime/evidence/v38-final-scripted-0731b/result.json` passed the
+unchanged scripted stock-wave verifier: the skirmisher reached wave 5 alive at
+50/50 HP with 35/35 accepted casts and 3,665.659 movement units. The strict
+team proof above independently exercised guardian and striker through their
+native synchronized level-up choices. The scripted verifier's paired
+host/client logs also matched 14 reliable progression publications to 14
+client applications, ending at the same exact `53.550007` XP snapshot for run
+nonce `546838040`.

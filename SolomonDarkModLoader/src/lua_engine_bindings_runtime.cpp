@@ -762,6 +762,28 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "experience_current");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.runtime.experience_next));
         lua_setfield(state, -2, "experience_next");
+        const bool reward_attribution_current =
+            participant.runtime.reward_attribution_run_nonce != 0 &&
+            participant.runtime.reward_attribution_run_nonce ==
+                participant.runtime.run_nonce;
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(
+                reward_attribution_current
+                    ? participant.runtime.reward_attributed_experience
+                    : 0.0));
+        lua_setfield(state, -2, "reward_attributed_experience");
+        lua_pushnumber(
+            state,
+            static_cast<lua_Number>(
+                reward_attribution_current
+                    ? participant.runtime
+                          .reward_attributed_enemy_hp_ratio_damage
+                    : 0.0));
+        lua_setfield(
+            state,
+            -2,
+            "reward_attributed_enemy_hp_ratio_damage");
         lua_pushstring(state, multiplayer::ParticipantSceneIntentKindLabel(participant.runtime.scene_intent.kind));
         lua_setfield(state, -2, "scene_kind");
         lua_pushnumber(state, static_cast<lua_Number>(participant.runtime.life_current));

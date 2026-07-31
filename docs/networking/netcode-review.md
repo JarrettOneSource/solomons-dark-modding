@@ -239,6 +239,11 @@ prefix is followed by 32 bytes per participant, up to 250 participants; unused
 capacity is never transmitted. The state checkpoint no longer carries a second
 truncated barrier copy that could overwrite the dedicated reliable record.
 
+Protocol 90 adds one 48-byte reliable `SharedProgressionPacket` per confirmed
+stock kill. It carries only authority, killer, run/revision identity, level,
+exact floating-point XP, and next threshold. This event-rate record converges
+the party total and is not part of the 10 Hz participant frame.
+
 ## Wave and spell-effect traffic
 
 The 20-row wave summary has moved out of `ParticipantFramePacket`. The host now

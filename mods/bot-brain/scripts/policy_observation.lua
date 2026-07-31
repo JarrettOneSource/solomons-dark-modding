@@ -96,17 +96,6 @@ local function find_participant(multiplayer, participant_id)
   return nil
 end
 
-local function enemy_health(enemies)
-  local result = {}
-  for _, enemy in ipairs(enemies) do
-    local actor_id = number(enemy.network_actor_id)
-    if actor_id > 0 then
-      result[actor_id] = ratio(enemy.hp, enemy.max_hp)
-    end
-  end
-  return result
-end
-
 local function new_memory()
   return {
     previous_move_action = 0,
@@ -1769,10 +1758,13 @@ function observation.capture(builder, context, frame)
       mana_ratio = mana_ratio,
       wave = wave_number,
       alive = hp_ratio > 0.0,
-      experience = number(
-        participant and participant.experience_current),
+      attributed_experience = number(
+        participant and
+          participant.reward_attributed_experience),
+      attributed_enemy_hp_ratio_damage = number(
+        participant and
+          participant.reward_attributed_enemy_hp_ratio_damage),
       enemy_count = #enemies,
-      enemy_health = enemy_health(enemies),
     },
   }
 end

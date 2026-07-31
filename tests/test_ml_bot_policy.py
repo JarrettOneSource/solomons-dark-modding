@@ -64,7 +64,9 @@ from train_bot_policy import (  # noqa: E402
     partition_rollout_records,
     prepare_choice_batch,
     prepare_rollout_batch,
+    progression_experience_deltas,
     resolve_rollout_timeout,
+    validate_natural_choice_proof_records,
 )
 
 
@@ -670,6 +672,11 @@ class MlBotPolicyTests(unittest.TestCase):
     ) -> None:
         args = build_parser().parse_args(["live-ppo"])
         self.assertEqual(args.episode_mode, "waves")
+        self.assertFalse(args.require_natural_choice_proof)
+        acceptance_args = build_parser().parse_args(
+            ["live-ppo", "--require-natural-choice-proof"]
+        )
+        self.assertTrue(acceptance_args.require_natural_choice_proof)
         self.assertIsNone(args.rollout_timeout)
         self.assertEqual(resolve_rollout_timeout(960, None), 180.0)
         self.assertEqual(resolve_rollout_timeout(1024, None), 188.0)
@@ -728,7 +735,44 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(gate["route_unit"], (-0.0, 1.0))
         self.assertEqual(gate["geometry_ids"], [7])
 
-    def test_natural_choice_gate_requires_xp_and_learned_acceptance(
+    def test_wave_integration_gate_accepts_xp_without_level_or_choice(
+        self,
+    ) -> None:
+        session = object.__new__(SoloSession)
+        session.participant_progression = lambda _ids: [
+            {
+                "participant_id": 41,
+                "level": 1,
+                "experience": 19,
+                "choice_pending": 0,
+                "choice_generation": 0,
+            }
+        ]
+        session.status = lambda: {
+            "learned_skill_choices_seen": "0",
+            "learned_skill_choices_accepted": "0",
+        }
+        result = session.wait_for_wave_integration(
+            (41,),
+            (
+                {
+                    "participant_id": 41,
+                    "level": 1,
+                    "experience": 0,
+                },
+            ),
+            initial_status={
+                "learned_skill_choices_seen": "0",
+                "learned_skill_choices_accepted": "0",
+            },
+            timeout=1.0,
+        )
+        self.assertEqual(result["level_delta"], 0)
+        self.assertEqual(result["experience_delta"], 19)
+        self.assertEqual(result["native_choices_seen_delta"], 0)
+        self.assertEqual(result["learned_choices_accepted_delta"], 0)
+
+    def test_natural_choice_proof_requires_level_and_learned_acceptance(
         self,
     ) -> None:
         session = object.__new__(SoloSession)
@@ -745,7 +789,7 @@ class MlBotPolicyTests(unittest.TestCase):
             "learned_skill_choices_seen": "1",
             "learned_skill_choices_accepted": "1",
         }
-        result = session.wait_for_natural_choice(
+        result = session.wait_for_natural_choice_proof(
             (41,),
             (
                 {
@@ -764,6 +808,79 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(result["experience_delta"], 100)
         self.assertEqual(result["native_choices_seen_delta"], 1)
         self.assertEqual(result["learned_choices_accepted_delta"], 1)
+
+    def test_choice_proof_records_are_optional_outside_acceptance_probe(
+        self,
+    ) -> None:
+        validate_natural_choice_proof_records([], required=False)
+        with self.assertRaisesRegex(ValueError, "no complete learned"):
+            validate_natural_choice_proof_records([], required=True)
+        validate_natural_choice_proof_records(
+            [_choice_record()], required=True
+        )
+
+    def test_headless_training_owner_resolves_native_picker_without_labels(
+        self,
+    ) -> None:
+        session = object.__new__(SoloSession)
+        session.training_owner_level_up_choices = []
+        statuses = iter((
+            {
+                "level_up_pause_active": "true",
+                "level_up_offer_valid": "true",
+                "level_up_offer_submitted": "false",
+                "level_up_offer_id": "17",
+                "level_up_offer_authority": "2305843009213704705",
+                "level_up_offer_target": "2305843009213704705",
+                "level_up_offer_option_count": "3",
+                "local_participant_id": "1",
+            },
+            {"level_up_pause_active": "false"},
+        ))
+        session.status = lambda: next(statuses)
+        calls: list[str] = []
+
+        def fake_lua(code: str, *, timeout: float = 15.0) -> str:
+            del timeout
+            calls.append(code)
+            return "pcall_ok=true\nresult=true\n"
+
+        session.lua = fake_lua
+        resolved = session.wait_for_training_owner_level_up_barrier(
+            timeout=1.0
+        )
+        self.assertEqual(resolved, [{
+            "participant_id": 1,
+            "target_participant_id": 2305843009213704705,
+            "offer_id": 17,
+            "option_index": 1,
+            "option_count": 3,
+        }])
+        self.assertEqual(
+            session.training_owner_level_up_choices,
+            resolved,
+        )
+        self.assertIn("option_index=1", calls[0])
+        self.assertNotIn("bot_policy_training", calls[0])
+
+    def test_episode_experience_deltas_are_participant_scoped(self) -> None:
+        before = (
+            {"participant_id": 41, "experience": 10},
+            {"participant_id": 42, "experience": 10},
+        )
+        after = (
+            {"participant_id": 41, "experience": 29},
+            {"participant_id": 42, "experience": 29},
+        )
+        self.assertEqual(
+            progression_experience_deltas(before, after),
+            {"41": 19, "42": 19},
+        )
+        with self.assertRaisesRegex(ValueError, "rolled back"):
+            progression_experience_deltas(before, (
+                {"participant_id": 41, "experience": 9},
+                {"participant_id": 42, "experience": 10},
+            ))
 
     def test_seed_round_trip_uses_native_rng_contract(self) -> None:
         session = object.__new__(SoloSession)
@@ -788,6 +905,16 @@ class MlBotPolicyTests(unittest.TestCase):
             },
         )
         self.assertIn("sd.rng.set_seed(requested)", calls[0])
+
+    def test_in_run_participant_ids_are_cap_agnostic(self) -> None:
+        session = object.__new__(SoloSession)
+        session.lua = lambda _code, timeout=10.0: (
+            "participant_ids=1,41,42,43,44,45\n"
+        )
+        self.assertEqual(
+            session.in_run_participant_ids(),
+            (1, 41, 42, 43, 44, 45),
+        )
 
     def test_validation_choice_event_uses_native_level_up_and_learned_apply(
         self,
@@ -1078,6 +1205,15 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(values["trajectory_v3"], "true")
         self.assertEqual(values["permanent_potion_masks"], "true")
         self.assertEqual(values["idle_live_enemy_reward"], "0.0")
+        self.assertEqual(values["teammate_kill_reward"], "0.0")
+        self.assertEqual(values["teammate_shared_level_delta"], "1")
+        self.assertEqual(
+            values["teammate_shared_experience_delta"], "3.0"
+        )
+        self.assertAlmostEqual(
+            float(values["solo_own_kill_reward"]),
+            4.0 / 25.0 + 0.2 * 0.65,
+        )
         self.assertEqual(values["idle_choice_duration_steps"], "1")
         self.assertEqual(values["xp_scale"], "25.0")
 

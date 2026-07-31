@@ -21,6 +21,10 @@ def _read_many(*relative_paths: str) -> str:
 _SPLIT_SOURCE_FRAGMENTS = frozenset(
     {
         "skill_choice_application.inl",
+        "shared_progression_api.inl",
+        "combat_reward_attribution_api.inl",
+        "shared_stock_xp_hook.inl",
+        "shared_progression_sync.inl",
         "public_memory_forwarders.inl",
         "lua_engine_main_thread_pump.inl",
         "lua_engine_registered_spell_effect_parsing.inl",

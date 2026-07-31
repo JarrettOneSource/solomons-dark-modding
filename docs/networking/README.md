@@ -25,11 +25,11 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-The current wire version is protocol 89. See
+The current wire version is protocol 90. See
 [`netcode-review.md`](netcode-review.md) for current packet sizes, cadence,
 interpolation, and bandwidth accounting.
 
-Protocol 89 also carries one authority-scoped, run-nonce-scoped native Game
+Protocol 90 also carries one authority-scoped, run-nonce-scoped native Game
 Over command and per-participant acknowledgement. This is distinct from a
 normal host run exit: every participant consumes the command on its own app
 thread and enters the complete stock Game Over flow.
@@ -254,6 +254,12 @@ Steam playtest flow and the remaining external verification boundary.
   accepted choice. The host auto-picks the first valid rolled option for any
   unresolved participant after 60 seconds, then repeats the accepted results
   and final resume state so packet loss cannot strand one client in the picker.
+  Protocol v90 adds a reliable `SharedProgressionPacket`. A confirmed kill by
+  any in-run participant still enters stock XP scaling exactly once on the
+  host. The host then applies the resulting exact level, floating-point XP, and
+  next threshold to every participant-owned progression and sends that
+  canonical snapshot to clients. The packet is host-only, run/revision scoped,
+  and prevents ordinary owner frames from restoring a stale personal total.
   Protocol v36 adds owner-authored transient spell-effect snapshots. Native
   Ether, Fireball, Water, and Ember objects still spawn through stock cast
   playback on every peer; the new lane binds those observer objects by owner
@@ -335,6 +341,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - `level-up-offer / level-up-choice / level-up-result` — host-authored shared
   level-up options, client-selected offer item, and host sanity-check/apply
   result
+- `shared-progression` — host-authored, run-scoped exact level/XP/next-threshold
+  convergence after a confirmed kill by any participant
 - `progression-delta` — XP, gold, level, spellbook, statbook, and live loadout
   mutation
 - `disconnect / reconnect`
@@ -356,6 +364,8 @@ Sampling happens on the stock game thread after native updates — no extra sim 
 - `world-snapshot` — run-actor structural identity on change and checkpoint
 - `level-up-barrier` — exact-length shared wait state for as many as 250
   participants
+- `shared-progression` — reliable canonical party progression that prevents
+  later owner-authored frames from rolling back XP or level
 
 **Explicitly not in v1:** `clock-sync`, `save-provenance`, input-replay-for-rollback.
 

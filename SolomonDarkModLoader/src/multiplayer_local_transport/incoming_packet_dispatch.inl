@@ -641,6 +641,9 @@ void DispatchReceivedPacket(
             continue;
         }
 
+        if (TryDispatchSharedProgressionPacket(kind, packet_buffer.data(), received, from, now_ms)) {
+            continue;
+        }
         if (kind == PacketKind::LevelUpChoice && received == static_cast<int>(sizeof(LevelUpChoicePacket))) {
             LevelUpChoicePacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
@@ -652,8 +655,7 @@ void DispatchReceivedPacket(
             continue;
         }
 
-        if (kind == PacketKind::LevelUpChoiceResult &&
-            received == static_cast<int>(sizeof(LevelUpChoiceResultPacket))) {
+        if (kind == PacketKind::LevelUpChoiceResult && received == static_cast<int>(sizeof(LevelUpChoiceResultPacket))) {
             LevelUpChoiceResultPacket packet{};
             std::memcpy(&packet, packet_buffer.data(), sizeof(packet));
             if (!IsValidHeader(packet.header, PacketKind::LevelUpChoiceResult)) {
@@ -676,10 +678,8 @@ void DispatchReceivedPacket(
             continue;
         }
         if (kind == PacketKind::LevelUpBarrier &&
-            received >= static_cast<int>(
-                kLevelUpBarrierPacketPrefixBytes) &&
-            received <=
-                static_cast<int>(sizeof(LevelUpBarrierPacket))) {
+            received >= static_cast<int>(kLevelUpBarrierPacketPrefixBytes) &&
+            received <= static_cast<int>(sizeof(LevelUpBarrierPacket))) {
             LevelUpBarrierPacket packet{};
             std::memcpy(
                 &packet,

@@ -76,6 +76,9 @@ struct ParticipantRuntimeInfo {
     float move_speed = 0.0f;
     std::int32_t experience_current = 0;
     std::int32_t experience_next = 0;
+    std::uint32_t reward_attribution_run_nonce = 0;  // Separate from shared party progression.
+    double reward_attributed_experience = 0.0;
+    double reward_attributed_enemy_hp_ratio_damage = 0.0;
     std::int32_t primary_entry_index = -1;
     std::int32_t primary_combo_entry_index = -1;
     std::array<std::int32_t, kSecondaryLoadoutSlotCount> queued_secondary_entry_indices = {

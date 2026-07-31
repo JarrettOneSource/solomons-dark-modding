@@ -973,6 +973,18 @@ struct HostMenuPauseRequestState {
     std::uint64_t last_update_ms = 0;
 };
 
+struct SharedProgressionTransportState {
+    bool valid = false;
+    std::uint64_t authority_participant_id = 0;
+    std::uint64_t killer_participant_id = 0;
+    std::uint32_t run_nonce = 0;
+    std::uint32_t revision = 0;
+    std::uint32_t packet_sequence = 0;
+    std::int32_t level = 0;
+    float experience = 0.0f;
+    std::int32_t experience_next = 0;
+};
+
 #include "multiplayer_local_transport/world_snapshot_fragmentation.inl"
 #include "multiplayer_local_transport/world_motion_snapshot_fragmentation.inl"
 
@@ -1046,6 +1058,7 @@ struct LocalTransportState {
     HostLocalExplodeCastBaseline host_local_explode_cast_baseline;
     bool spell_effect_snapshot_had_effects = false;
     std::uint32_t next_enemy_damage_claim_sequence = 1;
+    std::uint32_t next_shared_progression_revision = 1;
     std::uint64_t next_level_up_offer_id = 1;
     std::uint64_t next_level_up_barrier_id = 1;
     std::string world_scene_key;
@@ -1130,6 +1143,7 @@ struct LocalTransportState {
     std::unordered_map<std::uint64_t, IssuedLevelUpOffer> issued_level_up_offers_by_id;
     std::unordered_map<std::uint64_t, PendingHostLevelUpOfferTarget> pending_level_up_offer_targets_by_participant;
     HostLevelUpBarrierState host_level_up_barrier;
+    SharedProgressionTransportState shared_progression;
     std::unordered_map<std::uint64_t, NativeProgressionReconcileCheckpoint>
         native_progression_reconcile_by_participant;
     std::unordered_set<std::uint64_t> native_applied_level_up_result_offer_ids;
@@ -1630,6 +1644,9 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"
 #include "multiplayer_local_transport/outgoing_packet_sync.inl"
+bool IsConfiguredRemoteAuthorityEndpoint(
+    const TransportPeerEndpoint& from);
+#include "multiplayer_local_transport/shared_progression_sync.inl"
 #include "multiplayer_local_transport/local_session_status.inl"
 void StopLocalUdpIngressWorker();
 #include "multiplayer_local_transport/session_teardown_sync.inl"
@@ -2015,6 +2032,20 @@ int CaptureLocalTransportSehCode(EXCEPTION_POINTERS* exception_pointers, DWORD* 
 #include "multiplayer_local_transport/level_up_authority.inl"
 #include "multiplayer_local_transport/level_up_debug_authority.inl"
 #include "multiplayer_local_transport/level_up_barrier_authority.inl"
+
+void PublishAuthoritativeSharedProgression(
+    std::uint64_t killer_participant_id,
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    float experience,
+    std::int32_t experience_next) {
+    PublishAuthoritativeSharedProgressionInternal(
+        killer_participant_id,
+        run_nonce,
+        level,
+        experience,
+        experience_next);
+}
 
 bool QueueAuthoritativeLuaItemGrant(
     std::uint64_t content_id,

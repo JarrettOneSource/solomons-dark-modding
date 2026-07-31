@@ -883,24 +883,64 @@ local idle_previous = {
   mana_ratio = 0.5,
   wave = 4,
   alive = true,
-  experience = 10,
+  attributed_experience = 0,
+  attributed_enemy_hp_ratio_damage = 0,
   enemy_count = 1,
-  enemy_health = {[101] = 0.8},
 }
 local idle_current = {
   hp_ratio = 0.75,
   mana_ratio = 0.5,
   wave = 4,
   alive = true,
-  experience = 10,
+  attributed_experience = 0,
+  attributed_enemy_hp_ratio_damage = 0,
   enemy_count = 1,
-  enemy_health = {[101] = 0.8},
 }
 local idle_reward = controller:reward(
   idle_previous,
   idle_current,
   false)
 assert(idle_reward == 0.0)
+local teammate_kill_previous = {
+  hp_ratio = 1.0,
+  wave = 1,
+  alive = true,
+  level = 1,
+  experience = 89.0,
+  attributed_experience = 0.0,
+  attributed_enemy_hp_ratio_damage = 0.0,
+}
+local teammate_kill_current = {
+  hp_ratio = 1.0,
+  wave = 1,
+  alive = true,
+  -- Shared progression advances, but neither reward-attribution counter does.
+  level = 2,
+  experience = 92.0,
+  attributed_experience = 0.0,
+  attributed_enemy_hp_ratio_damage = 0.0,
+}
+assert(controller:reward(
+  teammate_kill_previous,
+  teammate_kill_current,
+  false) == 0.0)
+local own_kill_current = {
+  hp_ratio = 1.0,
+  wave = 1,
+  alive = true,
+  level = 2,
+  experience = 92.0,
+  attributed_experience = 4.0,
+  attributed_enemy_hp_ratio_damage = 0.2,
+}
+local own_kill_reward = controller:reward(
+  teammate_kill_previous,
+  own_kill_current,
+  false)
+local legacy_solo_own_kill_reward =
+  4.0 / training_module.XP_SCALE + 0.2 * 0.65
+assert(math.abs(
+  own_kill_reward - legacy_solo_own_kill_reward) < 0.000001)
 local idle_choice_context = {
   policy_choice_pending = {
     duration_steps = 0,
@@ -954,9 +994,9 @@ local main_capture = {
     mana_ratio = 1.0,
     wave = 1,
     alive = true,
-    experience = 10,
+    attributed_experience = 0,
+    attributed_enemy_hp_ratio_damage = 0,
     enemy_count = 1,
-    enemy_health = {[101] = 1.0},
   },
 }
 local main_decision = {
@@ -977,9 +1017,9 @@ main_capture.metrics = {
   mana_ratio = 0.9,
   wave = 1,
   alive = true,
-  experience = 15,
+  attributed_experience = 5,
+  attributed_enemy_hp_ratio_damage = 0.2,
   enemy_count = 1,
-  enemy_health = {[101] = 0.8},
 }
 controller:record(
   training_context,
@@ -991,9 +1031,9 @@ main_capture.metrics = {
   mana_ratio = 0.8,
   wave = 2,
   alive = true,
-  experience = 15,
+  attributed_experience = 5,
+  attributed_enemy_hp_ratio_damage = 0.2,
   enemy_count = 0,
-  enemy_health = {},
 }
 event_b.metrics = main_capture.metrics
 assert(choice_manager:handle(
@@ -1062,9 +1102,9 @@ scripted_controller:terminal(
     mana_ratio = 0.0,
     wave = 2,
     alive = false,
-    experience = 15,
+    attributed_experience = 5,
+    attributed_enemy_hp_ratio_damage = 0.2,
     enemy_count = 0,
-    enemy_health = {},
   })
 assert(
   #scripted_controller:drain_choices(10, false).records == 0)
@@ -1096,6 +1136,17 @@ print("choice_duration_steps=2")
 print("scripted_choice_excluded=true")
 print("trajectory_v3=true")
 print("idle_live_enemy_reward=" .. tostring(idle_reward))
+print("teammate_kill_reward=" .. tostring(
+  controller:reward(
+    teammate_kill_previous,
+    teammate_kill_current,
+    false)))
+print("teammate_shared_level_delta=" .. tostring(
+  teammate_kill_current.level - teammate_kill_previous.level))
+print("teammate_shared_experience_delta=" .. tostring(
+  teammate_kill_current.experience -
+    teammate_kill_previous.experience))
+print("solo_own_kill_reward=" .. tostring(own_kill_reward))
 print("idle_choice_duration_steps=" ..
   tostring(idle_choice_context.policy_choice_pending.duration_steps))
 print("xp_scale=" .. tostring(training_module.XP_SCALE))

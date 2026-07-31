@@ -155,6 +155,12 @@ struct CachedParticipantInventoryDetails {
     BotInventoryDetails details;
 };
 
+struct PendingSharedKillExperienceCredit {
+    SharedKillExperienceCredit credit;
+    float expected_native_amount = 0.0f;
+    std::uint64_t armed_ms = 0;
+};
+
 std::mutex g_bot_runtime_mutex;
 bool g_bot_runtime_initialized = false;
 std::uint64_t g_next_bot_id = kFirstLuaControlledParticipantId;
@@ -175,9 +181,15 @@ std::vector<ActiveBotWeldBuild> g_active_bot_weld_builds;
 std::vector<CachedParticipantInventoryDetails>
     g_inventory_details_cache;
 std::uint64_t g_next_consumable_use_id = 1;
+thread_local PendingSharedKillExperienceCredit
+    g_pending_shared_kill_experience_credit;
 
 constexpr float kBotArrivalThreshold = 0.5f;
 constexpr float kBotManaReadinessEpsilon = 0.001f;
+// Badguy::Contact returns directly into the stock synchronous reward block.
+// A short expiry prevents a malformed/manual enemy path from attributing a
+// later unrelated scripted XP award.
+constexpr std::uint64_t kSharedKillExperienceCreditWindowMs = 250;
 
 #include "bot_runtime/helpers.inl"
 

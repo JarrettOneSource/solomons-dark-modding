@@ -234,8 +234,9 @@ local capture = {
     mana_ratio = 1.0,
     wave = 1,
     alive = true,
+    attributed_experience = 0.0,
+    attributed_enemy_hp_ratio_damage = 0.0,
     enemy_count = 1,
-    enemy_health = {[7] = 1.0},
   },
 }
 controller:enable({seed = 123, capacity = 128})
@@ -262,8 +263,9 @@ capture.metrics = {
   mana_ratio = 0.9,
   wave = 1,
   alive = true,
+  attributed_experience = 0.0,
+  attributed_enemy_hp_ratio_damage = 0.2,
   enemy_count = 1,
-  enemy_health = {[7] = 0.8},
 }
 controller:record(context, capture, decision, 20)
 local finished = controller:finish_episode()

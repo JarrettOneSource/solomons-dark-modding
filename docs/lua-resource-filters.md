@@ -126,9 +126,12 @@ Lua-engine re-entry also fail open. Filters cannot yield.
 
 ## Ownership and replication
 
-Standalone XP, gold, and mana changes run locally. In multiplayer, native XP
-and mana changes run where that participant progression is simulated and
-ordinary progression replication carries the result.
+Standalone XP, gold, and mana changes run locally. In multiplayer, a stock
+kill's XP filter runs once on the host's canonical progression before native
+scaling. The exact post-native level/XP/next-threshold snapshot is then shared
+to every in-run participant; the filter is not replayed per participant.
+Explicit scripted XP and mana changes still run where the target progression
+is simulated, with ordinary progression replication carrying those results.
 
 Gold pickup authority is more explicit. The host filters its local stock
 pickup at `Gold_ChangeGlobal`. For a remote participant, the host filters the

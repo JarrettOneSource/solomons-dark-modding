@@ -6,7 +6,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 89;
+constexpr std::uint16_t kProtocolVersion = 90;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -79,6 +79,7 @@ enum class PacketKind : std::uint16_t {
     WaveSummary = 32,
     ParticipantHitFeedback = 33,
     HazardSnapshot = 34,
+    SharedProgression = 35,
 };
 
 enum ParticipantStateFlag : std::uint8_t {
@@ -1126,6 +1127,17 @@ struct LevelUpOfferPacket {
     LevelUpOfferOptionPacketState options[kLevelUpOfferMaxOptions];
 };
 
+struct SharedProgressionPacket {
+    PacketHeader header;
+    std::uint64_t authority_participant_id;
+    std::uint64_t killer_participant_id;
+    std::uint32_t run_nonce;
+    std::uint32_t revision;
+    std::int32_t level;
+    float experience;
+    std::int32_t experience_next;
+};
+
 struct LevelUpChoicePacket {
     PacketHeader header;
     std::uint64_t participant_id;
@@ -1912,6 +1924,8 @@ static_assert(
 static_assert(sizeof(LuaTimeControlPacket) == 56,
               "Unexpected Lua time control packet size");
 static_assert(sizeof(LevelUpOfferPacket) == 116, "Unexpected level-up offer packet size");
+static_assert(sizeof(SharedProgressionPacket) == 48,
+              "Unexpected shared progression packet size");
 static_assert(sizeof(LevelUpChoicePacket) == 40, "Unexpected level-up choice packet size");
 static_assert(sizeof(LevelUpChoiceResultPacket) == 64, "Unexpected level-up choice result packet size");
 static_assert(sizeof(LevelUpBarrierParticipantPacketState) == 32,

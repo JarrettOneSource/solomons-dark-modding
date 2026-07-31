@@ -268,6 +268,10 @@ void ApplyRemoteStatePacket(
             normalized,
             now_ms,
             participant);
+        participant->character_profile.level =
+            participant->runtime.level;
+        participant->character_profile.experience =
+            participant->runtime.experience_current;
         const bool should_apply_gold =
             !participant->owned_progression.initialized ||
             packet.gold_revision >= participant->owned_progression.gold_revision;
@@ -498,6 +502,10 @@ void ApplyRemoteParticipantFramePacket(
             normalized,
             now_ms,
             participant);
+        participant->character_profile.level =
+            participant->runtime.level;
+        participant->character_profile.experience =
+            participant->runtime.experience_current;
         profile = participant->character_profile;
         participant_found = true;
     });

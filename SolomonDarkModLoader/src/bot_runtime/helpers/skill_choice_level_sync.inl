@@ -114,3 +114,60 @@ bool SyncNativeBotProgressionLevel(
         " synced=" + std::to_string(synced ? 1 : 0));
     return synced;
 }
+
+bool SyncNativeProgressionToSharedSnapshot(
+    uintptr_t progression_address,
+    uintptr_t source_progression_address,
+    std::int32_t level,
+    float experience,
+    std::int32_t expected_next_experience,
+    DWORD* exception_code) {
+    if (progression_address == 0 ||
+        level <= 0 ||
+        !std::isfinite(experience) ||
+        experience < 0.0f ||
+        expected_next_experience <= 0) {
+        return false;
+    }
+
+    const auto rounded_experience =
+        static_cast<std::int32_t>(std::lround(experience));
+    if (!SyncNativeBotProgressionLevel(
+            progression_address,
+            source_progression_address,
+            level,
+            rounded_experience,
+            exception_code)) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    float native_experience = 0.0f;
+    float native_next_experience = 0.0f;
+    std::int32_t native_level = 0;
+    if (!memory.TryWriteField(
+            progression_address,
+            kProgressionXpOffset,
+            experience) ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionLevelOffset,
+            &native_level) ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionXpOffset,
+            &native_experience) ||
+        !memory.TryReadField(
+            progression_address,
+            kProgressionNextXpThresholdOffset,
+            &native_next_experience) ||
+        native_level != level ||
+        !std::isfinite(native_experience) ||
+        !std::isfinite(native_next_experience) ||
+        std::fabs(native_experience - experience) > 0.0001f ||
+        std::lround(native_next_experience) !=
+            expected_next_experience) {
+        return false;
+    }
+    return true;
+}

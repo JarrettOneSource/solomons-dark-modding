@@ -181,116 +181,34 @@ void UpdateParticipantLevelProfileState(
     }
 }
 
+void UpdateInRunParticipantSharedProgressionState(
+    std::uint32_t run_nonce,
+    std::int32_t level,
+    float experience,
+    std::int32_t next_experience) {
+    const auto rounded_experience =
+        static_cast<std::int32_t>(std::lround(experience));
+    UpdateRuntimeState([&](RuntimeState& state) {
+        for (auto& participant : state.participants) {
+            if (!participant.runtime.valid ||
+                !participant.runtime.in_run ||
+                participant.runtime.run_nonce != run_nonce) {
+                continue;
+            }
+            participant.character_profile.level = level;
+            participant.character_profile.experience =
+                rounded_experience;
+            participant.runtime.level = level;
+            participant.runtime.experience_current =
+                rounded_experience;
+            participant.runtime.experience_next = next_experience;
+        }
+    });
+}
+
 #include "natural_skill_choices_api.inl"
 
-struct LocalSharedLevelUpVitalsSnapshot {
-    bool health_valid = false;
-    bool mana_valid = false;
-    float hp = 0.0f;
-    float max_hp = 0.0f;
-    float mp = 0.0f;
-    float max_mp = 0.0f;
-};
-
-LocalSharedLevelUpVitalsSnapshot CaptureLocalSharedLevelUpVitals(uintptr_t progression_address) {
-    LocalSharedLevelUpVitalsSnapshot snapshot;
-    if (progression_address == 0) {
-        return snapshot;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    float hp = 0.0f;
-    float max_hp = 0.0f;
-    if (memory.TryReadField(progression_address, kProgressionHpOffset, &hp) &&
-        memory.TryReadField(progression_address, kProgressionMaxHpOffset, &max_hp) &&
-        std::isfinite(hp) &&
-        std::isfinite(max_hp) &&
-        max_hp > 0.0f) {
-        snapshot.health_valid = true;
-        snapshot.hp = hp;
-        snapshot.max_hp = max_hp;
-    }
-
-    float mp = 0.0f;
-    float max_mp = 0.0f;
-    if (memory.TryReadField(progression_address, kProgressionMpOffset, &mp) &&
-        memory.TryReadField(progression_address, kProgressionMaxMpOffset, &max_mp) &&
-        std::isfinite(mp) &&
-        std::isfinite(max_mp) &&
-        max_mp > 0.0f) {
-        snapshot.mana_valid = true;
-        snapshot.mp = mp;
-        snapshot.max_mp = max_mp;
-    }
-
-    return snapshot;
-}
-
-bool RestoreLocalSharedLevelUpVitals(
-    uintptr_t progression_address,
-    const LocalSharedLevelUpVitalsSnapshot& snapshot) {
-    if (progression_address == 0 ||
-        (!snapshot.health_valid && !snapshot.mana_valid)) {
-        return true;
-    }
-
-    auto& memory = ProcessMemory::Instance();
-    bool wrote = true;
-    if (snapshot.health_valid) {
-        wrote = memory.TryWriteField<float>(
-            progression_address,
-            kProgressionMaxHpOffset,
-            snapshot.max_hp) && wrote;
-        wrote = memory.TryWriteField<float>(
-            progression_address,
-            kProgressionHpOffset,
-            snapshot.hp) && wrote;
-    }
-    if (snapshot.mana_valid) {
-        wrote = memory.TryWriteField<float>(
-            progression_address,
-            kProgressionMaxMpOffset,
-            snapshot.max_mp) && wrote;
-        wrote = memory.TryWriteField<float>(
-            progression_address,
-            kProgressionMpOffset,
-            snapshot.mp) && wrote;
-    }
-    return wrote;
-}
-
-void LogLocalSharedLevelUpVitalsPreservedIfChanged(
-    uintptr_t progression_address,
-    const LocalSharedLevelUpVitalsSnapshot& before) {
-    if (progression_address == 0 ||
-        (!before.health_valid && !before.mana_valid)) {
-        return;
-    }
-
-    const auto native_after = CaptureLocalSharedLevelUpVitals(progression_address);
-    constexpr float kVitalsLogEpsilon = 0.001f;
-    const bool health_changed =
-        before.health_valid &&
-        native_after.health_valid &&
-        (std::fabs(before.hp - native_after.hp) > kVitalsLogEpsilon ||
-         std::fabs(before.max_hp - native_after.max_hp) > kVitalsLogEpsilon);
-    const bool mana_changed =
-        before.mana_valid &&
-        native_after.mana_valid &&
-        (std::fabs(before.mp - native_after.mp) > kVitalsLogEpsilon ||
-         std::fabs(before.max_mp - native_after.max_mp) > kVitalsLogEpsilon);
-    if (!health_changed && !mana_changed) {
-        return;
-    }
-
-    Log(
-        "[bots] local shared level-up sync preserving live vitals. progression=" +
-        HexString(progression_address) +
-        " hp_before=" + std::to_string(before.hp) + "/" + std::to_string(before.max_hp) +
-        " hp_native=" + std::to_string(native_after.hp) + "/" + std::to_string(native_after.max_hp) +
-        " mp_before=" + std::to_string(before.mp) + "/" + std::to_string(before.max_mp) +
-        " mp_native=" + std::to_string(native_after.mp) + "/" + std::to_string(native_after.max_mp));
-}
+#include "shared_progression_api.inl"
 
 bool SyncParticipantProgressionToSharedLevelUp(
     std::uint64_t participant_id,

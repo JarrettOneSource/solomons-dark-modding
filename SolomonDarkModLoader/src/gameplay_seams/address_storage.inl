@@ -250,6 +250,7 @@ uintptr_t kSpellCast3F0 = 0;
 uintptr_t kSpellCastDispatcher = 0;
 uintptr_t kSpellCastPurePrimary = 0;
 uintptr_t kGoldChanged = 0;
+uintptr_t kNativeApplyDamage = 0;
 uintptr_t kExperienceGain = 0;
 uintptr_t kLevelUp = 0;
 uintptr_t kLevelUpScreenCreate = 0;

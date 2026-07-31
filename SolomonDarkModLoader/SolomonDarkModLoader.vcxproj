@@ -287,11 +287,13 @@
     <ClInclude Include="src\bot_runtime\public_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\casting_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\consumable_use_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\combat_reward_attribution_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\inventory_details_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\lifecycle_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\loadout_details_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\movement_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\scene_intents_api.inl" />
+    <ClInclude Include="src\bot_runtime\public_api\shared_progression_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choices_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\natural_skill_choices_api.inl" />
     <ClInclude Include="src\bot_runtime\public_api\skill_choice_application.inl" />
@@ -430,7 +432,7 @@
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_damage_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\player_hit_feedback_authority_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\badguy_damage_hook.inl" />
-    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\synthetic_stock_xp_hook.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\shared_stock_xp_hook.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_enemy_damage_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\match_player_damage_observation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\gameplay_hooks\packet_enemy_damage_suppression.inl" />
@@ -534,6 +536,7 @@
     <ClInclude Include="src\multiplayer_local_transport\run_loading_barrier_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\run_loading_visibility.inl" />
     <ClInclude Include="src\multiplayer_local_transport\shared_gameplay_pause_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\shared_progression_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_snapshot_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\hagatha_perk_state.inl" />
     <ClInclude Include="src\multiplayer_local_transport\level_up_authority.inl" />

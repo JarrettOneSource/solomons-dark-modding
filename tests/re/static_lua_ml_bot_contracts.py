@@ -397,14 +397,14 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         assert token in training, (
             f"trajectory v3 writer lacks {token}"
         )
-    # V3-7 removes passive survival reward and adds only native XP progress;
-    # damage, self-vitals, wave, death, and clamp coefficients remain fixed.
+    # V3-7 removes passive survival reward; V3-8 source-attributes both combat
+    # terms while self-vitals, wave, death, and clamp coefficients stay fixed.
     for token in (
         "local XP_SCALE = 25.0",
         "local reward = 0.0",
         "reward = reward + hp_delta * 1.25",
-        "reward = reward + xp_delta / XP_SCALE",
-        "(previous_ratio - current_ratio) * 0.65",
+        "reward = reward + attributed_xp_delta / XP_SCALE",
+        "reward = reward + attributed_damage_delta * 0.65",
         "math.min(wave_delta, 1) * 1.5",
         "reward = reward - 2.0",
         "math.max(-4.0, math.min(4.0, reward))",
@@ -446,8 +446,8 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
     return (
         "V3 Phase 3 pins 1279 ordered observations, exact cached geometry, "
         "four action masks, inventory and hazard semantics, and separate "
-        "main and choice-event trajectories with the V3-7 XP-only progress "
-        "reward and zero passive survival reward"
+        "main and choice-event trajectories with V3-8 source-attributed "
+        "combat progress and zero passive survival reward"
     )
 
 
@@ -1087,7 +1087,8 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         '"choice_complete_intervals"',
         '"choice_update_records"',
         '"choice_intervals"',
-        '"natural_progression_gate"',
+        '"wave_integration_gate"',
+        '"episode_experience_deltas"',
         '"live-training-report.json"',
         'f"episode-{iteration:04d}.json"',
         "candidate not in run_seeds",
@@ -1281,7 +1282,7 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
     )
     damage_hook = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
-        "synthetic_stock_xp_hook.inl"
+        "shared_stock_xp_hook.inl"
     )
     level_hooks = _read(
         "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
@@ -1310,8 +1311,9 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
         '"waves episodes require an isolated temporary profile"',
         "def start_stock_wave_episode(",
         "def participant_progression(",
-        "def wait_for_natural_choice(",
-        '"stock waves did not produce natural learned progression',
+        "def wait_for_wave_integration(",
+        "def wait_for_natural_choice_proof(",
+        '"stock-wave integration produced no learned participant XP',
         '"learned_skill_choices_seen"',
     ):
         assert token in bridge, f"V3-6 bridge lacks {token}"
@@ -1337,7 +1339,8 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
     _require_in_order(
         trainer,
         "session.start_stock_wave_episode(",
-        "session.wait_for_natural_choice(",
+        "session.wait_for_wave_integration(",
+        "session.wait_for_natural_choice_proof(",
         "session.clear_main_training_stream()",
         "session.wait_for_rollouts(",
         "session.finish_training_episode()",
@@ -1354,6 +1357,8 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
         '"rollout_timeout_source"',
         '"progression_before"',
         '"progression_after"',
+        '"episode_experience_deltas"',
+        '"wave_experience_delta"',
         '"learned_skill_choices_seen_delta"',
         '"learned_skill_choices_accepted_delta"',
         '"choice_intervals"',
@@ -1371,18 +1376,20 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
     for token in (
         "native_kill_result == 0",
         "hp_after > 0.0f",
-        "level_before_route != capture.level_before",
-        "std::fabs(xp_before_route - capture.xp_before) > 0.0001f",
-        "capture.base_reward * capture.gameplay_multiplier",
-        "CallNativeExperienceGainSafe(",
-        "credited_xp=",
+        "capture.credit.base_reward *",
+        "capture.credit.gameplay_multiplier",
+        "ArmSharedKillExperienceCredit(",
     ):
         assert token in damage_hook, f"V3-6 stock XP route lacks {token}"
-    assert '#include "synthetic_stock_xp_hook.inl"' in damage_dispatch
+    assert '#include "shared_stock_xp_hook.inl"' in damage_dispatch
     for token in (
         "FindNaturalSyntheticParticipantForProgression(",
         "UpdateParticipantLevelProfileState(",
         "PublishNaturalParticipantLevelUp(",
+        "ConsumeSharedKillExperienceCredit(",
+        "SyncInRunParticipantsToSharedProgression(",
+        "ObserveParticipantKillExperienceRewardAttribution(",
+        "PublishAuthoritativeSharedProgression(",
     ):
         assert token in level_hooks, f"V3-6 progression hook lacks {token}"
     for token in (
@@ -1413,17 +1420,197 @@ def test_ml_bot_v36_stock_xp_wave_training_is_pinned() -> str:
     ):
         assert token in layout, f"V3-6 native XP evidence lacks {token}"
 
-    assert "participant and participant.experience_current" in observation
+    assert "participant.reward_attributed_experience" in observation
+    assert (
+        "participant.reward_attributed_enemy_hp_ratio_damage" in observation
+    )
     for token in (
         "local XP_SCALE = 25.0",
         "local reward = 0.0",
-        "reward = reward + xp_delta / XP_SCALE",
+        "reward = reward + attributed_xp_delta / XP_SCALE",
+        "reward = reward + attributed_damage_delta * 0.65",
         "pending.rewards[#pending.rewards + 1] = reward",
     ):
         assert token in training, f"V3-7 reward path lacks {token}"
     assert "local reward = 0.002" not in training
     return (
         "V3-6 makes isolated stock waves the training default, routes "
-        "synthetic-attributed stock XP through owned native progression, "
-        "fails closed on natural choices, and V3-7 removes passive reward"
+        "stock kill XP through shared owned progression, keeps strict natural "
+        "choices acceptance-only, and V3-7 removes passive reward"
+    )
+
+
+def test_ml_bot_v38_shared_progression_and_reward_attribution_is_pinned() -> str:
+    protocol = _read(
+        "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
+    )
+    stock_kill = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "shared_stock_xp_hook.inl"
+    )
+    level_hooks = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "enemy_death_reward_level_up_hooks.inl"
+    )
+    shared_api = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "shared_progression_api.inl"
+    )
+    lifecycle_targets = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/state_and_targets.inl"
+    )
+    lifecycle_install = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/hook_installation.inl"
+    )
+    layout = _read("config/binary-layout.ini")
+    attribution = _read(
+        "SolomonDarkModLoader/src/bot_runtime/public_api/"
+        "combat_reward_attribution_api.inl"
+    )
+    damage_edge = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "match_enemy_damage_observation.inl"
+    )
+    transport = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "shared_progression_sync.inl"
+    )
+    incoming = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_sync.inl"
+    )
+    bindings = _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
+    )
+    training = _read("mods/bot-brain/scripts/policy_training.lua")
+    fixture = _read("tests/lua/ml_bot_policy_v3_phase3.lua")
+    bridge = _read("tools/ml_bot/bridge.py")
+    trainer = _read("tools/train_bot_policy.py")
+
+    for token in (
+        "constexpr std::uint16_t kProtocolVersion = 90;",
+        "SharedProgression = 35",
+        "struct SharedProgressionPacket",
+        "std::uint64_t killer_participant_id",
+        "float experience",
+        "static_assert(sizeof(SharedProgressionPacket) == 48",
+    ):
+        assert token in protocol, f"V3-8 shared progression wire lacks {token}"
+
+    for token in (
+        "IsLuaModSimulationAuthority()",
+        "ResolveDamageSourceParticipantId(source_actor_address)",
+        "multiplayer::kLocalParticipantId",
+        "participant->runtime.in_run",
+        "native_kill_result == 0",
+        "capture.credit.base_reward *",
+        "capture.credit.gameplay_multiplier",
+        "ArmSharedKillExperienceCredit(",
+    ):
+        assert token in stock_kill, f"V3-8 kill capture lacks {token}"
+    for token in (
+        "HookNativeApplyDamage(",
+        "original(self, target_actor);",
+        "ConsumeSharedKillExperienceCredit(",
+        "CompleteSharedKillProgressionTransaction(",
+        "SyncInRunParticipantsToSharedProgression(",
+        "ObserveParticipantKillExperienceRewardAttribution(",
+        "PublishAuthoritativeSharedProgression(",
+        'canonical_source = "killer_progression"',
+    ):
+        assert token in level_hooks, f"V3-8 progression transaction lacks {token}"
+    _require_in_order(
+        level_hooks,
+        "original(self, target_actor);",
+        "ConsumeSharedKillExperienceCredit(",
+        "CompleteSharedKillProgressionTransaction(",
+    )
+    for token in (
+        "using NativeApplyDamageFn =",
+        "kHookNativeApplyDamage",
+        "targets[kHookNativeApplyDamage] = {kNativeApplyDamage, 5};",
+    ):
+        assert token in lifecycle_targets, f"V3-8 damage wrapper lacks {token}"
+    assert 'reinterpret_cast<void*>(&HookNativeApplyDamage)' in lifecycle_install
+    assert '"damage.apply"' in lifecycle_install
+    assert "native_apply_damage=0x0063E7D0" in layout
+    for token in (
+        "UpdateInRunParticipantSharedProgressionState(",
+        "RunWithParticipantConcentrationContext(",
+        "SyncNativeProgressionToSharedSnapshot(",
+        "RestoreLocalSharedLevelUpVitals(",
+        "SyncLocalPlayerProgressionToSharedSnapshot(",
+    ):
+        assert token in shared_api, f"V3-8 native progression sync lacks {token}"
+
+    for token in (
+        "SteamNetworkSendMode::ReliableNoNagle",
+        "IsConfiguredRemoteAuthorityEndpoint(from)",
+        "packet.run_nonce",
+        "packet.revision <= previous.revision",
+        "SyncLocalPlayerProgressionToSharedSnapshot(",
+    ):
+        assert token in transport, f"V3-8 replicated progression lacks {token}"
+    assert "ApplySharedProgressionToParticipantRuntime(" in incoming
+
+    for token in (
+        "reward_attribution_run_nonce",
+        "FindRewardAttributionParticipant(",
+        "participant_id == local_transport_participant_id",
+        "FindLocalParticipant(state)",
+        "reward_attributed_experience += experience",
+        "reward_attributed_enemy_hp_ratio_damage +=",
+    ):
+        assert token in attribution, f"V3-8 reward counter lacks {token}"
+    for token in (
+        "observation.source_participant_id",
+        "observation.target_hp_before",
+        "observation.target_max_hp",
+        "ObserveParticipantEnemyDamageRewardAttribution(",
+    ):
+        assert token in damage_edge, f"V3-8 damage edge lacks {token}"
+    assert "reward_attribution_current" in bindings
+    assert "participant.runtime.run_nonce" in bindings
+
+    for token in (
+        "current.attributed_experience",
+        "current.attributed_enemy_hp_ratio_damage",
+        "reward = reward + attributed_xp_delta / XP_SCALE",
+        "reward = reward + attributed_damage_delta * 0.65",
+    ):
+        assert token in training, f"V3-8 reward lacks {token}"
+    assert "current.enemy_health" not in training
+    for token in (
+        "teammate_kill_reward=",
+        "solo_own_kill_reward=",
+        "legacy_solo_own_kill_reward",
+    ):
+        assert token in fixture, f"V3-8 team reward fixture lacks {token}"
+
+    for token in (
+        "WAVE_INTEGRATION_MIN_EXPERIENCE_DELTA = 1",
+        "NATURAL_CHOICE_PROOF_MIN_LEVEL_DELTA = 1",
+        "def wait_for_wave_integration(",
+        "def wait_for_natural_choice_proof(",
+        "TRAINING_OWNER_LEVEL_UP_RESOLVE_TIMEOUT_SECONDS = 10.0",
+        "TRAINING_OWNER_LEVEL_UP_POLL_INTERVAL_SECONDS = 0.05",
+        "def _resolve_training_owner_level_up_offer(",
+        "sd.runtime.choose_level_up_option",
+        "target_participant_id != authority_participant_id",
+        "def wait_for_training_owner_level_up_barrier(",
+    ):
+        assert token in bridge, f"V3-8 wave guard lacks {token}"
+    for token in (
+        'args.require_natural_choice_proof and iteration == 1',
+        '"episode_experience_deltas"',
+        '"episode_experience_delta_total"',
+        '"party_progression_after"',
+        '"party_experience_deltas"',
+        '"party_progression_synchronized"',
+        '"training_owner_level_up_choices"',
+    ):
+        assert token in trainer, f"V3-8 episode reporting lacks {token}"
+    return (
+        "V3-8 pins host-authoritative shared native progression while both "
+        "ML reward terms remain source-participant attributed"
     )
