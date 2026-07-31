@@ -32,6 +32,7 @@ from static_lua_bot_brain_contracts import (
     test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
 )
 from static_lua_bot_play_contracts import (
+    test_bot_play_for_me_reuses_one_brain_and_owner_control_rails,
     test_lua_local_player_takeover_is_owner_scoped_and_stock_routed,
 )
 from static_lua_ml_bot_contracts import (
@@ -580,6 +581,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua bot brain is rostered and applied-damage gated",
         test_lua_bot_brain_is_rostered_native_routed_and_damage_gated,
+    ),
+    (
+        "Lua local-player takeover is owner-scoped and stock-routed",
+        test_lua_local_player_takeover_is_owner_scoped_and_stock_routed,
+    ),
+    (
+        "Bot Play For Me reuses one brain and owner-control rails",
+        test_bot_play_for_me_reuses_one_brain_and_owner_control_rails,
     ),
     (
         "Lua bot loadout details are cached and observation-safe",

@@ -1,13 +1,14 @@
 # Autonomous Lua bot-brain roster
 
-`mods/bot-brain/` is the opt-in reference brain for host-owned synthetic
-participants. Its host-scoped `roster` list contains ordered rows with name,
-element (`fire`, `water`, `earth`, `air`, or `ether`), native Discipline
-(Mind, Body, or Arcane; stored as `mind`, `body`, or `arcane`), and Behavior
-(`skirmisher`, `guardian`, `striker`, or `learned`). The current launcher
-schema accepts up to 32 rows; the session's configured participant capacity,
-not Lua, decides how many can become active. The mod is disabled by default,
-so an ordinary game never gains an unsolicited participant.
+`mods/bot-brain/` is the opt-in reference brain for synthetic participants and
+the local player's optional **Bot Play For Me** mode. Its host-scoped `roster`
+list contains ordered rows with name, element (`fire`, `water`, `earth`, `air`,
+or `ether`), native Discipline (Mind, Body, or Arcane; stored as `mind`,
+`body`, or `arcane`), and Behavior (`skirmisher`, `guardian`, `striker`, or
+`learned`). The current launcher schema accepts up to 32 rows; the session's
+configured participant capacity, not Lua, decides how many can become active.
+The mod and local takeover are disabled by default, so an ordinary game never
+gains an unsolicited participant or loses human control.
 
 The default roster contains one Arcane fire skirmisher named `Ember`. The
 earlier `persona_name` scalar is gone; names belong to rows. The other launcher
@@ -16,6 +17,41 @@ cadence for scripted rows, local focus key, and the confirmed host-only roster
 respawn action. `policy_weld_preference` controls whether the shared skill
 manager prefers, avoids, or automatically accepts Spell Welding. Learned rows
 decide every 100 ms of simulation time once matching v2 weights are installed.
+
+## Bot Play For Me
+
+The local-scoped **Bot Play For Me** toggle and F9 keybind can be changed
+during a run. The selected local play style creates another `brain.lua`
+context; `scripts/local_player.lua` only adapts that context's semantic
+`move_to`, `stop`, and `cast` requests to the local player's stock controls.
+It contains no behavior profiles, steering, flee logic, target selection, or
+level-up policy of its own. Keeping takeover inside `bot.brain` therefore
+leaves one brain implementation instead of creating a second mod with copied
+policy.
+
+Movement queues one frame at a time through
+`sd.input.hold_movement_frames`. Primary attacks pin the materialized enemy
+and use `sd.input.hold_mouse_left_frames`; secondary attacks use the player's
+live `belt_slot_N` binding. These queues are consumed inside the existing
+slot-zero player tick before the stock control-brain update. The adapter does
+not move the OS mouse, synthesize Windows input, write transforms, or create a
+new multiplayer authority path. A host drives its host-local player and a
+client drives its client-local player; normal cast, damage, death, and
+replication ownership remains unchanged.
+
+The local context derives its element from the equipped primary, uses the
+same deterministic level-up chooser, and uses the one-argument
+local-owner loot request. Guardian excludes the controlled player from its
+ward search so it protects another living native participant instead of
+orbiting itself. The small `BOT PLAYING [F9]` indicator is local immediate-mode
+drawing and never enters network state.
+
+Turning takeover off clears its destination and calls the owner-scoped native
+release. That release zeroes movement, mouse holds, key edges, cast intent,
+targets, and control-brain movement before the human regains control. Death,
+spectator mode, run exit, and Game Over release the same ownership
+automatically; a live wave-boundary respawn reacquires it if the user's toggle
+is still on.
 
 ## Ordered reconciliation
 

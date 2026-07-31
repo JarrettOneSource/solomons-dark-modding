@@ -94,7 +94,7 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "tests/lua/ml_bot_policy_v2_phase3.lua"
     )
 
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == "1.2.0"
     capabilities = set(
         manifest["runtime"]["requiredCapabilities"]
     )
@@ -347,7 +347,7 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     expert = _read("tools/ml_bot/expert.py")
     weights = _read("mods/bot-brain/scripts/policy_weights.lua")
 
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == "1.2.0"
     learned = next(
         choice
         for entry in manifest["settings"]["entries"]
@@ -815,7 +815,8 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
     )
 
     assert "sd.world.request_loot_pickup" in brain
-    assert "pickup_id,\n        context.participant_id" in brain
+    assert "context.request_loot_pickup" in brain
+    assert "pickup_id,\n          context.participant_id" in brain
     assert "pickup request queued network_drop_id=" in brain
     assert (
         "QueueSyntheticParticipantLootPickupRequest(" in transport_header

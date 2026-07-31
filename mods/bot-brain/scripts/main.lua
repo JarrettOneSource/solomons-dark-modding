@@ -51,6 +51,8 @@ end
 local require_mod = create_mod_require()
 local steering = assert(require_mod("scripts/steering.lua"))
 local brain = assert(require_mod("scripts/brain.lua"))
+local local_player =
+  assert(require_mod("scripts/local_player.lua"))
 local roster = assert(require_mod("scripts/roster.lua"))
 local policy_spec =
   assert(require_mod("scripts/policy_spec.lua"))
@@ -126,6 +128,9 @@ shared.think_interval_ms =
 shared.focus_bot_key = sd.settings.get("focus_bot_key")
 shared.weld_preference =
   sd.settings.get("policy_weld_preference")
+shared.play_for_me = sd.settings.get("play_for_me")
+shared.play_for_me_behavior =
+  sd.settings.get("play_for_me_behavior")
 
 local debug = {
   authority = false,
@@ -146,6 +151,8 @@ local debug = {
   think_profile = shared.think_profile,
   focus_bot_key = shared.focus_bot_key,
   weld_preference = shared.weld_preference,
+  play_for_me = shared.play_for_me,
+  play_for_me_behavior = shared.play_for_me_behavior,
   focus_active = false,
   settings_change_count = 0,
   last_settings_change_key = "",
@@ -183,6 +190,13 @@ local function simulation_authority()
 end
 
 local manager = roster.new(brain, steering, shared, debug)
+local local_controller = local_player.new(
+  brain,
+  steering,
+  shared,
+  shared.play_for_me,
+  shared.play_for_me_behavior)
+debug.local_player = local_controller.debug
 local state = {
   last_tick_ms = -shared.manager_interval_ms,
   last_now_ms = 0,
@@ -285,6 +299,16 @@ sd.settings.on_changed(function(key, new_value, old_value)
   elseif key == "policy_weld_preference" then
     shared.weld_preference = new_value
     debug.weld_preference = new_value
+  elseif key == "play_for_me" then
+    shared.play_for_me = new_value
+    debug.play_for_me = new_value
+    local_controller:set_desired(
+      new_value,
+      "setting toggled off")
+  elseif key == "play_for_me_behavior" then
+    shared.play_for_me_behavior = new_value
+    debug.play_for_me_behavior = new_value
+    local_controller:set_behavior(new_value)
   elseif key == "roster" then
     debug.last_roster_new_size = #new_value
     debug.last_roster_new_value = new_value
@@ -325,12 +349,14 @@ sd.events.on("run.started", function()
   policy_geometry:reset(nil)
   policy_training:begin_episode()
   manager:reset_run(true)
+  local_controller:reset_run(true)
   log(nil, "run started")
 end)
 
 sd.events.on("run.ended", function()
   policy_geometry:reset(nil)
   manager:reset_run(false)
+  local_controller:reset_run(false)
   log(nil, "run ended")
 end)
 
@@ -342,6 +368,7 @@ sd.events.on("runtime.tick", function(event)
   if now_ms == nil then
     return
   end
+  local_controller:tick(now_ms, event)
   update_focus_key()
   if now_ms - state.last_tick_ms <
       shared.manager_interval_ms then

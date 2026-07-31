@@ -231,22 +231,23 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
 
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == "1.2.0"
     assert manifest["summary"] == (
-        "Scripted and ML bot teammates that play like real players."
+        "Bot teammates and an optional bot brain for your own player."
     )
     assert manifest["description"] == (
-        "Adds bot teammates to your lobby. Bots fill real player slots: "
-        "they show up in the member list, enemies target them, and they "
-        "move, cast spells, die, and respawn like human players. Choose "
-        "a scripted style or the bundled learned policy for each bot. "
-        "Name each bot and choose its element and discipline in the "
-        "launcher's mod settings. Changes apply live, and in multiplayer "
-        "the host's roster syncs to everyone. The learned policy runs "
-        "locally inside Lua with no Python, GPU, or network service. "
-        "Requires v0.1.0-beta.22 or newer."
+        "Adds bot teammates to your lobby and can play your local "
+        "character for you. Toggle Bot Play For Me at any time or press "
+        "F9; turning it off returns clean control immediately. Local "
+        "play uses the same skirmisher, guardian, striker, or learned "
+        "brain as bot teammates and works for the host or a client "
+        "through normal multiplayer authority and replication. Bot "
+        "teammates still fill real player slots, appear in the member "
+        "list, draw enemy attention, and move, cast, die, and respawn "
+        "like human players. The learned policy runs locally inside Lua "
+        "with no Python, GPU, or network service."
     )
-    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.22"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.28"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
     required_capabilities = set(

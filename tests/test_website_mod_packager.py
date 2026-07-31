@@ -15,7 +15,7 @@ PACKAGER = ROOT / "scripts" / "package_website_mod.py"
 
 
 class WebsiteModPackagerTests(unittest.TestCase):
-    def test_submission_matches_listing_and_manifest(self) -> None:
+    def test_published_submission_stays_pinned_until_owner_flip(self) -> None:
         listing = json.loads(
             (
                 ROOT
@@ -54,18 +54,20 @@ class WebsiteModPackagerTests(unittest.TestCase):
                 "Requires v0.1.0-beta.22 or newer."
             )
         )
-        self.assertEqual(
-            submission["fields"]["version"],
-            manifest["version"],
-        )
+        self.assertEqual(submission["fields"]["version"], "1.1.0")
         self.assertEqual(listing["manifestId"], manifest["id"])
         self.assertEqual(
             listing["minimumLoaderVersion"],
-            manifest["minimumLoaderVersion"],
+            "0.1.0-beta.22",
         )
+        self.assertEqual(manifest["version"], "1.2.0")
         self.assertEqual(
             manifest["minimumLoaderVersion"],
-            "0.1.0-beta.22",
+            "0.1.0-beta.28",
+        )
+        self.assertNotEqual(
+            submission["fields"]["version"],
+            manifest["version"],
         )
         self.assertEqual(listing["screenshots"], [])
         self.assertEqual(submission["files"]["screenshots"], [])
@@ -94,10 +96,10 @@ class WebsiteModPackagerTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             details = json.loads(metadata.read_text())
             self.assertEqual(details["id"], "bot.brain")
-            self.assertEqual(details["version"], "1.1.0")
+            self.assertEqual(details["version"], "1.2.0")
             self.assertEqual(
                 details["minimumLoaderVersion"],
-                "0.1.0-beta.22",
+                "0.1.0-beta.28",
             )
             self.assertEqual(
                 details["packageSha256"],
@@ -111,6 +113,7 @@ class WebsiteModPackagerTests(unittest.TestCase):
                     sorted(archive.namelist()),
                 )
                 for required in (
+                    "scripts/local_player.lua",
                     "scripts/policy.lua",
                     "scripts/policy_observation.lua",
                     "scripts/policy_spec.lua",

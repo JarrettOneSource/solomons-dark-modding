@@ -98,9 +98,15 @@ local function update_attack_window(context, now_ms)
 end
 
 local function read_skill_choices(context)
-  local ok, choices = pcall(
-    sd.bots.get_skill_choices,
-    context.participant_id)
+  local reader = context.read_skill_choices
+  local ok, choices
+  if type(reader) == "function" then
+    ok, choices = pcall(reader, context)
+  else
+    ok, choices = pcall(
+      sd.bots.get_skill_choices,
+      context.participant_id)
+  end
   if not ok or type(choices) ~= "table" or
       choices.pending ~= true or
       type(choices.options) ~= "table" or
@@ -242,16 +248,26 @@ local function choose_pending_skill(context, choices)
       "skill choices contained no eligible deterministic option"
     return
   end
-  local apply_ok, accepted = pcall(
-    sd.bots.choose_skill,
-    context.participant_id,
-    selected_index,
-    generation)
+  local selected = choices.options[selected_index]
+  local apply_ok, accepted
+  if type(context.choose_skill) == "function" then
+    apply_ok, accepted = pcall(
+      context.choose_skill,
+      context,
+      selected_index,
+      generation,
+      selected)
+  else
+    apply_ok, accepted = pcall(
+      sd.bots.choose_skill,
+      context.participant_id,
+      selected_index,
+      generation)
+  end
   if apply_ok and accepted == true then
     context.last_skill_choice_generation = generation
     context.debug.skill_choices_accepted =
       context.debug.skill_choices_accepted + 1
-    local selected = choices.options[selected_index]
     context.shared.log(
       context,
       "skill choice accepted generation=" .. tostring(generation) ..
@@ -276,7 +292,10 @@ local function track_path_distance(context, bot_x, bot_y)
   context.last_position_y = bot_y
 end
 
-local function nearest_human(bot_x, bot_y)
+local function nearest_human(
+    bot_x,
+    bot_y,
+    excluded_participant_id)
   local ok, multiplayer = pcall(sd.runtime.get_multiplayer_state)
   if not ok or type(multiplayer) ~= "table" then
     return nil
@@ -286,7 +305,9 @@ local function nearest_human(bot_x, bot_y)
   for _, participant in ipairs(multiplayer.participants or {}) do
     local x = tonumber(participant.x)
     local y = tonumber(participant.y)
-    if tostring(participant.controller_kind or "") == "Native" and
+    if tonumber(participant.participant_id) ~=
+          tonumber(excluded_participant_id) and
+        tostring(participant.controller_kind or "") == "Native" and
         participant.runtime_valid == true and
         participant.in_run == true and
         (tonumber(participant.life_current) or 0.0) > 0.0 and
@@ -440,7 +461,8 @@ local function issue_primary_cast(context, now_ms, target)
       0,
       target.x,
       target.y,
-      context.shared.cast_hold_ms)
+      context.shared.cast_hold_ms,
+      target)
   end)
   if ok and accepted == true then
     context.debug.cast_accepted =
@@ -534,7 +556,8 @@ local function issue_policy_cast(
       action.skill_slot,
       target.x,
       target.y,
-      context.shared.cast_hold_ms)
+      context.shared.cast_hold_ms,
+      target)
   end)
   if ok and accepted == true then
     context.debug.cast_accepted =
@@ -597,10 +620,18 @@ local function request_nearby_pickup(
         pickup.distance
       context.debug.last_pickup_request_x = capture.bot_x
       context.debug.last_pickup_request_y = capture.bot_y
-      local ok, accepted, sequence_or_error = pcall(
-        sd.world.request_loot_pickup,
-        pickup_id,
-        context.participant_id)
+      local ok, accepted, sequence_or_error
+      if type(context.request_loot_pickup) == "function" then
+        ok, accepted, sequence_or_error = pcall(
+          context.request_loot_pickup,
+          context,
+          pickup_id)
+      else
+        ok, accepted, sequence_or_error = pcall(
+          sd.world.request_loot_pickup,
+          pickup_id,
+          context.participant_id)
+      end
       if ok and accepted == true then
         memory.pickup_request_accepted[pickup_id] = true
         context.debug.pickup_request_accepted =
@@ -1101,7 +1132,10 @@ function brain.think(
   local enemies = all_enemies
   if context.row.behavior == "guardian" then
     local ward_distance
-    ward, ward_distance = nearest_human(bot_x, bot_y)
+    ward, ward_distance = nearest_human(
+      bot_x,
+      bot_y,
+      context.participant_id)
     context.debug.guardian_human_participant_id =
       ward and ward.participant_id or 0
     context.debug.guardian_ward_distance =

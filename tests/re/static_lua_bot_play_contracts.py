@@ -129,3 +129,105 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "The owner-scoped local-player takeover uses the slot-zero stock "
         "control path and clears every queued control on release"
     )
+
+
+def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
+    import json
+
+    manifest = json.loads(_read("mods/bot-brain/manifest.json"))
+    main = _read("mods/bot-brain/scripts/main.lua")
+    local_player = _read("mods/bot-brain/scripts/local_player.lua")
+    brain = _read("mods/bot-brain/scripts/brain.lua")
+    steering = _read("mods/bot-brain/scripts/steering.lua")
+    observation = _read(
+        "mods/bot-brain/scripts/policy_observation.lua"
+    )
+    lua_contract = _read(
+        "tests/lua/bot_play_for_me_contract.lua"
+    )
+
+    assert manifest["id"] == "bot.brain"
+    assert manifest["version"] == "1.2.0"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.28"
+    capabilities = set(
+        manifest["runtime"]["requiredCapabilities"]
+    )
+    assert {
+        "input.local_player.takeover",
+        "draw.local.immediate",
+        "draw.text",
+        "draw.primitives",
+    } <= capabilities
+    settings = {
+        entry["key"]: entry
+        for entry in manifest["settings"]["entries"]
+    }
+    assert settings["play_for_me"]["default"] is False
+    assert settings["play_for_me"]["scope"] == "local"
+    assert settings["play_for_me_toggle"]["default"] == "F9"
+    assert settings["play_for_me_toggle"]["scope"] == "local"
+    behavior_values = {
+        choice["value"]
+        for choice in settings["play_for_me_behavior"]["choices"]
+    }
+    assert behavior_values == {
+        "skirmisher",
+        "guardian",
+        "striker",
+        "learned",
+    }
+
+    _require_in_order(
+        main,
+        'require_mod("scripts/brain.lua")',
+        'require_mod("scripts/local_player.lua")',
+        "local_player.new(",
+        "local_controller:tick(now_ms, event)",
+    )
+    assert "local_controller:set_desired(" in main
+    assert "local_controller:set_behavior(" in main
+    assert "local_controller:reset_run(false)" in main
+
+    for token in (
+        "self.brain.new(",
+        "self.brain.think(",
+        "self.brain.reset_run(",
+        "sd.input.set_local_player_takeover",
+        "sd.input.set_local_player_takeover_target",
+        "sd.input.hold_movement_frames",
+        "sd.input.hold_mouse_left_frames",
+        "sd.input.press_binding",
+        "sd.runtime.choose_level_up_option",
+        "sd.world.request_loot_pickup(network_drop_id)",
+        'sd.draw.text("BOT PLAYING  [F9]"',
+    ):
+        assert token in local_player, f"local adapter lacks {token}"
+    assert "PROFILES" not in local_player
+    assert "kite_direction" not in local_player
+    assert "flee_threshold" not in local_player
+
+    assert "context.read_skill_choices" in brain
+    assert "context.choose_skill" in brain
+    assert "context.request_loot_pickup" in brain
+    assert "excluded_participant_id" in brain
+    assert "context.shared.cast_hold_ms,\n      target)" in brain
+    assert "actor_address" not in steering
+    assert "actor_address" not in observation
+    assert "sd.world.get_run_enemy_by_network_id" in local_player
+
+    for token in (
+        "assert(controller.debug.release_clean)",
+        "assert(input_state.pending_movement_frames == 0)",
+        "assert(input_state.pending_mouse_left_frames == 0)",
+        "assert(input_state.pending_scancode_count == 0)",
+        "assert(input_state.target_actor_address == 0)",
+        "spectator_active = true",
+        "assert(controller.debug.activation_count == 3)",
+    ):
+        assert token in lua_contract
+
+    return (
+        "Bot Play For Me adapts the existing bot brain to owner-local stock "
+        "controls, auto-levels and picks up through existing owner rails, "
+        "and proves clean death, respawn, and toggle release"
+    )
