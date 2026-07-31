@@ -456,6 +456,48 @@ class GameOverSessionSemanticsVerifierTests(unittest.TestCase):
             blank = verifier.classify_loading_boneyard_image(path)
             self.assertFalse(blank["matched"])
 
+    def test_loading_classifier_accepts_canonical_late_stage_art(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "loading.png"
+            with Image.open(verifier.LOADING_BACKGROUND) as source:
+                image = source.convert("RGB").resize(
+                    (800, 450),
+                    Image.Resampling.BILINEAR,
+                )
+            bar_left = int(round(image.width * 0.20))
+            bar_right = int(round(image.width * 0.80))
+            bar_y = min(
+                image.height - 1,
+                int(round(image.height * 0.925)) + 4,
+            )
+            fill_right = bar_left + int(
+                round((bar_right - bar_left) * 0.92)
+            )
+            for x in range(bar_left, fill_right):
+                image.putpixel((x, bar_y), (202, 161, 77))
+            for x in range(fill_right, bar_right):
+                image.putpixel((x, bar_y), (20, 17, 13))
+            image.save(path)
+
+            matched = verifier.classify_loading_boneyard_image(path)
+            self.assertTrue(matched["matched"])
+            self.assertTrue(matched["branded_matched"])
+            self.assertAlmostEqual(
+                matched["measured_bar_progress"],
+                0.92,
+                places=2,
+            )
+
+            image.paste(
+                (20, 17, 13),
+                (bar_left, bar_y, bar_right, bar_y + 1),
+            )
+            image.save(path)
+            missing_progress = (
+                verifier.classify_loading_boneyard_image(path)
+            )
+            self.assertFalse(missing_progress["matched"])
+
     def test_native_game_over_classifier_requires_all_three_gold_lines(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "game-over.png"

@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageStat
 
 from multiplayer_defense_behavior_harness import invoke_native_magic_hit_trial
 from multiplayer_frame_capture import capture_game_backbuffer
@@ -58,6 +58,7 @@ SOLO_PARTICIPANT_ID = 0x2000000000001A01
 SOLO_PLAYER_NAME = "Solo Game Over"
 OUTPUT = ROOT / "runtime" / "game_over_session_semantics.json"
 ARTIFACT_ROOT = ROOT / "runtime" / "game-over-acceptance"
+LOADING_BACKGROUND = ROOT / "assets" / "loading" / "Wizards_dire_BG.png"
 SOLO_LAUNCHER = ROOT / "scripts" / "Launch-LocalSoloSession.ps1"
 CLICK_WINDOW = ROOT / "scripts" / "click_window.py"
 VITAL_TOLERANCE = 0.05
@@ -1248,7 +1249,7 @@ def healthy_loading_barrier_state_matches(
 
 
 def classify_loading_boneyard_image(path: Path) -> dict[str, object]:
-    """Recognize the intentional centered text on the black loading frame."""
+    """Recognize either supported in-game Loading Boneyard presentation."""
 
     with Image.open(path) as source:
         image = source.convert("RGB")
@@ -1260,15 +1261,55 @@ def classify_loading_boneyard_image(path: Path) -> dict[str, object]:
     dark_fraction = sum(
         max(pixel) < 20 for pixel in all_pixels
     ) / float(len(all_pixels))
+    legacy_matched = (
+        center_light_fraction >= 0.003
+        and dark_fraction >= 0.98
+    )
+
+    with Image.open(LOADING_BACKGROUND) as background_source:
+        background = background_source.convert("RGB").resize(
+            image.size,
+            Image.Resampling.BILINEAR,
+        )
+    comparison_height = int(image.height * 0.72)
+    difference = ImageChops.difference(
+        image.crop((0, 0, image.width, comparison_height)),
+        background.crop((0, 0, image.width, comparison_height)),
+    )
+    background_mean_error = sum(
+        ImageStat.Stat(difference).mean
+    ) / 3.0
+    bar_left = int(round(image.width * 0.20))
+    bar_right = int(round(image.width * 0.80))
+    bar_y = min(
+        image.height - 1,
+        int(round(image.height * 0.925)) + 4,
+    )
+    bar_pixels = [
+        image.getpixel((x, bar_y))
+        for x in range(bar_left, bar_right)
+    ]
+    measured_bar_progress = sum(
+        red >= 175
+        and 110 <= green <= 205
+        and blue <= 135
+        and red > green
+        for red, green, blue in bar_pixels
+    ) / float(len(bar_pixels))
+    branded_matched = (
+        background_mean_error <= 8.0
+        and 0.88 <= measured_bar_progress <= 1.0
+    )
     return {
-        "matched": (
-            center_light_fraction >= 0.003
-            and dark_fraction >= 0.98
-        ),
+        "matched": legacy_matched or branded_matched,
         "width": image.width,
         "height": image.height,
         "center_light_fraction": center_light_fraction,
         "dark_fraction": dark_fraction,
+        "legacy_matched": legacy_matched,
+        "branded_matched": branded_matched,
+        "canonical_background_mean_error": background_mean_error,
+        "measured_bar_progress": measured_bar_progress,
     }
 
 
