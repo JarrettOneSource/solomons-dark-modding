@@ -1,0 +1,63 @@
+# Botendure owner wave
+
+Date: 2026-07-31
+
+Status: corrective code complete; exact-SHA owner-topology rerun pending
+
+## Scope
+
+This investigation uses the owner's real two-machine topology: HomePC hosts,
+workstation20 joins by the lobby ID through the desktop launcher and Steam
+broker, and both local players use Bot Play For Me. It does not use a direct
+transport seam, a test-only takeover path, an owner installation, or the NFO
+host.
+
+Evidence is rooted at
+`/mnt/d/codex-evidence/botendure-20260731`. The `steam-r6` attempt crossed the
+real launcher boundaries on both machines, created and joined one Steam lobby,
+started both product processes, authenticated two members, and observed a
+connected Steam route. It then failed before both peers converged in the hub.
+
+## Product finding: deferred Lua entry failures leaked states
+
+The workstation20 Bot Brain entry script could not read one of its modules.
+The loader retried the complete deferred entry startup approximately every
+tick. The captured client log contains 145 failures, followed by a Lua
+`not enough memory` compilation failure and process loss. The read-only
+observer loaded before the failure, but its Lua pipe could no longer return a
+valid game state.
+
+`CreateLuaStateForMod` allocates a new Lua state before it registers bindings
+and executes the entry script. A failed deferred start returned that partial
+state to `PollLuaSettingsReplicationChanges`. That caller logged the error and
+continued without closing the state or retiring the deferred flag. The next
+poll allocated another state. The ordinary initial-load caller already closes
+a failed state; only the host-settings deferred path omitted the cleanup.
+
+The correction makes a deferred entry failure fail closed for that process.
+It logs the failure once, calls `CloseLuaStateForMod`, and therefore releases
+the partial state and retires the deferred flag. A broken mod remains disabled
+instead of consuming memory in a tick-rate retry loop.
+
+## Harness finding: workstation20 path guard covered the wrong maximum
+
+The failed Bot Brain module was staged at a 261-character Windows path. The
+real-flow harness checked only its loading-screen asset path on workstation20,
+although its local peer guard enumerated every staged Bot Brain file. The
+remote check consequently accepted a layout beyond the native path budget.
+
+The corrective harness now enumerates every Bot Brain source file at its
+hashed runtime destination on workstation20 and checks the actual longest
+candidate. It also uses a compact, still stage-confined `r\l` launcher layout,
+bringing the observed longest runtime path below the 248-character safety
+limit. The exact uploaded launcher directory is renamed only inside the
+newly-owned stage, and all existing confinement and exact-path cleanup rules
+remain in force.
+
+## Rerun requirement
+
+The product failure fix and remote staging fix must be rebuilt together and
+rerun through the same real launcher, lobby, and Steam flow. Completion
+requires both Bot Play takeovers to become active through the mod setting,
+live state and transport sampling throughout the match, milestone screenshots
+from both peers, and either natural Game Over or the 90-minute endurance cap.

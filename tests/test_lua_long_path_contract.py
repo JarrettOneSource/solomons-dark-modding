@@ -57,6 +57,26 @@ class LuaLongPathContractTests(unittest.TestCase):
             project,
         )
 
+    def test_deferred_entry_failure_closes_its_partial_lua_state(self) -> None:
+        source = (
+            ROOT
+            / "SolomonDarkModLoader"
+            / "src"
+            / "lua_settings_runtime.cpp"
+        ).read_text(encoding="utf-8")
+        failure = source.split(
+            "if (!CreateLuaStateForMod(", 1
+        )[1].split(
+            '"started deferred entry script after host settings', 1
+        )[0]
+
+        self.assertIn("mod disabled for", failure)
+        self.assertIn("CloseLuaStateForMod(mod);", failure)
+        self.assertLess(
+            failure.index("CloseLuaStateForMod(mod);"),
+            failure.index("continue;"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

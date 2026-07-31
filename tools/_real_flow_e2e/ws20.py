@@ -22,6 +22,7 @@ from PIL import Image
 from .config import HarnessConfig, PeerConfig
 from .runtime import LuaPipe, RuntimeProbeError, parse_key_values
 from .windows import (
+    BOT_PLAY_MOD_ID,
     PowerShell,
     WindowsPeer,
     launch_environment,
@@ -37,6 +38,43 @@ BRIDGE_PING_LENGTH = 0xFFFFFFFF
 
 class Ws20HarnessError(RuntimeError):
     """The workstation20 Steam peer could not be controlled safely."""
+
+
+def _longest_staged_runtime_path(
+    harness: HarnessConfig,
+    game_executable: str,
+) -> str:
+    stage_root = ntpath.dirname(game_executable)
+    candidates = [
+        ntpath.join(
+            stage_root,
+            ".sdmod",
+            "assets",
+            "loading",
+            "Wizards_dire_BG.png",
+        )
+    ]
+    if harness.bot_play_for_me:
+        bot_source = harness.source_root / "mods" / "bot-brain"
+        bot_storage_key = hashlib.sha256(
+            BOT_PLAY_MOD_ID.encode("utf-8")
+        ).hexdigest()
+        staged_bot_root = ntpath.join(
+            stage_root,
+            ".sdmod",
+            "runtime",
+            "mods",
+            bot_storage_key,
+        )
+        candidates.extend(
+            ntpath.join(
+                staged_bot_root,
+                *source.relative_to(bot_source).parts,
+            )
+            for source in bot_source.rglob("*")
+            if source.is_file()
+        )
+    return max(candidates, key=len)
 
 
 def _format_lua_response(raw: str) -> str:
@@ -866,12 +904,8 @@ class Ws20Peer:
                 "the owned workstation20 stage was not created"
             )
         client = prepare_windows_peer(harness, harness.client)
-        run_root = ntpath.join(
-            connection.stage_root,
-            "r",
-            harness.run_name,
-        )
-        bundle_root = ntpath.join(run_root, client.bundle_root.name)
+        run_root = ntpath.join(connection.stage_root, "r")
+        bundle_root = ntpath.join(run_root, "l")
         game_directory = ntpath.join(
             run_root,
             harness.game_directory.name,
@@ -896,12 +930,9 @@ class Ws20Peer:
             "logs",
             "network-telemetry.jsonl",
         )
-        longest_path = ntpath.join(
-            ntpath.dirname(game_executable),
-            ".sdmod",
-            "assets",
-            "loading",
-            "Wizards_dire_BG.png",
+        longest_path = _longest_staged_runtime_path(
+            harness,
+            game_executable,
         )
         if len(longest_path) >= 248:
             raise Ws20HarnessError(
@@ -962,6 +993,25 @@ New-Item -ItemType Directory -Path '{escaped_tools}' -Force | Out-Null
 """
         )
         connection.copy_tree_to(client.bundle_root, run_root)
+        uploaded_bundle_root = ntpath.join(
+            run_root,
+            client.bundle_root.name,
+        )
+        connection._require_confined(uploaded_bundle_root)
+        connection._require_confined(bundle_root)
+        connection.run_ps(
+            f"""
+$source='{uploaded_bundle_root.replace("'", "''")}'
+$target='{bundle_root.replace("'", "''")}'
+if(-not (Test-Path -LiteralPath $source -PathType Container)){{
+  throw 'The uploaded workstation20 launcher bundle is missing.'
+}}
+if(Test-Path -LiteralPath $target){{
+  throw 'The compact workstation20 launcher target must be new.'
+}}
+Move-Item -LiteralPath $source -Destination $target -ErrorAction Stop
+"""
+        )
         connection.copy_tree_to(harness.game_directory, run_root)
         tool_sources = (
             harness.source_root

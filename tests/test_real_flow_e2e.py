@@ -46,7 +46,11 @@ from tools._real_flow_e2e.windows import (
     close_exact_owned_processes,
     launch_environment,
 )
-from tools._real_flow_e2e.ws20 import RemoteWindowsConnection, Ws20Peer
+from tools._real_flow_e2e.ws20 import (
+    RemoteWindowsConnection,
+    Ws20Peer,
+    _longest_staged_runtime_path,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2036,6 +2040,43 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertEqual(start_client.count('-Name "Host Game"'), 2)
         self.assertEqual(start_client.count('-Name "Join Game"'), 1)
         self.assertIn('-Name "Launch Game"', start_client)
+
+    def test_ws20_safe_path_guard_covers_every_bot_runtime_file(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary)
+            bot_root = source_root / "mods" / "bot-brain"
+            nested = bot_root / "scripts" / "policy"
+            nested.mkdir(parents=True)
+            (bot_root / "manifest.json").write_text("{}\n")
+            longest = nested / "long-policy-descriptor.lua"
+            longest.write_text("return {}\n")
+            harness = SimpleNamespace(
+                source_root=source_root,
+                bot_play_for_me=True,
+            )
+
+            path = _longest_staged_runtime_path(
+                harness,
+                r"C:\Users\client-b\sd-botendure-stage\r\l\data"
+                r"\runtime\instances\bplyc\stage\SolomonDark.exe",
+            )
+
+        self.assertTrue(path.endswith(r"long-policy-descriptor.lua"))
+        self.assertIn("\\.sdmod\\runtime\\mods\\", path)
+
+    def test_ws20_uses_the_compact_owned_stage_layout(self) -> None:
+        source = (
+            ROOT / "tools" / "_real_flow_e2e" / "ws20.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'run_root = ntpath.join(connection.stage_root, "r")',
+            source,
+        )
+        self.assertIn('bundle_root = ntpath.join(run_root, "l")', source)
+        self.assertIn("Move-Item -LiteralPath $source", source)
 
     def test_ws20_action_uses_one_remote_powershell_round_trip(
         self,

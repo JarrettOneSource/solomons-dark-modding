@@ -573,7 +573,9 @@ void PollLuaSettingsReplicationChanges() {
                     &load_error)) {
                 LogLuaMessage(
                     *mod,
-                    "failed to start deferred entry script: " + load_error);
+                    "failed to start deferred entry script; mod disabled for "
+                    "this process: " + load_error);
+                CloseLuaStateForMod(mod);
                 continue;
             }
             LogLuaMessage(

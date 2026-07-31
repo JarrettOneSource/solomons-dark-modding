@@ -681,6 +681,8 @@ def test_lua_bot_brain_late_join_waits_for_complete_host_settings() -> str:
         "HaveCompleteReplicatedHostSettings(*mod)",
         "authoritative host settings ready before entry script",
         "CreateLuaStateForMod(",
+        "failed to start deferred entry script; mod disabled for",
+        "CloseLuaStateForMod(mod)",
         "started deferred entry script after host settings",
         "InitializeLuaHotReloadState(mod)",
         "ApplyEffectiveChange(",
