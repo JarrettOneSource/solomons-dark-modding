@@ -186,6 +186,14 @@ end
 if #output == 0 then return "none" end
 return table.concat(output, "\n")
 """
+AUTHORITY_DAMAGE_RE = re.compile(
+    r"Multiplayer enemy damage claim accepted\. "
+    r"participant_id=(\d+) "
+    r"target_network_actor_id=(\d+) "
+    r"damage=([-+0-9.eE]+) "
+    r"before_hp=([-+0-9.eE]+) "
+    r"after_hp=([-+0-9.eE]+)"
+)
 
 
 def validate_stock_water_cast(
@@ -1019,6 +1027,50 @@ def _drain_damage_observations(
             ) from exc
 
 
+def _drain_authority_damage_log(
+    log_path: Path,
+    offset: int,
+    partial_line: str,
+    enemy_rows: list[dict[str, Any]],
+) -> tuple[int, str]:
+    if not log_path.is_file():
+        return offset, partial_line
+    with log_path.open("rb") as stream:
+        stream.seek(offset)
+        chunk = stream.read()
+        new_offset = stream.tell()
+    if not chunk:
+        return new_offset, partial_line
+    text = partial_line + chunk.decode("utf-8", errors="replace")
+    lines = text.splitlines(keepends=True)
+    next_partial = ""
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        next_partial = lines.pop()
+    for line in lines:
+        match = AUTHORITY_DAMAGE_RE.search(line)
+        if match is None:
+            continue
+        before_hp = float(match.group(4))
+        after_hp = float(match.group(5))
+        accepted_damage = before_hp - after_hp
+        if accepted_damage <= 0.0:
+            continue
+        enemy_rows.append(
+            {
+                "sequence": 0,
+                "monotonicMs": 0,
+                "sourceParticipantId": int(match.group(1)),
+                "targetNetworkActorId": int(match.group(2)),
+                "targetHpBefore": before_hp,
+                "targetHpAfter": after_hp,
+                "damage": accepted_damage,
+                "claimedDamage": float(match.group(3)),
+                "evidenceSource": "host-authority-log",
+            }
+        )
+    return new_offset, next_partial
+
+
 def _damage_metrics(
     config: HarnessConfig,
     enemy_rows: list[dict[str, Any]],
@@ -1236,6 +1288,18 @@ def _run_bot_play_for_me(
     result["damageObserversReset"] = _reset_damage_observations(
         host_pipe
     )
+    authority_log_path = (
+        host.game_executable.parent
+        / ".sdmod"
+        / "logs"
+        / "solomondarkmodloader.log"
+    )
+    authority_log_offset = (
+        authority_log_path.stat().st_size
+        if authority_log_path.is_file()
+        else 0
+    )
+    authority_log_partial = ""
     result["activationRequests"] = {
         "host": _set_bot_play(
             host,
@@ -1302,6 +1366,15 @@ def _run_bot_play_for_me(
             host_pipe,
             enemy_rows,
             player_rows,
+        )
+        (
+            authority_log_offset,
+            authority_log_partial,
+        ) = _drain_authority_damage_log(
+            authority_log_path,
+            authority_log_offset,
+            authority_log_partial,
+            enemy_rows,
         )
         host_bot = _bot_probe(host_pipe)
         client_bot = _bot_probe(client_pipe)
@@ -1437,6 +1510,15 @@ def _run_bot_play_for_me(
         host_pipe,
         enemy_rows,
         player_rows,
+    )
+    (
+        authority_log_offset,
+        authority_log_partial,
+    ) = _drain_authority_damage_log(
+        authority_log_path,
+        authority_log_offset,
+        authority_log_partial,
+        enemy_rows,
     )
     missing_screenshots = sorted(
         {"host", "clientB"} - screenshots.keys()

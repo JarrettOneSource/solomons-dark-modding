@@ -27,6 +27,7 @@ from tools._real_flow_e2e.runtime import (
 )
 from tools.verify_real_flow_e2e import (
     _assert_clean_release,
+    _drain_authority_damage_log,
     _native_enemy_render_assertion,
     validate_living_wave_boundary,
     validate_stock_water_cast,
@@ -1034,6 +1035,47 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertEqual(
                 result["accepted"][0]["localActorAddress"],
                 0x1234,
+            )
+
+    def test_authority_damage_log_records_accepted_remote_claims(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = Path(directory) / "loader.log"
+            log_path.write_text(
+                "[2026-07-31 04:46:17.004] Multiplayer enemy damage "
+                "claim accepted. participant_id=3098476543630901250 "
+                "target_network_actor_id=281543696187396 "
+                "damage=1.000000 before_hp=2.500000 "
+                "after_hp=1.500000 position_applied=1\n",
+                encoding="utf-8",
+            )
+            rows = []
+
+            offset, partial = _drain_authority_damage_log(
+                log_path,
+                0,
+                "",
+                rows,
+            )
+
+            self.assertEqual(offset, log_path.stat().st_size)
+            self.assertEqual(partial, "")
+            self.assertEqual(
+                rows,
+                [
+                    {
+                        "sequence": 0,
+                        "monotonicMs": 0,
+                        "sourceParticipantId": 3098476543630901250,
+                        "targetNetworkActorId": 281543696187396,
+                        "targetHpBefore": 2.5,
+                        "targetHpAfter": 1.5,
+                        "damage": 1.0,
+                        "claimedDamage": 1.0,
+                        "evidenceSource": "host-authority-log",
+                    }
+                ],
             )
 
     def test_cleanup_accepts_a_process_that_exits_before_close(
