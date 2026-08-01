@@ -1652,8 +1652,7 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         if (now_ms - s_last_local_primary_no_emission_log_ms >= 1000) {
             s_last_local_primary_no_emission_log_ms = now_ms;
             Log(
-                "Multiplayer local pure-primary cast not queued: stock "
-                "emitted no matching projectile. actor=" +
+                "Multiplayer local pure-primary cast not queued: stock emitted no matching projectile. actor=" +
                 HexString(actor_address) +
                 " selection=" +
                 std::to_string(local_primary_descriptor.selection_state) +

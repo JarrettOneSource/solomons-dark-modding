@@ -114,6 +114,7 @@
     <ClInclude Include="include\mod_loader_bot_match_state.inl" />
     <ClInclude Include="include\mod_loader_damage_observation_state.inl" />
     <ClInclude Include="include\mod_loader_hub_state.inl" />
+    <ClInclude Include="include\mod_loader_local_player_control_state.inl" />
     <ClInclude Include="include\mod_loader_native_minion_state.inl" />
     <ClInclude Include="include\mod_loader_participant_gameplay_state.inl" />
     <ClInclude Include="include\mod_loader_public_api.inl" />

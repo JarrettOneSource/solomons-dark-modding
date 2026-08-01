@@ -1,0 +1,45 @@
+struct SDModLocalPlayerControlTakeoverState {
+    bool active = false;
+    bool clean = false;
+    std::string owner_mod_id;
+    uintptr_t actor_address = 0;
+    bool primary_selection_snapshot_pending = false;
+    bool primary_selection_restore_succeeded = true;
+    bool native_state_clear_succeeded = true;
+    uintptr_t primary_selection_actor_address = 0;
+    std::int32_t primary_selection_state_before = -1;
+    std::int32_t primary_selection_state_current = -1;
+    uintptr_t last_primary_selection_restored_actor_address = 0;
+    std::int32_t last_primary_selection_restored_state = -1;
+    uintptr_t target_actor_address = 0;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    bool target_valid = false;
+    float movement_input_x = 0.0f;
+    float movement_input_y = 0.0f;
+    float pending_movement_x = 0.0f;
+    float pending_movement_y = 0.0f;
+    std::uint32_t pending_movement_frames = 0;
+    std::uint32_t pending_mouse_left_frames = 0;
+    std::uint32_t pending_mouse_right_frames = 0;
+    std::uint32_t pending_scancode_count = 0;
+    std::uint32_t pending_native_control_frames = 0;
+    std::uint8_t cast_intent = 0;
+    std::int32_t primary_skill_id = 0;
+    std::int32_t previous_skill_id = 0;
+    uintptr_t current_target_actor_address = 0;
+    float control_brain_move_x = 0.0f;
+    float control_brain_move_y = 0.0f;
+};
+
+struct SDModLocalManaDeltaObservation {
+    bool armed = false;
+    bool valid = false;
+    uintptr_t actor_address = 0;
+    std::uint32_t call_count = 0;
+    std::uint32_t spend_call_count = 0;
+    std::uint32_t recovery_call_count = 0;
+    float spent_total = 0.0f;
+    float recovered_total = 0.0f;
+    float last_delta = 0.0f;
+};

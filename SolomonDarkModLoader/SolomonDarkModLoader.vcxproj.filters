@@ -221,6 +221,9 @@
     <ClInclude Include="include\mod_loader_hub_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\mod_loader_local_player_control_state.inl">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\mod_loader_native_minion_state.inl">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
