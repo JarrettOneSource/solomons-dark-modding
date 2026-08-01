@@ -39,6 +39,13 @@ The endurance evidence adds:
 - both peers' mandatory `SDMOD_NETWORK_TELEMETRY=1` streams, transport
   accounting, exact-process cleanup proof, and the evidence SHA-256 manifest.
 
+Paired captures use each game's D3D9 backbuffer seam concurrently. Their
+capture-execution brackets are measured on the controller clock, so workstation
+clock offset and image-transfer time cannot masquerade as screenshot skew. The
+complete two-peer bracket must span at most one second. A capture gets at most
+three attempts; the limit is never relaxed, and rejected pairs remain named in
+the accepted receipt.
+
 The live anomaly monitor uses sustained thresholds for scene/wave divergence,
 transport loss, packet stalls, client materialization loss, stopped takeover,
 brain-think stalls, idle/stuck/oscillating movement, sustained accepted casts

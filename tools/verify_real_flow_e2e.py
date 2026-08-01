@@ -1980,6 +1980,8 @@ def _run_bot_play_endurance(
                     client,
                     config.evidence_root / "captures" / "endurance",
                     label=f"wave-{milestone}",
+                    host_pipe=host_pipe,
+                    client_pipe=client_pipe,
                 )
                 assertions: dict[str, Any] = {}
                 for role in ("host", "clientB"):
@@ -2070,6 +2072,8 @@ def _run_bot_play_endurance(
                             "natural-game-over-wave-"
                             f"{max(endurance_wave(sample['host']), endurance_wave(sample['clientB']))}"
                         ),
+                        host_pipe=host_pipe,
+                        client_pipe=client_pipe,
                     )
                 except (
                     EvidenceError,
@@ -2098,6 +2102,8 @@ def _run_bot_play_endurance(
                     client,
                     config.evidence_root / "captures" / "endurance",
                     label=f"wall-clock-limit-wave-{converged_wave}",
+                    host_pipe=host_pipe,
+                    client_pipe=client_pipe,
                 )
             except (
                 EvidenceError,
@@ -2447,6 +2453,8 @@ def _run_bot_play_for_me(
                     client,
                     config.evidence_root / "screenshots",
                     label=f"bot-fighting-{role}-wave-{peer_wave}",
+                    host_pipe=host_pipe,
+                    client_pipe=client_pipe,
                 )
                 capture_path = Path(
                     candidate["captures"][role]["path"]
@@ -2863,6 +2871,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             client,
             config.evidence_root / "captures",
             label="shared-hub",
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
         )
 
         if phase == "shared-hub":
@@ -3070,6 +3080,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             client,
             config.evidence_root / "screenshots",
             label="first-wave",
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
         )
         client_capture_path = Path(
             result["pairedCapture"]["captures"]["clientB"]["path"]
@@ -3096,6 +3108,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
             client,
             config.evidence_root / "screenshots",
             label="post-client-damage",
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
         )
         if config.verify_through_wave >= 2:
             sampler.set_phase(
@@ -3139,6 +3153,8 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 client,
                 config.evidence_root / "screenshots",
                 label=f"wave-{config.verify_through_wave}",
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
             )
             result["completedPhase"] = (
                 f"wave-{config.verify_through_wave}"

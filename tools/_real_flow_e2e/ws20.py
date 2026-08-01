@@ -1481,6 +1481,7 @@ if(Test-Path -LiteralPath $path -PathType Leaf){{
             + ");print('ok='..tostring(ok));"
             "print('error='..tostring(err or ''))"
         )
+        capture_completed_ns = time.time_ns()
         remote_capture_ns = (
             self.open_lua_pipe().bridge
             .last_execution_utc_nanoseconds
@@ -1525,9 +1526,15 @@ if(Test-Path -LiteralPath $path -PathType Leaf){{
         return {
             "path": str(output),
             "startedUtcNanoseconds": started_ns,
-            "captureUtcNanoseconds": remote_capture_ns,
+            "captureUtcNanoseconds": (
+                started_ns + capture_completed_ns
+            ) // 2,
+            "captureWindowStartUtcNanoseconds": started_ns,
+            "captureWindowEndUtcNanoseconds": capture_completed_ns,
+            "remoteCaptureUtcNanoseconds": remote_capture_ns,
             "endedUtcNanoseconds": ended_ns,
             "captureMethod": "remote-d3d9-backbuffer",
+            "clockDomain": "controller-bracket",
             "rawBmpBytes": raw_size,
             "quality": {
                 "width": size[0],

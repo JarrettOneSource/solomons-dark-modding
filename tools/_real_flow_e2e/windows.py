@@ -1212,7 +1212,10 @@ def capture_window(
         "path": str(output),
         "startedUtcNanoseconds": started_ns,
         "captureUtcNanoseconds": int(match.group(1)),
+        "captureWindowStartUtcNanoseconds": int(match.group(1)),
+        "captureWindowEndUtcNanoseconds": int(match.group(1)),
         "endedUtcNanoseconds": ended_ns,
+        "clockDomain": "controller",
         "helper": text,
     }
 

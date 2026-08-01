@@ -11,7 +11,11 @@ import threading
 import time
 from typing import Any
 
-from .windows import WindowsPeer, capture_window as capture_local_window
+from .windows import (
+    WindowsPeer,
+    capture_window as capture_local_window,
+    windows_path,
+)
 
 
 class EvidenceError(RuntimeError):
@@ -48,51 +52,149 @@ def paired_windows_capture(
     output_directory: Path,
     *,
     label: str,
+    host_pipe: Any | None = None,
+    client_pipe: Any | None = None,
 ) -> dict[str, Any]:
     output_directory.mkdir(parents=True, exist_ok=True)
-    barrier_id = (
-        time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-        + f"-{time.time_ns() % 1_000_000_000:09d}"
-    )
-    barrier_ns = time.time_ns()
+    rejected_attempts: list[dict[str, Any]] = []
 
-    def capture(peer: WindowsPeer, output: Path) -> dict[str, Any]:
+    def capture(
+        peer: WindowsPeer,
+        pipe: Any | None,
+        output: Path,
+    ) -> dict[str, Any]:
         remote = getattr(peer, "capture_window", None)
         if callable(remote):
             return dict(remote(output))
+        if pipe is not None:
+            raw = output.with_suffix(".bmp")
+            if output.exists() or raw.exists():
+                raise EvidenceError(
+                    f"capture output must be new: {output}"
+                )
+            started_ns = time.time_ns()
+            response = pipe.execute(
+                "local ok,err=sd.debug.capture_backbuffer("
+                + json.dumps(windows_path(raw))
+                + ");print('ok='..tostring(ok));"
+                "print('error='..tostring(err or ''))"
+            )
+            completed_ns = time.time_ns()
+            values = dict(
+                line.split("=", 1)
+                for line in response.splitlines()
+                if "=" in line
+            )
+            if values.get("ok") != "true" or not raw.is_file():
+                raise EvidenceError(
+                    "local D3D9 backbuffer capture failed"
+                )
+            try:
+                from PIL import Image
+
+                with Image.open(raw) as source:
+                    image = source.convert("RGB")
+                    image.save(output)
+                    size = [image.width, image.height]
+            finally:
+                raw.unlink(missing_ok=True)
+            ended_ns = time.time_ns()
+            return {
+                "path": str(output),
+                "startedUtcNanoseconds": started_ns,
+                "captureUtcNanoseconds": (
+                    started_ns + completed_ns
+                ) // 2,
+                "captureWindowStartUtcNanoseconds": started_ns,
+                "captureWindowEndUtcNanoseconds": completed_ns,
+                "endedUtcNanoseconds": ended_ns,
+                "captureMethod": "local-d3d9-backbuffer",
+                "clockDomain": "controller-bracket",
+                "quality": {
+                    "width": size[0],
+                    "height": size[1],
+                },
+            }
         return capture_local_window(source_root, peer, output)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            "host": executor.submit(
-                capture,
-                host,
-                output_directory / f"{label}-{barrier_id}-host.png",
-            ),
-            "clientB": executor.submit(
-                capture,
-                client,
-                output_directory / f"{label}-{barrier_id}-client-b.png",
-            ),
-        }
-        captures = {
-            role: future.result()
-            for role, future in futures.items()
-        }
-    skew_ns = abs(
-        captures["host"]["captureUtcNanoseconds"]
-        - captures["clientB"]["captureUtcNanoseconds"]
-    )
-    if skew_ns > 1_000_000_000:
-        raise EvidenceError(
-            f"paired window capture skew was {skew_ns / 1e6:.1f} ms"
+    for attempt in range(1, 4):
+        barrier_id = (
+            time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+            + f"-{time.time_ns() % 1_000_000_000:09d}"
         )
-    return {
-        "barrierId": barrier_id,
-        "barrierUtcNanoseconds": barrier_ns,
-        "captureSkewNanoseconds": skew_ns,
-        "captures": captures,
-    }
+        barrier_ns = time.time_ns()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                "host": executor.submit(
+                    capture,
+                    host,
+                    host_pipe,
+                    output_directory
+                    / f"{label}-{barrier_id}-host.png",
+                ),
+                "clientB": executor.submit(
+                    capture,
+                    client,
+                    client_pipe,
+                    output_directory
+                    / f"{label}-{barrier_id}-client-b.png",
+                ),
+            }
+            captures = {
+                role: future.result()
+                for role, future in futures.items()
+            }
+        windows = {
+            role: (
+                int(
+                    capture_row.get(
+                        "captureWindowStartUtcNanoseconds",
+                        capture_row["captureUtcNanoseconds"],
+                    )
+                ),
+                int(
+                    capture_row.get(
+                        "captureWindowEndUtcNanoseconds",
+                        capture_row["captureUtcNanoseconds"],
+                    )
+                ),
+            )
+            for role, capture_row in captures.items()
+        }
+        span_ns = max(end for _, end in windows.values()) - min(
+            start for start, _ in windows.values()
+        )
+        skew_ns = abs(
+            int(captures["host"]["captureUtcNanoseconds"])
+            - int(captures["clientB"]["captureUtcNanoseconds"])
+        )
+        if span_ns <= 1_000_000_000:
+            return {
+                "barrierId": barrier_id,
+                "barrierUtcNanoseconds": barrier_ns,
+                "captureSkewNanoseconds": skew_ns,
+                "captureBoundSpanNanoseconds": span_ns,
+                "attempt": attempt,
+                "rejectedAttempts": rejected_attempts,
+                "captures": captures,
+            }
+        rejected_attempts.append(
+            {
+                "attempt": attempt,
+                "barrierId": barrier_id,
+                "captureBoundSpanNanoseconds": span_ns,
+                "captureSkewNanoseconds": skew_ns,
+                "captures": captures,
+            }
+        )
+    spans_ms = [
+        round(row["captureBoundSpanNanoseconds"] / 1e6, 1)
+        for row in rejected_attempts
+    ]
+    raise EvidenceError(
+        "paired window capture exceeded the 1000 ms controller-clock "
+        f"bound in three attempts: {spans_ms} ms"
+    )
 
 
 def rendered_enemy_assertion(

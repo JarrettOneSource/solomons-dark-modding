@@ -17,6 +17,7 @@ from PIL import Image
 from tools._real_flow_e2e.config import ConfigError, HarnessConfig
 from tools._real_flow_e2e.evidence import (
     EvidenceError,
+    paired_windows_capture,
     packet_accounting,
     rendered_enemy_assertion,
     steam_transport_assertion,
@@ -75,6 +76,70 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_paired_capture_uses_controller_clock_bounds(self) -> None:
+        def peer_capture(
+            capture_ns: int,
+            start_ns: int,
+            end_ns: int,
+        ) -> SimpleNamespace:
+            def capture(output: Path) -> dict[str, object]:
+                output.write_bytes(b"capture")
+                return {
+                    "path": str(output),
+                    "captureUtcNanoseconds": capture_ns,
+                    "captureWindowStartUtcNanoseconds": start_ns,
+                    "captureWindowEndUtcNanoseconds": end_ns,
+                }
+
+            return SimpleNamespace(capture_window=capture)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            result = paired_windows_capture(
+                ROOT,
+                peer_capture(150_000_000, 100_000_000, 200_000_000),
+                peer_capture(250_000_000, 150_000_000, 300_000_000),
+                Path(temporary),
+                label="bounded",
+            )
+
+        self.assertEqual(result["attempt"], 1)
+        self.assertEqual(result["captureBoundSpanNanoseconds"], 200_000_000)
+        self.assertEqual(result["rejectedAttempts"], [])
+
+    def test_paired_capture_retries_without_relaxing_bound(self) -> None:
+        class SequencedCapture:
+            def __init__(self, windows: list[tuple[int, int]]) -> None:
+                self.windows = iter(windows)
+
+            def capture_window(self, output: Path) -> dict[str, object]:
+                start_ns, end_ns = next(self.windows)
+                output.write_bytes(b"capture")
+                return {
+                    "path": str(output),
+                    "captureUtcNanoseconds": (start_ns + end_ns) // 2,
+                    "captureWindowStartUtcNanoseconds": start_ns,
+                    "captureWindowEndUtcNanoseconds": end_ns,
+                }
+
+        host = SequencedCapture(
+            [(0, 100_000_000), (2_000_000_000, 2_100_000_000)]
+        )
+        client = SequencedCapture(
+            [(1_200_000_000, 1_300_000_000), (2_050_000_000, 2_200_000_000)]
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            result = paired_windows_capture(
+                ROOT,
+                host,
+                client,
+                Path(temporary),
+                label="retry",
+            )
+
+        self.assertEqual(result["attempt"], 2)
+        self.assertEqual(len(result["rejectedAttempts"]), 1)
+        self.assertEqual(result["captureBoundSpanNanoseconds"], 200_000_000)
+
     def test_endurance_probe_bundle_recovers_from_bounded_remote_outage(
         self,
     ) -> None:
@@ -3194,7 +3259,7 @@ class RealFlowE2ETests(unittest.TestCase):
                 maximum_displacement=64.0,
             )
 
-    def test_ws20_capture_uses_remote_execution_wall_clock(
+    def test_ws20_capture_preserves_remote_clock_and_uses_controller_bound(
         self,
     ) -> None:
         adapter = (
@@ -3207,7 +3272,15 @@ class RealFlowE2ETests(unittest.TestCase):
         self.assertIn("-IncludeExecutionUtcNanoseconds", adapter)
         self.assertIn('struct.unpack(\n                    "<IQ"', adapter)
         self.assertIn(
-            '"captureUtcNanoseconds": remote_capture_ns',
+            '"remoteCaptureUtcNanoseconds": remote_capture_ns',
+            adapter,
+        )
+        self.assertIn(
+            '"captureWindowStartUtcNanoseconds": started_ns',
+            adapter,
+        )
+        self.assertIn(
+            '"captureWindowEndUtcNanoseconds": capture_completed_ns',
             adapter,
         )
         self.assertIn(
