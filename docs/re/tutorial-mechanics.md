@@ -84,7 +84,8 @@ Boneyard, not hard-coded as a generic Tutorial-controller reward.
 
 The item recipe is serialized in the level as type `AMULET`, name
 `Sorceror's Amulet`, description `A dull trinket, carved with a few beneficial
-runes`, all-white colors, and one serialized child containing magnitude 10.0.
+runes`, all-white colors, and one opaque serialized child containing float
+10.0. The child is retained without an invented effect-field name.
 The item command uses location mode 7. The potion command also uses location
 mode 7. At runtime `ScriptLocation_Resolve` (`0x00466600`) resolves mode 7 to
 the current script thread's trigger position at `[0x0081F618] + 0x64`; for these
@@ -482,6 +483,23 @@ camera projection block. There is no separate objective-marker manager or
 waypoint actor in the Tutorial path. The reusable marker is the pointer
 primitive plus caller-owned target resolution.
 
+The stage-10 equipment target resolves widget coordinates through
+`0x00570F80`. Its conditional backpack target requires the live inventory
+screen at `Game+0x15A0` and a non-null `screen+0x294` member, treats
+`screen+0x188` as an indexed UI-entry list, and retrieves entry zero through
+`0x005D07A0 -> 0x00558E40 -> 0x004F9320`. The base helper bounds-checks the
+index against list count `+0x08`, loads the ref-counted entry from array
+`+0x14`, and retains it. If the entry and its nested node are live,
+`0x004282D0` accumulates each parent node's `+0x14/+0x18` offset along the
+`+0x70` parent chain before the callout and pointer are drawn.
+
+These are generic UI collection/coordinate mechanisms, not a waypoint
+service. Raw direct reuse is **dirty**: the backpack target means "first
+rendered backpack entry in this stock modal," not a stable inventory-item
+identity. A loader should resolve a semantic inventory handle to a local UI
+anchor owned by the active overlay. [E01:005D1540..005D16E6] [E30] [E31]
+[E32] [E35:004282D0,00570F80]
+
 Recommended exposure is a semantic loader overlay layer—heading, body/callout,
 UI-anchor pointer, and world-object pointer—rather than direct access to the
 hard-coded Tutorial stage renderer. It should own strings, layout, lifetime,
@@ -524,6 +542,18 @@ global, so direct use is **dirty** for arbitrary mod tutorials. A loader should
 expose a local semantic prompt/dialogue queue with explicit text/audio assets,
 priority, cancellation, and scene-generation ownership. Stock narration keys
 could be an optional compatibility backend.
+
+#### Residual helper boundary
+
+An exhaustive symbol/decompile sweep of the adjacent `0x005C9600..0x005CA800`
+range found no hidden Tutorial prompt queue, objective manager, marker actor,
+or second arrow implementation. The other recovered functions are ordinary
+Game/UI neighbors: `0x005C9F40` formats enemy names/presentation,
+`0x005CA380` destroys a health-bar array, `0x005CA3A0` constructs a belt
+button, `0x005CA460` is a deleting destructor, `0x005CA730` clears a string
+array, and `0x005CA7C0` manages floating/gold messages. The only additional
+lesson-relevant neighbor is the generic skills-modal opener at `0x005CA640`,
+described with input gating below. [E33] [E34]
 
 ## Tutorial Boneyard scenario
 
@@ -698,6 +728,20 @@ uses `Game+0x15A0` for the live inventory screen and `Game+0x1664` for the
 skills screen, and waits for their close/resume bytes at `+0x14C` and `+0x98`.
 [E01:005D5FE0,005D6330] [E20] [E21]
 
+The normal keyboard handler at `0x005CB360` tests inventory byte `+0x1AC0`
+before calling `0x005C6F10`, and skills byte `+0x1AC1` before calling
+`0x005CA640`. `0x005C6F10` closes an open skills modal, toggles an existing
+inventory modal through `0x00550760`, or allocates the stock inventory screen
+with `0x00560380(Game+0x13B8, Game+0x1410, 0)` and stores it at
+`Game+0x15A0`. `0x005CA640` performs the inverse mutual-exclusion/toggle
+operation: it closes inventory through `0x00550760`, closes existing skills
+through `0x006568E0`, or retains progression `Game+0x1654`, constructs through
+`0x006576C0`, and stores the new screen at `Game+0x1664`. Both install a new
+modal through `0x004277E0` and `0x004280E0`. The stock screen openers are
+therefore **dirty/global** seams, even though the gates themselves look like
+bytes. [E21:005CB360] [E34:005CA640]
+[E35:005C6F10,00550760,004277E0,004280E0]
+
 Recommended design: a scoped tutorial session should snapshot only the access
 and visibility categories it changes, apply participant-local masks, and
 restore the snapshot on completion, cancellation, or scene transition. Direct
@@ -719,6 +763,7 @@ stock call path.
 | heading/subheading | `0x005C9710`, `0x005C9960` | stock font bundle and HUD render phase | clean-ish | tutorial overlay heading/body primitives |
 | bordered callout | `0x005C9C70` | current string, font, coordinates, render state | clean-ish | layout-owned callout with text and anchor |
 | dynamic key label | `0x004299B0`, `0x00402BF0` | configured action/key globals | clean-ish | resolve semantic input action to localized glyph/name |
+| resolve modal UI element anchor | equipment `0x00570F80`; backpack `0x005D07A0 -> 0x00558E40 -> 0x004F9320`, then `0x004282D0` | live owning modal; for backpack, `Game+0x15A0`, non-null member `+0x294`, list `+0x188`, entry zero | dirty/index-coupled | resolve a stable semantic handle to a participant-local modal anchor |
 | narration queue/idle | `0x004FCEC0`, `0x00462090` | global narration owner, existing localization/audio records | dirty/global | mod-owned prompt/audio queue with cancellation and local scope |
 | stock speaker/portrait installation | `0x005D5FE0`; Game `+0x1C94/+0x1C9C/+0x1CA0` | global stock asset tuple and narration/UI owners | dirty/global | dialogue speaker/portrait resource owned by the mod prompt session |
 | intro fade/camera presentation | `0x005D6330`, `0x005D08C0`; actor `+0x158/+0x15C`; UI record `[0x008199E4]+0x2124` | Tutorial UI object, player presentation fields, global render state | dirty | scoped scene-intro transition/spotlight with save-and-restore |
@@ -728,16 +773,20 @@ stock call path.
 | pickup transfer | `0x005E6B50 -> 0x0063E870/0x0055FF20` | ground actor with held item `+0x148`, delay `+0x14C`, valid inventory | dirty to call, clean to observe | item pickup event; do not call tick manually |
 | top-level inventory lesson test | enumeration via `0x004027F0`, Game count `+0x13CC` | local inventory root | dirty/broad | inventory query by stable item/recipe identity |
 | recursive potion count | `0x00552A80` | inventory root and type `0x1B59` | clean-ish query | `inventory.count({type="potion"})` / event-driven objective |
+| normalize belt/HUD inventory slots | `0x005D50E0` after the Tutorial clears two quick slots | Game-owned belt records, inventory, progression, UI layout and stock item types | dirty/global | one transactional loadout refresh owned by the tutorial session |
 | wave advance | `0x00465C00` | active Arena and configured wave graph | clean-ish | authority-owned `scenario.start_next_wave()` |
 | spawn custom monster/group | `0x00469580`, `0x0046C710`, `0x0046C790` | validated recipe/group/location and Arena | clean-ish | semantic spawn request returning identities |
 | enable/delete trigger | `0x00463020`, remote helpers `0x006822E0/0x00682340/0x006823A0` | live TriggerControl and UID | clean inside graph | scenario trigger handle with enable/disable/delete |
 | script sleep/loop | command IDs 1002, 1032, 1033 | live ScriptThread | clean | coroutine/timeline primitives |
 | level-authored camera lock | command 1065 -> `0x00464B20` | active camera/Arena and serialized region | clean-ish in solo | local-participant camera constraint handle |
 | destroy off-camera objects | command 1066 -> `0x004728B0` | active scene/camera ownership | dirty/destructive | no broad public seam; explicit filtered cleanup only |
+| level-authored fire prop | command 1061 -> `0x00466C60` | active Arena and serialized location/area | clean-ish | scenario-owned world-effect spawn with an explicit lifetime |
+| place Solomon digging | command 1048 -> `0x00467230` | stock Solomon actor/scene contract and serialized location | dirty/story-specific | no broad public seam; expose a generic validated actor action if needed |
 | XP floor for lesson progression | `0x00680AB0(...,10,1)` in stage 11 | local progression and post-wave idle | dirty as implicit loop | explicit tutorial reward transaction, once |
 | unlock/select Acid Rain | `0x00660320(...,0x48,1)`, progression `+0x870`, `0x0065F9A0` | local progression and skill catalog | clean-ish if transactional | validated grant/select API with reversible tutorial loadout |
 | force skill selection | command 1058, progression virtual `+0x85C` | local progression and valid skill ID | dirty raw | semantic skill-choice request by stable skill ID |
 | gate HUD/input | Game `+0x1AC0..+0x1AC4` plus widget state | Game/UI live and exact paired restoration | dirty raw | scoped participant-local access/visibility masks |
+| open inventory/skills modal | `0x005C6F10`, `0x005CA640`; constructors `0x00560380/0x006576C0`; close `0x00550760/0x006568E0`; attach `0x004277E0/0x004280E0` | Game, progression/inventory roots, mutually exclusive modal state | dirty/global | participant-scoped semantic stock-screen request, not raw function access |
 | temporary early protection | Game `+0x1CD5`; consumers `0x0052AC80/0x0052B150` | global Tutorial Game | dirty | explicit protection rule owned by session/participant |
 | attach overlay to modal screen | `0x00428160` plus UI-owner virtual `+0xA8` | live UI tree and modal screen | dirty raw | loader overlay layer automatically follows active modal surface |
 | first-run prelude | `0x005B6C90`, ControlPicker class | frontend globals, controls bundle, profile gate | dirty | mod settings/onboarding flow with mod-owned persistence |
@@ -747,7 +796,9 @@ No other objective/waypoint entity, prompt queue, tutorial-only actor factory,
 or separate loot-arrow timeout exists in the analyzed Tutorial controller,
 trigger graph, item-drop actor, or UI draw chain. The apparent family of
 objective arrows is one stock screen-space pointer helper fed by different
-caller-owned target calculations.
+caller-owned target calculations. The adjacent Tutorial helper-family range
+`0x005C9600..0x005CA800` was separately inventoried so nearby draw and wrapper
+functions were not mistaken for a second marker subsystem. [E33]
 
 ## MapPicker handoff for `mpk`
 
@@ -780,8 +831,13 @@ No picker hijack or deeper MapPicker implementation analysis is included here.
 
 | Address | Recovered role |
 | ---: | --- |
+| `0x0040AF70` | stock effect setup invoked at Tutorial intro countdown 20 |
 | `0x00414F90` | rotated/transformed sprite draw used by pointer |
 | `0x00414540` | common transformed sprite/quad draw |
+| `0x004277E0` | bind an allocated stock modal to its owner pointer |
+| `0x004280E0` | attach a UI child and set its parent |
+| `0x00428160` | detach a UI child from its current parent |
+| `0x004282D0` | resolve a modal UI-list entry's on-screen anchor |
 | `0x00462090` | narration controller idle predicate |
 | `0x004625F0` | configure next-wave condition |
 | `0x00462680` | set forced spawn mode |
@@ -803,14 +859,19 @@ No picker hijack or deeper MapPicker implementation analysis is included here.
 | `0x004728B0` | destroy off-camera objects |
 | `0x0047C070` | generic enemy reward selector |
 | `0x004819D0` | monster death, reward and linked-trigger entry |
+| `0x004F9320` | bounded ref-counted pointer-list entry getter |
 | `0x004FCEC0` | narration queue insertion |
 | `0x00508C60` | MapPicker render; handoff only |
 | `0x0050C730` | MapPicker constructor; handoff only |
 | `0x0050E5E0` | open/attach MapPicker; handoff only |
 | `0x0050E980` | MapPicker tick; handoff only |
 | `0x00514A20` | Game control callback that invokes MapPicker opener |
+| `0x00550760` | close the stock inventory modal |
 | `0x00552A80` | recursive inventory count by item type |
+| `0x00558E40` | inventory-anchor list getter delegate |
 | `0x0055FF20` | inventory insertion used by pickup |
+| `0x00560380` | construct the stock inventory modal |
+| `0x00570F80` | resolve stock equipment-widget coordinates |
 | `0x005A7D90` | normal frontend route when first-play flag is zero |
 | `0x005A8390` | missing-profile defaults; sets tutorial gate to one |
 | `0x005A84C0` | ControlPicker constructor |
@@ -824,22 +885,29 @@ No picker hijack or deeper MapPicker implementation analysis is included here.
 | `0x005BDB50` | dark-profile loader |
 | `0x005BE0B0` | dark-profile saver |
 | `0x005BF6A0` | post-profile-load first-play branch |
+| `0x005C6F10` | normal inventory-modal opener/toggle |
+| `0x005C96F0` | Tutorial deleting destructor/removal virtual |
 | `0x005C9710` | Tutorial primary heading draw |
 | `0x005C9960` | Tutorial subheading draw |
 | `0x005C9BB0` | pointer angle/blink/stock-arrow draw |
 | `0x005C9C70` | Tutorial bordered callout draw |
 | `0x005CA480` | Tutorial subheading wrapper |
 | `0x005CA560` | Tutorial callout wrapper |
+| `0x005CA640` | normal skills-modal opener/toggle |
 | `0x005CD3A0` | Game destruction path; tutorial gate clear/save |
 | `0x005CF4F0` | Game Over path; tutorial gate clear/save |
+| `0x005D07A0` | Tutorial modal UI-entry getter wrapper |
 | `0x005D08C0` | Tutorial render and all teaching overlays |
 | `0x005D2520` | Game HUD render consuming `+0x1AC3/+0x1AC4` |
+| `0x005D50E0` | belt/HUD inventory validation and layout normalization |
 | `0x005D5CF0` | construct/install Tutorial controller |
 | `0x005D5FE0` | Tutorial activation/reset and initial gates |
 | `0x005D6330` | Tutorial 0..19 stage machine |
 | `0x005E6B50` | ground item/Sack tick and pickup transfer |
 | `0x0063E870` | ground actor unregister/removal in pickup path |
 | `0x00646CB0` | first registered actor by native type |
+| `0x006568E0` | close the stock skills modal |
+| `0x006576C0` | construct the stock skills modal |
 | `0x00660320` | grant/unlock skill; used for Acid Rain `0x48` |
 | `0x00680AB0` | grant XP; stage-11 floor uses 10 |
 | `0x00681BA0` | trigger eligibility/condition evaluator |
@@ -903,6 +971,12 @@ The audit packet is `/mnt/d/codex-evidence/tutre-20260801/`. Its final
 | E27 | `raw/27_trigger_location_and_launch.txt` | script location mode 7 and trigger script launch |
 | E28 | `raw/28_tutorial_item_recipe_tree.txt` | exact embedded amulet recipe subtree |
 | E29 | `raw/29_tutorial_boneyard_layout_summary.txt` | complete serialized level-section and static-layout counts |
+| E30 | `raw/30_tutorial_ui_anchor_helper_decompile.txt` | Tutorial wrapper for modal UI-entry lookup |
+| E31 | `raw/31_tutorial_inventory_anchor_delegate_decompile.txt` | inventory-anchor lookup delegate |
+| E32 | `raw/32_tutorial_inventory_anchor_base_decompile.txt` | bounded ref-counted UI-entry list lookup |
+| E33 | `raw/33_tutorial_helper_symbol_range.txt` | adjacent Tutorial helper-family symbol inventory |
+| E34 | `raw/34_tutorial_residual_helpers_decompile.txt` | residual address-range audit; ordinary Game/UI neighbors, not hidden Tutorial subsystems |
+| E35 | `raw/35_tutorial_modal_and_anchor_helpers_decompile.txt` | inventory/skills modal openers and modal-anchor coordinate helpers |
 
 ### Reproduction pattern
 
