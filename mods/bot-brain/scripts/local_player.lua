@@ -367,8 +367,13 @@ function Controller:read_skill_choices()
   end
   local target_participant_id =
     tonumber(offer.target_participant_id) or 0
+  local local_offer_target_id =
+    tonumber(self.runtime.local_steam_id) or 0
+  if local_offer_target_id == 0 then
+    local_offer_target_id = self.participant_id
+  end
   if target_participant_id ~= 0 and
-      target_participant_id ~= self.participant_id then
+      target_participant_id ~= local_offer_target_id then
     return {}
   end
   return {

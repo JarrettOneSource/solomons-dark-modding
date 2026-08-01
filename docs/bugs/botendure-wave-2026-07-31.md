@@ -648,6 +648,38 @@ the owner-observed distance-triggered black sprites, and arena-edge skybox bleed
 remain presentation findings; available captures do not identity-correlate the
 black pixels strongly enough to claim a reproduction.
 
+## R24: picker identity-domain mismatch reproduced and corrected
+
+R24 passed the corrected live F9 proof on both peers, reached wave 50, and
+preserved seven game-anchored milestone pairs with a maximum conservative
+pairing interval of 352,579,416 ns. The host produced 389 authoritative native
+type-2004 projectile edges totaling 1,027.5 damage. The client produced 416
+origin-side type-2004 projectile edges totaling 1,010 damage, with 366
+corresponding authority-applied rows totaling 625 damage. A host death at wave
+50 was followed by a same-actor respawn, a valid Fire entry 16/current spell
+1011 native-primary initialization, and resumed casting. Both peers completed
+at least one 10%-hold to 80%-resume mana cycle.
+
+The run is rejected because all five observed level-up barriers reached the
+60-second native timeout. The normal `Waiting on 1 player` HUD was present, so
+the presentation fix worked, but neither Bot Play controller submitted a
+choice. The harness ended the already-disqualified run after the fifth timeout
+and completed exact-owned process, stage, and artifact cleanup.
+
+The R21 cadence diagnosis was incomplete. R24 logs show the local Bot Play
+controller continuing to move and cast throughout the picker pause, proving
+that its wall-clock polling did execute. The remaining failure was an identity
+domain mismatch: local-player takeover intentionally addresses the gameplay
+actor through participant ID `1`, while `active_level_up_offer` targets the
+local Steam transport participant. `Controller:read_skill_choices` compared
+those unlike IDs and discarded every valid offer before random selection.
+
+The controller now compares the offer target with
+`runtime.local_steam_id`, retaining participant ID `1` only for actor-control
+APIs. The contract fixture deliberately uses different actor and transport IDs
+and requires the local offer to be selected, closing the topology-specific gap
+that the prior same-ID unit fixture concealed.
+
 ## Rerun requirement
 
 The picker, mana, normal wait indicator, and exact F9 handback changes must be

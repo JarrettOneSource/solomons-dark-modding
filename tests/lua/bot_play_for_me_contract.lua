@@ -73,6 +73,7 @@ sd = {
   runtime = {
     get_multiplayer_state = function()
       return {
+        local_steam_id = 9001,
         participants = {
           {
             kind = "LocalHuman",
@@ -87,7 +88,7 @@ sd = {
         active_level_up_offer = {
           valid = offer_valid,
           selection_submitted = false,
-          target_participant_id = 11,
+          target_participant_id = 9001,
           offer_id = 44,
           options = {
             { id = 16, option_id = 16 },
