@@ -126,7 +126,7 @@ for _, binding in ipairs(replicated.bindings) do
 end
 if best ~= nil then
   local target_hp = math.max(1.0, math.min(best.before_hp, best.snapshot_hp) * 0.5)
-  if mode == "kill" or mode == "kill_drift" then target_hp = 0.0 end
+  if mode == "kill" or mode == "kill_drift" or mode == "kill_queue" then target_hp = 0.0 end
   emit("ok", true)
   emit("network_actor_id", string.format("%.0f", best.network_id))
   emit("local_actor_address", best.local_address)
@@ -153,11 +153,17 @@ if best ~= nil then
       emit("rebind_position", sd.world.rebind_actor(best.local_address))
     end
   end
-  if mode == "damage_drift" or mode == "kill_drift" then
+  if mode == "damage_drift" or mode == "kill_drift" or mode == "kill_queue" then
     if sd.input == nil or sd.input.queue_local_enemy_damage_claim == nil then
       emit("ok", false)
       emit("reason", "damage_claim_queue_missing")
       return
+    end
+    local claim_x = best.x
+    local claim_y = best.y
+    if mode == "damage_drift" or mode == "kill_drift" then
+      claim_x = best.x + 1024.0
+      claim_y = best.y + 1024.0
     end
     emit("queue_claim", sd.input.queue_local_enemy_damage_claim(
       best.network_id,
@@ -165,8 +171,8 @@ if best ~= nil then
       math.min(best.before_hp, best.snapshot_hp),
       target_hp,
       best.max_hp,
-      best.x + 1024.0,
-      best.y + 1024.0))
+      claim_x,
+      claim_y))
   end
   emit("write_hp", sd.debug.write_float(best.local_address + hp_offset, target_hp))
   return
@@ -626,7 +632,7 @@ def main() -> int:
         result["move_client_near_for_kill"] = move_client_near(rejected_target)
         time.sleep(0.6)
         host_log_before_kill = log_offset(HOST_LOG)
-        result["client_kill"] = wait_to_damage_any_client_enemy("kill")
+        result["client_kill"] = wait_to_damage_any_client_enemy("kill_queue")
         result["host_kill_accept"] = wait_for_host_enemy_killed(result["client_kill"])
         result["host_kill_native_death_presentation_log"] = wait_for_host_enemy_native_death_log(
             result["client_kill"],

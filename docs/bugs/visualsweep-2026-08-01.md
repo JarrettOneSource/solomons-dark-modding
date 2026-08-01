@@ -45,6 +45,16 @@ brain update, retire only the one health-bar record that call appended. Remote
 control brains and the renderer remain unchanged. This removes invalid local
 ownership rather than hiding a rendered row.
 
+### Resolution
+
+`HookPlayerControlBrainUpdate` now snapshots
+`gameplay_ally_healthbar_count` immediately before the published local slot-0
+control-brain call. If and only if that call appends exactly one record, the
+hook restores the prior count. The hook does not inspect labels, remove remote
+records, or alter the renderer. Static coverage fixes the writer address,
+layout key, slot/takeover ownership predicate, and one-record retirement
+contract.
+
 ## 2. Premature client enemy-death presentation
 
 ### Mechanism
@@ -83,6 +93,21 @@ organic local client death callback for a tracked replicated enemy while the
 fresh authoritative snapshot says `dead=false` and `hp>0`; positive authority
 then restores the damaged presentation through normal reconciliation. Accepted
 death results and dead authority snapshots remain the only death presenters.
+
+### Resolution
+
+The damage-claim sender no longer invokes or marks native death presentation,
+suppresses loot, or creates a speculative pending-lethal lifetime. The client
+enemy-death hook resolves the bound network actor and permits stock terminal
+presentation only after an accepted lethal correction or an authoritative dead
+snapshot has marked that network actor. A rejected claim can therefore be
+reconciled back to positive HP with `death_handled=0` and its binding intact.
+
+`tools/verify_enemy_damage_claim_sync.py` now exercises both sides of the
+authority boundary deterministically: an out-of-bounds queued lethal claim
+must be rejected and roll back without death presentation; a subsequent
+in-bounds queued lethal claim must invoke native death presentation and remove
+the actor after host acceptance.
 
 ## 3. Reappearing level-up sparkles
 
@@ -158,6 +183,15 @@ participant light whenever the exact stock predicate skips it: nonzero gameplay
 slot and nonzero animation drive, alive or dead. Do not bridge drive-zero actors,
 which already submit their stock light.
 
+### Resolution
+
+The corpse-only bridge is now a remote-participant light bridge. For a
+packet-driven remote gameplay slot, it submits the stock light under a scoped
+slot-zero context only when the recovered native predicate would skip the
+light (`slot != 0 && animation_drive != 0`). The scope restores the actor slot
+before returning. Drive-zero actors continue through stock submission alone,
+and no light color, radius, or palette value is synthesized by the loader.
+
 ## 5. Arena-edge skybox/void bleed
 
 ### Mechanism
@@ -189,3 +223,30 @@ Documented stock behavior; no fix. Camera clamping would be a game-design
 change with map-shape and combat-visibility consequences, not a multiplayer
 correction. The edge is normally outside ordinary player travel, but the
 renderer behaves identically with transport disabled.
+
+## Final acceptance record
+
+The exact-SHA acceptance bundle is kept outside the repository at
+`/mnt/d/codex-evidence/visualsweep-20260801/final`:
+
+- `hud/` pairs the main baseline and final two-instance frames with slot,
+  control-brain, takeover, registry-count, and remote-binding state.
+- `enemy-death/` pairs the rejected-lethal baseline and final frames, includes
+  the accepted-authority VFX frame, and records host/client HP,
+  `death_handled`, binding, claim-result, and native-presenter state.
+- `remote-light/` pairs equal-position/equal-distance drive-one baseline and
+  final frames with a drive-zero stock control and records slot, animation
+  drive, positions, and distance.
+- `stock-findings/` retains the level-up timer/choice evidence and the
+  transport-on/transport-off arena-edge evidence for the two no-fix verdicts.
+- `tests/`, `ci/`, `cleanup/`, and `sha256-manifest.txt` bind the gate receipts,
+  upstream CI, exact owned-process cleanup, and all evidence hashes to the
+  landed SHA.
+
+## Release-note candidates
+
+- Multiplayer HUD ownership no longer lets automated local-player control add
+  a second ally row.
+- Client enemy death presentation now follows authoritative enemy state.
+- Replicated remote-player lighting now remains native-consistent during
+  movement and casting animation states.

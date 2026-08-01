@@ -686,7 +686,8 @@ def test_client_enemy_death_presentation_requires_host_authority() -> str:
             )
 
     for token in (
-        'mode == "kill" or mode == "kill_drift"',
+        'mode == "kill" or mode == "kill_drift" or mode == "kill_queue"',
+        'wait_to_damage_any_client_enemy("kill_queue")',
         '"client_rejected_lethal_no_death_presentation"',
         '"death_handled"',
         "rejected lethal claim ran client death presentation before host authority",
