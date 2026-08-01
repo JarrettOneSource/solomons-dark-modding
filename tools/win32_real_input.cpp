@@ -342,6 +342,7 @@ WORD VirtualKey(const char* key) {
     if (std::strcmp(key, "down") == 0) return VK_DOWN;
     if (std::strcmp(key, "left") == 0) return VK_LEFT;
     if (std::strcmp(key, "right") == 0) return VK_RIGHT;
+    if (std::strcmp(key, "f9") == 0) return VK_F9;
     if (std::strlen(key) == 1 && key[0] >= 'a' && key[0] <= 'z') {
         return static_cast<WORD>('A' + key[0] - 'a');
     }

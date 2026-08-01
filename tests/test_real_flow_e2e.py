@@ -1683,6 +1683,16 @@ class RealFlowE2ETests(unittest.TestCase):
             input_helper,
         )
 
+    def test_real_input_supports_bot_play_f9_toggle(self) -> None:
+        input_helper = (
+            ROOT / "tools/win32_real_input.cpp"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'std::strcmp(key, "f9") == 0) return VK_F9;',
+            input_helper,
+        )
+
     def test_nfo_window_inventory_tolerates_disappearing_windows(
         self,
     ) -> None:
