@@ -97,6 +97,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool isJoiningLobby_;
     private bool launcherCloseStarted_;
     private string connectProgressText_ = string.Empty;
+    private string connectProgressDetailText_ = string.Empty;
     private double connectProgressPercent_;
     private bool isConnectProgressVisible_;
     private bool isConnectProgressError_;
@@ -285,6 +286,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         get => isConnectProgressError_;
         private set => SetProperty(ref isConnectProgressError_, value);
+    }
+
+    public string ConnectProgressDetailText
+    {
+        get => connectProgressDetailText_;
+        private set => SetProperty(ref connectProgressDetailText_, value);
     }
 
     public bool IsUpdateProgressVisible
@@ -2463,6 +2470,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         ConnectProgressText = progress.Text;
         ConnectProgressPercent = progress.Fraction * 100.0;
+        ConnectProgressDetailText = progress.IsError
+            ? string.Empty
+            : $"{Math.Round(progress.Fraction * 100.0)}%";
         IsConnectProgressError = progress.IsError;
         IsConnectProgressVisible = true;
         if (progress.IsComplete)
@@ -2509,6 +2519,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         IsConnectProgressVisible = false;
         IsConnectProgressError = false;
         ConnectProgressText = string.Empty;
+        ConnectProgressDetailText = string.Empty;
         ConnectProgressPercent = 0;
     }
 

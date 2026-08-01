@@ -229,40 +229,6 @@
                                  ToolTip="The launcher adds the Lobby ID when you host. To join by ID, paste the Lobby ID here."
                                  Style="{StaticResource DarkTextBoxStyle}" />
                     </StackPanel>
-
-                    <!-- Connect progress: stage text + bar driven by the loader's
-                         observed session phase (never a timer). Visible from lobby
-                         join / game launch until the session reaches the hub. -->
-                    <StackPanel Margin="0,12,0,0">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsConnectProgressVisible}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        <TextBlock FontSize="12"
-                                   Margin="0,0,0,4"
-                                   Text="{Binding ConnectProgressText}"
-                                   TextWrapping="Wrap">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsConnectProgressError}" Value="True">
-                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <ProgressBar Value="{Binding ConnectProgressPercent, Mode=OneWay}"
-                                     Style="{StaticResource UpdateProgressBarStyle}">
-                        </ProgressBar>
-                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -730,6 +696,76 @@
                                      AutomationProperties.Name="Update progress"
                                      Style="{StaticResource UpdateProgressBarStyle}"
                                      Value="{Binding UpdateProgressValue, Mode=OneWay}" />
+                    </Grid>
+                </Border>
+
+                <!-- Lobby-connect progress shares the bottom status slot; the
+                     update card wins when both are active. Stage/fraction come
+                     only from observed launcher/loader session state. -->
+                <Border Margin="0,0,0,8"
+                        Padding="12,8,12,10"
+                        Background="{StaticResource CardBackgroundBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsConnectProgressVisible}" Value="True" />
+                                        <Condition Binding="{Binding IsUpdateProgressVisible}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       Text="◆" />
+                            <TextBlock Grid.Column="1"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding ConnectProgressText}"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsConnectProgressError}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="2"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="{StaticResource GoldOutlineTextBrush}"
+                                       Text="{Binding ConnectProgressDetailText}" />
+                        </Grid>
+                        <ProgressBar Grid.Row="1"
+                                     AutomationProperties.Name="Connect progress"
+                                     Style="{StaticResource UpdateProgressBarStyle}"
+                                     Value="{Binding ConnectProgressPercent, Mode=OneWay}" />
                     </Grid>
                 </Border>
                 <TextBlock FontSize="11"
