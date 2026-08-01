@@ -134,6 +134,9 @@
     <ClInclude Include="src\boneyard_picker\content_resolution.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\boneyard_picker\frontend_render.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\boneyard_picker\internal.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

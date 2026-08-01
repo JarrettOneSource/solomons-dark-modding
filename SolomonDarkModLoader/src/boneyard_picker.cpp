@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -21,11 +22,13 @@
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace sdmod {
 namespace {
 #include "boneyard_picker/internal.inl"
+#include "boneyard_picker/frontend_render.inl"
 #include "boneyard_picker/content_resolution.inl"
 }  // namespace
 #include "boneyard_picker/public.inl"

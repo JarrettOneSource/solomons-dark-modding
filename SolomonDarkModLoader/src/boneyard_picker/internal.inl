@@ -1,5 +1,5 @@
-constexpr char kPlaceholderDrawOwner[] = "__loader.boneyard_picker";
-constexpr std::size_t kVisiblePlaceholderRows = 14;
+constexpr char kPickerDrawOwner[] = "__loader.boneyard_picker";
+constexpr std::size_t kVisibleBoneyardRows = 14;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
 constexpr std::size_t kMapPickerStartHookMinimumPatchSize = 5;
@@ -25,7 +25,7 @@ struct BoneyardPickerState {
     std::unordered_map<std::string, std::size_t> entry_by_digest;
     BoneyardPickerPhase phase = BoneyardPickerPhase::Closed;
     std::size_t selected_index = kBoneyardPickerNoSelection;
-    std::size_t placeholder_cursor = 0;
+    std::size_t cursor_index = 0;
     std::uint32_t selection_revision = 0;
     BoneyardPickerDigest selected_digest{};
     BoneyardResolutionStatus local_resolution =
@@ -275,7 +275,7 @@ bool OpenPickerLocked(
     ClearAuthoritativeSelectionLocked();
     g_picker.picker_open = true;
     g_picker.phase = BoneyardPickerPhase::Choosing;
-    g_picker.placeholder_cursor = 0;
+    g_picker.cursor_index = 0;
     g_picker.courtyard_address = courtyard_address;
     g_picker.pending_event = PendingFrontendEvent::None;
     g_picker.pending_selection_index = kBoneyardPickerNoSelection;
@@ -346,123 +346,15 @@ LuaDrawCommand MakeText(
     return command;
 }
 
-void SubmitPlaceholderCommand(LuaDrawCommand command) {
+void SubmitPickerDrawCommand(LuaDrawCommand command) {
     std::string ignored_error;
     (void)SubmitLuaDrawCommand(
-        kPlaceholderDrawOwner,
+        kPickerDrawOwner,
         std::move(command),
         &ignored_error);
 }
 
-void RenderPlaceholder(const BoneyardPickerSnapshot& snapshot) {
-    if (!IsLuaDrawRuntimeInitialized() ||
-        (!snapshot.is_open && snapshot.error_message.empty())) {
-        ClearLuaDrawFrameForMod(kPlaceholderDrawOwner);
-        return;
-    }
-
-    std::uint32_t viewport_width = 1280;
-    std::uint32_t viewport_height = 720;
-    std::string ignored_error;
-    (void)TryGetLuaDrawViewport(
-        &viewport_width,
-        &viewport_height,
-        &ignored_error);
-    const float panel_width = (std::min)(
-        860.0f,
-        static_cast<float>(viewport_width) - 48.0f);
-    const float panel_height = (std::min)(
-        520.0f,
-        static_cast<float>(viewport_height) - 48.0f);
-    const float panel_x =
-        (static_cast<float>(viewport_width) - panel_width) * 0.5f;
-    const float panel_y =
-        (static_cast<float>(viewport_height) - panel_height) * 0.5f;
-
-    BeginLuaDrawFrame(kPlaceholderDrawOwner);
-    SubmitPlaceholderCommand(MakeRectangle(
-        LuaDrawCommandKind::FilledRect,
-        panel_x,
-        panel_y,
-        panel_width,
-        panel_height,
-        LuaDrawColor{8, 10, 16, 238}));
-    SubmitPlaceholderCommand(MakeRectangle(
-        LuaDrawCommandKind::OutlinedRect,
-        panel_x,
-        panel_y,
-        panel_width,
-        panel_height,
-        LuaDrawColor{220, 184, 92, 255},
-        2.0f));
-    SubmitPlaceholderCommand(MakeText(
-        panel_x + 18.0f,
-        panel_y + 16.0f,
-        "Boneyard Picker (functional placeholder)",
-        LuaDrawColor{248, 220, 150, 255},
-        1.0f));
-
-    if (snapshot.catalog != nullptr && !snapshot.catalog->entries.empty()) {
-        std::size_t cursor = 0;
-        {
-            std::scoped_lock lock(g_picker.mutex);
-            cursor = (std::min)(
-                g_picker.placeholder_cursor,
-                snapshot.catalog->entries.size() - 1);
-        }
-        const auto first = cursor >= kVisiblePlaceholderRows
-            ? cursor - kVisiblePlaceholderRows + 1
-            : 0;
-        const auto last = (std::min)(
-            first + kVisiblePlaceholderRows,
-            snapshot.catalog->entries.size());
-        float row_y = panel_y + 58.0f;
-        for (std::size_t index = first; index < last; ++index) {
-            const auto& entry = snapshot.catalog->entries[index];
-            const bool selected = index == cursor;
-            if (selected) {
-                SubmitPlaceholderCommand(MakeRectangle(
-                    LuaDrawCommandKind::FilledRect,
-                    panel_x + 14.0f,
-                    row_y - 3.0f,
-                    panel_width - 28.0f,
-                    24.0f,
-                    LuaDrawColor{86, 67, 31, 230}));
-            }
-            SubmitPlaceholderCommand(MakeText(
-                panel_x + 24.0f,
-                row_y,
-                (selected ? "> " : "  ") + entry.display_name +
-                    "  [" + entry.source_mod_name + "]",
-                selected
-                    ? LuaDrawColor{255, 238, 180, 255}
-                    : LuaDrawColor{225, 225, 225, 255}));
-            row_y += 27.0f;
-        }
-    }
-
-    std::string footer;
-    if (!snapshot.error_message.empty()) {
-        footer = "ERROR: " + snapshot.error_message;
-    } else if (snapshot.phase == BoneyardPickerPhase::WaitingForPeers) {
-        footer = "Waiting for every connected player to resolve the selected Boneyard...";
-    } else if (snapshot.phase == BoneyardPickerPhase::Launching) {
-        footer = "Launching the selected Boneyard through the stock MapPicker path...";
-    } else {
-        footer = "Up/Down or Page Up/Page Down - Enter pick - Escape stock picker";
-    }
-    SubmitPlaceholderCommand(MakeText(
-        panel_x + 18.0f,
-        panel_y + panel_height - 34.0f,
-        std::move(footer),
-        snapshot.error_message.empty()
-            ? LuaDrawColor{190, 205, 220, 255}
-            : LuaDrawColor{255, 116, 116, 255},
-        0.75f));
-    CommitLuaDrawFrame(kPlaceholderDrawOwner);
-}
-
-void MovePlaceholderCursor(int delta) {
+void MovePickerCursor(int delta) {
     std::scoped_lock lock(g_picker.mutex);
     if (!g_picker.picker_open || g_picker.catalog == nullptr ||
         g_picker.catalog->entries.empty()) {
@@ -471,45 +363,45 @@ void MovePlaceholderCursor(int delta) {
     const auto count = g_picker.catalog->entries.size();
     if (delta < 0) {
         const auto magnitude = static_cast<std::size_t>(-delta);
-        g_picker.placeholder_cursor =
-            magnitude > g_picker.placeholder_cursor
+        g_picker.cursor_index =
+            magnitude > g_picker.cursor_index
                 ? 0
-                : g_picker.placeholder_cursor - magnitude;
+                : g_picker.cursor_index - magnitude;
     } else {
-        g_picker.placeholder_cursor = (std::min)(
+        g_picker.cursor_index = (std::min)(
             count - 1,
-            g_picker.placeholder_cursor + static_cast<std::size_t>(delta));
+            g_picker.cursor_index + static_cast<std::size_t>(delta));
     }
 }
 
-void ProcessPlaceholderInput() {
+void ProcessPickerInput() {
     bool accepts_input = false;
     std::size_t cursor = 0;
     {
         std::scoped_lock lock(g_picker.mutex);
         accepts_input =
             g_picker.picker_open && multiplayer::IsLocalTransportHost();
-        cursor = g_picker.placeholder_cursor;
+        cursor = g_picker.cursor_index;
     }
     if (!accepts_input) {
         return;
     }
     if ((GetAsyncKeyState(VK_UP) & 1) != 0) {
-        MovePlaceholderCursor(-1);
+        MovePickerCursor(-1);
     }
     if ((GetAsyncKeyState(VK_DOWN) & 1) != 0) {
-        MovePlaceholderCursor(1);
+        MovePickerCursor(1);
     }
     if ((GetAsyncKeyState(VK_PRIOR) & 1) != 0) {
-        MovePlaceholderCursor(-static_cast<int>(kVisiblePlaceholderRows));
+        MovePickerCursor(-static_cast<int>(kVisibleBoneyardRows));
     }
     if ((GetAsyncKeyState(VK_NEXT) & 1) != 0) {
-        MovePlaceholderCursor(static_cast<int>(kVisiblePlaceholderRows));
+        MovePickerCursor(static_cast<int>(kVisibleBoneyardRows));
     }
     if ((GetAsyncKeyState(VK_RETURN) & 1) != 0) {
         {
             std::scoped_lock lock(g_picker.mutex);
-            cursor = g_picker.placeholder_cursor;
+            cursor = g_picker.cursor_index;
         }
         std::string ignored_error;
         (void)PickBoneyard(cursor, &ignored_error);

@@ -63,6 +63,9 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
     design = _read("docs/design/boneyard-picker-seam.md")
     header = _read("SolomonDarkModLoader/include/boneyard_picker.h")
     internal = _read("SolomonDarkModLoader/src/boneyard_picker/internal.inl")
+    frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
     resolution = _read(
         "SolomonDarkModLoader/src/boneyard_picker/content_resolution.inl"
     )
@@ -101,10 +104,10 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         "launcher Boneyard catalog staging",
     )
     _require(
-        internal + resolution,
+        internal + frontend + resolution,
         (
             "if (!ShouldHijackHostBoneyardStart()) {\n        original(courtyard);\n        return;\n    }",
-            "kVisiblePlaceholderRows = 14",
+            "kVisibleBoneyardRows = 14",
             "CryptHashData(",
             "actual_digest != entry.content_digest",
             "ApplyStockSelectionAndOpenNativePicker(",
@@ -146,7 +149,7 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         "picker seam design",
     )
     return (
-        "immutable large-list provider, bounded placeholder, enabled-mod staging, "
+        "immutable large-list provider, bounded frontend, enabled-mod staging, "
         "content verification, exact zero-entry branch, and stock String handoff are pinned"
     )
 
@@ -161,6 +164,9 @@ def test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_join
         "SolomonDarkModLoader/src/multiplayer_local_transport/incoming_participant_state_sync.inl"
     )
     picker_internal = _read("SolomonDarkModLoader/src/boneyard_picker/internal.inl")
+    frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
     picker_public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
     dispatch = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_gameplay_thread_dispatch.inl"

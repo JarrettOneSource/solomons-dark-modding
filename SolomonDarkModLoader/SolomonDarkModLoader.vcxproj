@@ -91,6 +91,7 @@
     <ClInclude Include="include\bot_stuck_progress.h" />
     <ClInclude Include="include\boneyard_picker.h" />
     <ClInclude Include="src\boneyard_picker\content_resolution.inl" />
+    <ClInclude Include="src\boneyard_picker\frontend_render.inl" />
     <ClInclude Include="src\boneyard_picker\internal.inl" />
     <ClInclude Include="src\boneyard_picker\public.inl" />
     <ClInclude Include="include\d3d9_end_scene_hook.h" />

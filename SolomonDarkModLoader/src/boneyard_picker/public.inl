@@ -39,7 +39,7 @@ bool PickBoneyard(
         return false;
     }
 
-    g_picker.placeholder_cursor = index;
+    g_picker.cursor_index = index;
     g_picker.pending_selection_index = index;
     g_picker.pending_event = PendingFrontendEvent::Pick;
     return true;
@@ -159,7 +159,7 @@ bool InitializeBoneyardPicker(
 
 void ShutdownBoneyardPicker() {
     RemoveX86Hook(&g_picker.start_hook);
-    ClearLuaDrawFrameForMod(kPlaceholderDrawOwner);
+    ClearLuaDrawFrameForMod(kPickerDrawOwner);
     std::scoped_lock lock(g_picker.mutex);
     g_picker.initialized = false;
     g_picker.picker_open = false;
@@ -168,7 +168,7 @@ void ShutdownBoneyardPicker() {
     g_picker.entry_by_digest.clear();
     g_picker.phase = BoneyardPickerPhase::Closed;
     g_picker.selected_index = kBoneyardPickerNoSelection;
-    g_picker.placeholder_cursor = 0;
+    g_picker.cursor_index = 0;
     g_picker.selection_revision = 0;
     g_picker.selected_digest.fill(0);
     g_picker.local_resolution = BoneyardResolutionStatus::None;
@@ -185,7 +185,7 @@ void ShutdownBoneyardPicker() {
 }
 
 void PumpBoneyardPickerOnGameThread() {
-    ProcessPlaceholderInput();
+    ProcessPickerInput();
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     bool refresh_host_resolutions = false;
@@ -300,7 +300,7 @@ void PumpBoneyardPickerOnGameThread() {
         }
     }
 
-    RenderPlaceholder(GetBoneyardPickerSnapshot());
+    RenderBoneyardPickerUi(GetBoneyardPickerSnapshot());
 }
 
 bool ShouldHijackHostBoneyardStart() {

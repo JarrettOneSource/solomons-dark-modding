@@ -141,7 +141,7 @@ void ApplyPendingPickLocked(
     }
 
     g_picker.selected_index = index;
-    g_picker.placeholder_cursor = index;
+    g_picker.cursor_index = index;
     g_picker.selection_revision =
         NextRevision(g_picker.selection_revision);
     g_picker.selected_digest =
