@@ -4,7 +4,9 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 import io
 import json
+import os
 from pathlib import Path
+import re
 import tempfile
 import threading
 import time
@@ -17,6 +19,7 @@ from PIL import Image
 from tools._real_flow_e2e.config import ConfigError, HarnessConfig
 from tools._real_flow_e2e.evidence import (
     EvidenceError,
+    JsonlWriter,
     paired_windows_capture,
     packet_accounting,
     rendered_enemy_assertion,
@@ -67,6 +70,7 @@ from tools._real_flow_e2e.windows import (
 )
 from tools._real_flow_e2e.ws20 import (
     RemoteWindowsConnection,
+    RemoteWindowsLuaBridge,
     Ws20HarnessError,
     Ws20Peer,
     _longest_staged_runtime_path,
@@ -74,6 +78,90 @@ from tools._real_flow_e2e.ws20 import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class _GameCaptureBarrier:
+    def __init__(self, capture_times_ns: dict[str, int]) -> None:
+        self.capture_times_ns = capture_times_ns
+        self.paths: dict[str, Path] = {}
+        self.results: dict[str, dict[str, object]] = {}
+        self.lock = threading.Lock()
+        self.publish_count = 0
+        self.stream_sequence = 17
+
+    def pipe(self, role: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            execute=lambda code: self.execute(role, code)
+        )
+
+    def execute(self, role: str, code: str) -> str:
+        arm = re.search(
+            r"__real_flow_e2e_capture_arm\((\"(?:\\.|[^\"])*\"),"
+            r"(\"(?:\\.|[^\"])*\")\)",
+            code,
+        )
+        if arm is not None:
+            barrier_id = json.loads(arm.group(1))
+            path = Path(json.loads(arm.group(2)))
+            with self.lock:
+                self.paths[role] = path
+                self.results[role] = {
+                    "status": "armed",
+                    "barrier_id": barrier_id,
+                }
+            return f"armed=true\nbarrier_id={barrier_id}\n"
+
+        publish = re.search(
+            r"__real_flow_e2e_capture_publish\((\"(?:\\.|[^\"])*\")\)",
+            code,
+        )
+        if publish is not None:
+            barrier_id = json.loads(publish.group(1))
+            with self.lock:
+                self.publish_count += 1
+                for peer_role, path in self.paths.items():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    image = Image.new("RGB", (64, 64))
+                    image.putdata(
+                        [
+                            (
+                                index & 255,
+                                (index >> 8) & 255,
+                                (index * 37) & 255,
+                            )
+                            for index in range(64 * 64)
+                        ]
+                    )
+                    image.save(path)
+                    stamp = self.capture_times_ns[peer_role]
+                    os.utime(path, ns=(stamp, stamp))
+                    self.results[peer_role] = {
+                        "status": "captured",
+                        "barrier_id": barrier_id,
+                        "authority_participant_id": 42,
+                        "stream_sequence": self.stream_sequence,
+                        "trigger_tick_count": 100,
+                        "trigger_monotonic_ms": 10_000,
+                        "capture_monotonic_ms": 10_005,
+                        "capture_frame_count": 500,
+                        "capture_completed_monotonic_ms": 10_005,
+                        "capture_completed_frame_count": 500,
+                        "ok": True,
+                        "error": "",
+                    }
+            return (
+                f"barrier_id={barrier_id}\n"
+                f"stream_sequence={self.stream_sequence}\n"
+            )
+
+        if "__real_flow_e2e_capture_result" in code:
+            with self.lock:
+                result = dict(self.results.get(role, {}))
+            return "\n".join(
+                f"{key}={str(value).lower() if isinstance(value, bool) else value}"
+                for key, value in result.items()
+            ) + "\n"
+        raise AssertionError(f"unexpected observer code: {code}")
 
 
 class RealFlowE2ETests(unittest.TestCase):
@@ -115,69 +203,111 @@ class RealFlowE2ETests(unittest.TestCase):
         host.state.assert_called_once_with()
         client.state.assert_called_once_with()
 
-    def test_paired_capture_uses_controller_clock_bounds(self) -> None:
-        def peer_capture(
-            capture_ns: int,
-            start_ns: int,
-            end_ns: int,
-        ) -> SimpleNamespace:
-            def capture(output: Path) -> dict[str, object]:
-                output.write_bytes(b"capture")
-                return {
-                    "path": str(output),
-                    "captureUtcNanoseconds": capture_ns,
-                    "captureWindowStartUtcNanoseconds": start_ns,
-                    "captureWindowEndUtcNanoseconds": end_ns,
-                }
-
-            return SimpleNamespace(capture_window=capture)
-
+    def test_paired_capture_uses_replicated_game_barrier(self) -> None:
+        base_ns = 1_800_000_000_000_000_000
+        barrier = _GameCaptureBarrier(
+            {"host": base_ns, "clientB": base_ns + 200_000_000}
+        )
         with tempfile.TemporaryDirectory() as temporary:
-            result = paired_windows_capture(
-                ROOT,
-                peer_capture(150_000_000, 100_000_000, 200_000_000),
-                peer_capture(250_000_000, 150_000_000, 300_000_000),
-                Path(temporary),
-                label="bounded",
-            )
+            timeline = JsonlWriter(Path(temporary) / "timeline.jsonl")
+            with mock.patch(
+                "tools._real_flow_e2e.evidence.windows_path",
+                side_effect=lambda path: str(path),
+            ):
+                result = paired_windows_capture(
+                    ROOT,
+                    SimpleNamespace(),
+                    SimpleNamespace(),
+                    Path(temporary) / "captures",
+                    label="bounded",
+                    host_pipe=barrier.pipe("host"),
+                    client_pipe=barrier.pipe("clientB"),
+                    event_writer=timeline,
+                )
+            timeline_rows = [
+                json.loads(line)
+                for line in timeline.path.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+            ]
 
         self.assertEqual(result["attempt"], 1)
-        self.assertEqual(result["captureBoundSpanNanoseconds"], 200_000_000)
-        self.assertEqual(result["rejectedAttempts"], [])
-
-    def test_paired_capture_retries_without_relaxing_bound(self) -> None:
-        class SequencedCapture:
-            def __init__(self, windows: list[tuple[int, int]]) -> None:
-                self.windows = iter(windows)
-
-            def capture_window(self, output: Path) -> dict[str, object]:
-                start_ns, end_ns = next(self.windows)
-                output.write_bytes(b"capture")
-                return {
-                    "path": str(output),
-                    "captureUtcNanoseconds": (start_ns + end_ns) // 2,
-                    "captureWindowStartUtcNanoseconds": start_ns,
-                    "captureWindowEndUtcNanoseconds": end_ns,
-                }
-
-        host = SequencedCapture(
-            [(0, 100_000_000), (2_000_000_000, 2_100_000_000)]
+        self.assertEqual(
+            result["gameAnchoredPairingIntervalNanoseconds"],
+            200_000_000,
         )
-        client = SequencedCapture(
-            [(1_200_000_000, 1_300_000_000), (2_050_000_000, 2_200_000_000)]
+        self.assertEqual(result["rejectedAttempts"], [])
+        self.assertEqual(barrier.publish_count, 1)
+        self.assertEqual(
+            result["captures"]["host"]["barrier"]["stream_sequence"],
+            17,
+        )
+        self.assertIn("replicated in-game event", result["pairingDefinition"])
+        self.assertEqual(
+            [row["event"] for row in timeline_rows],
+            ["armed", "published", "accepted"],
+        )
+        self.assertEqual(
+            timeline_rows[-1]["peers"]["clientB"]["capture_monotonic_ms"],
+            10_005,
+        )
+
+    def test_paired_capture_rejects_once_without_retrying_barrier(self) -> None:
+        base_ns = 1_800_000_000_000_000_000
+        barrier = _GameCaptureBarrier(
+            {"host": base_ns, "clientB": base_ns + 1_200_000_000}
         )
         with tempfile.TemporaryDirectory() as temporary:
-            result = paired_windows_capture(
-                ROOT,
-                host,
-                client,
-                Path(temporary),
-                label="retry",
-            )
+            with mock.patch(
+                "tools._real_flow_e2e.evidence.windows_path",
+                side_effect=lambda path: str(path),
+            ), self.assertRaisesRegex(
+                EvidenceError,
+                "coordinated in-game paired capture exceeded the 1000 ms",
+            ):
+                paired_windows_capture(
+                    ROOT,
+                    SimpleNamespace(),
+                    SimpleNamespace(),
+                    Path(temporary),
+                    label="rejected",
+                    host_pipe=barrier.pipe("host"),
+                    client_pipe=barrier.pipe("clientB"),
+                )
 
-        self.assertEqual(result["attempt"], 2)
-        self.assertEqual(len(result["rejectedAttempts"]), 1)
-        self.assertEqual(result["captureBoundSpanNanoseconds"], 200_000_000)
+        self.assertEqual(barrier.publish_count, 1)
+
+    def test_remote_bridge_clock_alignment_selects_minimum_rtt(self) -> None:
+        bridge = object.__new__(RemoteWindowsLuaBridge)
+        samples = [
+            {
+                "roundTripNanoseconds": 80,
+                "remoteToControllerOffsetNanoseconds": 7,
+                "uncertaintyNanoseconds": 40,
+            },
+            {
+                "roundTripNanoseconds": 20,
+                "remoteToControllerOffsetNanoseconds": 9,
+                "uncertaintyNanoseconds": 10,
+            },
+            {
+                "roundTripNanoseconds": 50,
+                "remoteToControllerOffsetNanoseconds": 8,
+                "uncertaintyNanoseconds": 25,
+            },
+        ]
+        with mock.patch.object(
+            bridge,
+            "clock_offset_sample",
+            side_effect=samples,
+        ):
+            result = bridge.clock_alignment(samples=3)
+
+        self.assertEqual(
+            result["method"],
+            "minimum-rtt-bridge-ping-midpoint",
+        )
+        self.assertEqual(result["selected"], samples[1])
 
     def test_endurance_probe_bundle_recovers_from_bounded_remote_outage(
         self,
@@ -1491,18 +1621,32 @@ class RealFlowE2ETests(unittest.TestCase):
             windows,
         )
 
-    def test_observer_mod_is_inert_and_has_no_gameplay_callbacks(
+    def test_observer_mod_only_installs_harness_capture_callbacks(
         self,
     ) -> None:
         script = (
             ROOT
             / "tools/_real_flow_e2e/observer_mod/scripts/main.lua"
         ).read_text(encoding="utf-8")
+        manifest = json.loads(
+            (
+                ROOT / "tools/_real_flow_e2e/observer_mod/manifest.json"
+            ).read_text(encoding="utf-8")
+        )
 
         self.assertNotIn("sd.on_", script)
-        self.assertNotIn("sd.events", script)
+        self.assertIn('sd.events.on("runtime.tick"', script)
+        self.assertIn('sd.events.on(capture_event', script)
+        self.assertIn("sd.events.broadcast(capture_event", script)
+        self.assertIn("sd.debug.capture_backbuffer", script)
         self.assertNotIn("sd.player.set", script)
         self.assertNotIn("sd.debug.write", script)
+        self.assertNotIn("sd.input", script)
+        self.assertNotIn("sd.time.set", script)
+        self.assertIn(
+            "events.replicated.broadcast",
+            manifest["runtime"]["requiredCapabilities"],
+        )
 
     def test_render_assertion_rejects_unrelated_world_texture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

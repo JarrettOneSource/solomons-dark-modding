@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
+import ntpath
 from pathlib import Path
 import shutil
 import threading
@@ -13,7 +14,6 @@ from typing import Any
 
 from .windows import (
     WindowsPeer,
-    capture_window as capture_local_window,
     windows_path,
 )
 
@@ -54,147 +54,400 @@ def paired_windows_capture(
     label: str,
     host_pipe: Any | None = None,
     client_pipe: Any | None = None,
+    event_writer: JsonlWriter | None = None,
 ) -> dict[str, Any]:
     output_directory.mkdir(parents=True, exist_ok=True)
-    rejected_attempts: list[dict[str, Any]] = []
-
-    def capture(
-        peer: WindowsPeer,
-        pipe: Any | None,
-        output: Path,
-    ) -> dict[str, Any]:
-        remote = getattr(peer, "capture_window", None)
-        if callable(remote):
-            return dict(remote(output))
-        if pipe is not None:
-            raw = output.with_suffix(".bmp")
-            if output.exists() or raw.exists():
-                raise EvidenceError(
-                    f"capture output must be new: {output}"
-                )
-            started_ns = time.time_ns()
-            response = pipe.execute(
-                "local ok,err=sd.debug.capture_backbuffer("
-                + json.dumps(windows_path(raw))
-                + ");print('ok='..tostring(ok));"
-                "print('error='..tostring(err or ''))"
-            )
-            completed_ns = time.time_ns()
-            values = dict(
-                line.split("=", 1)
-                for line in response.splitlines()
-                if "=" in line
-            )
-            if values.get("ok") != "true" or not raw.is_file():
-                raise EvidenceError(
-                    "local D3D9 backbuffer capture failed"
-                )
-            try:
-                from PIL import Image
-
-                with Image.open(raw) as source:
-                    image = source.convert("RGB")
-                    image.save(output)
-                    size = [image.width, image.height]
-            finally:
-                raw.unlink(missing_ok=True)
-            ended_ns = time.time_ns()
-            return {
-                "path": str(output),
-                "startedUtcNanoseconds": started_ns,
-                "captureUtcNanoseconds": (
-                    started_ns + completed_ns
-                ) // 2,
-                "captureWindowStartUtcNanoseconds": started_ns,
-                "captureWindowEndUtcNanoseconds": completed_ns,
-                "endedUtcNanoseconds": ended_ns,
-                "captureMethod": "local-d3d9-backbuffer",
-                "clockDomain": "controller-bracket",
-                "quality": {
-                    "width": size[0],
-                    "height": size[1],
-                },
-            }
-        return capture_local_window(source_root, peer, output)
-
-    for attempt in range(1, 4):
-        barrier_id = (
-            time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-            + f"-{time.time_ns() % 1_000_000_000:09d}"
+    if host_pipe is None or client_pipe is None:
+        raise EvidenceError(
+            "coordinated in-game capture requires both Lua peers"
         )
-        barrier_ns = time.time_ns()
+
+    del source_root, host
+    barrier_id = (
+        time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        + f"-{time.time_ns() % 1_000_000_000:09d}"
+    )
+    barrier_path = output_directory / f"{label}-{barrier_id}-barrier.json"
+    host_output = output_directory / f"{label}-{barrier_id}-host.png"
+    client_output = (
+        output_directory / f"{label}-{barrier_id}-client-b.png"
+    )
+    host_raw = host_output.with_suffix(".bmp")
+    client_raw = client_output.with_suffix(".bmp")
+    for path in (barrier_path, host_output, client_output, host_raw, client_raw):
+        if path.exists():
+            raise EvidenceError(f"capture output must be new: {path}")
+
+    remote_connection = getattr(client, "connection", None)
+    remote_run_root = getattr(client, "run_root", None)
+    remote_bridge = getattr(client_pipe, "bridge", None)
+    remote_client = (
+        remote_connection is not None
+        and isinstance(remote_run_root, str)
+        and remote_bridge is not None
+    )
+    if remote_client:
+        client_capture_path = ntpath.join(
+            remote_run_root,
+            "captures",
+            client_raw.name,
+        )
+    else:
+        client_capture_path = windows_path(client_raw)
+    host_capture_path = windows_path(host_raw)
+
+    record: dict[str, Any] = {
+        "schemaVersion": 1,
+        "barrierId": barrier_id,
+        "label": label,
+        "pairingDefinition": (
+            "conservative UTC skew between capture-file completion times "
+            "produced by one replicated in-game event; remote UTC is "
+            "aligned before the trigger and controller request/acknowledgement "
+            "time is excluded"
+        ),
+        "maximumPairingIntervalNanoseconds": 1_000_000_000,
+        "status": "preparing",
+    }
+    record_written = False
+
+    def emit(event: str, **values: Any) -> None:
+        if event_writer is not None:
+            event_writer.append(
+                {
+                    "schemaVersion": 1,
+                    "kind": "capture-barrier",
+                    "event": event,
+                    "barrierId": barrier_id,
+                    "label": label,
+                    "utcNanoseconds": time.time_ns(),
+                    **values,
+                }
+            )
+
+    def execute_observer(pipe: Any, code: str) -> dict[str, str]:
+        response = pipe.execute(
+            "-- sdmod-exec-target: tool.real_flow_e2e_observer\n" + code
+        )
+        return {
+            key: value
+            for line in response.splitlines()
+            if "=" in line
+            for key, value in (line.split("=", 1),)
+        }
+
+    def arm(pipe: Any, path: str) -> dict[str, str]:
+        values = execute_observer(
+            pipe,
+            "local armed=__real_flow_e2e_capture_arm("
+            + json.dumps(barrier_id)
+            + ","
+            + json.dumps(path)
+            + ");print('armed='..tostring(armed));print('barrier_id='.."
+            + json.dumps(barrier_id)
+            + ")",
+        )
+        if values != {"armed": "true", "barrier_id": barrier_id}:
+            raise EvidenceError(
+                f"capture barrier arm returned invalid state: {values}"
+            )
+        return values
+
+    status_code = r"""
+local result = __real_flow_e2e_capture_result()
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+if type(result) ~= "table" then
+  emit("status", "missing")
+  return
+end
+for _, key in ipairs({
+  "status",
+  "barrier_id",
+  "authority_participant_id",
+  "stream_sequence",
+  "trigger_tick_count",
+  "trigger_monotonic_ms",
+  "capture_monotonic_ms",
+  "capture_frame_count",
+  "capture_completed_monotonic_ms",
+  "capture_completed_frame_count",
+  "ok",
+  "error",
+}) do
+  emit(key, result[key])
+end
+"""
+
+    def wait_for_capture(pipe: Any) -> dict[str, Any]:
+        deadline = time.monotonic() + 20.0
+        last: dict[str, str] = {}
+        while time.monotonic() < deadline:
+            last = execute_observer(pipe, status_code)
+            if (
+                last.get("barrier_id") == barrier_id
+                and last.get("status") in {"captured", "failed"}
+            ):
+                integer_keys = {
+                    "authority_participant_id",
+                    "stream_sequence",
+                    "trigger_tick_count",
+                    "trigger_monotonic_ms",
+                    "capture_monotonic_ms",
+                    "capture_frame_count",
+                    "capture_completed_monotonic_ms",
+                    "capture_completed_frame_count",
+                }
+                parsed: dict[str, Any] = dict(last)
+                try:
+                    parsed.update(
+                        {key: int(last.get(key, "0")) for key in integer_keys}
+                    )
+                except ValueError as exc:
+                    raise EvidenceError(
+                        f"capture barrier returned malformed timing: {last}"
+                    ) from exc
+                parsed["ok"] = last.get("ok") == "true"
+                return parsed
+            time.sleep(0.05)
+        raise EvidenceError(
+            "coordinated in-game capture barrier failed to synchronize: "
+            f"barrier={barrier_id} last={last}"
+        )
+
+    def convert_capture(raw: Path, output: Path) -> dict[str, Any]:
+        if not raw.is_file() or raw.stat().st_size <= 0:
+            raise EvidenceError(f"capture file is missing or empty: {raw}")
+        from PIL import Image
+
+        with Image.open(raw) as source:
+            image = source.convert("RGB")
+            colors = image.getcolors(maxcolors=image.width * image.height)
+            unique_colors = (
+                len(colors) if colors is not None else image.width * image.height
+            )
+            dominant_fraction = (
+                max(count for count, _ in colors)
+                / float(image.width * image.height)
+                if colors
+                else 0.0
+            )
+            if unique_colors < 1000 or dominant_fraction >= 0.85:
+                raise EvidenceError(
+                    f"backbuffer capture was blank or low-information: {raw}"
+                )
+            image.save(output)
+            quality = {
+                "width": image.width,
+                "height": image.height,
+                "uniqueColors": unique_colors,
+                "dominantFraction": dominant_fraction,
+            }
+        raw_bytes = raw.stat().st_size
+        raw.unlink()
+        return {"rawBmpBytes": raw_bytes, "quality": quality}
+
+    try:
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {
+            armed = {
                 "host": executor.submit(
-                    capture,
-                    host,
+                    arm,
                     host_pipe,
-                    output_directory
-                    / f"{label}-{barrier_id}-host.png",
+                    host_capture_path,
                 ),
                 "clientB": executor.submit(
-                    capture,
-                    client,
+                    arm,
                     client_pipe,
-                    output_directory
-                    / f"{label}-{barrier_id}-client-b.png",
+                    client_capture_path,
                 ),
             }
-            captures = {
-                role: future.result()
-                for role, future in futures.items()
+            record["armed"] = {
+                role: future.result() for role, future in armed.items()
             }
-        windows = {
-            role: (
-                int(
-                    capture_row.get(
-                        "captureWindowStartUtcNanoseconds",
-                        capture_row["captureUtcNanoseconds"],
-                    )
-                ),
-                int(
-                    capture_row.get(
-                        "captureWindowEndUtcNanoseconds",
-                        capture_row["captureUtcNanoseconds"],
-                    )
-                ),
+
+        if remote_client:
+            clock_alignment = remote_bridge.clock_alignment(samples=5)
+        else:
+            clock_alignment = {
+                "method": "shared-host-windows-utc",
+                "selected": {
+                    "remoteToControllerOffsetNanoseconds": 0,
+                    "uncertaintyNanoseconds": 0,
+                    "roundTripNanoseconds": 0,
+                },
+                "samples": [],
+            }
+        record["clockAlignment"] = clock_alignment
+        record["status"] = "armed"
+        emit("armed", clockAlignmentMethod=clock_alignment["method"])
+
+        published_ns = time.time_ns()
+        published = execute_observer(
+            host_pipe,
+            "local sequence=__real_flow_e2e_capture_publish("
+            + json.dumps(barrier_id)
+            + ");print('barrier_id='.."
+            + json.dumps(barrier_id)
+            + ");print('stream_sequence='..tostring(sequence))",
+        )
+        try:
+            stream_sequence = int(published.get("stream_sequence", "0"))
+        except ValueError as exc:
+            raise EvidenceError(
+                f"capture barrier publish returned invalid state: {published}"
+            ) from exc
+        if published.get("barrier_id") != barrier_id or stream_sequence <= 0:
+            raise EvidenceError(
+                f"capture barrier publish returned invalid state: {published}"
             )
-            for role, capture_row in captures.items()
+        record["publishedUtcNanoseconds"] = published_ns
+        record["streamSequence"] = stream_sequence
+        record["status"] = "published"
+        emit("published", streamSequence=stream_sequence)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            pending = {
+                "host": executor.submit(wait_for_capture, host_pipe),
+                "clientB": executor.submit(wait_for_capture, client_pipe),
+            }
+            peers = {
+                role: future.result() for role, future in pending.items()
+            }
+        record["peers"] = peers
+        for role, peer in peers.items():
+            if (
+                peer["status"] != "captured"
+                or peer["ok"] is not True
+                or peer["stream_sequence"] != stream_sequence
+                or peer["trigger_monotonic_ms"] <= 0
+                or peer["capture_monotonic_ms"] <= 0
+            ):
+                raise EvidenceError(
+                    "coordinated in-game capture barrier failed to "
+                    f"synchronize: role={role} state={peer}"
+                )
+            local_lag_ms = abs(
+                peer["capture_monotonic_ms"]
+                - peer["trigger_monotonic_ms"]
+            )
+            peer["localTriggerToCaptureMilliseconds"] = local_lag_ms
+            if local_lag_ms > 1000:
+                raise EvidenceError(
+                    "coordinated in-game capture barrier exceeded the local "
+                    f"trigger bound: role={role} lag={local_lag_ms} ms"
+                )
+
+        host_stat = host_raw.stat()
+        host_capture_utc_ns = host_stat.st_mtime_ns
+        host_quality = convert_capture(host_raw, host_output)
+
+        if remote_client:
+            remote_info = remote_connection.file_info(client_capture_path)
+            remote_capture_utc_ns = int(
+                remote_info.get("lastWriteUtcNanoseconds", 0)
+            )
+            if (
+                remote_info.get("exists") is not True
+                or int(remote_info.get("size", 0)) <= 0
+                or remote_capture_utc_ns <= 0
+            ):
+                raise EvidenceError(
+                    "workstation20 barrier capture file is missing or invalid"
+                )
+            remote_connection.copy_file_from(client_capture_path, client_raw)
+        else:
+            if not client_raw.is_file():
+                raise EvidenceError("client barrier capture file is missing")
+            remote_capture_utc_ns = client_raw.stat().st_mtime_ns
+        client_quality = convert_capture(client_raw, client_output)
+
+        selected_clock = clock_alignment["selected"]
+        adjusted_client_utc_ns = (
+            remote_capture_utc_ns
+            + int(selected_clock["remoteToControllerOffsetNanoseconds"])
+        )
+        estimated_skew_ns = abs(
+            host_capture_utc_ns - adjusted_client_utc_ns
+        )
+        uncertainty_ns = int(selected_clock["uncertaintyNanoseconds"])
+        pairing_interval_ns = estimated_skew_ns + uncertainty_ns
+        captures = {
+            "host": {
+                "path": str(host_output),
+                "captureUtcNanoseconds": host_capture_utc_ns,
+                "captureFileUtcNanoseconds": host_capture_utc_ns,
+                "captureMethod": "replicated-event-d3d9-backbuffer",
+                "clockDomain": "host-windows-utc",
+                "barrier": peers["host"],
+                **host_quality,
+            },
+            "clientB": {
+                "path": str(client_output),
+                "captureUtcNanoseconds": adjusted_client_utc_ns,
+                "captureFileUtcNanoseconds": remote_capture_utc_ns,
+                "captureMethod": "replicated-event-d3d9-backbuffer",
+                "clockDomain": (
+                    "remote-windows-utc-aligned-to-controller"
+                    if remote_client
+                    else "host-windows-utc"
+                ),
+                "barrier": peers["clientB"],
+                **client_quality,
+            },
         }
-        span_ns = max(end for _, end in windows.values()) - min(
-            start for start, _ in windows.values()
+        result = {
+            "barrierId": barrier_id,
+            "barrierUtcNanoseconds": published_ns,
+            "barrierStreamSequence": stream_sequence,
+            "pairingDefinition": record["pairingDefinition"],
+            "captureSkewNanoseconds": estimated_skew_ns,
+            "clockAlignmentUncertaintyNanoseconds": uncertainty_ns,
+            "gameAnchoredPairingIntervalNanoseconds": pairing_interval_ns,
+            "captureBoundSpanNanoseconds": pairing_interval_ns,
+            "maximumPairingIntervalNanoseconds": 1_000_000_000,
+            "clockAlignment": clock_alignment,
+            "attempt": 1,
+            "rejectedAttempts": [],
+            "captures": captures,
+        }
+        record.update(result)
+        record["status"] = (
+            "accepted"
+            if pairing_interval_ns <= 1_000_000_000
+            else "rejected"
         )
-        skew_ns = abs(
-            int(captures["host"]["captureUtcNanoseconds"])
-            - int(captures["clientB"]["captureUtcNanoseconds"])
+        write_json(barrier_path, record)
+        record_written = True
+        emit(
+            record["status"],
+            streamSequence=stream_sequence,
+            estimatedSkewNanoseconds=estimated_skew_ns,
+            clockAlignmentUncertaintyNanoseconds=uncertainty_ns,
+            gameAnchoredPairingIntervalNanoseconds=pairing_interval_ns,
+            evidencePath=str(barrier_path),
+            peers=peers,
         )
-        if span_ns <= 1_000_000_000:
-            return {
-                "barrierId": barrier_id,
-                "barrierUtcNanoseconds": barrier_ns,
-                "captureSkewNanoseconds": skew_ns,
-                "captureBoundSpanNanoseconds": span_ns,
-                "attempt": attempt,
-                "rejectedAttempts": rejected_attempts,
-                "captures": captures,
-            }
-        rejected_attempts.append(
-            {
-                "attempt": attempt,
-                "barrierId": barrier_id,
-                "captureBoundSpanNanoseconds": span_ns,
-                "captureSkewNanoseconds": skew_ns,
-                "captures": captures,
-            }
+        if pairing_interval_ns > 1_000_000_000:
+            raise EvidenceError(
+                "coordinated in-game paired capture exceeded the 1000 ms "
+                f"bound: interval={pairing_interval_ns / 1e6:.1f} ms "
+                f"estimatedSkew={estimated_skew_ns / 1e6:.1f} ms "
+                f"uncertainty={uncertainty_ns / 1e6:.1f} ms "
+                f"barrier={barrier_id}"
+            )
+        return result
+    except BaseException as exc:
+        if not record_written:
+            record["status"] = "failed"
+            record["error"] = f"{type(exc).__name__}: {exc}"
+            write_json(barrier_path, record)
+        emit(
+            "failed",
+            error=f"{type(exc).__name__}: {exc}",
+            evidencePath=str(barrier_path),
         )
-    spans_ms = [
-        round(row["captureBoundSpanNanoseconds"] / 1e6, 1)
-        for row in rejected_attempts
-    ]
-    raise EvidenceError(
-        "paired window capture exceeded the 1000 ms controller-clock "
-        f"bound in three attempts: {spans_ms} ms"
-    )
+        raise
 
 
 def rendered_enemy_assertion(

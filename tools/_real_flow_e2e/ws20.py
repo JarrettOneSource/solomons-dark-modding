@@ -287,6 +287,72 @@ class RemoteWindowsLuaBridge:
                 f"remote bridge startup failed: {exc}{suffix}"
             ) from exc
 
+    def clock_offset_sample(self) -> dict[str, int]:
+        """Estimate the bridge host's UTC offset without entering Lua."""
+        started = time.time_ns()
+        with self._lock:
+            process = self._start()
+            if process.stdin is None:
+                raise Ws20HarnessError("remote bridge has no stdin pipe")
+            try:
+                process.stdin.write(
+                    struct.pack("<II", BRIDGE_PING_LENGTH, 100)
+                )
+                process.stdin.flush()
+                response_size, remote_utc_ns = struct.unpack(
+                    "<IQ",
+                    self._read_exact(
+                        process,
+                        12,
+                        time.monotonic() + 15.0,
+                    ),
+                )
+            except (
+                BrokenPipeError,
+                EOFError,
+                OSError,
+                TimeoutError,
+                struct.error,
+            ) as exc:
+                detail = self._exit_detail(process)
+                self.close()
+                suffix = f": {detail}" if detail else ""
+                raise Ws20HarnessError(
+                    f"remote bridge clock ping failed: {exc}{suffix}"
+                ) from exc
+        ended = time.time_ns()
+        if response_size != 0 or remote_utc_ns <= 0:
+            raise Ws20HarnessError(
+                "remote bridge clock ping returned invalid metadata"
+            )
+        midpoint = started + (ended - started) // 2
+        return {
+            "controllerStartedUtcNanoseconds": started,
+            "controllerEndedUtcNanoseconds": ended,
+            "roundTripNanoseconds": ended - started,
+            "remoteUtcNanoseconds": remote_utc_ns,
+            "remoteToControllerOffsetNanoseconds": (
+                midpoint - remote_utc_ns
+            ),
+            "uncertaintyNanoseconds": (ended - started) // 2,
+        }
+
+    def clock_alignment(self, *, samples: int = 5) -> dict[str, Any]:
+        if not 1 <= samples <= 9:
+            raise Ws20HarnessError(
+                "remote bridge clock alignment sample count must be 1..9"
+            )
+        rows = [self.clock_offset_sample() for _ in range(samples)]
+        selected = min(
+            rows,
+            key=lambda row: row["roundTripNanoseconds"],
+        )
+        return {
+            "method": "minimum-rtt-bridge-ping-midpoint",
+            "selected": selected,
+            "samples": rows,
+        }
+
     def execute(self, code: str, timeout: float) -> str:
         request = code.encode("utf-8")
         if not request or len(request) > MAXIMUM_FRAME_BYTES:
@@ -849,10 +915,20 @@ $steam=@(
 $path='{escaped}'
 if(Test-Path -LiteralPath $path -PathType Leaf){{
   $file=Get-Item -LiteralPath $path
-  [ordered]@{{exists=$true;size=[int64]$file.Length}} |
+  $lastWriteUtcNanoseconds=[uint64](
+    ($file.LastWriteTimeUtc.Ticks - 621355968000000000) * 100)
+  [ordered]@{{
+    exists=$true
+    size=[int64]$file.Length
+    lastWriteUtcNanoseconds=$lastWriteUtcNanoseconds
+  }} |
     ConvertTo-Json -Compress
 }}else{{
-  [ordered]@{{exists=$false;size=0}} | ConvertTo-Json -Compress
+  [ordered]@{{
+    exists=$false
+    size=0
+    lastWriteUtcNanoseconds=0
+  }} | ConvertTo-Json -Compress
 }}
 """
         )

@@ -152,10 +152,13 @@ try {
                     $header,
                     4)
                 if ($requestLength -eq [uint32]::MaxValue) {
+                    $pingUtcNanoseconds = [uint64](
+                        ([DateTime]::UtcNow.Ticks - 621355968000000000) *
+                        100)
                     Write-ResponseHeader `
                         -Stream $stream `
                         -ResponseLength 0 `
-                        -ExecutionUtcNanoseconds 0
+                        -ExecutionUtcNanoseconds $pingUtcNanoseconds
                     $stream.Flush()
                     continue
                 }

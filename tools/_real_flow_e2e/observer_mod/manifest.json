@@ -8,6 +8,10 @@
     "entryScript": "scripts/main.lua",
     "requiredCapabilities": [
       "lua.engine",
+      "events.runtime.tick",
+      "events.replicated.broadcast",
+      "runtime.mod.info",
+      "state.replicated.read",
       "nav.read"
     ]
   }

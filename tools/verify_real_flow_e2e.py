@@ -667,6 +667,7 @@ def _paired_capture_with_paused_sampler(
             label=label,
             host_pipe=host_pipe,
             client_pipe=client_pipe,
+            event_writer=sampler.writer,
         )
 
 
