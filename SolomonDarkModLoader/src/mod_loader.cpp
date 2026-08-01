@@ -494,8 +494,23 @@ void Initialize(HMODULE module_handle) {
             }
         }
 
+        std::string multiplayer_join_flow_error;
+        if (!InitializeMultiplayerJoinFlow(
+                &multiplayer_join_flow_error)) {
+            const auto message =
+                multiplayer_join_flow_error.empty()
+                ? std::string(
+                    "Multiplayer join flow failed to initialize.")
+                : multiplayer_join_flow_error;
+            Log(message);
+            ShutdownPartialRuntime();
+            write_failed_status(
+                "multiplayer-join-flow-failed",
+                message);
+            return;
+        }
         const bool multiplayer_join_flow_enabled =
-            InitializeMultiplayerJoinFlow();
+            IsMultiplayerJoinFlowEnabled();
         const auto* join_flow_ui_config =
             TryGetDebugUiOverlayConfig();
         const bool diagnostic_ui_enabled =

@@ -6,7 +6,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 88;
+constexpr std::uint16_t kProtocolVersion = 89;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -543,6 +543,9 @@ struct StatePacket {
     std::uint8_t transform_valid;
     std::uint8_t controller_kind;
     std::uint8_t participant_state_flags;
+    std::uint8_t loadout_pick_state;
+    std::uint8_t loadout_pick_reserved[3] = {};
+    std::uint32_t loadout_pick_generation;
     std::uint32_t run_nonce;
     std::uint32_t game_over_command_epoch;
     std::uint32_t game_over_ack_epoch;
@@ -688,6 +691,9 @@ struct ParticipantFramePacket {
     std::uint8_t controller_kind;
     std::uint8_t scene_kind;
     std::uint8_t scene_reserved[3] = {};
+    std::uint8_t loadout_pick_state;
+    std::uint8_t loadout_pick_reserved[3] = {};
+    std::uint32_t loadout_pick_generation;
     std::uint32_t run_nonce;
     std::uint32_t game_over_command_epoch;
     std::uint32_t game_over_ack_epoch;
@@ -1755,12 +1761,12 @@ static_assert(sizeof(ParticipantProgressionBookEntryPacketState) == 20, "Unexpec
 static_assert(sizeof(LevelUpOfferOptionPacketState) == 8, "Unexpected level-up option packet size");
 static_assert(sizeof(ParticipantDerivedStatPacketState) == 64, "Unexpected derived stat packet size");
 static_assert(sizeof(ParticipantHagathaPerkPacketState) == 20, "Unexpected Hagatha perk packet size");
-static_assert(sizeof(StatePacket) == 657, "Unexpected state packet size");
+static_assert(sizeof(StatePacket) == 665, "Unexpected state packet size");
 static_assert(sizeof(WaveCompositionRowPacketState) == 12,
               "Unexpected wave composition row packet size");
 static_assert(sizeof(WaveSummaryPacket) == 296,
               "Unexpected wave summary packet size");
-static_assert(sizeof(ParticipantFramePacket) == 374,
+static_assert(sizeof(ParticipantFramePacket) == 382,
               "Unexpected participant frame packet size");
 static_assert(
     sizeof(ParticipantInventorySnapshotPacket) == 1832,

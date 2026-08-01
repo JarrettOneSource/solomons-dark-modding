@@ -61,6 +61,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("multiplayer quick-start launch routing", TestMultiplayerQuickStartLaunchRoutingAsync),
     ("manual lobby launch state", TestManualLobbyLaunchStateAsync),
     ("lobby connect progress mapping", TestLobbyConnectProgressMappingAsync),
+    ("early lobby loadout status", TestEarlyLobbyLoadoutStatusAsync),
     ("Steam lobby capacity bounds", TestSteamLobbyCapacityBoundsAsync),
     ("bot member status compatibility", TestBotMemberStatusCompatibilityAsync),
     ("Steam shortcut child launch identity", TestSteamShortcutChildLaunchIdentityAsync),
@@ -1886,6 +1887,75 @@ static Task TestLobbyConnectProgressMappingAsync()
     return Task.CompletedTask;
 }
 
+static Task TestEarlyLobbyLoadoutStatusAsync()
+{
+    static MultiplayerSessionStatus Status(
+        string gamePhase,
+        string sessionState,
+        string statusText) => new(
+            LaunchToken: "loadout-contract",
+            Enabled: true,
+            IsHost: true,
+            Phase: "LobbyReady",
+            GamePhase: gamePhase,
+            SessionState: sessionState,
+            AppId: 3362180,
+            LobbyId: 76561198000000901,
+            HostSteamId: 76561198000000902,
+            LocalSteamId: 76561198000000902,
+            PersonaName: "Loadout Host",
+            Privacy: "public",
+            ProtocolVersion: 89,
+            ManifestSha256: new string('8', 64),
+            FriendSteamIds: [],
+            MaxParticipants: 4,
+            AuthenticatedPeerCount: 0,
+            OverlayEnabled: false,
+            InviteDialogOpened: false,
+            InviteSent: false,
+            RouteRelayed: false,
+            RoutePingMs: 0,
+            Members: [],
+            StatusText: statusText,
+            ErrorText: string.Empty);
+
+    var host = LobbyHostOptions.Create(
+        MultiplayerLobbyPrivacy.Public,
+        "http://127.0.0.1:51713");
+    var picking = Status(
+        "picking-loadout",
+        "not-in-game",
+        "Picking Loadout");
+    Require(
+        LobbyDirectoryPublisher.IsPublishableHostStatus(host, picking),
+        "host launch did not publish before hub entry");
+    Require(
+        LobbyDirectoryPublisher.StatusTextForGamePhase("picking-loadout") ==
+            "Picking Loadout",
+        "loadout phase lost its directory status text");
+
+    var lifecycle = new[]
+    {
+        picking,
+        Status("hub", "in-hub", "In Hub"),
+        Status("session", "in-boneyard", "In Match"),
+        picking
+    };
+    var fingerprints = lifecycle
+        .Select(LobbyDirectoryPublisher.BuildStatusFingerprint)
+        .ToArray();
+    Require(
+        fingerprints[0] != fingerprints[1] &&
+        fingerprints[1] != fingerprints[2] &&
+        fingerprints[2] != fingerprints[3],
+        "lobby lifecycle changes did not trigger immediate directory updates");
+    Require(
+        fingerprints[0] == fingerprints[3],
+        "returning to loadout selection did not restore the picking status");
+
+    return Task.CompletedTask;
+}
+
 static Task TestManualLobbyLaunchStateAsync()
 {
     var state = new LobbyLaunchState();
@@ -1982,7 +2052,7 @@ static Task TestBotMemberStatusCompatibilityAsync()
               "localSteamId": 42,
               "personaName": "Host",
               "privacy": "local",
-              "protocolVersion": 88,
+              "protocolVersion": 89,
               "manifestSha256": "",
               "friendSteamIds": [],
               "maxParticipants": 4,

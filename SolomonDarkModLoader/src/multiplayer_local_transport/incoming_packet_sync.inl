@@ -421,6 +421,11 @@ void ApplyParticipantFrameToRuntime(
     }
 
     participant->ready = packet.ready != 0;
+    participant->loadout_pick_generation =
+        packet.loadout_pick_generation;
+    participant->loadout_pick_state =
+        static_cast<LoadoutPickState>(
+            packet.loadout_pick_state);
     participant->transport_connected = true;
     if (g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
         participant->transport_using_relay = false;

@@ -16,6 +16,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace sdmod {
 namespace {
@@ -436,9 +437,10 @@ void BeginLoadingScreen(
     {
         std::scoped_lock lock(g_loading_screen.mutex);
         auto& current = g_loading_screen.snapshot;
+        current.progress_bar_visible = true;
+        current.flow = flow;
         if (!current.active) {
             current.active = true;
-            current.flow = flow;
             current.progress = 0.0f;
             current.sequence += 1;
             current.started_ms =
@@ -470,6 +472,35 @@ void BeginLoadingScreen(
             " progress=" +
             std::to_string(snapshot.progress));
     }
+}
+
+void BeginLoadingScreenBarrier(
+    LoadingScreenFlow flow,
+    std::string stage_id,
+    std::string label) {
+    LoadingScreenSnapshot snapshot;
+    {
+        std::scoped_lock lock(g_loading_screen.mutex);
+        auto& current = g_loading_screen.snapshot;
+        if (!current.active) {
+            current.sequence += 1;
+        }
+        current.active = true;
+        current.progress_bar_visible = false;
+        current.flow = flow;
+        current.stage = LoadingScreenStage::ConnectingTransport;
+        current.progress = 0.0f;
+        current.started_ms =
+            static_cast<std::uint64_t>(GetTickCount64());
+        current.stage_id = std::move(stage_id);
+        current.label = std::move(label);
+        snapshot = current;
+    }
+    Log(
+        "Loading screen barrier started. sequence=" +
+        std::to_string(snapshot.sequence) +
+        " flow=" + FlowId(snapshot.flow) +
+        " stage=" + snapshot.stage_id);
 }
 
 void BeginBoneyardLoadingScreen() {

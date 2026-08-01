@@ -1263,7 +1263,7 @@ class RemoteLatencyWaveFiveVerifierTests(unittest.TestCase):
                 1_000_000 + index * 50_000,
                 sequence=100 + index,
                 kind=20,
-                bytes=374,
+                bytes=382,
             )
             for index in range(8)
         ]

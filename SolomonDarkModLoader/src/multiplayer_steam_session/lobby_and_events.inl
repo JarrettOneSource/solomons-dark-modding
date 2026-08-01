@@ -178,8 +178,16 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
     const auto runtime_state = SnapshotRuntimeState();
     const auto session_state =
         LobbySessionStateLabel(runtime_state.lobby_session_state);
-    std::string game_phase = "loading";
-    switch (runtime_state.lobby_session_state) {
+    const auto* local_participant =
+        FindLocalParticipant(runtime_state);
+    std::string game_phase =
+        local_participant == nullptr ||
+            local_participant->loadout_pick_state !=
+                LoadoutPickState::WorldReady
+        ? "picking-loadout"
+        : "loading";
+    if (game_phase != "picking-loadout") {
+        switch (runtime_state.lobby_session_state) {
     case LobbySessionState::NotInGame:
         game_phase =
             runtime_state.run_end_pending_lobby_return ||
@@ -197,6 +205,7 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
             ? "loading"
             : "session";
         break;
+        }
     }
 
     if (g_session.is_host &&

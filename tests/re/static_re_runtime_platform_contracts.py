@@ -115,7 +115,8 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
             "g_local_transport_authority_participant_id.store(",
         ),
         (flow_text, "multiplayer::ParticipantSceneIntentKind::Run"),
-        (loader_text, "InitializeMultiplayerJoinFlow();"),
+        (loader_text, "InitializeMultiplayerJoinFlow("),
+        (loader_text, '"multiplayer-join-flow-failed"'),
         (loader_text, "!multiplayer_join_flow_enabled"),
         (loader_text, "const bool native_ui_bridge_required"),
         (loader_text, "InitializeDebugUiOverlay(diagnostic_ui_enabled)"),
@@ -608,7 +609,6 @@ def test_launcher_tutorial_bypass_is_standalone_and_default_on() -> str:
 
     forbidden_flow_tokens = (
         "HookTutorialGameplayBootstrap",
-        "InstallSafeX86Hook",
         "kTutorialGameplayBootstrap",
         "kStartStandardGameplay",
         "SDMOD_SKIP_FRESH_SAVE_TUTORIAL",
@@ -653,7 +653,7 @@ def test_launcher_tutorial_bypass_is_standalone_and_default_on() -> str:
         "InitializeFreshSaveTutorialBypass("
     )
     join_flow_initialize = loader_text.find(
-        "InitializeMultiplayerJoinFlow()", tutorial_initialize
+        "InitializeMultiplayerJoinFlow(", tutorial_initialize
     )
     if not 0 <= tutorial_initialize < join_flow_initialize:
         raise StaticReTestFailure(

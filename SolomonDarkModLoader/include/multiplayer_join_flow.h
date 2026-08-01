@@ -10,7 +10,8 @@ struct MultiplayerJoinFlowPresentation {
     std::string message;
 };
 
-bool InitializeMultiplayerJoinFlow();
+bool InitializeMultiplayerJoinFlow(std::string* error_message);
+bool IsMultiplayerJoinFlowEnabled();
 void ShutdownMultiplayerJoinFlow();
 void TickMultiplayerJoinFlow();
 void ObserveMultiplayerJoinFlowSurface(std::string_view surface_id);

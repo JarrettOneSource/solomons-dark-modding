@@ -2561,17 +2561,18 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             "friendsOnly" => "Friends Only",
             _ => "Steam Lobby"
         };
-        var gamePhase = status.SessionState switch
+        var gamePhase = status.GamePhase switch
         {
-            "in-hub" => "In Hub",
-            "in-boneyard" => "In Boneyard",
-            "not-in-game" => "Not In Game",
-            _ => status.GamePhase switch
+            "picking-loadout" => "Picking Loadout",
+            "hub" => "In Hub",
+            "session" => "In Match",
+            "loading" => "Loading",
+            "results" => "Results",
+            _ => status.SessionState switch
             {
-                "hub" => "In Hub",
-                "session" => "In Match",
-                "loading" => "Loading",
-                "results" => "Results",
+                "in-hub" => "In Hub",
+                "in-boneyard" => "In Boneyard",
+                "not-in-game" => "Not In Game",
                 _ => "Starting"
             }
         };

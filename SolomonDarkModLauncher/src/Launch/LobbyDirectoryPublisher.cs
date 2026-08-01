@@ -25,6 +25,7 @@ internal static class LobbyDirectoryPublisher
     private const string SecretEnvironmentVariable = "SDMOD_LOBBY_DIRECTORY_SECRET";
     private const string SecretHeader = "X-SDR-Lobby-Secret";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -159,7 +160,7 @@ internal static class LobbyDirectoryPublisher
         };
 
         ulong announcedLobbyId = 0;
-        var hubObserved = false;
+        string? lastAttemptedFingerprint = null;
         var teardownRequested = false;
         var nextDelistAttemptUtc = DateTime.MinValue;
         var nextHeartbeatUtc = DateTime.MinValue;
@@ -200,22 +201,28 @@ internal static class LobbyDirectoryPublisher
                 var status = MultiplayerSessionStatusMonitor.TryRead(
                     configuration.StageRootPath,
                     configuration.LaunchToken);
-                hubObserved = hubObserved ||
-                    status?.SessionState == "in-hub";
-
                 if (!teardownRequested &&
-                    hubObserved &&
-                    DateTime.UtcNow >= nextHeartbeatUtc &&
                     IsPublishableHostStatus(configuration.Host, status))
                 {
+                    var fingerprint = BuildStatusFingerprint(status!);
+                    if (string.Equals(
+                            fingerprint,
+                            lastAttemptedFingerprint,
+                            StringComparison.Ordinal) &&
+                        DateTime.UtcNow < nextHeartbeatUtc)
+                    {
+                        await Task.Delay(PollInterval);
+                        continue;
+                    }
+                    lastAttemptedFingerprint = fingerprint;
                     var result = await AnnounceAsync(
                         client,
                         secret!,
                         status!,
                         configuration.ActiveMods);
-                    nextHeartbeatUtc = DateTime.UtcNow + HeartbeatInterval;
                     if (result is null)
                     {
+                        nextHeartbeatUtc = DateTime.UtcNow + RetryInterval;
                         AppendLog(
                             logPath,
                             "Directory update failed. The Steam lobby remains active.");
@@ -226,10 +233,13 @@ internal static class LobbyDirectoryPublisher
                         {
                             AppendLog(
                                 logPath,
-                                $"Published Steam lobby after the host entered the hub; " +
+                                $"Published Steam lobby when the host game launched; " +
+                                $"status={StatusTextForGamePhase(status!.GamePhase)}; " +
                                 $"directory TTL={result.ExpiresInSeconds}s.");
                         }
                         announcedLobbyId = status!.LobbyId;
+                        nextHeartbeatUtc =
+                            DateTime.UtcNow + HeartbeatInterval;
                     }
                 }
 
@@ -268,7 +278,7 @@ internal static class LobbyDirectoryPublisher
         return 0;
     }
 
-    private static bool IsPublishableHostStatus(
+    internal static bool IsPublishableHostStatus(
         LobbyHostOptions host,
         MultiplayerSessionStatus? status)
     {
@@ -282,7 +292,8 @@ internal static class LobbyDirectoryPublisher
             status.Phase is not ("LobbyReady" or "Connected") ||
             status.SessionState is not (
                 "not-in-game" or "in-hub" or "in-boneyard") ||
-            status.GamePhase is not ("hub" or "loading" or "session" or "results"))
+            status.GamePhase is not (
+                "picking-loadout" or "hub" or "loading" or "session" or "results"))
         {
             return false;
         }
@@ -292,6 +303,30 @@ internal static class LobbyDirectoryPublisher
             MultiplayerLobbyPrivacyTokens.ToApiToken(host.Privacy),
             StringComparison.Ordinal);
     }
+
+    internal static string BuildStatusFingerprint(
+        MultiplayerSessionStatus status) =>
+        string.Join(
+            '|',
+            status.LobbyId,
+            status.LocalSteamId,
+            status.GamePhase,
+            status.SessionState,
+            status.AuthenticatedPeerCount,
+            status.MaxParticipants,
+            status.Members.Length,
+            status.StatusText);
+
+    internal static string StatusTextForGamePhase(string gamePhase) =>
+        gamePhase switch
+        {
+            "picking-loadout" => "Picking Loadout",
+            "hub" => "In Hub",
+            "loading" => "Loading",
+            "session" => "In Match",
+            "results" => "Results",
+            _ => "Starting"
+        };
 
     private static async Task<AnnounceResponse?> AnnounceAsync(
         HttpClient client,
@@ -329,7 +364,7 @@ internal static class LobbyDirectoryPublisher
                 Wave: null,
                 Difficulty: null,
                 ElapsedSeconds: null,
-                StatusText: null),
+                StatusText: StatusTextForGamePhase(status.GamePhase)),
             activeMods);
 
         try

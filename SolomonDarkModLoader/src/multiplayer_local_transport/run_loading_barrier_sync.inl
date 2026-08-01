@@ -526,6 +526,15 @@ void ApplyRunLoadingBarrierPacket(
         return;
     }
 
+    const auto local_runtime = SnapshotRuntimeState();
+    const auto* local_participant =
+        FindLocalParticipant(local_runtime);
+    if (local_participant == nullptr ||
+        local_participant->loadout_pick_state !=
+            LoadoutPickState::WorldReady) {
+        return;
+    }
+
     if (!packet_from_configured_authority ||
         packet.authority_participant_id == 0 ||
         packet.participant_id !=

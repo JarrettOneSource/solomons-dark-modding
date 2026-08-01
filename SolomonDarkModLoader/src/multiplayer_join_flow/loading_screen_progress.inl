@@ -40,6 +40,12 @@ void UpdateLoadingScreenForPhase(JoinFlowPhase phase) {
                 : LoadingScreenFlow::MultiplayerJoin,
             LoadingScreenStage::ReceivingRunPlan);
         break;
+    case JoinFlowPhase::WaitingForHostLoadout:
+        BeginLoadingScreenBarrier(
+            LoadingScreenFlow::MultiplayerJoin,
+            "waiting_for_host_loadout",
+            "Waiting for host to pick loadout");
+        break;
     case JoinFlowPhase::Hub:
     case JoinFlowPhase::Run:
     case JoinFlowPhase::PrivateGameplay:

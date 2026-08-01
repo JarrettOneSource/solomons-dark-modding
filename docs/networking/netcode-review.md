@@ -28,8 +28,8 @@ compile-time sizes live in
 
 | Lane | Payload | Cadence | Steam mode |
 |---|---:|---|---|
-| Participant frame | 374 B | 50 ms / 20 Hz | UnreliableNoDelay |
-| Participant state checkpoint | 657 B | 1,000 ms | ReliableNoNagle |
+| Participant frame | 382 B | 50 ms / 20 Hz | UnreliableNoDelay |
+| Participant state checkpoint | 665 B | 1,000 ms | ReliableNoNagle |
 | Run-world motion | 968 B per 10 actors | 67 ms minimum / about 15 Hz, bandwidth-stretched | UnreliableNoDelay |
 | Run-world identity | 1,032 B per 3 actors | spawn/identity change plus bandwidth-limited reliable checkpoint | ReliableNoNagle |
 | Shared-hub world state | 1,032 B per 3 actors | 200 ms minimum / 5 Hz, bandwidth-stretched | Unreliable with reliable checkpoints |

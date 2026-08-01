@@ -141,6 +141,40 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn("LoadingScreenStage::ConfirmingParticipants", barrier)
         self.assertIn("CompleteLoadingScreen();", barrier)
 
+    def test_host_loadout_barrier_keeps_the_image_and_suppresses_the_bar(self) -> None:
+        header = (
+            ROOT / "SolomonDarkModLoader/include/loading_screen.h"
+        ).read_text(encoding="utf-8")
+        state = (
+            ROOT / "SolomonDarkModLoader/src/loading_screen.cpp"
+        ).read_text(encoding="utf-8")
+        renderer = (
+            ROOT / "SolomonDarkModLoader/src/loading_screen_renderer.cpp"
+        ).read_text(encoding="utf-8")
+        progress = (
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_join_flow/"
+            "loading_screen_progress.inl"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("bool progress_bar_visible = true;", header)
+        self.assertIn("void BeginLoadingScreenBarrier(", header)
+        self.assertIn("current.progress_bar_visible = false;", state)
+        self.assertIn("if (snapshot.progress_bar_visible)", renderer)
+        self.assertIn("JoinFlowPhase::WaitingForHostLoadout", progress)
+        self.assertIn(
+            '"Waiting for host to pick loadout"',
+            progress,
+        )
+        self.assertIn("BeginLoadingScreenBarrier(", progress)
+        self.assertIn(
+            "kLoadingScreenPresentationDelayMs = 150",
+            (
+                ROOT
+                / "SolomonDarkModLoader/src/loading_screen_internal.h"
+            ).read_text(encoding="utf-8"),
+        )
+
     def test_lua_runtime_exposes_actual_loading_screen_state(self) -> None:
         bindings = (
             ROOT / "SolomonDarkModLoader/src/lua_engine_bindings_runtime.cpp"
@@ -156,6 +190,7 @@ class LoadingScreenContractTests(unittest.TestCase):
         self.assertIn('"loading_screen"', bindings)
         self.assertIn('emit("loading.active"', harness)
         self.assertIn('state["loadingScreen"]["active"]', harness)
+        self.assertIn('"progress_bar_visible"', bindings)
 
     def test_asset_is_staged_packaged_and_loaded_from_sdmod_assets(self) -> None:
         materializer = (

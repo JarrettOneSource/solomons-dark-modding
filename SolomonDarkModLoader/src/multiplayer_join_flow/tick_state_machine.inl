@@ -6,6 +6,7 @@ void TickMultiplayerJoinFlow() {
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
     const auto runtime = multiplayer::SnapshotRuntimeState();
+    ReconcileAuthorityLoadoutGenerationUnlocked(runtime);
     if (runtime.session_status == multiplayer::SessionStatus::Error) {
         SetPhaseUnlocked(JoinFlowPhase::Failed);
         return;
@@ -17,6 +18,13 @@ void TickMultiplayerJoinFlow() {
     const bool boneyard_ready = IsBoneyardReady(scene);
     const bool private_gameplay_ready =
         IsPrivateGameplayReady(scene);
+
+    if (hub_ready &&
+        (g_join_flow.phase == JoinFlowPhase::SelectingLoadout ||
+         g_join_flow.phase == JoinFlowPhase::Connecting ||
+         g_join_flow.phase == JoinFlowPhase::Hub)) {
+        MarkLocalLoadoutWorldReadyUnlocked();
+    }
 
     UpdateLoadingScreenForRuntime(g_join_flow.phase, runtime);
 
@@ -173,32 +181,7 @@ void TickMultiplayerJoinFlow() {
                     &discipline_selected)) {
                 return;
             }
-            if (!g_join_flow.quick_start_loadout_replay_enabled) {
-                if (g_join_flow.quick_start_element_action_id.empty()) {
-                    g_join_flow.quick_start_element_action_id =
-                        ElementActionIdForSelection(element_selected);
-                    if (!g_join_flow.quick_start_element_action_id.empty()) {
-                        g_join_flow.quick_start_element_id =
-                            element_selected;
-                    }
-                }
-                if (g_join_flow.quick_start_discipline_action_id.empty()) {
-                    g_join_flow.quick_start_discipline_action_id =
-                        DisciplineActionIdForSelection(
-                            discipline_selected);
-                }
-                if (!g_join_flow.quick_start_loadout_state_logged &&
-                    !g_join_flow.quick_start_element_action_id.empty() &&
-                    !g_join_flow.quick_start_discipline_action_id.empty()) {
-                    g_join_flow.quick_start_loadout_state_logged = true;
-                    Log(
-                        "Multiplayer join flow retained the player's "
-                        "stock Create choices for post-run lobby "
-                        "reentry. element_action=" +
-                        g_join_flow.quick_start_element_action_id +
-                        " discipline_action=" +
-                        g_join_flow.quick_start_discipline_action_id);
-                }
+            if (!g_join_flow.quick_start_loadout_automation_enabled) {
                 return;
             }
             if (g_join_flow.quick_start_element_action_id.empty() ||
@@ -260,6 +243,13 @@ void TickMultiplayerJoinFlow() {
         } else {
             SetPhaseUnlocked(JoinFlowPhase::Connecting);
         }
+        return;
+
+    case JoinFlowPhase::WaitingForHostLoadout:
+        if (!IsAuthorityWorldReadyForCurrentLoadout(runtime)) {
+            return;
+        }
+        SetPhaseUnlocked(JoinFlowPhase::SelectingLoadout);
         return;
 
     case JoinFlowPhase::Connecting:

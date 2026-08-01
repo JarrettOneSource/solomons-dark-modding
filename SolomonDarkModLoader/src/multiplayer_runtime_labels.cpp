@@ -122,6 +122,25 @@ const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind) {
     return "Unknown";
 }
 
+const char* LoadoutPickStateLabel(LoadoutPickState state) {
+    switch (state) {
+    case LoadoutPickState::NotStarted:
+        return "not-started";
+    case LoadoutPickState::Picking:
+        return "picking";
+    case LoadoutPickState::Picked:
+        return "picked";
+    case LoadoutPickState::WorldReady:
+        return "world-ready";
+    }
+    return "unknown";
+}
+
+bool IsValidLoadoutPickState(std::uint8_t state) {
+    return state <= static_cast<std::uint8_t>(
+                        LoadoutPickState::WorldReady);
+}
+
 const char* LootDropKindLabel(LootDropKind kind) {
     switch (kind) {
     case LootDropKind::Unknown:

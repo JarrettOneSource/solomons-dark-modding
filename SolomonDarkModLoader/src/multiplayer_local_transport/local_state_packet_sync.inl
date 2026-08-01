@@ -420,6 +420,10 @@ void PopulateParticipantFrameFields(
     packet->transform_valid = participant.runtime.transform_valid ? 1 : 0;
     packet->controller_kind =
         static_cast<std::uint8_t>(participant.controller_kind);
+    packet->loadout_pick_state =
+        static_cast<std::uint8_t>(participant.loadout_pick_state);
+    packet->loadout_pick_generation =
+        participant.loadout_pick_generation;
     packet->run_nonce = participant.runtime.run_nonce;
     if (include_local_authority_state) {
         ResetLocalHitFeedbackAcknowledgementForRun(

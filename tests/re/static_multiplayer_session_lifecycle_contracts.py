@@ -142,7 +142,7 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     )
     assert "QueueGameplaySwitchRegion(" not in join_flow
     _require_tokens(
-        join_flow_state,
+        join_flow_state + join_flow,
         (
             "kPostRunInputRetryDelayMs = 1000;",
             "post_run_menu_retry_not_before_ms",
@@ -151,29 +151,32 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "post_run_hall_of_fame_continue_logged = false;",
             "now_ms + kActionRetryDelayMs;",
             "quick_start_loadout_state_logged",
-            "quick_start_loadout_replay_enabled",
+            "loadout_pick_generation",
+            "create_pick_committed",
             "kCreateDisciplineSelectedOffset = 0x22C;",
             "Multiplayer join flow could not queue semantic UI ",
         ),
         "post-run stock front-end state",
     )
     _require_tokens(
-        join_flow,
+        join_flow_state,
         (
-            "ElementActionIdForSelection(element_selected)",
-            "DisciplineActionIdForSelection(",
-            "retained the player's ",
-            "Multiplayer join flow observed stock Create ",
-            "if ((element_enabled & 0xFFu) != 0 &&",
-            "element_selected == g_join_flow.quick_start_element_id &&",
+            "void BeginNextLoadoutGenerationUnlocked(",
+            'BeginNextLoadoutGenerationUnlocked("game_over")',
+            'BeginNextLoadoutGenerationUnlocked(\n            "fresh_create_surface")',
+            "void __fastcall HookCreateTick(",
+            "void __fastcall HookCreateClick(",
+            "kCreateSelectionUnset",
+            "preselected_element=",
+            "preselected_discipline=",
+            "LoadoutPickState::Picking",
+            "LoadoutPickState::Picked",
+            "LoadoutPickState::WorldReady",
+            "JoinFlowPhase::WaitingForHostLoadout",
         ),
-        "post-run stock Create replay",
+        "per-match stock Create repick",
     )
-    assert "discipline_selected == kCreateSelectionUnset" not in join_flow
-    assert (
-        "element_selected == kCreateSelectionUnset &&\n"
-        "                    HasAction(" not in join_flow
-    )
+    assert "quick_start_loadout_replay_enabled" not in join_flow_state
     _require_tokens(
         debug_ui_header,
         ("bool TryContinuePostRunHallOfFame(std::string* error_message);",),
@@ -224,8 +227,9 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     _require_tokens(
         directory_publisher,
         (
-            'status?.SessionState == "in-hub"',
             '"not-in-game" or "in-hub" or "in-boneyard"',
+            '"picking-loadout" or "hub" or "loading" or "session" or "results"',
+            '"picking-loadout" => "Picking Loadout"',
             "status.GamePhase",
         ),
         "website lobby-directory publication",
@@ -386,7 +390,7 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         "tools/verify_game_over_session_semantics.py"
     )
 
-    assert "kProtocolVersion = 88" in protocol
+    assert "kProtocolVersion = 89" in protocol
     for field in (
         "run_loading_ack_nonce",
         "run_loading_release_nonce",
@@ -401,8 +405,8 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         assert protocol.count(field) == 2, (
             f"{field} must exist in both reliable state and participant frame"
         )
-    assert "sizeof(StatePacket) == 657" in protocol
-    assert "sizeof(ParticipantFramePacket) == 374" in protocol
+    assert "sizeof(StatePacket) == 665" in protocol
+    assert "sizeof(ParticipantFramePacket) == 382" in protocol
 
     _require_tokens(
         barrier,
@@ -411,7 +415,9 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
             "kRunLoadingMaterializationStableMs = 250",
             "local_visibility_stable_since_ms",
             "BuildHostRunLoadingExpectedParticipantIds(",
-            "g_local_transport.peers",
+            "participant.loadout_pick_generation !=",
+            "participant.loadout_pick_state !=",
+            "LoadoutPickState::WorldReady",
             "RunLoadingParticipantSetHash(",
             "BuildLocallyVisibleRunParticipantIds(",
             "HostHasLocalMutualRunVisibility(",

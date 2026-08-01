@@ -521,7 +521,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 88,
+               kProtocolVersion == 89,
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             std::string(
@@ -549,6 +549,24 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                     "timeout",
             "run-loading release labels changed") &&
         Require(
+            std::string(
+                LoadoutPickStateLabel(
+                    LoadoutPickState::Picking)) ==
+                    "picking" &&
+                std::string(
+                    LoadoutPickStateLabel(
+                        LoadoutPickState::Picked)) ==
+                    "picked" &&
+                std::string(
+                    LoadoutPickStateLabel(
+                        LoadoutPickState::WorldReady)) ==
+                    "world-ready" &&
+                IsValidLoadoutPickState(
+                    static_cast<std::uint8_t>(
+                        LoadoutPickState::WorldReady)) &&
+                !IsValidLoadoutPickState(4),
+            "loadout-pick wire state labels or validation changed") &&
+        Require(
             ResolveParticipantDeathPresentationTick(0) == 0 &&
                 ResolveParticipantDeathPresentationTick(2500) == 150 &&
                 ResolveParticipantDeathPresentationTick(2517) == 151 &&
@@ -569,10 +587,10 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationRenderTick(298) == 159,
             "death presentation render projection does not reach and hold the corpse frame") &&
         Require(
-            sizeof(StatePacket) == 657,
+            sizeof(StatePacket) == 665,
             "StatePacket regained checkpoint-array payload") &&
         Require(
-            sizeof(ParticipantFramePacket) == 374,
+            sizeof(ParticipantFramePacket) == 382,
             "ParticipantFramePacket regained wave-summary payload") &&
         Require(
             ParticipantInventorySnapshotPacketWireSize(0) ==

@@ -37,6 +37,7 @@ enum class LoadingScreenStage {
 
 struct LoadingScreenSnapshot {
     bool active = false;
+    bool progress_bar_visible = true;
     LoadingScreenFlow flow = LoadingScreenFlow::SinglePlayer;
     LoadingScreenStage stage = LoadingScreenStage::PreparingBoneyard;
     float progress = 0.0f;
@@ -55,6 +56,10 @@ void ShutdownLoadingScreen();
 void BeginLoadingScreen(
     LoadingScreenFlow flow,
     LoadingScreenStage stage);
+void BeginLoadingScreenBarrier(
+    LoadingScreenFlow flow,
+    std::string stage_id,
+    std::string label);
 void BeginBoneyardLoadingScreen();
 void AdvanceLoadingScreen(LoadingScreenStage stage);
 void NotifyBoneyardGameplayStarted();

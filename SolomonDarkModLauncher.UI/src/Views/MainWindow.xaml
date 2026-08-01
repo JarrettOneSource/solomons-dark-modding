@@ -852,7 +852,7 @@
                     <TextBlock Margin="0,12,0,0"
                                FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}"
-                               Text="Steam starts the lobby immediately. The website shows the lobby after you go to the hub."
+                               Text="Steam and the website show the lobby as soon as the host game launches."
                                TextWrapping="Wrap" />
 
                     <StackPanel Margin="0,16,0,0"
@@ -907,7 +907,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Pick a loadout and enter the hub.&#x0a;3. Your friends can select the lobby on the website, join through Steam, or use the Lobby ID."
+                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Your friends can join as soon as the game launches.&#x0a;3. Pick a loadout; each ready player enters without waiting on slower pickers."
                                TextWrapping="Wrap" />
 
                     <TextBlock Margin="0,16,0,0"
@@ -918,7 +918,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Select the lobby on the website, join through Steam, or enter a Lobby ID and click Join Game.&#x0a;2. Confirm any host mods, then click Launch Game.&#x0a;3. Pick a loadout and enter the hub."
+                               Text="1. Select the lobby on the website, join through Steam, or enter a Lobby ID and click Join Game.&#x0a;2. Confirm any host mods, then click Launch Game.&#x0a;3. Pick a loadout; if the host is still picking, the game waits for the host."
                                TextWrapping="Wrap" />
 
                     <Button Margin="0,18,0,0"

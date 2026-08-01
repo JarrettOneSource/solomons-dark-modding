@@ -43,6 +43,13 @@ enum class ParticipantSceneIntentKind : std::int32_t {
     Run = 2,
 };
 
+enum class LoadoutPickState : std::uint8_t {
+    NotStarted = 0,
+    Picking = 1,
+    Picked = 2,
+    WorldReady = 3,
+};
+
 struct CharacterAppearanceInfo {
     std::array<std::int32_t, 4> choice_ids = {-1, -1, -1, -1};
 };
@@ -380,6 +387,9 @@ struct ParticipantInfo {
     bool transport_connected = false;
     bool transport_using_relay = false;
     std::uint64_t last_packet_ms = 0;
+    std::uint32_t loadout_pick_generation = 0;
+    LoadoutPickState loadout_pick_state =
+        LoadoutPickState::NotStarted;
     MultiplayerCharacterProfile character_profile;
     ParticipantRuntimeInfo runtime;
     ParticipantOwnedProgressionState owned_progression;

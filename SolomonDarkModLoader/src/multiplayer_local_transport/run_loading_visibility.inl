@@ -83,17 +83,21 @@ BuildHostRunLoadingExpectedParticipantIds(
     const RuntimeState& runtime_state) {
     std::unordered_set<std::uint64_t> participant_ids;
     participant_ids.insert(g_local_transport.local_peer_id);
-    for (const auto& peer : g_local_transport.peers) {
-        if (peer.participant_id != 0) {
-            participant_ids.insert(peer.participant_id);
-        }
-    }
+    const auto* local = FindLocalParticipant(runtime_state);
+    const auto loadout_generation = local == nullptr
+        ? 0
+        : local->loadout_pick_generation;
     for (const auto& participant :
          runtime_state.participants) {
         if (!IsRemoteParticipant(participant) ||
             !IsNativeControlledParticipant(participant) ||
             !participant.ready ||
             !participant.transport_connected ||
+            loadout_generation == 0 ||
+            participant.loadout_pick_generation !=
+                loadout_generation ||
+            participant.loadout_pick_state !=
+                LoadoutPickState::WorldReady ||
             participant.participant_id == 0) {
             continue;
         }

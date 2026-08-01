@@ -679,7 +679,7 @@ void PushRunLoadingBarrierRuntimeInfo(
 void PushLoadingScreenSnapshot(
     lua_State* state,
     const LoadingScreenSnapshot& loading_screen) {
-    lua_createtable(state, 0, 7);
+    lua_createtable(state, 0, 8);
     lua_pushboolean(state, loading_screen.active ? 1 : 0);
     lua_setfield(state, -2, "active");
     lua_pushinteger(
@@ -694,6 +694,10 @@ void PushLoadingScreenSnapshot(
         state,
         static_cast<lua_Number>(loading_screen.progress));
     lua_setfield(state, -2, "progress");
+    lua_pushboolean(
+        state,
+        loading_screen.progress_bar_visible ? 1 : 0);
+    lua_setfield(state, -2, "progress_bar_visible");
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(loading_screen.sequence));
@@ -752,7 +756,7 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
     lua_createtable(state, static_cast<int>(runtime.participants.size()), 0);
     int lua_index = 1;
     for (const auto& participant : runtime.participants) {
-        lua_createtable(state, 0, 30);
+        lua_createtable(state, 0, 32);
         lua_pushinteger(state, static_cast<lua_Integer>(participant.participant_id));
         lua_setfield(state, -2, "participant_id");
         lua_pushinteger(state, static_cast<lua_Integer>(participant.steam_id));
@@ -765,6 +769,16 @@ int LuaRuntimeGetMultiplayerState(lua_State* state) {
         lua_setfield(state, -2, "controller_kind");
         lua_pushboolean(state, participant.ready ? 1 : 0);
         lua_setfield(state, -2, "ready");
+        lua_pushinteger(
+            state,
+            static_cast<lua_Integer>(
+                participant.loadout_pick_generation));
+        lua_setfield(state, -2, "loadout_pick_generation");
+        lua_pushstring(
+            state,
+            multiplayer::LoadoutPickStateLabel(
+                participant.loadout_pick_state));
+        lua_setfield(state, -2, "loadout_pick_state");
         lua_pushboolean(state, participant.is_owner ? 1 : 0);
         lua_setfield(state, -2, "is_owner");
         lua_pushboolean(state, participant.transport_connected ? 1 : 0);

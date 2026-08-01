@@ -45,6 +45,7 @@ void ApplyRemoteStatePacket(
         packet.participant_id == kLocalParticipantId ||
         packet.participant_id == g_local_transport.local_peer_id ||
         !IsValidParticipantControllerKind(packet.controller_kind) ||
+        !IsValidLoadoutPickState(packet.loadout_pick_state) ||
         (packet.participant_state_flags &
          ~ParticipantStateFlagRetired) != 0) {
         return;
@@ -408,7 +409,8 @@ void ApplyRemoteParticipantFramePacket(
         packet.participant_session_nonce == 0 ||
         packet.participant_id == kLocalParticipantId ||
         packet.participant_id == g_local_transport.local_peer_id ||
-        !IsValidParticipantControllerKind(packet.controller_kind)) {
+        !IsValidParticipantControllerKind(packet.controller_kind) ||
+        !IsValidLoadoutPickState(packet.loadout_pick_state)) {
         return;
     }
 

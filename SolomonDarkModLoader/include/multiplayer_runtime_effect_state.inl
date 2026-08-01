@@ -283,6 +283,8 @@ const char* DeathSpectatorPhaseLabel(DeathSpectatorPhase phase);
 const char* ParticipantKindLabel(ParticipantKind kind);
 const char* ParticipantControllerKindLabel(ParticipantControllerKind kind);
 const char* ParticipantSceneIntentKindLabel(ParticipantSceneIntentKind kind);
+const char* LoadoutPickStateLabel(LoadoutPickState state);
+bool IsValidLoadoutPickState(std::uint8_t state);
 const char* LootDropKindLabel(LootDropKind kind);
 const char* PowerupRewardKindLabel(PowerupRewardKind kind);
 const char* LootPickupResultCodeLabel(LootPickupResultCode code);

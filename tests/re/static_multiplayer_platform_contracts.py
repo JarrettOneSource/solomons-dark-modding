@@ -940,14 +940,22 @@ def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str
     ], "launcher session monitor still polls the staged runtime-mod directory"
     _require_in_order(
         publisher,
-        'status?.SessionState == "in-hub"',
         "if (!teardownRequested &&",
-        "hubObserved &&",
+        "IsPublishableHostStatus(configuration.Host, status)",
+        "var fingerprint = BuildStatusFingerprint(status!);",
         "var result = await AnnounceAsync(",
         "configuration.ActiveMods)",
     )
     for token in (
-        'std::string game_phase = "loading"',
+        '"picking-loadout" or "hub" or "loading" or "session" or "results"',
+        '"picking-loadout" => "Picking Loadout"',
+        "Published Steam lobby when the host game launched",
+    ):
+        assert token in publisher, f"early lobby publication lacks: {token}"
+    assert "hubObserved" not in publisher
+    for token in (
+        'std::string game_phase =',
+        '? "picking-loadout"',
         'game_phase = "hub"',
         'runtime_state.run_loading_barrier.released',
         "snapshot.session_state = session_state",
@@ -957,7 +965,7 @@ def test_launcher_accepts_steam_invites_without_auto_launching_the_game() -> str
 
     return (
         "accepted Steam callbacks prepare and join the lobby without launching "
-        "the game, while the existing host hub gate remains intact"
+        "the game, while host launch immediately exposes Picking Loadout"
     )
 
 

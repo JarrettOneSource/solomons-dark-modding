@@ -1,6 +1,12 @@
 constexpr std::uint64_t kLocalSessionStatusIntervalMs = 500;
 
 std::string LocalSessionGamePhase(const RuntimeState& runtime) {
+    const auto* local = FindLocalParticipant(runtime);
+    if (local == nullptr ||
+        local->loadout_pick_state !=
+            LoadoutPickState::WorldReady) {
+        return "picking-loadout";
+    }
     switch (runtime.lobby_session_state) {
     case LobbySessionState::InHub:
         return "hub";
@@ -135,12 +141,14 @@ void PublishLocalSessionStatus(
         !g_local_transport.clean_end_text.empty()
         ? g_local_transport.clean_end_text
         : "Local loopback multiplayer is connected.";
+    const auto game_phase = LocalSessionGamePhase(runtime);
     std::ostringstream signature;
     signature << phase << '|'
               << lobby_id << '|'
               << host_id << '|'
               << LobbySessionStateLabel(
                      runtime.lobby_session_state)
+              << '|' << game_phase
               << '|' << status_text;
     for (const auto& member : members) {
         signature << '|' << member.participant_id
@@ -166,7 +174,7 @@ void PublishLocalSessionStatus(
     snapshot.enabled = true;
     snapshot.is_host = g_local_transport.is_host;
     snapshot.phase = phase;
-    snapshot.game_phase = LocalSessionGamePhase(runtime);
+    snapshot.game_phase = game_phase;
     snapshot.session_state =
         LobbySessionStateLabel(runtime.lobby_session_state);
     snapshot.app_id = GetSteamBootstrapSnapshot().app_id;

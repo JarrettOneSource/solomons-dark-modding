@@ -170,7 +170,8 @@ the in-game join does not report success until the host compatibility handshake
 authenticates.
 
 The website lists public lobbies and the friends-only lobbies that the signed-in
-Steam user can enter. A lobby appears after its host reaches the hub. Its
+Steam user can enter. A lobby appears when its host game launches, initially as
+**Picking Loadout**. Its
 **Join Game** action opens the installed beta launcher and joins that lobby.
 Direct Steam invites and lobby-ID joins also ask the configured website for the
 host's exact mod set when it is available. If the website is unavailable, the

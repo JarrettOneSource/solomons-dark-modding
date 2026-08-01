@@ -463,50 +463,52 @@ bool DrawLoadingScreen(
         return false;
     }
 
-    const float bar_width =
-        width * kProgressBarWidthFraction;
-    const float bar_left =
-        left + (width - bar_width) * 0.5f;
     const float bar_top =
         top + height * kProgressBarTopFraction;
-    const float bar_height =
-        (std::clamp)(height * 0.0083f, 8.0f, 10.0f);
-    const float bar_right = bar_left + bar_width;
-    const float bar_bottom = bar_top + bar_height;
-    const auto border =
-        D3DCOLOR_ARGB(230, 105, 82, 42);
-    const auto track =
-        D3DCOLOR_ARGB(235, 20, 17, 13);
-    const auto fill =
-        D3DCOLOR_ARGB(255, 202, 161, 77);
-    if (!DrawColorQuad(
-            device,
-            bar_left - 1.0f,
-            bar_top - 1.0f,
-            bar_right + 1.0f,
-            bar_bottom + 1.0f,
-            border) ||
-        !DrawColorQuad(
-            device,
-            bar_left,
-            bar_top,
-            bar_right,
-            bar_bottom,
-            track)) {
-        return false;
-    }
-    const float fill_right =
-        bar_left + bar_width *
-            (std::clamp)(snapshot.progress, 0.0f, 1.0f);
-    if (fill_right > bar_left &&
-        !DrawColorQuad(
-            device,
-            bar_left,
-            bar_top,
-            fill_right,
-            bar_bottom,
-            fill)) {
-        return false;
+    if (snapshot.progress_bar_visible) {
+        const float bar_width =
+            width * kProgressBarWidthFraction;
+        const float bar_left =
+            left + (width - bar_width) * 0.5f;
+        const float bar_height =
+            (std::clamp)(height * 0.0083f, 8.0f, 10.0f);
+        const float bar_right = bar_left + bar_width;
+        const float bar_bottom = bar_top + bar_height;
+        const auto border =
+            D3DCOLOR_ARGB(230, 105, 82, 42);
+        const auto track =
+            D3DCOLOR_ARGB(235, 20, 17, 13);
+        const auto fill =
+            D3DCOLOR_ARGB(255, 202, 161, 77);
+        if (!DrawColorQuad(
+                device,
+                bar_left - 1.0f,
+                bar_top - 1.0f,
+                bar_right + 1.0f,
+                bar_bottom + 1.0f,
+                border) ||
+            !DrawColorQuad(
+                device,
+                bar_left,
+                bar_top,
+                bar_right,
+                bar_bottom,
+                track)) {
+            return false;
+        }
+        const float fill_right =
+            bar_left + bar_width *
+                (std::clamp)(snapshot.progress, 0.0f, 1.0f);
+        if (fill_right > bar_left &&
+            !DrawColorQuad(
+                device,
+                bar_left,
+                bar_top,
+                fill_right,
+                bar_bottom,
+                fill)) {
+            return false;
+        }
     }
 
     const float text_scale =
