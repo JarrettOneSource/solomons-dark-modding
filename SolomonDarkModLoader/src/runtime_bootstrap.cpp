@@ -49,6 +49,19 @@ bool TryParseUnsigned(const std::string& raw_value, std::size_t* parsed_value) {
     }
 }
 
+bool TryParseUnsigned64(const std::string& raw_value, std::uint64_t* parsed_value) {
+    if (parsed_value == nullptr) {
+        return false;
+    }
+
+    try {
+        *parsed_value = std::stoull(raw_value);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool TryParseBoolean(const std::string& raw_value, bool* parsed_value) {
     if (parsed_value == nullptr) {
         return false;
@@ -235,12 +248,31 @@ bool LoadRuntimeBootstrap(
         return false;
     }
 
+    std::string boneyard_count_value;
+    if (!TryReadRequiredValue(
+            sections,
+            "runtime",
+            "boneyard_count",
+            &boneyard_count_value,
+            error_message,
+            path)) {
+        return false;
+    }
+    std::size_t boneyard_count = 0;
+    if (!TryParseUnsigned(boneyard_count_value, &boneyard_count)) {
+        *error_message =
+            "Runtime bootstrap file contains an invalid boneyard_count in " +
+            path.string();
+        return false;
+    }
+
     bootstrap->api_version = std::move(runtime_api_version);
     bootstrap->stage_root = std::filesystem::path(stage_root_path);
     bootstrap->runtime_root = std::filesystem::path(runtime_root_path);
     bootstrap->mods_root = std::filesystem::path(mods_root_path);
     bootstrap->sandbox_root = std::filesystem::path(sandbox_root_path);
     bootstrap->mods.reserve(mod_count);
+    bootstrap->boneyards.reserve(boneyard_count);
 
     for (std::size_t index = 0; index < mod_count; ++index) {
         const auto section_name = "mod." + std::to_string(index);
@@ -363,6 +395,136 @@ bool LoadRuntimeBootstrap(
         bootstrap->mods.push_back(std::move(mod));
     }
 
+    for (std::size_t index = 0; index < boneyard_count; ++index) {
+        const auto section_name = "boneyard." + std::to_string(index);
+        RuntimeBoneyardDescriptor boneyard;
+        std::string stock_relative_path;
+        std::string stage_path;
+        std::string file_length;
+        std::string chunk_count;
+        std::string named_buffer_count;
+        std::string max_depth;
+        if (!TryReadRequiredValue(
+                sections,
+                section_name,
+                "display_name",
+                &boneyard.display_name,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_mod_id",
+                &boneyard.source_mod_id,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_mod_name",
+                &boneyard.source_mod_name,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_mod_version",
+                &boneyard.source_mod_version,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "filename",
+                &boneyard.filename,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "source_relative_path",
+                &boneyard.source_relative_path,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "content_sha256",
+                &boneyard.content_sha256,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "stock_relative_path",
+                &stock_relative_path,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "stage_path",
+                &stage_path,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "file_length",
+                &file_length,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "chunk_count",
+                &chunk_count,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "named_buffer_count",
+                &named_buffer_count,
+                error_message,
+                path) ||
+            !TryReadRequiredValue(
+                sections,
+                section_name,
+                "max_depth",
+                &max_depth,
+                error_message,
+                path)) {
+            return false;
+        }
+
+        std::uint64_t parsed_file_length = 0;
+        std::size_t parsed_chunk_count = 0;
+        std::size_t parsed_named_buffer_count = 0;
+        std::size_t parsed_max_depth = 0;
+        if (!TryParseUnsigned64(file_length, &parsed_file_length) ||
+            !TryParseUnsigned(chunk_count, &parsed_chunk_count) ||
+            !TryParseUnsigned(named_buffer_count, &parsed_named_buffer_count) ||
+            !TryParseUnsigned(max_depth, &parsed_max_depth) ||
+            parsed_chunk_count > UINT32_MAX ||
+            parsed_named_buffer_count > UINT32_MAX ||
+            parsed_max_depth > UINT32_MAX) {
+            *error_message =
+                "Runtime bootstrap file contains invalid Boneyard preview metadata in section [" +
+                section_name + "]: " + path.string();
+            return false;
+        }
+
+        boneyard.stock_relative_path = std::filesystem::path(stock_relative_path);
+        boneyard.stage_path = std::filesystem::path(stage_path);
+        boneyard.file_length = parsed_file_length;
+        boneyard.chunk_count = static_cast<std::uint32_t>(parsed_chunk_count);
+        boneyard.named_buffer_count =
+            static_cast<std::uint32_t>(parsed_named_buffer_count);
+        boneyard.max_depth = static_cast<std::uint32_t>(parsed_max_depth);
+        bootstrap->boneyards.push_back(std::move(boneyard));
+    }
+
     return true;
 }
 
@@ -382,6 +544,7 @@ std::string DescribeRuntimeBootstrap(const RuntimeBootstrap& bootstrap) {
     stream << "api_version=" << bootstrap.api_version
            << " mods=" << bootstrap.mods.size()
            << " lua=" << lua_mod_count
+           << " boneyards=" << bootstrap.boneyards.size()
            << " runtime_root=" << bootstrap.runtime_root.string();
     return stream.str();
 }

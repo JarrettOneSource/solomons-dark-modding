@@ -426,6 +426,14 @@ void PopulateParticipantFrameFields(
         participant.loadout_pick_generation;
     packet->run_nonce = participant.runtime.run_nonce;
     if (include_local_authority_state) {
+        const auto boneyard = BuildLocalBoneyardPickerPacketState();
+        packet->boneyard_selection_revision = boneyard.revision;
+        packet->boneyard_resolution_status =
+            static_cast<std::uint8_t>(boneyard.resolution);
+        std::memcpy(
+            packet->boneyard_selection_sha256,
+            boneyard.digest.data(),
+            boneyard.digest.size());
         ResetLocalHitFeedbackAcknowledgementForRun(
             participant.runtime.run_nonce);
         PopulateRunGameOverPacketFields(packet);

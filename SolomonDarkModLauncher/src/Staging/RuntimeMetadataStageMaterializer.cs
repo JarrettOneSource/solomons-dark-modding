@@ -15,6 +15,7 @@ internal static class RuntimeMetadataStageMaterializer
     private const string SandboxTempDirectoryName = "tmp";
     private const string RuntimeBootstrapFileName = "runtime-bootstrap.ini";
     private const string RuntimeFlagsFileName = "runtime-flags.ini";
+    private const string BoneyardPickerDirectoryName = ".sdmod-picker";
     private const string CurrentApiVersion = "0.2.0";
 
     public static RuntimeMetadataStageResult Materialize(
@@ -34,6 +35,10 @@ internal static class RuntimeMetadataStageMaterializer
         Directory.CreateDirectory(runtimeModsRootPath);
         Directory.CreateDirectory(runtimeSandboxModsRootPath);
 
+        var stagedBoneyards = MaterializeBoneyardPickerCatalog(
+            stageRootPath,
+            enabledMods);
+
         var stagedRuntimeMods = new List<RuntimeStageManifestEntry>();
         var activeStorageKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var mod in enabledMods)
@@ -52,7 +57,12 @@ internal static class RuntimeMetadataStageMaterializer
         File.WriteAllText(runtimeFlagsPath, BuildFlagsContent(flags));
         File.WriteAllText(
             runtimeBootstrapPath,
-            BuildBootstrapContent(stageRootPath, runtimeRootPath, runtimeSandboxRootPath, stagedRuntimeMods));
+            BuildBootstrapContent(
+                stageRootPath,
+                runtimeRootPath,
+                runtimeSandboxRootPath,
+                stagedRuntimeMods,
+                stagedBoneyards));
 
         return new RuntimeMetadataStageResult(
             runtimeRootPath,
@@ -62,7 +72,87 @@ internal static class RuntimeMetadataStageMaterializer
             runtimeFlagsPath,
             flags.ProfileName,
             flags.AsDictionary(),
-            stagedRuntimeMods);
+            stagedRuntimeMods)
+        {
+            StagedBoneyards = stagedBoneyards
+        };
+    }
+
+    private static IReadOnlyList<BoneyardPickerStageEntry> MaterializeBoneyardPickerCatalog(
+        string stageRootPath,
+        IReadOnlyList<DiscoveredMod> enabledMods)
+    {
+        var pickerRootPath = Path.Combine(
+            stageRootPath,
+            "data",
+            "levels",
+            BoneyardPickerDirectoryName);
+        if (Directory.Exists(pickerRootPath))
+        {
+            Directory.Delete(pickerRootPath, recursive: true);
+        }
+
+        var entries = new List<BoneyardPickerStageEntry>();
+        var copiedHashes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mod in enabledMods)
+        {
+            foreach (var overlay in mod.Manifest.Overlays)
+            {
+                if (!overlay.Source.EndsWith(".boneyard", StringComparison.OrdinalIgnoreCase) ||
+                    !overlay.Target.EndsWith(".boneyard", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var sourcePath = ResolveInsideRoot(mod.RootPath, overlay.Source);
+                var summary = BoneyardFile.Inspect(sourcePath);
+                using var sourceStream = File.OpenRead(sourcePath);
+                var contentSha256 = Convert.ToHexString(SHA256.HashData(sourceStream))
+                    .ToLowerInvariant();
+                var stockRelativePath = Path.Combine(
+                    "data",
+                    "levels",
+                    BoneyardPickerDirectoryName,
+                    contentSha256 + ".boneyard");
+                var stagePath = Path.Combine(stageRootPath, stockRelativePath);
+                if (copiedHashes.Add(contentSha256))
+                {
+                    Directory.CreateDirectory(pickerRootPath);
+                    File.Copy(sourcePath, stagePath, overwrite: false);
+                }
+
+                entries.Add(new BoneyardPickerStageEntry(
+                    Path.GetFileNameWithoutExtension(sourcePath),
+                    mod.Manifest.Id,
+                    mod.Manifest.Name,
+                    mod.Manifest.Version,
+                    Path.GetFileName(sourcePath),
+                    overlay.Source.Replace('\\', '/'),
+                    contentSha256,
+                    stockRelativePath.Replace('\\', '/'),
+                    stagePath,
+                    summary.Length,
+                    summary.ChunkCount,
+                    summary.NamedBufferCount,
+                    summary.MaxDepth));
+            }
+        }
+
+        return entries;
+    }
+
+    private static string ResolveInsideRoot(string rootPath, string relativePath)
+    {
+        var normalizedRoot = Path.GetFullPath(rootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+        var resolved = Path.GetFullPath(Path.Combine(rootPath, NormalizeRelativePath(relativePath)));
+        if (!resolved.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Boneyard picker source escapes mod root: {relativePath}");
+        }
+        return resolved;
     }
 
     private static RuntimeStageManifestEntry MaterializeMod(
@@ -150,7 +240,8 @@ internal static class RuntimeMetadataStageMaterializer
         string stageRootPath,
         string runtimeRootPath,
         string runtimeSandboxRootPath,
-        IReadOnlyList<RuntimeStageManifestEntry> stagedRuntimeMods)
+        IReadOnlyList<RuntimeStageManifestEntry> stagedRuntimeMods,
+        IReadOnlyList<BoneyardPickerStageEntry> stagedBoneyards)
     {
         var builder = new StringBuilder();
         builder.AppendLine("# Solomon Dark runtime bootstrap manifest");
@@ -161,6 +252,7 @@ internal static class RuntimeMetadataStageMaterializer
         builder.Append("mods_root_path=").AppendLine(EscapeIniValue(Path.Combine(runtimeRootPath, RuntimeModsDirectoryName)));
         builder.Append("sandbox_root_path=").AppendLine(EscapeIniValue(runtimeSandboxRootPath));
         builder.Append("mod_count=").AppendLine(stagedRuntimeMods.Count.ToString());
+        builder.Append("boneyard_count=").AppendLine(stagedBoneyards.Count.ToString());
 
         for (var index = 0; index < stagedRuntimeMods.Count; index++)
         {
@@ -187,6 +279,26 @@ internal static class RuntimeMetadataStageMaterializer
             builder.Append("optional_capabilities=").AppendLine(EscapeIniValue(string.Join(",", mod.OptionalCapabilities)));
             builder.Append("provides=").AppendLine(EscapeIniValue(string.Join(",", mod.Provides)));
             builder.Append("requires=").AppendLine(EscapeIniValue(string.Join(",", mod.Requires)));
+        }
+
+        for (var index = 0; index < stagedBoneyards.Count; index++)
+        {
+            var boneyard = stagedBoneyards[index];
+            builder.AppendLine();
+            builder.Append('[').Append("boneyard.").Append(index).AppendLine("]");
+            builder.Append("display_name=").AppendLine(EscapeIniValue(boneyard.DisplayName));
+            builder.Append("source_mod_id=").AppendLine(EscapeIniValue(boneyard.SourceModId));
+            builder.Append("source_mod_name=").AppendLine(EscapeIniValue(boneyard.SourceModName));
+            builder.Append("source_mod_version=").AppendLine(EscapeIniValue(boneyard.SourceModVersion));
+            builder.Append("filename=").AppendLine(EscapeIniValue(boneyard.Filename));
+            builder.Append("source_relative_path=").AppendLine(EscapeIniValue(boneyard.SourceRelativePath));
+            builder.Append("content_sha256=").AppendLine(boneyard.ContentSha256);
+            builder.Append("stock_relative_path=").AppendLine(EscapeIniValue(boneyard.StockRelativePath));
+            builder.Append("stage_path=").AppendLine(EscapeIniValue(boneyard.StagePath));
+            builder.Append("file_length=").AppendLine(boneyard.FileLength.ToString());
+            builder.Append("chunk_count=").AppendLine(boneyard.ChunkCount.ToString());
+            builder.Append("named_buffer_count=").AppendLine(boneyard.NamedBufferCount.ToString());
+            builder.Append("max_depth=").AppendLine(boneyard.MaxDepth.ToString());
         }
 
         return builder.ToString();

@@ -418,7 +418,7 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         "tools/verify_game_over_session_semantics.py"
     )
 
-    assert "kProtocolVersion = 89" in protocol
+    assert "kProtocolVersion = 90" in protocol
     for field in (
         "run_loading_ack_nonce",
         "run_loading_release_nonce",
@@ -433,8 +433,8 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         assert protocol.count(field) == 2, (
             f"{field} must exist in both reliable state and participant frame"
         )
-    assert "sizeof(StatePacket) == 665" in protocol
-    assert "sizeof(ParticipantFramePacket) == 382" in protocol
+    assert "sizeof(StatePacket) == 705" in protocol
+    assert "sizeof(ParticipantFramePacket) == 422" in protocol
 
     _require_tokens(
         barrier,

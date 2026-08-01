@@ -281,7 +281,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 89;",
+        "constexpr std::uint16_t kProtocolVersion = 90;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpWaitStatusMaxParticipants = 250",
@@ -1210,7 +1210,9 @@ def test_cpu_tick_stops_after_virtual_update_marks_object_for_removal() -> str:
         "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl",
     )
     layout = _read("config/binary-layout.ini")
-    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp")
+    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp") + _read(
+        "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     app_tick = _read("SolomonDarkModLoader/src/background_focus_bypass.cpp")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
 

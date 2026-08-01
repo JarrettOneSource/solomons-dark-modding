@@ -7,6 +7,7 @@
 #include "multiplayer_local_transport.h"
 
 #include "bot_runtime.h"
+#include "boneyard_picker.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
 #include "loading_screen.h"

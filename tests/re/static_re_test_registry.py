@@ -14,6 +14,11 @@ from static_re_boneyard_contracts import (
     test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
     test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
+from static_re_boneyard_picker_contracts import (
+    test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent,
+    test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
+    test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
+)
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
 )
@@ -630,6 +635,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Default Boneyard load, seed, and compact-decor findings are registered",
         test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
+    ),
+    (
+        "Stock map picker recovery pins the selected value and launch path",
+        test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
+    ),
+    (
+        "Boneyard picker provider is immutable, stock-routed, and stock-transparent",
+        test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent,
+    ),
+    (
+        "Boneyard picker replication is authoritative, missing-safe, and late-joined",
+        test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
     ),
     (
         "Multiplayer Boneyard scenery shares the host generation boundary",

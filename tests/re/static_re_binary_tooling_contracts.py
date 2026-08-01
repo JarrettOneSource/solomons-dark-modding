@@ -138,7 +138,11 @@ def test_native_d3d_device_lifetime_outlives_stock_teardown() -> str:
     guard = read_text(
         ROOT / "SolomonDarkModLoader/src/native_d3d9_lifetime_guard.cpp"
     )
-    loader = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader.cpp")
+    loader = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    ) + read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     project = read_text(MOD_LOADER_PROJECT)
     filters = read_text(MOD_LOADER_PROJECT_FILTERS)
 

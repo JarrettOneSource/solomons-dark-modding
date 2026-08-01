@@ -46,6 +46,9 @@ void ApplyRemoteStatePacket(
         packet.participant_id == g_local_transport.local_peer_id ||
         !IsValidParticipantControllerKind(packet.controller_kind) ||
         !IsValidLoadoutPickState(packet.loadout_pick_state) ||
+        packet.boneyard_resolution_status >
+            static_cast<std::uint8_t>(
+                BoneyardResolutionStatus::Missing) ||
         (packet.participant_state_flags &
          ~ParticipantStateFlagRetired) != 0) {
         return;
@@ -211,6 +214,23 @@ void ApplyRemoteStatePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
+    BoneyardPickerPacketState boneyard_packet;
+    boneyard_packet.revision =
+        packet.boneyard_selection_revision;
+    boneyard_packet.resolution =
+        static_cast<BoneyardResolutionStatus>(
+            packet.boneyard_resolution_status);
+    std::memcpy(
+        boneyard_packet.digest.data(),
+        packet.boneyard_selection_sha256,
+        boneyard_packet.digest.size());
+    if (packet_from_configured_authority) {
+        ApplyAuthoritativeBoneyardPickerPacket(boneyard_packet);
+    } else if (IsLocalTransportHost() && !synthetic_participant) {
+        RecordRemoteBoneyardPickerPacket(
+            packet.participant_id,
+            boneyard_packet);
+    }
     if (IsAuthenticatedFreshRunEntryPacket(
             packet,
             scene_intent,
@@ -410,7 +430,10 @@ void ApplyRemoteParticipantFramePacket(
         packet.participant_id == kLocalParticipantId ||
         packet.participant_id == g_local_transport.local_peer_id ||
         !IsValidParticipantControllerKind(packet.controller_kind) ||
-        !IsValidLoadoutPickState(packet.loadout_pick_state)) {
+        !IsValidLoadoutPickState(packet.loadout_pick_state) ||
+        packet.boneyard_resolution_status >
+            static_cast<std::uint8_t>(
+                BoneyardResolutionStatus::Missing)) {
         return;
     }
 
@@ -468,6 +491,23 @@ void ApplyRemoteParticipantFramePacket(
     const auto normalized = NormalizeParticipantFramePacket(packet);
     const bool packet_from_configured_authority =
         IsAuthoritativeHostParticipantPacket(packet, from);
+    BoneyardPickerPacketState boneyard_packet;
+    boneyard_packet.revision =
+        packet.boneyard_selection_revision;
+    boneyard_packet.resolution =
+        static_cast<BoneyardResolutionStatus>(
+            packet.boneyard_resolution_status);
+    std::memcpy(
+        boneyard_packet.digest.data(),
+        packet.boneyard_selection_sha256,
+        boneyard_packet.digest.size());
+    if (packet_from_configured_authority) {
+        ApplyAuthoritativeBoneyardPickerPacket(boneyard_packet);
+    } else if (IsLocalTransportHost() && !synthetic_participant) {
+        RecordRemoteBoneyardPickerPacket(
+            packet.participant_id,
+            boneyard_packet);
+    }
     if (IsAuthenticatedFreshRunEntryPacket(
             packet,
             scene_intent,

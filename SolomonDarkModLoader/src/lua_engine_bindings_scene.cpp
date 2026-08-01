@@ -1,5 +1,6 @@
 #include "lua_engine_bindings_internal.h"
 
+#include "boneyard_picker.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 
@@ -30,7 +31,9 @@ int LuaSceneGetState(lua_State* state) {
         scene.kind == "transition" || scene.name == "transition";
     const bool authority = multiplayer::IsLuaModSimulationAuthority();
 
-    lua_createtable(state, 0, 11);
+    const auto boneyard = GetBoneyardPickerSnapshot();
+
+    lua_createtable(state, 0, 18);
     lua_pushstring(state, scene.kind.c_str());
     lua_setfield(state, -2, "kind");
     lua_pushstring(state, scene.name.c_str());
@@ -57,6 +60,26 @@ int LuaSceneGetState(lua_State* state) {
         state,
         authority && !transitioning && scene.kind == "hub" ? 1 : 0);
     lua_setfield(state, -2, "can_enter_run");
+    lua_pushstring(
+        state,
+        BoneyardPickerPhaseLabel(boneyard.phase));
+    lua_setfield(state, -2, "boneyard_picker_phase");
+    lua_pushboolean(state, boneyard.is_open ? 1 : 0);
+    lua_setfield(state, -2, "boneyard_picker_open");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(boneyard.selection_revision));
+    lua_setfield(state, -2, "boneyard_revision");
+    lua_pushstring(state, boneyard.selected_content_sha256.c_str());
+    lua_setfield(state, -2, "boneyard_sha256");
+    lua_pushstring(
+        state,
+        BoneyardResolutionStatusLabel(boneyard.local_resolution));
+    lua_setfield(state, -2, "boneyard_resolution");
+    lua_pushstring(state, boneyard.applied_stock_relative_path.c_str());
+    lua_setfield(state, -2, "boneyard_stock_path");
+    lua_pushstring(state, boneyard.error_message.c_str());
+    lua_setfield(state, -2, "boneyard_error");
     return 1;
 }
 

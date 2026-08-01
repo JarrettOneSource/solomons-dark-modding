@@ -1,0 +1,13 @@
+{
+  "id": "acceptance.mpk.boneyard.alpha",
+  "name": "MAPPICK Alpha Arena",
+  "version": "1.0.0",
+  "enabled": false,
+  "overlays": [
+    {
+      "target": "data/levels/mpk-alpha.boneyard",
+      "source": "files/Alpha Arena.boneyard",
+      "format": "boneyard"
+    }
+  ]
+}

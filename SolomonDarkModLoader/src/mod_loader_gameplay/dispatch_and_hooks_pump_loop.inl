@@ -83,6 +83,7 @@ void PumpQueuedGameplayActions() {
     }
 
     TryDispatchPendingHubServiceOnGameThread();
+    PumpBoneyardPickerOnGameThread();
 
     const auto wizard_bot_sync_not_before_ms =
         g_gameplay_keyboard_injection.wizard_bot_sync_not_before_ms.load(std::memory_order_acquire);

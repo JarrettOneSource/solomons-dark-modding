@@ -25,11 +25,19 @@ perform local movement and presentation immediately, then the host or dedicated
 authority accepts, corrects, or rejects the claim. Clients never own canonical
 HP, deaths, drops, XP, or wave state.
 
-The current wire version is protocol 89. See
+The current wire version is protocol 90. See
 [`netcode-review.md`](netcode-review.md) for current packet sizes, cadence,
 interpolation, and bandwidth accounting.
 
-Protocol 89 also carries one authority-scoped, run-nonce-scoped native Game
+Protocol 90 also checkpoints the host's active Boneyard selection as a revision
+plus content SHA-256. Each client resolves that identity through its staged copy
+of the host's enabled mod set and acknowledges `Ready` or `Missing`; the host
+waits for every connected human before initial run entry. The selection remains
+in authority state so a late join resolves the same Boneyard before following
+the host's Run scene intent. See
+[`boneyard-picker-seam.md`](../design/boneyard-picker-seam.md).
+
+Protocol 90 also carries one authority-scoped, run-nonce-scoped native Game
 Over command and per-participant acknowledgement. This is distinct from a
 normal host run exit: every participant consumes the command on its own app
 thread and enters the complete stock Game Over flow.

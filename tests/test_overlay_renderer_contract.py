@@ -115,7 +115,9 @@ class OverlayRendererContractTests(unittest.TestCase):
         runtime_flags = read(
             "SolomonDarkModLauncher/src/Staging/RuntimeStageFlags.cs"
         )
-        loader = read("SolomonDarkModLoader/src/mod_loader.cpp")
+        loader = read("SolomonDarkModLoader/src/mod_loader.cpp") + read(
+            "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+        )
         overlay_header = read(
             "SolomonDarkModLoader/include/debug_ui_overlay.h"
         )

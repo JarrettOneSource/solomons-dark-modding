@@ -10,7 +10,12 @@ internal sealed record RuntimeMetadataStageResult(
     IReadOnlyDictionary<string, bool> FlagValues,
     IReadOnlyList<RuntimeStageManifestEntry> StagedRuntimeMods)
 {
+    public IReadOnlyList<BoneyardPickerStageEntry> StagedBoneyards { get; init; } =
+        Array.Empty<BoneyardPickerStageEntry>();
+
     public int StagedRuntimeModCount => StagedRuntimeMods.Count;
 
     public int StagedLuaModCount => StagedRuntimeMods.Count;
+
+    public int StagedBoneyardCount => StagedBoneyards.Count;
 }

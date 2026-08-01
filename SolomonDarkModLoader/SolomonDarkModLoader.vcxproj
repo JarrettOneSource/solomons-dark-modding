@@ -89,6 +89,10 @@
     <ClInclude Include="include\bot_runtime.h" />
     <ClInclude Include="include\bot_spawn_placement.h" />
     <ClInclude Include="include\bot_stuck_progress.h" />
+    <ClInclude Include="include\boneyard_picker.h" />
+    <ClInclude Include="src\boneyard_picker\content_resolution.inl" />
+    <ClInclude Include="src\boneyard_picker\internal.inl" />
+    <ClInclude Include="src\boneyard_picker\public.inl" />
     <ClInclude Include="include\d3d9_end_scene_hook.h" />
     <ClInclude Include="include\d3d9_font_atlas.h" />
     <ClInclude Include="include\debug_ui_config.h" />
@@ -583,6 +587,7 @@
     <ClInclude Include="src\lua_engine_bindings_input\local_player_takeover.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\level_up_and_runtime_api.inl" />
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl" />
+    <ClInclude Include="src\mod_loader\initialize.inl" />
     <ClInclude Include="src\mod_loader\startup_status_snapshot.inl" />
     <ClInclude Include="src\native_spell_stats\primary_build_mapping.inl" />
     <ClInclude Include="src\native_spell_stats\primary_and_secondary_resolution.inl" />
@@ -709,6 +714,7 @@
     <ClCompile Include="src\memory_access_io.cpp" />
     <ClCompile Include="src\memory_access_regions.cpp" />
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp" />
+    <ClCompile Include="src\boneyard_picker.cpp" />
     <ClCompile Include="src\headless_simulation.cpp" />
     <ClCompile Include="src\launch_audio_disable.cpp" />
     <ClCompile Include="src\native_audio_observability.cpp" />

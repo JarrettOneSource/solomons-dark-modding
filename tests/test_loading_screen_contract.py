@@ -209,6 +209,8 @@ class LoadingScreenContractTests(unittest.TestCase):
         )
         loader = (
             ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+        ).read_text(encoding="utf-8") + (
+            ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
         ).read_text(encoding="utf-8")
 
         self.assertIn('".sdmod"', materializer)

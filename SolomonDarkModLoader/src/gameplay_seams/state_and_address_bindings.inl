@@ -52,6 +52,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "gameplay_ui_centered_glyph_draw", kGameplayUiCenteredGlyphDraw),
         SDMOD_ADDR("gameplay.hooks", "gameplay_ally_label_glyph_return", kGameplayAllyLabelGlyphReturn),
         SDMOD_ADDR("gameplay.hooks", "gameplay_string_assign", kGameplayStringAssign),
+        SDMOD_ADDR("gameplay.hooks", "map_picker_start", kMapPickerStart),
         SDMOD_ADDR("gameplay.hooks", "gameplay_exact_text_object_render", kGameplayExactTextObjectRender),
         SDMOD_ADDR("gameplay.hooks", "pickup_notification", kPickupNotification),
         SDMOD_ADDR("gameplay.hooks", "puppet_manager_delete_puppet", kPuppetManagerDeletePuppet),

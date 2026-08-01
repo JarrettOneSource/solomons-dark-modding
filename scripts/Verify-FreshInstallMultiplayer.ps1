@@ -383,7 +383,7 @@ function Assert-LogContract {
     foreach ($required in @(
         "Multiplayer join flow: connecting -> hub",
         "Multiplayer join flow: loading_boneyard -> run",
-        "Runtime bootstrap: api_version=0.2.0 mods=0 lua=0",
+        "Runtime bootstrap: api_version=0.2.0 mods=0 lua=0 boneyards=0",
         "Lua runtime mods loaded: 0",
         "peers=1"
     )) {

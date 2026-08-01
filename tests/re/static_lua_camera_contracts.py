@@ -11,7 +11,9 @@ def test_lua_camera_is_native_bounded_owned_and_presentation_local() -> str:
     runtime = _read("SolomonDarkModLoader/src/lua_camera_runtime.cpp")
     runtime_header = _read("SolomonDarkModLoader/include/lua_camera_runtime.h")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
-    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp")
+    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp") + _read(
+        "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     seams = _read("SolomonDarkModLoader/src/gameplay_seams.h")
     layout = _read("config/binary-layout.ini")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")

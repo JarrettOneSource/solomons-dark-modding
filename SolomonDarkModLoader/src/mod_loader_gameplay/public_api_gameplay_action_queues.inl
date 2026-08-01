@@ -135,6 +135,9 @@ static bool QueueHubRunStartRequest(
 }
 
 bool QueueHubStartMatch(std::string* error_message) {
+    if (ShouldHijackHostBoneyardStart()) {
+        return OpenHostBoneyardPicker(error_message);
+    }
     return QueueHubRunStartRequest(true, error_message);
 }
 

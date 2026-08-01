@@ -74,6 +74,23 @@ internal static class StageReportWriter
                 runtimeFlags = runtimeMetadata.FlagValues,
                 stagedRuntimeModCount = runtimeMetadata.StagedRuntimeModCount,
                 stagedLuaModCount = runtimeMetadata.StagedLuaModCount,
+                stagedBoneyardCount = runtimeMetadata.StagedBoneyardCount,
+                stagedBoneyards = runtimeMetadata.StagedBoneyards.Select(boneyard => new
+                {
+                    boneyard.DisplayName,
+                    boneyard.SourceModId,
+                    boneyard.SourceModName,
+                    boneyard.SourceModVersion,
+                    boneyard.Filename,
+                    boneyard.SourceRelativePath,
+                    boneyard.ContentSha256,
+                    boneyard.StockRelativePath,
+                    boneyard.StagePath,
+                    boneyard.FileLength,
+                    boneyard.ChunkCount,
+                    boneyard.NamedBufferCount,
+                    boneyard.MaxDepth
+                }),
                 stagedRuntimeMods = runtimeMetadata.StagedRuntimeMods.Select(mod => new
                 {
                     mod.Id,

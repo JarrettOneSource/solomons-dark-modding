@@ -38,6 +38,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("exact manual catalog", TestExactManualCatalogAsync),
     ("canonical mod identifiers", TestCanonicalModIdentifiersAsync),
     ("strict multiplayer mod parity", TestStrictMultiplayerModParityAsync),
+    ("Boneyard picker staging", TestBoneyardPickerStagingAsync),
     ("loading screen asset staging", TestLoadingScreenAssetStagingAsync),
     ("Lua hot reload bootstrap", TestLuaHotReloadBootstrapAsync),
     ("Lua bus runtime contracts", TestLuaBusRuntimeContractsAsync),
@@ -1905,7 +1906,7 @@ static Task TestEarlyLobbyLoadoutStatusAsync()
             LocalSteamId: 76561198000000902,
             PersonaName: "Loadout Host",
             Privacy: "public",
-            ProtocolVersion: 89,
+            ProtocolVersion: 90,
             ManifestSha256: new string('8', 64),
             FriendSteamIds: [],
             MaxParticipants: 4,
@@ -2052,7 +2053,7 @@ static Task TestBotMemberStatusCompatibilityAsync()
               "localSteamId": 42,
               "personaName": "Host",
               "privacy": "local",
-              "protocolVersion": 89,
+              "protocolVersion": 90,
               "manifestSha256": "",
               "friendSteamIds": [],
               "maxParticipants": 4,
@@ -2351,6 +2352,108 @@ static Task TestStrictMultiplayerModParityAsync()
         Require(
             repeated.FingerprintSha256 == second.FingerprintSha256,
             "unchanged exact mod set produced a different session fingerprint");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestBoneyardPickerStagingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var fixture = BoneyardFixture();
+        var expectedSha256 = Convert.ToHexString(SHA256.HashData(fixture))
+            .ToLowerInvariant();
+        var mods = new List<DiscoveredMod>();
+        foreach (var descriptor in new[]
+                 {
+                     (Id: "tests.picker-alpha", Name: "Picker Alpha", File: "Alpha Arena.boneyard"),
+                     (Id: "tests.picker-beta", Name: "Picker Beta", File: "Beta Arena.boneyard")
+                 })
+        {
+            var modRoot = Path.Combine(root, descriptor.Id);
+            var filesRoot = Path.Combine(modRoot, "files");
+            Directory.CreateDirectory(filesRoot);
+            File.WriteAllBytes(Path.Combine(filesRoot, descriptor.File), fixture);
+            File.WriteAllText(
+                Path.Combine(modRoot, "manifest.json"),
+                $$"""
+                {
+                  "id": "{{descriptor.Id}}",
+                  "name": "{{descriptor.Name}}",
+                  "version": "1.0.0",
+                  "overlays": [{
+                    "target": "data/levels/{{descriptor.File}}",
+                    "source": "files/{{descriptor.File}}"
+                  }]
+                }
+                """);
+            mods.Add(ModDiscovery.DiscoverRoot(modRoot));
+        }
+
+        var stageRoot = Path.Combine(root, "stage");
+        var runtime = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            mods,
+            RuntimeStageOptions.Default);
+        Require(
+            runtime.StagedBoneyards.Count == 2,
+            "enabled Boneyard overlays were not exposed as picker entries");
+        Require(
+            runtime.StagedBoneyards.Select(entry => entry.DisplayName)
+                .SequenceEqual(["Alpha Arena", "Beta Arena"]),
+            "picker display names did not preserve the source filenames");
+        Require(
+            runtime.StagedBoneyards.Select(entry => entry.SourceModId)
+                .SequenceEqual(["tests.picker-alpha", "tests.picker-beta"]),
+            "picker entries lost their source mod identity");
+        Require(
+            runtime.StagedBoneyards.All(entry =>
+                entry.ContentSha256 == expectedSha256 &&
+                entry.FileLength == fixture.Length &&
+                entry.ChunkCount > 0 &&
+                entry.MaxDepth > 0),
+            "picker entries lost their content identity or cheap preview metadata");
+
+        var pickerRoot = Path.Combine(
+            stageRoot,
+            "data",
+            "levels",
+            ".sdmod-picker");
+        var stagedFiles = Directory.GetFiles(pickerRoot, "*.boneyard");
+        Require(
+            stagedFiles.Length == 1 &&
+            Path.GetFileName(stagedFiles[0]) == expectedSha256 + ".boneyard" &&
+            File.ReadAllBytes(stagedFiles[0]).SequenceEqual(fixture),
+            "content-addressed picker staging did not deduplicate exact Boneyard bytes");
+
+        var bootstrap = File.ReadAllText(runtime.RuntimeBootstrapPath);
+        Require(
+            bootstrap.Contains("api_version=0.2.0", StringComparison.Ordinal) &&
+            bootstrap.Contains("boneyard_count=2", StringComparison.Ordinal) &&
+            bootstrap.Contains("[boneyard.0]", StringComparison.Ordinal) &&
+            bootstrap.Contains("[boneyard.1]", StringComparison.Ordinal) &&
+            bootstrap.Contains(
+                $"stock_relative_path=data/levels/.sdmod-picker/{expectedSha256}.boneyard",
+                StringComparison.Ordinal),
+            "runtime bootstrap omitted the picker catalog contract");
+
+        var empty = RuntimeMetadataStageMaterializer.Materialize(
+            stageRoot,
+            [],
+            RuntimeStageOptions.Default);
+        var emptyBootstrap = File.ReadAllText(empty.RuntimeBootstrapPath);
+        Require(
+            empty.StagedBoneyards.Count == 0 &&
+            !Directory.Exists(pickerRoot) &&
+            emptyBootstrap.Contains("boneyard_count=0", StringComparison.Ordinal) &&
+            !emptyBootstrap.Contains("[boneyard.0]", StringComparison.Ordinal),
+            "zero-Boneyard staging retained a stale picker catalog");
     }
     finally
     {

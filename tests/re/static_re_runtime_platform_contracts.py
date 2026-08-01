@@ -49,7 +49,11 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
         / "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "incoming_packet_sync.inl"
     )
-    loader_text = read_text(ROOT / "SolomonDarkModLoader/src/mod_loader.cpp")
+    loader_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    ) + read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     app_tick_text = read_text(
         ROOT / "SolomonDarkModLoader/src/background_focus_bypass.cpp"
     )
@@ -331,6 +335,8 @@ def test_launcher_tutorial_bypass_is_standalone_and_default_on() -> str:
     )
     loader_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    ) + read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
     )
     gameplay_seams_text = read_text(
         ROOT / "SolomonDarkModLoader/src/gameplay_seams.h"

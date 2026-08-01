@@ -514,6 +514,23 @@ bool TryDispatchHubStartTestrunOnGameThread() {
         return false;
     }
 
+    bool boneyard_picker_handled = false;
+    std::string boneyard_picker_error;
+    if (!TryDispatchAuthoritativeBoneyardRunOnGameThread(
+            &boneyard_picker_handled,
+            &boneyard_picker_error)) {
+        if (boneyard_picker_handled) {
+            g_gameplay_keyboard_injection
+                .hub_start_testrun_cooldown_until_ms.store(
+                    now_ms + kHubStartTestrunDispatchCooldownMs,
+                    std::memory_order_release);
+        }
+        return false;
+    }
+    if (boneyard_picker_handled) {
+        return true;
+    }
+
     uintptr_t arena_address = 0;
     if (!TryResolveArena(&arena_address) || arena_address == 0) {
         return false;

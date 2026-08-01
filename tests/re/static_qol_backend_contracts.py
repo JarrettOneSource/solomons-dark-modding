@@ -215,6 +215,8 @@ def test_raptisoft_close_url_call_is_runtime_nopped() -> str:
     )
     loader = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    ) + read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
     )
     project = read_text(MOD_LOADER_PROJECT)
     filters = read_text(MOD_LOADER_PROJECT_FILTERS)

@@ -24,7 +24,9 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
     binding_root = _read("SolomonDarkModLoader/src/lua_engine_bindings.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
     events = _read("SolomonDarkModLoader/src/lua_engine_events.cpp")
-    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp")
+    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp") + _read(
+        "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     d3d_hook = _read("SolomonDarkModLoader/src/d3d9_end_scene_hook.cpp")
     projection_hook = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"

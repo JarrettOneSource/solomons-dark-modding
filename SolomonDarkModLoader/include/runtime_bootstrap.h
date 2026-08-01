@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -7,6 +8,22 @@
 namespace sdmod {
 
 inline constexpr char kRuntimeApiVersion[] = "0.2.0";
+
+struct RuntimeBoneyardDescriptor {
+    std::string display_name;
+    std::string source_mod_id;
+    std::string source_mod_name;
+    std::string source_mod_version;
+    std::string filename;
+    std::string source_relative_path;
+    std::string content_sha256;
+    std::filesystem::path stock_relative_path;
+    std::filesystem::path stage_path;
+    std::uint64_t file_length = 0;
+    std::uint32_t chunk_count = 0;
+    std::uint32_t named_buffer_count = 0;
+    std::uint32_t max_depth = 0;
+};
 
 struct RuntimeModDescriptor {
     std::string id;
@@ -42,6 +59,7 @@ struct RuntimeBootstrap {
     std::filesystem::path mods_root;
     std::filesystem::path sandbox_root;
     std::vector<RuntimeModDescriptor> mods;
+    std::vector<RuntimeBoneyardDescriptor> boneyards;
 };
 
 bool LoadRuntimeBootstrap(

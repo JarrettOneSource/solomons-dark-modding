@@ -128,6 +128,18 @@
     <ClInclude Include="include\bot_stuck_progress.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\boneyard_picker.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\boneyard_picker\content_resolution.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\boneyard_picker\internal.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\boneyard_picker\public.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\d3d9_end_scene_hook.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1610,6 +1622,9 @@
     <ClInclude Include="src\lua_engine_bindings_runtime\participant_equipment_state.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\mod_loader\initialize.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\mod_loader\startup_status_snapshot.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -1976,6 +1991,9 @@
       <Filter>Source Files\Support</Filter>
     </ClCompile>
     <ClCompile Include="src\fresh_save_tutorial_bypass.cpp">
+      <Filter>Source Files\Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\boneyard_picker.cpp">
       <Filter>Source Files\Loader</Filter>
     </ClCompile>
     <ClCompile Include="src\headless_simulation.cpp">

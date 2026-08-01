@@ -25,7 +25,9 @@ def test_lua_authoring_is_generated_reloadable_and_safe_thread_executed() -> str
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
     engine_header = _read("SolomonDarkModLoader/include/lua_engine.h")
     engine_internal = _read("SolomonDarkModLoader/src/lua_engine_internal.h")
-    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp")
+    loader = _read("SolomonDarkModLoader/src/mod_loader.cpp") + _read(
+        "SolomonDarkModLoader/src/mod_loader/initialize.inl"
+    )
     pump = _read("SolomonDarkModLoader/src/lua_engine_main_thread_pump.inl")
     console = _read("SolomonDarkModLoader/src/lua_developer_console.cpp")
     window_hook = _read("SolomonDarkModLoader/src/background_focus_bypass.cpp")

@@ -587,6 +587,8 @@ def test_launch_audio_disable_is_engine_level_and_player_opt_in() -> str:
     )
     loader_source = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    ) + read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader/initialize.inl"
     )
     native_project = read_text(
         ROOT / "SolomonDarkModLoader/SolomonDarkModLoader.vcxproj"
