@@ -56,12 +56,9 @@ struct DiagnosticSurfaceFrame {
 DiagnosticSurfaceFrame RegisterDiagnosticSurfaceFrame(
     bool diagnostic_visuals_enabled,
     const std::vector<OverlayRenderElement>& semantic_surface_elements) {
-    if (!diagnostic_visuals_enabled) {
-        return {};
-    }
-
     DiagnosticSurfaceFrame frame;
-    if (!semantic_surface_elements.empty()) {
+    if (diagnostic_visuals_enabled &&
+        !semantic_surface_elements.empty()) {
         frame.render_elements = semantic_surface_elements;
         ++frame.registered_surface_count;
     }

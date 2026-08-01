@@ -67,7 +67,7 @@ int LuaInputGetLocalPlayerTakeoverState(lua_State* state) {
             "sd.input.get_local_player_takeover_state failed.");
     }
 
-    lua_createtable(state, 0, 24);
+    lua_createtable(state, 0, 32);
     lua_pushboolean(state, takeover.active ? 1 : 0);
     lua_setfield(state, -2, "active");
     lua_pushboolean(state, takeover.clean ? 1 : 0);
@@ -81,6 +81,46 @@ int LuaInputGetLocalPlayerTakeoverState(lua_State* state) {
         state,
         static_cast<lua_Integer>(takeover.actor_address));
     lua_setfield(state, -2, "actor_address");
+    lua_pushboolean(
+        state,
+        takeover.primary_selection_snapshot_pending ? 1 : 0);
+    lua_setfield(state, -2, "primary_selection_snapshot_pending");
+    lua_pushboolean(
+        state,
+        takeover.primary_selection_restore_succeeded ? 1 : 0);
+    lua_setfield(state, -2, "primary_selection_restore_succeeded");
+    lua_pushboolean(
+        state,
+        takeover.native_state_clear_succeeded ? 1 : 0);
+    lua_setfield(state, -2, "native_state_clear_succeeded");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            takeover.primary_selection_actor_address));
+    lua_setfield(state, -2, "primary_selection_actor_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            takeover.primary_selection_state_before));
+    lua_setfield(state, -2, "primary_selection_state_before");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            takeover.primary_selection_state_current));
+    lua_setfield(state, -2, "primary_selection_state_current");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            takeover.last_primary_selection_restored_actor_address));
+    lua_setfield(
+        state,
+        -2,
+        "last_primary_selection_restored_actor_address");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(
+            takeover.last_primary_selection_restored_state));
+    lua_setfield(state, -2, "last_primary_selection_restored_state");
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(

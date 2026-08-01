@@ -86,6 +86,20 @@ local policy_observation_builder =
 local policy_training =
   policy_training_module.new(policy_spec, policy_runtime)
 
+local function seed_random()
+  pcall(function()
+    local seed = 1
+    if type(os) == "table" and type(os.time) == "function" then
+      seed = os.time()
+    end
+    math.randomseed(seed)
+    math.random()
+    math.random()
+    math.random()
+  end)
+end
+seed_random()
+
 local function policy_status()
   return policy_runtime:status()
 end
@@ -117,7 +131,6 @@ local shared = {
   policy_observation = policy_observation,
   policy_observation_builder = policy_observation_builder,
   policy_training = policy_training,
-  weld_preference = "auto",
 }
 
 shared.threat_radius = sd.settings.get("kite_radius")
@@ -126,8 +139,6 @@ shared.think_profile = sd.settings.get("think_profile")
 shared.think_interval_ms =
   shared.think_profile == "relaxed" and 400 or 250
 shared.focus_bot_key = sd.settings.get("focus_bot_key")
-shared.weld_preference =
-  sd.settings.get("policy_weld_preference")
 shared.play_for_me = sd.settings.get("play_for_me")
 shared.play_for_me_behavior =
   sd.settings.get("play_for_me_behavior")
@@ -150,7 +161,6 @@ local debug = {
   offense_enabled = shared.offense_enabled,
   think_profile = shared.think_profile,
   focus_bot_key = shared.focus_bot_key,
-  weld_preference = shared.weld_preference,
   play_for_me = shared.play_for_me,
   play_for_me_behavior = shared.play_for_me_behavior,
   focus_active = false,
@@ -296,9 +306,6 @@ sd.settings.on_changed(function(key, new_value, old_value)
   elseif key == "focus_bot_key" then
     shared.focus_bot_key = new_value
     debug.focus_bot_key = new_value
-  elseif key == "policy_weld_preference" then
-    shared.weld_preference = new_value
-    debug.weld_preference = new_value
   elseif key == "play_for_me" then
     shared.play_for_me = new_value
     debug.play_for_me = new_value
@@ -370,13 +377,14 @@ sd.events.on("runtime.tick", function(event)
   end
   local_controller:tick(now_ms, event)
   update_focus_key()
+  local authority = simulation_authority()
+  debug.authority = authority
+  manager:poll_skill_choices(authority)
   if now_ms - state.last_tick_ms <
       shared.manager_interval_ms then
     return
   end
   state.last_tick_ms = now_ms
-  local authority = simulation_authority()
-  debug.authority = authority
   manager:tick(
     now_ms,
     authority,

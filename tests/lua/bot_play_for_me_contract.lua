@@ -9,6 +9,9 @@ local input_state = {
   pending_movement_frames = 0,
   pending_mouse_left_frames = 0,
   pending_scancode_count = 0,
+  primary_selection_snapshot_pending = false,
+  primary_selection_restore_succeeded = true,
+  native_state_clear_succeeded = true,
 }
 local calls = {
   takeover = {},
@@ -107,6 +110,8 @@ sd = {
         y = 20.0,
         hp = player_hp,
         max_hp = 100.0,
+        mp = 100.0,
+        max_mp = 100.0,
       }
     end,
   },
@@ -230,6 +235,9 @@ function brain.think(context)
       { network_actor_id = 77, x = 120.0, y = 20.0 }))
   end
 end
+function brain.poll_skill_choice()
+  return false
+end
 function brain.reset_run(context, started)
   context.debug.mode = started and "prewave" or "hub"
 end
@@ -268,6 +276,9 @@ assert(input_state.pending_movement_frames == 0)
 assert(input_state.pending_mouse_left_frames == 0)
 assert(input_state.pending_scancode_count == 0)
 assert(input_state.target_actor_address == 0)
+assert(not input_state.primary_selection_snapshot_pending)
+assert(input_state.primary_selection_restore_succeeded)
+assert(input_state.native_state_clear_succeeded)
 
 controller:set_desired(true)
 event.tick_count = 2

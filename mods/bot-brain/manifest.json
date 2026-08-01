@@ -100,29 +100,6 @@
         "group": "Combat"
       },
       {
-        "key": "policy_weld_preference",
-        "type": "choice",
-        "label": "Learned bot welding",
-        "description": "Controls deterministic Spell Welding choices while the combat policy owns movement, targets, and casts.",
-        "default": "auto",
-        "scope": "host",
-        "group": "Combat",
-        "choices": [
-          {
-            "value": "auto",
-            "label": "Auto — weld after two primaries"
-          },
-          {
-            "value": "prefer",
-            "label": "Prefer eligible welds"
-          },
-          {
-            "value": "avoid",
-            "label": "Avoid welding"
-          }
-        ]
-      },
-      {
         "key": "roster",
         "type": "list",
         "label": "Bot roster",

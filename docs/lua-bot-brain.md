@@ -14,9 +14,8 @@ The default roster contains one Arcane fire skirmisher named `Ember`. The
 earlier `persona_name` scalar is gone; names belong to rows. The other launcher
 controls remain: 340-unit kite radius, offense enabled, local 250/400 ms think
 cadence for scripted rows, local focus key, and the confirmed host-only roster
-respawn action. `policy_weld_preference` controls whether the shared skill
-manager prefers, avoids, or automatically accepts Spell Welding. Learned rows
-decide every 100 ms of simulation time once matching v2 weights are installed.
+respawn action. Learned rows decide every 100 ms of simulation time once
+matching v2 weights are installed.
 
 ## Bot Play For Me
 
@@ -39,16 +38,21 @@ new multiplayer authority path. A host drives its host-local player and a
 client drives its client-local player; normal cast, damage, death, and
 replication ownership remains unchanged.
 
-The local context derives its element from the equipped primary, uses the
-same deterministic level-up chooser, and uses the one-argument
-local-owner loot request. Guardian excludes the controlled player from its
+The local context derives its element from the equipped primary and uses the
+one-argument local-owner loot request. Every local or synthetic bot chooses a
+random member of its offered level-up set as soon as the picker appears. Each
+accepted pick logs participant, wave, offer generation, the full offered set,
+and the chosen index and ID. Guardian excludes the controlled player from its
 ward search so it protects another living native participant instead of
 orbiting itself. The small `BOT PLAYING [F9]` indicator is local immediate-mode
 drawing and never enters network state.
 
 Turning takeover off clears its destination and calls the owner-scoped native
 release. That release zeroes movement, mouse holds, key edges, cast intent,
-targets, and control-brain movement before the human regains control. Death,
+targets, and control-brain movement, then restores the exact native primary
+selection that existed before takeover. A failed clear or restore keeps the
+release state observably unclean instead of silently handing back partial
+control. Death,
 spectator mode, run exit, and Game Over release the same ownership
 automatically; a live wave-boundary respawn reacquires it if the user's toggle
 is still on.
@@ -97,14 +101,21 @@ mask. Neither path writes a transform. The loader may apply its
 authority-owned, native-placement-validated stuck recovery only after a full
 30-second no-progress window.
 
+Each bot samples its own actor's mana and applies casting hysteresis. Casting
+enters hold at or below 10% mana and resumes only at or above 80%; movement and
+target selection continue while held. Both transitions log participant ID,
+current and maximum mana, ratio, and both named thresholds. Missing or invalid
+per-actor mana fails closed for casting instead of borrowing another player's
+pool.
+
 Each bot asks `sd.bots.get_primary_attack_window(participant_id)` for its own
 live class primary. A cast uses
 `bot:cast(0, target.x, target.y, 80)`, so Fire, Water, Earth, Air, and Ether all
 enter through the same replicated participant-cast ingress. Rejected casts
-remain rejected; there is no alternate damage path. Native level-up offers
-prioritize the configured element's primary and same-element family before
-general upgrades, and the chooser never takes a conflicting elemental
-primary.
+remain rejected; there is no alternate damage path. Native level-up offers are
+selected uniformly by index from the offered set. This intentionally includes
+Spell Welding and conflicting primary offers when the stock picker offers
+them; there is no hidden deterministic preference.
 
 With no enemies, contexts continue short orbit/anchor movement. That preserves
 native movement across spawn gaps and wave transitions rather than stopping
@@ -164,10 +175,9 @@ does not start Python, require a GPU, or contact a model service, and all
 movement and casts still use the native participant rails. Historical v1
 weights are rejected explicitly rather than reinterpreted.
 
-The shared skill manager sees learned primary progression, pending weld build
-IDs, and Spell Welding option 52. In `auto` mode it accepts a weld only after
-both component primaries are learned; `prefer` and `avoid` provide explicit
-owner control. Learned rows also make rate-limited pickup requests only for
+The shared skill manager handles level-up pickers outside the simulation-time
+decision cadence, so a shared picker pause cannot prevent either peer from
+submitting. Learned rows also make rate-limited pickup requests only for
 host-owned replicated drops inside the drop's native pickup radius. The
 current native bot API still has no owner-safe per-bot consume/equip mutation,
 so inventory actions remain out of scope. See [`ml-bot.md`](ml-bot.md) for

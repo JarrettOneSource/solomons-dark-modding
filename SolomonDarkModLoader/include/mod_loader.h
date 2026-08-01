@@ -196,6 +196,14 @@ struct SDModLocalPlayerControlTakeoverState {
     bool clean = false;
     std::string owner_mod_id;
     uintptr_t actor_address = 0;
+    bool primary_selection_snapshot_pending = false;
+    bool primary_selection_restore_succeeded = true;
+    bool native_state_clear_succeeded = true;
+    uintptr_t primary_selection_actor_address = 0;
+    std::int32_t primary_selection_state_before = -1;
+    std::int32_t primary_selection_state_current = -1;
+    uintptr_t last_primary_selection_restored_actor_address = 0;
+    std::int32_t last_primary_selection_restored_state = -1;
     uintptr_t target_actor_address = 0;
     float target_x = 0.0f;
     float target_y = 0.0f;

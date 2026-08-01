@@ -593,6 +593,8 @@ details.primary.build_id = 8
 local pickup_requests = 0
 local pickup_request_participant_id = 0
 local chosen_options = {}
+local mana_current = 100.0
+local mana_maximum = 100.0
 _G.sd = {
   runtime = {
     get_multiplayer_state = function()
@@ -607,6 +609,13 @@ _G.sd = {
       chosen_options[#chosen_options + 1] = option_index
       return true
     end,
+    get_participant_state = function(participant_id)
+      assert(participant_id == 42)
+      return {
+        mp = mana_current,
+        max_mp = mana_maximum,
+      }
+    end,
   },
   world = {
     request_loot_pickup = function(_, participant_id)
@@ -618,26 +627,39 @@ _G.sd = {
 }
 local brain =
   load_module("mods/bot-brain/scripts/brain.lua")
+local brain_logs = {}
 local assist_context = {
   participant_id = 42,
   row = {element = "fire"},
   shared = {
-    weld_preference = "auto",
     policy_spell_descriptors = descriptor_resolver,
     policy_spec = spec,
-    log = function() end,
+    log = function(_, message)
+      brain_logs[#brain_logs + 1] = message
+    end,
   },
   policy_memory = observation.new_memory(),
   last_skill_choice_generation = -1,
   debug = {
     last_error = "",
+    wave = 7,
     skill_choices_accepted = 0,
+    mana_sample_valid = false,
+    mana_cast_hold = false,
+    mana_hold_start_count = 0,
+    mana_hold_end_count = 0,
     pickup_request_issued = 0,
     pickup_request_accepted = 0,
     last_pickup_request_sequence = 0,
     last_pickup_error = "",
   },
 }
+local original_random = math.random
+local random_indexes = {2, 1}
+math.random = function(minimum, maximum)
+  assert(minimum == 1 and maximum == 2)
+  return table.remove(random_indexes, 1)
+end
 brain.choose_pending_skill(
   assist_context,
   {
@@ -645,8 +667,7 @@ brain.choose_pending_skill(
     generation = 10,
     options = {{id = 52}, {id = 64}},
   })
-assert(chosen_options[1] == 1)
-assist_context.shared.weld_preference = "avoid"
+assert(chosen_options[1] == 2)
 brain.choose_pending_skill(
   assist_context,
   {
@@ -654,7 +675,29 @@ brain.choose_pending_skill(
     generation = 11,
     options = {{id = 52}, {id = 64}},
   })
-assert(chosen_options[2] == 2)
+assert(chosen_options[2] == 1)
+math.random = original_random
+assert(string.find(brain_logs[1], "wave=7", 1, true))
+assert(string.find(brain_logs[1], "offered=[52,64]", 1, true))
+assert(string.find(brain_logs[1], "chosen_id=64", 1, true))
+
+assist_context.bot = {}
+assist_context.mana_sample_valid = false
+assist_context.mana_cast_hold = false
+mana_current = 9.0
+assert(brain.update_mana_cast_hold(assist_context))
+assert(assist_context.mana_cast_hold)
+assert(assist_context.debug.mana_hold_start_count == 1)
+mana_current = 50.0
+assert(brain.update_mana_cast_hold(assist_context))
+assert(assist_context.mana_cast_hold)
+assert(assist_context.debug.mana_hold_end_count == 0)
+mana_current = 80.0
+assert(brain.update_mana_cast_hold(assist_context))
+assert(not assist_context.mana_cast_hold)
+assert(assist_context.debug.mana_hold_end_count == 1)
+assert(brain.cast_mana_hold_low_ratio == 0.10)
+assert(brain.cast_mana_resume_high_ratio == 0.80)
 
 brain.request_nearby_pickup(
   assist_context,

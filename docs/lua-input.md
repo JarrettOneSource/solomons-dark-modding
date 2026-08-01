@@ -34,10 +34,14 @@ before accepting bot commands. Existing live control brains are left intact.
 
 Call `sd.input.set_local_player_takeover(false)` before returning control to
 the player. Release clears pending movement, mouse holds, binding edges, cast
-intent, targets, and control-brain movement. The loader performs the same
-release automatically if the owning mod unloads or hot reloads.
+intent, targets, primary/previous skill latches, and control-brain target and
+movement fields. Takeover's native primary priming snapshots the actor's prior
+selection and restores that exact selection during release. The loader performs
+the same release automatically if the owning mod unloads or hot reloads.
 
 `sd.input.get_local_player_takeover_state()` returns the owner, queued-control
-counts, current native cast fields, movement fields, and `clean`. Acceptance
-tests can assert `clean == true` immediately after release instead of relying
-on visual inspection.
+counts, current native cast and movement fields, primary-selection snapshot and
+last-restore fields, `native_state_clear_succeeded`, and `clean`. `clean` is
+true only after every queue/native field is cleared and the selection snapshot
+has been restored. Acceptance tests can assert it immediately after release
+instead of relying on visual inspection.

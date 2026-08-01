@@ -112,11 +112,6 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         entry["key"]: entry
         for entry in manifest["settings"]["entries"]
     }
-    weld = settings["policy_weld_preference"]
-    assert weld["default"] == "auto"
-    assert {
-        choice["value"] for choice in weld["choices"]
-    } == {"prefer", "avoid", "auto"}
     # The loader's current list-schema ceiling is configuration, not a Lua
     # participant-count assumption.
     assert settings["roster"]["max_items"] == 32
@@ -224,11 +219,11 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
         "issue_policy_cast(",
     )
     for token in (
-        "details.pending_weld_build_id_resolved ~= true",
-        'preference == "avoid"',
-        'preference == "prefer"',
-        'preference == "auto"',
-        "learned[components[1]] ~= true",
+        "math.random(1, #choices.options)",
+        '" offered=[" .. table.concat(offered, ",") .. "]"',
+        '" chosen_id=" .. tostring(selected and selected.id or -1)',
+        "CAST_MANA_HOLD_LOW_RATIO = 0.10",
+        "CAST_MANA_RESUME_HIGH_RATIO = 0.80",
         "request_nearby_pickup(",
         "capture.loadout.pickup_range <= 0.0",
         "pickup.pickup_range_multiplier",
@@ -474,7 +469,18 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
 
     _require_in_order(
         brain,
-        "choose_pending_skill(context, skill_choices)",
+        "function brain.poll_skill_choice(context)",
+        "choose_pending_skill(",
+    )
+    _require_in_order(
+        main,
+        "local_controller:tick(now_ms, event)",
+        "manager:poll_skill_choices(authority)",
+        "if now_ms - state.last_tick_ms <",
+        "manager:tick(",
+    )
+    _require_in_order(
+        brain,
         'if context.row.behavior == "learned" then',
         "think_with_policy(",
     )

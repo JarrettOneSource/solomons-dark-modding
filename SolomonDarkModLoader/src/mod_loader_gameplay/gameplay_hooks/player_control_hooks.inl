@@ -1049,6 +1049,198 @@ bool TryResolveLocalPlayerPrimaryCastDescriptor(
         descriptor);
 }
 
+void ResetLocalPlayerControlTakeoverHandbackTracking() {
+    std::lock_guard<std::mutex> lock(
+        g_gameplay_keyboard_injection.local_player_takeover_mutex);
+    g_gameplay_keyboard_injection
+        .local_player_takeover_primary_selection_actor = 0;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_primary_selection_before =
+            kUnknownAnimationStateId;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_primary_selection_snapshot_pending = false;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_primary_selection_restore_succeeded = true;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_native_state_clear_succeeded = true;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_last_restored_selection_actor = 0;
+    g_gameplay_keyboard_injection
+        .local_player_takeover_last_restored_selection_state =
+            kUnknownAnimationStateId;
+}
+
+bool TryWriteTrackedLocalPlayerTakeoverPrimarySelection(
+    uintptr_t actor_address,
+    int previous_selection_state,
+    int selected_state) {
+    if (actor_address == 0 ||
+        previous_selection_state == kUnknownAnimationStateId ||
+        selected_state == kUnknownAnimationStateId) {
+        return false;
+    }
+
+    uintptr_t discarded_actor = 0;
+    int discarded_state = kUnknownAnimationStateId;
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        auto& keyboard = g_gameplay_keyboard_injection;
+        if (!keyboard.local_player_takeover_active.load(
+                std::memory_order_acquire)) {
+            return false;
+        }
+        if (keyboard
+                .local_player_takeover_primary_selection_snapshot_pending &&
+            keyboard.local_player_takeover_primary_selection_actor !=
+                actor_address) {
+            discarded_actor =
+                keyboard.local_player_takeover_primary_selection_actor;
+            discarded_state =
+                keyboard.local_player_takeover_primary_selection_before;
+            keyboard
+                .local_player_takeover_primary_selection_snapshot_pending =
+                    false;
+        }
+        if (!keyboard
+                 .local_player_takeover_primary_selection_snapshot_pending) {
+            keyboard.local_player_takeover_primary_selection_actor =
+                actor_address;
+            keyboard.local_player_takeover_primary_selection_before =
+                previous_selection_state;
+            keyboard
+                .local_player_takeover_primary_selection_snapshot_pending =
+                    true;
+            keyboard
+                .local_player_takeover_primary_selection_restore_succeeded =
+                    true;
+        }
+    }
+    if (discarded_actor != 0) {
+        Log(
+            "[lua] local player takeover retired obsolete primary-selection "
+            "snapshot after actor replacement. actor=" +
+            HexString(discarded_actor) +
+            " selection=" + std::to_string(discarded_state) +
+            " replacement_actor=" + HexString(actor_address));
+    }
+
+    return
+        TryWriteActorAnimationStateIdDirect(
+            actor_address,
+            selected_state) &&
+        ResolveActorAnimationStateId(actor_address) == selected_state;
+}
+
+bool RestoreLocalPlayerControlTakeoverPrimarySelection(
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    uintptr_t snapshot_actor = 0;
+    int snapshot_state = kUnknownAnimationStateId;
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        const auto& keyboard = g_gameplay_keyboard_injection;
+        if (!keyboard
+                 .local_player_takeover_primary_selection_snapshot_pending) {
+            return true;
+        }
+        snapshot_actor =
+            keyboard.local_player_takeover_primary_selection_actor;
+        snapshot_state =
+            keyboard.local_player_takeover_primary_selection_before;
+    }
+
+    uintptr_t gameplay_address = 0;
+    uintptr_t current_actor = 0;
+    const bool snapshot_is_current =
+        TryResolveCurrentGameplayScene(&gameplay_address) &&
+        gameplay_address != 0 &&
+        TryResolvePlayerActorForSlot(
+            gameplay_address,
+            0,
+            &current_actor) &&
+        current_actor == snapshot_actor;
+    if (!snapshot_is_current) {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        auto& keyboard = g_gameplay_keyboard_injection;
+        if (keyboard
+                .local_player_takeover_primary_selection_snapshot_pending &&
+            keyboard.local_player_takeover_primary_selection_actor ==
+                snapshot_actor) {
+            keyboard
+                .local_player_takeover_primary_selection_snapshot_pending =
+                    false;
+            keyboard.local_player_takeover_primary_selection_actor = 0;
+            keyboard.local_player_takeover_primary_selection_before =
+                kUnknownAnimationStateId;
+            keyboard
+                .local_player_takeover_primary_selection_restore_succeeded =
+                    true;
+        }
+        Log(
+            "[lua] local player takeover discarded obsolete primary-selection "
+            "snapshot during release. actor=" +
+            HexString(snapshot_actor) +
+            " current_actor=" + HexString(current_actor));
+        return true;
+    }
+
+    const bool restored =
+        TryWriteActorAnimationStateIdDirect(
+            snapshot_actor,
+            snapshot_state) &&
+        ResolveActorAnimationStateId(snapshot_actor) == snapshot_state;
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        auto& keyboard = g_gameplay_keyboard_injection;
+        keyboard
+            .local_player_takeover_primary_selection_restore_succeeded =
+                restored;
+        if (restored &&
+            keyboard
+                .local_player_takeover_primary_selection_snapshot_pending &&
+            keyboard.local_player_takeover_primary_selection_actor ==
+                snapshot_actor) {
+            keyboard
+                .local_player_takeover_primary_selection_snapshot_pending =
+                    false;
+            keyboard.local_player_takeover_primary_selection_actor = 0;
+            keyboard.local_player_takeover_primary_selection_before =
+                kUnknownAnimationStateId;
+            keyboard.local_player_takeover_last_restored_selection_actor =
+                snapshot_actor;
+            keyboard.local_player_takeover_last_restored_selection_state =
+                snapshot_state;
+        }
+    }
+    if (!restored) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Local player takeover could not restore native primary "
+                "selection " +
+                std::to_string(snapshot_state) +
+                " for actor " + HexString(snapshot_actor) + ".";
+        }
+        Log(
+            "[lua] local player takeover primary-selection restore failed. "
+            "actor=" + HexString(snapshot_actor) +
+            " selection=" + std::to_string(snapshot_state));
+        return false;
+    }
+
+    Log(
+        "[lua] local player takeover restored native primary selection. "
+        "actor=" + HexString(snapshot_actor) +
+        " selection=" + std::to_string(snapshot_state));
+    return true;
+}
+
 bool ApplyLocalPlayerControlTakeoverPrimarySelection(
     uintptr_t actor_address) {
     if (!IsLocalPlayerControlTakeoverActive() ||
@@ -1069,11 +1261,10 @@ bool ApplyLocalPlayerControlTakeoverPrimarySelection(
     if (previous_selection_state == descriptor.selection_state) {
         return true;
     }
-    if (!TryWriteActorAnimationStateIdDirect(
+    if (!TryWriteTrackedLocalPlayerTakeoverPrimarySelection(
             actor_address,
-            descriptor.selection_state) ||
-        ResolveActorAnimationStateId(actor_address) !=
-            descriptor.selection_state) {
+            previous_selection_state,
+            descriptor.selection_state)) {
         return false;
     }
 

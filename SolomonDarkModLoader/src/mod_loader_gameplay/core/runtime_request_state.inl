@@ -271,6 +271,15 @@ struct GameplayKeyboardInjectionState {
     std::mutex local_player_takeover_mutex;
     std::string local_player_takeover_owner_mod_id;
     std::atomic<bool> local_player_takeover_active{false};
+    uintptr_t local_player_takeover_primary_selection_actor{0};
+    int local_player_takeover_primary_selection_before{
+        kUnknownAnimationStateId};
+    bool local_player_takeover_primary_selection_snapshot_pending{false};
+    bool local_player_takeover_primary_selection_restore_succeeded{true};
+    bool local_player_takeover_native_state_clear_succeeded{true};
+    uintptr_t local_player_takeover_last_restored_selection_actor{0};
+    int local_player_takeover_last_restored_selection_state{
+        kUnknownAnimationStateId};
     std::atomic<uintptr_t> local_player_takeover_target_actor{0};
     std::atomic<float> local_player_takeover_target_x{0.0f};
     std::atomic<float> local_player_takeover_target_y{0.0f};

@@ -281,12 +281,6 @@ return {
   primary_build_index_encoding =
     "base_band_identity_or_weld_pair_index",
 
-  weld_preferences = {
-    prefer = true,
-    avoid = true,
-    auto = true,
-  },
-
   movement_actions = {
     { name = "idle", x = 0.0, y = 0.0 },
     { name = "east", x = 1.0, y = 0.0 },

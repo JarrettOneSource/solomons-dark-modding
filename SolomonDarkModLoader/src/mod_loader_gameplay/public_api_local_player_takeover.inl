@@ -1,4 +1,8 @@
-void ClearLocalPlayerControlTakeoverInputState() {
+bool ClearLocalPlayerControlTakeoverInputState(
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
     g_gameplay_keyboard_injection.pending_movement_x.store(
         0.0f,
         std::memory_order_release);
@@ -54,23 +58,27 @@ void ClearLocalPlayerControlTakeoverInputState() {
     uintptr_t gameplay_address = 0;
     if (!TryResolveCurrentGameplayScene(&gameplay_address) ||
         gameplay_address == 0) {
-        return;
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        g_gameplay_keyboard_injection
+            .local_player_takeover_native_state_clear_succeeded = true;
+        return true;
     }
 
     auto& memory = ProcessMemory::Instance();
     const std::uint8_t released = 0;
-    (void)memory.TryWriteField(
+    bool native_state_cleared = memory.TryWriteField(
         gameplay_address,
         kGameplayCastIntentOffset,
         released);
-    (void)memory.TryWriteField(
+    native_state_cleared = memory.TryWriteField(
         gameplay_address,
         kGameplayLocalMovementInputXOffset,
-        0.0f);
-    (void)memory.TryWriteField(
+        0.0f) && native_state_cleared;
+    native_state_cleared = memory.TryWriteField(
         gameplay_address,
         kGameplayLocalMovementInputYOffset,
-        0.0f);
+        0.0f) && native_state_cleared;
     for (int buffer_index = 0;
          buffer_index < kGameplayInputBufferCount;
          ++buffer_index) {
@@ -80,14 +88,14 @@ void ClearLocalPlayerControlTakeoverInputState() {
         const auto right_offset = static_cast<std::size_t>(
             buffer_index * kGameplayInputBufferStride +
             kGameplayMouseRightButtonOffset);
-        (void)memory.TryWriteField(
+        native_state_cleared = memory.TryWriteField(
             gameplay_address,
             left_offset,
-            released);
-        (void)memory.TryWriteField(
+            released) && native_state_cleared;
+        native_state_cleared = memory.TryWriteField(
             gameplay_address,
             right_offset,
-            released);
+            released) && native_state_cleared;
     }
     uintptr_t actor_address = 0;
     if (TryResolvePlayerActorForSlot(
@@ -95,11 +103,29 @@ void ClearLocalPlayerControlTakeoverInputState() {
             0,
             &actor_address) &&
         actor_address != 0) {
-        std::string ignored_error;
-        (void)ClearWizardActorGameplayCastState(
+        std::string cast_error;
+        native_state_cleared = ClearWizardActorGameplayCastState(
             actor_address,
-            &ignored_error);
+            &cast_error) && native_state_cleared;
+        if (!native_state_cleared && error_message != nullptr &&
+            !cast_error.empty()) {
+            *error_message = cast_error;
+        }
     }
+    {
+        std::lock_guard<std::mutex> lock(
+            g_gameplay_keyboard_injection.local_player_takeover_mutex);
+        g_gameplay_keyboard_injection
+            .local_player_takeover_native_state_clear_succeeded =
+                native_state_cleared;
+    }
+    if (!native_state_cleared && error_message != nullptr &&
+        error_message->empty()) {
+        *error_message =
+            "One or more local player takeover input fields could not be "
+            "cleared.";
+    }
+    return native_state_cleared;
 }
 
 bool EnsureLocalPlayerControlBrainForTakeover(
@@ -227,6 +253,16 @@ bool SetLocalPlayerControlTakeover(
         if (enabled && active) {
             return true;
         }
+        if (enabled &&
+            g_gameplay_keyboard_injection
+                .local_player_takeover_primary_selection_snapshot_pending) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "The previous local player takeover has not restored its "
+                    "native primary selection.";
+            }
+            return false;
+        }
         if (!enabled && !active && current_owner.empty()) {
             return true;
         }
@@ -243,7 +279,31 @@ bool SetLocalPlayerControlTakeover(
             error_message)) {
         return false;
     }
-    ClearLocalPlayerControlTakeoverInputState();
+    std::string clear_error;
+    const bool native_state_cleared =
+        ClearLocalPlayerControlTakeoverInputState(&clear_error);
+    if (enabled) {
+        if (!native_state_cleared) {
+            if (error_message != nullptr) {
+                *error_message = clear_error;
+            }
+            return false;
+        }
+        ResetLocalPlayerControlTakeoverHandbackTracking();
+    } else {
+        std::string restore_error;
+        const bool selection_restored =
+            RestoreLocalPlayerControlTakeoverPrimarySelection(
+                &restore_error);
+        if (!native_state_cleared || !selection_restored) {
+            if (error_message != nullptr) {
+                *error_message = !clear_error.empty()
+                    ? clear_error
+                    : restore_error;
+            }
+            return false;
+        }
+    }
 
     {
         std::lock_guard<std::mutex> lock(takeover_mutex);
@@ -441,6 +501,27 @@ bool TryGetLocalPlayerControlTakeoverState(
         state->owner_mod_id =
             g_gameplay_keyboard_injection
                 .local_player_takeover_owner_mod_id;
+        state->primary_selection_snapshot_pending =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_primary_selection_snapshot_pending;
+        state->primary_selection_restore_succeeded =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_primary_selection_restore_succeeded;
+        state->native_state_clear_succeeded =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_native_state_clear_succeeded;
+        state->primary_selection_actor_address =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_primary_selection_actor;
+        state->primary_selection_state_before =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_primary_selection_before;
+        state->last_primary_selection_restored_actor_address =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_last_restored_selection_actor;
+        state->last_primary_selection_restored_state =
+            g_gameplay_keyboard_injection
+                .local_player_takeover_last_restored_selection_state;
     }
     state->target_actor_address =
         g_gameplay_keyboard_injection
@@ -521,6 +602,12 @@ bool TryGetLocalPlayerControlTakeoverState(
             state->actor_address = local_actor_address;
         }
         if (local_actor_address != 0) {
+            const auto selection_actor =
+                state->primary_selection_actor_address != 0
+                    ? state->primary_selection_actor_address
+                    : local_actor_address;
+            state->primary_selection_state_current =
+                ResolveActorAnimationStateId(selection_actor);
             (void)memory.TryReadField(
                 local_actor_address,
                 kActorPrimarySkillIdOffset,
@@ -563,6 +650,21 @@ bool TryGetLocalPlayerControlTakeoverState(
         state->pending_mouse_right_frames == 0 &&
         state->pending_scancode_count == 0 &&
         state->pending_native_control_frames == 0 &&
+        !state->primary_selection_snapshot_pending &&
+        state->primary_selection_restore_succeeded &&
+        state->native_state_clear_succeeded &&
+        state->cast_intent == 0 &&
+        state->primary_skill_id == 0 &&
+        state->previous_skill_id == 0 &&
+        state->current_target_actor_address == 0 &&
+        std::abs(state->movement_input_x) <=
+            kCleanInputEpsilon &&
+        std::abs(state->movement_input_y) <=
+            kCleanInputEpsilon &&
+        std::abs(state->control_brain_move_x) <=
+            kCleanInputEpsilon &&
+        std::abs(state->control_brain_move_y) <=
+            kCleanInputEpsilon &&
         std::abs(state->pending_movement_x) <=
             kCleanInputEpsilon &&
         std::abs(state->pending_movement_y) <=

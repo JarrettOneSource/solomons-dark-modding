@@ -545,14 +545,117 @@ observation, but no exact-edge screenshot was captured before teardown. This
 finding is independent of primary casting and remains open for a focused visual
 reproduction; it does not block the combat-seam correction.
 
+## R21: native primary correction verified, run rejected
+
+R21 used the normal website and Steam lobby flow and reached wave 73 before a
+natural `all_players_dead` Game Over. The primary-emission correction worked on
+both machines. The host produced 735 native type-2004 slot-zero enemy-damage
+edges totaling 1,596 damage. The client origin ledger produced 440 native
+type-2004 slot-zero edges totaling 1,679 damage, and the host accepted 334
+authority-side client claims totaling 1,005.25 damage. These are real
+spell-scale Fireball edges, not the earlier body-contact trickle.
+
+One client death was followed by a wave-50 same-actor respawn. Actor
+`0x123107F0` returned with HP/MP 100, takeover reacquired it, and its subsequent
+native-primary initialization still reported primary entry 16, combo entry 16,
+resolved/current spell 1011, and a valid spellbook revision. R21 therefore
+closes the suspected respawn loadout-loss class for the observed respawn.
+
+The coordinated capture barrier also worked: all sixteen preserved pairs were
+accepted with no rejected trigger, the largest conservative game-anchored
+interval was 993,866,925 ns against the 1,000 ms limit, and all fifteen
+endurance sampler pauses were explicit timeline windows under 30 seconds. R21
+is still rejected because the controller stopped before terminal coverage, all
+skill picks waited for the 60-second fallback, and F9 handback was incomplete.
+The milestone frames themselves are sound; the endurance controller falsely
+discarded them because its camera probe placed every living enemy outside the
+viewport while the D3D9 frames visibly contained the fight. Endurance now
+records that projection as a diagnostic and retains the strict enemy-pixel gate
+in the short fighting acceptance path.
+
+## Product defect: picker pause starved Bot Play decisions
+
+Every R21 level-up barrier reached its 60-second timeout. Bot Play queried and
+selected skills only inside its simulation-time think cadence, but the shared
+level-up barrier intentionally freezes that same clock. The owner-observed
+stall was therefore deterministic rather than policy tuning.
+
+Skill-picker polling now runs from every wall-clock `runtime.tick` before the
+simulation-cadence gate. Each local or synthetic bot randomly selects one
+member of its own offered set and logs participant, wave, generation, full
+offered set, chosen index, and chosen ID. This is deliberately random even when
+the offer contains Spell Welding or a different elemental primary; the former
+deterministic weld preference and its setting have been removed.
+
+The owner's host-first observation does not establish a multiplayer resume-gate
+defect. In the captured ordering, the host chose at 22:18:35.843, the client
+picker closed at 22:18:39.172, and only then did the authority send resume at
+22:18:39.224. The authority gate waited for the client, albeit through its
+timeout-forced choice. The missing `Waiting on 1 player` presentation was real:
+the product wait-text builder was incorrectly behind the diagnostic-visuals
+gate. Wait text is now registered in normal product mode while unrelated
+diagnostic surfaces remain gated.
+
+## Product defect: F9 did not restore takeover's primary selection
+
+R21's release state cleared queues, cast intent, actor cast fields, targets, and
+movement and reported `clean=true`, but the actor's resolved animation
+selection remained 16. The owner then saw automatic attacks continue after F9.
+Commit `451411a` introduced that selection write so native primary casting could
+start; the older release contract did not know it had to restore it.
+
+Takeover now snapshots the exact selection before its first primary priming
+write and restores it on F9, mod unload, or loader shutdown. Actor replacement
+retires an obsolete snapshot rather than writing through a dead actor. Release
+fails closed if either the native clear or exact selection restore fails, and
+the Lua state exposes the pending snapshot, restore result, last restored actor
+and value, and native-clear result. The clean predicate and static contract now
+enumerate every gameplay/actor/control-brain clear plus the paired selection
+write/restore, so another takeover-side primary-selection write cannot silently
+escape handback coverage.
+
+## Bot casting mana hysteresis
+
+Bot Play and synthetic Bot Brain actors now gate casting on each actor's own
+mana. The low-water threshold is the named constant 10% and the high-water
+threshold is 80%. A bot entering the low-water state keeps moving and targeting
+but holds every primary/policy cast until its own pool reaches the high-water
+mark. Both transitions log participant, current and maximum mana, ratio, and
+thresholds. Missing per-actor mana fails closed for casting.
+
+## R21 hard findings outside the campaign patch
+
+The three-bar HUD is preserved in the paired wave-1 frames, but both peers had
+only slot 0 and slot 1 populated; slots 2/3 were zero, the local-player actor
+global was zero, and the selection table was `[16, 16, -1, -1]`. Auditing
+`451411a` found only the direct actor selection write, with no gameplay-slot or
+local-player-global alias. The historical cast-shim alias mechanism is
+falsified, so the phantom second ally row remains a separate HUD defect.
+
+The owner's enemy-explodes-but-lives observation is an authority divergence.
+For network actor `281543696188128`, the client accumulated its local 5.0
+threshold and invoked the enemy-death hook at 22:28:38.780, then immediately
+rematerialized that same identity. The host accepted only a nonlethal 1.0 claim
+from HP 5 to 4 and did not publish the real death until about 13 seconds later.
+This is client prediction/display damage crossing a local death threshold, not
+the R20 phantom-primary announcement path.
+
+The speed curve is preserved for the dedicated speed task. Host sample speed
+rose from a first-quarter median of zero to a last-quarter median of 63.2 and a
+maximum of 224.37 after Rush ID 67 was applied at levels 2 and 4. The client
+curve also rose. No speed code is changed here. Persistent level-up sparkles,
+the owner-observed distance-triggered black sprites, and arena-edge skybox bleed
+remain presentation findings; available captures do not identity-correlate the
+black pixels strongly enough to claim a reproduction.
+
 ## Rerun requirement
 
-The product failure fixes, restored website flow, corrected damage attribution,
-bounded endurance probe continuity, and wave-boundary respawn correction must
-be rebuilt together and rerun through the same real launcher, lobby, and Steam
-flow. Completion requires both Bot Play takeovers to become active through the
-mod setting, projectile-sourced spell-scale origin damage plus host-applied
-damage from each fighter, live state and transport sampling throughout the
-match, milestone screenshots from both peers, equipped-primary persistence
-after every observed respawn, and either natural Game Over or the 90-minute
-endurance cap.
+The picker, mana, normal wait indicator, and exact F9 handback changes must be
+rebuilt together and rerun through the same real launcher, lobby, and Steam
+flow. Completion still requires both Bot Play takeovers to become active through
+the mod setting, observed non-timeout random skill picks, observed mana hold and
+resume transitions when the thresholds are reached, projectile-sourced
+spell-scale origin damage plus host-applied damage from each fighter, live state
+and transport sampling throughout the match, paired milestone screenshots,
+equipped-primary persistence after every observed respawn, a verified clean
+terminal handback, and either natural Game Over or the 90-minute cap.

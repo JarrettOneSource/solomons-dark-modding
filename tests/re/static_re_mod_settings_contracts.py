@@ -275,7 +275,6 @@ def test_mod_settings_are_scoped_atomic_privileged_and_replicated() -> str:
         "play_for_me_toggle",
         "kite_radius",
         "offense_enabled",
-        "policy_weld_preference",
         "roster",
         "think_profile",
         "focus_bot_key",

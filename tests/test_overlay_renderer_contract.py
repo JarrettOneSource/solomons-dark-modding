@@ -159,10 +159,14 @@ class OverlayRendererContractTests(unittest.TestCase):
         )
         gate = frame_renderer[gate_start:gate_end]
         self.assertIn(
-            "if (!diagnostic_visuals_enabled)",
+            "if (diagnostic_visuals_enabled &&",
             gate,
         )
-        self.assertIn("return {};", gate)
+        self.assertNotIn("return {};", gate)
+        self.assertIn(
+            "multiplayer::TryBuildLevelUpWaitStatusText(",
+            gate,
+        )
         self.assertIn(
             "Debug UI diagnostic surface set. enabled=",
             frame_renderer,
@@ -220,11 +224,13 @@ class OverlayRendererContractTests(unittest.TestCase):
             "frame.level_up_wait_text",
         ):
             self.assertIn(token, gate)
-        self.assertLess(
-            gate.index("if (!diagnostic_visuals_enabled)"),
-            gate.index(
-                "multiplayer::TryBuildLevelUpWaitStatusText("
-            ),
+        self.assertNotIn(
+            "if (!diagnostic_visuals_enabled)",
+            gate,
+        )
+        self.assertIn(
+            "if (diagnostic_visuals_enabled &&",
+            gate,
         )
         self.assertNotIn(
             "multiplayer::TryBuildDeathSpectatorStatusText(",

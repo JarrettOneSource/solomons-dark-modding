@@ -1081,6 +1081,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         g_gameplay_keyboard_injection
             .local_player_takeover_owner_mod_id.clear();
     }
+    ResetLocalPlayerControlTakeoverHandbackTracking();
     g_gameplay_keyboard_injection.local_player_takeover_active.store(
         false,
         std::memory_order_release);
@@ -1196,6 +1197,16 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
 }
 
 void ShutdownGameplayKeyboardInjection() {
+    g_gameplay_keyboard_injection.local_player_takeover_active.store(
+        false,
+        std::memory_order_release);
+    std::string takeover_restore_error;
+    if (!RestoreLocalPlayerControlTakeoverPrimarySelection(
+            &takeover_restore_error)) {
+        Log(
+            "[lua] local player takeover shutdown restore failed: " +
+            takeover_restore_error);
+    }
     ClearReplicatedSpellEffectBindings();
     ShutdownNativeMinionHooks();
     RemoveX86Hook(&g_gameplay_keyboard_injection.mouse_refresh_hook);
@@ -1308,6 +1319,7 @@ void ShutdownGameplayKeyboardInjection() {
         g_gameplay_keyboard_injection
             .local_player_takeover_owner_mod_id.clear();
     }
+    ResetLocalPlayerControlTakeoverHandbackTracking();
     g_gameplay_keyboard_injection.local_player_takeover_active.store(
         false,
         std::memory_order_release);

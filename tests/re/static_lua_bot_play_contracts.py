@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from static_multiplayer_contract_support import _read, _require_in_order
 
 
@@ -66,6 +68,11 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "local_player_takeover_target_actor",
         "local_player_takeover_target_x",
         "local_player_takeover_target_y",
+        "local_player_takeover_primary_selection_actor",
+        "local_player_takeover_primary_selection_before",
+        "local_player_takeover_primary_selection_snapshot_pending",
+        "local_player_takeover_primary_selection_restore_succeeded",
+        "local_player_takeover_native_state_clear_succeeded",
     ):
         assert token in request_state, f"takeover state lacks {token}"
 
@@ -78,7 +85,7 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     )
     _require_in_order(
         input_api,
-        "void ClearLocalPlayerControlTakeoverInputState()",
+        "bool ClearLocalPlayerControlTakeoverInputState(",
         "pending_movement_frames.store(",
         "ClearQueuedGameplayMouseLeft()",
         "local_player_takeover_target_actor.store(",
@@ -91,6 +98,7 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "local_player_takeover_active.store(",
         "EnsureLocalPlayerControlBrainForTakeover(",
         "ClearLocalPlayerControlTakeoverInputState(",
+        "RestoreLocalPlayerControlTakeoverPrimarySelection(",
     )
     _require_in_order(
         input_api,
@@ -111,9 +119,100 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         1,
     )[0]
     assert "pending_movement_x" in clean_expression
-    assert "control_brain_move_x" not in clean_expression
-    assert "movement_input_x" not in clean_expression
+    assert "control_brain_move_x" in clean_expression
+    assert "movement_input_x" in clean_expression
     assert "state->clean =" in input_api
+    assert "!state->primary_selection_snapshot_pending" in clean_expression
+    assert "state->primary_selection_restore_succeeded" in clean_expression
+    assert "state->native_state_clear_succeeded" in clean_expression
+
+    clear_start = input_api.index(
+        "bool ClearLocalPlayerControlTakeoverInputState("
+    )
+    clear_end = input_api.index(
+        "bool EnsureLocalPlayerControlBrainForTakeover(",
+        clear_start,
+    )
+    clear_body = input_api[clear_start:clear_end]
+    for token in (
+        "kGameplayCastIntentOffset",
+        "kGameplayLocalMovementInputXOffset",
+        "kGameplayLocalMovementInputYOffset",
+        "kGameplayMouseLeftButtonOffset",
+        "kGameplayMouseRightButtonOffset",
+        "ClearWizardActorGameplayCastState(",
+        "local_player_takeover_native_state_clear_succeeded",
+    ):
+        assert token in clear_body, (
+            "takeover native handback lacks " + token
+        )
+
+    cast_clear_start = input_api.index(
+        "bool ClearWizardActorGameplayCastState("
+    )
+    cast_clear_end = input_api.index(
+        "bool ClearLocalPlayerGameplayCastState(",
+        cast_clear_start,
+    )
+    cast_clear_body = input_api[cast_clear_start:cast_clear_end]
+    for token in (
+        "kActorPrimarySkillIdOffset",
+        "kActorPreviousSkillIdOffset",
+        "kActorPrimaryActionLatchE4Offset",
+        "kActorPrimaryActionLatchE8Offset",
+        "kActorPostGateActiveByteOffset",
+        "kActorSpellTargetGroupByteOffset",
+        "kActorSpellTargetSlotShortOffset",
+        "kActorAimTargetXOffset",
+        "kActorAimTargetYOffset",
+        "kActorAimTargetAux0Offset",
+        "kActorAimTargetAux1Offset",
+        "kActorCurrentTargetActorOffset",
+        "kActorCurrentTargetBucketDeltaOffset",
+        "kActorControlBrainTargetSlotOffset",
+        "kActorControlBrainTargetHandleOffset",
+        "kActorControlBrainRetargetTicksOffset",
+        "kActorControlBrainTargetCooldownTicksOffset",
+        "kActorControlBrainActionCooldownTicksOffset",
+        "kActorControlBrainActionBurstTicksOffset",
+        "kActorControlBrainHeadingLockTicksOffset",
+        "kActorControlBrainMoveInputXOffset",
+        "kActorControlBrainMoveInputYOffset",
+    ):
+        assert token in cast_clear_body, (
+            "takeover actor handback lacks " + token
+        )
+
+    target_write_start = control.index(
+        "bool ApplyManualSpawnerPrimaryTargetState("
+    )
+    target_write_end = control.index(
+        "bool IsPlayerActorPublishedInCurrentGameplaySlot(",
+        target_write_start,
+    )
+    target_write_body = control[target_write_start:target_write_end]
+    target_native_offsets = set(re.findall(
+        r"kActor[A-Za-z0-9]+Offset",
+        target_write_body,
+    ))
+    target_read_only_offsets = {
+        "kActorPositionXOffset",
+        "kActorPositionYOffset",
+    }
+    handback_native_offsets = set(re.findall(
+        r"kActor[A-Za-z0-9]+Offset",
+        cast_clear_body,
+    ))
+    assert (
+        target_native_offsets - target_read_only_offsets
+    ) <= handback_native_offsets, (
+        "takeover target writes without handback coverage: " +
+        repr(sorted(
+            target_native_offsets -
+            target_read_only_offsets -
+            handback_native_offsets
+        ))
+    )
 
     assert "IsLocalPlayerControlTakeoverActive()" in local_input
     _require_in_order(
@@ -126,11 +225,19 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "movement_x = 0.0f" in local_input
     assert "IsLocalPlayerControlTakeoverActive()" in control
     assert "ApplyPinnedLocalPlayerControlTakeoverTarget(" in control
+    assert control.count(
+        "TryWriteActorAnimationStateIdDirect("
+    ) == 2
     _require_in_order(
         control,
+        "bool TryWriteTrackedLocalPlayerTakeoverPrimarySelection(",
+        "local_player_takeover_primary_selection_before",
+        "TryWriteActorAnimationStateIdDirect(",
+        "bool RestoreLocalPlayerControlTakeoverPrimarySelection(",
+        "TryWriteActorAnimationStateIdDirect(",
         "bool ApplyLocalPlayerControlTakeoverPrimarySelection(",
         "TryResolveLocalPlayerPrimaryCastDescriptor(",
-        "TryWriteActorAnimationStateIdDirect(",
+        "TryWriteTrackedLocalPlayerTakeoverPrimarySelection(",
         "void __fastcall HookPurePrimarySpellStart(",
         "ApplyLocalPlayerControlTakeoverPrimarySelection(actor_address);",
         "TryListPurePrimaryProjectileActorAddressesInScene(",
@@ -138,13 +245,44 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "TryFindNewPurePrimaryProjectileActorInScene(",
         "QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);",
     )
+    apply_start = control.index(
+        "bool ApplyLocalPlayerControlTakeoverPrimarySelection("
+    )
+    apply_end = control.index(
+        "bool QueueLocalPlayerPrimaryCastForMultiplayer(",
+        apply_start,
+    )
+    apply_body = control[apply_start:apply_end]
+    assert "TryWriteActorAnimationStateIdDirect(" not in apply_body
+    assert apply_body.count(
+        "TryWriteTrackedLocalPlayerTakeoverPrimarySelection("
+    ) == 1
+    restore_start = control.index(
+        "bool RestoreLocalPlayerControlTakeoverPrimarySelection("
+    )
+    restore_end = apply_start
+    restore_body = control[restore_start:restore_end]
+    for token in (
+        "local_player_takeover_primary_selection_snapshot_pending",
+        "local_player_takeover_primary_selection_actor",
+        "local_player_takeover_primary_selection_before",
+        "local_player_takeover_primary_selection_restore_succeeded",
+        "TryWriteActorAnimationStateIdDirect(",
+        "ResolveActorAnimationStateId(snapshot_actor) == snapshot_state",
+    ):
+        assert token in restore_body, (
+            "takeover primary-selection handback lacks " + token
+        )
     _require_in_order(
         input_api,
         "bool ApplyPinnedLocalPlayerControlTakeoverTarget(",
         "ApplyLocalPlayerControlTakeoverPrimarySelection(",
         "ApplyManualSpawnerPrimaryTargetState(",
     )
-    assert "stock emitted no matching projectile" in control
+    assert (
+        '"Multiplayer local pure-primary cast not queued: stock "'
+    ) in control
+    assert '"emitted no matching projectile. actor="' in control
     _require_in_order(
         control,
         "original(self, param2, param3);",
@@ -172,6 +310,10 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         '"set_local_player_takeover"',
         '"set_local_player_takeover_target"',
         '"get_local_player_takeover_state"',
+        '"primary_selection_snapshot_pending"',
+        '"primary_selection_restore_succeeded"',
+        '"native_state_clear_succeeded"',
+        '"last_primary_selection_restored_state"',
     ):
         assert token in binding, f"Lua takeover binding lacks {token}"
     assert "GetLoadedLuaMod(state)" in binding
@@ -237,6 +379,8 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
         'require_mod("scripts/local_player.lua")',
         "local_player.new(",
         "local_controller:tick(now_ms, event)",
+        "manager:poll_skill_choices(authority)",
+        "if now_ms - state.last_tick_ms <",
     )
     assert "local_controller:set_desired(" in main
     assert "local_controller:set_behavior(" in main
@@ -260,10 +404,30 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
     assert "PROFILES" not in local_player
     assert "kite_direction" not in local_player
     assert "flee_threshold" not in local_player
+    _require_in_order(
+        local_player,
+        "function Controller:tick(now_ms, event)",
+        "self:update_runtime_state()",
+        "self.brain.poll_skill_choice(self.context)",
+        "self:can_drive(participant)",
+    )
+    assert "function Handle:mp()" in local_player
+    assert "function Handle:max_mp()" in local_player
+    assert "function Manager:poll_skill_choices(authority)" in _read(
+        "mods/bot-brain/scripts/roster.lua"
+    )
 
     assert "context.read_skill_choices" in brain
     assert "context.choose_skill" in brain
     assert "context.request_loot_pickup" in brain
+    assert "brain.poll_skill_choice" in brain
+    assert "math.random(1, #choices.options)" in brain
+    assert "CAST_MANA_HOLD_LOW_RATIO = 0.10" in brain
+    assert "CAST_MANA_RESUME_HIGH_RATIO = 0.80" in brain
+    assert "mana hold-start participant_id=" in brain
+    assert "mana hold-end participant_id=" in brain
+    assert "context.mana_cast_hold" in brain
+    assert "context.bot:mp(), context.bot:max_mp()" in brain
     assert "excluded_participant_id" in brain
     assert "context.shared.cast_hold_ms,\n      target)" in brain
     assert "actor_address" not in steering
@@ -278,6 +442,8 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
         "assert(input_state.pending_mouse_left_frames == 0)",
         "assert(input_state.pending_scancode_count == 0)",
         "assert(input_state.target_actor_address == 0)",
+        "assert(not input_state.primary_selection_snapshot_pending)",
+        "assert(input_state.primary_selection_restore_succeeded)",
         "spectator_active = true",
         "assert(controller.debug.activation_count == 3)",
     ):

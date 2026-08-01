@@ -426,10 +426,13 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         "context.bot:cast(",
         "sd.bots.get_skill_choices",
         "sd.bots.choose_skill",
-        "element_bands[context.row.element]",
-        "primary_entries[option_id] ~= true",
+        "math.random(1, #choices.options)",
+        '" offered=[" .. table.concat(offered, ",") .. "]"',
+        '" chosen_index=" .. tostring(selected_index)',
+        "brain.poll_skill_choice",
         'context.row.behavior == "guardian"',
-        "priority[band[1]] = 1",
+        "CAST_MANA_HOLD_LOW_RATIO = 0.10",
+        "CAST_MANA_RESUME_HIGH_RATIO = 0.80",
     ):
         assert token in brain, f"bot behavior policy lacks: {token}"
 

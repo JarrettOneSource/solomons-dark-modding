@@ -65,11 +65,10 @@ The velocity ceiling covers the fastest native movement envelope measured by
 the speed probe. The cooldown ceiling is the live-proven Teleport cap.
 Evidence comments live beside the constants in `policy_spec.lua`.
 
-The deterministic skill manager remains separate from the learned heads. It
-recognizes Spell Welding option 52 and honors
-`policy_weld_preference=prefer|avoid|auto`. Nearby host-owned pickups are also
-requested by a rate-limited scripted assist; the learned action is navigating
-to the observed drop.
+The skill manager remains separate from the learned heads and randomly chooses
+among the stock options whenever a level-up picker appears. Nearby host-owned
+pickups are requested by a rate-limited scripted assist; the learned action is
+navigating to the observed drop.
 
 ## Runtime architecture and strict versioning
 

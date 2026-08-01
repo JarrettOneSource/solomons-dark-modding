@@ -397,6 +397,22 @@ bool ClearWizardActorGameplayCastState(
         actor_address,
         kActorSpellTargetSlotShortOffset,
         kTargetHandleSlotSentinel) && wrote;
+    wrote = memory.TryWriteField<float>(
+        actor_address,
+        kActorAimTargetXOffset,
+        0.0f) && wrote;
+    wrote = memory.TryWriteField<float>(
+        actor_address,
+        kActorAimTargetYOffset,
+        0.0f) && wrote;
+    wrote = memory.TryWriteField<std::uint32_t>(
+        actor_address,
+        kActorAimTargetAux0Offset,
+        0) && wrote;
+    wrote = memory.TryWriteField<std::uint32_t>(
+        actor_address,
+        kActorAimTargetAux1Offset,
+        0) && wrote;
     wrote = memory.TryWriteField<uintptr_t>(actor_address, kActorCurrentTargetActorOffset, 0) && wrote;
     wrote = memory.TryWriteField<std::int32_t>(actor_address, kActorCurrentTargetBucketDeltaOffset, 0) && wrote;
 

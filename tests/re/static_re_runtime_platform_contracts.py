@@ -288,13 +288,14 @@ def test_launcher_multiplayer_quick_start_uses_live_ui_and_scene_readiness() -> 
     gate_end = render_text.find("\n}", gate_start)
     gate_body = render_text[gate_start:gate_end]
     if (
-        "if (!diagnostic_visuals_enabled)" not in gate_body
-        or "return {};" not in gate_body
+        "if (diagnostic_visuals_enabled &&" not in gate_body
+        or "if (!diagnostic_visuals_enabled)" in gate_body
+        or "multiplayer::TryBuildLevelUpWaitStatusText(" not in gate_body
         or "render_elements.clear();" in render_text
     ):
         raise StaticReTestFailure(
-            "diagnostic surfaces must remain unregistered while the semantic "
-            "UI bridge and functional multiplayer overlays stay active"
+            "diagnostic surfaces must remain gated while the product level-up "
+            "wait HUD stays active"
         )
 
     hook_start = run_hooks_text.find("void __fastcall HookStartGame(")

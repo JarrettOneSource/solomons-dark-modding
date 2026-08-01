@@ -155,6 +155,26 @@ function Handle:max_hp()
   return max_hp
 end
 
+function Handle:mp()
+  local player = self.controller.player
+  local mp = type(player) == "table" and
+    tonumber(player.mp) or nil
+  if not finite_number(mp) then
+    return nil, "local player mana is unavailable"
+  end
+  return mp
+end
+
+function Handle:max_mp()
+  local player = self.controller.player
+  local max_mp = type(player) == "table" and
+    tonumber(player.max_mp) or nil
+  if not finite_number(max_mp) then
+    return nil, "local player maximum mana is unavailable"
+  end
+  return max_mp
+end
+
 function Handle:alive()
   local hp = self:hp()
   local max_hp = self:max_hp()
@@ -551,6 +571,9 @@ end
 function Controller:tick(now_ms, event)
   self:update_toggle_key()
   local participant = self:update_runtime_state()
+  if self.desired then
+    self.brain.poll_skill_choice(self.context)
+  end
   local can_drive, reason = self:can_drive(participant)
   if not self.desired or not can_drive then
     if self.active then

@@ -50,6 +50,7 @@ from tools.verify_real_flow_e2e import (
     RealFlowFailure,
     _assert_clean_release,
     _drain_authority_damage_log,
+    _endurance_enemy_visibility_diagnostic,
     _native_enemy_render_assertion,
     _real_primary_damage_metrics,
     _replicated_damage_participant_ids,
@@ -1743,6 +1744,34 @@ class RealFlowE2ETests(unittest.TestCase):
                 result["accepted"][0]["localActorAddress"],
                 0x1234,
             )
+
+    def test_endurance_enemy_visibility_is_diagnostic_only(self) -> None:
+        result = _endurance_enemy_visibility_diagnostic(
+            {
+                "nativeEnemies": [
+                    {
+                        "address": 0x1234,
+                        "dead": False,
+                        "hp": 2.5,
+                        "screen_valid": False,
+                    },
+                    {
+                        "address": 0x5678,
+                        "dead": True,
+                        "hp": 0.0,
+                        "screen_valid": True,
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(result["livingNativeEnemyCount"], 1)
+        self.assertEqual(result["visibleLivingNativeEnemyCount"], 0)
+        self.assertFalse(result["projectionAvailable"])
+        self.assertEqual(
+            result["livingNativeEnemyAddresses"],
+            [0x1234],
+        )
 
     def test_authority_damage_log_records_accepted_remote_claims(
         self,

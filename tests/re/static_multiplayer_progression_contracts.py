@@ -577,9 +577,8 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
     gate_end = overlay_frame.index("\n}", gate_start)
     gate = overlay_frame[gate_start:gate_end]
-    assert gate.index("if (!diagnostic_visuals_enabled)") < gate.index(
-        "multiplayer::TryBuildLevelUpWaitStatusText("
-    )
+    assert "if (!diagnostic_visuals_enabled)" not in gate
+    assert "if (diagnostic_visuals_enabled &&" in gate
     assert (
         "gameplay_level_up_wait_text =\n"
         "        diagnostic_surface_frame.level_up_wait_text"

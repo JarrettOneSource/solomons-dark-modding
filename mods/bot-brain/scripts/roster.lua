@@ -354,6 +354,15 @@ function Manager:tick(now_ms, authority, simulation_tick)
   self:sync_debug()
 end
 
+function Manager:poll_skill_choices(authority)
+  if not authority then
+    return
+  end
+  for _, context in ipairs(self.contexts) do
+    self.brain.poll_skill_choice(context)
+  end
+end
+
 function Manager:reset_run(started)
   for _, context in ipairs(self.contexts) do
     self.brain.reset_run(context, started)

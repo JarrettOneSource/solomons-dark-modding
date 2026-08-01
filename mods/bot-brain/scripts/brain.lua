@@ -27,6 +27,9 @@ local PROFILES = {
   },
 }
 
+local CAST_MANA_HOLD_LOW_RATIO = 0.10
+local CAST_MANA_RESUME_HIGH_RATIO = 0.80
+
 local function distance(x1, y1, x2, y2)
   local dx = x2 - x1
   local dy = y2 - y1
@@ -116,59 +119,78 @@ local function read_skill_choices(context)
   return choices
 end
 
-local function learned_primary_state(context)
-  local learned = {}
-  local learned_count = 0
-  local ok, multiplayer =
-    pcall(sd.runtime.get_multiplayer_state)
-  if ok and type(multiplayer) == "table" then
-    for _, participant in
-        ipairs(multiplayer.participants or {}) do
-      if tonumber(participant.participant_id) ==
-          context.participant_id then
-        local owned =
-          type(participant.owned_progression) == "table" and
-            participant.owned_progression or {}
-        for _, entry in
-            ipairs(owned.progression_book_entries or {}) do
-          local entry_id = tonumber(entry.entry_index)
-          if tonumber(entry.active) ~= nil and
-              tonumber(entry.active) > 0 and
-              context.shared.policy_spell_descriptors:
-                is_base_primary(entry_id) and
-              learned[entry_id] ~= true then
-            learned[entry_id] = true
-            learned_count = learned_count + 1
-          end
-        end
-        break
-      end
-    end
+local function read_own_mana(context)
+  local handle_ok, current, maximum = pcall(function()
+    return context.bot:mp(), context.bot:max_mp()
+  end)
+  current = tonumber(current)
+  maximum = tonumber(maximum)
+  if handle_ok and current ~= nil and maximum ~= nil and
+      current == current and maximum > 0.0 then
+    return current, maximum
   end
-  return learned, learned_count
+
+  local snapshot_ok, snapshot = pcall(
+    sd.bots.get_participant_state,
+    context.participant_id)
+  if not snapshot_ok or type(snapshot) ~= "table" then
+    return nil, nil
+  end
+  current = tonumber(snapshot.mp)
+  maximum = tonumber(snapshot.max_mp)
+  if current == nil or maximum == nil or
+      current ~= current or maximum <= 0.0 then
+    return nil, nil
+  end
+  return current, maximum
 end
 
-local function weld_offer_eligible(
-    context,
-    details,
-    learned,
-    learned_count)
-  local preference = context.shared.weld_preference
-  if preference == "avoid" or
-      type(details) ~= "table" or
-      details.pending_weld_build_id_resolved ~= true then
+local function update_mana_cast_hold(context)
+  local current, maximum = read_own_mana(context)
+  if current == nil or maximum == nil then
+    context.mana_sample_valid = false
+    context.debug.mana_sample_valid = false
     return false
   end
-  local components =
-    context.shared.policy_spell_descriptors:
-      weld_components(details.pending_weld_build_id)
-  if type(components) ~= "table" or
-      learned[components[1]] ~= true or
-      learned[components[2]] ~= true then
-    return false
+
+  local ratio = math.max(0.0, math.min(current / maximum, 1.0))
+  context.mana_sample_valid = true
+  context.debug.mana_sample_valid = true
+  context.debug.mp = current
+  context.debug.max_mp = maximum
+  context.debug.mp_ratio = ratio
+  if not context.mana_cast_hold and
+      ratio <= CAST_MANA_HOLD_LOW_RATIO then
+    context.mana_cast_hold = true
+    context.debug.mana_cast_hold = true
+    context.debug.mana_hold_start_count =
+      context.debug.mana_hold_start_count + 1
+    context.shared.log(
+      context,
+      "mana hold-start participant_id=" ..
+      tostring(context.participant_id) ..
+      " current=" .. tostring(current) ..
+      " maximum=" .. tostring(maximum) ..
+      " ratio=" .. tostring(ratio) ..
+      " low=" .. tostring(CAST_MANA_HOLD_LOW_RATIO) ..
+      " high=" .. tostring(CAST_MANA_RESUME_HIGH_RATIO))
+  elseif context.mana_cast_hold and
+      ratio >= CAST_MANA_RESUME_HIGH_RATIO then
+    context.mana_cast_hold = false
+    context.debug.mana_cast_hold = false
+    context.debug.mana_hold_end_count =
+      context.debug.mana_hold_end_count + 1
+    context.shared.log(
+      context,
+      "mana hold-end participant_id=" ..
+      tostring(context.participant_id) ..
+      " current=" .. tostring(current) ..
+      " maximum=" .. tostring(maximum) ..
+      " ratio=" .. tostring(ratio) ..
+      " low=" .. tostring(CAST_MANA_HOLD_LOW_RATIO) ..
+      " high=" .. tostring(CAST_MANA_RESUME_HIGH_RATIO))
   end
-  return preference == "prefer" or
-    (preference == "auto" and learned_count >= 2)
+  return true
 end
 
 local function choose_pending_skill(context, choices)
@@ -176,79 +198,21 @@ local function choose_pending_skill(context, choices)
       choices.pending ~= true or
       type(choices.options) ~= "table" or
       #choices.options == 0 then
-    return
+    return false
   end
   local generation = tonumber(choices.generation)
   if generation == nil or
       generation == context.last_skill_choice_generation then
-    return
+    return false
   end
 
-  local element_bands = {
-    ether = { 8, 15 },
-    fire = { 16, 23 },
-    air = { 24, 31 },
-    water = { 32, 39 },
-    earth = { 40, 47 },
-  }
-  local primary_entries = {
-    [8] = true,
-    [16] = true,
-    [24] = true,
-    [32] = true,
-    [40] = true,
-  }
-  local priority = {
-    [64] = 30, -- Health Up
-  }
-  local learned, learned_count =
-    learned_primary_state(context)
-  local details_ok, details = pcall(
-    sd.bots.get_loadout_details,
-    context.participant_id)
-  if not details_ok then
-    details = {}
-  end
-  local weld_eligible =
-    weld_offer_eligible(
-      context,
-      details,
-      learned,
-      learned_count)
-  local band = element_bands[context.row.element]
-  if band ~= nil then
-    for option_id = band[1], band[2] do
-      priority[option_id] = 10 + option_id - band[1]
-    end
-    priority[band[1]] = 1
-  end
-  local selected_index = nil
-  local selected_priority = math.huge
-  for index, option in ipairs(choices.options) do
-    local option_id = tonumber(option.id)
-    local option_priority = priority[option_id]
-    if option_id == 52 then
-      option_priority = weld_eligible and 0 or math.huge
-    elseif option_priority == nil and
-        primary_entries[option_id] == true and
-        learned[option_id] ~= true then
-      option_priority = 50 + index
-    elseif option_priority == nil and
-        primary_entries[option_id] ~= true then
-      option_priority = 100 + index
-    end
-    option_priority = option_priority or math.huge
-    if option_priority < selected_priority then
-      selected_priority = option_priority
-      selected_index = index
-    end
-  end
-  if selected_index == nil then
-    context.debug.last_error =
-      "skill choices contained no eligible deterministic option"
-    return
-  end
+  local selected_index = math.random(1, #choices.options)
   local selected = choices.options[selected_index]
+  local offered = {}
+  for _, option in ipairs(choices.options) do
+    offered[#offered + 1] =
+      tostring(type(option) == "table" and option.id or -1)
+  end
   local apply_ok, accepted
   if type(context.choose_skill) == "function" then
     apply_ok, accepted = pcall(
@@ -270,9 +234,29 @@ local function choose_pending_skill(context, choices)
       context.debug.skill_choices_accepted + 1
     context.shared.log(
       context,
-      "skill choice accepted generation=" .. tostring(generation) ..
-      " option_id=" .. tostring(selected and selected.id or -1))
+      "skill pick participant_id=" ..
+      tostring(context.participant_id) ..
+      " wave=" .. tostring(context.debug.wave or 0) ..
+      " generation=" .. tostring(generation) ..
+      " offered=[" .. table.concat(offered, ",") .. "]" ..
+      " chosen_index=" .. tostring(selected_index) ..
+      " chosen_id=" .. tostring(selected and selected.id or -1))
+    return true
+  else
+    context.debug.last_error =
+      tostring(accepted or "skill choice rejected")
+    context.shared.log(
+      context,
+      "skill pick failed participant_id=" ..
+      tostring(context.participant_id) ..
+      " wave=" .. tostring(context.debug.wave or 0) ..
+      " generation=" .. tostring(generation) ..
+      " offered=[" .. table.concat(offered, ",") .. "]" ..
+      " chosen_index=" .. tostring(selected_index) ..
+      " chosen_id=" .. tostring(selected and selected.id or -1) ..
+      " error=" .. tostring(accepted))
   end
+  return false
 end
 
 local function track_path_distance(context, bot_x, bot_y)
@@ -449,7 +433,9 @@ end
 
 local function issue_primary_cast(context, now_ms, target)
   if not context.shared.offense_enabled or
-      context.fleeing or target == nil or
+      context.fleeing or
+      not context.mana_sample_valid or
+      context.mana_cast_hold or target == nil or
       now_ms - context.last_cast_attempt_ms <
         context.profile.cast_interval_ms then
     return
@@ -545,7 +531,9 @@ local function issue_policy_cast(
   context.debug.policy_cast_probability =
     decision.cast_probability
   memory.previous_cast_action = decision.cast_action
-  if decision.cast_action == 0 or target == nil then
+  if decision.cast_action == 0 or target == nil or
+      not context.mana_sample_valid or
+      context.mana_cast_hold then
     return
   end
 
@@ -842,6 +830,8 @@ function brain.new(row, roster_index, shared, steering)
       shared.think_interval_ms,
       shared.policy_interval_ms),
     last_skill_choice_generation = -1,
+    mana_sample_valid = false,
+    mana_cast_hold = false,
     last_position_x = nil,
     last_position_y = nil,
     arena = nil,
@@ -869,6 +859,13 @@ function brain.new(row, roster_index, shared, steering)
       hp = 0.0,
       max_hp = 0.0,
       hp_ratio = 0.0,
+      mp = 0.0,
+      max_mp = 0.0,
+      mp_ratio = 0.0,
+      mana_sample_valid = false,
+      mana_cast_hold = false,
+      mana_hold_start_count = 0,
+      mana_hold_end_count = 0,
       live_enemy_count = 0,
       threat_count = 0,
       target_network_actor_id = 0,
@@ -947,10 +944,19 @@ function brain.new(row, roster_index, shared, steering)
       loot_authority_participant_id = 0,
       ally_observation_count = 0,
       secondary_beyond_primary_accepted = 0,
-      weld_preference = shared.weld_preference,
       last_error = "",
     },
   }
+end
+
+function brain.poll_skill_choice(context)
+  if context.bot == nil or context.participant_id <= 0 then
+    return false
+  end
+  update_wave_debug(context)
+  return choose_pending_skill(
+    context,
+    read_skill_choices(context))
 end
 
 function brain.reset_run(context, started)
@@ -963,6 +969,10 @@ function brain.reset_run(context, started)
   end
   context.fleeing = false
   context.death_latched = false
+  context.mana_sample_valid = false
+  context.mana_cast_hold = false
+  context.debug.mana_sample_valid = false
+  context.debug.mana_cast_hold = false
   context.last_position_x = nil
   context.last_position_y = nil
   context.last_move_attempt_ms =
@@ -1007,8 +1017,6 @@ function brain.think(
   context.last_think_ms = now_ms
 
   local wave = update_wave_debug(context)
-  local skill_choices = read_skill_choices(context)
-  choose_pending_skill(context, skill_choices)
   local is_run, scene_key = current_run_scene()
   if not is_run then
     context.debug.active = false
@@ -1037,6 +1045,7 @@ function brain.think(
   context.debug.hp = hp
   context.debug.max_hp = max_hp
   context.debug.hp_ratio = hp / max_hp
+  update_mana_cast_hold(context)
   local alive_ok, alive =
     pcall(function() return context.bot:alive() end)
   if hp <= 0.0 or (alive_ok and alive ~= true) then
@@ -1294,6 +1303,9 @@ end
 
 brain.profiles = PROFILES
 brain.choose_pending_skill = choose_pending_skill
+brain.update_mana_cast_hold = update_mana_cast_hold
+brain.cast_mana_hold_low_ratio = CAST_MANA_HOLD_LOW_RATIO
+brain.cast_mana_resume_high_ratio = CAST_MANA_RESUME_HIGH_RATIO
 brain.request_nearby_pickup = request_nearby_pickup
 
 return brain
