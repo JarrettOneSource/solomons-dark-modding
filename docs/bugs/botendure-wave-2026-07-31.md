@@ -2,7 +2,7 @@
 
 Date: 2026-07-31
 
-Status: r18 live forensics complete; wave-boundary respawn correction under gate
+Status: R25 accepted through natural Game Over at wave 116
 
 ## Scope
 
@@ -680,24 +680,58 @@ APIs. The contract fixture deliberately uses different actor and transport IDs
 and requires the local offer to be selected, closing the topology-specific gap
 that the prior same-ID unit fixture concealed.
 
-## Rerun requirement
+## R25: real Steam endurance accepted
 
-The picker, mana, normal wait indicator, and exact F9 handback changes must be
-rebuilt together and rerun through the same real launcher, lobby, and Steam
-flow. Completion still requires both Bot Play takeovers to become active through
-the mod setting, observed non-timeout random skill picks, observed mana hold and
-resume transitions when the thresholds are reached, projectile-sourced
-spell-scale origin damage plus host-applied damage from each fighter, live state
-and transport sampling throughout the match, paired milestone screenshots,
-equipped-primary persistence after every observed respawn, a verified clean
-terminal handback, and either natural Game Over or the 90-minute cap.
+R25 used the production website, desktop launchers, Steam lobby announce and
+join path, and the unpublished pre-staged Lua Bots package on workstation20.
+Both Bot Play takeovers activated through the mod setting. The exact binary
+package remained the audited `e0f1c07` build; the dynamically staged Bot Play
+and harness source was `cc51e1d`. The match ended naturally after 1,248.572
+seconds with both peers converged at wave 116.
 
-The rerun classifier performs the handback proof while both actors are alive
-and their takeover selection snapshots are pending. It presses F9 in each
-owned game window, requires the current actor and the recorded restored actor
-to match, and requires both the last-restored selection and the live actor's
-selection to equal the exact pre-takeover value. It then presses F9 again and
-requires both takeovers to reactivate before the endurance clock starts. A
-second terminal F9 leaves both peers clean for artifact collection. The same
-classifier rejects a run unless each peer records at least one random skill
-pick and a complete 10%-hold to 80%-resume mana cycle.
+Both fighters crossed the real-primary gate. The host produced 452 origin-side
+native type-2004 Fireball edges totaling 1,104 damage and 703 authoritative
+applied edges totaling 2,531 damage. The client produced 1,308 origin-side
+type-2004 edges totaling 2,968 damage and 1,099 corresponding authority-applied
+edges totaling 1,854.708099 damage. Contact-only rows were excluded from this
+classification.
+
+Every level-up barrier completed without timeout. The host made nine logged
+random choices and the client made eight; each row preserves the wave,
+generation, offered set, chosen index, and chosen skill. The host recorded
+seven 10% mana hold starts and six 80% resumes, while the client recorded three
+starts and two resumes. Each peer completed at least one full hysteresis cycle;
+the unmatched final holds ended only because the natural terminal outcome had
+already occurred.
+
+The host died and returned through live wave-boundary respawns at waves 74,
+102, and 110. All three reacquisitions retained actor `0x168D6DA0`, re-primed
+Fire entry 16 with current spell 1011, and subsequently produced authoritative
+type-2004 damage. The client HP reset from zero to 50 at authority wave zero
+only after the accepted native Game Over command and `run ended` callback; it
+is a terminal scene reset, not a respawn into continued combat.
+
+The live F9 proof and terminal F9 handback both passed on both peers after a
+native gameplay tick. Actor, target, movement, input, cast, and primary-selection
+state were clean, the exact pre-takeover selection was restored, and both live
+takeovers successfully reactivated before endurance monitoring began.
+
+Thirteen paired milestone captures were retained at waves 3, 5, 15, 25, 30,
+55, 80, 85, 90, 95, 100, 110, and 115, plus a paired natural-Game-Over frame.
+The largest milestone game-anchored interval was 242,729,614 ns and the
+terminal interval was 343,113,834 ns, both below the 1,000 ms requirement. All
+15 sampler pauses were explicit timeline windows, with a maximum duration of
+4.754 seconds and no sampler error or probe outage. Thirteen requested
+milestones were skipped because waves advanced before capture completed; those
+are controller diagnostics, not failed synchronized pairs.
+
+Exact cleanup removed both owned stages and every owned launcher/game process,
+left no reserved port or workstation task, and preserved the workstation's one
+interactive Steam client. The accepted classifier and complete artifacts are
+under `runs/steam-r25-final` in the evidence root.
+
+Six hard findings remain outside the campaign patch: the phantom duplicate
+ally HUD row, premature client enemy-death VFX, Rush-associated speed growth,
+persistent level-up sparkles, distance-triggered black player sprites, and
+arena-edge skybox bleed. They are preserved for their dedicated follow-up
+tasks and do not invalidate the corrected Bot Play endurance path.
