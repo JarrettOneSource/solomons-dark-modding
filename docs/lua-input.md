@@ -28,6 +28,14 @@ player tick, primary casts enter the native control-brain path, and secondary
 casts use the player's live belt binding and stock dispatcher. Multiplayer
 authority and replication are unchanged.
 
+`hold_movement_frames` publishes one current direction and a duration from the
+current player tick. A newer call replaces both values; repeated one-frame
+calls maintain a one-frame intent instead of accumulating a stale backlog.
+If a frame cannot be applied, it is restored only when no newer duration has
+replaced it.
+This differs deliberately from mouse clicks and binding presses, which are
+discrete queued events.
+
 When a stock run has not materialized the local actor's control brain yet, the
 takeover claim initializes it through the game's own player-actor initializer
 before accepting bot commands. Existing live control brains are left intact.

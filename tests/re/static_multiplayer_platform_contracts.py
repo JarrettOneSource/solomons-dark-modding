@@ -226,9 +226,13 @@ def test_native_local_player_keeps_stock_input_and_equipment_ownership() -> str:
         "kGameplayLocalMovementInputXOffset",
         "kGameplayLocalMovementInputYOffset",
         "pending_frames.compare_exchange_weak(",
-        "pending_frames.fetch_add(1, std::memory_order_acq_rel)",
+        "RestoreConsumedPendingFrame();",
+        ".compare_exchange_strong(",
     ):
         assert token in stock_input, f"stock local scripted input lacks: {token}"
+    assert "pending_frames.fetch_add(" not in stock_input, (
+        "movement recovery must not add duration to a newer published intent"
+    )
     _require_in_order(
         actor_tick,
         "ScopedLocalPlayerScriptedMovementInput scripted_movement_input(",

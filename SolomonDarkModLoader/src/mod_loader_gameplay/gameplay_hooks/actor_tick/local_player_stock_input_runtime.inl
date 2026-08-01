@@ -20,6 +20,7 @@ public:
                 continue;
             }
             consumed_pending_frame_ = true;
+            pending_frames_before_consumption_ = available;
             break;
         }
         if (!takeover_active_ &&
@@ -36,9 +37,7 @@ public:
                 gameplay_address_,
                 kGameplayLocalMovementInputYOffset,
                 &saved_y_)) {
-            if (consumed_pending_frame_) {
-                pending_frames.fetch_add(1, std::memory_order_acq_rel);
-            }
+            RestoreConsumedPendingFrame();
             return;
         }
 
@@ -77,9 +76,7 @@ public:
                 kGameplayLocalMovementInputYOffset,
                 saved_y_);
         }
-        if (consumed_pending_frame_) {
-            pending_frames.fetch_add(1, std::memory_order_acq_rel);
-        }
+        RestoreConsumedPendingFrame();
     }
 
     ~ScopedLocalPlayerScriptedMovementInput() {
@@ -103,10 +100,25 @@ public:
         const ScopedLocalPlayerScriptedMovementInput&) = delete;
 
 private:
+    void RestoreConsumedPendingFrame() {
+        if (!consumed_pending_frame_ ||
+            pending_frames_before_consumption_ == 0) {
+            return;
+        }
+        auto expected = pending_frames_before_consumption_ - 1;
+        (void)g_gameplay_keyboard_injection.pending_movement_frames
+            .compare_exchange_strong(
+                expected,
+                pending_frames_before_consumption_,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire);
+    }
+
     uintptr_t gameplay_address_ = 0;
     float saved_x_ = 0.0f;
     float saved_y_ = 0.0f;
     bool takeover_active_ = false;
     bool consumed_pending_frame_ = false;
+    std::uint32_t pending_frames_before_consumption_ = 0;
     bool applied_ = false;
 };

@@ -185,9 +185,9 @@ bool QueueGameplayMovementHoldFrames(
     g_gameplay_keyboard_injection.pending_movement_y.store(
         direction_y,
         std::memory_order_release);
-    g_gameplay_keyboard_injection.pending_movement_frames.fetch_add(
+    g_gameplay_keyboard_injection.pending_movement_frames.store(
         frames,
-        std::memory_order_acq_rel);
+        std::memory_order_release);
     return true;
 }
 

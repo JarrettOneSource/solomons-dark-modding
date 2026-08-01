@@ -209,6 +209,17 @@ def test_steam_rush_reuses_strict_prepared_matrix() -> str:
         'output["real_keyboard_upgraded"]',
         "COMBINED_MAX_SPEED_MULTIPLIER",
         "minimum_ranked_rush_step_ratio",
+        "def probe_repeated_movement_hold_publication(",
+        "maximum_pending_movement_frames: int = 1",
+        '"latest_direction_owned"',
+        '"pending_duration_bounded"',
+        '"movement_hold_cleared"',
+        "def wait_for_movement_hold_clear(",
+        "RUSH_SPEED_PERCENT_BY_TESTED_RANK",
+        'output["rank_series"]',
+        '"expected_combined_multiplier"',
+        '"real_keyboard_position_step"',
+        "capture_pair_backbuffers(",
     )
     required_steam_tokens = (
         "require_shared_test_run(output[\"pair\"])",

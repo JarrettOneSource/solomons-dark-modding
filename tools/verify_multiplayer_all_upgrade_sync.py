@@ -654,7 +654,11 @@ def new_crash_artifacts(started_at: float) -> list[str]:
         if not log_dir.exists():
             continue
         for path in log_dir.glob("*crash*"):
-            if path.is_file() and path.stat().st_mtime >= started_at - 0.5:
+            if (
+                path.is_file()
+                and path.stat().st_size > 0
+                and path.stat().st_mtime >= started_at - 0.5
+            ):
                 artifacts.append(str(path.relative_to(ROOT)))
     # Windows Error Reporting writes process dumps outside each isolated stage.
     # Include them so a dead process cannot be misreported as a mere pipe or

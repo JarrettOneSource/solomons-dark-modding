@@ -124,7 +124,52 @@ def equipped_primary_pair() -> dict[str, dict[str, dict[str, str]]]:
     }
 
 
+def movement_speed_pair() -> dict[str, dict[str, dict[str, str]]]:
+    return {
+        fighter: {
+            view: {
+                "actor": str(0x501000),
+                "progression": str(0x502000),
+                "actor_move_speed_scale": "1.0",
+                "actor_movement_speed_multiplier": "1.0",
+                "actor_move_step_scale": "1.0",
+                "progression_move_speed": "1.1875",
+            }
+            for view in ("owner", "observer")
+        }
+        for fighter in ("host", "client")
+    }
+
+
 class WaveBoundaryRespawnVerifierTests(unittest.TestCase):
+    def test_movement_speed_stays_equal_across_peers_and_respawn(self) -> None:
+        before = movement_speed_pair()
+        after = copy.deepcopy(before)
+
+        checked = verifier.assert_movement_speed_stable_across_boundary(
+            before=before,
+            after=after,
+        )
+
+        self.assertEqual(
+            checked["host"]["owner"]["progression_move_speed"],
+            1.1875,
+        )
+
+    def test_movement_speed_growth_across_respawn_is_rejected(self) -> None:
+        before = movement_speed_pair()
+        after = copy.deepcopy(before)
+        after["host"]["owner"]["actor_move_step_scale"] = "1.25"
+
+        with self.assertRaisesRegex(
+            local.VerifyFailure,
+            "actor_move_step_scale changed across wave respawn",
+        ):
+            verifier.assert_movement_speed_stable_across_boundary(
+                before=before,
+                after=after,
+            )
+
     def test_ports_and_generated_prefix_stay_in_the_fb25_group(self) -> None:
         self.assertEqual(
             (verifier.HOST_PORT, verifier.CLIENT_PORT),

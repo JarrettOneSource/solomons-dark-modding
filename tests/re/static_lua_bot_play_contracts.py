@@ -126,6 +126,25 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "state->primary_selection_restore_succeeded" in clean_expression
     assert "state->native_state_clear_succeeded" in clean_expression
 
+    movement_hold = input_api.split(
+        "bool QueueGameplayMovementHoldFrames(", 1
+    )[1].split(
+        "bool SetGameplayNativeControlAllowanceFrames(", 1
+    )[0]
+    assert "pending_movement_frames.store(" in movement_hold, (
+        "movement is one replaceable direction intent, so repeated hold "
+        "publication must be idempotent"
+    )
+    assert "pending_movement_frames.fetch_add(" not in movement_hold, (
+        "a single overwritten direction cannot retain additive duration"
+    )
+
+    assert "pending_movement_frames.fetch_add(" not in local_input, (
+        "failed application must not add duration to a newer movement intent"
+    )
+    assert "RestoreConsumedPendingFrame();" in local_input
+    assert ".compare_exchange_strong(" in local_input
+
     clear_start = input_api.index(
         "bool ClearLocalPlayerControlTakeoverInputState("
     )

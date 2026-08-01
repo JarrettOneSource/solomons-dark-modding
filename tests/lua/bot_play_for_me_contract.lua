@@ -267,6 +267,13 @@ assert(math.abs(calls.movement[1].x - 1.0) < 0.000001)
 assert(#calls.draws == 3)
 assert(calls.draws[3].text == "BOT PLAYING  [F9]")
 
+for tick = 2, 121 do
+  event.tick_count = tick
+  controller:tick(tick * 10, event)
+end
+assert(#calls.movement == 121)
+assert(input_state.pending_movement_frames == 1)
+
 controller:set_desired(false, "contract toggle")
 assert(not controller.active)
 assert(controller.debug.release_clean)
@@ -282,7 +289,7 @@ assert(input_state.primary_selection_restore_succeeded)
 assert(input_state.native_state_clear_succeeded)
 
 controller:set_desired(true)
-event.tick_count = 2
+event.tick_count = 122
 controller:tick(10, event)
 assert(controller.active)
 assert(controller.debug.activation_count == 2)

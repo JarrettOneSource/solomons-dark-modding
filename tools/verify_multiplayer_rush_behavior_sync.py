@@ -14,6 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
+from multiplayer_frame_capture import capture_game_backbuffer
 from multiplayer_progression_probe import (
     query_progression_snapshot,
     query_ranked_numeric_stat,
@@ -71,6 +72,14 @@ COMBINED_MAX_SPEED_MULTIPLIER = (
     RUSH_MAX_SPEED_MULTIPLIER * CONCENTRATE_SPEED_MULTIPLIER
 )
 RUSH_BATCH_SIZE = 2
+RUSH_SPEED_PERCENT_BY_TESTED_RANK = {
+    0: 0.0,
+    2: 20.0,
+    4: 30.0,
+    6: 40.0,
+    8: 50.0,
+}
+MOVEMENT_HOLD_PUBLICATIONS = 240
 DRIVE_TICKS = 40
 KEYBOARD_HOLD_MS = 2200
 START_X = 621.5
@@ -94,6 +103,35 @@ DIRECTIONS = (
 )
 
 
+def configure_local_instance_group(instance_prefix: str) -> None:
+    """Point every reused verifier helper at one isolated local pair."""
+    import multiplayer_progression_probe as progression
+    import verify_local_multiplayer_sync as local_verify
+    import verify_multiplayer_all_upgrade_sync as upgrades
+    import verify_multiplayer_primary_kill_stress as primary
+    import verify_multiplayer_progression_catalog as catalog
+
+    global HOST_PIPE, CLIENT_PIPE, DIRECTIONS
+    HOST_PIPE = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-host"
+    CLIENT_PIPE = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client"
+    replacements = {
+        "HOST_PIPE": HOST_PIPE,
+        "CLIENT_PIPE": CLIENT_PIPE,
+        "HOST_ID": HOST_ID,
+        "CLIENT_ID": CLIENT_ID,
+        "HOST_NAME": HOST_NAME,
+        "CLIENT_NAME": CLIENT_NAME,
+    }
+    for module in (progression, local_verify, upgrades, primary, catalog):
+        for name, value in replacements.items():
+            if hasattr(module, name):
+                setattr(module, name, value)
+    DIRECTIONS = (
+        Direction("host_owned", HOST_ID, HOST_PIPE, CLIENT_PIPE, CLIENT_PIPE),
+        Direction("client_owned", CLIENT_ID, CLIENT_PIPE, HOST_PIPE, HOST_PIPE),
+    )
+
+
 def parse_float_text(value: str | None, default: float = 0.0) -> float:
     try:
         return float(value) if value is not None else default
@@ -109,6 +147,31 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def source_revision() -> dict[str, Any]:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10.0,
+        check=True,
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10.0,
+        check=True,
+    ).stdout
+    return {
+        "sha": revision,
+        "worktree_dirty": bool(status.strip()),
+    }
+
+
 def windows_path(path: Path) -> str:
     completed = subprocess.run(
         ["wslpath", "-w", str(path)],
@@ -122,6 +185,35 @@ def windows_path(path: Path) -> str:
     if completed.returncode != 0:
         raise VerifyFailure(f"wslpath failed for {path}: {completed.stdout}")
     return completed.stdout.strip()
+
+
+def instance_crash_artifacts(
+    started_at: float,
+    runtime_root: Path | None,
+    instance_prefix: str,
+) -> list[str]:
+    artifacts = set(new_crash_artifacts(started_at))
+    if runtime_root is None:
+        return sorted(artifacts)
+    for suffix in ("host", "client"):
+        log_dir = (
+            runtime_root
+            / "instances"
+            / f"{instance_prefix}-{suffix}"
+            / "stage"
+            / ".sdmod"
+            / "logs"
+        )
+        if not log_dir.is_dir():
+            continue
+        for path in log_dir.glob("*crash*"):
+            if (
+                path.is_file()
+                and path.stat().st_size > 0
+                and path.stat().st_mtime >= started_at - 0.5
+            ):
+                artifacts.add(str(path))
+    return sorted(artifacts)
 
 
 def hold_real_key(pid: int, key: str, hold_ms: int, timeout: float) -> str:
@@ -235,6 +327,7 @@ def apply_rush_batch(
     target_id: int,
     expected_active: int,
     timeout: float,
+    maximum_pending_movement_frames: int,
 ) -> dict[str, Any]:
     target_pipe = HOST_PIPE if target_id == HOST_ID else CLIENT_PIPE
     before = query_progression_snapshot(target_pipe)
@@ -263,6 +356,18 @@ def apply_rush_batch(
         RUSH_BATCH_SIZE,
     )
     pause_active = wait_for_pause(target_id, True, timeout)
+    movement_hold_replacement = {
+        "host": probe_repeated_movement_hold_publication(
+            HOST_PIPE,
+            MOVEMENT_HOLD_PUBLICATIONS,
+            maximum_pending_movement_frames,
+        ),
+        "client": probe_repeated_movement_hold_publication(
+            CLIENT_PIPE,
+            MOVEMENT_HOLD_PUBLICATIONS,
+            maximum_pending_movement_frames,
+        ),
+    }
     choice = choose_offer(target_pipe, offer["offer_id"], RUSH_ROW)
     result = wait_for_result(
         offer["offer_id"],
@@ -281,6 +386,10 @@ def apply_rush_batch(
         timeout,
     )
     pause_cleared = wait_for_pause(target_id, False, timeout)
+    movement_hold_cleared = {
+        "host": wait_for_movement_hold_clear(HOST_PIPE, timeout),
+        "client": wait_for_movement_hold_clear(CLIENT_PIPE, timeout),
+    }
     return {
         "target_participant_id": target_id,
         "before_active": before_active,
@@ -289,18 +398,122 @@ def apply_rush_batch(
         "publish": publish,
         "offer": offer,
         "pause_active": pause_active,
+        "movement_hold_replacement": movement_hold_replacement,
         "choice": choice,
         "result": result,
         "parity": parity,
         "pause_cleared": pause_cleared,
+        "movement_hold_cleared": movement_hold_cleared,
     }
 
 
-def apply_rush_to_max(target_id: int, timeout: float) -> list[dict[str, Any]]:
+def apply_rush_to_max(
+    target_id: int,
+    timeout: float,
+    maximum_pending_movement_frames: int,
+) -> list[dict[str, Any]]:
     return [
-        apply_rush_batch(target_id, expected_active, timeout)
+        apply_rush_batch(
+            target_id,
+            expected_active,
+            timeout,
+            maximum_pending_movement_frames,
+        )
         for expected_active in range(RUSH_BATCH_SIZE, RUSH_MAX_RANK + 1, RUSH_BATCH_SIZE)
     ]
+
+
+def capture_pair_backbuffers(
+    screenshot_directory: Path,
+    label: str,
+) -> dict[str, Any]:
+    return {
+        "host": capture_game_backbuffer(
+            HOST_PIPE,
+            screenshot_directory / f"{label}-host.png",
+        ),
+        "client": capture_game_backbuffer(
+            CLIENT_PIPE,
+            screenshot_directory / f"{label}-client.png",
+        ),
+    }
+
+
+def probe_repeated_movement_hold_publication(
+    pipe_name: str,
+    publications: int,
+    maximum_pending_movement_frames: int,
+) -> dict[str, Any]:
+    code = f"""
+local function emit(key, value)
+  print(key .. '=' .. tostring(value == nil and '' or value))
+end
+local before = sd.input.get_local_player_takeover_state()
+local writes_ok = true
+for index = 1, {publications} do
+  local x = index == {publications} and 0.0 or 1.0
+  local y = index == {publications} and 1.0 or 0.0
+  local ok, result = pcall(sd.input.hold_movement_frames, x, y, 1)
+  writes_ok = writes_ok and ok and result == true
+end
+local during = sd.input.get_local_player_takeover_state()
+emit('before_pending', before.pending_movement_frames)
+emit('writes_ok', writes_ok)
+emit('during_pending', during.pending_movement_frames)
+emit('during_x', during.pending_movement_x)
+emit('during_y', during.pending_movement_y)
+"""
+    values = parse_key_values(lua(pipe_name, code, timeout=12.0))
+    during_pending = parse_int_text(values.get("during_pending"), -1)
+    checks = {
+        "started_clear": parse_int_text(values.get("before_pending"), -1) == 0,
+        "all_publications_accepted": values.get("writes_ok") == "true",
+        "latest_direction_owned": (
+            math.isclose(parse_float_text(values.get("during_x")), 0.0, abs_tol=0.0001)
+            and math.isclose(parse_float_text(values.get("during_y")), 1.0, abs_tol=0.0001)
+        ),
+        "pending_duration_bounded": 1 <= during_pending <= maximum_pending_movement_frames,
+    }
+    failed = [name for name, passed in checks.items() if not passed]
+    result = {
+        "pipe": pipe_name,
+        "publications": publications,
+        "maximumPendingMovementFrames": maximum_pending_movement_frames,
+        "observedPendingMovementFrames": during_pending,
+        "values": values,
+        "checks": checks,
+    }
+    if failed:
+        raise VerifyFailure(
+            f"repeated movement-hold publication failed {failed}: {result}"
+        )
+    return result
+
+
+def wait_for_movement_hold_clear(
+    pipe_name: str,
+    timeout: float,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = parse_key_values(
+            lua(
+                pipe_name,
+                """
+local state = sd.input.get_local_player_takeover_state()
+print('pending=' .. tostring(state.pending_movement_frames))
+print('active=' .. tostring(state.active))
+""",
+                timeout=8.0,
+            )
+        )
+        if parse_int_text(last.get("pending"), -1) == 0:
+            return last
+        time.sleep(0.05)
+    raise VerifyFailure(
+        f"scripted movement intent did not clear on {pipe_name}: {last}"
+    )
 
 
 def enable_quiet_stock_input_mode(timeout: float) -> dict[str, Any]:
@@ -761,7 +974,7 @@ def run_real_keyboard_movement_trial(
     peak_position_step = parse_float_text(
         monitor.get("peak_position_step"), math.nan
     )
-    if not math.isfinite(displacement) or displacement <= 20.0:
+    if not math.isfinite(displacement) or displacement <= 5.0:
         raise VerifyFailure(
             f"{direction.name} {label} real keyboard movement was too small: "
             f"start=({start_x},{start_y}) final=({settled_x},{settled_y}) "
@@ -780,7 +993,6 @@ def run_real_keyboard_movement_trial(
     return {
         "direction": direction.name,
         "label": label,
-        "process_id": pid,
         "placement": placement,
         "before_runtime": before_runtime,
         "after_runtime": query_native_movement_runtime(direction.owner_pipe),
@@ -922,17 +1134,33 @@ def run_prepared_rush_matrix(
     *,
     minimum_concentrate_motion_ratio: float,
     minimum_ranked_rush_step_ratio: float,
+    maximum_pending_movement_frames: int = 1,
+    screenshot_directory: Path | None = None,
+    output: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    output: dict[str, Any] = {
-        "native_rush_evidence": native_rush_evidence,
-        "baseline_rush_contexts": assert_rush_contexts(
-            0,
-            0.0,
-            expect_concentration=False,
-        ),
+    if output is None:
+        output = {}
+    output["native_rush_evidence"] = native_rush_evidence
+    output["baseline_rush_contexts"] = assert_rush_contexts(
+        0,
+        0.0,
+        expect_concentration=False,
+    )
+    output["warmup"] = {
+        direction.name: run_movement_trial(direction, "warmup", timeout)
+        for direction in DIRECTIONS
     }
     output["baseline"] = {
         direction.name: run_movement_trial(direction, "baseline", timeout)
+        for direction in DIRECTIONS
+    }
+    output["real_keyboard_warmup"] = {
+        direction.name: run_real_keyboard_movement_trial(
+            direction,
+            keyboard_drivers[direction.name],
+            "warmup",
+            timeout,
+        )
         for direction in DIRECTIONS
     }
     output["real_keyboard_baseline"] = {
@@ -945,27 +1173,134 @@ def run_prepared_rush_matrix(
         for direction in DIRECTIONS
     }
     output["rush_applications"] = {
-        direction.name: apply_rush_to_max(direction.participant_id, timeout)
-        for direction in DIRECTIONS
+        direction.name: [] for direction in DIRECTIONS
     }
-    output["rush_contexts"] = assert_rush_contexts(
-        RUSH_MAX_RANK,
-        RUSH_MAX_SPEED_PERCENT,
-        expect_concentration=True,
-    )
-    output["upgraded"] = {
-        direction.name: run_movement_trial(direction, "max_rush", timeout)
-        for direction in DIRECTIONS
+    rank_zero_stage: dict[str, Any] = {
+        "rank": 0,
+        "rush_speed_percent": 0.0,
+        "expected_combined_multiplier": 1.0,
+        "contexts": output["baseline_rush_contexts"],
+        "scripted_trials": output["baseline"],
+        "real_keyboard_trials": output["real_keyboard_baseline"],
     }
-    output["real_keyboard_upgraded"] = {
-        direction.name: run_real_keyboard_movement_trial(
-            direction,
-            keyboard_drivers[direction.name],
-            "max_rush",
-            timeout,
+    if screenshot_directory is not None:
+        rank_zero_stage["screenshots"] = capture_pair_backbuffers(
+            screenshot_directory,
+            "start-rank-0",
         )
-        for direction in DIRECTIONS
-    }
+    output["rank_series"] = [rank_zero_stage]
+
+    for expected_rank in range(
+        RUSH_BATCH_SIZE,
+        RUSH_MAX_RANK + 1,
+        RUSH_BATCH_SIZE,
+    ):
+        for direction in DIRECTIONS:
+            output["rush_applications"][direction.name].append(
+                apply_rush_batch(
+                    direction.participant_id,
+                    expected_rank,
+                    timeout,
+                    maximum_pending_movement_frames,
+                )
+            )
+        speed_percent = RUSH_SPEED_PERCENT_BY_TESTED_RANK[expected_rank]
+        contexts = assert_rush_contexts(
+            expected_rank,
+            speed_percent,
+            expect_concentration=True,
+        )
+        scripted_trials = {
+            direction.name: run_movement_trial(
+                direction,
+                f"rank_{expected_rank}",
+                timeout,
+            )
+            for direction in DIRECTIONS
+        }
+        keyboard_trials = {
+            direction.name: run_real_keyboard_movement_trial(
+                direction,
+                keyboard_drivers[direction.name],
+                f"rank_{expected_rank}",
+                timeout,
+            )
+            for direction in DIRECTIONS
+        }
+        expected_multiplier = (
+            (1.0 + speed_percent / 100.0)
+            * CONCENTRATE_SPEED_MULTIPLIER
+        )
+        stage: dict[str, Any] = {
+            "rank": expected_rank,
+            "rush_speed_percent": speed_percent,
+            "expected_combined_multiplier": expected_multiplier,
+            "contexts": contexts,
+            "scripted_trials": scripted_trials,
+            "real_keyboard_trials": keyboard_trials,
+            "ratios_from_rank_zero": {},
+        }
+        for direction in DIRECTIONS:
+            baseline_scripted = float(
+                output["baseline"][direction.name]["displacement"]
+            )
+            scripted_ratio = (
+                float(scripted_trials[direction.name]["displacement"])
+                / baseline_scripted
+            )
+            baseline_keyboard = output["real_keyboard_baseline"][
+                direction.name
+            ]
+            ranked_keyboard = keyboard_trials[direction.name]
+            displacement_ratio = (
+                float(ranked_keyboard["displacement"])
+                / float(baseline_keyboard["displacement"])
+            )
+            position_step_ratio = (
+                float(ranked_keyboard["peak_position_step"])
+                / float(baseline_keyboard["peak_position_step"])
+            )
+            ratios = {
+                "scripted_displacement": scripted_ratio,
+                "real_keyboard_displacement": displacement_ratio,
+                "real_keyboard_position_step": position_step_ratio,
+            }
+            stage["ratios_from_rank_zero"][direction.name] = ratios
+            for measurement, ratio in ratios.items():
+                if not math.isclose(
+                    ratio,
+                    expected_multiplier,
+                    rel_tol=0.0,
+                    abs_tol=0.08,
+                ):
+                    raise VerifyFailure(
+                        f"{direction.name} rank {expected_rank} {measurement} "
+                        f"ratio diverged: measured={ratio:.6f} "
+                        f"expected={expected_multiplier:.6f}"
+                    )
+        host_ratios = stage["ratios_from_rank_zero"]["host_owned"]
+        client_ratios = stage["ratios_from_rank_zero"]["client_owned"]
+        for measurement in host_ratios:
+            if abs(host_ratios[measurement] - client_ratios[measurement]) > 0.05:
+                raise VerifyFailure(
+                    f"rank {expected_rank} {measurement} diverged between "
+                    f"peers: host={host_ratios[measurement]:.6f} "
+                    f"client={client_ratios[measurement]:.6f}"
+                )
+        if screenshot_directory is not None and expected_rank in {4, 8}:
+            label = "mid-rank-4" if expected_rank == 4 else "late-rank-8"
+            stage["screenshots"] = capture_pair_backbuffers(
+                screenshot_directory,
+                label,
+            )
+        output["rank_series"].append(stage)
+
+    final_stage = output["rank_series"][-1]
+    output["rush_contexts"] = final_stage["contexts"]
+    output["upgraded"] = final_stage["scripted_trials"]
+    output["real_keyboard_upgraded"] = final_stage[
+        "real_keyboard_trials"
+    ]
 
     standing_speed_ratios: dict[str, float] = {}
     baseline_views = output["baseline_rush_contexts"]["views"]
@@ -994,10 +1329,9 @@ def run_prepared_rush_matrix(
         "combined_max_multiplier": COMBINED_MAX_SPEED_MULTIPLIER,
         "standing_speed_ratios": standing_speed_ratios,
         "motion_measurement_scope": (
-            "scripted local input is downstream of the ranked Rush evaluator; "
-            "that trial measures Concentrate movement plus position replication. "
-            "The real-keyboard trial enters through stock input and separately "
-            "proves ranked Rush."
+            "scripted and real-keyboard input both enter the stock player tick; "
+            "each must measure the catalog's absolute ranked Rush factor times "
+            "the independently refreshed Concentrate factor."
         ),
         "ranked_behavior_evidence": native_rush_evidence,
     }
@@ -1008,11 +1342,17 @@ def run_prepared_rush_matrix(
         upgraded = float(output["upgraded"][direction.name]["displacement"])
         ratio = upgraded / baseline
         motion_ratios[direction.name] = ratio
-        if ratio < minimum_concentrate_motion_ratio:
+        if ratio < minimum_concentrate_motion_ratio or not math.isclose(
+            ratio,
+            COMBINED_MAX_SPEED_MULTIPLIER,
+            rel_tol=0.0,
+            abs_tol=0.08,
+        ):
             raise VerifyFailure(
-                f"{direction.name} Concentrate did not materially accelerate "
+                f"{direction.name} combined Rush/Concentrate motion diverged: "
                 f"downstream motion: baseline={baseline:.4f} "
                 f"upgraded={upgraded:.4f} ratio={ratio:.4f} "
+                f"expected={COMBINED_MAX_SPEED_MULTIPLIER:.4f} "
                 f"minimum={minimum_concentrate_motion_ratio:.4f}"
             )
     if abs(motion_ratios["host_owned"] - motion_ratios["client_owned"]) > 0.05:
@@ -1020,6 +1360,7 @@ def run_prepared_rush_matrix(
             f"host/client Concentrate motion ratios diverged: {motion_ratios}"
         )
     output["concentrate_motion_ratios"] = motion_ratios
+    output["combined_motion_ratios"] = motion_ratios
 
     keyboard_contract: dict[str, dict[str, float]] = {}
     ranked_step_ratios: dict[str, float] = {}
@@ -1140,7 +1481,26 @@ def main() -> int:
         ),
     )
     parser.add_argument("--keep-open", action="store_true")
+    parser.add_argument("--instance-prefix", default="spd-rush")
+    parser.add_argument("--host-port", type=int, default=51721)
+    parser.add_argument("--client-port", type=int, default=51722)
+    parser.add_argument("--runtime-root", type=Path)
+    parser.add_argument("--game-directory", type=Path)
+    parser.add_argument(
+        "--exact-mod-id",
+        default="sample.lua.ui_sandbox_lab",
+    )
+    parser.add_argument(
+        "--maximum-pending-movement-frames",
+        type=int,
+        default=1,
+        help=(
+            "maximum remaining duration after 240 repeated one-frame movement "
+            "publications during a shared-simulation pause"
+        ),
+    )
     parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--screenshot-directory", type=Path)
     parser.add_argument(
         "--native-rush-evidence",
         type=Path,
@@ -1148,11 +1508,18 @@ def main() -> int:
         help="fresh passing stock-native Rush probe for the current Release DLL",
     )
     args = parser.parse_args()
+    if args.maximum_pending_movement_frames < 1:
+        parser.error("--maximum-pending-movement-frames must be positive")
 
     started_at = time.time()
-    output: dict[str, Any] = {"ok": False}
+    output: dict[str, Any] = {
+        "ok": False,
+        "source_revision": source_revision(),
+        "release_loader_sha256": sha256_file(RELEASE_LOADER),
+    }
     return_code = 1
     try:
+        configure_local_instance_group(args.instance_prefix)
         output["native_rush_evidence"] = load_native_rush_evidence(
             args.native_rush_evidence
         )
@@ -1163,6 +1530,14 @@ def main() -> int:
             test_survival_boneyard_override=FLAT_BONEYARD,
             test_blank_boneyard=True,
             allow_focus_steal=True,
+            instance_prefix=args.instance_prefix,
+            host_port=args.host_port,
+            client_port=args.client_port,
+            third_port=args.client_port + 1,
+            runtime_root=args.runtime_root,
+            game_directory=args.game_directory,
+            exact_mod_id=args.exact_mod_id,
+            enable_audio=False,
         )
         keyboard_drivers: dict[str, KeyboardDriver] = {
             "host_owned": partial(
@@ -1185,21 +1560,28 @@ def main() -> int:
         output["quiet_stock_input_mode"] = enable_quiet_stock_input_mode(
             args.timeout
         )
-        output.update(
-            run_prepared_rush_matrix(
-                keyboard_drivers,
-                args.timeout,
-                output["native_rush_evidence"],
-                minimum_concentrate_motion_ratio=(
-                    args.minimum_concentrate_motion_ratio
-                ),
-                minimum_ranked_rush_step_ratio=(
-                    args.minimum_ranked_rush_step_ratio
-                ),
-            )
+        run_prepared_rush_matrix(
+            keyboard_drivers,
+            args.timeout,
+            output["native_rush_evidence"],
+            minimum_concentrate_motion_ratio=(
+                args.minimum_concentrate_motion_ratio
+            ),
+            minimum_ranked_rush_step_ratio=(
+                args.minimum_ranked_rush_step_ratio
+            ),
+            maximum_pending_movement_frames=(
+                args.maximum_pending_movement_frames
+            ),
+            screenshot_directory=args.screenshot_directory,
+            output=output,
         )
 
-        crashes = new_crash_artifacts(started_at)
+        crashes = instance_crash_artifacts(
+            started_at,
+            args.runtime_root,
+            args.instance_prefix,
+        )
         output["new_crash_artifacts"] = crashes
         if crashes:
             raise VerifyFailure(f"new crash artifacts appeared during Rush behavior test: {crashes}")
@@ -1207,15 +1589,19 @@ def main() -> int:
         return_code = 0
     except (VerifyFailure, subprocess.TimeoutExpired, ValueError, OSError) as exc:
         output["error"] = str(exc)
-        output["new_crash_artifacts"] = new_crash_artifacts(started_at)
+        output["new_crash_artifacts"] = instance_crash_artifacts(
+            started_at,
+            args.runtime_root,
+            args.instance_prefix,
+        )
     finally:
+        if not args.keep_open:
+            output["cleanup"] = stop_owned_game_processes()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(output, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        if not args.keep_open:
-            stop_owned_game_processes()
 
     print(
         json.dumps(

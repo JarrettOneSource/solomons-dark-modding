@@ -256,6 +256,37 @@ emit("primary_visual_type_id",
   visual and visual.primary_visual_lane and
     visual.primary_visual_lane.current_object_type_id or 0)
 """
+MOVEMENT_SPEED_STATE_PROBE = r"""
+local requested_participant_id = __PARTICIPANT_ID__
+local expected_owner_view = __OWNER_VIEW__
+local function emit(key, value)
+  print(key .. "=" .. tostring(value == nil and "" or value))
+end
+local player = expected_owner_view and sd.player.get_state() or nil
+local participant = not expected_owner_view and
+  sd.bots.get_participant_state(requested_participant_id) or nil
+local actor = tonumber(
+  expected_owner_view and player and player.actor_address or
+  participant and participant.actor_address) or 0
+local progression = tonumber(
+  expected_owner_view and player and player.progression_address or
+  participant and participant.progression_runtime_state_address) or 0
+local function off(name) return sd.debug.layout_offset(name) end
+emit("actor", actor)
+emit("progression", progression)
+if actor ~= 0 then
+  emit("actor_move_speed_scale",
+    sd.debug.read_float(actor + off("actor_move_speed_scale")))
+  emit("actor_movement_speed_multiplier",
+    sd.debug.read_float(actor + off("actor_movement_speed_multiplier")))
+  emit("actor_move_step_scale",
+    sd.debug.read_float(actor + off("actor_move_step_scale")))
+end
+if progression ~= 0 then
+  emit("progression_move_speed",
+    sd.debug.read_float(progression + off("progression_move_speed")))
+end
+"""
 
 PRIMARY_PERSISTENCE_KEYS = (
     "primary_entry",
@@ -275,6 +306,12 @@ PRIMARY_CROSS_PEER_KEYS = tuple(
     key
     for key in PRIMARY_PERSISTENCE_KEYS
     if key != "primary_visual_type_id"
+)
+MOVEMENT_SPEED_KEYS = (
+    "actor_move_speed_scale",
+    "actor_movement_speed_multiplier",
+    "actor_move_step_scale",
+    "progression_move_speed",
 )
 
 
@@ -496,6 +533,128 @@ def _query_equipped_primary_views(
             participant_id,
             owner_view=False,
         ),
+    }
+
+
+def _query_movement_speed_view(
+    pipe_name: str,
+    participant_id: int,
+    *,
+    owner_view: bool,
+) -> dict[str, str]:
+    return parse_key_values(
+        lua(
+            pipe_name,
+            MOVEMENT_SPEED_STATE_PROBE.replace(
+                "__PARTICIPANT_ID__",
+                str(participant_id),
+            ).replace(
+                "__OWNER_VIEW__",
+                "true" if owner_view else "false",
+            ),
+            timeout=8.0,
+        )
+    )
+
+
+def _query_movement_speed_views(
+    *,
+    host_pipe: str,
+    client_pipe: str,
+) -> dict[str, dict[str, dict[str, str]]]:
+    return {
+        "host": {
+            "owner": _query_movement_speed_view(
+                host_pipe, HOST_ID, owner_view=True
+            ),
+            "observer": _query_movement_speed_view(
+                client_pipe, HOST_ID, owner_view=False
+            ),
+        },
+        "client": {
+            "owner": _query_movement_speed_view(
+                client_pipe, CLIENT_ID, owner_view=True
+            ),
+            "observer": _query_movement_speed_view(
+                host_pipe, CLIENT_ID, owner_view=False
+            ),
+        },
+    }
+
+
+def assert_movement_speed_stable_across_boundary(
+    *,
+    before: Mapping[str, Mapping[str, Mapping[str, str]]],
+    after: Mapping[str, Mapping[str, Mapping[str, str]]],
+) -> dict[str, Any]:
+    checked: dict[str, Any] = {}
+    for fighter in ("host", "client"):
+        checked[fighter] = {}
+        for view in ("owner", "observer"):
+            before_view = before[fighter][view]
+            after_view = after[fighter][view]
+            if (
+                _integer(before_view, "actor") == 0
+                or _integer(after_view, "actor") == 0
+                or _integer(before_view, "progression") == 0
+                or _integer(after_view, "progression") == 0
+            ):
+                raise VerifyFailure(
+                    f"{fighter} {view} movement-speed state was unavailable: "
+                    f"before={dict(before_view)} after={dict(after_view)}"
+                )
+            values: dict[str, float] = {}
+            for key in MOVEMENT_SPEED_KEYS:
+                before_value = _number(before_view, key)
+                after_value = _number(after_view, key)
+                if (
+                    not math.isfinite(before_value)
+                    or before_value <= 0.0
+                    or not math.isclose(
+                        before_value,
+                        after_value,
+                        rel_tol=0.0,
+                        abs_tol=0.001,
+                    )
+                ):
+                    raise VerifyFailure(
+                        f"{fighter} {view} {key} changed across wave respawn: "
+                        f"before={before_value} after={after_value}"
+                    )
+                values[key] = after_value
+            checked[fighter][view] = values
+        for key in MOVEMENT_SPEED_KEYS:
+            owner_value = checked[fighter]["owner"][key]
+            observer_value = checked[fighter]["observer"][key]
+            if not math.isclose(
+                owner_value,
+                observer_value,
+                rel_tol=0.0,
+                abs_tol=0.001,
+            ):
+                raise VerifyFailure(
+                    f"{fighter} {key} diverged between peers after respawn: "
+                    f"owner={owner_value} observer={observer_value}"
+                )
+    return checked
+
+
+def _probe_repeated_movement_hold_publication(
+    pipe_name: str,
+) -> dict[str, Any]:
+    from verify_multiplayer_rush_behavior_sync import (
+        MOVEMENT_HOLD_PUBLICATIONS,
+        probe_repeated_movement_hold_publication,
+        wait_for_movement_hold_clear,
+    )
+
+    return {
+        "publication": probe_repeated_movement_hold_publication(
+            pipe_name,
+            MOVEMENT_HOLD_PUBLICATIONS,
+            1,
+        ),
+        "clear": wait_for_movement_hold_clear(pipe_name, 8.0),
     }
 
 
@@ -1602,6 +1761,21 @@ def run_live_verification(
             result["equipped_primary_before_boundary"] = (
                 equipped_primary_before
             )
+            movement_speed_before = _query_movement_speed_views(
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
+            )
+            result["movement_speed_before_boundary"] = (
+                movement_speed_before
+            )
+            result["movement_hold_before_boundary"] = {
+                "host": _probe_repeated_movement_hold_publication(
+                    host_pipe
+                ),
+                "client": _probe_repeated_movement_hold_publication(
+                    client_pipe
+                ),
+            }
 
             result["client_survival_hold_disabled"] = (
                 _set_survival_hold(
@@ -1748,6 +1922,27 @@ def run_live_verification(
                     after=equipped_primary_after,
                 )
             )
+            movement_speed_after = _query_movement_speed_views(
+                host_pipe=host_pipe,
+                client_pipe=client_pipe,
+            )
+            result["movement_speed_after_respawn"] = (
+                movement_speed_after
+            )
+            result["movement_speed_stability"] = (
+                assert_movement_speed_stable_across_boundary(
+                    before=movement_speed_before,
+                    after=movement_speed_after,
+                )
+            )
+            result["movement_hold_after_respawn"] = {
+                "host": _probe_repeated_movement_hold_publication(
+                    host_pipe
+                ),
+                "client": _probe_repeated_movement_hold_publication(
+                    client_pipe
+                ),
+            }
             result["ok"] = True
             return result
         finally:
