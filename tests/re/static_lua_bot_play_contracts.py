@@ -280,9 +280,9 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
         "ApplyManualSpawnerPrimaryTargetState(",
     )
     assert (
-        '"Multiplayer local pure-primary cast not queued: stock "'
+        '"Multiplayer local pure-primary cast not queued: stock emitted no '
+        'matching projectile. actor="'
     ) in control
-    assert '"emitted no matching projectile. actor="' in control
     _require_in_order(
         control,
         "original(self, param2, param3);",
