@@ -88,6 +88,11 @@ class LoadingScreenContractTests(unittest.TestCase):
             / "SolomonDarkModLoader/src/multiplayer_join_flow/"
             "loading_screen_progress.inl"
         ).read_text(encoding="utf-8")
+        phase = (
+            ROOT
+            / "SolomonDarkModLoader/src/multiplayer_join_flow/"
+            "phase_state.inl"
+        ).read_text(encoding="utf-8")
         tick = (
             ROOT
             / "SolomonDarkModLoader/src/multiplayer_join_flow/"
@@ -99,7 +104,8 @@ class LoadingScreenContractTests(unittest.TestCase):
             "run_loading_barrier_sync.inl"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("loading_screen_progress.inl", join)
+        self.assertIn("phase_state.inl", join)
+        self.assertIn("loading_screen_progress.inl", phase)
         self.assertIn("UpdateLoadingScreenForRuntime", tick)
         self.assertIn("LoadingScreenStage::ConnectingTransport", progress)
         for token in (

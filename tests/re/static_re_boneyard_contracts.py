@@ -365,7 +365,7 @@ def test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime() ->
         "LoadingScreenStage::ReceivingWaveCheckpoint",
     )
     if (
-        "loading_screen_progress.inl" not in join_flow
+        "phase_state.inl" not in join_flow
         or any(token not in join_progress for token in required_multiplayer)
     ):
         raise StaticReTestFailure(

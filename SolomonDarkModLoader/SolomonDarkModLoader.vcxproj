@@ -140,6 +140,8 @@
     <ClInclude Include="src\lua_engine\lua_exec_target.inl" />
     <ClInclude Include="include\multiplayer_native_minion_state.inl" />
     <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl" />
+    <ClInclude Include="src\multiplayer_join_flow\loadout_picker.inl" />
+    <ClInclude Include="src\multiplayer_join_flow\phase_state.inl" />
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl" />
     <ClInclude Include="include\wave_intelligence.h" />
     <ClInclude Include="src\multiplayer_local_transport\wave_summary_sync.inl" />

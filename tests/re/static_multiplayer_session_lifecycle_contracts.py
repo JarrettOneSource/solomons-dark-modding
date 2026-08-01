@@ -41,6 +41,10 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
     )
     join_flow_state = _read(
         "SolomonDarkModLoader/src/multiplayer_join_flow.cpp"
+    ) + _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/loadout_picker.inl"
+    ) + _read(
+        "SolomonDarkModLoader/src/multiplayer_join_flow/phase_state.inl"
     )
     debug_ui_header = _read(
         "SolomonDarkModLoader/include/debug_ui_overlay.h"

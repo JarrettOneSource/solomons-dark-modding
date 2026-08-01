@@ -269,6 +269,12 @@
     <ClInclude Include="src\multiplayer_join_flow\loading_screen_progress.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_join_flow\loadout_picker.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_join_flow\phase_state.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_join_flow\tick_state_machine.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>

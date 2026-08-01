@@ -44,10 +44,7 @@ enum class ParticipantSceneIntentKind : std::int32_t {
 };
 
 enum class LoadoutPickState : std::uint8_t {
-    NotStarted = 0,
-    Picking = 1,
-    Picked = 2,
-    WorldReady = 3,
+    NotStarted = 0, Picking = 1, Picked = 2, WorldReady = 3,
 };
 
 struct CharacterAppearanceInfo {
