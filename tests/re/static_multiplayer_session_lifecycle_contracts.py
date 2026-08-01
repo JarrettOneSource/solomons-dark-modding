@@ -179,6 +179,9 @@ def test_match_end_preserves_lobby_and_reports_explicit_activity_state() -> str:
             "g_join_flow.last_committed_element = element_selected;",
             "g_join_flow.last_committed_discipline = discipline_selected;",
             "TryReadCreatePoint(",
+            "ClosestCreatePointDistanceSquared<",
+            "discipline_distance_squared <\n"
+            "                         element_distance_squared",
             "replay_retained_element",
             "retained_element_x",
             "retained_element_y",

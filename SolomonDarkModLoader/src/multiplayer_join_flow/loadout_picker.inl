@@ -264,12 +264,14 @@ void ObserveCreateOwnerUnlocked(std::uintptr_t owner_address) {
 }
 
 template <std::size_t PointCount>
-bool IsCreatePointHit(
+float ClosestCreatePointDistanceSquared(
     std::uintptr_t owner_address,
     std::size_t point_list_offset,
     std::int32_t x,
     std::int32_t y) {
     auto& memory = ProcessMemory::Instance();
+    auto closest_distance_squared =
+        (std::numeric_limits<float>::max)();
     for (std::size_t index = 0; index < PointCount; ++index) {
         const auto point_address =
             owner_address + point_list_offset +
@@ -288,12 +290,11 @@ bool IsCreatePointHit(
             static_cast<float>(x) - point_x;
         const auto delta_y =
             static_cast<float>(y) - point_y;
-        if (delta_x * delta_x + delta_y * delta_y <=
-            kCreateSelectionRadius * kCreateSelectionRadius) {
-            return true;
-        }
+        closest_distance_squared = (std::min)(
+            closest_distance_squared,
+            delta_x * delta_x + delta_y * delta_y);
     }
-    return false;
+    return closest_distance_squared;
 }
 
 bool TryReadCreatePoint(
@@ -426,24 +427,32 @@ void __fastcall HookCreateClick(
                 IsCompletedCreateSelection(
                     discipline_selected,
                     kCreateDisciplinePointCount)) {
-                if (IsCreatePointHit<kCreateElementPointCount>(
-                        owner_address,
-                        kCreateElementPointListOffset,
-                        x,
-                        y)) {
-                    retained_element_change =
-                        g_join_flow.retained_preselection_active;
-                    valid_selection_attempt =
-                        ProcessMemory::Instance().TryWriteField(
+                const auto element_distance_squared =
+                    ClosestCreatePointDistanceSquared<
+                        kCreateElementPointCount>(
                             owner_address,
-                            kCreateElementSelectedOffset,
-                            kCreateSelectionUnset);
-                } else if (
-                    IsCreatePointHit<kCreateDisciplinePointCount>(
-                        owner_address,
-                        kCreateDisciplinePointListOffset,
-                        x,
-                        y)) {
+                            kCreateElementPointListOffset,
+                            x,
+                            y);
+                const auto discipline_distance_squared =
+                    ClosestCreatePointDistanceSquared<
+                        kCreateDisciplinePointCount>(
+                            owner_address,
+                            kCreateDisciplinePointListOffset,
+                            x,
+                            y);
+                const auto selection_radius_squared =
+                    kCreateSelectionRadius * kCreateSelectionRadius;
+                const bool element_hit =
+                    element_distance_squared <= selection_radius_squared;
+                const bool discipline_hit =
+                    discipline_distance_squared <= selection_radius_squared;
+                // Both stock groups are exposed for retained picks, so their
+                // hit radii can overlap. The closest stock point owns the click.
+                if (discipline_hit &&
+                    (!element_hit ||
+                     discipline_distance_squared <
+                         element_distance_squared)) {
                     if (g_join_flow.retained_preselection_active) {
                         valid_selection_attempt =
                             TryReadCreatePoint(
@@ -477,6 +486,14 @@ void __fastcall HookCreateClick(
                                 kCreateDisciplineSelectedOffset,
                                 kCreateSelectionUnset);
                     }
+                } else if (element_hit) {
+                    retained_element_change =
+                        g_join_flow.retained_preselection_active;
+                    valid_selection_attempt =
+                        ProcessMemory::Instance().TryWriteField(
+                            owner_address,
+                            kCreateElementSelectedOffset,
+                            kCreateSelectionUnset);
                 }
             } else {
                 valid_selection_attempt = true;
