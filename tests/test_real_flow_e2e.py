@@ -46,6 +46,7 @@ from tools.verify_real_flow_e2e import (
     _assert_clean_release,
     _drain_authority_damage_log,
     _native_enemy_render_assertion,
+    _real_primary_damage_metrics,
     _replicated_damage_participant_ids,
     _try_endurance_probe_bundle,
     validate_living_wave_boundary,
@@ -1531,10 +1532,86 @@ class RealFlowE2ETests(unittest.TestCase):
                         "targetHpAfter": 1.5,
                         "damage": 1.0,
                         "claimedDamage": 1.0,
+                        "sourceNativeTypeId": 0,
+                        "sourceOwnerNativeTypeId": 0,
+                        "sourceGameplaySlot": -1,
                         "evidenceSource": "host-authority-log",
+                        "evidencePeer": "host",
+                        "authoritative": True,
                     }
                 ],
             )
+
+    def test_real_primary_damage_rejects_contact_only_edges(self) -> None:
+        config = SimpleNamespace(
+            host=SimpleNamespace(loadout_element="fire"),
+            client=SimpleNamespace(loadout_element="fire"),
+        )
+        participant_ids = {"host": 11, "clientB": 22}
+        contact_rows = {
+            role: [
+                {
+                    "sourceParticipantId": participant_ids[role],
+                    "sourceNativeTypeId": 1,
+                    "damage": 1.0,
+                }
+            ]
+            for role in participant_ids
+        }
+
+        with self.assertRaisesRegex(
+            RealFlowFailure,
+            "real projectile-sourced",
+        ):
+            _real_primary_damage_metrics(
+                config,
+                [
+                    {
+                        "sourceParticipantId": participant_id,
+                        "damage": 1.0,
+                        "authoritative": True,
+                    }
+                    for participant_id in participant_ids.values()
+                ],
+                contact_rows,
+                participant_ids,
+            )
+
+    def test_real_primary_damage_requires_origin_and_authority(self) -> None:
+        config = SimpleNamespace(
+            host=SimpleNamespace(loadout_element="fire"),
+            client=SimpleNamespace(loadout_element="fire"),
+        )
+        participant_ids = {"host": 11, "clientB": 22}
+        origins = {
+            role: [
+                {
+                    "sourceParticipantId": participant_ids[role],
+                    "sourceNativeTypeId": 0x7D4,
+                    "damage": 4.0,
+                }
+            ]
+            for role in participant_ids
+        }
+        metrics = _real_primary_damage_metrics(
+            config,
+            [
+                {
+                    "sourceParticipantId": participant_id,
+                    "damage": 4.0,
+                    "authoritative": True,
+                }
+                for participant_id in participant_ids.values()
+            ],
+            origins,
+            participant_ids,
+        )
+
+        self.assertEqual(metrics["missing"], [])
+        self.assertEqual(
+            metrics["fighters"]["clientB"]["expectedSourceNativeTypeId"],
+            0x7D4,
+        )
 
     def test_cleanup_accepts_a_process_that_exits_before_close(
         self,

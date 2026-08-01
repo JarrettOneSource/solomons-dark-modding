@@ -500,6 +500,29 @@ def test_queued_mouse_holds_use_player_tick_duration() -> str:
     if pure_primary_hook_start == -1:
         raise StaticReTestFailure("pure-primary start hook was not found")
     pure_primary_hook = player_control_text[pure_primary_hook_start:]
+    required_emission_tokens = (
+        "ApplyLocalPlayerControlTakeoverPrimarySelection(actor_address);",
+        "TryListPurePrimaryProjectileActorAddressesInScene(",
+        "TryFindNewPurePrimaryProjectileActorInScene(",
+        "if (local_projectile_emitted)",
+        "stock emitted no matching projectile",
+    )
+    missing_emission_tokens = [
+        token for token in required_emission_tokens
+        if token not in pure_primary_hook
+    ]
+    if missing_emission_tokens:
+        raise StaticReTestFailure(
+            "local pure-primary capture lacks native emission proof: "
+            + ", ".join(missing_emission_tokens))
+    original_call = pure_primary_hook.find("original(self);")
+    emission_check = pure_primary_hook.find(
+        "TryFindNewPurePrimaryProjectileActorInScene(")
+    packet_queue = pure_primary_hook.find(
+        "QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);")
+    if not (0 <= original_call < emission_check < packet_queue):
+        raise StaticReTestFailure(
+            "local primary packet capture must follow stock projectile emission")
     local_player_log_guard = (
         "local_actor_address == actor_address &&\n"
         "            g_pure_primary_control_log_budget > 0"

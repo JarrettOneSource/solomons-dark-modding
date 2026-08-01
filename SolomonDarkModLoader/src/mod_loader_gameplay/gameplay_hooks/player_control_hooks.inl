@@ -1049,6 +1049,50 @@ bool TryResolveLocalPlayerPrimaryCastDescriptor(
         descriptor);
 }
 
+bool ApplyLocalPlayerControlTakeoverPrimarySelection(
+    uintptr_t actor_address) {
+    if (!IsLocalPlayerControlTakeoverActive() ||
+        !IsActorCurrentLocalPlayerSlotZero(actor_address)) {
+        return false;
+    }
+
+    ResolvedPrimaryCastDescriptor descriptor{};
+    if (!TryResolveLocalPlayerPrimaryCastDescriptor(
+            actor_address,
+            &descriptor) ||
+        descriptor.selection_state < 0) {
+        return false;
+    }
+
+    const auto previous_selection_state =
+        ResolveActorAnimationStateId(actor_address);
+    if (previous_selection_state == descriptor.selection_state) {
+        return true;
+    }
+    if (!TryWriteActorAnimationStateIdDirect(
+            actor_address,
+            descriptor.selection_state) ||
+        ResolveActorAnimationStateId(actor_address) !=
+            descriptor.selection_state) {
+        return false;
+    }
+
+    static std::uint64_t s_last_primary_selection_log_ms = 0;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    if (now_ms - s_last_primary_selection_log_ms >= 1000) {
+        s_last_primary_selection_log_ms = now_ms;
+        Log(
+            "[lua] local player takeover primed native primary selection. "
+            "actor=" + HexString(actor_address) +
+            " previous=" + std::to_string(previous_selection_state) +
+            " selected=" +
+                std::to_string(descriptor.selection_state) +
+            " build_skill_id=" +
+                std::to_string(descriptor.build_skill_id));
+    }
+    return true;
+}
+
 bool QueueLocalPlayerPrimaryCastForMultiplayer(
     uintptr_t actor_address,
     LocalPrimaryCastCaptureKind capture_kind =
@@ -1088,6 +1132,11 @@ bool QueueLocalPlayerPrimaryCastForMultiplayer(
         (primary_descriptor.primary_entry_index != dispatched_skill_id ||
          primary_descriptor.combo_entry_index != dispatched_skill_id ||
          primary_descriptor.dispatcher_skill_id != dispatched_skill_id)) {
+        return false;
+    }
+    if (capture_kind == LocalPrimaryCastCaptureKind::PurePrimaryStart &&
+        primary_descriptor.lane !=
+            ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary) {
         return false;
     }
 
@@ -1211,6 +1260,30 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
         LuaRegisteredSpellInputDispatchResult::NotSelected) {
         return;
     }
+
+    (void)ApplyLocalPlayerControlTakeoverPrimarySelection(actor_address);
+
+    ResolvedPrimaryCastDescriptor local_primary_descriptor{};
+    const bool capture_local_pure_primary =
+        multiplayer::IsLocalTransportEnabled() &&
+        IsActorCurrentLocalPlayerSlotZero(actor_address) &&
+        TryResolveLocalPlayerPrimaryCastDescriptor(
+            actor_address,
+            &local_primary_descriptor) &&
+        local_primary_descriptor.lane ==
+            ParticipantEntityBinding::OngoingCastState::Lane::PurePrimary;
+    const auto expected_local_projectile_type =
+        capture_local_pure_primary
+            ? ExpectedPurePrimaryProjectileTypeForSelectionState(
+                  local_primary_descriptor.selection_state)
+            : 0;
+    std::vector<uintptr_t> local_projectile_baseline;
+    const bool local_projectile_baseline_ready =
+        capture_local_pure_primary &&
+        expected_local_projectile_type != 0 &&
+        TryListPurePrimaryProjectileActorAddressesInScene(
+            expected_local_projectile_type,
+            &local_projectile_baseline);
 
     auto& memory = ProcessMemory::Instance();
     if (IsRunLifecycleManualEnemySpawnerTestModeEnabled() &&
@@ -1373,7 +1446,33 @@ void __fastcall HookPurePrimarySpellStart(void* self, void* /*unused_edx*/) {
     // Preserve the same target for owner-authored packet capture after stock
     // primary startup mutates its transient cast state.
     (void)ApplyPinnedManualSpawnerPrimaryTarget(actor_address);
-    (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
+    uintptr_t emitted_local_projectile_address = 0;
+    const bool local_projectile_emitted =
+        local_projectile_baseline_ready &&
+        TryFindNewPurePrimaryProjectileActorInScene(
+            expected_local_projectile_type,
+            local_projectile_baseline,
+            &emitted_local_projectile_address);
+    if (local_projectile_emitted) {
+        (void)QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);
+    } else if (capture_local_pure_primary) {
+        static std::uint64_t s_last_local_primary_no_emission_log_ms = 0;
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        if (now_ms - s_last_local_primary_no_emission_log_ms >= 1000) {
+            s_last_local_primary_no_emission_log_ms = now_ms;
+            Log(
+                "Multiplayer local pure-primary cast not queued: stock "
+                "emitted no matching projectile. actor=" +
+                HexString(actor_address) +
+                " selection=" +
+                std::to_string(local_primary_descriptor.selection_state) +
+                " expected_type=" +
+                std::to_string(expected_local_projectile_type) +
+                " baseline_ready=" +
+                std::to_string(
+                    local_projectile_baseline_ready ? 1 : 0));
+        }
+    }
     if (log_this) {
         Log(
             "[bots] pure_primary_start exit actor=" + HexString(actor_address) +

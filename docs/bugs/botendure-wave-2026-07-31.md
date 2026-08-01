@@ -294,13 +294,13 @@ edges totaling seven damage. Network actor `281543696187401` alone received
 host spent the final 458 seconds with the same nine living enemies and 21.5
 aggregate HP while its own HP regenerated to 50.
 
-This is a Bot Brain policy pathology, not a cast-ingress rejection. Scripted
-target selection considers native range and geometric distance, while its
-progress state counts accepted casts. It has no applied-damage feedback and no
-projectile-clear-path signal, so repeated misses against the same moving or
-occluded target look successful to the policy. The long perimeter circuit
-also defeats the existing short-window oscillation detector because net
-displacement remains large.
+This was initially classified as a Bot Brain policy pathology because the
+scripted target selection considers native range and geometric distance while
+its progress state counts accepted casts. R20's source taxonomy and causal
+selection probe supersede that classification: the accepted actions never
+entered an effective native primary lane. The long perimeter circuit still
+defeats the existing short-window oscillation detector because net displacement
+remains large, but it is not the cause of the missing damage.
 
 No combat-policy threshold was changed from this one match. Retargeting after
 an arbitrary cast count or treating the player-sized navigation grid as
@@ -443,9 +443,8 @@ seconds after that death.
 
 This rejects death as the cause of the workstation fighter's offensive stall.
 The primary was present, but its applied-damage efficacy had already stopped
-for more than twelve minutes. That remains a distinct Bot Brain combat-policy
-finding and must still satisfy the brief's per-fighter applied-damage gate on
-the next endurance run.
+for more than twelve minutes. R20 subsequently identified the shared native
+cast-pipeline cause; this is not a distinct combat-policy finding.
 
 The redacted correlation, conversion method, conservative timing bounds, and
 hypothesis verdicts are recorded in
@@ -493,13 +492,67 @@ captures, result, and clean after-receipt are preserved; its client runtime log
 is unavailable. The missing client log does not affect the paired semantic
 loadout proof or the host-side absence of respawn publication.
 
+## Product defect: Bot Play never selected the local native primary
+
+R20 reproduced both owner-visible symptoms after the respawn correction: the
+workstation fighter retained a bare wooden staff, and the host fighter
+periodically showed bare arms at close range. Both Bot Brains continued to
+issue and accept primary actions. There is no melee action in the local-player
+takeover adapter; the close-range damage and pose were incidental collision
+behavior while primary input was ineffective.
+
+The live native state made the failure precise. Each local actor had Fire
+primary entry 16, combo entry 16, current spell 1011, and a complete spellbook,
+but its control-brain selection remained `-2`. Hundreds of primary input edges
+reached `HookPurePrimarySpellStart`, yet the local peer created no type-2004
+Fireball. The hook still queued a multiplayer cast after the failed stock call,
+so the other peer could render a synthetic Fireball even though the origin
+fighter emitted nothing.
+
+The authoritative r20 pre-intervention taxonomy contains only native source
+type 1, gameplay slot 0, exactly 1.0 damage per edge. These are body-contact
+edges, not projectile hits. A bounded diagnostic write changed only the host
+actor's selection from `-2` to Fire entry 16. Native type-2004 Fireballs
+appeared immediately and produced fourteen authoritative 4.0-damage edges;
+the wave advanced from 11 to 12. The write was restored before exact-owned
+cleanup. This falsifies policy-never-casts, cast-issued-but-misses, loadout
+loss, and respawn loss. Primary selection is the sufficient missing state.
+
+`ApplyPinnedLocalPlayerControlTakeoverTarget` now primes the local actor from
+the authoritative participant profile before applying the native target. The
+pure-primary hook repeats that assertion at the last stock cast boundary, so a
+new actor after death or scene materialization cannot inherit the unselected
+state. Multiplayer cast publication is now fail-closed: for Ether, Fire, and
+Earth pure-primary lanes, the hook snapshots matching native projectiles before
+the stock call and queues the network event only after a new expected object is
+observed. A failed local cast can no longer masquerade as a remote spell.
+
+The endurance damage ledger now records native source type, owner type, and
+gameplay slot. It drains the workstation's origin-side hook separately and
+requires both an origin-side spell-scale projectile edge and a host-applied
+authoritative edge for each fighter. A positive ledger containing only 1.0
+type-1 contact damage fails acceptance.
+
+The paired screenshots, action/animation samples, source taxonomy, bounded
+causal probe, final logs, classification, and cleanup postcheck are under
+`runs/steam-r20/live-cast-forensics` and `runs/steam-r20` in the evidence root.
+
+## Separate presentation finding: arena-edge skybox bleed
+
+The owner observed a bright, glitch-like skybox glow behind arena assets after
+the policy walked to the map edge. The traversal itself is a useful behavior
+observation, but no exact-edge screenshot was captured before teardown. This
+finding is independent of primary casting and remains open for a focused visual
+reproduction; it does not block the combat-seam correction.
+
 ## Rerun requirement
 
 The product failure fixes, restored website flow, corrected damage attribution,
 bounded endurance probe continuity, and wave-boundary respawn correction must
 be rebuilt together and rerun through the same real launcher, lobby, and Steam
 flow. Completion requires both Bot Play takeovers to become active through the
-mod setting, positive authoritative enemy damage from each fighter, live state
-and transport sampling throughout the match, milestone screenshots from both
-peers, equipped-primary persistence after every observed respawn, and either
-natural Game Over or the 90-minute endurance cap.
+mod setting, projectile-sourced spell-scale origin damage plus host-applied
+damage from each fighter, live state and transport sampling throughout the
+match, milestone screenshots from both peers, equipped-primary persistence
+after every observed respawn, and either natural Game Over or the 90-minute
+endurance cap.

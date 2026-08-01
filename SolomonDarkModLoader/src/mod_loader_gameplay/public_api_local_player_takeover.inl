@@ -340,6 +340,8 @@ bool ApplyPinnedLocalPlayerControlTakeoverTarget(
         actor_address,
         kActorAnimationSelectionStateOffset,
         &selection_pointer);
+    (void)ApplyLocalPlayerControlTakeoverPrimarySelection(
+        actor_address);
     return ApplyManualSpawnerPrimaryTargetState(
         actor_address,
         selection_pointer,

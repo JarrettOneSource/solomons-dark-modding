@@ -1399,11 +1399,14 @@ def test_manual_primary_target_survives_stock_cursor_refresh() -> str:
         body,
         "original(self);",
         "ApplyPinnedManualSpawnerPrimaryTarget(actor_address);",
+        "TryFindNewPurePrimaryProjectileActorInScene(",
+        "if (local_projectile_emitted)",
         "QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);",
     )
     return (
         "manual primary casts pin their world target at native dispatch, then "
-        "restore it before owner-authored packet capture"
+        "restore it and prove native emission before owner-authored packet "
+        "capture"
     )
 
 

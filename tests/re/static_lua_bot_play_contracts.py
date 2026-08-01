@@ -128,6 +128,25 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
     assert "ApplyPinnedLocalPlayerControlTakeoverTarget(" in control
     _require_in_order(
         control,
+        "bool ApplyLocalPlayerControlTakeoverPrimarySelection(",
+        "TryResolveLocalPlayerPrimaryCastDescriptor(",
+        "TryWriteActorAnimationStateIdDirect(",
+        "void __fastcall HookPurePrimarySpellStart(",
+        "ApplyLocalPlayerControlTakeoverPrimarySelection(actor_address);",
+        "TryListPurePrimaryProjectileActorAddressesInScene(",
+        "original(self);",
+        "TryFindNewPurePrimaryProjectileActorInScene(",
+        "QueueLocalPlayerPrimaryCastForMultiplayer(actor_address);",
+    )
+    _require_in_order(
+        input_api,
+        "bool ApplyPinnedLocalPlayerControlTakeoverTarget(",
+        "ApplyLocalPlayerControlTakeoverPrimarySelection(",
+        "ApplyManualSpawnerPrimaryTargetState(",
+    )
+    assert "stock emitted no matching projectile" in control
+    _require_in_order(
+        control,
         "original(self, param2, param3);",
         "if (local_player_takeover_active ||",
         "local_player_takeover_primary_cast_active",
@@ -161,7 +180,8 @@ def test_lua_local_player_takeover_is_owner_scoped_and_stock_routed() -> str:
 
     return (
         "The owner-scoped local-player takeover uses the slot-zero stock "
-        "control path and clears every queued control on release"
+        "control path, primes its native primary, proves projectile emission, "
+        "and clears every queued control on release"
     )
 
 

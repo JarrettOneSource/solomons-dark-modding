@@ -106,6 +106,7 @@ local root = rawget(_G, "bot_brain_debug") or {}
 local local_player = root.local_player or {}
 local brain = local_player.brain or {}
 local takeover = sd.input.get_local_player_takeover_state()
+local player = sd.player.get_state()
 emit("loaded", rawget(_G, "bot_brain_debug") ~= nil)
 emit("desired", local_player.desired or false)
 emit("active", local_player.active or false)
@@ -156,6 +157,8 @@ for _, key in ipairs({
 }) do
   emit("takeover." .. key, takeover[key])
 end
+emit("takeover.primary_selection_state",
+  player and player.resolved_animation_state_id or -999)
 """
 RESET_DAMAGE_LUA = r"""
 print("enemy=" ..
@@ -172,9 +175,15 @@ for _, row in ipairs(
     tostring(row.sequence or 0),
     tostring(row.monotonic_ms or 0),
     tostring(row.source_participant_id or 0),
+    tostring(row.source_native_type_id or 0),
+    tostring(row.source_owner_native_type_id or 0),
+    tostring(row.source_gameplay_slot or -1),
+    tostring(row.target_actor_address or 0),
     tostring(row.target_network_actor_id or 0),
+    tostring(row.target_native_type_id or 0),
     tostring(row.target_hp_before or 0),
     tostring(row.target_hp_after or 0),
+    tostring(row.target_max_hp or 0),
     tostring(row.hp_delta or 0),
   }, "|")
 end
@@ -185,8 +194,13 @@ for _, row in ipairs(
     tostring(row.sequence or 0),
     tostring(row.monotonic_ms or 0),
     tostring(row.target_participant_id or 0),
+    tostring(row.target_gameplay_slot or -1),
+    tostring(row.target_actor_address or 0),
+    tostring(row.source_actor_address or 0),
+    tostring(row.source_native_type_id or 0),
     tostring(row.target_hp_before or 0),
     tostring(row.target_hp_after or 0),
+    tostring(row.target_max_hp or 0),
     tostring(row.hp_delta or 0),
   }, "|")
 end
@@ -996,6 +1010,8 @@ def _drain_damage_observations(
     player_rows: list[dict[str, Any]],
     *,
     target_mod_id: str = OBSERVER_MOD_ID,
+    evidence_peer: str = "host",
+    authoritative: bool = True,
 ) -> None:
     output = _targeted_execute(
         pipe,
@@ -1007,27 +1023,42 @@ def _drain_damage_observations(
     for line in output.splitlines():
         parts = line.strip().split("|")
         try:
-            if len(parts) == 8 and parts[0] == "enemy":
+            if len(parts) == 14 and parts[0] == "enemy":
                 enemy_rows.append(
                     {
                         "sequence": int(parts[1]),
                         "monotonicMs": int(parts[2]),
                         "sourceParticipantId": int(parts[3]),
-                        "targetNetworkActorId": int(parts[4]),
-                        "targetHpBefore": float(parts[5]),
-                        "targetHpAfter": float(parts[6]),
-                        "damage": float(parts[7]),
+                        "sourceNativeTypeId": int(parts[4]),
+                        "sourceOwnerNativeTypeId": int(parts[5]),
+                        "sourceGameplaySlot": int(parts[6]),
+                        "targetActorAddress": int(parts[7]),
+                        "targetNetworkActorId": int(parts[8]),
+                        "targetNativeTypeId": int(parts[9]),
+                        "targetHpBefore": float(parts[10]),
+                        "targetHpAfter": float(parts[11]),
+                        "targetMaxHp": float(parts[12]),
+                        "damage": float(parts[13]),
+                        "evidencePeer": evidence_peer,
+                        "evidenceSource": "native-damage-hook",
+                        "authoritative": authoritative,
                     }
                 )
-            elif len(parts) == 7 and parts[0] == "player":
+            elif len(parts) == 12 and parts[0] == "player":
                 player_rows.append(
                     {
                         "sequence": int(parts[1]),
                         "monotonicMs": int(parts[2]),
                         "targetParticipantId": int(parts[3]),
-                        "targetHpBefore": float(parts[4]),
-                        "targetHpAfter": float(parts[5]),
-                        "damage": float(parts[6]),
+                        "targetGameplaySlot": int(parts[4]),
+                        "targetActorAddress": int(parts[5]),
+                        "sourceActorAddress": int(parts[6]),
+                        "sourceNativeTypeId": int(parts[7]),
+                        "targetHpBefore": float(parts[8]),
+                        "targetHpAfter": float(parts[9]),
+                        "targetMaxHp": float(parts[10]),
+                        "damage": float(parts[11]),
+                        "evidencePeer": evidence_peer,
                     }
                 )
             else:
@@ -1076,7 +1107,12 @@ def _drain_authority_damage_log(
                 "targetHpAfter": after_hp,
                 "damage": accepted_damage,
                 "claimedDamage": float(match.group(3)),
+                "sourceNativeTypeId": 0,
+                "sourceOwnerNativeTypeId": 0,
+                "sourceGameplaySlot": -1,
                 "evidenceSource": "host-authority-log",
+                "evidencePeer": "host",
+                "authoritative": True,
             }
         )
     return new_offset, next_partial
@@ -1274,6 +1310,68 @@ def _fighter_damage_present(
         and row["damage"] > 0.0
         for row in rows
     )
+
+
+PRIMARY_PROJECTILE_NATIVE_TYPE_BY_ELEMENT = {
+    "ether": 0x7D3,
+    "fire": 0x7D4,
+    "earth": 0x7D5,
+}
+MINIMUM_SPELL_SCALE_DAMAGE = 2.0
+
+
+def _real_primary_damage_metrics(
+    config: HarnessConfig,
+    authoritative_rows: list[dict[str, Any]],
+    origin_rows: dict[str, list[dict[str, Any]]],
+    participant_ids: dict[str, int],
+) -> dict[str, Any]:
+    fighters: dict[str, Any] = {}
+    missing: list[str] = []
+    for role, peer in (("host", config.host), ("clientB", config.client)):
+        participant_id = participant_ids[role]
+        expected_source_type = PRIMARY_PROJECTILE_NATIVE_TYPE_BY_ELEMENT.get(
+            peer.loadout_element
+        )
+        spell_edges = [
+            row
+            for row in origin_rows[role]
+            if int(row.get("sourceParticipantId", 0)) == participant_id
+            and int(row.get("sourceNativeTypeId", 0))
+            == expected_source_type
+            and float(row.get("damage", 0.0))
+            >= MINIMUM_SPELL_SCALE_DAMAGE
+        ]
+        applied_edges = [
+            row
+            for row in authoritative_rows
+            if int(row.get("sourceParticipantId", 0)) == participant_id
+            and bool(row.get("authoritative", True))
+            and float(row.get("damage", 0.0)) > 0.0
+        ]
+        fighters[role] = {
+            "participantId": participant_id,
+            "element": peer.loadout_element,
+            "expectedSourceNativeTypeId": expected_source_type,
+            "spellScaleOriginEdges": len(spell_edges),
+            "spellScaleOriginDamage": sum(
+                float(row["damage"]) for row in spell_edges
+            ),
+            "authoritativeAppliedEdges": len(applied_edges),
+            "authoritativeAppliedDamage": sum(
+                float(row["damage"]) for row in applied_edges
+            ),
+        }
+        if not spell_edges or not applied_edges:
+            missing.append(role)
+    metrics = {"fighters": fighters, "missing": missing}
+    if missing:
+        raise RealFlowFailure(
+            "bot-driven fighters lacked real projectile-sourced, "
+            "spell-scale authoritative enemy damage: "
+            f"{missing} metrics={metrics}"
+        )
+    return metrics
 
 
 def _verify_mixed_bot_and_idle_human(
@@ -1615,10 +1713,17 @@ def _run_bot_play_endurance(
     damage_writer = JsonlWriter(
         config.evidence_root / "endurance-damage.jsonl"
     )
+    origin_damage_writer = JsonlWriter(
+        config.evidence_root / "endurance-origin-damage.jsonl"
+    )
     enemy_rows: list[dict[str, Any]] = []
     player_rows: list[dict[str, Any]] = []
+    client_origin_enemy_rows: list[dict[str, Any]] = []
+    client_origin_player_rows: list[dict[str, Any]] = []
     enemy_rows_written = 0
     player_rows_written = 0
+    client_origin_enemy_rows_written = 0
+    client_origin_player_rows_written = 0
 
     initial = sampler.sample_now("endurance-pre-activation")
     transport_ids = {
@@ -1658,9 +1763,10 @@ def _run_bot_play_endurance(
             )
         },
     }
-    result["damageObserversReset"] = _reset_damage_observations(
-        host_pipe
-    )
+    result["damageObserversReset"] = {
+        "host": _reset_damage_observations(host_pipe),
+        "clientB": _reset_damage_observations(client_pipe),
+    }
     authority_log_path = (
         host.game_executable.parent
         / ".sdmod"
@@ -1770,6 +1876,13 @@ def _run_bot_play_endurance(
             enemy_rows,
             player_rows,
         )
+        _drain_damage_observations(
+            client_pipe,
+            client_origin_enemy_rows,
+            client_origin_player_rows,
+            evidence_peer="clientB",
+            authoritative=False,
+        )
         (
             authority_log_offset,
             authority_log_partial,
@@ -1789,6 +1902,30 @@ def _run_bot_play_endurance(
                 {"kind": "player", **player_rows[player_rows_written]}
             )
             player_rows_written += 1
+        while client_origin_enemy_rows_written < len(
+            client_origin_enemy_rows
+        ):
+            origin_damage_writer.append(
+                {
+                    "kind": "enemy",
+                    **client_origin_enemy_rows[
+                        client_origin_enemy_rows_written
+                    ],
+                }
+            )
+            client_origin_enemy_rows_written += 1
+        while client_origin_player_rows_written < len(
+            client_origin_player_rows
+        ):
+            origin_damage_writer.append(
+                {
+                    "kind": "player",
+                    **client_origin_player_rows[
+                        client_origin_player_rows_written
+                    ],
+                }
+            )
+            client_origin_player_rows_written += 1
 
         final_bots = bots
         driving = {
@@ -1985,6 +2122,13 @@ def _run_bot_play_endurance(
         enemy_rows,
         player_rows,
     )
+    _drain_damage_observations(
+        client_pipe,
+        client_origin_enemy_rows,
+        client_origin_player_rows,
+        evidence_peer="clientB",
+        authoritative=False,
+    )
     (
         authority_log_offset,
         authority_log_partial,
@@ -2004,6 +2148,30 @@ def _run_bot_play_endurance(
             {"kind": "player", **player_rows[player_rows_written]}
         )
         player_rows_written += 1
+    while client_origin_enemy_rows_written < len(
+        client_origin_enemy_rows
+    ):
+        origin_damage_writer.append(
+            {
+                "kind": "enemy",
+                **client_origin_enemy_rows[
+                    client_origin_enemy_rows_written
+                ],
+            }
+        )
+        client_origin_enemy_rows_written += 1
+    while client_origin_player_rows_written < len(
+        client_origin_player_rows
+    ):
+        origin_damage_writer.append(
+            {
+                "kind": "player",
+                **client_origin_player_rows[
+                    client_origin_player_rows_written
+                ],
+            }
+        )
+        client_origin_player_rows_written += 1
 
     elapsed_seconds = time.monotonic() - started_monotonic
     findings = monitor.finish(float(final_sample["elapsedSeconds"]))
@@ -2015,6 +2183,20 @@ def _run_bot_play_endurance(
             }
         )
     fighter_stats = tracker.result(enemy_rows, player_rows)
+    real_primary_damage = _real_primary_damage_metrics(
+        config,
+        enemy_rows,
+        {
+            "host": [
+                row
+                for row in enemy_rows
+                if row.get("evidenceSource") == "native-damage-hook"
+                and row.get("evidencePeer") == "host"
+            ],
+            "clientB": client_origin_enemy_rows,
+        },
+        damage_participant_ids,
+    )
     for role, stats in fighter_stats.items():
         if stats["damageDealtEdges"] == 0:
             findings.append(
@@ -2052,9 +2234,15 @@ def _run_bot_play_endurance(
             "damageEventCounts": {
                 "enemy": len(enemy_rows),
                 "player": len(player_rows),
+                "clientOriginEnemy": len(client_origin_enemy_rows),
+                "clientOriginPlayer": len(client_origin_player_rows),
             },
+            "realPrimaryDamage": real_primary_damage,
             "damageEvidencePath": str(
                 config.evidence_root / "endurance-damage.jsonl"
+            ),
+            "originDamageEvidencePath": str(
+                config.evidence_root / "endurance-origin-damage.jsonl"
             ),
             "milestoneCaptures": captures,
             "captureErrors": capture_errors,
