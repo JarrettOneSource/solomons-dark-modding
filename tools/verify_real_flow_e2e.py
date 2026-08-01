@@ -99,6 +99,7 @@ BOT_EXEC_DIRECTIVE = f"-- sdmod-exec-target: {BOT_MOD_ID}\n"
 OBSERVER_EXEC_DIRECTIVE = (
     f"-- sdmod-exec-target: {OBSERVER_MOD_ID}\n"
 )
+LIVE_F9_HANDBACK_SETTLE_SECONDS = 1.0
 BOT_PROBE_LUA = r"""
 local function emit(key, value)
   print(key .. "=" .. tostring(value == nil and "" or value))
@@ -1054,6 +1055,7 @@ def _assert_clean_release(
     state: dict[str, Any],
     *,
     after_human_input: bool = False,
+    after_native_tick: bool = False,
     expected_selection_state: int | None = None,
 ) -> dict[str, Any]:
     takeover_exact_zero = (
@@ -1075,9 +1077,11 @@ def _assert_clean_release(
         "takeover.pending_movement_x",
         "takeover.pending_movement_y",
     )
-    stock_float_zero = (
+    stock_movement_float_zero = (
         "takeover.movement_input_x",
         "takeover.movement_input_y",
+    )
+    native_control_brain_float_zero = (
         "takeover.control_brain_move_x",
         "takeover.control_brain_move_y",
     )
@@ -1085,7 +1089,9 @@ def _assert_clean_release(
     float_zero = takeover_float_zero
     if not after_human_input:
         exact_zero += stock_exact_zero
-        float_zero += stock_float_zero
+        float_zero += stock_movement_float_zero
+        if not after_native_tick:
+            float_zero += native_control_brain_float_zero
     failures = {
         key: state.get(key)
         for key in exact_zero
@@ -1145,7 +1151,13 @@ def _assert_clean_release(
         state.get("active") is True
         or state.get("desired") is True
         or state.get("takeover.active") is True
-        or state.get("takeover.clean") is not True
+        or (
+            state.get("takeover.clean") is not True
+            and not (
+                (after_human_input or after_native_tick)
+                and state.get("release_clean") is True
+            )
+        )
         or state.get("takeover.primary_selection_snapshot_pending") is True
         or state.get("takeover.primary_selection_restore_succeeded") is not True
         or state.get("takeover.native_state_clear_succeeded") is not True
@@ -1160,6 +1172,7 @@ def _assert_clean_release(
     return {
         "clean": True,
         "afterHumanInput": after_human_input,
+        "afterNativeTick": after_native_tick,
         "expectedSelectionState": expected_selection_state,
         "explicitZeroFields": list(exact_zero + float_zero),
         "state": state,
@@ -2131,7 +2144,7 @@ def _run_bot_play_endurance(
                 state.get("desired") is False
                 and state.get("active") is False
                 and state.get("takeover.active") is False
-                and state.get("takeover.clean") is True
+                and state.get("release_clean") is True
             ),
             timeout=5.0,
             label="endurance host live F9 handback",
@@ -2142,7 +2155,7 @@ def _run_bot_play_endurance(
                 state.get("desired") is False
                 and state.get("active") is False
                 and state.get("takeover.active") is False
-                and state.get("takeover.clean") is True
+                and state.get("release_clean") is True
             ),
             timeout=5.0,
             label="endurance client live F9 handback",
@@ -2154,6 +2167,7 @@ def _run_bot_play_endurance(
         "released": {
             role: _assert_clean_release(
                 state,
+                after_native_tick=True,
                 expected_selection_state=int(
                     active_before_f9[role][
                         "takeover.primary_selection_state_before"
@@ -2163,6 +2177,42 @@ def _run_bot_play_endurance(
             for role, state in released_after_f9.items()
         },
     }
+    time.sleep(LIVE_F9_HANDBACK_SETTLE_SECONDS)
+    settled_after_f9 = {
+        "host": _bot_probe(host_pipe),
+        "clientB": _bot_probe(client_pipe),
+    }
+    for role, state in settled_after_f9.items():
+        baseline = released_after_f9[role]
+        cast_counts = {
+            key: (
+                int(baseline.get(key, -1)),
+                int(state.get(key, -2)),
+            )
+            for key in (
+                "brain.cast_issued",
+                "brain.cast_accepted",
+            )
+        }
+        if any(before != after for before, after in cast_counts.values()):
+            raise RealFlowFailure(
+                "Bot Play For Me cast count advanced after F9 handback: "
+                f"role={role} counts={cast_counts} state={state}"
+            )
+        live_f9_handback.setdefault("settled", {})[role] = (
+            _assert_clean_release(
+                state,
+                after_native_tick=True,
+                expected_selection_state=int(
+                    active_before_f9[role][
+                        "takeover.primary_selection_state_before"
+                    ]
+                ),
+            )
+        )
+    live_f9_handback["settleSeconds"] = (
+        LIVE_F9_HANDBACK_SETTLE_SECONDS
+    )
     f9_enable_requests = {
         "host": _send_peer_key(config, host, "f9", 100),
         "clientB": _send_peer_key(config, client, "f9", 100),
@@ -2619,7 +2669,7 @@ def _run_bot_play_endurance(
                 state.get("desired") is False
                 and state.get("active") is False
                 and state.get("takeover.active") is False
-                and state.get("takeover.clean") is True
+                and state.get("release_clean") is True
             ),
             timeout=5.0,
             label="endurance host F9 handback",
@@ -2630,7 +2680,7 @@ def _run_bot_play_endurance(
                 state.get("desired") is False
                 and state.get("active") is False
                 and state.get("takeover.active") is False
-                and state.get("takeover.clean") is True
+                and state.get("release_clean") is True
             ),
             timeout=5.0,
             label="endurance client F9 handback",
@@ -2639,7 +2689,10 @@ def _run_bot_play_endurance(
     f9_handback = {
         "requests": f9_requests,
         "peers": {
-            role: _assert_clean_release(state)
+            role: _assert_clean_release(
+                state,
+                after_native_tick=True,
+            )
             for role, state in released_bots.items()
         },
     }

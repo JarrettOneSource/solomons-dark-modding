@@ -702,6 +702,77 @@ class RealFlowE2ETests(unittest.TestCase):
         ):
             _assert_clean_release(state, expected_selection_state=0)
 
+    def test_live_f9_receipt_allows_only_native_brain_repopulation(
+        self,
+    ) -> None:
+        state = {
+            "active": False,
+            "desired": False,
+            "release_clean": True,
+            "focus_active": False,
+            "takeover.active": False,
+            "takeover.clean": False,
+            "takeover.target_valid": False,
+            "takeover.primary_selection_snapshot_pending": False,
+            "takeover.primary_selection_restore_succeeded": True,
+            "takeover.native_state_clear_succeeded": True,
+            "takeover.actor_address": 0,
+            "takeover.target_actor_address": 0,
+            "takeover.pending_movement_frames": 0,
+            "takeover.pending_mouse_left_frames": 0,
+            "takeover.pending_mouse_right_frames": 0,
+            "takeover.pending_scancode_count": 0,
+            "takeover.pending_native_control_frames": 0,
+            "takeover.pending_movement_x": 0.0,
+            "takeover.pending_movement_y": 0.0,
+            "takeover.cast_intent": 0,
+            "takeover.primary_skill_id": 0,
+            "takeover.previous_skill_id": 0,
+            "takeover.current_target_actor_address": 0,
+            "takeover.movement_input_x": 0.0,
+            "takeover.movement_input_y": 0.0,
+            "takeover.control_brain_move_x": 0.66,
+            "takeover.control_brain_move_y": -0.75,
+        }
+
+        assertion = _assert_clean_release(
+            state,
+            after_native_tick=True,
+        )
+        self.assertTrue(assertion["afterNativeTick"])
+        self.assertNotIn(
+            "takeover.control_brain_move_x",
+            assertion["explicitZeroFields"],
+        )
+        state["takeover.cast_intent"] = 1
+        with self.assertRaisesRegex(
+            RealFlowFailure,
+            "release retained control state",
+        ):
+            _assert_clean_release(state, after_native_tick=True)
+        state["takeover.cast_intent"] = 0
+        state["release_clean"] = False
+        with self.assertRaisesRegex(
+            RealFlowFailure,
+            "release retained control state",
+        ):
+            _assert_clean_release(state, after_native_tick=True)
+
+    def test_live_f9_proof_holds_without_new_bot_casts(self) -> None:
+        controller = (
+            ROOT / "tools/verify_real_flow_e2e.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "LIVE_F9_HANDBACK_SETTLE_SECONDS = 1.0",
+            controller,
+        )
+        self.assertIn(
+            "Bot Play For Me cast count advanced after F9 handback",
+            controller,
+        )
+        self.assertIn('"settleSeconds"', controller)
+
     def test_endurance_bot_brain_requires_pick_and_mana_cycle(self) -> None:
         bot = {
             "brain.skill_choices_accepted": 3,
