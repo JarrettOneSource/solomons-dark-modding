@@ -141,8 +141,9 @@ the same pickup is never filtered twice.
 ## Sample and verification
 
 The opt-in `sample.lua.resource_filter_lab` mod doubles positive XP and gold
-gains while leaving spends unchanged. The
-`canary.lua.invincibility_potion` mod uses `mana.changing` together with
+gains while leaving spends unchanged. The Invincibility Potion mod, whose
+stable internal ID remains
+`canary.lua.invincibility_potion`, uses `mana.changing` together with
 `sd.player.restore_mana()` to implement three minutes of true infinite mana.
 Run the static contract with:
 

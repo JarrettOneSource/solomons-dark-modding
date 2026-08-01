@@ -1,9 +1,11 @@
 {
   "name": "Lua Bots",
-  "tagline": "Scripted and ML bot teammates that play like real players.",
-  "description": "Adds bot teammates to your lobby. Bots fill real player slots: they show up in the member list, enemies target them, and they move, cast spells, die, and respawn like human players. Choose a scripted style or the bundled learned policy for each bot. Name each bot and choose its element and discipline in the launcher's mod settings. Changes apply live, and in multiplayer the host's roster syncs to everyone. The learned policy runs locally inside Lua with no Python, GPU, or network service. Requires v0.1.0-beta.22 or newer.",
-  "version": "1.1.0",
+  "author": "Generic",
+  "tagline": "Bot teammates, or a bot that can play your own wizard.",
+  "description": "Add configurable bot teammates, or let a bot take over your own wizard with Bot Play For Me. Toggle it in settings or press F9 during a run; press F9 again to hand control back. Choose a name, element, discipline, and Skirmisher, Guardian, Striker, or Learned style for each teammate. Bots fill real player slots, appear in the member list, draw enemy attention, choose a random offered skill at level-up, and move, cast, die, and respawn like players. To conserve mana, they stop casting at 10 percent and resume at 80 percent. In multiplayer the host's roster is shared with everyone, while each player can choose Bot Play For Me for their own wizard. The bundled learned policy runs inside Lua without Python, a GPU, or a network service. Requires v0.1.0-beta.29 or newer.",
+  "version": "1.2.0",
   "manifestId": "bot.brain",
-  "minimumLoaderVersion": "0.1.0-beta.22",
+  "minimumLoaderVersion": "0.1.0-beta.29",
+  "changelog": "Added Bot Play For Me with an F9 toggle and clean handback. Bots now choose random offered skills and conserve mana by pausing spells at 10 percent and resuming at 80 percent. Fixed multiplayer level-up choices targeting the wrong participant. Requires beta.29 for clean primary-skill handback and removal of the extra ally row while takeover is active.",
   "screenshots": []
 }

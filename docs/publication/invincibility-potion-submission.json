@@ -1,0 +1,30 @@
+{
+  "expectedAuthor": "Generic",
+  "migration": {
+    "reason": "The website does not support author transfer; recreate through authenticated public endpoints.",
+    "remove": {
+      "method": "DELETE",
+      "url": "https://solomondarker.com/api/mods/invincibility-potion-canary",
+      "authorization": "Bearer token for the existing listing owner"
+    },
+    "create": {
+      "method": "POST",
+      "url": "https://solomondarker.com/api/mods",
+      "authorization": "Bearer token for Generic",
+      "contentType": "multipart/form-data",
+      "fields": {
+        "name": "Invincibility Potion",
+        "summary": "A green potion that grants three minutes of invincibility and unlimited mana.",
+        "description": "Adds a bright-green potion with its own bottle art in the world and in your inventory. Ordinary enemies have a 50 percent chance to drop one, while bosses always do. Drink it to refill your mana and glow green while damage and mana costs are blocked for three minutes. In multiplayer, everyone sees the drinker's glow and the host enforces the protection until it expires. Requires v0.1.0-beta.29 or newer.",
+        "tags": "gameplay,items,lua,multiplayer",
+        "version": "0.2.0"
+      },
+      "files": {
+        "file": "/mnt/d/codex-evidence/modpipe-20260801/phase-a/packages/invincibility-potion-0.2.0.zip",
+        "packageSha256": "ac16df4ac239f1e6c9e02bc0b2bebaed08ce49bba164a5d081920de59673c889",
+        "contentSha256": "c7f4e792d67d0a04694182166892ebcf1075a90c2f71df9db00d9bbdb5fa601f"
+      }
+    }
+  },
+  "changelog": "Promoted the earlier test release into the player-facing Invincibility Potion mod, with a new name and description. The custom green pickup art, shared activation glow, and three-minute invincibility and unlimited-mana effect are unchanged. Requires beta.29 for downloaded-mod multiplayer verification."
+}

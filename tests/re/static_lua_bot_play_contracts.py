@@ -363,7 +363,7 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
 
     assert manifest["id"] == "bot.brain"
     assert manifest["version"] == "1.2.0"
-    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.28"
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.29"
     capabilities = set(
         manifest["runtime"]["requiredCapabilities"]
     )

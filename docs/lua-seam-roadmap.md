@@ -296,8 +296,9 @@ optional native `SpellGlow` request. `sd.loot.register` independently rolls
 normal and exact stock-boss chances at the authority's enemy-death seam.
 Protocol 89 carries stable content IDs through drops, pickup results, inventory,
 and deduplicated use events while each peer resolves its own native subtype.
-The `canary.lua.invincibility_potion` mod exercises the complete path with a
-baked-green potion, 50/100 percent loot policy, stock inventory use, replicated
+The Invincibility Potion mod retains the stable internal ID
+`canary.lua.invincibility_potion` and uses the complete path with a baked-green
+potion, 50/100 percent loot policy, stock inventory use, replicated
 three-minute invincibility, and owner-side infinite mana.
 
 **Enemy registration and spawning implemented 2026-07-22.** `sd.enemies.register`,

@@ -220,8 +220,8 @@ host-local command changes only the host's inventory. Both mutations must add
 exactly one recipe unit. The verifier records each peer's local recipe UID and
 stops only the exact processes it launched.
 
-`canary.lua.invincibility_potion` is the end-to-end custom-content canary. Its
-manually baked bright-green potion drops at 50 percent from ordinary enemies
-and 100 percent from bosses, enters the stock inventory, emits native
-`SpellGlow`, and combines a replicated three-minute effect with damage and mana
-filters.
+The Invincibility Potion mod retains the stable internal ID
+`canary.lua.invincibility_potion`. Its manually baked bright-green potion drops
+at 50 percent from ordinary enemies and 100 percent from bosses, enters the
+stock inventory, emits native `SpellGlow`, and combines a replicated
+three-minute effect with damage and mana filters.

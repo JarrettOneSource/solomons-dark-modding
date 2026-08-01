@@ -1,0 +1,11 @@
+{
+  "name": "Invincibility Potion",
+  "author": "Generic",
+  "tagline": "A green potion that grants three minutes of invincibility and unlimited mana.",
+  "description": "Adds a bright-green potion with its own bottle art in the world and in your inventory. Ordinary enemies have a 50 percent chance to drop one, while bosses always do. Drink it to refill your mana and glow green while damage and mana costs are blocked for three minutes. In multiplayer, everyone sees the drinker's glow and the host enforces the protection until it expires. Requires v0.1.0-beta.29 or newer.",
+  "version": "0.2.0",
+  "manifestId": "canary.lua.invincibility_potion",
+  "minimumLoaderVersion": "0.1.0-beta.29",
+  "changelog": "Promoted the earlier test release into the player-facing Invincibility Potion mod, with a new name and description. The custom green pickup art, shared activation glow, and three-minute invincibility and unlimited-mana effect are unchanged. Requires beta.29 for downloaded-mod multiplayer verification.",
+  "screenshots": []
+}

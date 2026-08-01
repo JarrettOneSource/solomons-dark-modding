@@ -2,9 +2,7 @@
   "id": "bot.brain",
   "name": "Lua Bots",
   "version": "1.2.0",
-  "summary": "Bot teammates and an optional bot brain for your own player.",
-  "description": "Adds bot teammates to your lobby and can play your local character for you. Toggle Bot Play For Me at any time or press F9; turning it off returns clean control immediately. Local play uses the same skirmisher, guardian, striker, or learned brain as bot teammates and works for the host or a client through normal multiplayer authority and replication. Bot teammates still fill real player slots, appear in the member list, draw enemy attention, and move, cast, die, and respawn like human players. The learned policy runs locally inside Lua with no Python, GPU, or network service.",
-  "minimumLoaderVersion": "0.1.0-beta.28",
+  "minimumLoaderVersion": "0.1.0-beta.29",
   "enabled": false,
   "runtime": {
     "apiVersion": "0.2.0",

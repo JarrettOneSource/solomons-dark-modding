@@ -76,17 +76,17 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     )
     layout = _read("config/binary-layout.ini")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
-    canary_manifest = _read(
+    potion_manifest = _read(
         "mods/lua_invincibility_potion_canary/manifest.json"
     )
-    canary = _read(
+    potion = _read(
         "mods/lua_invincibility_potion_canary/scripts/main.lua"
     )
-    canary_sprite = _read(
+    potion_sprite = _read(
         "mods/lua_invincibility_potion_canary/sprites/"
         "invincibility_potion.json"
     )
-    canary_readme = _read(
+    potion_readme = _read(
         "mods/lua_invincibility_potion_canary/README.md"
     )
 
@@ -236,10 +236,13 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     assert "participant_id == 0 ? 1 : participant_id" in damage_hook
 
     _require(
-        "complex invincibility-potion canary",
-        canary_manifest + canary + canary_sprite + canary_readme,
+        "player-facing invincibility potion",
+        potion_manifest + potion + potion_sprite + potion_readme,
         (
             '"id": "canary.lua.invincibility_potion"',
+            '"name": "Invincibility Potion"',
+            '"version": "0.2.0"',
+            '"minimumLoaderVersion": "0.1.0-beta.29"',
             '"items.consumables.register"',
             '"loot.register"',
             '"player.resources.owner"',
@@ -254,7 +257,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             'sd.events.filter("mana.changing"',
             "return {delta = 0}",
             "sd.timer.after(event.duration_ms",
-            "manually recolored derivative",
+            "own green artwork",
             '"width": 53',
             '"height": 50',
         ),
@@ -285,5 +288,5 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         "Lua consumables register bounded stable identities, roll additive "
         "normal/boss loot, materialize through stock potion inventory paths, "
         "replicate by content ID, execute owner-local resource effects, and ship "
-        "a baked-green three-minute invincibility canary"
+        "a player-facing baked-green three-minute invincibility potion"
     )

@@ -18,6 +18,33 @@ SEMVER = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+MANIFEST_FIELDS = frozenset(
+    {
+        "$schema",
+        "id",
+        "name",
+        "version",
+        "minimumLoaderVersion",
+        "enabled",
+        "priority",
+        "overlays",
+        "runtime",
+        "requiredMods",
+        "provides",
+        "requires",
+        "settings",
+    }
+)
+RUNTIME_FIELDS = frozenset(
+    {
+        "apiVersion",
+        "entryScript",
+        "entryDll",
+        "requiredCapabilities",
+        "optionalCapabilities",
+    }
+)
+OVERLAY_FIELDS = frozenset({"target", "source", "format"})
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +57,42 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--metadata-output", type=Path)
     return parser.parse_args()
+
+
+def require_known_fields(
+    value: object,
+    label: str,
+    allowed: frozenset[str],
+) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain an object")
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ValueError(
+            f"{label} contains fields that are not part of the website "
+            f"package contract: {', '.join(unknown)}"
+        )
+    return value
+
+
+def validate_manifest_fields(manifest: dict[str, object]) -> None:
+    require_known_fields(manifest, "manifest.json", MANIFEST_FIELDS)
+
+    runtime = manifest.get("runtime")
+    if runtime is not None:
+        require_known_fields(runtime, "manifest.runtime", RUNTIME_FIELDS)
+
+    overlays = manifest.get("overlays")
+    if overlays is None:
+        return
+    if not isinstance(overlays, list):
+        raise ValueError("manifest.overlays must contain a list")
+    for index, overlay in enumerate(overlays):
+        require_known_fields(
+            overlay,
+            f"manifest.overlays[{index}]",
+            OVERLAY_FIELDS,
+        )
 
 
 def load_entries(mod_root: Path, version: str | None) -> dict[str, bytes]:
@@ -54,6 +117,7 @@ def load_entries(mod_root: Path, version: str | None) -> dict[str, bytes]:
     manifest = json.loads(entries["manifest.json"])
     if not isinstance(manifest, dict):
         raise ValueError("manifest.json must contain an object")
+    validate_manifest_fields(manifest)
     package_version = version if version is not None else manifest.get("version")
     if not isinstance(package_version, str) or not SEMVER.fullmatch(package_version):
         raise ValueError("manifest.version must use semantic versioning")

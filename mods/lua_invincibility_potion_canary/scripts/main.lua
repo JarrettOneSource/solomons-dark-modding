@@ -98,5 +98,5 @@ sd.events.filter("mana.changing", function(event)
 end)
 
 print(string.format(
-  "Invincibility Potion Canary loaded content_id=%d normal_drop=50%% boss_drop=100%%",
+  "Invincibility Potion loaded content_id=%d normal_drop=50%% boss_drop=100%%",
   potion.id))

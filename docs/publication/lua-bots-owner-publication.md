@@ -1,44 +1,36 @@
-# Lua Bots v1.0.3 owner staging handoff
+# Lua Bots 1.2.0 publication record
 
-Lua Bots v1.0.3 supersedes the staged, unpublished v1.0.2 package. This wave
-does not create a listing, call a production endpoint, or use owner
-credentials. It prepares an update for the owner to submit through the
-existing listing's **Add version** flow.
+Date: 2026-08-01
 
-## Prepared staging artifacts
+Status: fresh package prepared; production publication and downloaded-package
+acceptance pending
 
-The complete handoff is under:
+Lua Bots 1.2.0 is built from the current `mods/bot-brain` source. It does not
+reuse the superseded 1.2.0 staging package from 2026-07-31.
 
-```text
-/mnt/d/codex-evidence/botmatch-20260728/package/
-```
+## Prepared package
 
-It contains:
+- Path: `/mnt/d/codex-evidence/modpipe-20260801/phase-a/packages/lua-bots-1.2.0.zip`
+- Package SHA-256: `5a53a8292d122e0e88d0243d334b26a4459032b5fd9096f34eee606cfa2ef14c`
+- Content SHA-256: `41413291606f5b39396e918b087223d0eb568e8192ca8c44a021dadd04bb3c5b`
+- Manifest ID: `bot.brain`
+- Minimum loader: `0.1.0-beta.29`
 
-- `lua-bots-1.0.3.zip`;
-- `lua-bots-1.0.3.zip.sha256`;
-- deterministic package metadata with the package and content hashes; and
-- `listing-update-1.0.3.json` with the existing listing copy and the complete
-  v1.0.3 mod changelog.
+The archive is rooted at `manifest.json`, contains only the Lua Bots README,
+changelog, manifest, and Lua scripts, and has no native binaries or wrapper
+directory. `docs/publication/lua-bots-listing.json` contains the player-facing
+listing and `docs/publication/lua-bots-submission.json` describes the exact
+PATCH plus Add Version requests.
 
-The v1.0.3 changelog includes all unpublished v1.0.2 Behavior, Discipline,
-appearance, stuck-recovery, equipped-range, and applied-damage content. It also
-records the pre-wave idle behavior needed to let a complete bot party navigate
-and regroup in the hub before Solomon Dig starts. Loader implementation details
-are not presented as Lua Bots features.
+## Player changelog
 
-## Owner submission checklist
+- Added Bot Play For Me with the F9 toggle and clean control handback.
+- Bots choose a random offered skill at level-up.
+- Bots stop casting at 10 percent mana and resume at 80 percent.
+- Fixed multiplayer skill choices targeting the wrong participant.
+- Requires beta.29 for primary-skill handback and removal of the extra ally row
+  during takeover.
 
-1. Verify the ZIP against `lua-bots-1.0.3.zip.sha256`.
-2. Confirm the archive-root manifest reports id `bot.brain`, version `1.0.3`,
-   and minimum loader `0.1.0-beta.22`.
-3. Open the existing Lua Bots listing's **Add version** flow.
-4. Upload `lua-bots-1.0.3.zip`; do not use the initial mod-creation endpoint.
-5. Apply the description and changelog from `listing-update-1.0.3.json`.
-6. Verify the resulting public version, hashes, and beta.22 compatibility from
-   a separate launcher before announcing it.
-
-Keep `manifest.id` equal to `bot.brain` for future updates, increment
-`manifest.version` semantically, and upload the matching package. Installed
-users receive the newest compatible semantic version through
-`POST /api/mods/updates`.
+Production completion requires the authenticated website flow, confirmation
+that the live listing reports author `Generic` and version `1.2.0`, and a fresh
+launcher download whose package hash matches this record.
