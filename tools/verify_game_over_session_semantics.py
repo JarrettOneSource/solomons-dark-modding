@@ -33,6 +33,7 @@ from verify_local_multiplayer_sync import (
     THIRD_ID,
     THIRD_NAME,
     VerifyFailure,
+    activate_native_ui_action,
     extract_json,
     game_process_ids,
     launch_pair,
@@ -71,6 +72,18 @@ EXISTING_WIZARD_SAVE_FIXTURE = (
     / "fieldbreak25_existing_wizard"
     / "solomondark"
 )
+CREATE_ELEMENT_IDS = {
+    "ether": 0,
+    "fire": 1,
+    "air": 2,
+    "water": 3,
+    "earth": 4,
+}
+CREATE_DISCIPLINE_IDS = {
+    "mind": 0,
+    "body": 1,
+    "arcane": 2,
+}
 
 
 def _acceptance_mod_ids(
@@ -279,6 +292,10 @@ emit("alive_run_count", alive_run_count)
 emit("remote_peer_count", remote_peer_count)
 emit("run_nonce", run_nonce)
 emit("local_in_run", local_row and local_row.in_run or false)
+emit("local_loadout_generation",
+  local_row and local_row.loadout_pick_generation or 0)
+emit("local_loadout_state",
+  local_row and local_row.loadout_pick_state or "")
 emit("session_state", multiplayer.session_state or "")
 emit("run_end_pending_lobby_return",
   multiplayer.run_end_pending_lobby_return or false)
@@ -696,6 +713,54 @@ def run_boundary_vitality_reset_matches(
     )
 
 
+def local_hub_vitality_reset_without_remote_matches(
+    values: Mapping[str, str],
+) -> bool:
+    local_zero_keys = (
+        "local.runtime.death_presentation_tick",
+        "local.runtime.poison_remaining_ticks",
+        "local.runtime.damage_x4_remaining_ticks",
+        "local.native.poison_remaining_ticks",
+    )
+    death_presentation_mask = 1 << 6
+    persistent_combat_mask = 0x07
+    transient_combat_mask = 0x1F
+    return (
+        values.get("scene") == "hub"
+        and values.get("session_state") == "in-hub"
+        and _integer(values, "participant_count") == 2
+        and values.get("local.runtime.in_run") == "false"
+        and _integer(values, "local.participant_id") > 0
+        and _full_vitality_matches(
+            values,
+            "local.runtime.life_current",
+            "local.runtime.life_max",
+        )
+        and _full_vitality_matches(
+            values,
+            "local.native.life_current",
+            "local.native.life_max",
+        )
+        and all(_integer(values, key) == 0 for key in local_zero_keys)
+        and _integer(values, "local.runtime.presentation_flags")
+        & death_presentation_mask
+        == 0
+        and _integer(values, "local.runtime.persistent_status_flags")
+        & persistent_combat_mask
+        == 0
+        and _integer(values, "local.native.persistent_status_flags")
+        & persistent_combat_mask
+        == 0
+        and _integer(values, "local.runtime.transient_status_flags")
+        & transient_combat_mask
+        == 0
+        and _integer(values, "local.native.transient_status_flags")
+        & transient_combat_mask
+        == 0
+        and not values_have_materialized_remote(values)
+    )
+
+
 def _windows_path_equal(left: str, right: str) -> bool:
     return ntpath.normcase(ntpath.normpath(left)) == ntpath.normcase(
         ntpath.normpath(right)
@@ -886,6 +951,8 @@ def launch_solo(
         SOLO_PLAYER_NAME,
         "-GameDirectory",
         path_for_powershell(game_directory),
+        "-RuntimeRoot",
+        path_for_powershell(ROOT / "runtime"),
         "-ExactModIds",
         ",".join(exact_mod_ids),
         "-ProcessIdOutputPath",
@@ -1010,6 +1077,29 @@ def values_have_materialized_remote(values: Mapping[str, str]) -> bool:
         values.get("remote.native.materialized") == "true"
         and _integer(values, "remote.native.actor") > 0
         and _integer(values, "remote.participant_id") > 0
+    )
+
+
+def _wait_for_unmaterialized_remote_in_hub(
+    pipe_name: str,
+    *,
+    timeout: float = 15.0,
+) -> dict[str, str]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        last = query_death_reset_state(pipe_name)
+        if (
+            last.get("scene") == "hub"
+            and last.get("session_state") == "in-hub"
+            and _integer(last, "participant_count") == 2
+            and not values_have_materialized_remote(last)
+        ):
+            return last
+        time.sleep(0.1)
+    raise VerifyFailure(
+        "host did not remain playable in the hub without materializing the "
+        f"still-picking client: {last}"
     )
 
 
@@ -1639,25 +1729,110 @@ def advance_stock_post_game_over(
 
 def advance_stock_boneyard_game_over(
     process_ids_by_pipe: Mapping[str, int],
+    retained_loadouts_by_pipe: Mapping[str, tuple[str, str]],
 ) -> dict[str, object]:
-    hub = {
-        pipe_name: _drive_stock_click_until(
+    if process_ids_by_pipe.keys() != retained_loadouts_by_pipe.keys():
+        raise ValueError(
+            "owned process and retained-loadout pipe sets must match"
+        )
+    create: dict[str, object] = {}
+    for pipe_name, process_id in process_ids_by_pipe.items():
+        transition = _drive_stock_click_until(
             pipe_name,
             process_id,
             0.5,
             0.5,
             lambda values: (
-                values.get("scene") == "hub"
-                and values.get("session_state") == "in-hub"
+                values.get("surface") == "create"
+                and _integer(values, "create_owner") > 0
+                and values.get("local_loadout_state") == "picking"
+                and _integer(values, "local_loadout_generation") >= 2
             ),
             timeout=60.0,
-            description="same-lobby hub after stock Boneyard Game Over",
+            description="next-generation stock Create after Boneyard Game Over",
         )
-        for pipe_name, process_id in process_ids_by_pipe.items()
+        element, discipline = retained_loadouts_by_pipe[pipe_name]
+        _assert_retained_create_selection(
+            pipe_name,
+            transition["state"],
+            element,
+            discipline,
+        )
+        create[pipe_name] = transition
+
+    confirmations = {
+        pipe_name: _confirm_retained_create_selection(
+            pipe_name,
+            *retained_loadouts_by_pipe[pipe_name],
+        )
+        for pipe_name in process_ids_by_pipe
     }
     return {
-        "progression": "exact-pid-window-input",
+        "progression": "exact-pid-window-input-then-stock-create-confirmation",
         "owned_process_ids": dict(process_ids_by_pipe),
+        "create": create,
+        "confirmations": confirmations,
+    }
+
+
+def _assert_retained_create_selection(
+    pipe_name: str,
+    values: Mapping[str, str],
+    element: str,
+    discipline: str,
+) -> None:
+    expected = (
+        CREATE_ELEMENT_IDS[element],
+        CREATE_DISCIPLINE_IDS[discipline],
+    )
+    actual = (
+        _integer(values, "create_element_selected"),
+        _integer(values, "create_discipline_selected"),
+    )
+    if actual != expected:
+        raise VerifyFailure(
+            f"{pipe_name} did not preselect its previous loadout on the "
+            f"next stock Create surface: expected={expected} actual={actual} "
+            f"state={dict(values)}"
+        )
+
+
+def _confirm_retained_create_selection(
+    pipe_name: str,
+    element: str,
+    discipline: str,
+) -> dict[str, object]:
+    action_id = f"create.select_discipline_{discipline}"
+    ready = _wait_for_state(
+        pipe_name,
+        lambda values: (
+            values.get("surface") == "create"
+            and _integer(values, "create_discipline_enabled") != 0
+            and action_id in values.get("create_action_ids", "").split(",")
+        ),
+        timeout=12.0,
+        description="retained stock Create confirmation readiness",
+    )
+    _assert_retained_create_selection(
+        pipe_name,
+        ready,
+        element,
+        discipline,
+    )
+    action = activate_native_ui_action(pipe_name, action_id, "create")
+    hub = _wait_for_state(
+        pipe_name,
+        lambda values: (
+            values.get("scene") == "hub"
+            and values.get("session_state") == "in-hub"
+        ),
+        timeout=45.0,
+        description="same-lobby hub after one-click retained loadout confirmation",
+    )
+    return {
+        "ready": ready,
+        "action": action,
+        "semantic_confirmation_clicks": 1,
         "hub": hub,
     }
 
@@ -1854,7 +2029,8 @@ def run_solo_verification(
             allow_boneyard_mode=True,
         )
         result["post_game_over"] = advance_stock_boneyard_game_over(
-            {pipe_name: next(iter(owned))}
+            {pipe_name: next(iter(owned))},
+            {pipe_name: ("fire", "mind")},
         )
         result["ok"] = True
         return result
@@ -1892,6 +2068,7 @@ def run_trio_verification(
         third_player=True,
         kill_existing=False,
         instance_prefix=trio_prefix,
+        runtime_root=ROOT / "runtime",
         host_port=ports[2],
         client_port=ports[3],
         third_port=ports[4],
@@ -2093,7 +2270,12 @@ def run_trio_verification(
                 host_pipe: int(launch["hostProcessId"]),
                 client_pipe: int(launch["clientProcessId"]),
                 third_pipe: int(launch["thirdProcessId"]),
-            }
+            },
+            {
+                host_pipe: ("fire", "mind"),
+                client_pipe: ("water", "body"),
+                third_pipe: ("earth", "arcane"),
+            },
         )
         for pipe_name in pipes:
             wait_for_scene(pipe_name, "hub", 60.0)
@@ -2259,6 +2441,7 @@ def run_loading_timeout_verification(
         third_player=False,
         kill_existing=False,
         instance_prefix=pair_prefix,
+        runtime_root=ROOT / "runtime",
         host_port=ports[5],
         client_port=ports[6],
         game_directory=game_directory,
@@ -2482,11 +2665,11 @@ def run_death_reset_pair_verification(
 ) -> dict[str, object]:
     if len(ports) != 2:
         raise ValueError("death-reset verification requires exactly two ports")
-    required_prefix = "bply" if with_bot_play_mod else "drst"
-    if not instance_prefix.startswith(required_prefix):
+    required_prefixes = ("bply",) if with_bot_play_mod else ("drst", "ldt")
+    if not instance_prefix.startswith(required_prefixes):
         raise ValueError(
-            "death-reset verification instance prefix must start with "
-            f"'{required_prefix}'"
+            "death-reset verification instance prefix must start with one of "
+            f"{required_prefixes}"
         )
 
     artifact_directory = ARTIFACT_ROOT / instance_prefix / "death-reset"
@@ -2532,6 +2715,7 @@ def run_death_reset_pair_verification(
             allow_focus_steal=False,
             kill_existing=False,
             instance_prefix=instance_prefix,
+            runtime_root=ROOT / "runtime",
             host_port=ports[0],
             client_port=ports[1],
             third_port=ports[1],
@@ -2698,33 +2882,46 @@ def run_death_reset_pair_verification(
                 )
                 for label, pipe_name in pipes.items()
             }
-            host_first_return = _drive_stock_click_until(
+            host_create = _drive_stock_click_until(
                 host_pipe,
                 int(launch["hostProcessId"]),
                 0.5,
                 0.5,
                 lambda values: (
-                    values.get("scene") == "hub"
-                    and values.get("session_state") == "in-hub"
+                    values.get("surface") == "create"
+                    and _integer(values, "create_owner") > 0
+                    and values.get("local_loadout_state") == "picking"
+                    and _integer(values, "local_loadout_generation") >= 2
                 ),
                 timeout=60.0,
                 description=(
-                    "host-only same-lobby hub before client Game Over return"
+                    "host next-generation stock Create before client return"
                 ),
             )
-            wait_for_remote(
+            _assert_retained_create_selection(
                 host_pipe,
-                CLIENT_ID,
-                CLIENT_NAME,
-                "hub",
-                45.0,
+                host_create["state"],
+                "air",
+                "mind",
             )
-            host_first_hub = _wait_for_death_reset_state(
+            client_during_host_repick = query_session_state(client_pipe)
+            if not terminal_game_over_state_matches(client_during_host_repick):
+                raise VerifyFailure(
+                    "client left native Game Over while only the host advanced "
+                    f"to repick: {client_during_host_repick}"
+                )
+            host_confirmation = _confirm_retained_create_selection(
                 host_pipe,
-                expected_scene="hub",
+                "air",
+                "mind",
             )
+            host_first_hub = _wait_for_unmaterialized_remote_in_hub(host_pipe)
             result["host_first_hub_before_client_return"] = (
                 host_first_hub
+            )
+            time.sleep(1.25)
+            result["host_first_hub_after_join_presentation"] = (
+                _wait_for_unmaterialized_remote_in_hub(host_pipe)
             )
             result["host_first_hub_frame"] = capture_game_backbuffer(
                 host_pipe,
@@ -2734,24 +2931,42 @@ def run_death_reset_pair_verification(
             result["client_state_during_host_first_hub"] = (
                 query_session_state(client_pipe)
             )
-            client_return = _drive_stock_click_until(
+            client_create = _drive_stock_click_until(
                 client_pipe,
                 int(launch["clientProcessId"]),
                 0.5,
                 0.5,
                 lambda values: (
-                    values.get("scene") == "hub"
-                    and values.get("session_state") == "in-hub"
+                    values.get("surface") == "create"
+                    and _integer(values, "create_owner") > 0
+                    and values.get("local_loadout_state") == "picking"
+                    and _integer(values, "local_loadout_generation") >= 2
                 ),
                 timeout=60.0,
                 description=(
-                    "client same-lobby hub after host-first observation"
+                    "client next-generation stock Create after host-first hub"
                 ),
             )
+            _assert_retained_create_selection(
+                client_pipe,
+                client_create["state"],
+                "water",
+                "body",
+            )
+            client_confirmation = _confirm_retained_create_selection(
+                client_pipe,
+                "water",
+                "body",
+            )
             result["post_game_over"] = {
-                "progression": "exact-pid-window-input",
-                "host_first_return": host_first_return,
-                "client_return": client_return,
+                "progression": (
+                    "staggered-stock-create-with-retained-one-click-confirmation"
+                ),
+                "host_create": host_create,
+                "client_during_host_repick": client_during_host_repick,
+                "host_confirmation": host_confirmation,
+                "client_create": client_create,
+                "client_confirmation": client_confirmation,
             }
 
             for pipe_name in pipes.values():
@@ -2846,12 +3061,8 @@ def run_death_reset_pair_verification(
 
             assertions = {
                 "host_first_hub_before_client_return": (
-                    run_boundary_vitality_reset_matches(
-                        host_first_hub,
-                        expected_remote_appearance=(
-                            expected_appearance["host"]
-                        ),
-                        expected_scene="hub",
+                    local_hub_vitality_reset_without_remote_matches(
+                        host_first_hub
                     )
                 ),
             }

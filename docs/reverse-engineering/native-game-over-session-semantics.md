@@ -141,16 +141,17 @@ application thread. The handler only changes state once `controller+0x7C`
 has reached zero, so a call made during the initial fade is a safe no-op.
 Automation must retry the validated handler until the surface advances; call
 return alone is not proof that Hall of Fame accepted the input.
-After the main menu reopens Create, the controller can expose either retained
-values or `0xFFFFFFFF` sentinels. Stock button activation remains valid in
-both states and is what advances the controller. The multiplayer onboarding
-flow therefore observes the player's actual first Create choices at
-`Create+0x1A4` (element) and `Create+0x22C` (discipline), retains their
-semantic action IDs in process memory, and replays those same stock buttons on
-a later post-run Create surface. An explicitly configured native fresh-start
-loadout uses those configured IDs instead. It does not hard-code a fallback
-character, use either sentinel as an action-eligibility gate, or rewrite a
-native selection field.
+After the main menu reopens Create, the multiplayer onboarding flow starts a
+new loadout generation. It remembers the choices committed on the preceding
+Create owner and preselects them on the new stock owner at `Create+0x1A4`
+(element) and `Create+0x22C` (discipline). Both stock choice groups remain
+interactive. Clicking the retained discipline confirms the unchanged loadout
+in one semantic stock action; choosing a different element returns the stock
+controller to its discipline step before that new pair is committed. The
+discipline is masked only while the new pick is uncommitted or, on a client,
+while the authority has not published a world-ready state. This prevents
+stock world creation from bypassing the picker or the host barrier without
+inventing a replacement screen.
 
 Two attempted direct `Gameplay_SwitchRegion(game, 0)` probes are negative
 evidence, not an implementation option. One ran immediately after the
@@ -298,8 +299,10 @@ Static and live gates must prove both sides of the boundary:
   one authority terminal command and a native Boneyard GameOver object on all
   three processes, a fade-only frame with the object tick/input alphas fully
   advanced, the stock private Memoratorium transition, the native Hall of Fame
-  controller transition, and then normal main-menu onboarding back to the
-  shared hub;
+  controller transition, and then a next-generation stock Create picker on
+  every process. Each prior loadout must be visibly preselected and require an
+  explicit stock confirmation before that participant returns to the shared
+  hub;
 - protocol: terminal commands are authority-validated, run-nonce scoped,
   replay-safe, and present in the reliable state path;
 - lifecycle: native Game Over dispatch occurs exactly once per participant and
@@ -310,7 +313,9 @@ executable-path-validated process ID and verifies Mortuary, Hall of Fame, and
 main-menu states. Boneyard coverage waits for the native tick-1000 input
 threshold, sends mouse messages only to the exact owned process window, and
 then verifies the `FUN_005A7F60` front-end branch before the launcher flow
-follows the validated `HallOfFame` controller and returns the same processes
-to the intact lobby hub. It neither activates a foreground window nor mutates
-global mouse state. Lua gameplay-click injection is not evidence for the Game
-Over surface because the native Game Over object owns its own input tick.
+follows the validated `HallOfFame` controller into stock Create. It asserts
+the retained selections there and performs one explicit semantic stock
+confirmation per participant before accepting the intact lobby hub. It
+neither activates a foreground window nor mutates global mouse state. Lua
+gameplay-click injection is not evidence for the Game Over surface because the
+native Game Over object owns its own input tick.

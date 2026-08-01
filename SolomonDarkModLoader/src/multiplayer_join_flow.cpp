@@ -104,6 +104,9 @@ struct JoinFlowState {
     std::uintptr_t active_create_owner_address = 0;
     std::uintptr_t create_vftable_address = 0;
     bool create_pick_committed = false;
+    bool retained_preselection_active = false;
+    std::uint32_t last_committed_element = kCreateSelectionUnset;
+    std::uint32_t last_committed_discipline = kCreateSelectionUnset;
     std::uint32_t loadout_pick_generation = 1;
     std::uint32_t observed_authority_loadout_generation = 0;
     X86Hook create_tick_hook;
@@ -239,6 +242,9 @@ void ResetStateUnlocked(JoinFlowState* state) {
     state->active_create_owner_address = 0;
     state->create_vftable_address = 0;
     state->create_pick_committed = false;
+    state->retained_preselection_active = false;
+    state->last_committed_element = kCreateSelectionUnset;
+    state->last_committed_discipline = kCreateSelectionUnset;
     state->loadout_pick_generation = 1;
     state->observed_authority_loadout_generation = 0;
     state->create_tick_hook = {};
@@ -309,6 +315,7 @@ void BeginNextLoadoutGenerationUnlocked(std::string_view source) {
         ++g_join_flow.loadout_pick_generation;
     }
     g_join_flow.create_pick_committed = false;
+    g_join_flow.retained_preselection_active = false;
     g_join_flow.active_create_owner_address = 0;
     g_join_flow.quick_start_element_dispatched = false;
     g_join_flow.quick_start_discipline_dispatched = false;
@@ -449,6 +456,7 @@ void ObserveCreateOwnerUnlocked(std::uintptr_t owner_address) {
 
     g_join_flow.active_create_owner_address = owner_address;
     g_join_flow.create_pick_committed = false;
+    g_join_flow.retained_preselection_active = false;
     g_join_flow.quick_start_element_dispatched = false;
     g_join_flow.quick_start_discipline_dispatched = false;
     g_join_flow.quick_start_loadout_automation_enabled =
@@ -465,6 +473,39 @@ void ObserveCreateOwnerUnlocked(std::uintptr_t owner_address) {
             owner_address,
             &element_selected,
             &discipline_selected)) {
+        if (element_selected == kCreateSelectionUnset &&
+            discipline_selected == kCreateSelectionUnset &&
+            IsCompletedCreateSelection(
+                g_join_flow.last_committed_element,
+                kCreateElementPointCount) &&
+            IsCompletedCreateSelection(
+                g_join_flow.last_committed_discipline,
+                kCreateDisciplinePointCount)) {
+            auto& memory = ProcessMemory::Instance();
+            const bool element_written = memory.TryWriteField(
+                owner_address,
+                kCreateElementSelectedOffset,
+                g_join_flow.last_committed_element);
+            const bool discipline_written = memory.TryWriteField(
+                owner_address,
+                kCreateDisciplineSelectedOffset,
+                g_join_flow.last_committed_discipline);
+            if (element_written && discipline_written) {
+                element_selected = g_join_flow.last_committed_element;
+                discipline_selected =
+                    g_join_flow.last_committed_discipline;
+                g_join_flow.retained_preselection_active = true;
+            } else {
+                (void)memory.TryWriteField(
+                    owner_address,
+                    kCreateElementSelectedOffset,
+                    kCreateSelectionUnset);
+                (void)memory.TryWriteField(
+                    owner_address,
+                    kCreateDisciplineSelectedOffset,
+                    kCreateSelectionUnset);
+            }
+        }
         Log(
             "Multiplayer loadout picker entered. generation=" +
             std::to_string(g_join_flow.loadout_pick_generation) +
@@ -508,6 +549,35 @@ bool IsCreatePointHit(
     return false;
 }
 
+bool TryReadCreatePoint(
+    std::uintptr_t owner_address,
+    std::size_t point_list_offset,
+    std::size_t point_index,
+    std::int32_t* x,
+    std::int32_t* y) {
+    if (x == nullptr || y == nullptr) {
+        return false;
+    }
+    const auto point_address =
+        owner_address + point_list_offset +
+        point_index * kCreatePointStride;
+    float point_x = 0.0f;
+    float point_y = 0.0f;
+    if (!ProcessMemory::Instance().TryReadValue(
+            point_address,
+            &point_x) ||
+        !ProcessMemory::Instance().TryReadValue(
+            point_address + sizeof(float),
+            &point_y) ||
+        !std::isfinite(point_x) ||
+        !std::isfinite(point_y)) {
+        return false;
+    }
+    *x = static_cast<std::int32_t>(point_x);
+    *y = static_cast<std::int32_t>(point_y);
+    return true;
+}
+
 void __fastcall HookCreateTick(
     void* owner,
     void* /*unused_edx*/) {
@@ -520,6 +590,7 @@ void __fastcall HookCreateTick(
     const auto owner_address =
         reinterpret_cast<std::uintptr_t>(owner);
     bool discipline_masked = false;
+    bool expose_retained_choices = false;
     std::uint32_t retained_discipline =
         kCreateSelectionUnset;
     {
@@ -533,6 +604,9 @@ void __fastcall HookCreateTick(
             const bool gate_world_creation =
                 !g_join_flow.create_pick_committed ||
                 !IsAuthorityWorldReadyForCurrentLoadout(runtime);
+            expose_retained_choices =
+                g_join_flow.retained_preselection_active &&
+                !g_join_flow.create_pick_committed;
             if (gate_world_creation &&
                 ProcessMemory::Instance().TryReadField(
                     owner_address,
@@ -556,6 +630,16 @@ void __fastcall HookCreateTick(
             kCreateDisciplineSelectedOffset,
             retained_discipline);
     }
+    if (expose_retained_choices) {
+        (void)ProcessMemory::Instance().TryWriteField(
+            owner_address,
+            kCreateElementEnabledOffset,
+            std::uint32_t{1});
+        (void)ProcessMemory::Instance().TryWriteField(
+            owner_address,
+            kCreateDisciplineEnabledOffset,
+            std::uint32_t{1});
+    }
 }
 
 void __fastcall HookCreateClick(
@@ -572,6 +656,10 @@ void __fastcall HookCreateClick(
     const auto owner_address =
         reinterpret_cast<std::uintptr_t>(owner);
     bool valid_selection_attempt = false;
+    bool retained_element_change = false;
+    bool replay_retained_element = false;
+    std::int32_t retained_element_x = 0;
+    std::int32_t retained_element_y = 0;
     {
         std::scoped_lock lock(g_join_flow.mutex);
         if (g_join_flow.enabled &&
@@ -596,6 +684,8 @@ void __fastcall HookCreateClick(
                         kCreateElementPointListOffset,
                         x,
                         y)) {
+                    retained_element_change =
+                        g_join_flow.retained_preselection_active;
                     valid_selection_attempt =
                         ProcessMemory::Instance().TryWriteField(
                             owner_address,
@@ -607,11 +697,39 @@ void __fastcall HookCreateClick(
                         kCreateDisciplinePointListOffset,
                         x,
                         y)) {
-                    valid_selection_attempt =
-                        ProcessMemory::Instance().TryWriteField(
-                            owner_address,
-                            kCreateDisciplineSelectedOffset,
-                            kCreateSelectionUnset);
+                    if (g_join_flow.retained_preselection_active) {
+                        valid_selection_attempt =
+                            TryReadCreatePoint(
+                                owner_address,
+                                kCreateElementPointListOffset,
+                                element_selected,
+                                &retained_element_x,
+                                &retained_element_y) &&
+                            ProcessMemory::Instance().TryWriteField(
+                                owner_address,
+                                kCreateElementEnabledOffset,
+                                std::uint32_t{1}) &&
+                            ProcessMemory::Instance().TryWriteField(
+                                owner_address,
+                                kCreateElementSelectedOffset,
+                                kCreateSelectionUnset) &&
+                            ProcessMemory::Instance().TryWriteField(
+                                owner_address,
+                                kCreateDisciplineEnabledOffset,
+                                std::uint32_t{0}) &&
+                            ProcessMemory::Instance().TryWriteField(
+                                owner_address,
+                                kCreateDisciplineSelectedOffset,
+                                kCreateSelectionUnset);
+                        replay_retained_element =
+                            valid_selection_attempt;
+                    } else {
+                        valid_selection_attempt =
+                            ProcessMemory::Instance().TryWriteField(
+                                owner_address,
+                                kCreateDisciplineSelectedOffset,
+                                kCreateSelectionUnset);
+                    }
                 }
             } else {
                 valid_selection_attempt = true;
@@ -619,6 +737,18 @@ void __fastcall HookCreateClick(
         }
     }
 
+    if (replay_retained_element) {
+        original(
+            owner,
+            retained_element_x,
+            retained_element_y);
+        if (!ProcessMemory::Instance().TryWriteField(
+                owner_address,
+                kCreateDisciplineEnabledOffset,
+                std::uint32_t{1})) {
+            return;
+        }
+    }
     original(owner, x, y);
 
     std::scoped_lock lock(g_join_flow.mutex);
@@ -626,6 +756,13 @@ void __fastcall HookCreateClick(
         !valid_selection_attempt ||
         !IsCreateOwner(owner_address)) {
         return;
+    }
+    if (retained_element_change) {
+        (void)ProcessMemory::Instance().TryWriteField(
+            owner_address,
+            kCreateDisciplineSelectedOffset,
+            kCreateSelectionUnset);
+        g_join_flow.retained_preselection_active = false;
     }
     std::uint32_t element_selected = kCreateSelectionUnset;
     std::uint32_t discipline_selected = kCreateSelectionUnset;
@@ -643,6 +780,9 @@ void __fastcall HookCreateClick(
     }
 
     g_join_flow.create_pick_committed = true;
+    g_join_flow.retained_preselection_active = false;
+    g_join_flow.last_committed_element = element_selected;
+    g_join_flow.last_committed_discipline = discipline_selected;
     g_join_flow.quick_start_loadout_automation_consumed = true;
     g_join_flow.quick_start_loadout_automation_enabled = false;
     SetLocalLoadoutPickStateUnlocked(

@@ -21,6 +21,7 @@ param(
     [string]$GameDirectory = "",
     [string]$RuntimeRoot = "",
     [string]$LauncherPath = "",
+    [string]$DirectoryUrl = "",
     [string]$HostSavegamesRoot = "",
     [string]$ClientSavegamesRoot = "",
     [switch]$EnableThird,
@@ -447,6 +448,15 @@ function Start-MultiplayerInstance {
     }
     if (-not [string]::IsNullOrWhiteSpace($runtimeRootOverride)) {
         $args += @("--runtime-root", $runtimeRootOverride)
+    }
+    if ($Role -eq "host" -and
+        -not [string]::IsNullOrWhiteSpace($DirectoryUrl)) {
+        $args += @(
+            "--multiplayer", "host",
+            "--lobby-privacy", "public",
+            "--directory-url", $DirectoryUrl,
+            "--no-invite-dialog"
+        )
     }
 
     Invoke-LauncherWithEnvironment `
@@ -1570,6 +1580,7 @@ if (-not $NoTileWindows) {
     thirdName = if ($EnableThird) { $ThirdName } else { $null }
     instancePrefix = $InstancePrefix
     runtimeRoot = $effectiveRuntimeRoot
+    directoryUrl = $DirectoryUrl
     hostSavegamesRoot = $resolvedHostSavegamesRoot
     clientSavegamesRoot = $resolvedClientSavegamesRoot
     hostLuaPipe = $hostLuaPipe

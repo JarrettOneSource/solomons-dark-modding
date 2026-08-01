@@ -342,6 +342,7 @@ def launch_pair(
     game_directory: Path | None = None,
     launcher_path: Path | None = None,
     runtime_root: Path | None = None,
+    directory_url: str | None = None,
     exact_mod_id: str | None = None,
     exact_mod_ids: Iterable[str] | None = None,
     quick_start: bool = False,
@@ -466,6 +467,8 @@ def launch_pair(
             "-RuntimeRoot",
             path_for_powershell(runtime_root),
         ])
+    if directory_url is not None:
+        args.extend(["-DirectoryUrl", directory_url])
     if host_savegames_root is not None:
         args.extend([
             "-HostSavegamesRoot",
