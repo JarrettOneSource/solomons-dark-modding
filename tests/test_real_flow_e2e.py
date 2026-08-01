@@ -49,6 +49,7 @@ from tools.verify_real_flow_e2e import (
     PairSampler,
     RealFlowFailure,
     _assert_clean_release,
+    _assert_endurance_bot_brain_evidence,
     _drain_authority_damage_log,
     _endurance_enemy_visibility_diagnostic,
     _native_enemy_render_assertion,
@@ -615,6 +616,9 @@ class RealFlowE2ETests(unittest.TestCase):
             "takeover.active": False,
             "takeover.clean": True,
             "takeover.target_valid": False,
+            "takeover.primary_selection_snapshot_pending": False,
+            "takeover.primary_selection_restore_succeeded": True,
+            "takeover.native_state_clear_succeeded": True,
             "takeover.actor_address": 0,
             "takeover.target_actor_address": 0,
             "takeover.pending_movement_frames": 0,
@@ -649,6 +653,78 @@ class RealFlowE2ETests(unittest.TestCase):
             "takeover.control_brain_move_x",
             assertion["explicitZeroFields"],
         )
+
+    def test_clean_release_proves_exact_primary_selection_restore(self) -> None:
+        state = {
+            "active": False,
+            "desired": False,
+            "focus_active": False,
+            "takeover.active": False,
+            "takeover.clean": True,
+            "takeover.target_valid": False,
+            "takeover.primary_selection_snapshot_pending": False,
+            "takeover.primary_selection_restore_succeeded": True,
+            "takeover.native_state_clear_succeeded": True,
+            "takeover.actor_address": 0,
+            "takeover.target_actor_address": 0,
+            "takeover.pending_movement_frames": 0,
+            "takeover.pending_mouse_left_frames": 0,
+            "takeover.pending_mouse_right_frames": 0,
+            "takeover.pending_scancode_count": 0,
+            "takeover.pending_native_control_frames": 0,
+            "takeover.pending_movement_x": 0.0,
+            "takeover.pending_movement_y": 0.0,
+            "takeover.cast_intent": 0,
+            "takeover.primary_skill_id": 0,
+            "takeover.previous_skill_id": 0,
+            "takeover.current_target_actor_address": 0,
+            "takeover.movement_input_x": 0.0,
+            "takeover.movement_input_y": 0.0,
+            "takeover.control_brain_move_x": 0.0,
+            "takeover.control_brain_move_y": 0.0,
+            "player.actor_address": 0x1234,
+            "takeover.last_primary_selection_restored_actor_address": (
+                0x1234
+            ),
+            "takeover.last_primary_selection_restored_state": 0,
+            "takeover.primary_selection_state": 0,
+        }
+
+        assertion = _assert_clean_release(
+            state,
+            expected_selection_state=0,
+        )
+        self.assertEqual(assertion["expectedSelectionState"], 0)
+        state["takeover.primary_selection_state"] = 16
+        with self.assertRaisesRegex(
+            RealFlowFailure,
+            "release retained control state",
+        ):
+            _assert_clean_release(state, expected_selection_state=0)
+
+    def test_endurance_bot_brain_requires_pick_and_mana_cycle(self) -> None:
+        bot = {
+            "brain.skill_choices_accepted": 3,
+            "brain.mana_hold_start_count": 4,
+            "brain.mana_hold_end_count": 3,
+            "brain.cast_accepted": 20,
+            "brain.move_accepted": 10,
+            "brain.mp_ratio": 0.3,
+            "brain.mana_cast_hold": True,
+        }
+        evidence = _assert_endurance_bot_brain_evidence(
+            {"host": dict(bot), "clientB": dict(bot)}
+        )
+        self.assertEqual(evidence["host"]["skillChoicesAccepted"], 3)
+        broken = dict(bot)
+        broken["brain.mana_hold_end_count"] = 0
+        with self.assertRaisesRegex(
+            RealFlowFailure,
+            "acceptance evidence was incomplete",
+        ):
+            _assert_endurance_bot_brain_evidence(
+                {"host": dict(bot), "clientB": broken}
+            )
 
     def _config_document(self, root: Path) -> dict[str, object]:
         source = root / "source"

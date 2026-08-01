@@ -125,6 +125,18 @@ emit("brain.think_count", brain.think_count or 0)
 emit("brain.move_accepted", brain.move_accepted or 0)
 emit("brain.cast_issued", brain.cast_issued or 0)
 emit("brain.cast_accepted", brain.cast_accepted or 0)
+emit("brain.skill_choices_accepted",
+  brain.skill_choices_accepted or 0)
+emit("brain.mana_sample_valid",
+  brain.mana_sample_valid or false)
+emit("brain.mana_cast_hold", brain.mana_cast_hold or false)
+emit("brain.mana_hold_start_count",
+  brain.mana_hold_start_count or 0)
+emit("brain.mana_hold_end_count",
+  brain.mana_hold_end_count or 0)
+emit("brain.mp", brain.mp or 0)
+emit("brain.max_mp", brain.max_mp or 0)
+emit("brain.mp_ratio", brain.mp_ratio or 0)
 emit("brain.target_network_actor_id",
   brain.target_network_actor_id or 0)
 emit("brain.live_enemy_count", brain.live_enemy_count or 0)
@@ -138,6 +150,14 @@ for _, key in ipairs({
   "clean",
   "owner_mod_id",
   "actor_address",
+  "primary_selection_snapshot_pending",
+  "primary_selection_restore_succeeded",
+  "native_state_clear_succeeded",
+  "primary_selection_actor_address",
+  "primary_selection_state_before",
+  "primary_selection_state_current",
+  "last_primary_selection_restored_actor_address",
+  "last_primary_selection_restored_state",
   "target_actor_address",
   "target_valid",
   "movement_input_x",
@@ -158,6 +178,7 @@ for _, key in ipairs({
 }) do
   emit("takeover." .. key, takeover[key])
 end
+emit("player.actor_address", player and player.actor_address or 0)
 emit("takeover.primary_selection_state",
   player and player.resolved_animation_state_id or -999)
 """
@@ -893,6 +914,11 @@ def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
         "takeover.active",
         "takeover.clean",
         "takeover.target_valid",
+        "takeover.primary_selection_snapshot_pending",
+        "takeover.primary_selection_restore_succeeded",
+        "takeover.native_state_clear_succeeded",
+        "brain.mana_sample_valid",
+        "brain.mana_cast_hold",
     }
     integer_keys = {
         "participant_id",
@@ -903,9 +929,17 @@ def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
         "brain.move_accepted",
         "brain.cast_issued",
         "brain.cast_accepted",
+        "brain.skill_choices_accepted",
+        "brain.mana_hold_start_count",
+        "brain.mana_hold_end_count",
         "brain.target_network_actor_id",
         "brain.live_enemy_count",
         "takeover.actor_address",
+        "takeover.primary_selection_actor_address",
+        "takeover.primary_selection_state_before",
+        "takeover.primary_selection_state_current",
+        "takeover.last_primary_selection_restored_actor_address",
+        "takeover.last_primary_selection_restored_state",
         "takeover.target_actor_address",
         "takeover.pending_movement_frames",
         "takeover.pending_mouse_left_frames",
@@ -916,12 +950,17 @@ def _bot_probe(pipe: LuaPipe) -> dict[str, Any]:
         "takeover.primary_skill_id",
         "takeover.previous_skill_id",
         "takeover.current_target_actor_address",
+        "player.actor_address",
+        "takeover.primary_selection_state",
     }
     float_keys = {
         "brain.attack_window_max",
         "brain.nearest_enemy_distance",
         "brain.target_distance",
         "brain.hp_ratio",
+        "brain.mp",
+        "brain.max_mp",
+        "brain.mp_ratio",
         "takeover.movement_input_x",
         "takeover.movement_input_y",
         "takeover.pending_movement_x",
@@ -1015,6 +1054,7 @@ def _assert_clean_release(
     state: dict[str, Any],
     *,
     after_human_input: bool = False,
+    expected_selection_state: int | None = None,
 ) -> dict[str, Any]:
     takeover_exact_zero = (
         "takeover.actor_address",
@@ -1063,11 +1103,52 @@ def _assert_clean_release(
             )
         }
     )
+    if expected_selection_state is not None:
+        selection_fields = {
+            "takeover.last_primary_selection_restored_actor_address": int(
+                state.get(
+                    "takeover.last_primary_selection_restored_actor_address",
+                    0,
+                )
+            ),
+            "player.actor_address": int(
+                state.get("player.actor_address", 0)
+            ),
+            "takeover.last_primary_selection_restored_state": int(
+                state.get(
+                    "takeover.last_primary_selection_restored_state",
+                    -999,
+                )
+            ),
+            "takeover.primary_selection_state": int(
+                state.get("takeover.primary_selection_state", -999)
+            ),
+        }
+        if (
+            selection_fields[
+                "takeover.last_primary_selection_restored_actor_address"
+            ]
+            <= 0
+            or selection_fields[
+                "takeover.last_primary_selection_restored_actor_address"
+            ]
+            != selection_fields["player.actor_address"]
+            or selection_fields[
+                "takeover.last_primary_selection_restored_state"
+            ]
+            != expected_selection_state
+            or selection_fields["takeover.primary_selection_state"]
+            != expected_selection_state
+        ):
+            failures.update(selection_fields)
     if (
         state.get("active") is True
         or state.get("desired") is True
         or state.get("takeover.active") is True
         or state.get("takeover.clean") is not True
+        or state.get("takeover.primary_selection_snapshot_pending") is True
+        or state.get("takeover.primary_selection_restore_succeeded") is not True
+        or state.get("takeover.native_state_clear_succeeded") is not True
         or state.get("takeover.target_valid") is True
         or state.get("focus_active") is True
         or failures
@@ -1079,9 +1160,68 @@ def _assert_clean_release(
     return {
         "clean": True,
         "afterHumanInput": after_human_input,
+        "expectedSelectionState": expected_selection_state,
         "explicitZeroFields": list(exact_zero + float_zero),
         "state": state,
     }
+
+
+def _send_peer_key(
+    config: HarnessConfig,
+    peer: WindowsPeer,
+    key: str,
+    hold_ms: int,
+) -> str:
+    remote_send = getattr(peer, "send_key", None)
+    if callable(remote_send):
+        return str(remote_send(key, hold_ms))
+    return send_key(config.source_root, peer, key, hold_ms)
+
+
+def _assert_endurance_bot_brain_evidence(
+    bots: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    accepted: dict[str, Any] = {}
+    failures: dict[str, Any] = {}
+    for role in ("host", "clientB"):
+        bot = bots[role]
+        evidence = {
+            "skillChoicesAccepted": int(
+                bot.get("brain.skill_choices_accepted", 0)
+            ),
+            "manaHoldStarts": int(
+                bot.get("brain.mana_hold_start_count", 0)
+            ),
+            "manaHoldEnds": int(
+                bot.get("brain.mana_hold_end_count", 0)
+            ),
+            "castAccepted": int(bot.get("brain.cast_accepted", 0)),
+            "moveAccepted": int(bot.get("brain.move_accepted", 0)),
+            "lastManaRatio": float(bot.get("brain.mp_ratio", 0.0)),
+            "holdingAtEnd": bool(bot.get("brain.mana_cast_hold", False)),
+        }
+        role_failures: list[str] = []
+        if evidence["skillChoicesAccepted"] <= 0:
+            role_failures.append("no random skill choice was accepted")
+        if evidence["manaHoldStarts"] <= 0:
+            role_failures.append("the 10 percent mana hold never started")
+        if evidence["manaHoldEnds"] <= 0:
+            role_failures.append("the 80 percent mana resume never completed")
+        if evidence["manaHoldEnds"] > evidence["manaHoldStarts"]:
+            role_failures.append("mana resume count exceeded hold count")
+        if evidence["castAccepted"] <= 0:
+            role_failures.append("no primary cast was accepted")
+        if evidence["moveAccepted"] <= 0:
+            role_failures.append("no movement was accepted")
+        accepted[role] = evidence
+        if role_failures:
+            failures[role] = role_failures
+    if failures:
+        raise RealFlowFailure(
+            "endurance bot-brain acceptance evidence was incomplete: "
+            f"failures={failures} bots={bots}"
+        )
+    return accepted
 
 
 def _reset_damage_observations(
@@ -1933,6 +2073,125 @@ def _run_bot_play_endurance(
             runtime_participant_ids[role]
         )
 
+    sampler.set_phase("bot-play-endurance-f9-handback-preflight")
+    active_before_f9 = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            lambda state: (
+                _bot_is_driving(
+                    state,
+                    runtime_participant_ids["host"],
+                )
+                and state.get(
+                    "takeover.primary_selection_snapshot_pending"
+                )
+                is True
+                and int(
+                    state.get(
+                        "takeover.primary_selection_actor_address",
+                        0,
+                    )
+                )
+                > 0
+            ),
+            timeout=15.0,
+            label="endurance host primed selection before live F9",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            lambda state: (
+                _bot_is_driving(
+                    state,
+                    runtime_participant_ids["clientB"],
+                )
+                and state.get(
+                    "takeover.primary_selection_snapshot_pending"
+                )
+                is True
+                and int(
+                    state.get(
+                        "takeover.primary_selection_actor_address",
+                        0,
+                    )
+                )
+                > 0
+            ),
+            timeout=15.0,
+            label="endurance client primed selection before live F9",
+        ),
+    }
+    f9_disable_requests = {
+        "host": _send_peer_key(config, host, "f9", 100),
+        "clientB": _send_peer_key(config, client, "f9", 100),
+    }
+    released_after_f9 = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            lambda state: (
+                state.get("desired") is False
+                and state.get("active") is False
+                and state.get("takeover.active") is False
+                and state.get("takeover.clean") is True
+            ),
+            timeout=5.0,
+            label="endurance host live F9 handback",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            lambda state: (
+                state.get("desired") is False
+                and state.get("active") is False
+                and state.get("takeover.active") is False
+                and state.get("takeover.clean") is True
+            ),
+            timeout=5.0,
+            label="endurance client live F9 handback",
+        ),
+    }
+    live_f9_handback = {
+        "disableRequests": f9_disable_requests,
+        "activeBefore": active_before_f9,
+        "released": {
+            role: _assert_clean_release(
+                state,
+                expected_selection_state=int(
+                    active_before_f9[role][
+                        "takeover.primary_selection_state_before"
+                    ]
+                ),
+            )
+            for role, state in released_after_f9.items()
+        },
+    }
+    f9_enable_requests = {
+        "host": _send_peer_key(config, host, "f9", 100),
+        "clientB": _send_peer_key(config, client, "f9", 100),
+    }
+    reactivated_after_f9 = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            lambda state: _bot_is_driving(
+                state,
+                runtime_participant_ids["host"],
+            ),
+            timeout=5.0,
+            label="endurance host F9 reactivation",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            lambda state: _bot_is_driving(
+                state,
+                runtime_participant_ids["clientB"],
+            ),
+            timeout=5.0,
+            label="endurance client F9 reactivation",
+        ),
+    }
+    live_f9_handback["enableRequests"] = f9_enable_requests
+    live_f9_handback["reactivated"] = reactivated_after_f9
+    sampler.sample_now("endurance-live-f9-handback-complete")
+    result["liveF9Handback"] = live_f9_handback
+
     sampler.set_phase("bot-play-endurance")
     tracker = FighterStatsTracker(damage_participant_ids)
     monitor = EnduranceAnomalyMonitor()
@@ -2324,6 +2583,7 @@ def _run_bot_play_endurance(
         },
         damage_participant_ids,
     )
+    bot_brain_evidence = _assert_endurance_bot_brain_evidence(final_bots)
     for role, stats in fighter_stats.items():
         if stats["damageDealtEdges"] == 0:
             findings.append(
@@ -2347,6 +2607,43 @@ def _run_bot_play_endurance(
             "endurance produced no paired wave-milestone capture"
         )
 
+    sampler.set_phase("bot-play-endurance-f9-handback")
+    f9_requests = {
+        "host": _send_peer_key(config, host, "f9", 100),
+        "clientB": _send_peer_key(config, client, "f9", 100),
+    }
+    released_bots = {
+        "host": _wait_for_bot_state(
+            host_pipe,
+            lambda state: (
+                state.get("desired") is False
+                and state.get("active") is False
+                and state.get("takeover.active") is False
+                and state.get("takeover.clean") is True
+            ),
+            timeout=5.0,
+            label="endurance host F9 handback",
+        ),
+        "clientB": _wait_for_bot_state(
+            client_pipe,
+            lambda state: (
+                state.get("desired") is False
+                and state.get("active") is False
+                and state.get("takeover.active") is False
+                and state.get("takeover.clean") is True
+            ),
+            timeout=5.0,
+            label="endurance client F9 handback",
+        ),
+    }
+    f9_handback = {
+        "requests": f9_requests,
+        "peers": {
+            role: _assert_clean_release(state)
+            for role, state in released_bots.items()
+        },
+    }
+
     result.update(
         {
             "startedUtcNanoseconds": started_utc_ns,
@@ -2365,6 +2662,7 @@ def _run_bot_play_endurance(
                 "clientOriginPlayer": len(client_origin_player_rows),
             },
             "realPrimaryDamage": real_primary_damage,
+            "botBrainAcceptance": bot_brain_evidence,
             "damageEvidencePath": str(
                 config.evidence_root / "endurance-damage.jsonl"
             ),
@@ -2377,6 +2675,7 @@ def _run_bot_play_endurance(
             "gameOverOrLimitCapture": game_over_capture,
             "findings": findings,
             "finalBots": final_bots,
+            "f9Handback": f9_handback,
             "finalState": final_sample,
             "completedPhase": (
                 "bot-play-natural-game-over"

@@ -659,3 +659,13 @@ spell-scale origin damage plus host-applied damage from each fighter, live state
 and transport sampling throughout the match, paired milestone screenshots,
 equipped-primary persistence after every observed respawn, a verified clean
 terminal handback, and either natural Game Over or the 90-minute cap.
+
+The rerun classifier performs the handback proof while both actors are alive
+and their takeover selection snapshots are pending. It presses F9 in each
+owned game window, requires the current actor and the recorded restored actor
+to match, and requires both the last-restored selection and the live actor's
+selection to equal the exact pre-takeover value. It then presses F9 again and
+requires both takeovers to reactivate before the endurance clock starts. A
+second terminal F9 leaves both peers clean for artifact collection. The same
+classifier rejects a run unless each peer records at least one random skill
+pick and a complete 10%-hold to 80%-resume mana cycle.
