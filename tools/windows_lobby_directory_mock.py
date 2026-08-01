@@ -10,9 +10,20 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 MAX_BODY_BYTES = 1024 * 1024
+MOD_UPDATE_RESPONSE = b'{"updates":[]}'
+LOBBY_ANNOUNCE_RESPONSE = b'{"id":1,"expiresInSeconds":60}'
+
+
+def _post_route(path: str) -> tuple[bytes | None, bool]:
+    if path == "/api/mods/updates":
+        return MOD_UPDATE_RESPONSE, True
+    if path == "/api/lobbies/announce":
+        return LOBBY_ANNOUNCE_RESPONSE, True
+    return None, False
 
 
 def _read_chunked_body(handler: BaseHTTPRequestHandler) -> bytes:
@@ -73,8 +84,15 @@ def serve(port: int, events_path: Path, ready_path: Path, stop_path: Path) -> No
             except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
                 self.send_error(400)
                 return
-            self._record("POST", body)
-            response = b'{"id":1,"expiresInSeconds":60}'
+            path = urlsplit(self.path).path
+            response, record_body = _post_route(path)
+            if record_body:
+                self._record("POST", body)
+            else:
+                self._record("POST")
+            if response is None:
+                self.send_error(404)
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response)))
