@@ -259,9 +259,9 @@ void ResetLocalEnemyDamageClaimObservation(std::uint64_t network_actor_id);
 bool TakeLocalEnemyDamageClaimObservation(
     std::uint64_t network_actor_id,
     LocalEnemyDamageClaimObservation* observation);
-bool HasLocalPendingLethalEnemyDamageClaim(
-    std::uint64_t network_actor_id,
-    std::uint64_t now_ms);
+bool ShouldSuppressLocalClientRunEnemyDeathPresentation(
+    uintptr_t actor_address,
+    float* authoritative_hp_out);
 bool TryFindLocalRunEnemyByNetworkId(
     std::uint64_t network_actor_id,
     SDModSceneActorState* actor_out);

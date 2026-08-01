@@ -295,6 +295,7 @@ std::size_t kGameplayInputGateFlagOffset = 0;
 std::size_t kGameplayRegionTableOffset = 0;
 std::size_t kGameplayPlayerActorOffset = 0;
 std::size_t kGameplayPlayerProgressionHandleOffset = 0;
+std::size_t kGameplayAllyHealthbarCountOffset = 0;
 std::size_t kGameplayInputBufferIndexOffset = 0;
 std::size_t kGameplayInputMouseButtonMaskOffset = 0;
 std::size_t kGameplayActorAttachSubobjectOffset = 0;

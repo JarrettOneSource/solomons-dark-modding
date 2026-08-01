@@ -25,17 +25,32 @@ bool NativeRemoteParticipantPlaybackTargetIsMoving(
 
 #include "native_remote_death_drop.inl"
 
-bool SubmitNativeRemoteParticipantCorpseLight(
+bool SubmitMissingNativeRemoteParticipantLight(
     const ParticipantEntityBinding* binding,
     uintptr_t actor_address) {
     if (!IsPacketDrivenRemoteParticipantBinding(binding) ||
-        !binding->native_remote_death_epoch_active ||
-        actor_address == 0) {
+        actor_address == 0 ||
+        kActorSlotOffset == 0 ||
+        kActorAnimationDriveStateByteOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    std::int8_t actor_slot = -1;
+    std::uint8_t animation_drive_state = 0;
+    if (!memory.TryReadField(actor_address, kActorSlotOffset, &actor_slot) ||
+        !memory.TryReadField(
+            actor_address,
+            kActorAnimationDriveStateByteOffset,
+            &animation_drive_state) ||
+        actor_slot <= 0 ||
+        actor_slot >= static_cast<std::int8_t>(kGameplayPlayerSlotCount) ||
+        animation_drive_state == 0) {
         return false;
     }
 
     const auto light_submit_address =
-        ProcessMemory::Instance().ResolveGameAddressOrZero(
+        memory.ResolveGameAddressOrZero(
             kPlayerActorLightSubmit);
     if (light_submit_address == 0) {
         return false;
@@ -56,14 +71,12 @@ bool SubmitNativeRemoteParticipantCorpseLight(
     return submitted && exception_code == 0 && slot_context.restored;
 }
 
-void SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame() {
+void SubmitMissingNativeRemoteParticipantLightsForCurrentFrame() {
     std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
     for (const auto& binding : g_participant_entities) {
-        if (binding.native_remote_death_epoch_active) {
-            (void)SubmitNativeRemoteParticipantCorpseLight(
-                &binding,
-                binding.actor_address);
-        }
+        (void)SubmitMissingNativeRemoteParticipantLight(
+            &binding,
+            binding.actor_address);
     }
 }
 

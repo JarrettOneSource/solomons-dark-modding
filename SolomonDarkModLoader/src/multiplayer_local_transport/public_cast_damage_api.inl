@@ -116,10 +116,42 @@ void RecordReplicatedAirChainTargetOverride(
         applied);
 }
 
-bool HasLocalPendingLethalEnemyDamageClaim(
-    std::uint64_t network_actor_id,
-    std::uint64_t now_ms) {
-    return HasLocalPendingLethalEnemyDamageClaimInternal(network_actor_id, now_ms);
+bool ShouldSuppressLocalClientRunEnemyDeathPresentation(
+    uintptr_t actor_address,
+    float* authoritative_hp_out) {
+    if (authoritative_hp_out != nullptr) {
+        *authoritative_hp_out = 0.0f;
+    }
+    if (!IsLocalTransportClient() || actor_address == 0) {
+        return false;
+    }
+
+    const auto network_actor_id =
+        FindReplicatedLocalNetworkActorId(actor_address);
+    if (network_actor_id == 0) {
+        return false;
+    }
+    if (sdmod::HasReplicatedRunEnemyDeathPresentation(network_actor_id)) {
+        return false;
+    }
+
+    const auto runtime_state = SnapshotRuntimeState();
+    for (const auto& actor : runtime_state.world_snapshot.actors) {
+        if (actor.network_actor_id != network_actor_id ||
+            !actor.tracked_enemy) {
+            continue;
+        }
+        if (authoritative_hp_out != nullptr && std::isfinite(actor.hp)) {
+            *authoritative_hp_out = actor.hp;
+        }
+        return !actor.dead &&
+               (!std::isfinite(actor.hp) ||
+                actor.hp > kEnemyDamageClaimHpEpsilon);
+    }
+
+    // A live replicated binding without a current authoritative death is not
+    // permission to run the terminal native presentation.
+    return true;
 }
 
 bool HasReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id) {
@@ -148,7 +180,6 @@ void ClearReplicatedRunEnemyDamageBaseline(std::uint64_t network_actor_id) {
     g_local_transport.last_synced_enemy_hp_by_network_id.erase(network_actor_id);
     g_local_transport.last_enemy_claimed_hp_by_network_id.erase(network_actor_id);
     g_local_transport.observed_enemy_damage_by_network_id.erase(network_actor_id);
-    g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(network_actor_id);
     g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(network_actor_id);
 }
 

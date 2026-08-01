@@ -331,12 +331,6 @@ bool ApplyReplicatedRunEnemyHealth(
     }
     const bool authoritative_dead =
         authoritative_actor.dead || authoritative_hp <= kReplicatedRunEnemyDeathHpEpsilon;
-    if (multiplayer::IsLocalTransportClient() &&
-        !authoritative_dead &&
-        (HasReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id) ||
-         multiplayer::HasLocalPendingLethalEnemyDamageClaim(authoritative_actor.network_actor_id, now_ms))) {
-        return false;
-    }
     const bool max_hp_changed = std::fabs(local_health.max_hp - authoritative_max_hp) > 0.01f;
     const bool max_hp_synced =
         std::fabs(local_health.max_hp - authoritative_max_hp) <= 0.05f;
@@ -395,6 +389,9 @@ bool ApplyReplicatedRunEnemyHealth(
     }
     if (wrote && authoritative_dead && !death_handled) {
         std::uint32_t death_exception_code = 0;
+        MarkReplicatedRunEnemyDeathPresentationStarted(
+            authoritative_actor.network_actor_id,
+            now_ms);
         const bool death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
         ClearManualRunEnemyFreeze(actor_address);
         Log(
@@ -405,9 +402,6 @@ bool ApplyReplicatedRunEnemyHealth(
             " dead=" + std::to_string(authoritative_actor.dead ? 1 : 0) +
             " death_called=" + std::to_string(death_called ? 1 : 0) +
             " death_seh=" + HexString(static_cast<uintptr_t>(death_exception_code)));
-        if (death_called && authoritative_actor.network_actor_id != 0) {
-            MarkReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id, now_ms);
-        }
         if (death_called && multiplayer::IsLocalTransportClient()) {
             SuppressClientLocalLootActors("client_replicated_enemy_death_snapshot");
         }

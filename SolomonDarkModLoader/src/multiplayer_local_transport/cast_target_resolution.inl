@@ -610,6 +610,7 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
             const bool death_already_presented =
                 sdmod::HasReplicatedRunEnemyDeathPresentation(packet.target_network_actor_id);
             if (!death_already_presented) {
+                sdmod::MarkReplicatedRunEnemyDeathPresented(packet.target_network_actor_id);
                 death_called = sdmod::TryTriggerRunEnemyDeath(actor_address, &death_exception_code);
             }
             sdmod::ClearManualRunEnemyFreeze(actor_address);
@@ -630,8 +631,6 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
                 g_local_transport.last_enemy_claimed_hp_by_network_id[packet.target_network_actor_id] =
                     packet.authoritative_hp;
             }
-            g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(
-                packet.target_network_actor_id);
             g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(
                 packet.target_network_actor_id);
         } else {
@@ -639,8 +638,6 @@ void ApplyEnemyDamageCorrection(const EnemyDamageResultPacket& packet) {
                 packet.target_network_actor_id,
                 packet.authoritative_hp);
             g_local_transport.last_enemy_claimed_hp_by_network_id.erase(packet.target_network_actor_id);
-            g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(
-                packet.target_network_actor_id);
             g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms[packet.target_network_actor_id] =
                 static_cast<std::uint64_t>(GetTickCount64()) +
                 kEnemyDamageRejectedRetrySuppressMs;

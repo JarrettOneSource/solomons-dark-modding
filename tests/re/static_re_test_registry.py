@@ -264,6 +264,7 @@ from static_re_multiplayer_combat_contracts import (
     test_bot_level_sync_uses_native_level_up,
     test_bot_skill_upgrade_combat_probe_checks_native_damage_and_mana,
     test_bot_upgrade_damage_delta_probe_checks_native_mana_projection_and_release_policy,
+    test_client_enemy_death_presentation_requires_host_authority,
     test_primary_slot_gate_registry_is_authoritative_and_cast_scoped,
     test_hub_start_match_uses_stock_generated_boneyard_selection,
     test_hub_start_match_waits_for_app_tick_pump,
@@ -368,6 +369,7 @@ from static_re_runtime_cast_contracts import (
     test_earth_primary_is_captured_from_its_native_dispatcher,
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
+    test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration,
     test_player_control_brain_requires_published_gameplay_slot,
     test_primary_cast_lane_requires_native_collision_segment,
     test_queued_mouse_holds_use_player_tick_duration,
@@ -378,6 +380,9 @@ from static_re_runtime_cast_contracts import (
     test_water_live_verifier_requires_native_visual_emission,
     test_write_watch_rearm_is_owned_by_faulting_thread,
     test_write_watches_are_transparent_to_loader_memory_access,
+)
+from static_wan_corpse_rendering_contracts import (
+    test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
 )
 from static_re_audio_disable_contracts import (
     test_automation_launch_surfaces_default_to_disabled_audio,
@@ -1458,4 +1463,16 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Repo-wide native reads reject substitute state", test_repo_wide_native_reads_do_not_publish_substitute_state),
     ("Path builder rejects unrequested alternate goals", test_path_builder_does_not_walk_to_unrequested_alternate_goals),
     ("Path builder expands cells before LOS smoothing", test_path_builder_expands_cells_before_los_smoothing),
+    (
+        "local control-brain retires only its invalid ally-HUD registration",
+        test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration,
+    ),
+    (
+        "client enemy death presentation requires host authority",
+        test_client_enemy_death_presentation_requires_host_authority,
+    ),
+    (
+        "driven remote players use the skipped stock light branch",
+        test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
+    ),
 ]

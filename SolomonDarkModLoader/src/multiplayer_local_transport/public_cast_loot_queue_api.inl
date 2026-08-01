@@ -200,11 +200,6 @@ void QueueLocalEnemyDamageClaim(
         !IsLocalTransportClient() ||
         HasReplicatedRunEnemyDamageBaseline(network_actor_id);
     g_queued_local_enemy_damage_claims.push_back(claim);
-    if (local_hp <= kEnemyDamageClaimHpEpsilon && IsLocalTransportClient()) {
-        g_local_transport.pending_lethal_enemy_damage_claim_until_ms[network_actor_id] =
-            static_cast<std::uint64_t>(GetTickCount64()) +
-            kEnemyDamageLethalClaimPendingSuppressMs;
-    }
 }
 
 void NotifyLocalRunEnemyDeath(uintptr_t actor_address) {

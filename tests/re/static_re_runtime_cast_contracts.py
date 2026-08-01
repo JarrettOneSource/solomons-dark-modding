@@ -1888,3 +1888,48 @@ def test_player_control_brain_requires_published_gameplay_slot() -> str:
             "unpublished player actors must not reach the stock control-brain routine")
 
     return "player control-brain skips actors until the current gameplay slot table owns them"
+
+
+def test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration() -> str:
+    config = read_text(ROOT / "config/binary-layout.ini")
+    player_control_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
+    )
+
+    assert "gameplay_ally_healthbar_count=0x1C20" in config
+    hook_start = player_control_text.index(
+        "void __fastcall HookPlayerControlBrainUpdate("
+    )
+    hook_end = player_control_text.index(
+        "bool IsActorCurrentLocalPlayerSlotZero(", hook_start
+    )
+    hook = player_control_text[hook_start:hook_end]
+    required_tokens = (
+        "publication_actor_slot == 0",
+        "kGameplayAllyHealthbarCountOffset",
+        "ally_healthbar_count_before",
+        "original(self, param2, param3);",
+        "ally_healthbar_count_after == ally_healthbar_count_before + 1",
+        "ally_healthbar_count_before))",
+        "retired stock local-player ally HUD registration",
+    )
+    missing = [token for token in required_tokens if token not in hook]
+    if missing:
+        raise StaticReTestFailure(
+            "local control-brain ally-HUD ownership repair is missing token(s): "
+            + ", ".join(missing)
+        )
+    if hook.index("ally_healthbar_count_before") > hook.index(
+        "original(self, param2, param3);"
+    ):
+        raise StaticReTestFailure(
+            "the local ally-HUD count must be captured before the stock append"
+        )
+    if hook.index("ally_healthbar_count_after ==") < hook.index(
+        "original(self, param2, param3);"
+    ):
+        raise StaticReTestFailure(
+            "the stock append must be observed before its invalid local registration is retired"
+        )
+
+    return "slot zero keeps stock self-HUD ownership while remote control brains keep native ally rows"

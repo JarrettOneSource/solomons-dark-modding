@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify client-originated enemy damage claims and host rollback corrections."""
+"""Verify client damage claims, authority-gated death, and rollback corrections."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ for _, binding in ipairs(replicated.bindings) do
 end
 if best ~= nil then
   local target_hp = math.max(1.0, math.min(best.before_hp, best.snapshot_hp) * 0.5)
-  if mode == "kill" then target_hp = 0.0 end
+  if mode == "kill" or mode == "kill_drift" then target_hp = 0.0 end
   emit("ok", true)
   emit("network_actor_id", string.format("%.0f", best.network_id))
   emit("local_actor_address", best.local_address)
@@ -153,7 +153,7 @@ if best ~= nil then
       emit("rebind_position", sd.world.rebind_actor(best.local_address))
     end
   end
-  if mode == "damage_drift" then
+  if mode == "damage_drift" or mode == "kill_drift" then
     if sd.input == nil or sd.input.queue_local_enemy_damage_claim == nil then
       emit("ok", false)
       emit("reason", "damage_claim_queue_missing")
@@ -600,7 +600,7 @@ def main() -> int:
         result["rejected_target_seed"] = select_client_enemy()
         result["far_client_vitals"] = set_local_player_vitals(CLIENT_PIPE, TEST_PLAYER_HP, TEST_PLAYER_HP)
         result["client_rejected_damage"] = damage_client_enemy(
-            "damage_drift",
+            "kill_drift",
             result["rejected_target_seed"]["network_actor_id"],
         )
         rejected_target = result["client_rejected_damage"]
@@ -608,6 +608,16 @@ def main() -> int:
             rejected_target["network_actor_id"],
             number(rejected_target, "snapshot_hp"),
         )
+        if int(number(result["client_rollback"], "death_handled")) != 0:
+            raise VerifyFailure(
+                "rejected lethal claim ran client death presentation before host authority: "
+                f"{result['client_rollback']}"
+            )
+        result["client_rejected_lethal_no_death_presentation"] = {
+            "network_actor_id": rejected_target["network_actor_id"],
+            "authoritative_hp": result["client_rollback"].get("hp", ""),
+            "death_handled": result["client_rollback"].get("death_handled", ""),
+        }
         result["host_rejected_target_before_kill"] = wait_for_host_enemy_hp(
             rejected_target,
             number(rejected_target, "snapshot_hp"),
@@ -617,11 +627,6 @@ def main() -> int:
         time.sleep(0.6)
         host_log_before_kill = log_offset(HOST_LOG)
         result["client_kill"] = wait_to_damage_any_client_enemy("kill")
-        result["client_kill_predicted_death_handled"] = wait_for_client_enemy_death_handled(
-            result["client_kill"]["network_actor_id"],
-            result["client_kill"]["local_actor_address"],
-            timeout=3.0,
-        )
         result["host_kill_accept"] = wait_for_host_enemy_killed(result["client_kill"])
         result["host_kill_native_death_presentation_log"] = wait_for_host_enemy_native_death_log(
             result["client_kill"],

@@ -468,7 +468,7 @@ class ReplicatedAudioEventVerifierTests(unittest.TestCase):
             "void SendObservedLocalEnemyDamageClaims(",
             1,
         )[1].split(
-            "bool HasLocalPendingLethalEnemyDamageClaimInternal(",
+            "std::vector<QueuedLocalEnemyDamageClaim> TakeQueuedLocalEnemyDamageClaims(",
             1,
         )[0]
         self.assertIn("observed.in_flight_claim_sequence != 0", send_section)

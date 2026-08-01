@@ -5,6 +5,16 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
     }
 
     const auto self_address = reinterpret_cast<uintptr_t>(self);
+    float authoritative_hp = 0.0f;
+    if (multiplayer::ShouldSuppressLocalClientRunEnemyDeathPresentation(
+            self_address,
+            &authoritative_hp)) {
+        Log(
+            "enemy.death presentation deferred to host authority. enemy=" +
+            HexString(self_address) +
+            " authoritative_hp=" + std::to_string(authoritative_hp));
+        return 0;
+    }
     auto& memory = ProcessMemory::Instance();
     std::uint8_t already_handled_byte = 0;
     const bool have_already_handled =

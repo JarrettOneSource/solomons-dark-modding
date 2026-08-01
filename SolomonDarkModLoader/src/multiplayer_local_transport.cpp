@@ -202,7 +202,6 @@ constexpr float kEnemyDamageClaimMaxTargetDrift = 384.0f;
 constexpr float kEnemyDamageClaimMaxHpFactor = 2.5f;
 constexpr float kEnemyDamageClaimAbsoluteCap = 20000.0f;
 constexpr std::uint64_t kEnemyDamageRejectedRetrySuppressMs = 500;
-constexpr std::uint64_t kEnemyDamageLethalClaimPendingSuppressMs = 2500;
 constexpr std::int32_t kFireballExplodeProgressionEntryId = 18;
 constexpr float kFireballExplodeConfigFootToWorldUnits = 2.4f;
 constexpr float kLootPickupDropDriftMaxDistance = 160.0f;
@@ -1079,7 +1078,6 @@ struct LocalTransportState {
         observed_enemy_damage_by_network_id;
     std::unordered_map<std::uint64_t, std::uint64_t>
         recent_local_air_chain_target_until_ms;
-    std::unordered_map<std::uint64_t, std::uint64_t> pending_lethal_enemy_damage_claim_until_ms;
     std::unordered_map<std::uint64_t, std::uint64_t> rejected_enemy_damage_retry_suppressed_until_ms;
     std::unordered_map<std::uint64_t, std::uint32_t> last_state_packet_sequence_by_participant;
     std::unordered_set<std::uint64_t> capacity_rejected_participant_ids;

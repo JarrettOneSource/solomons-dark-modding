@@ -2070,7 +2070,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (transport_text, "RecordRecentRunEnemyDeathSnapshot"),
         (transport_text, "WorldActorSnapshotFlagDead |"),
         (transport_text, "WorldActorSnapshotFlagTrackedEnemy |"),
-        (transport_text, "local_death_called"),
+        (transport_text, "ShouldSuppressLocalClientRunEnemyDeathPresentation"),
         (transport_text, "(actor.dead || actor.hp > kEnemyDamageClaimHpEpsilon)"),
         (transport_text, "BuildLocalLootSnapshotPacket"),
         (transport_text, "PopulateWorldActorPresentationSnapshot"),

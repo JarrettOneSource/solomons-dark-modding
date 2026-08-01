@@ -17,7 +17,7 @@ void __cdecl HookArenaLightCollectionFinalize() {
         return;
     }
 
-    SubmitNativeRemoteParticipantCorpseLightsForCurrentFrame();
+    SubmitMissingNativeRemoteParticipantLightsForCurrentFrame();
     original();
 }
 

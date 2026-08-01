@@ -520,14 +520,10 @@ def test_replicated_manual_run_enemy_materialization_is_client_bounded() -> str:
         "request.allow_active_waves = allow_active_waves",
         "request.freeze_on_spawn = freeze_on_spawn",
         "if (request.freeze_on_spawn) {",
-        "multiplayer::HasLocalPendingLethalEnemyDamageClaim(authoritative_actor.network_actor_id, now_ms)",
         "if (IsRunLifecycleManualEnemySpawnerTestModeEnabled())",
         "QueueRunLifecycleManualEnemySpawn(",
         "(void)QueueReplicatedManualRunEnemyMaterialization(authoritative_actor, now_ms)",
         "g_replicated_run_pending_enemy_materialization_until_ms.erase(network_actor_id)",
-        "pending_lethal_enemy_damage_claim_until_ms",
-        "kEnemyDamageLethalClaimPendingSuppressMs",
-        "HasLocalPendingLethalEnemyDamageClaim",
         "manual run enemy spawn is host-authoritative while connected to multiplayer.",
     )
     haystacks = {
@@ -578,6 +574,136 @@ def test_replicated_manual_run_enemy_materialization_is_client_bounded() -> str:
             "replicated client catch-up without a live spawner is missing "
             "ownership guard(s): " + ", ".join(direct_missing))
     return "replicated manual run enemy materialization stays client/test-mode bounded and public API remains host-authoritative"
+
+
+def test_client_enemy_death_presentation_requires_host_authority() -> str:
+    damage_sync = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/client_enemy_damage_sync.inl"
+    )
+    damage_api = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/public_cast_damage_api.inl"
+    )
+    correction = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/cast_target_resolution.inl"
+    )
+    health_sync = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/world_snapshot_reconciliation/"
+        "run_enemy_health_and_status.inl"
+    )
+    death_hook = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "enemy_death_reward_level_up_hooks.inl"
+    )
+    live_verifier = read_text(ROOT / "tools/verify_enemy_damage_claim_sync.py")
+    transport = read_multiplayer_transport_source()
+
+    send_start = damage_sync.index("bool SendLocalEnemyDamageClaim(")
+    send_end = damage_sync.index(
+        "void SendObservedLocalEnemyDamageClaims(", send_start
+    )
+    sender = damage_sync[send_start:send_end]
+    for forbidden in (
+        "TryTriggerRunEnemyDeath",
+        "MarkReplicatedRunEnemyDeathPresented",
+        "SuppressClientLocalLootActors",
+        "pending_lethal_enemy_damage_claim",
+    ):
+        if forbidden in sender:
+            raise StaticReTestFailure(
+                "a client damage claim still starts speculative death presentation: "
+                + forbidden
+            )
+
+    gate_start = damage_api.index(
+        "bool ShouldSuppressLocalClientRunEnemyDeathPresentation("
+    )
+    gate_end = damage_api.index(
+        "bool HasReplicatedRunEnemyDamageBaseline(", gate_start
+    )
+    gate = damage_api[gate_start:gate_end]
+    for token in (
+        "FindReplicatedLocalNetworkActorId(actor_address)",
+        "HasReplicatedRunEnemyDeathPresentation(network_actor_id)",
+        "SnapshotRuntimeState()",
+        "runtime_state.world_snapshot.actors",
+        "!actor.dead",
+        "actor.hp > kEnemyDamageClaimHpEpsilon",
+        "return true;",
+    ):
+        assert token in gate
+
+    hook_start = death_hook.index("int __fastcall HookEnemyDeath(")
+    hook_end = death_hook.index("int __stdcall HookGoldChanged(", hook_start)
+    hook = death_hook[hook_start:hook_end]
+    gate_call = hook.index(
+        "ShouldSuppressLocalClientRunEnemyDeathPresentation("
+    )
+    notify_call = hook.index("NotifyLocalRunEnemyDeath(")
+    stock_call = hook.index("original(self, unused_edx);")
+    if not gate_call < notify_call < stock_call:
+        raise StaticReTestFailure(
+            "client authority must gate death before host notification and stock presentation"
+        )
+
+    correction_mark = correction.index(
+        "MarkReplicatedRunEnemyDeathPresented(packet.target_network_actor_id);"
+    )
+    correction_trigger = correction.index(
+        "TryTriggerRunEnemyDeath(actor_address, &death_exception_code)",
+        correction_mark,
+    )
+    if correction_mark > correction_trigger:
+        raise StaticReTestFailure(
+            "accepted lethal correction must authorize the native death call"
+        )
+    snapshot_mark = health_sync.index(
+        "MarkReplicatedRunEnemyDeathPresentationStarted(",
+        health_sync.index("if (wrote && authoritative_dead && !death_handled)"),
+    )
+    snapshot_trigger = health_sync.index(
+        "TryTriggerRunEnemyDeath(actor_address, &death_exception_code)",
+        snapshot_mark,
+    )
+    if snapshot_mark > snapshot_trigger:
+        raise StaticReTestFailure(
+            "authoritative dead snapshots must authorize the native death call"
+        )
+
+    for removed in (
+        "pending_lethal_enemy_damage_claim_until_ms",
+        "kEnemyDamageLethalClaimPendingSuppressMs",
+        "HasLocalPendingLethalEnemyDamageClaim",
+        "client_local_enemy_death_claim",
+    ):
+        if removed in transport:
+            raise StaticReTestFailure(
+                "speculative lethal presentation state was not removed: " + removed
+            )
+
+    for token in (
+        'mode == "kill" or mode == "kill_drift"',
+        '"client_rejected_lethal_no_death_presentation"',
+        '"death_handled"',
+        "rejected lethal claim ran client death presentation before host authority",
+        'result["host_kill_accept"]',
+        'result["client_kill_death_handled"]',
+    ):
+        if token not in live_verifier:
+            raise StaticReTestFailure(
+                "enemy-damage live verifier is missing authority-gate coverage: "
+                + token
+            )
+    if "client_kill_predicted_death_handled" in live_verifier:
+        raise StaticReTestFailure(
+            "enemy-damage live verifier still requires speculative client death"
+        )
+
+    return "client enemy death VFX starts only from an accepted lethal result or authoritative dead snapshot"
 
 
 def test_primary_mana_resolver_accepts_native_dispatcher_entry_ids() -> str:

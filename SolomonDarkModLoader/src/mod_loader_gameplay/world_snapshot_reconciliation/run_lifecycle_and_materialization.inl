@@ -238,7 +238,6 @@ bool QueueReplicatedManualRunEnemyMaterialization(
         authoritative_actor.enemy_type < 0 ||
         IsAuthoritativeRunTrackedEnemyDeadSnapshot(authoritative_actor) ||
         HasReplicatedRunEnemyDeathPresentationStarted(authoritative_actor.network_actor_id) ||
-        multiplayer::HasLocalPendingLethalEnemyDamageClaim(authoritative_actor.network_actor_id, now_ms) ||
         !std::isfinite(authoritative_actor.position_x) ||
         !std::isfinite(authoritative_actor.position_y) ||
         HasPendingReplicatedRunEnemyMaterialization(authoritative_actor.network_actor_id, now_ms)) {

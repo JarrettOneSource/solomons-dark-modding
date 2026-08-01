@@ -148,7 +148,6 @@ bool SendLocalEnemyDamageClaim(
     }
     if (local_hp + kEnemyDamageClaimHpEpsilon >= authoritative_hp) {
         g_local_transport.last_enemy_claimed_hp_by_network_id.erase(network_actor_id);
-        g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(network_actor_id);
         g_local_transport.rejected_enemy_damage_retry_suppressed_until_ms.erase(network_actor_id);
         return false;
     }
@@ -215,27 +214,8 @@ bool SendLocalEnemyDamageClaim(
             packet.claimed_damage,
             associated_skill_id);
     }
-    if (packet.lethal != 0) {
-        g_local_transport.pending_lethal_enemy_damage_claim_until_ms[network_actor_id] =
-            now_ms + kEnemyDamageLethalClaimPendingSuppressMs;
-    }
-
     for (const auto& endpoint : endpoints) {
         SendPacketToEndpoint(packet, endpoint);
-    }
-    std::uint32_t local_death_exception_code = 0;
-    bool local_death_called = false;
-    if (packet.lethal != 0) {
-        const auto local_actor_address = FindReplicatedLocalActorAddress(network_actor_id);
-        if (local_actor_address != 0) {
-            local_death_called =
-                sdmod::TryTriggerRunEnemyDeath(local_actor_address, &local_death_exception_code);
-            sdmod::ClearManualRunEnemyFreeze(local_actor_address);
-            if (local_death_called) {
-                sdmod::MarkReplicatedRunEnemyDeathPresented(network_actor_id);
-                sdmod::SuppressClientLocalLootActors("client_local_enemy_death_claim");
-            }
-        }
     }
     g_local_transport.last_enemy_claimed_hp_by_network_id[network_actor_id] = local_hp;
     Log(
@@ -245,9 +225,7 @@ bool SendLocalEnemyDamageClaim(
         " damage=" + std::to_string(packet.claimed_damage) +
         " after_hp=" + std::to_string(packet.client_after_hp) +
         " baseline_prevalidated=" + std::to_string(baseline_prevalidated ? 1 : 0) +
-        " force_resend=" + std::to_string(force_resend ? 1 : 0) +
-        " local_death_called=" + std::to_string(local_death_called ? 1 : 0) +
-        " local_death_seh=" + HexString(static_cast<uintptr_t>(local_death_exception_code)));
+        " force_resend=" + std::to_string(force_resend ? 1 : 0));
     return true;
 }
 
@@ -353,27 +331,6 @@ void SendObservedLocalEnemyDamageClaims(
             " accumulated_damage=" + std::to_string(claim_damage) +
             " pending_damage=" + std::to_string(observed.pending_damage));
     }
-}
-
-bool HasLocalPendingLethalEnemyDamageClaimInternal(
-    std::uint64_t network_actor_id,
-    std::uint64_t now_ms) {
-    if (!IsLocalTransportClient() || network_actor_id == 0) {
-        return false;
-    }
-    if (now_ms == 0) {
-        now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    }
-    const auto pending_it =
-        g_local_transport.pending_lethal_enemy_damage_claim_until_ms.find(network_actor_id);
-    if (pending_it == g_local_transport.pending_lethal_enemy_damage_claim_until_ms.end()) {
-        return false;
-    }
-    if (pending_it->second > now_ms) {
-        return true;
-    }
-    g_local_transport.pending_lethal_enemy_damage_claim_until_ms.erase(pending_it);
-    return false;
 }
 
 std::vector<QueuedLocalEnemyDamageClaim> TakeQueuedLocalEnemyDamageClaims() {

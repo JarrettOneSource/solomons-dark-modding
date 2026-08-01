@@ -728,7 +728,41 @@ void __fastcall HookPlayerControlBrainUpdate(
                 std::memory_order_release);
         }
     }
+    std::int32_t ally_healthbar_count_before = 0;
+    const bool local_player_ally_healthbar_count_captured =
+        publication_actor_slot == 0 &&
+        kGameplayAllyHealthbarCountOffset != 0 &&
+        memory.TryReadField(
+            publication_gameplay_address,
+            kGameplayAllyHealthbarCountOffset,
+            &ally_healthbar_count_before);
     original(self, param2, param3);
+    if (local_player_ally_healthbar_count_captured &&
+        ally_healthbar_count_before >= 0 &&
+        ally_healthbar_count_before <
+            static_cast<std::int32_t>(kGameplayPlayerSlotCount)) {
+        std::int32_t ally_healthbar_count_after = 0;
+        if (memory.TryReadField(
+                publication_gameplay_address,
+                kGameplayAllyHealthbarCountOffset,
+                &ally_healthbar_count_after) &&
+            ally_healthbar_count_after == ally_healthbar_count_before + 1 &&
+            memory.TryWriteField(
+                publication_gameplay_address,
+                kGameplayAllyHealthbarCountOffset,
+                ally_healthbar_count_before)) {
+            static std::atomic<bool> s_logged_local_ally_healthbar_retirement{false};
+            if (!s_logged_local_ally_healthbar_retirement.exchange(
+                    true,
+                    std::memory_order_acq_rel)) {
+                Log(
+                    "[bots] retired stock local-player ally HUD registration. actor=" +
+                    HexString(actor_address) +
+                    " gameplay=" + HexString(publication_gameplay_address) +
+                    " count_before=" + std::to_string(ally_healthbar_count_before));
+            }
+        }
+    }
     if (sanitize_native_remote_idle_control_brain) {
         ClearIdleNativeRemoteCastReplayState(actor_address, selection_pointer);
         (void)write_vector2(param2, 0.0f, 0.0f);
