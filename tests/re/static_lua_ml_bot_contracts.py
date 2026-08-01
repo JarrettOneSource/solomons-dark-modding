@@ -299,6 +299,9 @@ def test_ml_bot_phase3_observation_masks_and_assists_are_pinned() -> str:
 
 def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
+    listing = json.loads(
+        _read("docs/publication/lua-bots-listing.json")
+    )
     model = json.loads(_read("models/bot-brain/policy-v2.json"))
     historical_v1 = json.loads(
         _read("models/bot-brain/policy-v1.json")
@@ -353,7 +356,9 @@ def test_ml_bot_is_simulation_timed_local_and_native_action_routed() -> str:
         if choice["value"] == "learned"
     )
     assert learned["label"] == "Learned — ML movement and casting"
-    assert "no Python, GPU, or network service" in manifest["description"]
+    assert "without Python, a GPU, or a network service" in listing[
+        "description"
+    ]
 
     assert model["format"] == "solomon-dark-bot-policy"
     assert model["version"] == 2

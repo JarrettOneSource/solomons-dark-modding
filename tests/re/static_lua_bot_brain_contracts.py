@@ -209,6 +209,9 @@ def test_bot_loadout_details_are_cached_address_free_and_observation_safe() -> s
 
 def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     manifest = json.loads(_read("mods/bot-brain/manifest.json"))
+    listing = json.loads(
+        _read("docs/publication/lua-bots-listing.json")
+    )
     main = _read("mods/bot-brain/scripts/main.lua")
     roster = _read("mods/bot-brain/scripts/roster.lua")
     brain = _read("mods/bot-brain/scripts/brain.lua")
@@ -247,24 +250,27 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
     assert manifest["id"] == "bot.brain"
     assert manifest["name"] == "Lua Bots"
     assert manifest["version"] == "1.2.0"
-    assert manifest["summary"] == (
-        "Bot teammates and an optional bot brain for your own player."
-    )
-    assert manifest["description"] == (
-        "Adds bot teammates to your lobby and can play your local "
-        "character for you. Toggle Bot Play For Me at any time or press "
-        "F9; turning it off returns clean control immediately. Local "
-        "play uses the same skirmisher, guardian, striker, or learned "
-        "brain as bot teammates and works for the host or a client "
-        "through normal multiplayer authority and replication. Bot "
-        "teammates still fill real player slots, appear in the member "
-        "list, draw enemy attention, and move, cast, die, and respawn "
-        "like human players. The learned policy runs locally inside Lua "
-        "with no Python, GPU, or network service."
-    )
-    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.28"
+    assert "summary" not in manifest
+    assert "description" not in manifest
+    assert manifest["minimumLoaderVersion"] == "0.1.0-beta.29"
     assert manifest["enabled"] is False
     assert manifest["runtime"]["entryScript"] == "scripts/main.lua"
+    assert listing["name"] == manifest["name"]
+    assert listing["author"] == "Generic"
+    assert listing["version"] == manifest["version"]
+    assert listing["manifestId"] == manifest["id"]
+    assert (
+        listing["minimumLoaderVersion"]
+        == manifest["minimumLoaderVersion"]
+    )
+    for player_feature in (
+        "Bot Play For Me",
+        "F9",
+        "random offered skill",
+        "10 percent",
+        "80 percent",
+    ):
+        assert player_feature in listing["description"]
     required_capabilities = set(
         manifest["runtime"]["requiredCapabilities"]
     )
