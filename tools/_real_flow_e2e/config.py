@@ -25,6 +25,10 @@ SAFE_TOKEN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,47}$")
 PARTICIPANT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}$")
 LOADOUT_ELEMENTS = frozenset(("ether", "fire", "air", "water", "earth"))
 LOADOUT_DISCIPLINES = frozenset(("mind", "body", "arcane"))
+LOOPBACK_WINDOWS_PORT_PAIRS = (
+    frozenset((50911, 50912)),
+    frozenset((51711, 51712)),
+)
 
 
 class ConfigError(ValueError):
@@ -673,10 +677,11 @@ class HarnessConfig:
             }
             if (
                 self.topology == "loopback_windows"
-                and ports != {50911, 50912}
+                and frozenset(ports) not in LOOPBACK_WINDOWS_PORT_PAIRS
             ):
                 raise ConfigError(
-                    "loopback_windows is reserved to ports 50911/50912"
+                    "loopback_windows is reserved to mission port pairs "
+                    "50911/50912 or 51711/51712"
                 )
             if (
                 self.topology == "loopback_windows_botplay"

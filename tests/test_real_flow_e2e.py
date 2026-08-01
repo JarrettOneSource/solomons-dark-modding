@@ -908,7 +908,7 @@ class RealFlowE2ETests(unittest.TestCase):
             ],
         }
 
-    def test_loopback_config_is_confined_to_reserved_ports(self) -> None:
+    def test_loopback_config_is_confined_to_mission_ports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             document = self._config_document(root)
@@ -922,8 +922,16 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertEqual(config.host.loadout_element, "air")
             self.assertEqual(config.client.loadout_element, "water")
 
+            document["host"]["localPort"] = 51711  # type: ignore[index]
+            document["host"]["remotePort"] = 51712  # type: ignore[index]
+            document["client"]["localPort"] = 51712  # type: ignore[index]
+            document["client"]["remotePort"] = 51711  # type: ignore[index]
+            config = self._load_document(root, document)
+            self.assertEqual(config.host.local_port, 51711)
+            self.assertEqual(config.client.local_port, 51712)
+
             document["host"]["localPort"] = 50913  # type: ignore[index]
-            with self.assertRaisesRegex(ConfigError, "50911/50912"):
+            with self.assertRaisesRegex(ConfigError, "mission port pairs"):
                 self._load_document(root, document)
 
     def test_botplay_loopback_uses_owner_ports_and_prefix(self) -> None:
