@@ -44,7 +44,10 @@ capture-execution brackets are measured on the controller clock, so workstation
 clock offset and image-transfer time cannot masquerade as screenshot skew. The
 complete two-peer bracket must span at most one second. A capture gets at most
 three attempts; the limit is never relaxed, and rejected pairs remain named in
-the accepted receipt.
+the accepted receipt. The periodic pair sampler is paused only while that
+paired capture call owns the two Lua pipes. Each bounded pause writes start and
+end markers, duration, outcome, and limit into `timeline.jsonl`; sampling then
+resumes at its normal cadence without catch-up bursts.
 
 The live anomaly monitor uses sustained thresholds for scene/wave divergence,
 transport loss, packet stalls, client materialization loss, stopped takeover,

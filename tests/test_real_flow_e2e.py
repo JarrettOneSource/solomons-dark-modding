@@ -43,6 +43,7 @@ from tools._real_flow_e2e.runtime import (
 )
 from tools.verify_real_flow_e2e import (
     EnduranceProbeOutage,
+    PairSampler,
     RealFlowFailure,
     _assert_clean_release,
     _drain_authority_damage_log,
@@ -76,6 +77,44 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RealFlowE2ETests(unittest.TestCase):
+    def test_pair_sampler_capture_pause_is_logged_and_exclusive(self) -> None:
+        host = SimpleNamespace(state=mock.Mock(return_value={"role": "host"}))
+        client = SimpleNamespace(
+            state=mock.Mock(return_value={"role": "client"})
+        )
+        writer = SimpleNamespace(append=mock.Mock())
+        sampler = PairSampler(host, client, writer, 0.1)
+        requested = threading.Event()
+
+        def sample() -> None:
+            requested.set()
+            sampler.sample_now("after-pause")
+
+        with sampler.pause_for_capture(
+            "shared-hub",
+            maximum_seconds=1.0,
+        ):
+            thread = threading.Thread(target=sample)
+            thread.start()
+            self.assertTrue(requested.wait(1.0))
+            time.sleep(0.02)
+            host.state.assert_not_called()
+            client.state.assert_not_called()
+        thread.join(timeout=1.0)
+        self.assertFalse(thread.is_alive())
+
+        rows = [call.args[0] for call in writer.append.call_args_list]
+        self.assertEqual(rows[0]["kind"], "sampler-pause")
+        self.assertEqual(rows[0]["event"], "start")
+        self.assertEqual(rows[0]["label"], "shared-hub")
+        self.assertEqual(rows[1]["kind"], "sampler-pause")
+        self.assertEqual(rows[1]["event"], "end")
+        self.assertTrue(rows[1]["withinBound"])
+        self.assertEqual(rows[1]["outcome"], "completed")
+        self.assertEqual(rows[2]["label"], "after-pause")
+        host.state.assert_called_once_with()
+        client.state.assert_called_once_with()
+
     def test_paired_capture_uses_controller_clock_bounds(self) -> None:
         def peer_capture(
             capture_ns: int,

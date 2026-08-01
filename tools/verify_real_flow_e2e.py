@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import asdict
 import json
 import math
@@ -15,7 +16,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -505,6 +506,8 @@ class PairSampler:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._sample_lock = threading.Lock()
+        self._pause_sequence = 0
 
     def set_phase(self, phase: str) -> None:
         with self._lock:
@@ -533,24 +536,93 @@ class PairSampler:
         self.writer.append(row)
         return row
 
-    def _sample(self, label: str) -> dict[str, Any]:
+    @contextmanager
+    def pause_for_capture(
+        self,
+        label: str,
+        *,
+        maximum_seconds: float = 30.0,
+    ) -> Iterator[dict[str, Any]]:
+        wait_started = time.monotonic()
+        if not self._sample_lock.acquire(timeout=20.0):
+            raise RealFlowFailure(
+                "pair sampler did not yield for paired capture"
+            )
+        pause_started = time.monotonic()
+        pause_started_ns = time.time_ns()
         with self._lock:
+            self._pause_sequence += 1
+            pause_id = self._pause_sequence
             phase = self.phase
-        started_ns = time.time_ns()
-        host = self.host.state()
-        between_ns = time.time_ns()
-        client = self.client.state()
-        return {
+        marker = {
             "schemaVersion": 1,
+            "kind": "sampler-pause",
+            "event": "start",
+            "pauseId": pause_id,
             "label": label,
             "phase": phase,
-            "utcNanoseconds": started_ns,
-            "betweenPeerUtcNanoseconds": between_ns,
-            "completedUtcNanoseconds": time.time_ns(),
-            "elapsedSeconds": time.monotonic() - self.started,
-            "host": host,
-            "clientB": client,
+            "utcNanoseconds": pause_started_ns,
+            "elapsedSeconds": pause_started - self.started,
+            "acquisitionWaitSeconds": pause_started - wait_started,
+            "maximumSeconds": maximum_seconds,
         }
+        outcome = "completed"
+        error = ""
+        try:
+            self.writer.append(marker)
+            yield marker
+        except BaseException as exc:
+            outcome = "failed"
+            error = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            pause_ended = time.monotonic()
+            duration = pause_ended - pause_started
+            try:
+                self.writer.append(
+                    {
+                        "schemaVersion": 1,
+                        "kind": "sampler-pause",
+                        "event": "end",
+                        "pauseId": pause_id,
+                        "label": label,
+                        "phase": phase,
+                        "utcNanoseconds": time.time_ns(),
+                        "elapsedSeconds": pause_ended - self.started,
+                        "durationSeconds": duration,
+                        "maximumSeconds": maximum_seconds,
+                        "withinBound": duration <= maximum_seconds,
+                        "outcome": outcome,
+                        "error": error,
+                    }
+                )
+            finally:
+                self._sample_lock.release()
+        if duration > maximum_seconds:
+            raise RealFlowFailure(
+                "paired capture sampler pause exceeded its bound: "
+                f"{duration:.3f}s > {maximum_seconds:.3f}s"
+            )
+
+    def _sample(self, label: str) -> dict[str, Any]:
+        with self._sample_lock:
+            with self._lock:
+                phase = self.phase
+            started_ns = time.time_ns()
+            host = self.host.state()
+            between_ns = time.time_ns()
+            client = self.client.state()
+            return {
+                "schemaVersion": 1,
+                "label": label,
+                "phase": phase,
+                "utcNanoseconds": started_ns,
+                "betweenPeerUtcNanoseconds": between_ns,
+                "completedUtcNanoseconds": time.time_ns(),
+                "elapsedSeconds": time.monotonic() - self.started,
+                "host": host,
+                "clientB": client,
+            }
 
     def _run(self) -> None:
         next_sample = time.monotonic()
@@ -568,8 +640,34 @@ class PairSampler:
                 }
                 self.errors.append(error)
             next_sample += self.interval_seconds
+            now = time.monotonic()
+            if next_sample < now:
+                next_sample = now + self.interval_seconds
             delay = max(0.01, next_sample - time.monotonic())
             self._stop.wait(delay)
+
+
+def _paired_capture_with_paused_sampler(
+    config: HarnessConfig,
+    host: WindowsPeer,
+    client: Any,
+    host_pipe: LuaPipe,
+    client_pipe: LuaPipe,
+    sampler: PairSampler,
+    output_directory: Path,
+    *,
+    label: str,
+) -> dict[str, Any]:
+    with sampler.pause_for_capture(label):
+        return paired_windows_capture(
+            config.source_root,
+            host,
+            client,
+            output_directory,
+            label=label,
+            host_pipe=host_pipe,
+            client_pipe=client_pipe,
+        )
 
 
 def _git_sha(source_root: Path) -> str:
@@ -1974,14 +2072,15 @@ def _run_bot_play_endurance(
             attempts = capture_attempts.get(milestone, 0) + 1
             capture_attempts[milestone] = attempts
             try:
-                capture = paired_windows_capture(
-                    config.source_root,
+                capture = _paired_capture_with_paused_sampler(
+                    config,
                     host,
                     client,
+                    host_pipe,
+                    client_pipe,
+                    sampler,
                     config.evidence_root / "captures" / "endurance",
                     label=f"wave-{milestone}",
-                    host_pipe=host_pipe,
-                    client_pipe=client_pipe,
                 )
                 assertions: dict[str, Any] = {}
                 for role in ("host", "clientB"):
@@ -2063,17 +2162,18 @@ def _run_bot_play_endurance(
             )
             if surfaces_ready or time.monotonic() - terminal_started >= 4.0:
                 try:
-                    game_over_capture = paired_windows_capture(
-                        config.source_root,
+                    game_over_capture = _paired_capture_with_paused_sampler(
+                        config,
                         host,
                         client,
+                        host_pipe,
+                        client_pipe,
+                        sampler,
                         config.evidence_root / "captures" / "endurance",
                         label=(
                             "natural-game-over-wave-"
                             f"{max(endurance_wave(sample['host']), endurance_wave(sample['clientB']))}"
                         ),
-                        host_pipe=host_pipe,
-                        client_pipe=client_pipe,
                     )
                 except (
                     EvidenceError,
@@ -2096,14 +2196,15 @@ def _run_bot_play_endurance(
 
         if time.monotonic() >= deadline:
             try:
-                game_over_capture = paired_windows_capture(
-                    config.source_root,
+                game_over_capture = _paired_capture_with_paused_sampler(
+                    config,
                     host,
                     client,
+                    host_pipe,
+                    client_pipe,
+                    sampler,
                     config.evidence_root / "captures" / "endurance",
                     label=f"wall-clock-limit-wave-{converged_wave}",
-                    host_pipe=host_pipe,
-                    client_pipe=client_pipe,
                 )
             except (
                 EvidenceError,
@@ -2447,14 +2548,15 @@ def _run_bot_play_for_me(
             ):
                 continue
             try:
-                candidate = paired_windows_capture(
-                    config.source_root,
+                candidate = _paired_capture_with_paused_sampler(
+                    config,
                     host,
                     client,
+                    host_pipe,
+                    client_pipe,
+                    sampler,
                     config.evidence_root / "screenshots",
                     label=f"bot-fighting-{role}-wave-{peer_wave}",
-                    host_pipe=host_pipe,
-                    client_pipe=client_pipe,
                 )
                 capture_path = Path(
                     candidate["captures"][role]["path"]
@@ -2865,14 +2967,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         sampler.start()
         sampler_started = True
         sampler.sample_now("shared-hub-ready")
-        result["sharedHubCapture"] = paired_windows_capture(
-            config.source_root,
+        result["sharedHubCapture"] = _paired_capture_with_paused_sampler(
+            config,
             host,
             client,
+            host_pipe,
+            client_pipe,
+            sampler,
             config.evidence_root / "captures",
             label="shared-hub",
-            host_pipe=host_pipe,
-            client_pipe=client_pipe,
         )
 
         if phase == "shared-hub":
@@ -3074,14 +3177,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
 
         sampler.set_phase("paired-render-capture")
         capture_state = sampler.sample_now("paired-capture-state")
-        result["pairedCapture"] = paired_windows_capture(
-            config.source_root,
+        result["pairedCapture"] = _paired_capture_with_paused_sampler(
+            config,
             host,
             client,
+            host_pipe,
+            client_pipe,
+            sampler,
             config.evidence_root / "screenshots",
             label="first-wave",
-            host_pipe=host_pipe,
-            client_pipe=client_pipe,
         )
         client_capture_path = Path(
             result["pairedCapture"]["captures"]["clientB"]["path"]
@@ -3102,14 +3206,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
         result["clientEnemyMotion"] = enemy_motion_assertion(sampler.rows)
         result["clientEnemyAttack"] = enemy_attack_assertion(sampler.rows)
 
-        result["postDamageCapture"] = paired_windows_capture(
-            config.source_root,
+        result["postDamageCapture"] = _paired_capture_with_paused_sampler(
+            config,
             host,
             client,
+            host_pipe,
+            client_pipe,
+            sampler,
             config.evidence_root / "screenshots",
             label="post-client-damage",
-            host_pipe=host_pipe,
-            client_pipe=client_pipe,
         )
         if config.verify_through_wave >= 2:
             sampler.set_phase(
@@ -3147,14 +3252,15 @@ def run(config: HarnessConfig, *, phase: str) -> dict[str, Any]:
                 final_wave["clientB"],
                 target_wave=config.verify_through_wave,
             )
-            result["wave2Capture"] = paired_windows_capture(
-                config.source_root,
+            result["wave2Capture"] = _paired_capture_with_paused_sampler(
+                config,
                 host,
                 client,
+                host_pipe,
+                client_pipe,
+                sampler,
                 config.evidence_root / "screenshots",
                 label=f"wave-{config.verify_through_wave}",
-                host_pipe=host_pipe,
-                client_pipe=client_pipe,
             )
             result["completedPhase"] = (
                 f"wave-{config.verify_through_wave}"
