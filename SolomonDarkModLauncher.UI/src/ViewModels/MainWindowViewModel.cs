@@ -86,7 +86,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         "Send Logs uploads launcher and loader logs to private website storage.";
     private bool isModDownloadPromptOpen_;
     private string modDownloadPromptText_ = string.Empty;
-    private string modDownloadPromptTitle_ = "The host has mods";
+    private string modDownloadPromptTitle_ = "This lobby uses mods";
     private string modDownloadPromptNote_ =
         "Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session.";
     private string modDownloadConfirmText_ = "Yes";
@@ -2141,10 +2141,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 .Where(mod => mod.State == "unavailable")
                 .Select(mod => $"{mod.DisplayName} {mod.Version}");
             SetError(
-                "Mod list mismatch that can't be repaired automatically. The host has mods " +
-                $"that are not available for download: {string.Join(", ", unavailable)}. " +
-                "Ask the host to publish them on the website or disable them.");
-            StatusText = "Join canceled: the host's mods are not downloadable.";
+                $"The host has unpublished mods: {string.Join(", ", unavailable)}. " +
+                "They aren't on the mod directory yet, so they can't be downloaded " +
+                "automatically. Ask the host to publish them, or install the same mod " +
+                "files manually before joining.");
+            StatusText = "Join canceled: the host has unpublished mods.";
             return;
         }
 
@@ -2171,13 +2172,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 ModDownloadItems.Add(line);
             }
 
-            ModDownloadPromptTitle = "The host has mods";
+            ModDownloadPromptTitle = "This lobby uses mods";
             ModDownloadPromptText =
-                "The host has mods enabled, would you like to download them to join?";
+                "The host's game uses the mods listed below. Download them to join the lobby?";
             ModDownloadPromptNote =
-                "Downloads come from the website mod directory. Your own mod folders are not changed; the host's mod set is only used for this session.";
-            ModDownloadConfirmText = "Yes";
-            ModDownloadDeclineText = "No";
+                "Mods download from the official mod directory and apply to this session only - your own mod setup isn't changed.";
+            ModDownloadConfirmText = "Download and join";
+            ModDownloadDeclineText = "Cancel";
             pendingWebsiteModInstall_ = null;
             consentedJoinStatusText_ = joinStatusText;
             StatusText = "Waiting for your mod download choice.";
