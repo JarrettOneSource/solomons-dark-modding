@@ -52,6 +52,9 @@ from static_lua_draw_contracts import (
 from static_lua_sprites_contracts import (
     test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
 )
+from static_world_render_seam_contracts import (
+    test_world_sprites_use_native_order_while_screen_ui_stays_overlay,
+)
 from static_lua_authoring_contracts import (
     test_lua_authoring_is_generated_reloadable_and_safe_thread_executed,
 )
@@ -567,6 +570,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua sprites are owned, bounded, sandboxed, and revisioned",
         test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
+    ),
+    (
+        "World sprites use native order while screen UI stays overlay",
+        test_world_sprites_use_native_order_while_screen_ui_stays_overlay,
     ),
     (
         "Lua authoring is generated, reloadable, and safe-thread executed",
