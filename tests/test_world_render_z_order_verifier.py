@@ -138,6 +138,85 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertIn("progression + 0xCC", code)
         self.assertIn("sd.debug.write_float(address, 0.01)", code)
 
+    def test_generic_marker_uses_native_world_marker_api(self) -> None:
+        output = "registered=true\nenabled=true\ncapability=true\n"
+        with mock.patch.object(
+            verifier,
+            "parse_values",
+            return_value=verifier.sync.parse_key_values(output),
+        ) as parse:
+            result = verifier.configure_generic_world_marker(
+                "test-pipe",
+                enabled=True,
+                x=10.0,
+                y=20.0,
+            )
+
+        self.assertEqual(result["enabled"], "true")
+        code = parse.call_args.args[1]
+        self.assertIn('sd.world.marker("ZRD MARKER"', code)
+        self.assertNotIn("sd.draw.world_to_screen", code)
+
+    def test_native_order_relations_use_stock_effective_keys(self) -> None:
+        state = {
+            "players": {
+                "local": {
+                    "actor_address": 100,
+                    "x": 10.0,
+                    "y": 68.0,
+                    "sort_bias": 0.0,
+                },
+                "remote": {
+                    "actor_address": 200,
+                    "x": 30.0,
+                    "y": 68.0,
+                    "sort_bias": 0.0,
+                },
+            },
+            "drops": {
+                "stock": {
+                    "actor_address": 300,
+                    "x": 10.0,
+                    "y": 100.0,
+                    "sort_bias": -25.0,
+                },
+                "custom": {
+                    "actor_address": 400,
+                    "x": 30.0,
+                    "y": 100.0,
+                    "sort_bias": -25.0,
+                },
+            },
+        }
+        behind = verifier.verify_native_order_relation(
+            state,
+            relation="behind",
+        )
+        self.assertEqual(behind["stock"]["player_effective_key"], 68)
+        self.assertEqual(behind["stock"]["drop_effective_key"], 75)
+
+        state["players"]["local"]["y"] = 104.0
+        state["players"]["remote"]["y"] = 104.0
+        front = verifier.verify_native_order_relation(
+            state,
+            relation="front",
+        )
+        self.assertEqual(front["custom"]["relation"], ">")
+
+    def test_native_marker_pixels_require_the_cyan_cross(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            image_path = Path(temporary) / "marker.png"
+            image = Image.new("RGB", (80, 80), (20, 20, 20))
+            for x in range(30, 51):
+                image.putpixel((x, 40), (0, 255, 255))
+                image.putpixel((x, 41), (0, 255, 255))
+            image.save(image_path)
+            result = verifier.verify_native_marker_pixels(
+                image_path,
+                {"x": 40, "y": 40},
+            )
+        self.assertGreaterEqual(result["cyan_pixels"], 24)
+
     def test_custom_potion_is_found_and_consumed_in_one_inventory_probe(self) -> None:
         output = "".join(
             (
@@ -164,6 +243,8 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertEqual(result["found"], result["item_address"])
         code = parse.call_args.args[1]
         self.assertIn("item.slot == 6", code)
+        self.assertIn("item.item_address + 20", code)
+        self.assertEqual(verifier.ITEM_UID_OFFSET, 0x14)
         self.assertLess(
             code.index("call_thiscall_u32_ret_u32"),
             code.index("call_thiscall_u32(\n        use"),

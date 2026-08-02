@@ -417,6 +417,12 @@ bool InitializeLuaWorldRenderer(std::string* error_message) {
             "Lua world-render command runtime is not initialized.");
         return false;
     }
+    if (!IsLuaCameraRuntimeAvailable()) {
+        SetError(
+            error_message,
+            "Lua native world renderer requires the Region camera runtime.");
+        return false;
+    }
     {
         std::scoped_lock lock(g_world_renderer.mutex);
         if (g_world_renderer.initialized) {

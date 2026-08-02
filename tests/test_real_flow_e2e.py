@@ -930,6 +930,14 @@ class RealFlowE2ETests(unittest.TestCase):
             self.assertEqual(config.host.local_port, 51711)
             self.assertEqual(config.client.local_port, 51712)
 
+            document["host"]["localPort"] = 51755  # type: ignore[index]
+            document["host"]["remotePort"] = 51756  # type: ignore[index]
+            document["client"]["localPort"] = 51756  # type: ignore[index]
+            document["client"]["remotePort"] = 51755  # type: ignore[index]
+            config = self._load_document(root, document)
+            self.assertEqual(config.host.local_port, 51755)
+            self.assertEqual(config.client.local_port, 51756)
+
             document["host"]["localPort"] = 50913  # type: ignore[index]
             with self.assertRaisesRegex(ConfigError, "mission port pairs"):
                 self._load_document(root, document)

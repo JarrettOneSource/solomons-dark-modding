@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -31,10 +32,72 @@ ATLAS_ID = f"{MOD_ID}:invincibility_potion"
 POTION_TYPE_ID = 0x1B59
 INVENTORY_USE_ITEM = 0x0056D1B0
 INVENTORY_FIND_ITEM_BY_UID = 0x005521C0
-ITEM_UID_OFFSET = 0x34
+ITEM_UID_OFFSET = 0x14
 NATIVE_HEALTH_BAR_HEIGHT = 7.0
 MPP_POLL_INTERVAL_SECONDS = 300.0
 MPP_WAIT_TIMEOUT_SECONDS = 6.0 * 60.0 * 60.0
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def verify_exact_source_and_artifacts(expected_source_sha: str) -> dict[str, Any]:
+    expected = expected_source_sha.strip().lower()
+    if re.fullmatch(r"[0-9a-f]{40}", expected) is None:
+        raise sync.VerifyFailure(
+            f"expected source SHA is not a full lowercase commit: {expected_source_sha!r}"
+        )
+    actual = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    ).stdout.strip().lower()
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    ).stdout
+    if actual != expected:
+        raise sync.VerifyFailure(
+            f"source SHA changed: expected={expected} actual={actual}"
+        )
+    if status:
+        raise sync.VerifyFailure(
+            "exact-SHA acceptance requires a clean worktree: "
+            + status.replace("\n", "; ").strip()
+        )
+
+    artifact_paths = {
+        "release": ROOT / "bin/Release/Win32/SolomonDarkModLoader.dll",
+        "launcher": ROOT / "dist/launcher/SolomonDarkModLoader.dll",
+    }
+    missing = [str(path) for path in artifact_paths.values() if not path.is_file()]
+    if missing:
+        raise sync.VerifyFailure(f"built loader artifacts are missing: {missing}")
+    hashes = {name: sha256_file(path) for name, path in artifact_paths.items()}
+    if len(set(hashes.values())) != 1:
+        raise sync.VerifyFailure(f"Release and launcher DLLs differ: {hashes}")
+    return {
+        "expected_source_sha": expected,
+        "actual_source_sha": actual,
+        "worktree_clean": True,
+        "artifacts": {
+            name: {"path": str(path), "sha256": hashes[name]}
+            for name, path in artifact_paths.items()
+        },
+        "loader_sha256": hashes["release"],
+    }
 
 
 def _powershell_json(script: str) -> Any:
@@ -168,6 +231,138 @@ def udp_exclusion_inventory(ports: tuple[int, int]) -> dict[str, Any]:
     }
 
 
+def _normalize_windows_path(path: str) -> str:
+    normalized = path.strip().replace("/", "\\")
+    if normalized.startswith("\\\\?\\"):
+        normalized = normalized[4:]
+    return normalized.rstrip("\\").casefold()
+
+
+def verify_launched_processes_and_modules(
+    launch: dict[str, object],
+    *,
+    runtime_root: Path,
+    instance_prefix: str,
+    loader_sha256: str,
+) -> dict[str, Any]:
+    expected: dict[int, dict[str, str]] = {}
+    for role in ("host", "client"):
+        pid_value = launch.get(f"{role}ProcessId")
+        if isinstance(pid_value, bool):
+            pid = 0
+        else:
+            pid = int(pid_value or 0)
+        launch_path = str(launch.get(f"{role}ExecutablePath") or "")
+        staged_path = sync.path_for_powershell(
+            (
+                runtime_root
+                / "instances"
+                / f"{instance_prefix}-{role}"
+                / "stage/SolomonDark.exe"
+            ).resolve()
+        )
+        if pid <= 0 or _normalize_windows_path(launch_path) != _normalize_windows_path(staged_path):
+            raise sync.VerifyFailure(
+                f"{role} launcher identity is not the exact staged game: "
+                f"pid={pid} launch={launch_path!r} expected={staged_path!r}"
+            )
+        expected[pid] = {"role": role, "executable_path": staged_path}
+
+    pid_list = ",".join(str(pid) for pid in sorted(expected))
+    value = _powershell_json(
+        "$rows=@(); foreach($processId in @(" + pid_list + ")) { "
+        "$process=Get-Process -Id $processId -ErrorAction Stop; "
+        "$loader=@($process.Modules | Where-Object { "
+        "$_.ModuleName -ieq 'SolomonDarkModLoader.dll' }); "
+        "if($loader.Count -ne 1){ throw ('PID ' + $processId + "
+        "' has ' + $loader.Count + ' loader modules') }; "
+        "$rows += [pscustomobject]@{ ProcessId=[int]$processId; "
+        "ExecutablePath=$process.Path; LoaderPath=$loader[0].FileName; "
+        "LoaderSha256=(Get-FileHash -LiteralPath $loader[0].FileName "
+        "-Algorithm SHA256).Hash.ToLowerInvariant() } }; "
+        "ConvertTo-Json -Compress -InputObject $rows"
+    )
+    rows = value if isinstance(value, list) else [value]
+    by_pid = {
+        int(row["ProcessId"]): row
+        for row in rows
+        if isinstance(row, dict) and "ProcessId" in row
+    }
+    if set(by_pid) != set(expected):
+        raise sync.VerifyFailure(
+            f"loaded-module inventory did not return exact game PIDs: {rows}"
+        )
+    result: dict[str, Any] = {}
+    for pid, identity in expected.items():
+        row = by_pid[pid]
+        executable_path = str(row.get("ExecutablePath") or "")
+        module_hash = str(row.get("LoaderSha256") or "").lower()
+        if _normalize_windows_path(executable_path) != _normalize_windows_path(
+            identity["executable_path"]
+        ):
+            raise sync.VerifyFailure(
+                f"PID {pid} executable changed: {executable_path!r}"
+            )
+        if module_hash != loader_sha256:
+            raise sync.VerifyFailure(
+                f"PID {pid} loaded a different loader DLL: "
+                f"expected={loader_sha256} actual={module_hash}"
+            )
+        result[identity["role"]] = {
+            "process_id": pid,
+            "executable_path": executable_path,
+            "loader_path": str(row.get("LoaderPath") or ""),
+            "loader_sha256": module_hash,
+        }
+    return result
+
+
+def verify_campaign_port_owners(
+    ports: tuple[int, int],
+    launch: dict[str, object],
+) -> dict[str, Any]:
+    expected = {
+        ports[0]: int(launch.get("hostProcessId") or 0),
+        ports[1]: int(launch.get("clientProcessId") or 0),
+    }
+    rows = bound_campaign_ports(ports)
+    owners = {
+        port: {
+            int(row.get("OwningProcess", 0))
+            for row in rows
+            if int(row.get("LocalPort", 0)) == port
+        }
+        for port in ports
+    }
+    for port, process_id in expected.items():
+        if process_id <= 0 or owners[port] != {process_id}:
+            raise sync.VerifyFailure(
+                f"UDP {port} is not bound only by its exact launched PID "
+                f"{process_id}: rows={rows}"
+            )
+    return {
+        "rows": rows,
+        "expected_owners": {str(port): pid for port, pid in expected.items()},
+    }
+
+
+def wait_for_campaign_ports_unbound(
+    ports: tuple[int, int],
+    *,
+    timeout: float = 10.0,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        last = bound_campaign_ports(ports)
+        if not last:
+            return {"unbound": True, "rows": []}
+        time.sleep(0.1)
+    raise sync.VerifyFailure(
+        f"campaign UDP ports remained bound after exact PID cleanup: {last}"
+    )
+
+
 def parse_values(pipe: str, code: str, timeout: float = 10.0) -> dict[str, str]:
     return sync.parse_key_values(sync.lua(pipe, code, timeout=timeout))
 
@@ -225,6 +420,47 @@ print("capability=" .. tostring(sd.runtime.has_capability("world.render.native")
     ):
         raise sync.VerifyFailure(
             f"generic native world sprite setup failed on {pipe}: {values}"
+        )
+    return values
+
+
+def configure_generic_world_marker(
+    pipe: str,
+    *,
+    enabled: bool,
+    x: float,
+    y: float,
+) -> dict[str, str]:
+    code = f"""
+if _G.__zrd_world_marker_registered ~= true then
+  sd.events.on("runtime.tick", function()
+    local state = rawget(_G, "__zrd_world_marker")
+    if state ~= nil and state.enabled == true then
+      sd.world.marker("ZRD MARKER", state.x, state.y, {{
+        color = {{ r = 0, g = 255, b = 255, a = 255 }}
+      }})
+    end
+  end)
+  _G.__zrd_world_marker_registered = true
+end
+_G.__zrd_world_marker = {{
+  enabled = {str(enabled).lower()},
+  x = {x:.6f},
+  y = {y:.6f},
+}}
+print("registered=" .. tostring(_G.__zrd_world_marker_registered))
+print("enabled=" .. tostring(_G.__zrd_world_marker.enabled))
+print("capability=" .. tostring(sd.runtime.has_capability("world.render.native")))
+"""
+    values = parse_values(pipe, code)
+    expected_enabled = str(enabled).lower()
+    if (
+        values.get("registered") != "true"
+        or values.get("enabled") != expected_enabled
+        or values.get("capability") != "true"
+    ):
+        raise sync.VerifyFailure(
+            f"generic native world marker setup failed on {pipe}: {values}"
         )
     return values
 
@@ -315,6 +551,156 @@ def wait_for_drop_pair(
     raise sync.VerifyFailure(
         f"stock/custom potion pair did not materialize on {pipe}: {last}"
     )
+
+
+def probe_native_render_state(
+    pipe: str,
+    points: dict[str, tuple[float, float]],
+) -> dict[str, Any]:
+    target_rows = ",\n".join(
+        "  { name = "
+        + json.dumps(name)
+        + f", x = {x:.6f}, y = {y:.6f} }}"
+        for name, (x, y) in points.items()
+    )
+    values = parse_values(
+        pipe,
+        f"""
+local function emit(key, value)
+  print(key .. "=" .. tostring(value))
+end
+local function emit_actor(prefix, actor, x, y)
+  emit(prefix .. ".actor_address", actor or 0)
+  emit(prefix .. ".x", x or 0)
+  emit(prefix .. ".y", y or 0)
+  emit(prefix .. ".sort_bias", actor and sd.debug.read_float(actor + 0xA0) or -9999)
+  emit(prefix .. ".light_scalar", actor and sd.debug.read_float(actor + 0xCC) or -9999)
+end
+local player = sd.player.get_state()
+emit_actor("player.local", player and player.actor_address or 0,
+  player and player.x or 0, player and player.y or 0)
+local remote = nil
+for _, participant in ipairs(sd.bots.get_participants()) do
+  if participant.entity_materialized and participant.actor_address ~= 0 then
+    remote = participant
+    break
+  end
+end
+emit_actor("player.remote", remote and remote.actor_address or 0,
+  remote and remote.x or 0, remote and remote.y or 0)
+local actors = sd.world.list_actors() or {{}}
+local targets = {{
+{target_rows}
+}}
+for _, target in ipairs(targets) do
+  local best = nil
+  local best_distance = math.huge
+  for _, actor in ipairs(actors) do
+    if actor.object_type_id == 0x07DD then
+      local dx = (actor.x or 0) - target.x
+      local dy = (actor.y or 0) - target.y
+      local distance = dx * dx + dy * dy
+      if distance < best_distance then
+        best = actor
+        best_distance = distance
+      end
+    end
+  end
+  emit_actor("drop." .. target.name, best and best.actor_address or 0,
+    best and best.x or 0, best and best.y or 0)
+  emit("drop." .. target.name .. ".distance_squared", best_distance)
+end
+""",
+    )
+
+    def actor(prefix: str) -> dict[str, Any]:
+        try:
+            row = {
+                "actor_address": int(values[f"{prefix}.actor_address"]),
+                "x": float(values[f"{prefix}.x"]),
+                "y": float(values[f"{prefix}.y"]),
+                "sort_bias": float(values[f"{prefix}.sort_bias"]),
+                "light_scalar": float(values[f"{prefix}.light_scalar"]),
+            }
+        except (KeyError, ValueError) as exc:
+            raise sync.VerifyFailure(
+                f"native render-state probe was incomplete on {pipe}: {values}"
+            ) from exc
+        if row["actor_address"] <= 0:
+            raise sync.VerifyFailure(
+                f"native render-state probe found no {prefix} on {pipe}: {values}"
+            )
+        return row
+
+    result = {
+        "players": {
+            "local": actor("player.local"),
+            "remote": actor("player.remote"),
+        },
+        "drops": {name: actor(f"drop.{name}") for name in points},
+    }
+    for name, row in result["drops"].items():
+        row["distance_squared"] = float(
+            values[f"drop.{name}.distance_squared"]
+        )
+        if row["distance_squared"] > 64.0:
+            raise sync.VerifyFailure(
+                f"native Sack carrier is not at the requested {name} anchor "
+                f"on {pipe}: {result}"
+            )
+        if not math.isclose(row["sort_bias"], -25.0, abs_tol=0.001):
+            raise sync.VerifyFailure(
+                f"native {name} Sack lost stock -25 sort bias on {pipe}: {result}"
+            )
+        if not math.isfinite(row["light_scalar"]) or not (
+            0.0 <= row["light_scalar"] <= 4.0
+        ):
+            raise sync.VerifyFailure(
+                f"native {name} Sack light scalar is invalid on {pipe}: {result}"
+            )
+    for row in result["players"].values():
+        if not math.isclose(row["sort_bias"], 0.0, abs_tol=0.001):
+            raise sync.VerifyFailure(
+                f"PlayerWizard lost stock zero sort bias on {pipe}: {result}"
+            )
+    result["lighting_scalar_delta"] = abs(
+        result["drops"]["stock"]["light_scalar"]
+        - result["drops"]["custom"]["light_scalar"]
+    )
+    return result
+
+
+def verify_native_order_relation(
+    state: dict[str, Any],
+    *,
+    relation: str,
+) -> dict[str, Any]:
+    if relation not in {"behind", "front"}:
+        raise ValueError(relation)
+    players = list(state["players"].values())
+    comparisons: dict[str, Any] = {}
+    for name, drop in state["drops"].items():
+        player = min(players, key=lambda row: abs(row["x"] - drop["x"]))
+        if abs(player["x"] - drop["x"]) > 8.0:
+            raise sync.VerifyFailure(
+                f"no PlayerWizard overlaps the {name} drop anchor: {state}"
+            )
+        drop_key = math.floor(drop["y"]) + math.floor(drop["sort_bias"])
+        player_key = math.floor(player["y"]) + math.floor(player["sort_bias"])
+        correct = player_key < drop_key if relation == "behind" else player_key > drop_key
+        if not correct:
+            raise sync.VerifyFailure(
+                f"native {relation} ordering inequality failed for {name}: "
+                f"player_key={player_key} drop_key={drop_key} state={state}"
+            )
+        comparisons[name] = {
+            "player_actor_address": player["actor_address"],
+            "player_effective_key": player_key,
+            "drop_actor_address": drop["actor_address"],
+            "drop_effective_key": drop_key,
+            "relation": "<" if relation == "behind" else ">",
+        }
+    return comparisons
 
 
 def set_local_pickup_range(
@@ -494,6 +880,27 @@ def color_stats(
         "maximum_channel": max(brightness, default=0),
         "percentile_90_channel": percentile_90,
     }
+
+
+def verify_native_marker_pixels(
+    image_path: Path,
+    point: dict[str, Any],
+) -> dict[str, Any]:
+    with Image.open(image_path) as opened:
+        image = opened.convert("RGB")
+        box = _crop_box(image, point, half_width=16, half_height=16)
+        pixels = list(image.crop(box).get_flattened_data())
+    cyan = sum(
+        1
+        for red, green, blue in pixels
+        if green >= 150 and blue >= 150 and red <= 100
+    )
+    if cyan < 24:
+        raise sync.VerifyFailure(
+            f"native Lua marker cross is not visible: image={image_path} "
+            f"box={box} cyan_pixels={cyan}"
+        )
+    return {"box": list(box), "cyan_pixels": cyan}
 
 
 def _matches_potion_color(pixel: tuple[int, int, int], color: str) -> bool:
@@ -1162,7 +1569,21 @@ def run(
     instance_prefix: str,
     ports: tuple[int, int],
     timeout: float,
+    expected_source_sha: str,
+    result: dict[str, Any],
 ) -> dict[str, Any]:
+    evidence.mkdir(parents=True, exist_ok=True)
+    result.update(
+        {
+            "ok": False,
+            "instance_prefix": instance_prefix,
+            "ports": list(ports),
+            "audio_disabled": True,
+            "source_and_artifacts": verify_exact_source_and_artifacts(
+                expected_source_sha
+            ),
+        }
+    )
     mpp_wait = wait_for_mpp_games_to_exit()
     bound = bound_campaign_ports(ports)
     if bound:
@@ -1171,7 +1592,6 @@ def run(
         )
     udp_exclusions = udp_exclusion_inventory(ports)
 
-    evidence.mkdir(parents=True, exist_ok=True)
     host_pipe = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-host"
     client_pipe = f"SolomonDarkModLoader_LuaExec_{instance_prefix}-client"
     pipes = {"host": host_pipe, "client": client_pipe}
@@ -1211,17 +1631,22 @@ def run(
             f"z-order pair did not report two exact game PIDs: {launch}"
         )
 
-    result: dict[str, Any] = {
-        "ok": False,
-        "launch": launch,
-        "process_ids": process_ids,
-        "instance_prefix": instance_prefix,
-        "ports": list(ports),
-        "audio_disabled": True,
-        "mpp_wait": mpp_wait,
-        "udp_exclusions": udp_exclusions,
-    }
+    result.update(
+        {
+            "launch": launch,
+            "process_ids": process_ids,
+            "mpp_wait": mpp_wait,
+            "udp_exclusions": udp_exclusions,
+        }
+    )
     try:
+        result["launched_processes"] = verify_launched_processes_and_modules(
+            launch,
+            runtime_root=runtime_root,
+            instance_prefix=instance_prefix,
+            loader_sha256=result["source_and_artifacts"]["loader_sha256"],
+        )
+        result["udp_port_owners"] = verify_campaign_port_owners(ports, launch)
         sync.wait_for_remote(
             host_pipe,
             sync.CLIENT_ID,
@@ -1302,6 +1727,38 @@ def run(
                 y=generic_y,
             )
 
+        marker_x = center_x
+        marker_y = center_y + 110.0
+        result["generic_world_marker"] = {
+            role: configure_generic_world_marker(
+                pipe,
+                enabled=True,
+                x=marker_x,
+                y=marker_y,
+            )
+            for role, pipe in pipes.items()
+        }
+        time.sleep(0.5)
+        marker_capture = capture_phase(
+            evidence,
+            "generic-native-marker",
+            pipes,
+            {"marker": (marker_x, marker_y)},
+        )
+        for role in pipes:
+            marker_capture[role]["pixels"] = verify_native_marker_pixels(
+                evidence / f"generic-native-marker-{role}.png",
+                marker_capture[role]["projection"]["marker"],
+            )
+        result["generic_marker_capture"] = marker_capture
+        for pipe in pipes.values():
+            configure_generic_world_marker(
+                pipe,
+                enabled=False,
+                x=marker_x,
+                y=marker_y,
+            )
+
         # Keep the local peers from consuming drops while their silhouettes
         # cross. This derived range drives both stock pickup and the
         # multiplayer-native request boundary; restore it before the real
@@ -1337,40 +1794,61 @@ def run(
                 for name, row in client_drops.items()
             },
         }
+        drop_points = {
+            name: (float(row["x"]), float(row["y"]))
+            for name, row in client_drops.items()
+        }
+        stock_drop_x, stock_drop_y = drop_points["stock"]
+        custom_drop_x, custom_drop_y = drop_points["custom"]
         result["potion_lighting_placement"] = place_pair(
             host_pipe,
             client_pipe,
-            host_target=(stock_x, center_y - 48.0, 0.0),
-            client_target=(custom_x, center_y - 48.0, 0.0),
+            host_target=(stock_drop_x, stock_drop_y - 48.0, 0.0),
+            client_target=(custom_drop_x, custom_drop_y - 48.0, 0.0),
             timeout=timeout,
         )
         lighting_control = capture_phase(
             evidence,
             "potion_lighting",
             pipes,
-            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+            drop_points,
         )
         result["potion_lighting"] = lighting_control
+        result["native_lighting_state"] = {
+            role: probe_native_render_state(pipe, drop_points)
+            for role, pipe in pipes.items()
+        }
 
         # Sack's stock -25 sort bias makes its effective key Y-25, while a
         # live PlayerWizard retains the base zero bias. Keep silhouettes
         # crossed on each side of that exact boundary.
-        behind_y = center_y - 32.0
-        front_y = center_y + 4.0
         result["actor_behind_placement"] = place_pair(
             host_pipe,
             client_pipe,
-            host_target=(stock_x, behind_y, 0.0),
-            client_target=(custom_x, behind_y, 0.0),
+            host_target=(stock_drop_x, stock_drop_y - 32.0, 0.0),
+            client_target=(custom_drop_x, custom_drop_y - 32.0, 0.0),
             timeout=timeout,
         )
         behind = capture_phase(
             evidence,
             "actor_behind",
             pipes,
-            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+            drop_points,
         )
         result["actor_behind"] = behind
+        behind_state = {
+            role: probe_native_render_state(pipe, drop_points)
+            for role, pipe in pipes.items()
+        }
+        result["actor_behind_native_order"] = {
+            role: {
+                "state": state,
+                "comparisons": verify_native_order_relation(
+                    state, relation="behind"
+                ),
+            }
+            for role, state in behind_state.items()
+        }
         wait_for_drop_pair(
             client_pipe,
             native_subtype=definition["native_subtype"],
@@ -1380,46 +1858,85 @@ def run(
         result["actor_front_placement"] = place_pair(
             host_pipe,
             client_pipe,
-            host_target=(stock_x, front_y, 0.0),
-            client_target=(custom_x, front_y, 0.0),
+            host_target=(stock_drop_x, stock_drop_y + 4.0, 0.0),
+            client_target=(custom_drop_x, custom_drop_y + 4.0, 0.0),
             timeout=timeout,
         )
         front = capture_phase(
             evidence,
             "actor_front",
             pipes,
-            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+            drop_points,
         )
         result["actor_front"] = front
+        front_state = {
+            role: probe_native_render_state(pipe, drop_points)
+            for role, pipe in pipes.items()
+        }
+        result["actor_front_native_order"] = {
+            role: {
+                "state": state,
+                "comparisons": verify_native_order_relation(
+                    state, relation="front"
+                ),
+            }
+            for role, state in front_state.items()
+        }
 
         result["actor_behind_swapped_placement"] = place_pair(
             host_pipe,
             client_pipe,
-            host_target=(custom_x, behind_y, 0.0),
-            client_target=(stock_x, behind_y, 0.0),
+            host_target=(custom_drop_x, custom_drop_y - 32.0, 0.0),
+            client_target=(stock_drop_x, stock_drop_y - 32.0, 0.0),
             timeout=timeout,
         )
         behind_swapped = capture_phase(
             evidence,
             "actor_behind_swapped",
             pipes,
-            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+            drop_points,
         )
         result["actor_behind_swapped"] = behind_swapped
+        behind_swapped_state = {
+            role: probe_native_render_state(pipe, drop_points)
+            for role, pipe in pipes.items()
+        }
+        result["actor_behind_swapped_native_order"] = {
+            role: {
+                "state": state,
+                "comparisons": verify_native_order_relation(
+                    state, relation="behind"
+                ),
+            }
+            for role, state in behind_swapped_state.items()
+        }
         result["actor_front_swapped_placement"] = place_pair(
             host_pipe,
             client_pipe,
-            host_target=(custom_x, front_y, 0.0),
-            client_target=(stock_x, front_y, 0.0),
+            host_target=(custom_drop_x, custom_drop_y + 4.0, 0.0),
+            client_target=(stock_drop_x, stock_drop_y + 4.0, 0.0),
             timeout=timeout,
         )
         front_swapped = capture_phase(
             evidence,
             "actor_front_swapped",
             pipes,
-            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+            drop_points,
         )
         result["actor_front_swapped"] = front_swapped
+        front_swapped_state = {
+            role: probe_native_render_state(pipe, drop_points)
+            for role, pipe in pipes.items()
+        }
+        result["actor_front_swapped_native_order"] = {
+            role: {
+                "state": state,
+                "comparisons": verify_native_order_relation(
+                    state, relation="front"
+                ),
+            }
+            for role, state in front_swapped_state.items()
+        }
         result["potion_pixel_analysis"] = analyze_potion_captures(
             evidence,
             lighting_control,
@@ -1536,6 +2053,7 @@ def run(
             "host": (
                 "Lua native world renderer initialized",
                 "native carrier glyph reached stock draw batch",
+                "native post-scene marker drawn",
                 "custom glyph reached stock carrier draw batch",
                 "invincibility potion activated participant_id=",
                 "source=native_world_indicator",
@@ -1544,6 +2062,7 @@ def run(
             "client": (
                 "Lua native world renderer initialized",
                 "native carrier glyph reached stock draw batch",
+                "native post-scene marker drawn",
                 "custom glyph reached stock carrier draw batch",
                 "invincibility potion activated participant_id=",
                 "source=native_world_indicator",
@@ -1573,6 +2092,7 @@ def run(
             "actor_behind_is_occluded_by_both": True,
             "native_lighting_lane_both_peers": True,
             "generic_world_sprite_both_peers": True,
+            "generic_world_marker_both_peers": True,
             "native_spell_glow_both_peers": True,
             "floating_bar_stock_indicator_semantics_both_peers": True,
         }
@@ -1580,6 +2100,7 @@ def run(
         return result
     finally:
         result["cleanup"] = sync.stop_game_processes(process_ids)
+        result["ports_after_cleanup"] = wait_for_campaign_ports_unbound(ports)
 
 
 def main() -> int:
@@ -1600,6 +2121,7 @@ def main() -> int:
     parser.add_argument("--host-port", type=int, default=PORTS[0])
     parser.add_argument("--client-port", type=int, default=PORTS[1])
     parser.add_argument("--timeout", type=float, default=75.0)
+    parser.add_argument("--expected-source-sha", required=True)
     args = parser.parse_args()
 
     result: dict[str, Any] = {
@@ -1617,6 +2139,8 @@ def main() -> int:
             instance_prefix=args.instance_prefix,
             ports=(args.host_port, args.client_port),
             timeout=args.timeout,
+            expected_source_sha=args.expected_source_sha,
+            result=result,
         )
     except Exception as exc:  # noqa: BLE001 - persist exact acceptance failure.
         result["error"] = str(exc)

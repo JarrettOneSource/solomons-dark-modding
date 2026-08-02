@@ -17,7 +17,8 @@ The addresses below are image-base virtual addresses for the analyzed retail
 The stock game under `C:\SolomonDarkAbandonware` was treated as read-only.
 Headless Ghidra ran against the existing read-only project replica. Raw
 instruction and decompiler captures for this campaign are under
-`/mnt/d/codex-evidence/zorder-20260802/re/`.
+`/mnt/d/codex-evidence/zorder-20260802/re/` and
+`/mnt/d/codex-evidence/zorder-20260802/re-scope-addition/`.
 
 ## Result
 

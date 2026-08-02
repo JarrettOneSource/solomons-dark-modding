@@ -271,7 +271,8 @@ is reused on a later frame only after the original flush returns.
 ## Native post-scene indicator lane
 
 The renderer also hooks `Arena_Render` at `0x0046EC80`. Its detour invokes the
-complete stock function first, then calls
+complete stock function first, verifies that the detour receiver is still the
+live local player's active Arena, then calls
 `RenderGameplayWorldIndicatorsInNativePass` and renders active Lua marker
 commands before returning to the stock UI tree. This is intentionally separate
 from the queue-flush detour: the stock tutorial loot arrow proves that
@@ -361,8 +362,9 @@ Code resolves addresses through the repository's binary-layout and image-base
 helpers. Native color and quad calls receive the embedded draw-state at
 `*native_renderer_global + native_renderer_draw_state_offset`, matching the
 stock HUD call shape. Missing values, non-executable functions, an unavailable
-renderer, or a hook-install failure blocks Lua renderer startup. No retail
-address is silently duplicated as a C++ fallback.
+Region camera runtime, an unavailable renderer, or a hook-install failure
+blocks Lua renderer startup. No retail address is silently duplicated as a C++
+fallback.
 
 ## Lifecycle and failure behavior
 
@@ -434,10 +436,15 @@ with:
 5. the floating remote actor name/bar and a Lua marker following the stock
    tutorial indicator's post-scene behavior on both peers.
 
-Acceptance captures include the exact loader SHA, pair instance identities,
-world coordinates/order state, screenshots from both peers, native-render log
-receipts, and the existing wave-boundary plus real-flow E2E gates. The campaign
-does not land without those rendered-window observations.
+Acceptance captures include the exact 40-character source SHA from a clean
+worktree, identical Release/launcher DLL hashes, each exact staged game PID and
+loaded loader-module hash, the `zrd` instance identities, and netsh-verified UDP
+ownership of 51755/51756. Live state records the stock Sack `-25.0` and
+PlayerWizard `0.0` sort biases, their effective-key inequalities, and each
+drop's native light scalar beside screenshots and native-render log receipts
+from both peers. The existing wave-boundary and real-flow E2E gates remain
+mandatory. The campaign does not land without those rendered-window
+observations.
 
 ## Compatibility and publication
 

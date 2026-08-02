@@ -28,6 +28,7 @@ LOADOUT_DISCIPLINES = frozenset(("mind", "body", "arcane"))
 LOOPBACK_WINDOWS_PORT_PAIRS = (
     frozenset((50911, 50912)),
     frozenset((51711, 51712)),
+    frozenset((51755, 51756)),
 )
 
 
@@ -681,7 +682,7 @@ class HarnessConfig:
             ):
                 raise ConfigError(
                     "loopback_windows is reserved to mission port pairs "
-                    "50911/50912 or 51711/51712"
+                    "50911/50912, 51711/51712, or 51755/51756"
                 )
             if (
                 self.topology == "loopback_windows_botplay"
