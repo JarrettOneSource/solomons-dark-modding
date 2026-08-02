@@ -94,6 +94,25 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertEqual(control["remaining_ratio"], 1.0)
         self.assertEqual(actor_front["remaining_ratio"], 0.0)
 
+    def test_potion_location_calibrates_vertical_capture_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            image_path = Path(temporary) / "capture.png"
+            image = Image.new("RGB", (120, 120), (20, 20, 20))
+            for y in range(25, 35):
+                for x in range(55, 65):
+                    image.putpixel((x, y), (30, 180, 20))
+            image.save(image_path)
+
+            location = verifier.locate_potion_color(
+                image_path,
+                {"x": 60, "y": 70},
+                color="green",
+            )
+
+        self.assertEqual(location["matching_pixels"], 100)
+        self.assertEqual(location["center_y"], 29.5)
+        self.assertEqual(location["bounds"], [55, 25, 64, 34])
+
     def test_pickup_range_hold_writes_the_stock_derived_field(self) -> None:
         output = "".join(
             (

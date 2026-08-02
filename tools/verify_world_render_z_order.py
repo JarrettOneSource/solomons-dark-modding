@@ -505,6 +505,50 @@ def _matches_potion_color(pixel: tuple[int, int, int], color: str) -> bool:
     raise ValueError(color)
 
 
+def locate_potion_color(
+    image_path: Path,
+    point: dict[str, Any],
+    *,
+    color: str,
+    half_width: int = 40,
+    half_height: int = 80,
+) -> dict[str, Any]:
+    with Image.open(image_path) as opened:
+        image = opened.convert("RGB")
+        box = _crop_box(
+            image,
+            point,
+            half_width=half_width,
+            half_height=half_height,
+        )
+        selected = [
+            (x, y)
+            for y in range(box[1], box[3])
+            for x in range(box[0], box[2])
+            if _matches_potion_color(image.getpixel((x, y)), color)
+        ]
+    if not selected:
+        return {
+            "search_box": list(box),
+            "matching_pixels": 0,
+            "center_x": 0.0,
+            "center_y": 0.0,
+            "bounds": [],
+        }
+    return {
+        "search_box": list(box),
+        "matching_pixels": len(selected),
+        "center_x": sum(x for x, _ in selected) / len(selected),
+        "center_y": sum(y for _, y in selected) / len(selected),
+        "bounds": [
+            min(x for x, _ in selected),
+            min(y for _, y in selected),
+            max(x for x, _ in selected),
+            max(y for _, y in selected),
+        ],
+    }
+
+
 def potion_template_stats(
     reference_path: Path,
     reference_point: dict[str, Any],
@@ -746,12 +790,47 @@ def analyze_potion_captures(
             ("actor_behind_swapped", behind_swapped),
             ("actor_front_swapped", front_swapped),
         )
+        lighting_projection = lighting_control[role]["projection"]
+        custom_location = locate_potion_color(
+            evidence / f"potion_lighting-{role}.png",
+            lighting_projection["custom"],
+            color="green",
+        )
+        if custom_location["matching_pixels"] < 12:
+            raise sync.VerifyFailure(
+                f"custom potion could not calibrate the {role} capture: "
+                f"{custom_location}"
+            )
+        y_adjustment = (
+            custom_location["center_y"]
+            - float(lighting_projection["custom"]["y"])
+        )
+        role_result["capture_alignment"] = {
+            "custom_location": custom_location,
+            "projection_y_adjustment": y_adjustment,
+        }
+        aligned_points: dict[str, dict[str, dict[str, Any]]] = {}
         for label, phase in phases:
             image_path = evidence / f"{label}-{role}.png"
             projection = phase[role]["projection"]
+            aligned_points[label] = {
+                item: {
+                    **projection[item],
+                    "y": float(projection[item]["y"]) + y_adjustment,
+                }
+                for item in ("stock", "custom")
+            }
             role_result[label] = {
-                "stock": color_stats(image_path, projection["stock"], color="red"),
-                "custom": color_stats(image_path, projection["custom"], color="green"),
+                "stock": color_stats(
+                    image_path,
+                    aligned_points[label]["stock"],
+                    color="red",
+                ),
+                "custom": color_stats(
+                    image_path,
+                    aligned_points[label]["custom"],
+                    color="green",
+                ),
             }
         # Compare both sprites under the same water PlayerWizard. The fire
         # actor shares the stock bottle's red hue and is intentionally not a
@@ -759,8 +838,6 @@ def analyze_potion_captures(
         # in the companion captures.
         stock_phases = ("actor_behind_swapped", "actor_front_swapped")
         custom_phases = ("actor_behind", "actor_front")
-        phase_values = dict(phases)
-
         def template_analysis(
             item: str,
             color: str,
@@ -773,19 +850,19 @@ def analyze_potion_captures(
                 else "actor_behind"
             )
             reference_path = evidence / f"{behind_label}-{role}.png"
-            reference_point = phase_values[behind_label][role]["projection"][item]
+            reference_point = aligned_points[behind_label][item]
             control = potion_template_stats(
                 reference_path,
                 reference_point,
                 evidence / f"{control_label}-{role}.png",
-                phase_values[control_label][role]["projection"][item],
+                aligned_points[control_label][item],
                 color=color,
             )
             actor_front = potion_template_stats(
                 reference_path,
                 reference_point,
                 evidence / f"{front_label}-{role}.png",
-                phase_values[front_label][role]["projection"][item],
+                aligned_points[front_label][item],
                 color=color,
             )
             return {
