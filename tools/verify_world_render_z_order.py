@@ -340,7 +340,7 @@ for _, actor in ipairs(sd.world.list_actors() or {{}}) do
       if math.abs((tonumber(actor.x) or 0) - target.x) <= 2 and
          math.abs((tonumber(actor.y) or 0) - target.y) <= 2 then
         local address = tonumber(actor.actor_address) or 0
-        if address ~= 0 and sd.debug.write_u32(address + 0x14C, {delay_ticks}) then
+        if address ~= 0 and sd.debug.write_float(address + 0x14C, {delay_ticks}) then
           found[name] = address
           writes = writes + 1
         end
@@ -351,16 +351,16 @@ end
 print("writes=" .. tostring(writes))
 print("stock_address=" .. tostring(found.stock or 0))
 print("custom_address=" .. tostring(found.custom or 0))
-print("stock_delay=" .. tostring(found.stock and sd.debug.read_u32(found.stock + 0x14C) or -1))
-print("custom_delay=" .. tostring(found.custom and sd.debug.read_u32(found.custom + 0x14C) or -1))
+print("stock_delay=" .. tostring(found.stock and sd.debug.read_float(found.stock + 0x14C) or -1))
+print("custom_delay=" .. tostring(found.custom and sd.debug.read_float(found.custom + 0x14C) or -1))
 """,
     )
     if (
         values.get("writes") != "2"
         or int(values.get("stock_address", "0")) == 0
         or int(values.get("custom_address", "0")) == 0
-        or int(values.get("stock_delay", "-1")) != delay_ticks
-        or int(values.get("custom_delay", "-1")) != delay_ticks
+        or float(values.get("stock_delay", "-1")) != delay_ticks
+        or float(values.get("custom_delay", "-1")) != delay_ticks
     ):
         raise sync.VerifyFailure(
             f"could not set potion pickup delay on {pipe}: {values}"

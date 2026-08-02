@@ -120,7 +120,8 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertEqual(result["writes"], "2")
         code = parse.call_args.args[1]
         self.assertIn("actor.object_type_id) == 0x07DD", code)
-        self.assertIn("address + 0x14C, 36000", code)
+        self.assertIn("sd.debug.write_float(address + 0x14C, 36000)", code)
+        self.assertIn("sd.debug.read_float(found.stock + 0x14C)", code)
         self.assertIn("math.abs((tonumber(actor.x) or 0) - target.x) <= 2", code)
 
 
