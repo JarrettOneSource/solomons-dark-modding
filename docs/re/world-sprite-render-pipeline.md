@@ -37,6 +37,16 @@ custom-potion path projected a quad to screen coordinates and delayed it until
 the D3D9 `EndScene` hook, where Z testing, Z writing, and lighting are disabled.
 That path can never reproduce native actor/prop occlusion.
 
+Stock has a second native idiom for content that is anchored to a world
+position but semantically labels the scene. The tutorial loot arrow is not an
+Arena render-queue object. Its `Tutorial` UI node projects a live world target
+and draws the arrow from the native UI tree after the Arena scene has
+completed. It is consequently post-scene, always above scene actors and props,
+and is not multiplied by the target tile's local-light tint. Floating actor
+names, actor health bars, and world-target markers belong in that native
+world-indicator lane, matching the stock arrow rather than inventing a Y-sort
+rule for labels.
+
 The recovered native seams are:
 
 1. At the intercepted stock potion `Glyph_Draw` call, substitute a native
@@ -48,6 +58,9 @@ The recovered native seams are:
    dispatcher call its virtual native-glyph renderer.
 3. Keep stock animation actors, including `Anim_SpellGlow`, on their existing
    native animation lane. Do not mirror a world-anchored burst in `EndScene`.
+4. For world-anchored indicators, draw with stock native UI primitives
+   immediately after `Arena_Render` returns. This matches the tutorial arrow's
+   post-scene ordering while keeping the later D3D9 overlay screen-only.
 
 ## Evidence map
 
@@ -65,6 +78,12 @@ The recovered native seams are:
 | Native 32-bit texture-slot upload | `ghidra-native-texture-slots.txt:51-155` |
 | Base world-render carrier constructor | `ghidra-native-render-carrier.txt:53-153` |
 | Base carrier vtable and common dispatcher entries | `ghidra-puppet-vtable.txt:60-85` |
+| Tutorial UI-node construction, vtable install, and native-tree attachment | `re-scope-addition/hud-arena-tutorial-decompile.txt:747-794` |
+| Native UI-tree render, derived render call, then child traversal | `re-scope-addition/hud-arena-tutorial-decompile.txt:675-741` |
+| Tutorial vtable: derived render and inherited tree-render slots | `re-scope-addition/tutorial-render-vtable.txt:57-72` |
+| Tutorial stages 8 and 17 project a world target then draw the loot arrow | `re-scope-addition/hud-arena-tutorial-decompile.txt:1128-1185`, `:1614-1672` |
+| Stock HUD health-bar path selects color and submits a native untextured quad | `re-scope-addition/stock-healthbar-render-decompile.txt:192-220` |
+| Native untextured-quad geometry and current packed-color consumption | `re-scope-addition/stock-ui-primitives-decompile.txt:53-105` |
 
 Line references in this table are to the immutable campaign captures in the
 evidence directory above. The conclusions below distinguish instructions that
@@ -192,6 +211,68 @@ last-writer sites for object `+0xCC` are documented in
 The world-render seam must neither replace the common dispatcher nor force a
 constant tint, because either change would bypass that bridge.
 
+## Stock world-anchored indicator pass
+
+The tutorial loot-drop arrow documented in
+[`tutorial-mechanics.md`](tutorial-mechanics.md) is the stock discriminator
+between a scene sprite and a world-anchored indicator. `Tutorial` construction
+at `0x005D5CF0` first calls the base UI-node constructor `0x00427370`, installs
+the vtable at `0x0079AFC4`, and attaches the new node through `0x004280E0`
+(`re-scope-addition/hud-arena-tutorial-decompile.txt:747-794`). The vtable's
+derived render slot `+0x0C` is `0x005D08C0`; its inherited tree-render slot
+`+0x24` is `0x004278C0`
+(`re-scope-addition/tutorial-render-vtable.txt:57-72`).
+
+The inherited tree renderer calls the node's derived render slot and then
+walks its child list (`re-scope-addition/hud-arena-tutorial-decompile.txt:
+695-739`). Inside the derived Tutorial render, stages 8 and 17 resolve a live
+world actor, subtract the camera origin, apply the camera scale, add the render
+translation, and finally call the arrow renderer at `0x005C9BB0`
+(`re-scope-addition/hud-arena-tutorial-decompile.txt:1128-1185`,
+`:1614-1672`). There is no call to Arena queue insertion `0x0068C3B0`, no
+Puppet common dispatcher, and no local-light query in either arrow branch.
+
+This proves that the stock arrow is a dedicated post-scene,
+world-projected native indicator rather than a Y-sorted scene object. The
+loader's actor-attached labels must follow that behavior exactly: project and
+draw after the Arena scene, remain above scene geometry regardless of target
+Y, and do not inherit tile lighting. The selected loader seam is the return
+edge of `Arena_Render` at `0x0046EC80`: call the complete original first, then
+submit loader indicators through native text and untextured-quad primitives.
+That point is later than all Arena queue flushes but remains in the game's
+native render phase, before the D3D9 `EndScene` overlay.
+
+Stock already supplies the health-bar primitive needed by this lane. The HUD
+health-bar loop at `0x005D2520` sets the renderer color through `0x0041FE50`
+and calls native untextured-quad submission `0x0041DD70`
+(`re-scope-addition/stock-healthbar-render-decompile.txt:192-220`). The quad
+function appends four vertices using the renderer's current packed color at
+`+0x21C` (`re-scope-addition/stock-ui-primitives-decompile.txt:53-105`). A
+loader health bar can therefore stay wholly inside the native batch without
+capturing ExactText quads or replaying D3D primitives during `EndScene`.
+
+## Complete loader world-anchor inventory
+
+The cutover inventory was taken across loader render entry points and all
+in-repository Lua mods. It is class-complete for the current tree:
+
+| Current content | Pre-cutover path | Stock-matched destination |
+| --- | --- | --- |
+| Registered custom-potion ground glyph | Stock carrier draw was replaced by a projected `EndScene` quad | Keep the stock drop carrier and replace only its native glyph in place. |
+| Invincibility Potion active orbit/burst | World projection followed by consumable `EndScene` quads, alongside native `Anim_SpellGlow` | Delete the duplicate overlay quads; retain only native `Anim_SpellGlow`. |
+| General `sd.world.sprite` content | No native public seam | Loader Puppet carrier in the Arena Y-sorted queue. |
+| Replicated Dampen ring | Projected D3D9 `EndScene` line strip | Native textured world carrier in the Arena Y-sorted queue. |
+| Remote-player floating name and health bar | Name rendered during actor animation advance, captured/reprojected, then name and bar replayed in `EndScene` | Native post-scene world-indicator lane using ExactText and stock untextured quads. |
+| `lua_hud_showcase` actor marker and `YOU` label | `sd.draw.world_to_screen`, then overlay lines/text | Native post-scene world-indicator command anchored by world coordinates. |
+
+No other loader or in-repository mod draw consumes a world position for
+visual submission. Top-left ally rows, level-up status, `BOT PLAYING`,
+Boneyard controls, loading/join surfaces, and ordinary `sd.draw`/`sd.hud`
+commands are screen-owned and remain in the existing overlay. The
+`sd.draw.world_to_screen` projection helper remains a compatibility API for
+screen UI that deliberately tracks a world target, but using it does not
+authorize a world-owned visual to enter `EndScene`.
+
 ## Why the current overlay path is not salvageable
 
 The loader's `lua_sprite_runtime` and `lua_draw_*` path owns screen-space
@@ -262,16 +343,19 @@ No overlay fallback is allowed for world-anchored VFX.
 | Item drops, including registered custom potions | Native carrier and native glyph batch | Must interleave with actors and props and inherit local light. |
 | World-anchored mod sprites | Loader carrier inserted into the native world queue | Needs stock Y/bias order, culling, and tint. |
 | World-anchored VFX | Native animation actor or native world carrier | Must be occluded and lit in the scene. |
-| HUD indicators | Existing `EndScene` overlay | Position and ownership are screen-space. |
+| Actor-attached names and health bars | Native post-scene world-indicator pass | Matches the stock tutorial arrow: world projected, above the scene, not tile-lit. |
+| World-target marker labels | Native post-scene world-indicator pass | Same stock indicator semantics as the tutorial arrow. |
+| Top-left ally rows and other screen HUD | Existing `EndScene` overlay or existing stock HUD | Position and ownership are screen-space. |
 | Boneyard picker | Existing `EndScene` overlay | Intentional screen UI. |
 | `BOT PLAYING` label | Existing `EndScene` overlay | Intentional screen UI. |
 | Loading screens | Existing `EndScene` overlay | Intentional screen UI. |
 
-Projection does not change ownership: using `world_to_screen` to place a HUD
-marker remains an overlay operation, while a sprite intended to occupy the
-world must use the native seam. A static contract must pin this distinction so
-new item drops or world VFX cannot silently reintroduce a projected EndScene
-quad.
+Projection does not change ownership. A screen widget may deliberately follow
+a projected point and remain overlay-owned. A world sprite or actor-attached
+indicator must use its corresponding native lane even though both may start
+from the same coordinates. A static contract must pin this distinction so new
+item drops, world VFX, actor labels, or anchored markers cannot silently
+reintroduce a projected EndScene draw.
 
 ## Verified facts and remaining runtime proof
 
@@ -282,8 +366,11 @@ Verified directly from stock instructions/decompilation:
 - leading/bucket/trailing flush order and overflow Y sort;
 - stock potion subtype-to-sprite lookup and native glyph call;
 - common visibility, lighting, tint, and virtual-render control flow;
-- native texture upload and glyph batching boundaries; and
-- the base Puppet carrier constructor/vtable shape used by the proposed seam.
+- native texture upload and glyph batching boundaries;
+- the base Puppet carrier constructor/vtable shape used by the proposed seam;
+- the tutorial arrow's post-scene native UI-tree ownership and explicit world
+  projection; and
+- the stock native untextured-quad primitive used for HUD health bars.
 
 The following are implementation hypotheses until live acceptance:
 
@@ -296,5 +383,7 @@ The following are implementation hypotheses until live acceptance:
 
 Acceptance must therefore show a stock potion and custom potion together, with
 an actor in front of both and behind both, under non-flat lighting, on both
-local multiplayer peers. Passing static or headless checks alone cannot close
-those hypotheses.
+local multiplayer peers. It must also show an actor-attached floating bar and
+label on both peers in the same native post-scene relationship as the stock
+tutorial indicator. Passing static or headless checks alone cannot close those
+hypotheses.
