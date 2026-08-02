@@ -262,7 +262,7 @@ def loot_rows(pipe: str) -> list[dict[str, Any]]:
         """
 local snapshot = sd.world.get_replicated_loot()
 for _, row in ipairs(snapshot and snapshot.drops or {}) do
-  if row.kind == "potion" and row.active then
+  if row.kind == "Potion" and row.active then
     print(table.concat({
       tostring(row.network_drop_id), tostring(row.item_slot),
       tostring(row.x), tostring(row.y), tostring(row.radius),
