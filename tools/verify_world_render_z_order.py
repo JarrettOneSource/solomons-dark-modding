@@ -444,12 +444,7 @@ def color_stats(
         image = opened.convert("RGB")
         box = _crop_box(image, point)
         pixels = list(image.crop(box).getdata())
-    if color == "red":
-        selected = [pixel for pixel in pixels if pixel[0] >= 55 and pixel[0] >= pixel[1] * 1.35 and pixel[0] >= pixel[2] * 1.2]
-    elif color == "green":
-        selected = [pixel for pixel in pixels if pixel[1] >= 55 and pixel[1] >= pixel[0] * 1.35 and pixel[1] >= pixel[2] * 1.2]
-    else:
-        raise ValueError(color)
+    selected = [pixel for pixel in pixels if _matches_potion_color(pixel, color)]
     brightness = sorted(max(pixel) for pixel in selected)
     percentile_90 = (
         brightness[min(len(brightness) - 1, math.floor(len(brightness) * 0.9))]
@@ -461,6 +456,85 @@ def color_stats(
         "matching_pixels": len(selected),
         "maximum_channel": max(brightness, default=0),
         "percentile_90_channel": percentile_90,
+    }
+
+
+def _matches_potion_color(pixel: tuple[int, int, int], color: str) -> bool:
+    red, green, blue = pixel
+    if color == "red":
+        return red >= 55 and red >= green * 1.35 and red >= blue * 1.2
+    if color == "green":
+        return green >= 55 and green >= red * 1.35 and green >= blue * 1.2
+    raise ValueError(color)
+
+
+def potion_template_stats(
+    reference_path: Path,
+    reference_point: dict[str, Any],
+    candidate_path: Path,
+    candidate_point: dict[str, Any],
+    *,
+    color: str,
+    alignment_radius: int = 2,
+) -> dict[str, Any]:
+    """Measure how much of a potion's tint-invariant color mask remains."""
+    with Image.open(reference_path) as opened:
+        reference_image = opened.convert("RGB")
+        reference_box = _crop_box(reference_image, reference_point)
+        reference = reference_image.crop(reference_box)
+    with Image.open(candidate_path) as opened:
+        candidate_image = opened.convert("RGB")
+        candidate_box = _crop_box(candidate_image, candidate_point)
+        candidate = candidate_image.crop(candidate_box)
+
+    if reference.size != candidate.size:
+        raise sync.VerifyFailure(
+            "potion comparison crops have different dimensions: "
+            f"reference={reference_box} candidate={candidate_box}"
+        )
+
+    reference_pixels = reference.load()
+    candidate_pixels = candidate.load()
+    width, height = reference.size
+    mask = [
+        (x, y)
+        for y in range(height)
+        for x in range(width)
+        if _matches_potion_color(reference_pixels[x, y], color)
+    ]
+
+    best_matches = -1
+    best_offset = (0, 0)
+    for y_offset in range(-alignment_radius, alignment_radius + 1):
+        for x_offset in range(-alignment_radius, alignment_radius + 1):
+            matches = sum(
+                _matches_potion_color(
+                    candidate_pixels[x + x_offset, y + y_offset],
+                    color,
+                )
+                for x, y in mask
+                if 0 <= x + x_offset < width
+                and 0 <= y + y_offset < height
+            )
+            candidate_key = (matches, -abs(x_offset) - abs(y_offset))
+            best_key = (
+                best_matches,
+                -abs(best_offset[0]) - abs(best_offset[1]),
+            )
+            if candidate_key > best_key:
+                best_matches = matches
+                best_offset = (x_offset, y_offset)
+
+    template_pixels = len(mask)
+    return {
+        "reference_box": list(reference_box),
+        "candidate_box": list(candidate_box),
+        "template_pixels": template_pixels,
+        "matching_pixels": max(0, best_matches),
+        "remaining_ratio": (
+            max(0, best_matches) / template_pixels if template_pixels else 0.0
+        ),
+        "alignment_offset": list(best_offset),
     }
 
 
@@ -650,10 +724,53 @@ def analyze_potion_captures(
             if role == "host"
             else ("actor_behind", "actor_front")
         )
-        behind_stock = role_result[stock_phases[0]]["stock"]["matching_pixels"]
-        front_stock = role_result[stock_phases[1]]["stock"]["matching_pixels"]
-        behind_custom = role_result[custom_phases[0]]["custom"]["matching_pixels"]
-        front_custom = role_result[custom_phases[1]]["custom"]["matching_pixels"]
+        phase_values = dict(phases)
+
+        def template_analysis(
+            item: str,
+            color: str,
+            local_phases: tuple[str, str],
+        ) -> dict[str, Any]:
+            behind_label, front_label = local_phases
+            control_label = (
+                "actor_behind_swapped"
+                if behind_label == "actor_behind"
+                else "actor_behind"
+            )
+            reference_path = evidence / f"{behind_label}-{role}.png"
+            reference_point = phase_values[behind_label][role]["projection"][item]
+            control = potion_template_stats(
+                reference_path,
+                reference_point,
+                evidence / f"{control_label}-{role}.png",
+                phase_values[control_label][role]["projection"][item],
+                color=color,
+            )
+            actor_front = potion_template_stats(
+                reference_path,
+                reference_point,
+                evidence / f"{front_label}-{role}.png",
+                phase_values[front_label][role]["projection"][item],
+                color=color,
+            )
+            return {
+                "reference_phase": behind_label,
+                "behind_control_phase": control_label,
+                "actor_front_phase": front_label,
+                "behind_control": control,
+                "actor_front": actor_front,
+            }
+
+        stock_template = template_analysis("stock", "red", stock_phases)
+        custom_template = template_analysis("custom", "green", custom_phases)
+        role_result["template_occlusion"] = {
+            "stock": stock_template,
+            "custom": custom_template,
+        }
+        behind_stock = stock_template["behind_control"]["template_pixels"]
+        front_stock = stock_template["actor_front"]["matching_pixels"]
+        behind_custom = custom_template["behind_control"]["template_pixels"]
+        front_custom = custom_template["actor_front"]["matching_pixels"]
         role_result["occlusion"] = {
             "stock_pixels_hidden": behind_stock - front_stock,
             "custom_pixels_hidden": behind_custom - front_custom,
@@ -665,14 +782,26 @@ def analyze_potion_captures(
             "custom_percentile_90": custom_light,
             "highlight_delta": abs(stock_light - custom_light),
         }
-        if min(behind_stock, behind_custom) < 12:
-            raise sync.VerifyFailure(
-                f"potion pixels were not visible in actor-behind {role} capture: {role_result}"
-            )
-        if behind_stock <= front_stock or behind_custom <= front_custom:
-            raise sync.VerifyFailure(
-                f"actor-front capture did not occlude both potion sprites for {role}: {role_result}"
-            )
+        for item, template in (
+            ("stock", stock_template),
+            ("custom", custom_template),
+        ):
+            control = template["behind_control"]
+            actor_front = template["actor_front"]
+            if control["template_pixels"] < 12:
+                raise sync.VerifyFailure(
+                    f"{item} potion template was not visible for {role}: {role_result}"
+                )
+            if control["remaining_ratio"] < 0.9:
+                raise sync.VerifyFailure(
+                    f"{item} potion did not draw over the behind actor for {role}: "
+                    f"{role_result}"
+                )
+            if actor_front["remaining_ratio"] > 0.65:
+                raise sync.VerifyFailure(
+                    f"front actor did not cover enough of the {item} potion for "
+                    f"{role}: {role_result}"
+                )
         if abs(stock_light - custom_light) > 56:
             raise sync.VerifyFailure(
                 f"side-by-side stock/custom lighting highlights diverged for {role}: {role_result}"
@@ -1071,8 +1200,12 @@ def run(
             },
         }
 
-        behind_y = center_y - 48.0
-        front_y = center_y + 48.0
+        # Keep the actor and bottle silhouettes crossed while changing only
+        # their native Y ordering. A wide separation proves position, not
+        # occlusion; four world units remain in distinct stock floor(Y)
+        # buckets and create an unambiguous overlap in both directions.
+        behind_y = center_y - 4.0
+        front_y = center_y + 4.0
         result["actor_behind_placement"] = place_pair(
             host_pipe,
             client_pipe,

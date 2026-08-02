@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +55,44 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertIn("sd.camera.get_state()", code)
         self.assertIn("(x - camera.origin_x) * camera.scale", code)
         self.assertNotIn("sd.draw.world_to_screen", code)
+
+    def test_potion_template_ignores_same_color_actor_pixels_off_mask(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reference_path = root / "reference.png"
+            control_path = root / "control.png"
+            occluded_path = root / "occluded.png"
+            reference = Image.new("RGB", (80, 80), (20, 20, 20))
+            for y in range(32, 48):
+                for x in range(35, 45):
+                    reference.putpixel((x, y), (180, 40, 35))
+            reference.save(reference_path)
+            reference.save(control_path)
+
+            occluded = Image.new("RGB", (80, 80), (20, 20, 20))
+            for y in range(50, 70):
+                for x in range(20, 60):
+                    occluded.putpixel((x, y), (220, 30, 25))
+            occluded.save(occluded_path)
+            point = {"x": 40, "y": 40}
+
+            control = verifier.potion_template_stats(
+                reference_path,
+                point,
+                control_path,
+                point,
+                color="red",
+            )
+            actor_front = verifier.potion_template_stats(
+                reference_path,
+                point,
+                occluded_path,
+                point,
+                color="red",
+            )
+
+        self.assertEqual(control["remaining_ratio"], 1.0)
+        self.assertEqual(actor_front["remaining_ratio"], 0.0)
 
 
 if __name__ == "__main__":
