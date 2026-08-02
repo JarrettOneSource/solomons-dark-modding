@@ -17,6 +17,8 @@ struct LuaWorldRenderModFrame {
     bool accepting_commands = false;
     std::vector<LuaWorldSpriteCommand> pending_commands;
     std::vector<LuaWorldSpriteCommand> active_commands;
+    std::vector<LuaWorldMarkerCommand> pending_markers;
+    std::vector<LuaWorldMarkerCommand> active_markers;
 };
 
 struct LuaWorldRenderRuntimeState {
@@ -37,6 +39,10 @@ LuaWorldRenderModFrame& FindOrCreateWorldFrame(std::string_view mod_id) {
             kLuaWorldRenderMaxSpritesPerMod);
         frame->second.active_commands.reserve(
             kLuaWorldRenderMaxSpritesPerMod);
+        frame->second.pending_markers.reserve(
+            kLuaWorldRenderMaxSpritesPerMod);
+        frame->second.active_markers.reserve(
+            kLuaWorldRenderMaxSpritesPerMod);
         g_lua_world_render_runtime.mod_order.push_back(owned_mod_id);
     }
     return frame->second;
@@ -53,7 +59,8 @@ std::size_t CountOtherActiveCommands(std::string_view owner) {
     for (const auto& [mod_id, frame] :
          g_lua_world_render_runtime.mod_frames) {
         if (mod_id != owner) {
-            count += frame.active_commands.size();
+            count += frame.active_commands.size() +
+                frame.active_markers.size();
         }
     }
     return count;
@@ -96,6 +103,7 @@ void BeginLuaWorldRenderFrame(std::string_view mod_id) {
     }
     auto& frame = FindOrCreateWorldFrame(mod_id);
     frame.pending_commands.clear();
+    frame.pending_markers.clear();
     frame.accepting_commands = true;
 }
 
@@ -114,6 +122,8 @@ void CommitLuaWorldRenderFrame(std::string_view mod_id) {
     frame->second.accepting_commands = false;
     frame->second.active_commands.swap(frame->second.pending_commands);
     frame->second.pending_commands.clear();
+    frame->second.active_markers.swap(frame->second.pending_markers);
+    frame->second.pending_markers.clear();
     ++frame->second.generation;
 }
 
@@ -196,14 +206,67 @@ bool SubmitLuaWorldSpriteCommand(
         return false;
     }
     auto& pending = found->second.pending_commands;
-    if (pending.size() >= kLuaWorldRenderMaxSpritesPerMod) {
+    if (pending.size() + found->second.pending_markers.size() >=
+        kLuaWorldRenderMaxSpritesPerMod) {
         SetError(error_message, "Per-mod world sprite frame limit exceeded.");
         return false;
     }
     const auto other_active = CountOtherActiveCommands(mod_id);
-    if (other_active + pending.size() + 1 >
+    if (other_active + pending.size() +
+            found->second.pending_markers.size() + 1 >
         kLuaWorldRenderMaxGlobalSprites) {
         SetError(error_message, "Global world sprite frame limit exceeded.");
+        return false;
+    }
+    pending.push_back(std::move(command));
+    return true;
+}
+
+bool SubmitLuaWorldMarkerCommand(
+    std::string_view mod_id,
+    LuaWorldMarkerCommand command,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (mod_id.empty() || error_message == nullptr) {
+        return false;
+    }
+    if (command.label.empty() ||
+        command.label.size() > kLuaWorldRenderMaxMarkerLabelBytes) {
+        SetError(error_message, "World marker label must contain 1 to 64 bytes.");
+        return false;
+    }
+    if (!IsBoundedFinite(command.x, kLuaWorldRenderMaximumCoordinate) ||
+        !IsBoundedFinite(command.y, kLuaWorldRenderMaximumCoordinate)) {
+        SetError(error_message, "World marker position is outside its bound.");
+        return false;
+    }
+
+    std::scoped_lock lock(g_lua_world_render_runtime.mutex);
+    if (!g_lua_world_render_runtime.initialized) {
+        SetError(error_message, "Native world rendering is not initialized.");
+        return false;
+    }
+    const auto found =
+        g_lua_world_render_runtime.mod_frames.find(std::string(mod_id));
+    if (found == g_lua_world_render_runtime.mod_frames.end() ||
+        !found->second.accepting_commands) {
+        SetError(
+            error_message,
+            "World markers may only be submitted during runtime.tick.");
+        return false;
+    }
+    auto& pending = found->second.pending_markers;
+    if (pending.size() + found->second.pending_commands.size() >=
+        kLuaWorldRenderMaxSpritesPerMod) {
+        SetError(error_message, "Per-mod world render frame limit exceeded.");
+        return false;
+    }
+    const auto other_active = CountOtherActiveCommands(mod_id);
+    if (other_active + found->second.pending_commands.size() +
+            pending.size() + 1 > kLuaWorldRenderMaxGlobalSprites) {
+        SetError(error_message, "Global world render frame limit exceeded.");
         return false;
     }
     pending.push_back(std::move(command));
@@ -227,7 +290,8 @@ void RefreshLuaWorldRenderFrameSnapshots(
         const auto frame =
             g_lua_world_render_runtime.mod_frames.find(mod_id);
         if (frame == g_lua_world_render_runtime.mod_frames.end() ||
-            frame->second.active_commands.empty()) {
+            (frame->second.active_commands.empty() &&
+             frame->second.active_markers.empty())) {
             continue;
         }
         const auto cached = std::find_if(
@@ -245,6 +309,7 @@ void RefreshLuaWorldRenderFrameSnapshots(
             mod_id,
             frame->second.generation,
             frame->second.active_commands,
+            frame->second.active_markers,
         });
     }
 }

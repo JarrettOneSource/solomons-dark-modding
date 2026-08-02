@@ -229,8 +229,8 @@ presentation-only.
   hitscan by hand: `list_actors` + geometry + `queue_local_enemy_damage_claim`; ammo in
   Lua; feedback via logs. Ugly, solo-only, proves the fire loop end to end.
 - **M1 — after `sd.state` + `sd.hud` + filters (roadmap build steps 1–3).** Real ammo
-  HUD, cast-blocking on empty, brass economy through drop filters, mag decal via
-  world-anchored overlay fallback.
+  HUD, cast-blocking on empty, brass economy through drop filters, and a mag
+  decal through `sd.world.sprite` in the native world queue.
 - **M2 — after `sd.spells.register` (primary) + `sd.combat.deal_damage` + input
   listening.** True primary registration in the picker, upgrade tree live, reload/cycle
   keys, correct damage attribution in MP. Ammo types stubbed as manual toggles.

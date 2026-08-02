@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from static_multiplayer_contract_support import _read, _require_in_order
+from static_multiplayer_contract_support import ROOT, _read, _require_in_order
 
 
 def _require(label: str, text: str, tokens: tuple[str, ...]) -> None:
@@ -23,6 +23,14 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
     )
     world_renderer = _read(
         "SolomonDarkModLoader/src/lua_world_renderer.cpp"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_carrier_queue.inl"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_indicator_lane.inl"
     )
     world_renderer += _read(
         "SolomonDarkModLoader/src/lua_world_renderer/"
@@ -73,6 +81,28 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
     layout = _read("config/binary-layout.ini")
     project = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj")
     filters = _read("SolomonDarkModLoader/SolomonDarkModLoader.vcxproj.filters")
+    gameplay_hud = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "gameplay_hud_hooks.inl"
+    )
+    animation_advance = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "actor_tick/animation_advance_hook.inl"
+    )
+    dampen_effect = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/"
+        "multiplayer_dampen_effect.inl"
+    )
+    debug_overlay = _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay.cpp"
+    ) + _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/"
+        "label_resolution_surface_registry_and_frame_render.inl"
+    ) + _read(
+        "SolomonDarkModLoader/src/debug_ui_overlay/public_api.inl"
+    )
+    showcase = _read("mods/lua_hud_showcase/scripts/main.lua")
+    acceptance = _read("tools/verify_world_render_z_order.py")
 
     _require(
         "evidence-first native ordering recovery",
@@ -85,7 +115,10 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "0x006105F0",
             "0x004143D0",
             "larger world Y / sort bias renders later",
-            "HUD indicators",
+            "post-scene world-indicator pass",
+            "0x005C9BB0",
+            "Actor-attached names and health bars",
+            "Top-left ally rows and other screen HUD",
             "Boneyard picker",
             "`BOT PLAYING` label",
             "Loading screens",
@@ -97,6 +130,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         (
             "[lua_world_render]",
             "arena_render_queue_offset=0x17C",
+            "arena_render=0x0046EC80",
             "render_queue_flush=0x0068C480",
             "render_queue_insert=0x0068C3B0",
             "puppet_ctor=0x006287D0",
@@ -107,6 +141,8 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "native_renderer_global=0x00B401A8",
             "native_texture_critical_section=0x00B3F9DC",
             "native_texture_critical_section_initialized=0x00B40205",
+            "native_renderer_set_color=0x0041FE50",
+            "native_untextured_quad=0x0041DD70",
         ),
     )
     _require(
@@ -116,11 +152,13 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "kLuaWorldRenderMaxSpritesPerMod = 256",
             "kLuaWorldRenderMaxGlobalSprites = 2048",
             "struct LuaWorldSpriteCommand",
+            "struct LuaWorldMarkerCommand",
             "struct LuaWorldRenderFrameSnapshot",
             "BeginLuaWorldRenderFrame(mod->descriptor.id)",
             "CommitLuaWorldRenderFrame(mod->descriptor.id)",
             "ClearLuaWorldRenderFrameForMod(mod->descriptor.id)",
             "SubmitLuaWorldSpriteCommand",
+            "SubmitLuaWorldMarkerCommand",
             "RefreshLuaWorldRenderFrameSnapshots",
             '"world.render.native"',
         ),
@@ -134,13 +172,15 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "CommitLuaDrawFrame(mod->descriptor.id);",
     )
     _require(
-        "additive sd.world sprite binding",
+        "additive sd.world sprite and marker bindings",
         world_bindings + binding_registry,
         (
             "RegisterLuaWorldRenderBindings",
             "RegisterLuaWorldRenderBindings(state);",
             'RegisterFunction(state, &LuaWorldSprite, "sprite")',
+            'RegisterFunction(state, &LuaWorldMarker, "marker")',
             '"sd.world.sprite"',
+            '"sd.world.marker"',
             "TryGetLuaDrawSpriteInfo",
             "SubmitLuaWorldSpriteCommand",
         ),
@@ -171,6 +211,28 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         world_renderer,
         "InsertWorldSpriteCarriers(self, pass)",
         "original(self, pass);",
+    )
+    _require(
+        "native post-scene world indicator lane",
+        world_renderer + gameplay_hud,
+        (
+            "HookNativeArenaRender",
+            "GetX86HookTrampoline<NativeArenaRenderFn>",
+            "original(self);",
+            "RenderGameplayWorldIndicatorsInNativePass();",
+            "RenderLuaWorldMarkersInNativePass();",
+            "native_renderer_set_color",
+            "native_untextured_quad",
+            "DrawNativeWorldIndicatorHealthBar",
+            "source=native_world_indicator",
+            "health_bar=native",
+        ),
+    )
+    _require_in_order(
+        world_renderer,
+        "original(self);",
+        "RenderGameplayWorldIndicatorsInNativePass();",
+        "RenderLuaWorldMarkersInNativePass();",
     )
     _require(
         "native registered-atlas texture bridge",
@@ -206,6 +268,13 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "BuildCustomPotionWorldQuad",
         "AppendConsumableActivationBurstQuads",
         "QueueConsumableQuad",
+        "QueueDebugUiMultiplayerDampenPresentation",
+        "BuildGameplayDampenPresentationRenderItems",
+        "DrawGameplayDampenPresentation",
+        "BuildGameplayParticipantHealthBarRenderItems",
+        "source=dx9_nameplate_healthbar",
+        "BeginDebugUiGameplayParticipantNameplateCapture",
+        'surface_id = "gameplay_nameplate"',
     ):
         assert removed not in (
             item_header
@@ -214,7 +283,55 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             + native_hooks
             + draw_renderer
             + draw_helpers
+            + debug_overlay
+            + gameplay_hud
+            + animation_advance
+            + dampen_effect
         ), f"world-space overlay residue remains: {removed}"
+
+    _require(
+        "Dampen uses a native Y-sorted carrier",
+        world_header + world_renderer + dampen_effect,
+        (
+            "QueueNativeWorldDampenPresentation",
+            "NativeWorldDampenPresentation",
+            "BuildNativeDampenRingGlyph",
+            "Multiplayer Dampen native world presentation",
+            "request.position_x",
+            "request.position_y",
+        ),
+    )
+    assert "DX9 presentation" not in debug_overlay + dampen_effect
+    assert "D3DPT_LINESTRIP" not in debug_overlay
+
+    _require(
+        "in-repository world marker uses the native indicator API",
+        showcase,
+        ('sd.world.marker("YOU"',),
+    )
+    assert "sd.draw.world_to_screen" not in showcase
+    for lua_path in sorted((ROOT / "mods").rglob("*.lua")):
+        lua_source = lua_path.read_text(encoding="utf-8")
+        assert "sd.draw.world_to_screen" not in lua_source, (
+            "in-repository Lua content may not project a world-owned draw into "
+            f"the overlay; use sd.world.sprite/marker: {lua_path}"
+        )
+
+    _require(
+        "two-peer native world and indicator acceptance",
+        acceptance,
+        (
+            'INSTANCE_NAME = "zrd"',
+            "PORTS = (51755, 51756)",
+            "wait_for_mpp_games_to_exit()",
+            "netsh interface ipv4 show excludedportrange protocol=udp",
+            'label="indicator-host-actor-front"',
+            'label="indicator-client-actor-front"',
+            '"floating_bar_stock_indicator_semantics_both_peers": True',
+            '"actor_front_occludes_both": True',
+            '"actor_behind_is_occluded_by_both": True',
+        ),
+    )
 
     _require(
         "native-only replicated potion VFX",
@@ -261,10 +378,14 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "fail-closed renderer lifecycle",
         loader + world_renderer,
         (
+            "native_world_renderer_required",
+            "multiplayer::IsFoundationInitialized()",
+            "InitializeLuaWorldRenderRuntime",
             "InitializeLuaWorldRenderer",
             'write_failed_status("lua-world-renderer-failed"',
             "ShutdownLuaWorldRenderer",
             "RemoveX86Hook(&g_world_renderer.render_queue_flush_hook)",
+            "RemoveX86Hook(&g_world_renderer.arena_render_hook)",
         ),
     )
     _require_in_order(
@@ -278,6 +399,8 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         r"include\lua_world_render_runtime.h",
         r"src\lua_world_render_runtime.cpp",
         r"src\lua_world_renderer.cpp",
+        r"src\lua_world_renderer\native_carrier_queue.inl",
+        r"src\lua_world_renderer\native_indicator_lane.inl",
         r"src\lua_engine_bindings_world_render.cpp",
     ):
         assert item in project, f"native project omits: {item}"
@@ -287,13 +410,14 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "compatibility and publication boundary",
         design + item_docs,
         (
-            "does not require an Invincibility Potion mod republish",
-            "No listing or release action",
+            "the Invincibility Potion does not",
+            "No listing, republish, or release action",
+            "showcase therefore needs republishing",
             "native `SpellGlow`",
         ),
     )
 
     return (
-        "world sprites enter the native Y-sorted, light-tinted queue while "
-        "HUD and other intentional screen UI remain exclusively in EndScene"
+        "world sprites enter the native Y-sorted, light-tinted queue, world "
+        "indicators use the native post-scene lane, and screen UI stays overlay-owned"
     )

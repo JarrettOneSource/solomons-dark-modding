@@ -45,17 +45,6 @@ sd.events.on("runtime.tick", function(event)
 
   local player = sd.player.get_state()
   if type(player) == "table" then
-    local marker = sd.draw.world_to_screen(player.x, player.y - 54)
-    if type(marker) == "table" and marker.visible then
-      sd.draw.line(marker.x - 10, marker.y, marker.x + 10, marker.y, {
-        thickness = 2,
-        color = gold,
-      })
-      sd.draw.line(marker.x, marker.y - 10, marker.x, marker.y + 10, {
-        thickness = 2,
-        color = gold,
-      })
-      sd.draw.text("YOU", marker.x - 14, marker.y - 30, {color = gold})
-    end
+    sd.world.marker("YOU", player.x, player.y - 54, {color = gold})
   end
 end)

@@ -186,9 +186,13 @@ def test_lua_draw_is_bounded_local_and_backbuffer_verified() -> str:
         "sd.draw.rect(",
         "sd.draw.line(",
         'sd.draw.sprite("Title", 9',
-        "sd.draw.world_to_screen(",
+        'sd.world.marker("YOU"',
     ):
         assert token in sample, f"HUD showcase lacks: {token}"
+
+    assert "sd.draw.world_to_screen(" not in sample, (
+        "the world-owned HUD showcase marker regressed to EndScene projection"
+    )
 
     for token in (
         "capture_game_backbuffer(",

@@ -189,20 +189,22 @@ runtime and distribution research.
 
 ### Tier 1 — force multipliers
 
-**1. `sd.hud` / `sd.draw` — immediate-mode draw list.**
-Lua submits per-frame commands: text, rects, lines, sprites (from existing atlases),
-world-anchored markers via a `world_to_screen` helper. Loader renders them in the EndScene
-hook (the debug overlay + glyph-draw seams are the proven substrate).
-*Unlocks:* DPS meters, boss bars, damage numbers, quest trackers, ground telegraphs,
-race HUDs, tutorial callouts.
+**1. `sd.hud` / `sd.draw` — screen-space immediate-mode draw list.**
+Lua submits per-frame text, rectangles, lines, and sprites for viewport-fixed
+presentation. Loader renders them in the `EndScene` hook. World sprites use
+`sd.world.sprite`; actor/target indicators use `sd.world.marker` and the
+stock-style native post-scene indicator pass.
+*Unlocks:* DPS meters, boss bars, quest trackers, race HUDs, and other screen UI.
 *Multiplayer:* Presentation-class — purely local, MP-safe by construction. Pairs with
 replicated events for synchronized displays.
 
 **Implemented 2026-07-22.** Each mod owns a bounded immediate display list submitted
 from `runtime.tick`; the EndScene renderer supports ASCII text, filled/outlined rects,
-thick lines, all 28 stock sprite atlases, viewport queries, and gameplay
-`world_to_screen`. `sd.hud` is an exact alias and the renderer preserves the caller's
-D3D9 state. Exact two-peer acceptance proves independent tick handlers, command
+thick lines, all 28 stock sprite atlases, viewport queries, and the compatible
+`world_to_screen` projection helper. `sd.hud` is an exact alias and the renderer preserves the caller's
+D3D9 state. The 2026-08-02 native world-render cutover made projection
+explicitly insufficient for world-owned content; see `lua-world-rendering.md`.
+Exact two-peer acceptance proves independent tick handlers, command
 submission, projection schemas, activation, and release; pixel-level backbuffer
 acceptance remains the rendered-output gate. See `lua-draw.md` and the opt-in
 `sample.lua.hud_showcase` mod.

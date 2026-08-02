@@ -265,7 +265,17 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("lua-engine-failed", message);
                 return;
             }
+        } else {
+            Log("Lua engine disabled by runtime flags.");
+        }
 
+        const bool native_world_renderer_required =
+            runtime_flags.loader.lua_engine ||
+            multiplayer::IsFoundationInitialized();
+        if (native_world_renderer_required) {
+            if (!IsLuaWorldRenderRuntimeInitialized()) {
+                InitializeLuaWorldRenderRuntime();
+            }
             std::string lua_world_renderer_error;
             if (!InitializeLuaWorldRenderer(&lua_world_renderer_error)) {
                 const auto message = lua_world_renderer_error.empty()
@@ -276,7 +286,13 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("lua-world-renderer-failed", message);
                 return;
             }
+        } else {
+            Log(
+                "Native world renderer disabled because Lua and multiplayer "
+                "are unavailable.");
+        }
 
+        if (runtime_flags.loader.lua_engine) {
             std::string lua_item_hook_error;
             if (!InitializeLuaItemNativeHooks(&lua_item_hook_error)) {
                 const auto message = lua_item_hook_error.empty()
@@ -306,8 +322,6 @@ void Initialize(HMODULE module_handle) {
                 write_failed_status("lua-exec-pipe-failed", message);
                 return;
             }
-        } else {
-            Log("Lua engine disabled by runtime flags.");
         }
 
         startup_status.runtime_tick_service_enabled = runtime_flags.loader.runtime_tick_service;

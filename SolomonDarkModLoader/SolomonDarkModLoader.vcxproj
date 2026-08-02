@@ -107,8 +107,11 @@
     <ClInclude Include="include\lua_developer_console.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
     <ClInclude Include="include\lua_world_render_runtime.h" />
+    <ClInclude Include="include\native_world_render.h" />
     <ClInclude Include="include\lua_item_runtime.h" />
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl" />
+    <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl" />
+    <ClInclude Include="src\lua_world_renderer\native_indicator_lane.inl" />
     <ClInclude Include="src\lua_world_renderer\native_texture_bridge.inl" />
     <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_sprite_runtime.h" />
@@ -208,7 +211,6 @@
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture_and_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_lifecycle.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_session.inl" />
-    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\gameplay_nameplate_projection.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\glyph_observation.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\render_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution.inl" />
@@ -218,8 +220,6 @@
     <ClInclude Include="src\debug_ui_overlay\exact_widget_resolution\recorded_control_rects.inl" />
     <ClInclude Include="src\debug_ui_overlay\dark_cloud_browser_native_tabs.inl" />
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl" />
-    <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl" />
-    <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl" />
     <ClInclude Include="src\debug_ui_overlay\install_hooks.inl" />
     <ClInclude Include="src\debug_ui_overlay\label_resolution_and_frame_render.inl" />
@@ -472,6 +472,7 @@
     <ClInclude Include="src\mod_loader_gameplay\public_api_input_queueing.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_local_player_takeover.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\public_api_world_render.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl" />
     <ClInclude Include="src\mod_loader_gameplay\public_api_replicated_loot.inl" />
     <ClInclude Include="src\mod_loader_gameplay\inventory_snapshot_tree.inl" />

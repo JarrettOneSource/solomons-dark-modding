@@ -864,9 +864,14 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
         "stock_dampen_effect_context.inl"
     )
-    dampen_rendering = _read(
-        "SolomonDarkModLoader/src/debug_ui_overlay/"
-        "gameplay_dampen_rendering.inl"
+    native_world_renderer = _read(
+        "SolomonDarkModLoader/src/lua_world_renderer.cpp"
+    ) + _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_carrier_queue.inl"
+    ) + _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_texture_bridge.inl"
     )
     dampen_effect = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/"
@@ -1188,18 +1193,24 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
             f"deterministic Dampen native-family gate lacks: {token}"
         )
     assert "if (!actor.tracked_enemy)" not in dampen_effect
-    assert "QueueDebugUiMultiplayerDampenPresentation(" in dampen_effect
+    assert "QueueNativeWorldDampenPresentation(" in dampen_effect
     for token in (
-        "BuildGameplayDampenPresentationRenderItems(",
-        "multiplayer::GetLocalTransportParticipantId()",
-        'element.surface_id == "gameplay_nameplate"',
-        "D3DPT_LINESTRIP",
-        "DrawGameplayDampenPresentation(",
-        '"Multiplayer Dampen DX9 presentation drawn.',
+        "struct NativeWorldDampenPresentation",
+        "BuildNativeDampenRingGlyph(",
+        "PrepareDampenCarrier(",
+        "g_world_renderer.render_queue_insert(",
+        '"Multiplayer Dampen native world presentation drawn.',
     ):
-        assert token in dampen_rendering, (
-            f"multiplayer Dampen DX9 presentation lacks: {token}"
+        assert token in native_world_renderer, (
+            f"multiplayer Dampen native world presentation lacks: {token}"
         )
+    for removed in (
+        "QueueDebugUiMultiplayerDampenPresentation(",
+        "BuildGameplayDampenPresentationRenderItems(",
+        "D3DPT_LINESTRIP",
+        "Multiplayer Dampen DX9 presentation drawn.",
+    ):
+        assert removed not in dampen_effect + native_world_renderer
 
     for source, token in (
         (gameplay_api, "bool TryListNativeActorModifiers("),

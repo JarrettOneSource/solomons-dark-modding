@@ -558,7 +558,6 @@ void ResetDebugUiOverlayStateUnlocked(DebugUiOverlayState* state) {
     state->frame_exact_text_elements.clear();
     state->frame_exact_control_elements.clear();
     state->active_exact_text_renders.clear();
-    state->multiplayer_dampen_presentations.clear();
     state->recent_assigned_strings.clear();
     state->recent_assigned_strings_updated_at = 0;
     state->tracked_title_main_menu_object = 0;

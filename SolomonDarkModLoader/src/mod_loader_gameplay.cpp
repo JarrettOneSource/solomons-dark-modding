@@ -16,6 +16,7 @@
 #include "multiplayer_local_transport.h"
 #include "native_enemy_lifecycle.h"
 #include "native_enemy_types.h"
+#include "native_world_render.h"
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
 #include "multiplayer_service_loop.h"

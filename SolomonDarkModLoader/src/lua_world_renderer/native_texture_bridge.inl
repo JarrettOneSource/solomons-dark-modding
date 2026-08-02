@@ -137,6 +137,134 @@ NativeAtlasTexture* GetNativeAtlasTexture(
     return texture;
 }
 
+bool EnsureNativeDampenTexture(std::string* error_message) {
+    auto& texture = g_world_renderer.dampen_texture;
+    if (texture.handle >= 0) {
+        return true;
+    }
+    if (texture.load_attempted) {
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    texture.load_attempted = true;
+    texture.width = static_cast<std::uint32_t>(kDampenTextureSize);
+    texture.height = static_cast<std::uint32_t>(kDampenTextureSize);
+
+    std::vector<std::uint8_t> pixels(
+        kDampenTextureSize * kDampenTextureSize * 4,
+        0);
+    const float center =
+        (static_cast<float>(kDampenTextureSize) - 1.0f) * 0.5f;
+    for (std::size_t y = 0; y < kDampenTextureSize; ++y) {
+        for (std::size_t x = 0; x < kDampenTextureSize; ++x) {
+            const float dx = static_cast<float>(x) - center;
+            const float dy = static_cast<float>(y) - center;
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            const bool outer = std::fabs(distance - 56.0f) <= 1.4f;
+            const bool inner = std::fabs(distance - 52.0f) <= 1.2f;
+            if (!outer && !inner) {
+                continue;
+            }
+            const auto offset = (y * kDampenTextureSize + x) * 4;
+            pixels[offset + 0] = 255;
+            pixels[offset + 1] = outer ? 210 : 246;
+            pixels[offset + 2] = outer ? 146 : 229;
+            pixels[offset + 3] = outer ? 230 : 173;
+        }
+    }
+
+    if (g_world_renderer.native_texture_upload_bgra == nullptr ||
+        g_world_renderer.native_texture_critical_section == nullptr ||
+        g_world_renderer.native_texture_critical_section_initialized ==
+            nullptr) {
+        texture.error_message = "native Dampen texture seams are unavailable";
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    if (*g_world_renderer.native_texture_critical_section_initialized == 0) {
+        InitializeCriticalSection(
+            g_world_renderer.native_texture_critical_section);
+        *g_world_renderer.native_texture_critical_section_initialized = 1;
+    }
+    EnterCriticalSection(g_world_renderer.native_texture_critical_section);
+    texture.handle = g_world_renderer.native_texture_upload_bgra(
+        static_cast<int>(kDampenTextureSize),
+        static_cast<int>(kDampenTextureSize),
+        pixels.data(),
+        0);
+    LeaveCriticalSection(g_world_renderer.native_texture_critical_section);
+    if (texture.handle < 0) {
+        texture.error_message =
+            "stock BGRA uploader returned no Dampen texture slot";
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+
+    void* renderer = TryGetNativeRenderer();
+    if (renderer == nullptr ||
+        g_world_renderer.native_render_page_register == nullptr) {
+        texture.error_message =
+            "stock renderer page table is unavailable for Dampen";
+        ReleaseNativeAtlasTexture(&texture);
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    WriteNativeField(
+        texture.page_record.data(),
+        kNativePageHandleOffset,
+        texture.handle);
+    g_world_renderer.native_render_page_register(
+        renderer,
+        texture.page_record.data());
+    return true;
+}
+
+bool BuildNativeDampenRingGlyph(
+    float radius,
+    NativeWorldGlyph* glyph,
+    std::array<float, 4>* bounds,
+    std::string* error_message) {
+    if (glyph == nullptr || bounds == nullptr || error_message == nullptr ||
+        !std::isfinite(radius) || radius <= 0.0f ||
+        !EnsureNativeDampenTexture(error_message)) {
+        return false;
+    }
+    *glyph = {};
+    const std::uint8_t valid = 1;
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteValidOffset,
+        valid);
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteTextureHandleOffset,
+        g_world_renderer.dampen_texture.handle);
+    const std::array<float, 8> geometry = {
+        -radius, -radius,
+        radius, -radius,
+        -radius, radius,
+        radius, radius,
+    };
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteGeometryOffset,
+        geometry);
+    const float inset =
+        kNativeUvHalfTexel / static_cast<float>(kDampenTextureSize);
+    const std::array<float, 8> uv = {
+        inset, inset,
+        1.0f - inset, inset,
+        inset, 1.0f - inset,
+        1.0f - inset, 1.0f - inset,
+    };
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteUvOffset,
+        uv);
+    *bounds = {-radius, -radius, radius, radius};
+    return true;
+}
+
 bool WriteNativeUv(
     const LuaDrawSpriteInfo& sprite,
     const NativeAtlasTexture& texture,

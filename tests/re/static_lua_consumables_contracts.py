@@ -64,6 +64,10 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     world_renderer = _read(
         "SolomonDarkModLoader/src/lua_world_renderer.cpp"
     )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_carrier_queue.inl"
+    )
     gameplay_pump = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
     )

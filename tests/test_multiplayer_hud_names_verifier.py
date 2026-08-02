@@ -21,6 +21,34 @@ import verify_multiplayer_hud_names as verifier  # noqa: E402
 
 
 class MultiplayerHudNamesVerifierTests(unittest.TestCase):
+    def test_native_indicator_geometry_is_derived_from_native_log(self) -> None:
+        line = (
+            "source=native_world_indicator participant=2 ok=1 "
+            "health_bar=native health_ratio=0.500000 health_percent=50 "
+            "center_x=200.000000 name_y=120.000000 bar_top=137.000000 "
+            "bar_width=80.000000"
+        )
+
+        geometry = verifier.verify_native_nameplate_health_bar_geometry(
+            line,
+            50,
+        )
+
+        self.assertEqual(geometry["left"], 160.0)
+        self.assertEqual(geometry["right"], 240.0)
+        self.assertEqual(geometry["bottom"], 144.0)
+
+    def test_native_indicator_geometry_rejects_stale_health(self) -> None:
+        line = (
+            "source=native_world_indicator participant=2 ok=1 "
+            "health_bar=native health_ratio=1.000000 health_percent=100 "
+            "center_x=200.000000 name_y=120.000000 bar_top=137.000000 "
+            "bar_width=80.000000"
+        )
+
+        with self.assertRaises(verifier.VerifyFailure):
+            verifier.verify_native_nameplate_health_bar_geometry(line, 50)
+
     def test_live_verifier_uses_quick_start_and_exact_process_cleanup(
         self,
     ) -> None:

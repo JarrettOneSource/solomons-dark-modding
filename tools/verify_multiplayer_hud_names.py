@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify remote world nameplates, DX9 health bars, and named ally HUD rows."""
+"""Verify native world indicators and named screen-space ally HUD rows."""
 
 from __future__ import annotations
 
@@ -50,9 +50,9 @@ CLIENT_TEST_MAX_HP = 500.0
 EXPECTED_HALF_HEALTH_PERCENT = 50
 RUN_FORMATION_LEASE_SECONDS = 5.5
 MIN_ALLY_HUD_NAME_GAP = 1.0
-MIN_DX9_NAMEPLATE_BAR_WIDTH = 64.0
-DX9_NAMEPLATE_BAR_HEIGHT = 7.0
-DX9_NAMEPLATE_BAR_VERTICAL_GAP = 1.0
+MIN_NATIVE_NAMEPLATE_BAR_WIDTH = 64.0
+NATIVE_NAMEPLATE_BAR_HEIGHT = 7.0
+NATIVE_NAMEPLATE_BAR_OFFSET = 17.0
 
 
 @dataclass(frozen=True)
@@ -254,78 +254,60 @@ def verify_ally_hud_name_layout(line: str) -> dict[str, float]:
     return values
 
 
-def verify_dx9_nameplate_health_bar_geometry(
+def verify_native_nameplate_health_bar_geometry(
     line: str,
     expected_percent: int | None = None,
 ) -> dict[str, float]:
     ratio_match = re.search(r"(?:^| )health_ratio=([0-9.]+)", line)
     percent_match = re.search(r"(?:^| )health_percent=([0-9]+)", line)
-    bounds_match = re.search(
-        r"(?:^| )bounds=\((-?[0-9.]+),(-?[0-9.]+),"
-        r"(-?[0-9.]+),(-?[0-9.]+)\)",
-        line,
-    )
-    name_bounds_match = re.search(
-        r"(?:^| )name_bounds=\((-?[0-9.]+),(-?[0-9.]+),"
-        r"(-?[0-9.]+),(-?[0-9.]+)\)",
-        line,
-    )
+    center_match = re.search(r"(?:^| )center_x=(-?[0-9.]+)", line)
+    name_y_match = re.search(r"(?:^| )name_y=(-?[0-9.]+)", line)
+    bar_top_match = re.search(r"(?:^| )bar_top=(-?[0-9.]+)", line)
+    bar_width_match = re.search(r"(?:^| )bar_width=([0-9.]+)", line)
     if (
         ratio_match is None
         or percent_match is None
-        or bounds_match is None
-        or name_bounds_match is None
+        or center_match is None
+        or name_y_match is None
+        or bar_top_match is None
+        or bar_width_match is None
     ):
-        raise VerifyFailure(f"DX9 health draw has incomplete geometry: {line}")
+        raise VerifyFailure(
+            f"native indicator draw has incomplete geometry: {line}"
+        )
 
     health_ratio = float(ratio_match.group(1))
     health_percent = int(percent_match.group(1))
-    left, top, right, bottom = (
-        float(value) for value in bounds_match.groups()
-    )
-    name_left, name_top, name_right, name_bottom = (
-        float(value) for value in name_bounds_match.groups()
-    )
-    width = right - left
-    height = bottom - top
-    name_width = name_right - name_left
-    name_height = name_bottom - name_top
+    center_x = float(center_match.group(1))
+    name_y = float(name_y_match.group(1))
+    top = float(bar_top_match.group(1))
+    width = float(bar_width_match.group(1))
+    left = center_x - width * 0.5
+    right = center_x + width * 0.5
+    bottom = top + NATIVE_NAMEPLATE_BAR_HEIGHT
     if expected_percent is not None:
         expected_ratio = expected_percent / 100.0
         if health_percent != expected_percent or abs(
             health_ratio - expected_ratio
         ) > 0.01:
             raise VerifyFailure(
-                "DX9 health draw ratio mismatch: "
+                "native indicator health ratio mismatch: "
                 f"expected={expected_ratio} line={line}"
             )
     if (
-        width + 0.01 < MIN_DX9_NAMEPLATE_BAR_WIDTH
-        or not math.isclose(
-            height,
-            DX9_NAMEPLATE_BAR_HEIGHT,
-            rel_tol=0.0,
-            abs_tol=0.01,
-        )
-        or name_width <= 0.0
-        or name_height <= 0.0
-        or width + 0.01 < name_width
+        width + 0.01 < MIN_NATIVE_NAMEPLATE_BAR_WIDTH
+        or not all(math.isfinite(value) for value in (center_x, name_y, top))
     ):
-        raise VerifyFailure(f"DX9 health draw has invalid dimensions: {line}")
-    if not math.isclose(
-        (left + right) * 0.5,
-        (name_left + name_right) * 0.5,
-        rel_tol=0.0,
-        abs_tol=0.01,
-    ):
-        raise VerifyFailure(f"DX9 health bar is not centered under its name: {line}")
+        raise VerifyFailure(f"native indicator has invalid dimensions: {line}")
     if not math.isclose(
         top,
-        name_bottom + DX9_NAMEPLATE_BAR_VERTICAL_GAP,
+        name_y + NATIVE_NAMEPLATE_BAR_OFFSET,
         rel_tol=0.0,
         abs_tol=0.01,
     ):
-        raise VerifyFailure(f"DX9 health bar is not flush under its name: {line}")
+        raise VerifyFailure(
+            f"native health bar is not anchored under its name: {line}"
+        )
 
     return {
         "health_ratio": health_ratio,
@@ -335,13 +317,9 @@ def verify_dx9_nameplate_health_bar_geometry(
         "right": right,
         "bottom": bottom,
         "width": width,
-        "height": height,
-        "name_left": name_left,
-        "name_top": name_top,
-        "name_right": name_right,
-        "name_bottom": name_bottom,
-        "name_width": name_width,
-        "name_height": name_height,
+        "height": NATIVE_NAMEPLATE_BAR_HEIGHT,
+        "center_x": center_x,
+        "name_y": name_y,
     }
 
 
@@ -463,24 +441,14 @@ def verify_render_logs(
                 if expected_health_percent is not None
                 else "health_percent="
             )
-            world_line = matching_line(
+            native_indicator_line = matching_line(
                 dynamic_log_text,
                 (
-                    "source=playerwizard_render",
+                    "source=native_world_indicator",
                     participant_token,
                     f"name={owner.name}",
                     "ok=1",
-                    "health_bar=dx9",
-                    "health_valid=1",
-                    health_percent_token,
-                ),
-            )
-            dx9_health_line = matching_line(
-                dynamic_log_text,
-                (
-                    "source=dx9_nameplate_healthbar",
-                    participant_token,
-                    "ok=1",
+                    "health_bar=native",
                     "health_ratio=",
                     health_percent_token,
                 ),
@@ -497,11 +465,10 @@ def verify_render_logs(
                 ),
             )
             observer_evidence[owner.label] = {
-                "world": world_line,
-                "dx9_health_bar": dx9_health_line,
-                "dx9_health_bar_geometry": (
-                    verify_dx9_nameplate_health_bar_geometry(
-                        dx9_health_line,
+                "native_indicator": native_indicator_line,
+                "native_health_bar_geometry": (
+                    verify_native_nameplate_health_bar_geometry(
+                        native_indicator_line,
                         expected_health_percent,
                     )
                 ),
@@ -518,33 +485,24 @@ def verify_render_logs(
             observer != CLIENT
             and client_expected_percent == EXPECTED_HALF_HEALTH_PERCENT
         ):
-            half_health_line = matching_line(
+            half_health_native_line = matching_line(
                 dynamic_log_text,
                 (
-                    "source=playerwizard_render",
-                    f"participant={CLIENT.participant_id}",
-                    "health_bar=dx9",
-                    f"health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
-                ),
-            )
-            half_health_dx9_line = matching_line(
-                dynamic_log_text,
-                (
-                    "source=dx9_nameplate_healthbar",
+                    "source=native_world_indicator",
                     f"participant={CLIENT.participant_id}",
                     "ok=1",
+                    "health_bar=native",
                     f"health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
                 ),
             )
-            half_health_geometry = verify_dx9_nameplate_health_bar_geometry(
-                half_health_dx9_line,
+            half_health_geometry = verify_native_nameplate_health_bar_geometry(
+                half_health_native_line,
                 EXPECTED_HALF_HEALTH_PERCENT,
             )
             observer_evidence["client_half_health"] = {
                 "health_ratio": half_health_geometry["health_ratio"],
-                "world_line": half_health_line,
-                "dx9_health_bar_line": half_health_dx9_line,
-                "dx9_health_bar_geometry": half_health_geometry,
+                "native_indicator_line": half_health_native_line,
+                "native_health_bar_geometry": half_health_geometry,
             }
         evidence[observer.label] = observer_evidence
     return evidence
@@ -660,7 +618,7 @@ def _verify_running_trio(
         observer.label: verify_health_bar_pixels(
             observer.screenshot,
             result["render_logs"][observer.label]["client_half_health"][
-                "dx9_health_bar_geometry"
+                "native_health_bar_geometry"
             ],
         )
         for observer in (HOST, THIRD)
@@ -669,7 +627,7 @@ def _verify_running_trio(
         "participant_count": len(PARTICIPANTS),
         "observer_relationship_count": 6,
         "world_nameplate_checks": 6,
-        "dx9_health_bar_checks": 6,
+        "native_health_bar_checks": 6,
         "ally_hud_name_checks": 6,
         "half_health_owner": CLIENT.name,
         "half_health_percent": EXPECTED_HALF_HEALTH_PERCENT,

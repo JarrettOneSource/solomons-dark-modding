@@ -18,9 +18,7 @@ void EndExactTextRenderCapture() {
     float resolved_top = capture.min_y;
     float resolved_right = capture.max_x;
     float resolved_bottom = capture.max_y;
-    const auto used_owned_rect =
-        capture.surface_id != "gameplay_nameplate" &&
-        TryResolveOwnedExactTextRect(
+    const auto used_owned_rect = TryResolveOwnedExactTextRect(
             capture.surface_id,
             capture.caller_address,
             capture.source_object_ptr,
@@ -41,10 +39,6 @@ void EndExactTextRenderCapture() {
     element.min_y = resolved_top;
     element.max_y = resolved_bottom;
     element.sample_count = capture.glyph_count;
-    element.gameplay_participant_id =
-        capture.gameplay_participant_id;
-    element.gameplay_health_ratio =
-        capture.gameplay_health_ratio;
     element.label = std::move(capture.label);
     auto logged_element = element;
     {

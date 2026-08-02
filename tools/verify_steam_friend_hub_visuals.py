@@ -25,7 +25,7 @@ from steam_friend_active_pair import (
 from verify_local_multiplayer_sync import VerifyFailure, parse_key_values
 from verify_multiplayer_hud_names import (
     verify_ally_hud_name_layout,
-    verify_dx9_nameplate_health_bar_geometry,
+    verify_native_nameplate_health_bar_geometry,
 )
 from verify_steam_friend_active_pair_state import configure_modules
 
@@ -66,55 +66,36 @@ def render_evidence(observer: Participant, owner: Participant) -> dict[str, Any]
     failed_draws = [
         line
         for line in log_text.splitlines()
-        if "source=dx9_nameplate_healthbar" in line
+        if "source=native_world_indicator" in line
         and participant_token in line
         and " ok=0 " in line
     ]
     if failed_draws:
         raise VerifyFailure(
-            f"{observer.label} recorded failed DX9 health draws for {owner.label}: "
+            f"{observer.label} recorded failed native indicator draws for "
+            f"{owner.label}: "
             f"{failed_draws[-1]}"
         )
 
-    baseline_world = matching_line(
+    baseline_native = matching_line(
         log_text,
         (
-            "source=playerwizard_render",
+            "source=native_world_indicator",
             participant_token,
             f"name={owner.name}",
             "ok=1",
-            "health_bar=dx9",
-            "health_valid=1",
+            "health_bar=native",
             "health_percent=100",
         ),
     )
-    baseline_dx9 = matching_line(
+    half_native = matching_line(
         log_text,
         (
-            "source=dx9_nameplate_healthbar",
-            participant_token,
-            "ok=1",
-            "health_percent=100",
-        ),
-    )
-    half_world = matching_line(
-        log_text,
-        (
-            "source=playerwizard_render",
+            "source=native_world_indicator",
             participant_token,
             f"name={owner.name}",
             "ok=1",
-            "health_bar=dx9",
-            "health_valid=1",
-            "health_percent=50",
-        ),
-    )
-    half_dx9 = matching_line(
-        log_text,
-        (
-            "source=dx9_nameplate_healthbar",
-            participant_token,
-            "ok=1",
+            "health_bar=native",
             "health_percent=50",
         ),
     )
@@ -152,19 +133,17 @@ def render_evidence(observer: Participant, owner: Participant) -> dict[str, Any]
         )
 
     return {
-        "world_nameplate_baseline": baseline_world,
-        "world_nameplate_half_health": half_world,
-        "dx9_baseline": {
-            "line": baseline_dx9,
-            "geometry": verify_dx9_nameplate_health_bar_geometry(
-                baseline_dx9,
+        "native_indicator_baseline": {
+            "line": baseline_native,
+            "geometry": verify_native_nameplate_health_bar_geometry(
+                baseline_native,
                 100,
             ),
         },
-        "dx9_half_health": {
-            "line": half_dx9,
-            "geometry": verify_dx9_nameplate_health_bar_geometry(
-                half_dx9,
+        "native_indicator_half_health": {
+            "line": half_native,
+            "geometry": verify_native_nameplate_health_bar_geometry(
+                half_native,
                 50,
             ),
         },
@@ -603,8 +582,8 @@ def run(timeout: float, output: Path) -> dict[str, Any]:
                 "genuine_steam_accounts": 2,
                 "observers": 2,
                 "remote_world_nameplates": 2,
-                "successful_dx9_health_bars": 2,
-                "half_health_dx9_bars": 2,
+                "successful_native_health_bars": 2,
+                "half_health_native_bars": 2,
                 "ally_hud_rows_per_observer": 1,
                 "generic_ally_labels": 0,
                 "windows_capture": True,

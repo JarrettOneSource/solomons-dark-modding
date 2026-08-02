@@ -198,8 +198,6 @@ struct ObservedUiElement {
     float min_y = 0.0f;
     float max_y = 0.0f;
     std::uint32_t sample_count = 0;
-    std::uint64_t gameplay_participant_id = 0;
-    float gameplay_health_ratio = 0.0f;
     std::string label;
 };
 
@@ -286,20 +284,6 @@ struct ExactTextRenderCapture {
     float max_x = (std::numeric_limits<float>::lowest)();
     float max_y = (std::numeric_limits<float>::lowest)();
     std::uint32_t glyph_count = 0;
-    std::uint64_t gameplay_participant_id = 0;
-    float gameplay_health_ratio = 0.0f;
-    float gameplay_world_width = 0.0f;
-    bool gameplay_viewport_offset_resolved = false;
-    float gameplay_viewport_offset_x = 0.0f;
-    float gameplay_viewport_offset_y = 0.0f;
-};
-
-struct GameplayParticipantNameplateCaptureRequest {
-    bool active = false;
-    std::uint64_t participant_id = 0;
-    float health_ratio = 0.0f;
-    float world_width = 0.0f;
-    std::string exact_text;
 };
 
 struct TrackedDialogState {
@@ -502,14 +486,6 @@ struct DebugUiOverlayState {
     std::vector<ObservedUiElement> frame_exact_text_elements;
     std::vector<ObservedUiElement> frame_exact_control_elements;
     std::vector<ExactTextRenderCapture> active_exact_text_renders;
-    struct MultiplayerDampenPresentation {
-        std::uint64_t owner_participant_id = 0;
-        std::uint32_t cast_sequence = 0;
-        ULONGLONG started_at_milliseconds = 0;
-        bool draw_logged = false;
-    };
-    std::vector<MultiplayerDampenPresentation>
-        multiplayer_dampen_presentations;
     std::vector<std::string> recent_assigned_strings;
     ULONGLONG recent_assigned_strings_updated_at = 0;
     uintptr_t tracked_title_main_menu_object = 0;
@@ -539,8 +515,6 @@ struct DebugUiOverlayState {
 };
 
 DebugUiOverlayState g_debug_ui_overlay_state;
-thread_local GameplayParticipantNameplateCaptureRequest
-    g_gameplay_participant_nameplate_capture;
 
 bool InitializeFontAtlas(IDirect3DDevice9* device, FontAtlas* atlas, std::string* error_message);
 int MeasureLabelWidth(const FontAtlas& atlas, std::string_view label);

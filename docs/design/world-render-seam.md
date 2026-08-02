@@ -49,9 +49,11 @@ separate stock-matched native indicator lane.
 - adding compatibility rendering through the overlay when the native seam is
   unavailable.
 
-The renderer is required when the Lua engine is enabled. Address, hook, or
-texture initialization failure fails loader startup instead of falling back to
-incorrect overlay behavior.
+The renderer is required when either the Lua engine or multiplayer foundation
+is enabled: Lua owns general sprite/marker commands, while multiplayer owns
+floating participant indicators and Dampen. Address, hook, or texture
+initialization failure fails loader startup instead of falling back to an
+incorrect overlay.
 
 ## Public Lua contract
 

@@ -247,9 +247,11 @@ bool ExecuteMultiplayerDampenEffectNow(
         }
         return stream.str();
     };
-    QueueDebugUiMultiplayerDampenPresentation(
+    QueueNativeWorldDampenPresentation(
         request.owner_participant_id,
-        request.cast_sequence);
+        request.cast_sequence,
+        request.position_x,
+        request.position_y);
     Log(
         "Multiplayer Dampen behavior applied. owner_participant_id=" +
         std::to_string(request.owner_participant_id) +

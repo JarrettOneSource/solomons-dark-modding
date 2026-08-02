@@ -9,7 +9,8 @@ This is intentionally the overlay lane for HUD indicators, pickers, labels,
 loading screens, and other screen-space UI. Do not use it for a sprite that
 exists at a world position: `sd.draw.world_to_screen` changes coordinates but
 does not change render ownership, Z ordering, occlusion, or lighting. Use
-[`sd.world.sprite`](lua-world-rendering.md) for world-space sprites.
+[`sd.world.sprite`](lua-world-rendering.md) for scene sprites or
+`sd.world.marker` for world-anchored indicators.
 
 Drawing is local and never enters the multiplayer transport. It is therefore
 safe to call from the same mod on every peer. Use replicated `sd.state` values

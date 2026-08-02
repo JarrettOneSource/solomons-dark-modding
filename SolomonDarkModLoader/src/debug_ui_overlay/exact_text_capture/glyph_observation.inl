@@ -55,13 +55,6 @@ void ObserveActiveExactTextGlyph(float glyph_offset_x, float glyph_offset_y) {
     if (!capture.capture_enabled) {
         return;
     }
-    // Gameplay nameplates need the full TextQuad XYZ projection. Mixing these
-    // unprojected glyph origins into the projected quad bounds would recreate
-    // camera-distance drift.
-    if (capture.surface_id == "gameplay_nameplate") {
-        return;
-    }
-
     if (!IsExactTextSampleNearExpectedOrigin(capture, glyph_x, glyph_y, glyph_x, glyph_y)) {
         return;
     }
@@ -117,7 +110,7 @@ bool TryBuildDestinationQuadBounds(
 }
 
 void ObserveActiveExactTextQuad(
-    void* draw_state,
+    void* /*draw_state*/,
     const float* destination_vertices,
     const float* /*texture_coordinates*/) {
     float base_x = 0.0f;
@@ -158,38 +151,21 @@ void ObserveActiveExactTextQuad(
         return;
     }
 
-    if (capture.surface_id == "gameplay_nameplate") {
-        // TextQuad_Draw submits XYZ + diffuse + UV. Resolve the exact
-        // backbuffer bounds synchronously while its per-draw fixed-function
-        // transforms are still active.
-        if (!TryProjectGameplayNameplateQuadBounds(
-                draw_state,
-                destination_vertices,
-                base_x,
-                base_y,
-                &left,
-                &top,
-                &right,
-                &bottom)) {
-            return;
-        }
-    } else {
-        left += base_x;
-        right += base_x;
-        top += base_y;
-        bottom += base_y;
-        if (!IsPlausibleTitleCoordinate(left) ||
-            !IsPlausibleTitleCoordinate(top) ||
-            !IsPlausibleTitleCoordinate(right) ||
-            !IsPlausibleTitleCoordinate(bottom) ||
-            !IsExactTextSampleNearExpectedOrigin(
-                capture,
-                left,
-                top,
-                right,
-                bottom)) {
-            return;
-        }
+    left += base_x;
+    right += base_x;
+    top += base_y;
+    bottom += base_y;
+    if (!IsPlausibleTitleCoordinate(left) ||
+        !IsPlausibleTitleCoordinate(top) ||
+        !IsPlausibleTitleCoordinate(right) ||
+        !IsPlausibleTitleCoordinate(bottom) ||
+        !IsExactTextSampleNearExpectedOrigin(
+            capture,
+            left,
+            top,
+            right,
+            bottom)) {
+        return;
     }
 
     capture.min_x = (std::min)(capture.min_x, left);

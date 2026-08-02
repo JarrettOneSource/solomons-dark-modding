@@ -227,14 +227,14 @@ def verify_capture_resolution_contract(
         for evidence in render_logs[observer].values():
             if not isinstance(evidence, dict):
                 continue
-            geometry = evidence.get("dx9_health_bar_geometry")
+            geometry = evidence.get("native_health_bar_geometry")
             if not isinstance(geometry, dict):
                 continue
             checked_health_bars += 1
-            left = min(float(geometry["left"]), float(geometry["name_left"]))
-            top = min(float(geometry["top"]), float(geometry["name_top"]))
-            right = max(float(geometry["right"]), float(geometry["name_right"]))
-            bottom = max(float(geometry["bottom"]), float(geometry["name_bottom"]))
+            left = float(geometry["left"])
+            top = min(float(geometry["top"]), float(geometry["name_y"]))
+            right = float(geometry["right"])
+            bottom = float(geometry["bottom"])
             if (
                 left < -VIEWPORT_GEOMETRY_TOLERANCE
                 or top < -VIEWPORT_GEOMETRY_TOLERANCE
@@ -243,7 +243,7 @@ def verify_capture_resolution_contract(
             ):
                 raise VerifyFailure(
                     f"{observer} participant name/health geometry escaped its "
-                    f"{width}x{height} D3D9 viewport: {geometry}"
+                    f"{width}x{height} native viewport: {geometry}"
                 )
             if (
                 left <= VIEWPORT_EDGE_EXERCISE_DISTANCE

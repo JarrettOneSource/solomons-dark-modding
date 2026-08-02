@@ -194,10 +194,19 @@
     <ClInclude Include="include\lua_world_render_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\native_world_render.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_item_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lua_world_renderer\native_indicator_lane.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_world_renderer\native_texture_bridge.inl">
@@ -656,9 +665,6 @@
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\capture_session.inl">
       <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
     </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\exact_text_capture\gameplay_nameplate_projection.inl">
-      <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
-    </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\exact_text_capture\glyph_observation.inl">
       <Filter>Header Files\Debug UI Overlay\Exact Text Capture</Filter>
     </ClInclude>
@@ -684,12 +690,6 @@
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\font_atlas_rendering.inl">
-      <Filter>Header Files\Debug UI Overlay</Filter>
-    </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\gameplay_dampen_rendering.inl">
-      <Filter>Header Files\Debug UI Overlay</Filter>
-    </ClInclude>
-    <ClInclude Include="src\debug_ui_overlay\gameplay_health_bar_rendering.inl">
       <Filter>Header Files\Debug UI Overlay</Filter>
     </ClInclude>
     <ClInclude Include="src\debug_ui_overlay\gameplay_level_up_wait_rendering.inl">
@@ -1251,6 +1251,9 @@
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_keyboard_injection.inl">
+      <Filter>Header Files\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\public_api_world_render.inl">
       <Filter>Header Files\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\public_api_participant_queues.inl">

@@ -10,6 +10,7 @@ namespace sdmod {
 
 inline constexpr std::size_t kLuaWorldRenderMaxSpritesPerMod = 256;
 inline constexpr std::size_t kLuaWorldRenderMaxGlobalSprites = 2048;
+inline constexpr std::size_t kLuaWorldRenderMaxMarkerLabelBytes = 64;
 inline constexpr float kLuaWorldRenderMaximumCoordinate = 1000000.0f;
 inline constexpr float kLuaWorldRenderMaximumDimension = 16384.0f;
 inline constexpr float kLuaWorldRenderMaximumSortBias = 16384.0f;
@@ -26,10 +27,21 @@ struct LuaWorldSpriteCommand {
     float sort_bias = 0.0f;
 };
 
+struct LuaWorldMarkerCommand {
+    std::string label;
+    float x = 0.0f;
+    float y = 0.0f;
+    std::uint8_t red = 255;
+    std::uint8_t green = 255;
+    std::uint8_t blue = 255;
+    std::uint8_t alpha = 255;
+};
+
 struct LuaWorldRenderFrameSnapshot {
     std::string mod_id;
     std::uint64_t generation = 0;
     std::vector<LuaWorldSpriteCommand> commands;
+    std::vector<LuaWorldMarkerCommand> markers;
 };
 
 using LuaNativeGlyphDrawFn =
@@ -45,6 +57,10 @@ void ClearLuaWorldRenderFrameForMod(std::string_view mod_id);
 bool SubmitLuaWorldSpriteCommand(
     std::string_view mod_id,
     LuaWorldSpriteCommand command,
+    std::string* error_message);
+bool SubmitLuaWorldMarkerCommand(
+    std::string_view mod_id,
+    LuaWorldMarkerCommand command,
     std::string* error_message);
 void RefreshLuaWorldRenderFrameSnapshots(
     std::vector<LuaWorldRenderFrameSnapshot>* snapshots);

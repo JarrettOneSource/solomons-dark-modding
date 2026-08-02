@@ -1,5 +1,10 @@
 # Custom Visuals / D3D9 Overlay Review — 2026-07-23
 
+> Historical implementation record. The 2026-08-02 native world-render
+> cutover removed world sprites, floating participant bars/names, and Dampen
+> rings from this overlay. The current ownership boundary is documented in
+> [`world-render-seam.md`](design/world-render-seam.md).
+
 A code-level assessment and implementation record for the loader's custom
 rendering stack. The six ranked improvements from the original review are now
 implemented without changing the Lua API.
@@ -20,14 +25,14 @@ presentation-only overlay pipelines:
   filled/outlined rectangles, lines, stock sprites, registered mod sprites,
   and consumable icons. It renders pre-transformed XYZRHW triangle lists and
   retains scratch vertex capacity between frames. A world-to-screen snapshot
-  of the game's viewport and W/V/P matrices powers world-anchored HUD.
+  remains available for intentionally screen-owned UI that tracks a target.
 - **`lua_ui_renderer.cpp`** is the `sd.ui` authored-window lane. It calls the
   game's native panel and exact-text renderers through SEH-guarded seams, so
   authored UI inherits retail styling.
 - **`debug_ui_overlay.cpp` and its `.inl` components** form the developer
   inspector and multiplayer presentation lane. It captures widget geometry
-  and text from game memory and renders diagnostic surfaces, participant
-  health bars, spectator text, and related presentation.
+  and text from game memory and renders diagnostic surfaces, spectator text,
+  and related screen presentation.
 
 Lua mods still submit a bounded `pending` display list during their runtime
 tick and commit it atomically to `active`. Rendering remains local to each

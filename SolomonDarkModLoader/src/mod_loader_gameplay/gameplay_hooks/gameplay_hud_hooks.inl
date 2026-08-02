@@ -1,11 +1,3 @@
-bool DrawGameplayHudParticipantName(
-    uintptr_t actor_address,
-    std::uint64_t participant_id,
-    const std::string& display_name,
-    float health_ratio,
-    float* draw_x,
-    float* draw_y,
-    DWORD* exception_code);
 bool DrawGameplayHudExactTextAt(
     const std::string& display_text,
     float x,
@@ -258,23 +250,23 @@ float EstimateGameplayAllyHudTextWidth(std::string_view display_name) {
     return width;
 }
 
-float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_name) {
-    return actor_x - (EstimateGameplayNameplateTextWidth(display_name) * 0.5f);
-}
-
-bool DrawGameplayHudParticipantName(
+bool DrawGameplayWorldIndicatorParticipant(
     uintptr_t actor_address,
     std::uint64_t participant_id,
     const std::string& display_name,
     float health_ratio,
-    float* draw_x,
-    float* draw_y,
+    float* drawn_center_x,
+    float* drawn_name_y,
+    float* drawn_bar_width,
     DWORD* exception_code) {
-    if (draw_x != nullptr) {
-        *draw_x = 0.0f;
+    if (drawn_center_x != nullptr) {
+        *drawn_center_x = 0.0f;
     }
-    if (draw_y != nullptr) {
-        *draw_y = 0.0f;
+    if (drawn_name_y != nullptr) {
+        *drawn_name_y = 0.0f;
+    }
+    if (drawn_bar_width != nullptr) {
+        *drawn_bar_width = 0.0f;
     }
     if (actor_address == 0 ||
         participant_id == 0 ||
@@ -283,63 +275,141 @@ bool DrawGameplayHudParticipantName(
         return false;
     }
 
-    auto& memory = ProcessMemory::Instance();
-    const auto string_assign_address = memory.ResolveGameAddressOrZero(kGameplayStringAssign);
-    const auto text_object_render_address = memory.ResolveGameAddressOrZero(kGameplayExactTextObjectRender);
-    const auto text_object_global_address = memory.ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal);
-    if (string_assign_address == 0 ||
-        text_object_render_address == 0 ||
-        text_object_global_address == 0 ||
-        kGameplayExactTextObjectOffset == 0 ||
-        !memory.IsReadableRange(text_object_global_address, sizeof(uintptr_t))) {
+    float world_x = 0.0f;
+    float world_y = 0.0f;
+    if (!TryReadFiniteFloatField(
+            actor_address,
+            kActorPositionXOffset,
+            &world_x) ||
+        !TryReadFiniteFloatField(
+            actor_address,
+            kActorPositionYOffset,
+            &world_y)) {
         return false;
     }
-
-    uintptr_t text_object_base = 0;
-    if (!memory.TryReadValue(text_object_global_address, &text_object_base) ||
-        text_object_base == 0) {
+    float center_x = 0.0f;
+    float name_y = 0.0f;
+    if (!TryProjectNativeWorldIndicatorPoint(
+            world_x,
+            world_y - 45.0f,
+            &center_x,
+            &name_y)) {
         return false;
-    }
-
-    const auto text_object_address = text_object_base + kGameplayExactTextObjectOffset;
-    if (!memory.IsReadableRange(text_object_address, sizeof(uintptr_t))) {
-        return false;
-    }
-
-    float x = 0.0f;
-    float y = 0.0f;
-    if (!TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x) ||
-        !TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)) {
-        return false;
-    }
-    y -= 45.0f;
-    x = CalculateGameplayNameplateDrawX(x, display_name);
-    if (draw_x != nullptr) {
-        *draw_x = x;
-    }
-    if (draw_y != nullptr) {
-        *draw_y = y;
     }
 
     const auto nameplate_text = BuildGameplayNameplateExactText(display_name);
-    BeginDebugUiGameplayParticipantNameplateCapture(
-        participant_id,
+    const float name_width =
+        EstimateGameplayNameplateTextWidth(display_name);
+    const float bar_width = (std::max)(64.0f, name_width);
+    const bool drew_name = DrawGameplayHudExactTextAt(
         nameplate_text,
-        health_ratio,
-        EstimateGameplayNameplateTextWidth(display_name));
-    struct GameplayNameplateCaptureScope {
-        ~GameplayNameplateCaptureScope() {
-            EndDebugUiGameplayParticipantNameplateCapture();
-        }
-    } capture_scope;
-    return CallGameplayExactTextObjectRenderSafe(
-        string_assign_address,
-        text_object_render_address,
-        text_object_address,
-        nameplate_text.c_str(),
-        x,
-        y,
+        center_x - name_width * 0.5f,
+        name_y,
         exception_code);
+    const bool drew_health = DrawNativeWorldIndicatorHealthBar(
+        center_x,
+        name_y + 17.0f,
+        bar_width,
+        health_ratio);
+    if (drew_name && drew_health) {
+        if (drawn_center_x != nullptr) {
+            *drawn_center_x = center_x;
+        }
+        if (drawn_name_y != nullptr) {
+            *drawn_name_y = name_y;
+        }
+        if (drawn_bar_width != nullptr) {
+            *drawn_bar_width = bar_width;
+        }
+    }
+    return drew_name && drew_health;
+}
+
+void RenderGameplayWorldIndicatorsInNativePassImpl() {
+    std::vector<uintptr_t> actor_addresses;
+    {
+        std::lock_guard<std::recursive_mutex> lock(
+            g_participant_entities_mutex);
+        actor_addresses.reserve(g_participant_entities.size());
+        for (const auto& binding : g_participant_entities) {
+            if (IsWizardParticipantKind(binding.kind) &&
+                binding.actor_address != 0) {
+                actor_addresses.push_back(binding.actor_address);
+            }
+        }
+    }
+    std::sort(actor_addresses.begin(), actor_addresses.end());
+    actor_addresses.erase(
+        std::unique(actor_addresses.begin(), actor_addresses.end()),
+        actor_addresses.end());
+
+    for (const auto actor_address : actor_addresses) {
+        if (!IsTrackedWizardParticipantActorForHud(actor_address)) {
+            continue;
+        }
+        std::string display_name;
+        std::uint64_t participant_id = 0;
+        float health_ratio = 0.0f;
+        if (!TryGetGameplayHudParticipantDisplayNameForActor(
+                actor_address,
+                &display_name,
+                &participant_id,
+                &health_ratio) ||
+            display_name.empty()) {
+            continue;
+        }
+
+        DWORD exception_code = 0;
+        float drawn_center_x = 0.0f;
+        float drawn_name_y = 0.0f;
+        float drawn_bar_width = 0.0f;
+        const bool drawn = DrawGameplayWorldIndicatorParticipant(
+            actor_address,
+            participant_id,
+            display_name,
+            health_ratio,
+            &drawn_center_x,
+            &drawn_name_y,
+            &drawn_bar_width,
+            &exception_code);
+        const int health_percent = std::clamp(
+            static_cast<int>(std::lround(health_ratio * 100.0f)),
+            0,
+            100);
+        static std::unordered_map<std::uint64_t, int>
+            s_logged_nameplate_health_percent;
+        static int s_failed_nameplate_draw_logs_remaining = 8;
+        const auto logged =
+            s_logged_nameplate_health_percent.find(participant_id);
+        const bool health_changed =
+            logged == s_logged_nameplate_health_percent.end() ||
+            logged->second != health_percent;
+        if ((drawn && health_changed) ||
+            (!drawn && s_failed_nameplate_draw_logs_remaining > 0)) {
+            if (drawn) {
+                s_logged_nameplate_health_percent[participant_id] =
+                    health_percent;
+            } else {
+                --s_failed_nameplate_draw_logs_remaining;
+            }
+            Log(
+                "[bots] native gameplay participant name draw. "
+                "source=native_world_indicator actor=" +
+                HexString(actor_address) +
+                " participant=" + std::to_string(participant_id) +
+                " name=" + display_name +
+                " ok=" + std::string(drawn ? "1" : "0") +
+                " health_bar=native" +
+                " health_ratio=" + std::to_string(health_ratio) +
+                " health_percent=" + std::to_string(health_percent) +
+                " center_x=" + std::to_string(drawn_center_x) +
+                " name_y=" + std::to_string(drawn_name_y) +
+                " bar_top=" + std::to_string(drawn_name_y + 17.0f) +
+                " bar_width=" + std::to_string(drawn_bar_width) +
+                " exception=" +
+                HexString(static_cast<uintptr_t>(exception_code)));
+        }
+    }
 }
 
 bool DrawGameplayHudExactTextAt(

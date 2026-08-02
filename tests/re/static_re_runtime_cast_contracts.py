@@ -1090,588 +1090,253 @@ def test_earth_live_verifier_requires_native_boulder_visual_emission() -> str:
 def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     hud_text = read_text(GAMEPLAY_HUD_HOOKS)
     public_state_text = read_text(GAMEPLAY_PUBLIC_STATE_GETTERS)
-    overlay_text = read_text(DEBUG_UI_OVERLAY_FRAME_RENDER)
-    overlay_health_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/gameplay_health_bar_rendering.inl"
-    )
-    overlay_primitives_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/font_atlas_rendering.inl"
-    )
-    overlay_capture_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/capture_session.inl"
-    )
-    overlay_glyph_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/glyph_observation.inl"
-    )
-    overlay_projection_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/"
-        "gameplay_nameplate_projection.inl"
-    )
-    overlay_render_hooks_text = read_text(
-        ROOT
-        / "SolomonDarkModLoader/src/debug_ui_overlay/exact_text_capture/render_hooks.inl"
-    )
-    overlay_header_text = read_text(DEBUG_UI_OVERLAY_HEADER)
-    overlay_public_text = read_text(DEBUG_UI_OVERLAY_PUBLIC_SURFACE)
-    mod_loader_header_text = read_mod_loader_header_source()
-    mod_loader_text = read_text(MOD_LOADER_GAMEPLAY)
-    layout_text = read_text(BINARY_LAYOUT)
     animation_text = read_text(ACTOR_ANIMATION_ADVANCE_HOOK)
-    player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
-    keyboard_injection_text = read_text(GAMEPLAY_KEYBOARD_INJECTION)
+    world_renderer_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/lua_world_renderer.cpp"
+    )
+    world_renderer_text += read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_indicator_lane.inl"
+    )
+    world_header_text = read_text(
+        ROOT / "SolomonDarkModLoader/include/native_world_render.h"
+    )
+    overlay_text = "\n".join(
+        (
+            read_text(ROOT / "SolomonDarkModLoader/src/debug_ui_overlay.cpp"),
+            read_text(DEBUG_UI_OVERLAY_FRAME_RENDER),
+            read_text(DEBUG_UI_OVERLAY_PUBLIC_SURFACE),
+            read_text(DEBUG_UI_OVERLAY_HEADER),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/"
+                "exact_text_capture/glyph_observation.inl"
+            ),
+            read_text(
+                ROOT
+                / "SolomonDarkModLoader/src/debug_ui_overlay/"
+                "exact_text_capture/render_hooks.inl"
+            ),
+        )
+    )
+    layout_text = read_text(BINARY_LAYOUT)
     native_types_text = read_text(GAMEPLAY_NATIVE_FUNCTION_TYPES)
+    keyboard_text = read_text(GAMEPLAY_KEYBOARD_INJECTION)
+    player_tick_text = read_text(PLAYER_ACTOR_TICK_HOOK)
     verifier_text = read_text(MULTIPLAYER_HUD_NAMES_VERIFIER)
-    steam_verifier_text = read_text(STEAM_FRIEND_HUB_VISUALS_VERIFIER)
-    physical_steam_verifier_text = read_text(
-        STEAM_FRIEND_ACTIVE_PAIR_VISUALS_VERIFIER
-    )
-    hud_label_materializer_text = read_text(HUD_LABEL_ASSET_MATERIALIZER)
+    materializer_text = read_text(HUD_LABEL_ASSET_MATERIALIZER)
+    mod_loader_text = read_mod_loader_header_source()
+    acceptance_text = read_text(ROOT / "tools/verify_world_render_z_order.py")
 
-    required_animation_tokens = (
-        "struct AnimationAdvanceContextScope",
-        "~AnimationAdvanceContextScope()",
-        "original(self);",
-        "IsTrackedWizardParticipantActorForHud(actor_address)",
+    required_native_indicator_tokens = (
+        "void RenderGameplayWorldIndicatorsInNativePassImpl()",
+        "DrawGameplayWorldIndicatorParticipant(",
+        "TryProjectNativeWorldIndicatorPoint(",
+        "DrawGameplayHudExactTextAt(",
+        "DrawNativeWorldIndicatorHealthBar(",
         "TryGetGameplayHudParticipantDisplayNameForActor(",
-        "&health_ratio);",
-        "DrawGameplayHudParticipantName(",
-        "participant_id,",
-        "health_ratio,",
-        "source=playerwizard_render",
-        "health_ratio=",
-        "health_bar=dx9",
+        "source=native_world_indicator",
+        "health_bar=native",
     )
-    missing_animation = [
-        token for token in required_animation_tokens
-        if token not in animation_text
+    missing_indicator = [
+        token for token in required_native_indicator_tokens if token not in hud_text
     ]
-    if missing_animation:
+    if missing_indicator:
         raise StaticReTestFailure(
-            "PlayerWizard render callback no longer draws remote names and health bars: " +
-            ", ".join(missing_animation))
+            "native post-scene participant indicator contract is incomplete: "
+            + ", ".join(missing_indicator)
+        )
+
+    required_world_hook_tokens = (
+        "void __fastcall HookNativeArenaRender(",
+        "original(self);",
+        "RenderGameplayWorldIndicatorsInNativePass();",
+        "RenderLuaWorldMarkersInNativePass();",
+        "DrawNativeWorldIndicatorHealthBar(",
+        "native_renderer_set_color",
+        "native_untextured_quad",
+    )
+    missing_world_hook = [
+        token
+        for token in required_world_hook_tokens
+        if token not in world_renderer_text + world_header_text
+    ]
+    if missing_world_hook:
+        raise StaticReTestFailure(
+            "native post-scene renderer hook is incomplete: "
+            + ", ".join(missing_world_hook)
+        )
 
     forbidden_animation_tokens = (
-        "TryListGameplayParticipantNameplates(",
-        "PublishGameplayParticipantNameplateOverlaySnapshot",
-        "source=actor_callback",
-        "DrawGameplayParticipantHealthBar(",
-        "health_segments",
-        # The rendered ratio must come from the authoritative participant
-        # runtime snapshot, never from tick-synced actor progression memory
-        # that freezes while player-actor ticks are paused.
-        "TryGetGameplayParticipantHealthRatio(",
-        "TryReadActorProgressionHealth(",
+        "DrawGameplayHudParticipantName(",
+        "BeginDebugUiGameplayParticipantNameplateCapture(",
+        "health_bar=dx9",
+        "source=playerwizard_render",
     )
     present_animation = [
         token for token in forbidden_animation_tokens if token in animation_text
     ]
     if present_animation:
         raise StaticReTestFailure(
-            "PlayerWizard native render path contains stale overlay/callback plumbing: " +
-            ", ".join(present_animation))
+            "PlayerWizard animation pass still emits world-attached overlays: "
+            + ", ".join(present_animation)
+        )
 
-    forbidden_hud_tokens = (
-        "TryListGameplayParticipantNameplates(",
-        "multiplayer-nameplate",
-        "ShouldDrawGameplayHudParticipantNameFromActorCallback",
-        "PublishGameplayParticipantNameplateOverlaySnapshot",
-        "ClearDebugUiGameplayNameplateOverlaySnapshot",
-        "DebugUiGameplayNameplateOverlayItem",
-        "PublishDebugUiGameplayNameplateOverlaySnapshot",
-        "TryProjectGameplayHudNameplatePosition",
-        "TryGetPlayerState(",
-        "scene_state.kind != \"arena\"",
-        "kGameplayHudVirtualWidth",
-        "actor_x - player_state.x",
-        "DrawGameplayHudUiExactTextAt(",
-        "kGameplayUiExactTextObjectRender",
-    )
-    present_hud = [token for token in forbidden_hud_tokens if token in hud_text]
-    if present_hud:
-        raise StaticReTestFailure(
-            "native nameplate helper still contains stale arena projection or overlay plumbing: " +
-            ", ".join(present_hud))
-
-    required_hud_tokens = (
-        "void __fastcall HookGameplayUiAllyLabelGlyphDraw(",
-        "IsGameplayAllyHudLabelGlyphCall(glyph_address, caller_address)",
-        "BuildGameplayAllyHudRows()",
-        "ResolveGameplayAllyHudRowIndex(y, rows.size())",
-        "DrawGameplayHudAllyBarParticipantName(",
-        "&name_layout,",
-        "&exception_code);",
-        "source=ally_healthbar",
-        "stock_label=0",
-        "BuildGameplayAllyHudExactText(",
-        "EstimateGameplayAllyHudTextWidth(",
-        "constexpr float kGameplayAllyHudReservedLabelWidth = 128.0f;",
-        "constexpr float kGameplayAllyHudNameHorizontalPadding = 2.0f;",
-        "multiplayer::kParticipantDisplayNameBytes - 1",
-        '"The ally HUD reservation must fit the longest protocol display name."',
-        "resolved.name_left_x = x + kGameplayAllyHudNameHorizontalPadding;",
-        "layout_ok=",
-        "bar_right_x=",
-        "label_right_x=",
-        "name_left_x=",
-        "name_right_x=",
-        "bool CallGameplayExactTextObjectRenderSafe(",
-        "NativeStringAssignFn",
-        "NativeExactTextObjectRenderFn",
-        "NativeGameString native_text",
-        "string_assign(&native_text, nullptr)",
-        "std::string BuildGameplayNameplateExactText(const std::string& display_name)",
-        "constexpr const char* kHalfScaleCommand = \"s(0.5)\"",
-        "bool DrawGameplayHudParticipantName(",
-        "native gameplay HUD participant name draw",
-        "ResolveGameAddressOrZero(kGameplayStringAssign)",
-        "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
-        "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
-        "kGameplayExactTextObjectOffset",
-        "const auto text_object_address = text_object_base + kGameplayExactTextObjectOffset",
-        "TryReadFiniteFloatField(actor_address, kActorPositionXOffset, &x)",
-        "TryReadFiniteFloatField(actor_address, kActorPositionYOffset, &y)",
-        "y -= 45.0f;",
-        "float EstimateGameplayNameplateTextWidth(std::string_view display_name)",
-        "constexpr float kNativeGlyphAdvance = 16.0f;",
-        "constexpr float kNativeSpaceAdvance = 8.0f;",
-        "float CalculateGameplayNameplateDrawX(float actor_x, std::string_view display_name)",
-        "x = CalculateGameplayNameplateDrawX(x, display_name);",
-        "const auto nameplate_text = BuildGameplayNameplateExactText(display_name);",
+    forbidden_overlay_tokens = (
+        "RenderGameplayParticipantNameplates(",
+        "TryListGameplayParticipantNameplates(&items)",
+        "BuildGameplayParticipantHealthBarRenderItems(",
+        "DrawGameplayParticipantHealthBar(",
+        "source=dx9_nameplate_healthbar",
         "BeginDebugUiGameplayParticipantNameplateCapture(",
-        "EndDebugUiGameplayParticipantNameplateCapture();",
-        "CallGameplayExactTextObjectRenderSafe(",
-        "nameplate_text.c_str()",
+        "EndDebugUiGameplayParticipantNameplateCapture(",
+        'surface_id = "gameplay_nameplate"',
+        "gameplay_nameplate_overlay_items",
+        "TryProjectGameplayNameplateWithD3dTransform(",
     )
-    missing_hud = [token for token in required_hud_tokens if token not in hud_text]
-    if missing_hud:
+    combined_runtime = "\n".join(
+        (overlay_text, animation_text, hud_text, mod_loader_text)
+    )
+    present_overlay = [
+        token for token in forbidden_overlay_tokens if token in combined_runtime
+    ]
+    if present_overlay:
         raise StaticReTestFailure(
-            "native remote-name or thin-health-bar rendering contract is incomplete: " +
-            ", ".join(missing_hud))
+            "world-attached participant UI leaked back into EndScene: "
+            + ", ".join(present_overlay)
+        )
 
-    if "TryReadActorProgressionHealth(" in hud_text:
+    required_ally_hud_tokens = (
+        "void __fastcall HookGameplayUiAllyLabelGlyphDraw(",
+        "BuildGameplayAllyHudRows()",
+        "BuildGameplayAllyHudExactText(",
+        "DrawGameplayHudAllyBarParticipantName(",
+        "source=ally_healthbar",
+        '" layout_ok="',
+    )
+    missing_ally_hud = [
+        token for token in required_ally_hud_tokens if token not in hud_text
+    ]
+    if missing_ally_hud:
         raise StaticReTestFailure(
-            "native nameplate helpers read tick-synced actor progression health "
-            "instead of the authoritative participant runtime vitals")
+            "screen-space top-left ally rows changed during world cutover: "
+            + ", ".join(missing_ally_hud)
+        )
 
     ally_rows = hud_text[
         hud_text.index("std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows()") :
         hud_text.index("\nbool IsGameplayAllyHudLabelGlyphCall(")
     ]
-    if "SnapshotRuntimeState()" in ally_rows:
+    if "TryGetRemoteParticipantDisplayState(" not in ally_rows:
         raise StaticReTestFailure(
-            "the per-row ally HUD path deep-copies the full multiplayer runtime")
+            "ally HUD rows no longer resolve display state from transport"
+        )
 
     required_authoritative_vitals_tokens = (
         "bool TryGetGameplayHudParticipantDisplayNameForActor(",
-        "TryGetRemoteParticipantDisplayState(",
-        "!resolved_runtime.valid",
+        "multiplayer::TryGetRemoteParticipantDisplayState(",
         "resolved_runtime.life_current / resolved_runtime.life_max",
-        "resolved_runtime.life_max <= 0.0f",
+        "health_ratio",
     )
-    missing_authoritative_vitals = [
-        token for token in required_authoritative_vitals_tokens
+    missing_vitals = [
+        token
+        for token in required_authoritative_vitals_tokens
         if token not in public_state_text
     ]
-    if missing_authoritative_vitals:
+    if missing_vitals:
         raise StaticReTestFailure(
-            "nameplate health no longer resolves from the authoritative "
-            "participant runtime snapshot: " +
-            ", ".join(missing_authoritative_vitals))
-
-    if "TryGetGameplayHudParticipantNameplateForActor" in public_state_text + animation_text:
-        raise StaticReTestFailure(
-            "nameplate health retained a redundant display-name API alias")
-
-    nameplate_getter = public_state_text[
-        public_state_text.index("bool TryGetGameplayHudParticipantDisplayNameForActor(") :
-        public_state_text.index("\nbool TryGetPlayerState(")
-    ]
-    if "SnapshotRuntimeState()" in nameplate_getter:
-        raise StaticReTestFailure(
-            "the per-actor nameplate path deep-copies the full multiplayer runtime")
-
-    forbidden_ascii_health_tokens = (
-        "constexpr int kBarSegments",
-        "std::string bar_text",
-        "\"_s(0.25)[\"",
-        "filled_segment_count",
-        "bar_text.append",
-    )
-    present_ascii_health = [
-        token for token in forbidden_ascii_health_tokens if token in hud_text
-    ]
-    if present_ascii_health:
-        raise StaticReTestFailure(
-            "ASCII participant health fallback remains active: "
-            + ", ".join(present_ascii_health)
+            "participant indicators no longer use authoritative replicated vitals: "
+            + ", ".join(missing_vitals)
         )
-
-    required_materializer_tokens = (
-        'private const string DefaultAllyLabel = "ALLY";',
-        "private const int GeneratedAllyLabelWidth = 128;",
-        "return string.IsNullOrEmpty(configuredLabel) ? DefaultAllyLabel : configuredLabel;",
-    )
-    missing_materializer = [
-        token for token in required_materializer_tokens
-        if token not in hud_label_materializer_text
-    ]
-    if missing_materializer:
+    if "TryReadActorProgressionHealth(" in hud_text:
         raise StaticReTestFailure(
-            "staged ally HUD label reservation no longer matches the native name layout: " +
-            ", ".join(missing_materializer))
-
-    forbidden_public_tokens = (
-        "struct SDModGameplayNameplateDrawItem",
-        "TryListGameplayParticipantNameplates(",
-        "DebugUiGameplayNameplateOverlayItem",
-        "PublishDebugUiGameplayNameplateOverlaySnapshot",
-        "ClearDebugUiGameplayNameplateOverlaySnapshot",
-    )
-    present_public = [
-        token for token in forbidden_public_tokens
-        if token in public_state_text or token in mod_loader_header_text or token in overlay_header_text or token in overlay_public_text
-    ]
-    if present_public:
-        raise StaticReTestFailure(
-            "public nameplate snapshot or overlay API was reintroduced: " +
-            ", ".join(present_public))
-
-    forbidden_overlay_tokens = (
-        "RenderGameplayParticipantNameplates(",
-        "TryListGameplayParticipantNameplates(&items)",
-        "TryGetPlayerState(",
-        "TryGetSceneState(",
-        "struct GameplayNameplateOverlayRenderItem",
-        "CopyRecentGameplayNameplateOverlayItems()",
-        "BuildGameplayNameplateOverlayRenderItems(",
-        "kGameplayNameplateOverlayMaximumIdleMs",
-        "kGameplayNameplateVirtualWidth",
-        "kGameplayNameplateVirtualHeight",
-        "TryProjectGameplayNameplateWithD3dTransform(",
-        "DrawGameplayNameplateOverlayItem(",
-        "Debug UI overlay rendered cached gameplay nameplates",
-        "struct DebugUiGameplayNameplateOverlayItem",
-        "PublishDebugUiGameplayNameplateOverlaySnapshot",
-        "ClearDebugUiGameplayNameplateOverlaySnapshot",
-        "gameplay_nameplate_overlay_items",
-        "gameplay_nameplate_overlay_captured_at",
-    )
-    combined_overlay_text = "\n".join((
-        overlay_text,
-        overlay_health_text,
-        overlay_primitives_text,
-        overlay_capture_text,
-        overlay_glyph_text,
-        overlay_projection_text,
-        overlay_render_hooks_text,
-        overlay_header_text,
-        overlay_public_text,
-        mod_loader_text,
-    ))
-    present_overlay = [token for token in forbidden_overlay_tokens if token in combined_overlay_text]
-    if present_overlay:
-        raise StaticReTestFailure(
-            "D3D gameplay nameplate overlay workaround was reintroduced instead of native commit 35378b3 path: " +
-            ", ".join(present_overlay))
-
-    required_dx9_health_tokens = (
-        "BeginDebugUiGameplayParticipantNameplateCapture(",
-        "EndDebugUiGameplayParticipantNameplateCapture()",
-        'capture.surface_id = "gameplay_nameplate";',
-        "BuildGameplayParticipantHealthBarRenderItems(",
-        # The bar sits flush under the captured name bounds and spans the
-        # nameplate width with a readable floor.
-        "constexpr float kBarMinimumWidth = 64.0f;",
-        "constexpr float kBarVerticalGap = 1.0f;",
-        "element.max_x - element.min_x);",
-        "item.top = element.max_y + kBarVerticalGap;",
-        "GameplayParticipantHealthBarDrawResult DrawGameplayParticipantHealthBar(",
-        "GameplayParticipantHealthBarDrawResult::Culled",
-        "GameplayParticipantHealthBarDrawResult::Drawn",
-        "GameplayParticipantHealthBarDrawResult::Failed",
-        "LogGameplayParticipantHealthBarDraw(health_bar, draw_result)",
-        'source=dx9_nameplate_healthbar',
-        '" ok=" + std::string(drew_bar ? "1" : "0")',
-        '" health_percent=" + std::to_string(health_percent)',
-        "diagnostic_surface_frame.render_elements.empty() &&\n"
-        "        gameplay_health_bars.empty()",
-        "for (const auto& health_bar : gameplay_health_bars)",
-        "DrawFilledRect(",
-        "DrawRectOutline(",
-        "SUCCEEDED(device->DrawPrimitiveUP(",
-        "element.gameplay_health_ratio",
-        "std::clamp(",
-        "bool TryReadUiRenderBase(float* base_x, float* base_y)",
-        "capture.expected_origin_x = render_base_x + origin_x;",
-        "capture.expected_origin_y = render_base_y + origin_y;",
-        "capture.capture_enabled = capture.has_expected_origin;",
-        "capture.gameplay_world_width =",
-        "TryBuildDestinationQuadBounds(",
-        "TryProjectGameplayNameplateQuadBounds(",
-        "TryApplyGameplayNameplateViewportClamp(",
-        "constexpr float kViewportMargin = 2.0f;",
-        "constexpr float kMinimumHealthBarWidth = 64.0f;",
-        "const bool intersects_viewport =",
-        "capture.gameplay_viewport_offset_resolved = true;",
-        "GetLastSeenD3d9Device()",
-        "kTextQuadDrawStateDepthOffset",
-        "GetTransform(D3DTS_WORLD, &world)",
-        "GetTransform(D3DTS_VIEW, &view)",
-        "GetTransform(D3DTS_PROJECTION, &projection)",
-        "point = TransformD3dRowVector(point, world);",
-        "point = TransformD3dRowVector(point, view);",
-        "clip.w <= kMinimumPositiveClipW",
-        "name_bounds=(",
-        "ObserveActiveExactTextQuad(self, draw_vertices, arg3);",
-        "original(self, draw_vertices, arg3);",
-        "const float* destination_vertices,",
-        "const float* /*texture_coordinates*/",
-    )
-    missing_dx9_health = [
-        token
-        for token in required_dx9_health_tokens
-        if token not in combined_overlay_text
-    ]
-    if missing_dx9_health:
-        raise StaticReTestFailure(
-            "DX9 participant health-bar rendering contract is incomplete: "
-            + ", ".join(missing_dx9_health)
+            "participant indicators read tick-delayed actor health"
         )
-
-    forbidden_quad_heuristics = (
-        "alternate_valid",
-        "alternate_area",
-        "primary_area",
-        "TryBuildGlyphQuadBounds(arg3",
-        "capture.has_expected_origin = false;",
-    )
-    present_quad_heuristics = [
-        token
-        for token in forbidden_quad_heuristics
-        if token in combined_overlay_text
-    ]
-    if present_quad_heuristics:
-        raise StaticReTestFailure(
-            "gameplay nameplate capture reintroduced unverified geometry "
-            "fallbacks: " + ", ".join(present_quad_heuristics)
-        )
-
-    quad_function_start = overlay_glyph_text.index(
-        "void ObserveActiveExactTextQuad("
-    )
-    gameplay_projection_start = overlay_glyph_text.index(
-        'if (capture.surface_id == "gameplay_nameplate")',
-        quad_function_start,
-    )
-    gameplay_projection_end = overlay_glyph_text.index(
-        "capture.min_x =",
-        gameplay_projection_start,
-    )
-    gameplay_projection_branch = overlay_glyph_text[
-        gameplay_projection_start:gameplay_projection_end
-    ]
-    for token in (
-        "TryProjectGameplayNameplateQuadBounds(",
-        "draw_state,",
-        "destination_vertices,",
-        "base_x,",
-        "base_y,",
-    ):
-        if token not in gameplay_projection_branch:
-            raise StaticReTestFailure(
-                "gameplay nameplate quad capture does not project through the "
-                "stock fixed-function transform: " + token
-            )
 
     required_layout_tokens = (
         "gameplay_ui_glyph_draw=0x004143D0",
         "gameplay_ui_centered_glyph_draw=0x004142E0",
-        "gameplay_ally_label_glyph_return=0x005D3521",
-        "gameplay_string_assign=0x00402AE0",
+        "gameplay_hud_render_dispatch=0x00512060",
         "gameplay_exact_text_object_render=0x0043BCD0",
-        "gameplay_ui_bundle=0x008199E4",
         "gameplay_exact_text_object=0x008199A0",
-        "gameplay_ui_ally_label_glyph=0x38",
         "gameplay_exact_text_object=0xE7D98",
+        "arena_render=0x0046EC80",
+        "native_renderer_set_color=0x0041FE50",
+        "native_untextured_quad=0x0041DD70",
     )
-    missing_layout = [token for token in required_layout_tokens if token not in layout_text]
+    missing_layout = [
+        token for token in required_layout_tokens if token not in layout_text
+    ]
     if missing_layout:
         raise StaticReTestFailure(
-            "native exact-text layout keys are missing: " +
-            ", ".join(missing_layout))
+            "native indicator layout keys are missing: "
+            + ", ".join(missing_layout)
+        )
 
-    forbidden_layout_tokens = ("gameplay_nameplate_text_object",)
-    present_layout = [token for token in forbidden_layout_tokens if token in layout_text]
-    if present_layout:
-        raise StaticReTestFailure(
-            "stale nameplate-only native text layout keys were reintroduced: " +
-            ", ".join(present_layout))
-
-    required_native_type_tokens = (
+    for token in (
         "using GameplayUiGlyphDrawFn = void(__thiscall*)(void* self, float x, float y)",
         "using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case, uintptr_t arg1, uintptr_t arg2)",
         "struct NativeGameString",
-        "static_assert(sizeof(NativeGameString) == 0x1C",
-        "using NativeStringAssignFn = void(__thiscall*)(void* self, char* text)",
-        "using NativeExactTextObjectRenderFn = void(__thiscall*)(void* self, NativeGameString text, float x, float y)",
-    )
-    missing_native_types = [
-        token for token in required_native_type_tokens
-        if token not in native_types_text
-    ]
-    if missing_native_types:
-        raise StaticReTestFailure(
-            "native text function types are missing: " +
-            ", ".join(missing_native_types))
+    ):
+        if token not in native_types_text:
+            raise StaticReTestFailure(
+                "native ExactText call types are incomplete: " + token
+            )
 
-    required_injection_tokens = (
-        "ResolveGameAddressOrZero(kGameplayUiGlyphDraw)",
-        "ResolveGameAddressOrZero(kGameplayUiCenteredGlyphDraw)",
-        "ResolveGameAddressOrZero(kGameplayAllyLabelGlyphReturn)",
-        "ResolveGameAddressOrZero(kGameplayUiBundleGlobal)",
-        "kGameplayUiAllyLabelGlyphOffset == 0",
-        "reinterpret_cast<void*>(&HookGameplayUiGlyphDraw)",
-        "reinterpret_cast<void*>(&HookGameplayUiAllyLabelGlyphDraw)",
-        "kGameplayUiGlyphDrawHookPatchSize",
-        "kGameplayUiCenteredGlyphDrawHookPatchSize",
+    for token in (
+        "gameplay_hud_render_dispatch_hook",
         "gameplay_ui_glyph_draw_hook",
         "gameplay_ui_ally_label_glyph_draw_hook",
-        "ResolveGameAddressOrZero(kGameplayStringAssign)",
-        "ResolveGameAddressOrZero(kGameplayExactTextObjectRender)",
-        "ResolveGameAddressOrZero(kGameplayExactTextObjectGlobal)",
-        "kGameplayExactTextObjectOffset == 0",
-        "native HUD text helpers",
-        "gameplay_exact_text_object_offset=",
-    )
-    missing_injection = [
-        token for token in required_injection_tokens
-        if token not in keyboard_injection_text
-    ]
-    if missing_injection:
-        raise StaticReTestFailure(
-            "gameplay injection startup no longer validates native HUD text helpers: " +
-            ", ".join(missing_injection))
+    ):
+        if token not in keyboard_text:
+            raise StaticReTestFailure(
+                "native HUD hook lifecycle is incomplete: " + token
+            )
 
-    required_player_tick_tokens = (
-        "native_remote_pre_tick_progression_runtime",
-        "ApplyNativeRemoteParticipantPlayback(binding, actor_address, native_tick_now_ms)",
-        "ApplyNativeRemoteParticipantPresentationState(binding, actor_address)",
-        "ApplyReplicatedWorldSnapshotIfActive(gameplay_address_for_pump, static_cast<std::uint64_t>(::GetTickCount64()))",
-    )
-    missing_player_tick = [
-        token for token in required_player_tick_tokens
-        if token not in player_tick_text
-    ]
-    if missing_player_tick:
-        raise StaticReTestFailure(
-            "player tick no longer owns remote participant playback/presentation: " +
-            ", ".join(missing_player_tick))
+    for token in (
+        "TickParticipantSceneBindingsIfActive",
+        "ApplyNativeRemoteParticipantPlayback",
+    ):
+        if token not in player_tick_text:
+            raise StaticReTestFailure(
+                "player tick no longer owns remote participant playback: " + token
+            )
 
-    if "PublishGameplayParticipantNameplateOverlaySnapshot();" in player_tick_text:
-        raise StaticReTestFailure(
-            "player tick still publishes stale D3D nameplate overlay snapshots")
-
-    required_verifier_tokens = (
+    for token in (
         "launch_pair(",
-        "quick_start=True",
-        "kill_existing=False",
-        "tile_windows=False",
-        "exact_mod_id=ACCEPTANCE_MOD_ID",
-        "stop_game_processes(process_ids)",
-        "wait_for_all_relationships(\"hub\", timeout)",
-        "wait_for_all_relationships(\"testrun\", timeout)",
-        "place_trio_for_capture(timeout)",
-        "set_local_player_vitals(",
-        "wait_for_remote_matches_owner_health(",
-        "verify_dx9_nameplate_health_bar_geometry(",
-        "name_bounds=",
-        "DX9 health bar is not centered under its name",
-        "DX9 health bar is not flush under its name",
-        "health_percent={EXPECTED_HALF_HEALTH_PERCENT}",
-        "source=playerwizard_render",
-        "source=dx9_nameplate_healthbar",
-        '"health_bar=dx9"',
-        '"dx9_health_bar": dx9_health_line',
+        "wait_for_all_relationships",
         "source=ally_healthbar",
-        "stock_label=0",
         "layout_ok=1",
-        "wait_for_render_logs(timeout)",
-        "verify_ally_hud_name_layout(ally_hud_line)",
-        "ally HUD name overlaps its health bar",
-        "ally HUD name extends outside its reserved label slot",
-        "reversed(log_text.splitlines())",
-        "capture_game_backbuffer(",
-        "verify_health_bar_pixels(",
-        '"healthbar_pixels"',
-        "verify_loopback_transport_log(",
-        '"bind=127.0.0.1"',
-    )
-    missing_verifier = [
-        token for token in required_verifier_tokens if token not in verifier_text
-    ]
-    if missing_verifier:
-        raise StaticReTestFailure(
-            "three-player name/health-bar regression verifier is incomplete: " +
-            ", ".join(missing_verifier))
+    ):
+        if token not in verifier_text:
+            raise StaticReTestFailure(
+                "existing participant HUD verifier lost screen-HUD coverage: " + token
+            )
 
-    required_steam_verifier_tokens = (
-        "suspend_runtime_test_godmode(",
-        "restore_runtime_test_godmode(",
-        "_G.__sdmod_steam_test_godmode_enabled = false",
-        "verify_dx9_nameplate_health_bar_geometry(",
-        "attachment_visual_type",
-        "attachment_visual_address",
-    )
-    missing_steam_verifier = [
-        token
-        for token in required_steam_verifier_tokens
-        if token not in steam_verifier_text
-    ]
-    if missing_steam_verifier:
-        raise StaticReTestFailure(
-            "Steam friend name/health-bar regression verifier is incomplete: "
-            + ", ".join(missing_steam_verifier)
-        )
+    for token in ("UI.bundle", "UI.png", "AllyLabelEnvironmentVariable"):
+        if token not in materializer_text:
+            raise StaticReTestFailure(
+                "HUD label asset materializer is incomplete: " + token
+            )
 
-    required_physical_resolution_tokens = (
-        "def verify_capture_resolution_contract(",
-        'parser.add_argument("--require-distinct-resolutions", action="store_true")',
-        'resolutions["host"] != resolutions["client"]',
-        "participant name/health geometry escaped its",
-        "VIEWPORT_EDGE_EXERCISE_DISTANCE = 24.0",
-        "edge_contained_health_bars",
-        "did not exercise a participant",
-        'output["resolution_contract"] = verify_capture_resolution_contract(',
-        "wait_for_local_transform_settled(",
-        '"host_settled": list(host_target)',
-        '"client_settled": list(client_target)',
-        "suspend_runtime_test_godmode(",
-        "restore_runtime_test_godmode(",
-        "godmode_before[label] = suspend_runtime_test_godmode(",
-        "vitals_before[label] = health.query_local_player_vitals(endpoint)",
-        "fresh_render_log_lines = log_line_counts(host, client)",
-        "expected_health_percent_by_participant=(",
-        "minimum_log_line_counts=fresh_render_log_lines",
-        '"client_observes_host"',
-        '"host_observes_client"',
-    )
-    missing_physical_resolution = [
-        token
-        for token in required_physical_resolution_tokens
-        if token not in physical_steam_verifier_text
-    ]
-    if missing_physical_resolution:
-        raise StaticReTestFailure(
-            "physical Steam cross-resolution verifier is incomplete: "
-            + ", ".join(missing_physical_resolution)
-        )
+    for token in (
+        'INSTANCE_NAME = "zrd"',
+        "PORTS = (51755, 51756)",
+        "native_world_indicator",
+        "health_bar=native",
+        "side_by_side",
+        "both_peers",
+    ):
+        if token not in acceptance_text:
+            raise StaticReTestFailure(
+                "world-render acceptance verifier is incomplete: " + token
+            )
 
-    return "remote names, DX9 health bars, and ally names render through the native PlayerWizard and ally-HUD passes"
+    return (
+        "remote names and health bars use the native post-scene indicator pass "
+        "while top-left ally rows remain screen-space HUD"
+    )
 
 
 def test_memory_region_cache_refreshes_newly_committed_native_objects() -> str:

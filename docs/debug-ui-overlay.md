@@ -67,16 +67,21 @@ constructed. Death-spectator status is deliberately not part of this registry:
 it is player-facing product UI rendered through the retail panel and exact-text
 functions only while the local owner is in the `Spectating` phase.
 
-The complete native D3D9 surface audit is:
+The complete D3D9 overlay surface audit is:
 
 | Surface class | Normal-session policy | Reason |
 | --- | --- | --- |
 | Observed stock UI labels and panels | Diagnostic gate | Automation and acceptance observability |
 | Level-up barrier wait text | Diagnostic gate | Loader status text; stock picker remains authoritative |
 | Death-spectator target/click hint | Product, spectator-only | Required target and input affordance; uses retail panel/text rendering |
-| Participant health bars | Functional | Multiplayer combat information |
-| Dampen rings | Functional | Replicated gameplay effect |
 | Join consent and loading covers | Functional | Required launcher join-flow interaction |
+
+World-owned presentation is intentionally absent from this table. Floating
+participant names and health bars use the native post-scene world-indicator
+pass, while Dampen rings use the Arena's Y-sorted native world queue. The
+screen-space top-left ally rows remain in the stock HUD. See
+[`world-render-seam.md`](design/world-render-seam.md) for the enforced
+world-versus-overlay boundary.
 
 The product spectator renderer first proves render target 0 is the swap-chain
 backbuffer. It skips offscreen `EndScene` passes, so a summon or spell render

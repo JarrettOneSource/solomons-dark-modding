@@ -59,29 +59,6 @@ void BeginExactTextRenderCapture(
         capture.max_y = capture.expected_origin_y;
     }
 
-    if (g_gameplay_participant_nameplate_capture.active &&
-        g_gameplay_participant_nameplate_capture.participant_id != 0 &&
-        std::isfinite(
-            g_gameplay_participant_nameplate_capture.health_ratio) &&
-        capture.label ==
-            g_gameplay_participant_nameplate_capture.exact_text) {
-        capture.capture_enabled = capture.has_expected_origin;
-        capture.surface_id = "gameplay_nameplate";
-        capture.surface_title = "Gameplay Participant";
-        capture.gameplay_participant_id =
-            g_gameplay_participant_nameplate_capture.participant_id;
-        capture.gameplay_health_ratio = std::clamp(
-            g_gameplay_participant_nameplate_capture.health_ratio,
-            0.0f,
-            1.0f);
-        capture.gameplay_world_width =
-            g_gameplay_participant_nameplate_capture.world_width;
-        capture.min_x = (std::numeric_limits<float>::max)();
-        capture.min_y = (std::numeric_limits<float>::max)();
-        capture.max_x = (std::numeric_limits<float>::lowest)();
-        capture.max_y = (std::numeric_limits<float>::lowest)();
-    }
-
     const auto surface_match = TryResolveSurfaceForDrawCall(caller_address, g_debug_ui_overlay_state.config.stack_scan_slots);
     const auto recognized_title_line = IsRecognizedTitleMainMenuLine(capture.label);
     uintptr_t main_menu_address = 0;

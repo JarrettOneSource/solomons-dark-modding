@@ -165,13 +165,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     auto exact_control_elements = TakeExactControlFrameElements();
     auto elements = FilterElementsToDominantSurface(raw_elements);
     std::vector<OverlayRenderElement> semantic_surface_elements;
-    const auto gameplay_health_bars =
-        BuildGameplayParticipantHealthBarRenderItems(
-            exact_text_elements);
-    const auto gameplay_dampen_presentations =
-        BuildGameplayDampenPresentationRenderItems(
-            device,
-            exact_text_elements);
     const auto quick_panel_render_elements =
         TryBuildQuickPanelOverlayRenderElements(exact_text_elements, exact_control_elements);
 
@@ -314,8 +307,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             GameplayLevelUpWaitDrawResult::Hidden);
     }
     if (diagnostic_surface_frame.render_elements.empty() &&
-        gameplay_health_bars.empty() &&
-        gameplay_dampen_presentations.empty() &&
         gameplay_level_up_wait_text.empty()) {
         return;
     }
@@ -325,16 +316,6 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     for (const auto& element :
          diagnostic_surface_frame.render_elements) {
         DrawObservedOverlayElement(device, g_debug_ui_overlay_state.font_atlas, element);
-    }
-    for (const auto& health_bar : gameplay_health_bars) {
-        const auto draw_result =
-            DrawGameplayParticipantHealthBar(device, health_bar);
-        LogGameplayParticipantHealthBarDraw(health_bar, draw_result);
-    }
-    for (const auto& presentation : gameplay_dampen_presentations) {
-        const bool drawn =
-            DrawGameplayDampenPresentation(device, presentation);
-        LogGameplayDampenPresentationDraw(presentation, drawn);
     }
     if (!gameplay_level_up_wait_text.empty()) {
         const auto draw_result = DrawGameplayLevelUpWaitStatus(
@@ -351,11 +332,7 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
             "Debug UI overlay observed " + std::to_string(elements.size()) + " raw UI draw candidate(s) and rendered " +
             std::to_string(
                 diagnostic_surface_frame.render_elements.size()) +
-            " diagnostic element overlay region(s) plus " +
-            std::to_string(gameplay_health_bars.size()) +
-            " gameplay participant health bar(s) and " +
-            std::to_string(gameplay_dampen_presentations.size()) +
-            " Dampen presentation(s) on the first rendered frame.");
+            " diagnostic element overlay region(s) on the first rendered frame.");
     }
 
 }

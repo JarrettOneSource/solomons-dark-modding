@@ -6,34 +6,28 @@ participant names. It supersedes the earlier `FUN_00500250`, HUD case-100, and
 
 ## World nameplate
 
-Remote `PlayerWizard` actors render through `0x0054BA80`. The loader detours
-that callback, lets the original wizard render finish, and then draws:
+Remote `PlayerWizard` actors remain ordinary native scene actors. After the
+complete `Arena_Render` call at `0x0046EC80` returns, the loader draws:
 
 - the connected participant's display name with command-aware ExactText
   (`0x0043BCD0`) at half scale;
-- a 7-pixel-tall D3D9 health bar flush beneath the rendered name (one pixel
-  under the captured glyph bounds), spanning the captured name width with a
-  64-pixel minimum.
+- a 7-pixel-tall health bar through the stock native renderer color setter
+  (`0x0041FE50`) and untextured-quad primitive (`0x0041DD70`), spanning the
+  estimated name width with a 64-pixel minimum.
 
 The native name draw carries the participant identity and the participant's
-authoritative replicated HP ratio into the exact-glyph capture. The ratio is
+authoritative replicated HP ratio into the native indicator draw. The ratio is
 resolved from the multiplayer runtime snapshot at render time, not from the
 materialized actor's progression memory: that memory is only rewritten by the
 player-actor tick, which pauses (level-up barrier, death quiesce) while the
 render pass keeps drawing, so it goes stale exactly when remote vitals change
 the most. Runtime vitals refresh from 50 ms participant frames plus host
 corrections, so the bar follows the authority promptly and any real
-client/host divergence stays visible instead of being smoothed over. The glyph
-hook records the actual screen-space name bounds. During the same D3D9 frame,
-the overlay pass centers a bordered red bar beneath those bounds and fills it
-to the captured HP ratio. The primitive setup and every `DrawPrimitiveUP` call
-must succeed before the draw is recorded as successful. There is no text or
-ASCII fallback.
-
-Drawing the rectangles inside the native scene transform produced black wedge
-artifacts. The final path keeps the name in the native `PlayerWizard` render
-pass and draws only the bar later in the screen-space EndScene pass, using the
-captured native glyph bounds as its anchor.
+client/host divergence stays visible instead of being smoothed over. Name and
+bar now share one native post-scene draw and never enter the D3D9 `EndScene`
+overlay. This matches the stock tutorial loot-arrow idiom: the target is world
+projected, the indicator stays above scene geometry, and tile light does not
+tint it. There is no text, quad, or ASCII overlay fallback.
 
 ## Top-center ally rows
 
@@ -90,8 +84,9 @@ substitute a generic label.
 `tools/verify_multiplayer_hud_names.py` launches three independent instances,
 waits for all six observer/participant relationships, changes one participant
 to half health, and captures every D3D9 backbuffer. For each remote participant
-on each observer it requires a successful native world-name draw, a successful
-DX9 health-bar draw, and a successful ally-row name draw. The half-health case
-must produce a second successful DX9 draw at 50 percent. The verifier also
-parses the native HUD coordinates and fails if a name begins over its bar or
-extends beyond the reserved label slot.
+on each observer it requires a successful native post-scene name/bar draw and
+a successful ally-row name draw. The half-health case must produce a second
+native draw at 50 percent, and captured pixels must contain the matching filled
+and empty segments. The verifier separately parses the stock-HUD row geometry
+and fails if a row name begins over its bar or extends beyond its reserved
+label slot.

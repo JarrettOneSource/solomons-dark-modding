@@ -93,6 +93,64 @@ float ReadWorldRenderOption(
     return value;
 }
 
+std::uint8_t ReadWorldMarkerColorChannel(
+    lua_State* state,
+    int color_index,
+    const char* field_name,
+    const char* api_name,
+    std::uint8_t default_value) {
+    lua_getfield(state, color_index, field_name);
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        return default_value;
+    }
+    if (!lua_isinteger(state, -1)) {
+        luaL_error(
+            state,
+            "%s options.color.%s must be an integer from 0 through 255",
+            api_name,
+            field_name);
+    }
+    const auto value = lua_tointeger(state, -1);
+    lua_pop(state, 1);
+    if (value < 0 || value > 255) {
+        luaL_error(
+            state,
+            "%s options.color.%s must be an integer from 0 through 255",
+            api_name,
+            field_name);
+    }
+    return static_cast<std::uint8_t>(value);
+}
+
+void ReadWorldMarkerColor(
+    lua_State* state,
+    int options_index,
+    const char* api_name,
+    LuaWorldMarkerCommand* command) {
+    if (options_index == 0 || command == nullptr) {
+        return;
+    }
+    lua_getfield(state, options_index, "color");
+    if (lua_isnil(state, -1)) {
+        lua_pop(state, 1);
+        return;
+    }
+    if (!lua_istable(state, -1)) {
+        luaL_error(state, "%s options.color must be a table", api_name);
+    }
+    const int color_index = lua_absindex(state, -1);
+    command->red = ReadWorldMarkerColorChannel(
+        state, color_index, "r", api_name, command->red);
+    command->green = ReadWorldMarkerColorChannel(
+        state, color_index, "g", api_name, command->green);
+    command->blue = ReadWorldMarkerColorChannel(
+        state, color_index, "b", api_name, command->blue);
+    command->alpha = ReadWorldMarkerColorChannel(
+        state, color_index, "a", api_name, command->alpha);
+    lua_pop(state, 1);
+}
+
 int LuaWorldSprite(lua_State* state) {
     constexpr const char* kApiName = "sd.world.sprite";
     const auto* mod = RequireWorldRenderMod(state, kApiName);
@@ -196,10 +254,57 @@ int LuaWorldSprite(lua_State* state) {
     return 1;
 }
 
+int LuaWorldMarker(lua_State* state) {
+    constexpr const char* kApiName = "sd.world.marker";
+    const auto* mod = RequireWorldRenderMod(state, kApiName);
+    std::size_t label_length = 0;
+    const char* label = luaL_checklstring(state, 1, &label_length);
+    if (label_length == 0 ||
+        label_length > kLuaWorldRenderMaxMarkerLabelBytes ||
+        std::string_view(label, label_length).find('\0') !=
+            std::string_view::npos) {
+        return luaL_error(
+            state,
+            "%s label must contain 1 to %d bytes without NUL characters",
+            kApiName,
+            static_cast<int>(kLuaWorldRenderMaxMarkerLabelBytes));
+    }
+
+    LuaWorldMarkerCommand command;
+    command.label.assign(label, label_length);
+    command.x = ReadWorldRenderNumber(
+        state,
+        2,
+        kApiName,
+        "x",
+        -kLuaWorldRenderMaximumCoordinate,
+        kLuaWorldRenderMaximumCoordinate);
+    command.y = ReadWorldRenderNumber(
+        state,
+        3,
+        kApiName,
+        "y",
+        -kLuaWorldRenderMaximumCoordinate,
+        kLuaWorldRenderMaximumCoordinate);
+    const int options = NormalizeWorldRenderOptions(state, 4, kApiName);
+    ReadWorldMarkerColor(state, options, kApiName, &command);
+
+    std::string error_message;
+    if (!SubmitLuaWorldMarkerCommand(
+            mod->descriptor.id,
+            std::move(command),
+            &error_message)) {
+        return luaL_error(state, "%s", error_message.c_str());
+    }
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 }  // namespace
 
 void RegisterLuaWorldRenderBindings(lua_State* state) {
     RegisterFunction(state, &LuaWorldSprite, "sprite");
+    RegisterFunction(state, &LuaWorldMarker, "marker");
 }
 
 }  // namespace sdmod::detail
