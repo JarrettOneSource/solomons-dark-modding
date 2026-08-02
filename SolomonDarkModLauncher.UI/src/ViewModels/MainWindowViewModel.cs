@@ -2040,15 +2040,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ExecuteLobbyPrimaryAction()
     {
-        if (IsLocalUdpDevelopmentLaunch() &&
-            !lobbyLaunchState_.JoinedLobbyId.HasValue)
-        {
-            _ = ExecuteUiCommandAsync(
-                LauncherUiCommandMode.LaunchSteamJoin,
-                $"Launching local game for lobby {LobbyId}…");
-            return;
-        }
-
         if (lobbyLaunchState_.PrimaryAction == LobbyPrimaryAction.LaunchGame)
         {
             _ = LaunchJoinedLobbyAsync();
@@ -2220,6 +2211,14 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 LauncherUiCommandMode.PrepareSteamJoin,
                 joinStatusText))
         {
+            return;
+        }
+
+        if (IsLocalUdpDevelopmentLaunch())
+        {
+            await ExecuteUiCommandAsync(
+                LauncherUiCommandMode.LaunchSteamJoin,
+                $"Launching local game for lobby {LobbyId}…");
             return;
         }
 

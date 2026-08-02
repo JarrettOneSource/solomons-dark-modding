@@ -212,7 +212,7 @@ void RefreshLocalParticipantFromGameState() {
                 "Multiplayer local native belt loadout refreshed. entries=" +
                 entries.str());
         }
-        local->transport_connected = true;
+        local->transport_connected = g_local_transport.initialized;
         if (g_local_transport.backend == GameplayTransportBackend::LocalUdp) {
             local->transport_using_relay = false;
         }

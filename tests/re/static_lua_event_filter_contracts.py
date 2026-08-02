@@ -85,6 +85,9 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
         "WriteLuaDamageFilterLanes(",
         "LuaDamageLaneWriteResult::RestoredAfterFailure",
         "LuaDamageLaneWriteResult::RestoreFailed",
+        "context->target_actor_address = actor_address;",
+        "*native_context_captured = false;",
+        "damage filter rewrite skipped because the native",
         "ResetActiveDamageContext();",
     ):
         assert token in hook, f"native damage hook lacks: {token}"
@@ -98,6 +101,7 @@ def test_lua_damage_filters_are_ordered_owner_side_and_transactional() -> str:
         hook,
         "const auto original_context = filtered_context;",
         "ApplyLuaDamageFilters(&filtered_context)",
+        "if (!native_context_captured)",
         "WriteLuaDamageFilterLanes(",
     )
 

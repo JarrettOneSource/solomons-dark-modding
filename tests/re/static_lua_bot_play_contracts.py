@@ -360,6 +360,14 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
     lua_contract = _read(
         "tests/lua/bot_play_for_me_contract.lua"
     )
+    transport_pump = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_cast_loot_api.inl"
+    )
+    local_state_refresh = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_state_packet_sync.inl"
+    )
 
     assert manifest["id"] == "bot.brain"
     assert manifest["version"] == "1.2.0"
@@ -454,6 +462,17 @@ def test_bot_play_for_me_reuses_one_brain_and_owner_control_rails() -> str:
     assert "sd.world.get_run_enemy_by_network_id" in local_player
     assert "sd.world.list_actors" in local_player
     assert "nearest_distance_squared" in local_player
+    _require_in_order(
+        transport_pump,
+        "void TickLocalTransport(std::uint64_t now_ms)",
+        "RefreshLocalParticipantFromGameState();",
+        "if (!g_local_transport.initialized)",
+        "ServiceSyntheticParticipantCastInputs(now_ms);",
+    )
+    assert (
+        "local->transport_connected = g_local_transport.initialized;"
+        in local_state_refresh
+    )
 
     for token in (
         "assert(controller.debug.release_clean)",

@@ -132,6 +132,7 @@ void ShutdownLocalTransport() {
 }
 
 void TickLocalTransport(std::uint64_t now_ms) {
+    RefreshLocalParticipantFromGameState();
     if (!g_local_transport.initialized) {
         ServiceSyntheticParticipantCastInputs(now_ms);
         return;
@@ -161,7 +162,6 @@ void TickLocalTransport(std::uint64_t now_ms) {
     }
     ApplyQueuedSteamGameplayEvents(now_ms);
     finish_stage("steam_events");
-    RefreshLocalParticipantFromGameState();
     finish_stage("local_participant_refresh");
     RefreshHostSyntheticParticipantSceneIntent();
     RefreshHostWaveRespawnCommand(now_ms);

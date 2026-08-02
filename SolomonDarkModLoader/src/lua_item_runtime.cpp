@@ -1,9 +1,11 @@
 #include "lua_item_runtime.h"
 
 #include "gameplay_seams.h"
+#include "lua_camera_runtime.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 
 #include <Windows.h>
 
@@ -19,12 +21,19 @@ namespace sdmod {
 namespace {
 
 struct LuaItemRuntimeState {
+    struct ActiveNativeVfxPulse {
+        LuaConsumableNativeVfxRequest request;
+        std::uint64_t next_spawn_ms = 0;
+        std::uint64_t expires_at_ms = 0;
+    };
+
     std::map<std::uint64_t, LuaConsumableDefinition> consumables;
     std::unordered_map<std::int32_t, std::uint64_t> content_by_subtype;
     std::unordered_map<std::uint64_t, std::int32_t> reserved_subtype_by_content;
     std::vector<LuaLootPoolEntry> loot_pool;
     std::vector<LuaConsumableRenderQuad> render_quads;
     std::vector<LuaConsumableNativeVfxRequest> native_vfx_requests;
+    std::vector<ActiveNativeVfxPulse> active_native_vfx_pulses;
     std::uint64_t loot_rng_state = 0xA0761D6478BD642Full;
     std::int32_t next_native_subtype = kLuaFirstConsumablePotionSubtype;
     std::mutex mutex;
@@ -71,6 +80,130 @@ using ObjectAllocateFn = void*(__cdecl*)(std::size_t);
 using SpellGlowCtorFn = void*(__thiscall*)(void*);
 using RegisterAnimationFn =
     void(__thiscall*)(void* world, void* animation, float layer);
+
+constexpr float kSpellGlowAnimationLayer = 75.0f;
+constexpr std::uint64_t kSpellGlowPulseIntervalMs = 16;
+constexpr std::uint64_t kSpellGlowPulseDurationMs = 4000;
+constexpr std::size_t kMaximumRenderQuads = 512;
+constexpr std::size_t kActivationBurstParticleCount = 4;
+constexpr float kActivationBurstOrbitRadius = 42.0f;
+constexpr float kActivationBurstIconHalfSize = 16.0f;
+constexpr float kPi = 3.14159265358979323846f;
+
+struct ConsumableVfxTarget {
+    uintptr_t actor_address = 0;
+    uintptr_t world_address = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+bool TryResolveConsumableVfxTarget(
+    std::uint64_t participant_id,
+    ConsumableVfxTarget* target) {
+    if (target == nullptr || participant_id == 0) {
+        return false;
+    }
+    *target = ConsumableVfxTarget{};
+
+    const auto transport_participant_id =
+        multiplayer::GetLocalTransportParticipantId();
+    const auto local_participant_id = transport_participant_id != 0
+        ? transport_participant_id
+        : multiplayer::kLocalParticipantId;
+    if (participant_id == local_participant_id) {
+        SDModPlayerState player;
+        if (!TryGetPlayerState(&player) ||
+            !player.valid ||
+            player.actor_address == 0 ||
+            player.world_address == 0) {
+            return false;
+        }
+        target->actor_address = player.actor_address;
+        target->world_address = player.world_address;
+        target->x = player.x;
+        target->y = player.y;
+        return true;
+    }
+
+    SDModParticipantGameplayState participant;
+    if (!TryGetParticipantGameplayState(participant_id, &participant) ||
+        !participant.available ||
+        !participant.entity_materialized ||
+        participant.actor_address == 0) {
+        return false;
+    }
+    target->actor_address = participant.actor_address;
+    target->world_address = participant.world_address;
+    target->x = participant.x;
+    target->y = participant.y;
+    return true;
+}
+
+void AppendConsumableActivationBurstQuads(
+    const LuaConsumableDefinition& definition,
+    const LuaConsumableNativeVfxRequest& request,
+    std::uint64_t now_ms,
+    std::vector<LuaConsumableRenderQuad>* quads) {
+    if (quads == nullptr) {
+        return;
+    }
+
+    ConsumableVfxTarget target;
+    LuaCameraSnapshot camera;
+    if (!TryResolveConsumableVfxTarget(
+            request.participant_id,
+            &target) ||
+        !TryGetLuaCameraSnapshot(definition.mod_id, &camera) ||
+        !camera.scene_available ||
+        !std::isfinite(camera.origin_x) ||
+        !std::isfinite(camera.origin_y) ||
+        !std::isfinite(camera.scale) ||
+        camera.scale <= 0.0f) {
+        return;
+    }
+
+    const float center_x =
+        (target.x - camera.origin_x) * camera.scale;
+    const float center_y =
+        (target.y - camera.origin_y) * camera.scale -
+        14.0f * camera.scale;
+    const float phase =
+        static_cast<float>(now_ms % 1600) / 1600.0f * 2.0f * kPi +
+        static_cast<float>(request.use_id & 0xFFu) /
+            255.0f * 2.0f * kPi;
+
+    for (std::size_t index = 0;
+         index < kActivationBurstParticleCount &&
+             quads->size() < kMaximumRenderQuads;
+         ++index) {
+        const float angle = phase +
+            static_cast<float>(index) *
+                (2.0f * kPi /
+                 static_cast<float>(kActivationBurstParticleCount));
+        const float particle_x = center_x +
+            std::cos(angle) * kActivationBurstOrbitRadius;
+        const float particle_y = center_y +
+            std::sin(angle) * kActivationBurstOrbitRadius * 0.65f;
+        const float half_size = kActivationBurstIconHalfSize +
+            std::sin(angle * 2.0f) * 2.0f;
+
+        LuaConsumableRenderQuad quad;
+        quad.content_id = definition.content_id;
+        quad.icon_atlas = definition.icon_atlas;
+        quad.icon_frame = definition.icon_frame;
+        quad.vertices = {
+            particle_x - half_size,
+            particle_y - half_size,
+            particle_x + half_size,
+            particle_y - half_size,
+            particle_x - half_size,
+            particle_y + half_size,
+            particle_x + half_size,
+            particle_y + half_size,
+        };
+        quads->push_back(std::move(quad));
+    }
+}
 
 bool ConstructSpellGlowSafe(
     uintptr_t allocate_address,
@@ -128,7 +261,7 @@ bool RegisterSpellGlowSafe(
         register_animation(
             reinterpret_cast<void*>(world_address),
             glow,
-            0.0f);
+            kSpellGlowAnimationLayer);
         return true;
     } __except (
         CaptureNativeVfxSehCode(
@@ -143,11 +276,8 @@ bool SpawnSpellGlowForParticipant(
     std::uint64_t participant_id,
     std::uint64_t use_id,
     std::string* error_message) {
-    SDModParticipantGameplayState participant;
-    if (!TryGetParticipantGameplayState(participant_id, &participant) ||
-        !participant.available ||
-        !participant.entity_materialized ||
-        participant.actor_address == 0) {
+    ConsumableVfxTarget target;
+    if (!TryResolveConsumableVfxTarget(participant_id, &target)) {
         SetError(
             error_message,
             "participant actor is not materialized");
@@ -155,11 +285,11 @@ bool SpawnSpellGlowForParticipant(
     }
 
     auto& memory = ProcessMemory::Instance();
-    uintptr_t world_address = participant.world_address;
+    uintptr_t world_address = target.world_address;
     if (world_address == 0 &&
         (kActorOwnerOffset == 0 ||
          !memory.TryReadField(
-             participant.actor_address,
+             target.actor_address,
              kActorOwnerOffset,
              &world_address))) {
         SetError(error_message, "participant world is unavailable");
@@ -211,11 +341,11 @@ bool SpawnSpellGlowForParticipant(
     if (!memory.TryWriteField(
             glow_address,
             0x14,
-            participant.x) ||
+            target.x) ||
         !memory.TryWriteField(
             glow_address,
             0x18,
-            participant.y) ||
+            target.y) ||
         !memory.TryWriteField(glow_address, 0x1C, phase) ||
         !memory.TryWriteField(glow_address, 0x20, phase) ||
         !memory.TryWriteField(glow_address, 0x24, selector) ||
@@ -477,7 +607,7 @@ bool QueueLuaConsumableRenderQuad(LuaConsumableRenderQuad quad) {
 
     auto& runtime = ItemRuntime();
     std::scoped_lock lock(runtime.mutex);
-    if (runtime.render_quads.size() >= 512) {
+    if (runtime.render_quads.size() >= kMaximumRenderQuads) {
         return false;
     }
     runtime.render_quads.push_back(std::move(quad));
@@ -485,10 +615,41 @@ bool QueueLuaConsumableRenderQuad(LuaConsumableRenderQuad quad) {
 }
 
 std::vector<LuaConsumableRenderQuad> TakeLuaConsumableRenderQuads() {
+    using ActivePresentation = std::pair<
+        LuaConsumableDefinition,
+        LuaConsumableNativeVfxRequest>;
+
     auto& runtime = ItemRuntime();
-    std::scoped_lock lock(runtime.mutex);
     std::vector<LuaConsumableRenderQuad> quads;
-    quads.swap(runtime.render_quads);
+    std::vector<ActivePresentation> presentations;
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    {
+        std::scoped_lock lock(runtime.mutex);
+        quads.swap(runtime.render_quads);
+        presentations.reserve(runtime.active_native_vfx_pulses.size());
+        for (const auto& pulse : runtime.active_native_vfx_pulses) {
+            if (now_ms > pulse.expires_at_ms) {
+                continue;
+            }
+            const auto definition =
+                runtime.consumables.find(pulse.request.content_id);
+            if (definition == runtime.consumables.end() ||
+                definition->second.consume_vfx_kind ==
+                    LuaConsumableVfxKind::None) {
+                continue;
+            }
+            presentations.emplace_back(
+                definition->second,
+                pulse.request);
+        }
+    }
+    for (const auto& [definition, request] : presentations) {
+        AppendConsumableActivationBurstQuads(
+            definition,
+            request,
+            now_ms,
+            &quads);
+    }
     return quads;
 }
 
@@ -501,7 +662,9 @@ bool QueueLuaConsumableNativeVfx(
     }
     auto& runtime = ItemRuntime();
     std::scoped_lock lock(runtime.mutex);
-    if (runtime.native_vfx_requests.size() >= 256) {
+    if (runtime.native_vfx_requests.size() +
+            runtime.active_native_vfx_pulses.size() >=
+        256) {
         return false;
     }
     runtime.native_vfx_requests.push_back(request);
@@ -509,13 +672,35 @@ bool QueueLuaConsumableNativeVfx(
 }
 
 void PumpLuaConsumableNativeVfx() {
-    std::vector<LuaConsumableNativeVfxRequest> requests;
+    std::vector<LuaConsumableNativeVfxRequest> requests_to_spawn;
     {
         auto& runtime = ItemRuntime();
         std::scoped_lock lock(runtime.mutex);
-        requests.swap(runtime.native_vfx_requests);
+        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+        for (const auto& request : runtime.native_vfx_requests) {
+            runtime.active_native_vfx_pulses.push_back({
+                request,
+                now_ms,
+                now_ms + kSpellGlowPulseDurationMs,
+            });
+        }
+        runtime.native_vfx_requests.clear();
+
+        for (auto iterator = runtime.active_native_vfx_pulses.begin();
+             iterator != runtime.active_native_vfx_pulses.end();) {
+            if (now_ms > iterator->expires_at_ms) {
+                iterator = runtime.active_native_vfx_pulses.erase(iterator);
+                continue;
+            }
+            if (now_ms >= iterator->next_spawn_ms) {
+                requests_to_spawn.push_back(iterator->request);
+                iterator->next_spawn_ms =
+                    now_ms + kSpellGlowPulseIntervalMs;
+            }
+            ++iterator;
+        }
     }
-    for (const auto& request : requests) {
+    for (const auto& request : requests_to_spawn) {
         const auto definition =
             FindLuaConsumableDefinition(request.content_id);
         if (!definition.has_value() ||
@@ -581,6 +766,15 @@ void ClearLuaItemRuntimeForMod(std::string_view mod_id) {
                     runtime.consumables.end();
             }),
         runtime.native_vfx_requests.end());
+    runtime.active_native_vfx_pulses.erase(
+        std::remove_if(
+            runtime.active_native_vfx_pulses.begin(),
+            runtime.active_native_vfx_pulses.end(),
+            [&](const LuaItemRuntimeState::ActiveNativeVfxPulse& pulse) {
+                return runtime.consumables.find(pulse.request.content_id) ==
+                    runtime.consumables.end();
+            }),
+        runtime.active_native_vfx_pulses.end());
 }
 
 void ResetLuaItemRuntime() {
@@ -592,6 +786,7 @@ void ResetLuaItemRuntime() {
     runtime.loot_pool.clear();
     runtime.render_quads.clear();
     runtime.native_vfx_requests.clear();
+    runtime.active_native_vfx_pulses.clear();
     runtime.loot_rng_state =
         static_cast<std::uint64_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()) ^

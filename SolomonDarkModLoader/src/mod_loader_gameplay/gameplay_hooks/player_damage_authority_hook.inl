@@ -189,10 +189,18 @@ bool TryResolveDamageSourceProgressionAddress(
 
 bool TryCaptureLuaDamageFilterContext(
     uintptr_t actor_address,
-    LuaDamageFilterContext* context) {
-    if (actor_address == 0 || context == nullptr) {
+    LuaDamageFilterContext* context,
+    bool* native_context_captured) {
+    if (actor_address == 0 || context == nullptr ||
+        native_context_captured == nullptr) {
         return false;
     }
+
+    *context = LuaDamageFilterContext{};
+    context->target_actor_address = actor_address;
+    context->target_participant_id =
+        ResolveLuaDamageFilterParticipantId(actor_address);
+    *native_context_captured = false;
 
     auto& state = g_gameplay_keyboard_injection;
     if (state.damage_context_target_address == 0 ||
@@ -201,36 +209,42 @@ bool TryCaptureLuaDamageFilterContext(
         state.damage_context_primary_address == 0 ||
         state.damage_context_secondary_address !=
             state.damage_context_primary_address + sizeof(float)) {
-        return false;
+        return true;
     }
 
-    *context = LuaDamageFilterContext{};
+    LuaDamageFilterContext captured_context{};
     auto& memory = ProcessMemory::Instance();
     bool captured =
         memory.TryReadValue(
             state.damage_context_target_address,
-            &context->target_actor_address) &&
+            &captured_context.target_actor_address) &&
         memory.TryReadValue(
             state.damage_context_source_address,
-            &context->source_actor_address) &&
+            &captured_context.source_actor_address) &&
         memory.TryReadValue(
             state.damage_context_flags_address,
-            &context->flags);
-    for (std::size_t index = 0; index < context->lanes.size(); ++index) {
+            &captured_context.flags);
+    for (std::size_t index = 0;
+         index < captured_context.lanes.size();
+         ++index) {
         captured =
             memory.TryReadValue(
                 state.damage_context_primary_address + index * sizeof(float),
-                &context->lanes[index]) &&
+                &captured_context.lanes[index]) &&
             captured;
     }
-    if (!captured || context->target_actor_address != actor_address) {
-        return false;
+    if (!captured || captured_context.target_actor_address != actor_address) {
+        return true;
     }
 
-    context->source_participant_id =
-        ResolveLuaDamageFilterParticipantId(context->source_actor_address);
-    context->target_participant_id =
-        ResolveLuaDamageFilterParticipantId(context->target_actor_address);
+    captured_context.source_participant_id =
+        ResolveLuaDamageFilterParticipantId(
+            captured_context.source_actor_address);
+    captured_context.target_participant_id =
+        ResolveLuaDamageFilterParticipantId(
+            captured_context.target_actor_address);
+    *context = captured_context;
+    *native_context_captured = true;
     return true;
 }
 
@@ -545,9 +559,11 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
     if (!g_authoritative_local_player_damage_replay_active) {
         if (HasLuaDamageFilterHandlers()) {
             LuaDamageFilterContext filtered_context;
+            bool native_context_captured = false;
             if (!TryCaptureLuaDamageFilterContext(
                     actor_address,
-                    &filtered_context)) {
+                    &filtered_context,
+                    &native_context_captured)) {
                 LogLuaDamageFilterHookFailure(
                     &g_lua_damage_filter_capture_log_count,
                     "damage filters skipped because the native context could "
@@ -559,23 +575,31 @@ std::uint32_t __fastcall HookPlayerActorMagicDamage(
                     return 0;
                 }
                 if (filtered_context.lanes != original_context.lanes) {
-                    const auto write_result = WriteLuaDamageFilterLanes(
-                        original_context,
-                        filtered_context);
-                    if (write_result !=
-                        LuaDamageLaneWriteResult::Applied) {
+                    if (!native_context_captured) {
                         LogLuaDamageFilterHookFailure(
-                            &g_lua_damage_filter_write_log_count,
-                            "damage filter rewrite failed. actor=" +
-                                HexString(actor_address) + " restored=" +
-                                (write_result ==
-                                         LuaDamageLaneWriteResult::RestoredAfterFailure
-                                     ? "1"
-                                     : "0"));
-                        if (write_result ==
-                            LuaDamageLaneWriteResult::RestoreFailed) {
-                            ResetActiveDamageContext();
-                            return 0;
+                            &g_lua_damage_filter_capture_log_count,
+                            "damage filter rewrite skipped because the native "
+                            "context could not be captured. actor=" +
+                                HexString(actor_address));
+                    } else {
+                        const auto write_result = WriteLuaDamageFilterLanes(
+                            original_context,
+                            filtered_context);
+                        if (write_result !=
+                            LuaDamageLaneWriteResult::Applied) {
+                            LogLuaDamageFilterHookFailure(
+                                &g_lua_damage_filter_write_log_count,
+                                "damage filter rewrite failed. actor=" +
+                                    HexString(actor_address) + " restored=" +
+                                    (write_result ==
+                                             LuaDamageLaneWriteResult::RestoredAfterFailure
+                                         ? "1"
+                                         : "0"));
+                            if (write_result ==
+                                LuaDamageLaneWriteResult::RestoreFailed) {
+                                ResetActiveDamageContext();
+                                return 0;
+                            }
                         }
                     }
                 }

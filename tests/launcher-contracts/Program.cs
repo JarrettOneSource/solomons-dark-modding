@@ -1988,6 +1988,28 @@ static Task TestManualLobbyLaunchStateAsync()
             LauncherUiCommandMode.LaunchSteamJoin),
         "explicit Launch Game is not classified as a game launch");
 
+    var workspaceRoot = WorkspaceLocator.FindRootPath(AppContext.BaseDirectory);
+    var viewModel = File.ReadAllText(Path.Combine(
+        workspaceRoot,
+        "SolomonDarkModLauncher.UI",
+        "src",
+        "ViewModels",
+        "MainWindowViewModel.cs"));
+    var primaryAction = viewModel[
+        viewModel.IndexOf("private void ExecuteLobbyPrimaryAction()", StringComparison.Ordinal)..
+        viewModel.IndexOf("private static bool IsLocalUdpDevelopmentLaunch()", StringComparison.Ordinal)];
+    var prepareJoin = viewModel[
+        viewModel.IndexOf("private async Task PrepareLobbyJoinAsync", StringComparison.Ordinal)..
+        viewModel.IndexOf("private void StartSteamLobbyMembership()", StringComparison.Ordinal)];
+    Require(
+        !primaryAction.Contains("IsLocalUdpDevelopmentLaunch", StringComparison.Ordinal) &&
+        primaryAction.Contains("JoinLobbyDirect();", StringComparison.Ordinal),
+        "local UDP bypasses the join preview and host-mod consent path");
+    Require(
+        prepareJoin.Contains("IsLocalUdpDevelopmentLaunch()", StringComparison.Ordinal) &&
+        prepareJoin.Contains("LauncherUiCommandMode.LaunchSteamJoin", StringComparison.Ordinal),
+        "local UDP does not launch after its consented host-mod preparation");
+
     state.Reset();
     Require(state.JoinedLobbyId is null, "leaving retained the old lobby identity");
     Require(state.PrimaryButtonText == "Join Game", "leaving did not restore Join Game");

@@ -44,6 +44,10 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     native_loot = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/replicated_loot_reconciliation.inl"
     )
+    spawn_reward = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/execute_requests/"
+        "spawn_reward.inl"
+    )
     native_inventory = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/native_inventory_reconciliation.inl"
     )
@@ -196,25 +200,43 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
 
     _require(
         "stock potion presentation and use",
-        native_hooks + layout,
+        native_hooks + native_loot + spawn_reward + layout,
         (
             "HookSpriteDrawAtPosition",
-            "HookSpriteDrawTransformed",
+            "BuildCustomPotionWorldQuad",
+            "TryGetLuaCameraSnapshot",
+            "QueueLuaConsumableRenderQuad",
             "HookItemDisplayName",
             "HookPotionHelp",
             "HookInventoryUseItem",
             "QueueLocalLuaConsumableUse",
+            "sprite_draw_at_position=0x004143D0",
             "inventory_use_item=0x0056D1B0",
             "inventory_find_item_by_uid=0x005521C0",
             "item_display_name=0x00571980",
             "potion_help=0x00571C80",
         ),
     )
+    assert "SeedStockPotionGeometry" not in native_hooks
+    assert "PrepareLuaConsumableNativePresentation" not in native_hooks
     _require(
         "stock SpellGlow consume VFX",
         runtime + gameplay_pump + layout,
         (
             "SpawnSpellGlowForParticipant",
+            "TryResolveConsumableVfxTarget",
+            "multiplayer::GetLocalTransportParticipantId()",
+            "multiplayer::kLocalParticipantId",
+            "TryGetPlayerState(&player)",
+            "TryGetParticipantGameplayState(participant_id, &participant)",
+            "kSpellGlowAnimationLayer = 75.0f",
+            "kSpellGlowPulseIntervalMs = 16",
+            "kSpellGlowPulseDurationMs = 4000",
+            "active_native_vfx_pulses",
+            "AppendConsumableActivationBurstQuads",
+            "kActivationBurstParticleCount = 4",
+            "TryGetLuaCameraSnapshot(definition.mod_id, &camera)",
+            "TakeLuaConsumableRenderQuads()",
             "allocate(0x38)",
             "QueueLuaConsumableNativeVfx",
             "PumpLuaConsumableNativeVfx();",
