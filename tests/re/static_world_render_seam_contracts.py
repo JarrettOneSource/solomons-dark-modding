@@ -224,6 +224,9 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "RenderLuaWorldMarkersInNativePass();",
             "native_renderer_set_color",
             "native_untextured_quad",
+            "TryGetLuaCameraSnapshot({}, &camera)",
+            "(world_x - camera.origin_x) * camera.scale",
+            "(world_y - camera.origin_y) * camera.scale",
             "renderer + g_world_renderer.native_renderer_draw_state_offset",
             "DrawNativeWorldIndicatorHealthBar",
             "source=native_world_indicator",
@@ -312,6 +315,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         ('sd.world.marker("YOU"',),
     )
     assert "sd.draw.world_to_screen" not in showcase
+    assert "sd.draw.world_to_screen" not in acceptance
     for lua_path in sorted((ROOT / "mods").rglob("*.lua")):
         lua_source = lua_path.read_text(encoding="utf-8")
         assert "sd.draw.world_to_screen" not in lua_source, (

@@ -356,16 +356,26 @@ def place_pair(
 
 
 def projections(pipe: str, points: dict[str, tuple[float, float]]) -> dict[str, Any]:
-    lines = ["local function emit(name, x, y)"]
+    lines = [
+        "local camera = sd.camera.get_state()",
+        "local viewport = sd.draw.get_viewport()",
+        "assert(camera and camera.scene_available, 'native camera unavailable')",
+        "assert(viewport, 'capture viewport unavailable')",
+        "local function emit(name, x, y)",
+    ]
     lines.extend(
         [
-            "  local p, err = sd.draw.world_to_screen(x, y)",
-            "  if p == nil then error(err) end",
-            "  print(name .. '.x=' .. tostring(p.x))",
-            "  print(name .. '.y=' .. tostring(p.y))",
-            "  print(name .. '.visible=' .. tostring(p.visible))",
-            "  print(name .. '.width=' .. tostring(p.viewport_width))",
-            "  print(name .. '.height=' .. tostring(p.viewport_height))",
+            "  local screen_x = (x - camera.origin_x) * camera.scale",
+            "  local screen_y = (y - camera.origin_y) * camera.scale",
+            "  local scene_width = camera.width * camera.scale",
+            "  local scene_height = camera.height * camera.scale",
+            "  local visible = screen_x >= 0 and screen_x <= scene_width and",
+            "    screen_y >= 0 and screen_y <= scene_height",
+            "  print(name .. '.x=' .. tostring(screen_x))",
+            "  print(name .. '.y=' .. tostring(screen_y))",
+            "  print(name .. '.visible=' .. tostring(visible))",
+            "  print(name .. '.width=' .. tostring(viewport.width))",
+            "  print(name .. '.height=' .. tostring(viewport.height))",
             "end",
         ]
     )

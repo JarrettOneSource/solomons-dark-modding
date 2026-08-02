@@ -242,6 +242,16 @@ submit loader indicators through native text and untextured-quad primitives.
 That point is later than all Arena queue flushes but remains in the game's
 native render phase, before the D3D9 `EndScene` overlay.
 
+The projection input must be the Region camera rectangle, not an arbitrary
+D3D transform left behind by an actor draw. Stock subtracts the camera origin
+from the live world point, multiplies both axes by the camera scale, and adds
+the native render translation before clipping
+(`re-scope-addition/hud-arena-tutorial-decompile.txt:1128-1185`). The loader's
+semantic camera snapshot exposes the already translated visible-rectangle
+origin and scale, so its indicator coordinate is
+`(world - view_origin) * view_scale`. The native indicator lane deliberately
+does not call the overlay compatibility helper `sd.draw.world_to_screen`.
+
 Stock already supplies the health-bar primitive needed by this lane. The HUD
 health-bar loop at `0x005D2520` sets the renderer color through `0x0041FE50`
 and calls native untextured-quad submission `0x0041DD70`

@@ -29,6 +29,30 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertTrue(rows[0]["materialized"])
         self.assertIn('row.kind == "Potion"', lua.call_args.args[1])
 
+    def test_capture_projection_uses_the_stock_region_camera(self) -> None:
+        projected = "".join(
+            (
+                "drop.x=310\n",
+                "drop.y=418\n",
+                "drop.visible=true\n",
+                "drop.width=1600\n",
+                "drop.height=900\n",
+            )
+        )
+
+        with mock.patch.object(
+            verifier,
+            "parse_values",
+            return_value=verifier.sync.parse_key_values(projected),
+        ) as parse:
+            result = verifier.projections("test-pipe", {"drop": (230, 310)})
+
+        self.assertEqual(result["drop"]["x"], 310)
+        code = parse.call_args.args[1]
+        self.assertIn("sd.camera.get_state()", code)
+        self.assertIn("(x - camera.origin_x) * camera.scale", code)
+        self.assertNotIn("sd.draw.world_to_screen", code)
+
 
 if __name__ == "__main__":
     unittest.main()

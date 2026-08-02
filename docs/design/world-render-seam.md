@@ -292,9 +292,11 @@ bar. The top-left ally-row hook remains unchanged because those rows are
 screen-space stock HUD.
 
 Lua markers use the same lane. Their cross is made from two native untextured
-quads and their label uses native ExactText. They are projected by the same
-native scene transform active for stock tutorial indicators and always draw
-above the completed scene, independent of the target actor's Arena Y bucket.
+quads and their label uses native ExactText. They use the same Region-camera
+origin/scale projection as stock tutorial indicators:
+`(world - view_origin) * view_scale`. They do not reuse the late-overlay
+`sd.draw.world_to_screen` snapshot and always draw above the completed scene,
+independent of the target actor's Arena Y bucket.
 
 ## Replicated Dampen presentation
 

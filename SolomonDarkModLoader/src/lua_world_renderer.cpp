@@ -2,6 +2,7 @@
 
 #include "binary_layout.h"
 #include "logger.h"
+#include "lua_camera_runtime.h"
 #include "lua_draw_internal.h"
 #include "lua_draw_runtime.h"
 #include "memory_access.h"
@@ -505,19 +506,21 @@ bool TryProjectNativeWorldIndicatorPoint(
     if (screen_x == nullptr || screen_y == nullptr) {
         return false;
     }
-    LuaDrawProjectionResult result;
-    std::string error_message;
-    if (!TryProjectLuaDrawWorldPoint(
-            world_x,
-            world_y,
-            0.0f,
-            &result,
-            &error_message) ||
-        !result.visible) {
+    LuaCameraSnapshot camera;
+    if (!TryGetLuaCameraSnapshot({}, &camera) ||
+        !camera.scene_available) {
         return false;
     }
-    *screen_x = result.x;
-    *screen_y = result.y;
+    const float projected_x = (world_x - camera.origin_x) * camera.scale;
+    const float projected_y = (world_y - camera.origin_y) * camera.scale;
+    const float viewport_width = camera.width * camera.scale;
+    const float viewport_height = camera.height * camera.scale;
+    if (projected_x < 0.0f || projected_x > viewport_width ||
+        projected_y < 0.0f || projected_y > viewport_height) {
+        return false;
+    }
+    *screen_x = projected_x;
+    *screen_y = projected_y;
     return true;
 }
 
