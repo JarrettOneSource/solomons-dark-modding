@@ -400,6 +400,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "InitializeLuaWorldRenderer",
             "IsLuaCameraRuntimeAvailable()",
             "requires the Region camera runtime",
+            'Log("Module path: " + GetModulePath(module_handle).string())',
             'write_failed_status("lua-world-renderer-failed"',
             "ShutdownLuaWorldRenderer",
             "RemoveX86Hook(&g_world_renderer.render_queue_flush_hook)",

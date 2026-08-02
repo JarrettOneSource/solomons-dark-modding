@@ -40,6 +40,7 @@ void Initialize(HMODULE module_handle) {
 
     try {
         Log("SolomonDarkModLoader attached.");
+        Log("Module path: " + GetModulePath(module_handle).string());
         Log("Module directory: " + GetModuleDirectory(module_handle).string());
         Log("Host process directory: " + GetHostProcessDirectory().string());
         Log("Stage runtime directory: " + stage_runtime_directory.string());

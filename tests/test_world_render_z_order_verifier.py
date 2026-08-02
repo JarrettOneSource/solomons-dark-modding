@@ -217,6 +217,52 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
             )
         self.assertGreaterEqual(result["cyan_pixels"], 24)
 
+    def test_loaded_module_proof_uses_the_dll_self_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime = Path(temporary) / "runtime"
+            launch: dict[str, object] = {"hostProcessId": 101, "clientProcessId": 202}
+            process_rows = []
+            expected_loader = verifier.sync.path_for_powershell(
+                verifier.ROOT / "dist/launcher/SolomonDarkModLoader.dll"
+            )
+            for role, process_id in (("host", 101), ("client", 202)):
+                executable = verifier.sync.path_for_powershell(
+                    runtime / f"instances/zrd-{role}/stage/SolomonDark.exe"
+                )
+                launch[f"{role}ExecutablePath"] = executable
+                process_rows.append(
+                    {"ProcessId": process_id, "ExecutablePath": executable}
+                )
+                log = (
+                    runtime
+                    / f"instances/zrd-{role}/stage/.sdmod/logs/solomondarkmodloader.log"
+                )
+                log.parent.mkdir(parents=True)
+                log.write_text(
+                    f"[test] Module path: {expected_loader}\n",
+                    encoding="utf-8",
+                )
+
+            with mock.patch.object(
+                verifier,
+                "_powershell_json",
+                return_value=process_rows,
+            ):
+                result = verifier.verify_launched_processes_and_modules(
+                    launch,
+                    runtime_root=runtime,
+                    launcher_path=verifier.ROOT
+                    / "dist/launcher/SolomonDarkModLauncher.exe",
+                    instance_prefix="zrd",
+                    loader_sha256="abc123",
+                )
+
+        self.assertEqual(result["host"]["loader_sha256"], "abc123")
+        self.assertEqual(
+            result["client"]["loader_path_source"],
+            "GetModuleFileNameW(module_handle)",
+        )
+
     def test_custom_potion_is_found_and_consumed_in_one_inventory_probe(self) -> None:
         output = "".join(
             (

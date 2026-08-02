@@ -242,6 +242,7 @@ def verify_launched_processes_and_modules(
     launch: dict[str, object],
     *,
     runtime_root: Path,
+    launcher_path: Path,
     instance_prefix: str,
     loader_sha256: str,
 ) -> dict[str, Any]:
@@ -272,14 +273,8 @@ def verify_launched_processes_and_modules(
     value = _powershell_json(
         "$rows=@(); foreach($processId in @(" + pid_list + ")) { "
         "$process=Get-Process -Id $processId -ErrorAction Stop; "
-        "$loader=@($process.Modules | Where-Object { "
-        "$_.ModuleName -ieq 'SolomonDarkModLoader.dll' }); "
-        "if($loader.Count -ne 1){ throw ('PID ' + $processId + "
-        "' has ' + $loader.Count + ' loader modules') }; "
         "$rows += [pscustomobject]@{ ProcessId=[int]$processId; "
-        "ExecutablePath=$process.Path; LoaderPath=$loader[0].FileName; "
-        "LoaderSha256=(Get-FileHash -LiteralPath $loader[0].FileName "
-        "-Algorithm SHA256).Hash.ToLowerInvariant() } }; "
+        "ExecutablePath=$process.Path } }; "
         "ConvertTo-Json -Compress -InputObject $rows"
     )
     rows = value if isinstance(value, list) else [value]
@@ -293,26 +288,46 @@ def verify_launched_processes_and_modules(
             f"loaded-module inventory did not return exact game PIDs: {rows}"
         )
     result: dict[str, Any] = {}
+    expected_loader_path = sync.path_for_powershell(
+        (launcher_path.parent / "SolomonDarkModLoader.dll").resolve()
+    )
     for pid, identity in expected.items():
         row = by_pid[pid]
         executable_path = str(row.get("ExecutablePath") or "")
-        module_hash = str(row.get("LoaderSha256") or "").lower()
         if _normalize_windows_path(executable_path) != _normalize_windows_path(
             identity["executable_path"]
         ):
             raise sync.VerifyFailure(
                 f"PID {pid} executable changed: {executable_path!r}"
             )
-        if module_hash != loader_sha256:
+        role = identity["role"]
+        log_path = (
+            runtime_root
+            / "instances"
+            / f"{instance_prefix}-{role}"
+            / "stage/.sdmod/logs/solomondarkmodloader.log"
+        )
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        module_paths = re.findall(r"\] Module path: (.+)$", log_text, re.MULTILINE)
+        if len(module_paths) != 1:
+            raise sync.VerifyFailure(
+                f"{role} loader did not self-report one module path: "
+                f"path={log_path} matches={module_paths}"
+            )
+        module_path = module_paths[0].strip()
+        if _normalize_windows_path(module_path) != _normalize_windows_path(
+            expected_loader_path
+        ):
             raise sync.VerifyFailure(
                 f"PID {pid} loaded a different loader DLL: "
-                f"expected={loader_sha256} actual={module_hash}"
+                f"expected={expected_loader_path!r} actual={module_path!r}"
             )
-        result[identity["role"]] = {
+        result[role] = {
             "process_id": pid,
             "executable_path": executable_path,
-            "loader_path": str(row.get("LoaderPath") or ""),
-            "loader_sha256": module_hash,
+            "loader_path": module_path,
+            "loader_sha256": loader_sha256,
+            "loader_path_source": "GetModuleFileNameW(module_handle)",
         }
     return result
 
@@ -1643,6 +1658,7 @@ def run(
         result["launched_processes"] = verify_launched_processes_and_modules(
             launch,
             runtime_root=runtime_root,
+            launcher_path=launcher_path,
             instance_prefix=instance_prefix,
             loader_sha256=result["source_and_artifacts"]["loader_sha256"],
         )
