@@ -15,6 +15,10 @@ def _require(label: str, text: str, tokens: tuple[str, ...]) -> None:
 def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     runtime_header = _read("SolomonDarkModLoader/include/lua_item_runtime.h")
     runtime = _read("SolomonDarkModLoader/src/lua_item_runtime.cpp")
+    vfx_runtime = _read(
+        "SolomonDarkModLoader/src/lua_item_runtime/"
+        "consumable_vfx_helpers.inl"
+    )
     consumables = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_consumables.cpp"
     )
@@ -221,7 +225,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     assert "PrepareLuaConsumableNativePresentation" not in native_hooks
     _require(
         "stock SpellGlow consume VFX",
-        runtime + gameplay_pump + layout,
+        runtime + vfx_runtime + gameplay_pump + layout,
         (
             "SpawnSpellGlowForParticipant",
             "TryResolveConsumableVfxTarget",
@@ -300,6 +304,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     for item in (
         r"include\lua_item_runtime.h",
         r"src\lua_item_runtime.cpp",
+        r"src\lua_item_runtime\consumable_vfx_helpers.inl",
         r"src\lua_item_native_hooks.cpp",
         r"src\lua_engine_bindings_consumables.cpp",
         r"src\lua_engine_bindings_loot.cpp",

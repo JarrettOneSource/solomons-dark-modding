@@ -194,6 +194,9 @@
     <ClInclude Include="include\lua_item_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\lua_net_runtime.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
