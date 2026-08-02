@@ -244,7 +244,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "TryGetParticipantGameplayState(participant_id, &participant)",
             "kSpellGlowAnimationLayer = 75.0f",
             "kSpellGlowPulseIntervalMs = 16",
-            "kSpellGlowPulseDurationMs = 4000",
+            "kSpellGlowPulseDurationMs = 12000",
             "active_native_vfx_pulses",
             "allocate(0x38)",
             "QueueLuaConsumableNativeVfx",

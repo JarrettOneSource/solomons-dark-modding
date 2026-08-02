@@ -358,7 +358,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             "SpawnSpellGlowForParticipant",
             "kSpellGlowAnimationLayer = 75.0f",
             "kSpellGlowPulseIntervalMs = 16",
-            "kSpellGlowPulseDurationMs = 4000",
+            "kSpellGlowPulseDurationMs = 12000",
         ),
     )
 
