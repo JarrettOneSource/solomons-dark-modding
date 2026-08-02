@@ -94,6 +94,35 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertEqual(control["remaining_ratio"], 1.0)
         self.assertEqual(actor_front["remaining_ratio"], 0.0)
 
+    def test_pickup_delay_targets_only_the_two_potion_carriers(self) -> None:
+        output = "".join(
+            (
+                "writes=2\n",
+                "stock_address=287310000\n",
+                "custom_address=287320000\n",
+                "stock_delay=36000\n",
+                "custom_delay=36000\n",
+            )
+        )
+        with mock.patch.object(
+            verifier,
+            "parse_values",
+            return_value=verifier.sync.parse_key_values(output),
+        ) as parse:
+            result = verifier.set_potion_pickup_delay(
+                "test-pipe",
+                stock_x=100.0,
+                custom_x=300.0,
+                y=200.0,
+                delay_ticks=36000,
+            )
+
+        self.assertEqual(result["writes"], "2")
+        code = parse.call_args.args[1]
+        self.assertIn("actor.object_type_id) == 0x07DD", code)
+        self.assertIn("address + 0x14C, 36000", code)
+        self.assertIn("math.abs((tonumber(actor.x) or 0) - target.x) <= 2", code)
+
 
 if __name__ == "__main__":
     unittest.main()
