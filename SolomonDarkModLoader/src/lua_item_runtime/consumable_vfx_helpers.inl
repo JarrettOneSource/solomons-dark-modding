@@ -19,11 +19,6 @@ using RegisterAnimationFn =
 constexpr float kSpellGlowAnimationLayer = 75.0f;
 constexpr std::uint64_t kSpellGlowPulseIntervalMs = 16;
 constexpr std::uint64_t kSpellGlowPulseDurationMs = 4000;
-constexpr std::size_t kMaximumRenderQuads = 512;
-constexpr std::size_t kActivationBurstParticleCount = 4;
-constexpr float kActivationBurstOrbitRadius = 42.0f;
-constexpr float kActivationBurstIconHalfSize = 16.0f;
-constexpr float kPi = 3.14159265358979323846f;
 
 struct ConsumableVfxTarget {
     uintptr_t actor_address = 0;
@@ -72,72 +67,6 @@ bool TryResolveConsumableVfxTarget(
     target->x = participant.x;
     target->y = participant.y;
     return true;
-}
-
-void AppendConsumableActivationBurstQuads(
-    const LuaConsumableDefinition& definition,
-    const LuaConsumableNativeVfxRequest& request,
-    std::uint64_t now_ms,
-    std::vector<LuaConsumableRenderQuad>* quads) {
-    if (quads == nullptr) {
-        return;
-    }
-
-    ConsumableVfxTarget target;
-    LuaCameraSnapshot camera;
-    if (!TryResolveConsumableVfxTarget(
-            request.participant_id,
-            &target) ||
-        !TryGetLuaCameraSnapshot(definition.mod_id, &camera) ||
-        !camera.scene_available ||
-        !std::isfinite(camera.origin_x) ||
-        !std::isfinite(camera.origin_y) ||
-        !std::isfinite(camera.scale) ||
-        camera.scale <= 0.0f) {
-        return;
-    }
-
-    const float center_x =
-        (target.x - camera.origin_x) * camera.scale;
-    const float center_y =
-        (target.y - camera.origin_y) * camera.scale -
-        14.0f * camera.scale;
-    const float phase =
-        static_cast<float>(now_ms % 1600) / 1600.0f * 2.0f * kPi +
-        static_cast<float>(request.use_id & 0xFFu) /
-            255.0f * 2.0f * kPi;
-
-    for (std::size_t index = 0;
-         index < kActivationBurstParticleCount &&
-             quads->size() < kMaximumRenderQuads;
-         ++index) {
-        const float angle = phase +
-            static_cast<float>(index) *
-                (2.0f * kPi /
-                 static_cast<float>(kActivationBurstParticleCount));
-        const float particle_x = center_x +
-            std::cos(angle) * kActivationBurstOrbitRadius;
-        const float particle_y = center_y +
-            std::sin(angle) * kActivationBurstOrbitRadius * 0.65f;
-        const float half_size = kActivationBurstIconHalfSize +
-            std::sin(angle * 2.0f) * 2.0f;
-
-        LuaConsumableRenderQuad quad;
-        quad.content_id = definition.content_id;
-        quad.icon_atlas = definition.icon_atlas;
-        quad.icon_frame = definition.icon_frame;
-        quad.vertices = {
-            particle_x - half_size,
-            particle_y - half_size,
-            particle_x + half_size,
-            particle_y - half_size,
-            particle_x - half_size,
-            particle_y + half_size,
-            particle_x + half_size,
-            particle_y + half_size,
-        };
-        quads->push_back(std::move(quad));
-    }
 }
 
 bool ConstructSpellGlowSafe(
@@ -324,4 +253,3 @@ bool SpawnSpellGlowForParticipant(
     }
     return true;
 }
-

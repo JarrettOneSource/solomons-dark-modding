@@ -2252,6 +2252,7 @@ void RegisterLuaGameplayBindings(lua_State* state) {
     RegisterFunction(state, &LuaWorldRebindActor, "rebind_actor");
     RegisterFunction(state, &LuaWorldSpawnReward, "spawn_reward");
     RegisterFunction(state, &LuaWorldTriggerEnemyDeath, "trigger_enemy_death");
+    RegisterLuaWorldRenderBindings(state);
     lua_setfield(state, -2, "world");
 }
 

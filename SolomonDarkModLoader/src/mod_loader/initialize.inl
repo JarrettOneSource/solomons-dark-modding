@@ -266,6 +266,17 @@ void Initialize(HMODULE module_handle) {
                 return;
             }
 
+            std::string lua_world_renderer_error;
+            if (!InitializeLuaWorldRenderer(&lua_world_renderer_error)) {
+                const auto message = lua_world_renderer_error.empty()
+                    ? std::string("Lua native world renderer failed to initialize.")
+                    : lua_world_renderer_error;
+                Log(message);
+                ShutdownPartialRuntime();
+                write_failed_status("lua-world-renderer-failed", message);
+                return;
+            }
+
             std::string lua_item_hook_error;
             if (!InitializeLuaItemNativeHooks(&lua_item_hook_error)) {
                 const auto message = lua_item_hook_error.empty()

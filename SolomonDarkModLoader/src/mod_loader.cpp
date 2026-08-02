@@ -19,6 +19,7 @@
 #include "lua_engine.h"
 #include "lua_exec_pipe.h"
 #include "lua_item_runtime.h"
+#include "lua_world_render_runtime.h"
 #include "memory_access.h"
 #include "multiplayer_foundation.h"
 #include "multiplayer_join_flow.h"
@@ -144,6 +145,7 @@ void ShutdownPartialRuntime() {
     ShutdownCpuLifecycleGuard();
     ShutdownBackgroundFocusBypass();
     ShutdownHeadlessSimulation();
+    ShutdownLuaWorldRenderer();
     ShutdownLuaItemNativeHooks();
     ShutdownBoneyardPicker();
     ShutdownGameplayKeyboardInjection();
@@ -197,6 +199,7 @@ void Shutdown() {
     RunShutdownStep("CPU lifecycle guard", &ShutdownCpuLifecycleGuard);
     RunShutdownStep("background focus bypass", &ShutdownBackgroundFocusBypass);
     RunShutdownStep("headless simulation", &ShutdownHeadlessSimulation);
+    RunShutdownStep("lua world renderer", &ShutdownLuaWorldRenderer);
     RunShutdownStep("lua item native hooks", &ShutdownLuaItemNativeHooks);
     RunShutdownStep("boneyard picker", &ShutdownBoneyardPicker);
     RunShutdownStep("gameplay keyboard injection", &ShutdownGameplayKeyboardInjection);

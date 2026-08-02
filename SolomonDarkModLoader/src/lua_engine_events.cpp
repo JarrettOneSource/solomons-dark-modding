@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "lua_draw_runtime.h"
 #include "lua_ui_runtime.h"
+#include "lua_world_render_runtime.h"
 #include "native_enemy_types.h"
 
 extern "C" {
@@ -360,6 +361,7 @@ void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const RuntimeTickContext& conte
         return;
     }
     BeginLuaDrawFrame(mod->descriptor.id);
+    BeginLuaWorldRenderFrame(mod->descriptor.id);
     DispatchLuaTimersToMod(mod, context);
     if (mod->runtime_tick_registered) {
         DispatchEventToMod(
@@ -370,6 +372,7 @@ void DispatchRuntimeTickToMod(LoadedLuaMod* mod, const RuntimeTickContext& conte
                 PushRuntimeTickPayload(state, context);
             });
     }
+    CommitLuaWorldRenderFrame(mod->descriptor.id);
     CommitLuaDrawFrame(mod->descriptor.id);
 }
 

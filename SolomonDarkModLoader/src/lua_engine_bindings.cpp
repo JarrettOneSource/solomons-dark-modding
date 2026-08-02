@@ -136,7 +136,7 @@ bool RegisterLuaBindings(LoadedLuaMod* mod, std::string* error_message) {
 
     // runtime, events, settings, state, storage, timer, bus, net, time, rng, nav, scene, waves,
     // spells, items, loot, enemies, ai, audio, camera, sprites, draw/hud, bots, ui, input,
-    // gameplay,
+    // gameplay, world rendering,
     // player, world, hub, debug
     lua_createtable(mod->state, 0, 31);
     RegisterLuaRuntimeBindings(mod->state);

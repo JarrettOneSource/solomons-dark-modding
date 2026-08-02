@@ -106,8 +106,10 @@
     <ClInclude Include="include\lua_camera_runtime.h" />
     <ClInclude Include="include\lua_developer_console.h" />
     <ClInclude Include="include\lua_draw_runtime.h" />
+    <ClInclude Include="include\lua_world_render_runtime.h" />
     <ClInclude Include="include\lua_item_runtime.h" />
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl" />
+    <ClInclude Include="src\lua_world_renderer\native_texture_bridge.inl" />
     <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_sprite_runtime.h" />
     <ClInclude Include="include\lua_time_runtime.h" />
@@ -643,6 +645,7 @@
     <ClCompile Include="src\lua_engine_mod_loading.cpp" />
     <ClCompile Include="src\lua_engine_bindings.cpp" />
     <ClCompile Include="src\lua_engine_bindings_draw.cpp" />
+    <ClCompile Include="src\lua_engine_bindings_world_render.cpp" />
     <ClCompile Include="src\lua_engine_bindings_state.cpp" />
     <ClCompile Include="src\lua_engine_bindings_storage.cpp" />
     <ClCompile Include="src\lua_engine_bindings_timer.cpp" />
@@ -703,6 +706,8 @@
     <ClCompile Include="src\lua_draw_assets.cpp" />
     <ClCompile Include="src\lua_draw_renderer.cpp" />
     <ClCompile Include="src\lua_draw_runtime.cpp" />
+    <ClCompile Include="src\lua_world_render_runtime.cpp" />
+    <ClCompile Include="src\lua_world_renderer.cpp" />
     <ClCompile Include="src\lua_ui_renderer.cpp" />
     <ClCompile Include="src\lua_ui_runtime.cpp" />
     <ClCompile Include="src\loading_screen.cpp" />

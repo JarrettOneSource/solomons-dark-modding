@@ -73,13 +73,18 @@ registered by the same mod, and `icon.frame` must resolve inside that atlas.
 what the duration means. `on_consume` is required and runs only on the consuming
 participant's process. `consume_vfx` is optional; the current semantic
 `spell_glow` kind constructs the game's native `SpellGlow` animation around the
-participant on every peer using the supplied finite RGBA color.
+participant on every peer using the supplied finite RGBA color. The effect is
+native `SpellGlow` only; no icon particles are projected into the screen-space
+overlay.
 
 Custom potions use peer-local native subtype reservations only to enter the
 stock inventory. Their descriptors add `consumable`, `description`, `icon`,
 `duration_ms`, `native_subtype`, and optional `consume_vfx` fields. The subtype
 is diagnostic local state. Network inventory, loot, pickup, and use messages
 carry the stable content ID and resolve that peer's subtype at the native edge.
+The ground icon is drawn through the same native positioned-glyph call used by
+stock potion drops, so stock render-list order, actor/prop occlusion, and scene
+lighting apply on each peer. It is not an `sd.draw` overlay.
 
 Every accepted use also queues `item.consumed` on every peer:
 

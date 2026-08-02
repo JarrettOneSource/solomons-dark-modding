@@ -3,7 +3,8 @@
 `sd.sprites` lets a Lua mod register its own PNG atlas and reversed Solomon
 Dark `.bundle` frame stream without replacing a stock atlas. Registration is
 presentation-local: the resulting atlas can be passed directly to
-`sd.draw.sprite` and `sd.draw.get_sprite_info`, but it never enters simulation
+`sd.draw.sprite`, `sd.draw.get_sprite_info`, and native
+[`sd.world.sprite`](lua-world-rendering.md), but it never enters simulation
 state or the multiplayer protocol.
 
 ## Basic use

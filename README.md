@@ -269,6 +269,7 @@ py -3 ./scripts/capture_window.py --title SolomonDark --output ./runtime/debug-u
 - `docs/lua-settings.md` — manifest settings, launcher persistence/live apply, keybind reads, and host scope.
 - `docs/lua-input.md` — stock-routed gameplay controls and owner-scoped local-player takeover.
 - `docs/lua-draw.md` — local immediate-mode text, primitives, stock sprites, projection, and bounds.
+- `docs/lua-world-rendering.md` — native world-space sprites, Z ordering, occlusion, lighting, and limits.
 - `docs/lua-sprites.md` — mod-owned runtime atlases, bundle authoring, sandboxing, and limits.
 - `docs/lua-authoring.md` — generated LuaLS/EmmyLua stubs, opt-in entry-script hot reload, and the in-game exec console.
 - `docs/lua-bots.md` — host-authoritative synthetic remote bot participants, handle API, brain ticks, and multiplayer acceptance.

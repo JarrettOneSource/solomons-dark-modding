@@ -1,7 +1,6 @@
 #include "lua_item_runtime.h"
 
 #include "gameplay_seams.h"
-#include "lua_camera_runtime.h"
 #include "logger.h"
 #include "memory_access.h"
 #include "mod_loader.h"
@@ -31,7 +30,6 @@ struct LuaItemRuntimeState {
     std::unordered_map<std::int32_t, std::uint64_t> content_by_subtype;
     std::unordered_map<std::uint64_t, std::int32_t> reserved_subtype_by_content;
     std::vector<LuaLootPoolEntry> loot_pool;
-    std::vector<LuaConsumableRenderQuad> render_quads;
     std::vector<LuaConsumableNativeVfxRequest> native_vfx_requests;
     std::vector<ActiveNativeVfxPulse> active_native_vfx_pulses;
     std::uint64_t loot_rng_state = 0xA0761D6478BD642Full;
@@ -272,64 +270,6 @@ bool LuaLootRollSucceeds(
     return IsValidChance(chance) && unit_roll < chance;
 }
 
-bool QueueLuaConsumableRenderQuad(LuaConsumableRenderQuad quad) {
-    if (quad.content_id == 0 || quad.icon_atlas.empty()) {
-        return false;
-    }
-    for (const auto coordinate : quad.vertices) {
-        if (!std::isfinite(coordinate)) {
-            return false;
-        }
-    }
-
-    auto& runtime = ItemRuntime();
-    std::scoped_lock lock(runtime.mutex);
-    if (runtime.render_quads.size() >= kMaximumRenderQuads) {
-        return false;
-    }
-    runtime.render_quads.push_back(std::move(quad));
-    return true;
-}
-
-std::vector<LuaConsumableRenderQuad> TakeLuaConsumableRenderQuads() {
-    using ActivePresentation = std::pair<
-        LuaConsumableDefinition,
-        LuaConsumableNativeVfxRequest>;
-
-    auto& runtime = ItemRuntime();
-    std::vector<LuaConsumableRenderQuad> quads;
-    std::vector<ActivePresentation> presentations;
-    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    {
-        std::scoped_lock lock(runtime.mutex);
-        quads.swap(runtime.render_quads);
-        presentations.reserve(runtime.active_native_vfx_pulses.size());
-        for (const auto& pulse : runtime.active_native_vfx_pulses) {
-            if (now_ms > pulse.expires_at_ms) {
-                continue;
-            }
-            const auto definition =
-                runtime.consumables.find(pulse.request.content_id);
-            if (definition == runtime.consumables.end() ||
-                definition->second.consume_vfx_kind ==
-                    LuaConsumableVfxKind::None) {
-                continue;
-            }
-            presentations.emplace_back(
-                definition->second,
-                pulse.request);
-        }
-    }
-    for (const auto& [definition, request] : presentations) {
-        AppendConsumableActivationBurstQuads(
-            definition,
-            request,
-            now_ms,
-            &quads);
-    }
-    return quads;
-}
-
 bool QueueLuaConsumableNativeVfx(
     LuaConsumableNativeVfxRequest request) {
     if (request.content_id == 0 ||
@@ -425,15 +365,6 @@ void ClearLuaItemRuntimeForMod(std::string_view mod_id) {
                 return entry.mod_id == mod_id;
             }),
         runtime.loot_pool.end());
-    runtime.render_quads.erase(
-        std::remove_if(
-            runtime.render_quads.begin(),
-            runtime.render_quads.end(),
-            [&](const LuaConsumableRenderQuad& quad) {
-                return runtime.consumables.find(quad.content_id) ==
-                    runtime.consumables.end();
-            }),
-        runtime.render_quads.end());
     runtime.native_vfx_requests.erase(
         std::remove_if(
             runtime.native_vfx_requests.begin(),
@@ -461,7 +392,6 @@ void ResetLuaItemRuntime() {
     runtime.content_by_subtype.clear();
     runtime.reserved_subtype_by_content.clear();
     runtime.loot_pool.clear();
-    runtime.render_quads.clear();
     runtime.native_vfx_requests.clear();
     runtime.active_native_vfx_pulses.clear();
     runtime.loot_rng_state =

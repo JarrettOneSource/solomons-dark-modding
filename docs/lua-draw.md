@@ -1,9 +1,15 @@
 # Lua immediate-mode drawing
 
-`sd.draw` is the loader-owned, presentation-local drawing API. `sd.hud` is an
-exact alias of the same table. A mod submits a display list from its
-`runtime.tick` handler, and the loader draws that list over the next D3D9
+`sd.draw` is the loader-owned, presentation-local screen-space drawing API.
+`sd.hud` is an exact alias of the same table. A mod submits a display list from
+its `runtime.tick` handler, and the loader draws that list over the next D3D9
 frames until the mod completes another tick.
+
+This is intentionally the overlay lane for HUD indicators, pickers, labels,
+loading screens, and other screen-space UI. Do not use it for a sprite that
+exists at a world position: `sd.draw.world_to_screen` changes coordinates but
+does not change render ownership, Z ordering, occlusion, or lighting. Use
+[`sd.world.sprite`](lua-world-rendering.md) for world-space sprites.
 
 Drawing is local and never enters the multiplayer transport. It is therefore
 safe to call from the same mod on every peer. Use replicated `sd.state` values

@@ -2,6 +2,7 @@
 
 #include "lua_draw_internal.h"
 #include "lua_sprite_runtime.h"
+#include "lua_world_render_runtime.h"
 
 #include <algorithm>
 #include <mutex>
@@ -64,10 +65,12 @@ bool InitializeLuaDrawRuntime(
     }
     ResetLuaSpriteRegistry();
     detail::ConfigureLuaDrawAssets(stage_root / "images");
+    InitializeLuaWorldRenderRuntime();
     return true;
 }
 
 void ShutdownLuaDrawRuntime() {
+    ResetLuaWorldRenderRuntime();
     detail::ShutdownLuaDrawRenderer();
     detail::ResetLuaDrawAssets();
     ResetLuaSpriteRegistry();

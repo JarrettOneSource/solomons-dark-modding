@@ -12,6 +12,7 @@
 #include "lua_sprite_runtime.h"
 #include "lua_time_runtime.h"
 #include "lua_ui_runtime.h"
+#include "lua_world_render_runtime.h"
 #include "mod_loader.h"
 #include "multiplayer_foundation.h"
 #include "multiplayer_local_transport.h"
@@ -342,9 +343,7 @@ RuntimeBootstrap& LuaRuntimeBootstrapStorage() {
     static RuntimeBootstrap bootstrap;
     return bootstrap;
 }
-
 #include "lua_engine/lua_exec_target.inl"
-
 std::vector<std::string> BuildLuaCapabilitySet() {
     std::vector<std::string> capabilities = {
         "lua.engine",
@@ -357,6 +356,7 @@ std::vector<std::string> BuildLuaCapabilitySet() {
         "draw.local.immediate", "draw.text",
         "draw.primitives", "draw.stock_sprites",
         "draw.world_projection",
+        "world.render.native",
         "sprites.local.register", "sprites.local.read",
         "runtime.mod.info",
         "settings.self",
@@ -490,6 +490,7 @@ void CloseLuaStateForMod(LoadedLuaMod* mod) {
     ClearLuaNetSubscriptionsForMod(mod);
     ClearLuaTimeScaleRequest(mod->descriptor.id);
     ClearLuaCameraFocus(mod->descriptor.id);
+    ClearLuaWorldRenderFrameForMod(mod->descriptor.id);
     ClearLuaDrawFrameForMod(mod->descriptor.id);
     ClearLuaSpriteAtlasesForMod(mod->descriptor.id);
     ClearLuaRegisteredSpellInputSelectionsForMod(mod->descriptor.id);
@@ -685,7 +686,6 @@ bool QueueLuaExecRequestAsync(
     }
     return false;
 }
-
 #include "lua_exec_wait.inl"
 namespace detail {
 namespace {

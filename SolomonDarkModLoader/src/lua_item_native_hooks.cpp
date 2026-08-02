@@ -2,25 +2,21 @@
 
 #include "gameplay_seams.h"
 #include "logger.h"
-#include "lua_camera_runtime.h"
+#include "lua_world_render_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "x86_hook.h"
 
-#include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
-#include <utility>
 
 namespace sdmod {
 namespace {
 
 constexpr std::size_t kNativeSpriteSize = 0xC4;
-constexpr std::size_t kNativeSpriteGeometryOffset = 0x2C;
 constexpr std::size_t kInventorySpriteListOffset = 0xE64;
 constexpr std::size_t kInventorySpriteCountOffset = 0xE68;
 constexpr std::size_t kWorldSpriteListOffset = 0x489C;
@@ -143,48 +139,6 @@ bool TryMatchCustomPotionSprite(
                match);
 }
 
-bool BuildCustomPotionWorldQuad(
-    const NativeCustomPotionSprite& match,
-    float world_x,
-    float world_y,
-    LuaConsumableRenderQuad* quad) {
-    if (quad == nullptr) {
-        return false;
-    }
-
-    std::array<float, 8> local_vertices{};
-    auto& memory = ProcessMemory::Instance();
-    if (!memory.TryRead(
-            match.stock_health_sprite + kNativeSpriteGeometryOffset,
-            local_vertices.data(),
-            sizeof(local_vertices))) {
-        return false;
-    }
-
-    LuaCameraSnapshot camera;
-    if (!TryGetLuaCameraSnapshot(match.definition.mod_id, &camera) ||
-        !camera.scene_available ||
-        !std::isfinite(camera.origin_x) ||
-        !std::isfinite(camera.origin_y) ||
-        !std::isfinite(camera.scale) ||
-        camera.scale <= 0.0f) {
-        return false;
-    }
-
-    quad->content_id = match.definition.content_id;
-    quad->icon_atlas = match.definition.icon_atlas;
-    quad->icon_frame = match.definition.icon_frame;
-    for (std::size_t index = 0; index < 4; ++index) {
-        quad->vertices[index * 2] =
-            (world_x + local_vertices[index * 2] - camera.origin_x) *
-            camera.scale;
-        quad->vertices[index * 2 + 1] =
-            (world_y + local_vertices[index * 2 + 1] - camera.origin_y) *
-            camera.scale;
-    }
-    return true;
-}
-
 void __fastcall HookSpriteDrawAtPosition(
     void* self,
     void* /*unused_edx*/,
@@ -203,14 +157,21 @@ void __fastcall HookSpriteDrawAtPosition(
         return;
     }
 
-    LuaConsumableRenderQuad quad;
-    if ((!BuildCustomPotionWorldQuad(match, x, y, &quad) ||
-         !QueueLuaConsumableRenderQuad(std::move(quad))) &&
+    std::string draw_error;
+    if (!DrawLuaSpriteWithStockGeometry(
+            match.definition.icon_atlas,
+            match.definition.icon_frame,
+            reinterpret_cast<const void*>(match.stock_health_sprite),
+            x,
+            y,
+            original,
+            &draw_error) &&
         g_custom_potion_draw_failure_logs_remaining > 0) {
         --g_custom_potion_draw_failure_logs_remaining;
         Log(
             "Lua custom potion world sprite draw failed. content_id=" +
-            std::to_string(match.definition.content_id));
+            std::to_string(match.definition.content_id) +
+            " error=" + draw_error);
     }
 }
 
@@ -418,7 +379,6 @@ void ShutdownLuaItemNativeHooks() {
     RemoveX86Hook(&g_potion_help_hook);
     RemoveX86Hook(&g_item_display_name_hook);
     RemoveX86Hook(&g_sprite_draw_at_position_hook);
-    (void)TakeLuaConsumableRenderQuads();
 }
 
 }  // namespace sdmod

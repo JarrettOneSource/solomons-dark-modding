@@ -4,7 +4,6 @@
 #include "d3d9_font_atlas.h"
 #include "logger.h"
 #include "lua_draw_internal.h"
-#include "lua_item_runtime.h"
 
 #include <Windows.h>
 #include <d3d9.h>
@@ -294,8 +293,6 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
         viewport.Width == 0 || viewport.Height == 0) {
         return;
     }
-    const auto consumable_quads = TakeLuaConsumableRenderQuads();
-
     std::scoped_lock lock(g_lua_draw_renderer.mutex);
     if (!g_lua_draw_renderer.started) {
         return;
@@ -308,7 +305,7 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
     PruneUnavailableAtlasTextures();
     RefreshLuaDrawFrameSnapshots(&g_lua_draw_renderer.frame_snapshots);
     const auto& frames = g_lua_draw_renderer.frame_snapshots;
-    if (frames.empty() && consumable_quads.empty()) {
+    if (frames.empty()) {
         return;
     }
 
@@ -331,17 +328,6 @@ void RenderLuaDrawFrame(IDirect3DDevice9* device) {
                         std::to_string(static_cast<int>(command.kind)));
                 }
             }
-        }
-    }
-    for (const auto& quad : consumable_quads) {
-        ++command_count;
-        if ((!render_state_ok ||
-             !QueueConsumableQuad(device, &batcher, quad)) &&
-            g_lua_draw_renderer.draw_failure_logs_remaining > 0) {
-            --g_lua_draw_renderer.draw_failure_logs_remaining;
-            Log(
-                "Lua consumable icon draw failed. content_id=" +
-                std::to_string(quad.content_id));
         }
     }
     batcher.Finish();

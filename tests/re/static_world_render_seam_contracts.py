@@ -24,6 +24,10 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
     world_renderer = _read(
         "SolomonDarkModLoader/src/lua_world_renderer.cpp"
     )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_texture_bridge.inl"
+    )
     world_bindings = _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_world_render.cpp"
     )
@@ -31,6 +35,8 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "SolomonDarkModLoader/src/lua_engine_bindings.cpp"
     ) + _read(
         "SolomonDarkModLoader/src/lua_engine_bindings_internal.h"
+    ) + _read(
+        "SolomonDarkModLoader/src/lua_engine_bindings_gameplay.cpp"
     )
     events = _read("SolomonDarkModLoader/src/lua_engine_events.cpp")
     engine = _read("SolomonDarkModLoader/src/lua_engine.cpp")
@@ -132,7 +138,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         world_bindings + binding_registry,
         (
             "RegisterLuaWorldRenderBindings",
-            'lua_getfield(state, -1, "world")',
+            "RegisterLuaWorldRenderBindings(state);",
             'RegisterFunction(state, &LuaWorldSprite, "sprite")',
             '"sd.world.sprite"',
             "TryGetLuaDrawSpriteInfo",

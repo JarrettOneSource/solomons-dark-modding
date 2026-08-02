@@ -10,6 +10,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #pragma comment(lib, "windowscodecs.lib")
@@ -40,15 +41,14 @@ void ReleaseComObject(Interface** object) {
 
 }  // namespace
 
-bool LoadLuaDrawTexture(
-    IDirect3DDevice9* device,
+bool DecodeLuaDrawTextureBgra(
     const std::filesystem::path& path,
-    IDirect3DTexture9** texture,
+    std::vector<std::uint8_t>* pixels,
     std::uint32_t* width,
     std::uint32_t* height,
     std::string* error_message) {
-    if (texture != nullptr) {
-        *texture = nullptr;
+    if (pixels != nullptr) {
+        pixels->clear();
     }
     if (width != nullptr) {
         *width = 0;
@@ -59,8 +59,7 @@ bool LoadLuaDrawTexture(
     if (error_message != nullptr) {
         error_message->clear();
     }
-    if (device == nullptr ||
-        texture == nullptr ||
+    if (pixels == nullptr ||
         width == nullptr ||
         height == nullptr ||
         error_message == nullptr ||
@@ -157,18 +156,67 @@ bool LoadLuaDrawTexture(
         return Fail(DescribeHresult("WIC BGRA conversion", result));
     }
 
-    std::vector<std::uint8_t> pixels(pixel_bytes);
+    std::vector<std::uint8_t> decoded_pixels(pixel_bytes);
     result = converter->CopyPixels(
         nullptr,
         static_cast<UINT>(stride),
         static_cast<UINT>(pixel_bytes),
-        pixels.data());
+        decoded_pixels.data());
     if (FAILED(result)) {
         return Fail(DescribeHresult("WIC pixel copy", result));
     }
 
+    Cleanup();
+    *pixels = std::move(decoded_pixels);
+    *width = decoded_width;
+    *height = decoded_height;
+    return true;
+}
+
+bool LoadLuaDrawTexture(
+    IDirect3DDevice9* device,
+    const std::filesystem::path& path,
+    IDirect3DTexture9** texture,
+    std::uint32_t* width,
+    std::uint32_t* height,
+    std::string* error_message) {
+    if (texture != nullptr) {
+        *texture = nullptr;
+    }
+    if (width != nullptr) {
+        *width = 0;
+    }
+    if (height != nullptr) {
+        *height = 0;
+    }
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (device == nullptr ||
+        texture == nullptr ||
+        width == nullptr ||
+        height == nullptr ||
+        error_message == nullptr ||
+        path.empty()) {
+        return false;
+    }
+
+    std::vector<std::uint8_t> pixels;
+    std::uint32_t decoded_width = 0;
+    std::uint32_t decoded_height = 0;
+    if (!DecodeLuaDrawTextureBgra(
+            path,
+            &pixels,
+            &decoded_width,
+            &decoded_height,
+            error_message)) {
+        return false;
+    }
+    const std::size_t stride =
+        static_cast<std::size_t>(decoded_width) * 4;
+
     IDirect3DTexture9* created_texture = nullptr;
-    result = device->CreateTexture(
+    HRESULT result = device->CreateTexture(
         decoded_width,
         decoded_height,
         1,
@@ -178,13 +226,15 @@ bool LoadLuaDrawTexture(
         &created_texture,
         nullptr);
     if (FAILED(result) || created_texture == nullptr) {
-        return Fail(DescribeHresult("D3D9 texture creation", result));
+        *error_message = DescribeHresult("D3D9 texture creation", result);
+        return false;
     }
     D3DLOCKED_RECT locked{};
     result = created_texture->LockRect(0, &locked, nullptr, 0);
     if (FAILED(result)) {
         created_texture->Release();
-        return Fail(DescribeHresult("D3D9 texture lock", result));
+        *error_message = DescribeHresult("D3D9 texture lock", result);
+        return false;
     }
     for (UINT row = 0; row < decoded_height; ++row) {
         std::memcpy(
@@ -195,7 +245,6 @@ bool LoadLuaDrawTexture(
     }
     created_texture->UnlockRect(0);
 
-    Cleanup();
     *texture = created_texture;
     *width = decoded_width;
     *height = decoded_height;

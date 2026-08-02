@@ -41,13 +41,6 @@ struct LuaLootPoolEntry {
     double boss_chance = 0.0;
 };
 
-struct LuaConsumableRenderQuad {
-    std::uint64_t content_id = 0;
-    std::string icon_atlas;
-    std::uint32_t icon_frame = 0;
-    std::array<float, 8> vertices{};
-};
-
 struct LuaConsumableNativeVfxRequest {
     std::uint64_t content_id = 0;
     std::uint64_t participant_id = 0;
@@ -74,8 +67,6 @@ bool LuaLootRollSucceeds(
     bool boss,
     double unit_roll);
 
-bool QueueLuaConsumableRenderQuad(LuaConsumableRenderQuad quad);
-std::vector<LuaConsumableRenderQuad> TakeLuaConsumableRenderQuads();
 bool QueueLuaConsumableNativeVfx(LuaConsumableNativeVfxRequest request);
 void PumpLuaConsumableNativeVfx();
 

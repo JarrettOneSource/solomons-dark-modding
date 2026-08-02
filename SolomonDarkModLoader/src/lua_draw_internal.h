@@ -18,6 +18,12 @@ bool TryParseLuaDrawSpriteBundle(
     const std::filesystem::path& path,
     std::vector<LuaDrawSpriteInfo>* sprites,
     std::string* error_message);
+bool DecodeLuaDrawTextureBgra(
+    const std::filesystem::path& path,
+    std::vector<std::uint8_t>* pixels,
+    std::uint32_t* width,
+    std::uint32_t* height,
+    std::string* error_message);
 bool LoadLuaDrawTexture(
     IDirect3DDevice9* device,
     const std::filesystem::path& path,

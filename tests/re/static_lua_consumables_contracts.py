@@ -61,6 +61,9 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         "SolomonDarkModLoader/src/lua_engine_bindings_runtime/level_up_and_runtime_api.inl"
     )
     native_hooks = _read("SolomonDarkModLoader/src/lua_item_native_hooks.cpp")
+    world_renderer = _read(
+        "SolomonDarkModLoader/src/lua_world_renderer.cpp"
+    )
     gameplay_pump = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
     )
@@ -204,12 +207,14 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
 
     _require(
         "stock potion presentation and use",
-        native_hooks + native_loot + spawn_reward + layout,
+        native_hooks + world_renderer + native_loot + spawn_reward + layout,
         (
             "HookSpriteDrawAtPosition",
-            "BuildCustomPotionWorldQuad",
-            "TryGetLuaCameraSnapshot",
-            "QueueLuaConsumableRenderQuad",
+            "TryMatchCustomPotionSprite",
+            "DrawLuaSpriteWithStockGeometry",
+            "stock_health_sprite",
+            "native_texture_upload_bgra",
+            "native_render_page_register",
             "HookItemDisplayName",
             "HookPotionHelp",
             "HookInventoryUseItem",
@@ -237,10 +242,6 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "kSpellGlowPulseIntervalMs = 16",
             "kSpellGlowPulseDurationMs = 4000",
             "active_native_vfx_pulses",
-            "AppendConsumableActivationBurstQuads",
-            "kActivationBurstParticleCount = 4",
-            "TryGetLuaCameraSnapshot(definition.mod_id, &camera)",
-            "TakeLuaConsumableRenderQuads()",
             "allocate(0x38)",
             "QueueLuaConsumableNativeVfx",
             "PumpLuaConsumableNativeVfx();",
@@ -248,6 +249,16 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "actor_world_register_animation=0x0063E5E0",
         ),
     )
+    for overlay_residue in (
+        "LuaConsumableRenderQuad",
+        "QueueLuaConsumableRenderQuad",
+        "TakeLuaConsumableRenderQuads",
+        "BuildCustomPotionWorldQuad",
+        "AppendConsumableActivationBurstQuads",
+        "kActivationBurstParticleCount",
+        "TryGetLuaCameraSnapshot",
+    ):
+        assert overlay_residue not in runtime_header + runtime + vfx_runtime + native_hooks
     _require(
         "owner-local semantic mana restoration",
         gameplay_api + gameplay_actions + gameplay_bindings + engine,

@@ -41,6 +41,7 @@ class LuaApiStubGeneratorTests(unittest.TestCase):
         self.assertIn("create_surface", by_name["ui"].functions)
         self.assertIn("get_progression_book_state", by_name["player"].functions)
         self.assertIn("get_replicated_air_chains", by_name["world"].functions)
+        self.assertIn("sprite", by_name["world"].functions)
 
     def test_draw_and_hud_preserve_the_native_table_alias(self) -> None:
         by_name = {
