@@ -1539,40 +1539,56 @@ def wait_for_log_tokens(
     raise sync.VerifyFailure(f"loader log receipts did not converge: {last}")
 
 
+def analyze_vfx_role_delta(
+    evidence: Path,
+    baseline: dict[str, Any],
+    active: dict[str, Any],
+    role: str,
+) -> dict[str, Any]:
+    baseline_path = evidence / f"vfx-baseline-{role}.png"
+    active_path = evidence / f"vfx-active-{role}.png"
+    point = active[role]["projection"]["effect"]
+    with Image.open(baseline_path) as before_open, Image.open(active_path) as after_open:
+        before = before_open.convert("RGB")
+        after = after_open.convert("RGB")
+        box = _crop_box(after, point, half_width=75, half_height=85)
+        difference = ImageChops.difference(before.crop(box), after.crop(box))
+        changed = sum(
+            1
+            for pixel in difference.get_flattened_data()
+            if max(pixel) >= 18
+        )
+    green_before = color_stats(
+        baseline_path,
+        baseline[role]["projection"]["effect"],
+        color="green",
+    )
+    green_after = color_stats(active_path, point, color="green")
+    if (
+        changed < 40
+        or green_after["matching_pixels"] <= green_before["matching_pixels"]
+    ):
+        raise sync.VerifyFailure(
+            f"replicated native SpellGlow was not visible on {role}: "
+            f"changed={changed} before={green_before} after={green_after}"
+        )
+    return {
+        "box": list(box),
+        "changed_pixels": changed,
+        "green_before": green_before,
+        "green_after": green_after,
+    }
+
+
 def analyze_vfx_delta(
     evidence: Path,
     baseline: dict[str, Any],
     active: dict[str, Any],
 ) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for role in ("host", "client"):
-        baseline_path = evidence / f"vfx-baseline-{role}.png"
-        active_path = evidence / f"vfx-active-{role}.png"
-        point = active[role]["projection"]["effect"]
-        with Image.open(baseline_path) as before_open, Image.open(active_path) as after_open:
-            before = before_open.convert("RGB")
-            after = after_open.convert("RGB")
-            box = _crop_box(after, point, half_width=75, half_height=85)
-            difference = ImageChops.difference(before.crop(box), after.crop(box))
-            changed = sum(
-                1
-                for pixel in difference.get_flattened_data()
-                if max(pixel) >= 18
-            )
-        green_before = color_stats(baseline_path, baseline[role]["projection"]["effect"], color="green")
-        green_after = color_stats(active_path, point, color="green")
-        if changed < 40 or green_after["matching_pixels"] <= green_before["matching_pixels"]:
-            raise sync.VerifyFailure(
-                f"replicated native SpellGlow was not visible on {role}: "
-                f"changed={changed} before={green_before} after={green_after}"
-            )
-        result[role] = {
-            "box": list(box),
-            "changed_pixels": changed,
-            "green_before": green_before,
-            "green_after": green_after,
-        }
-    return result
+    return {
+        role: analyze_vfx_role_delta(evidence, baseline, active, role)
+        for role in ("host", "client")
+    }
 
 
 def wait_for_vfx_capture(
@@ -1584,21 +1600,38 @@ def wait_for_vfx_capture(
     timeout: float,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     deadline = time.monotonic() + timeout
-    last_error: sync.VerifyFailure | None = None
+    active: dict[str, Any] = {}
+    analysis: dict[str, Any] = {}
+    last_errors: dict[str, sync.VerifyFailure] = {}
     while time.monotonic() < deadline:
-        active = capture_phase(
-            evidence,
-            "vfx-active",
-            pipes,
-            points_by_role=effect_points,
-        )
-        try:
-            return active, analyze_vfx_delta(evidence, baseline, active)
-        except sync.VerifyFailure as error:
-            last_error = error
+        for role in ("host", "client"):
+            if role in active:
+                continue
+            role_active = capture_phase(
+                evidence,
+                "vfx-active",
+                {role: pipes[role]},
+                points_by_role={role: effect_points[role]},
+            )
+            try:
+                role_analysis = analyze_vfx_role_delta(
+                    evidence,
+                    baseline,
+                    role_active,
+                    role,
+                )
+            except sync.VerifyFailure as error:
+                last_errors[role] = error
+                continue
+            active[role] = role_active[role]
+            analysis[role] = role_analysis
+        if len(active) == len(pipes):
+            return active, analysis
+        if time.monotonic() < deadline:
             time.sleep(0.25)
-    if last_error is not None:
-        raise last_error
+    for role in ("host", "client"):
+        if role in last_errors and role not in active:
+            raise last_errors[role]
     raise sync.VerifyFailure("native SpellGlow capture timed out")
 
 

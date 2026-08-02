@@ -298,17 +298,22 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
 
     def test_vfx_capture_waits_for_both_native_spellglow_views(self) -> None:
         baseline = {"host": {}, "client": {}}
-        first = {"host": {"attempt": 1}, "client": {"attempt": 1}}
-        second = {"host": {"attempt": 2}, "client": {"attempt": 2}}
+        first_host = {"host": {"attempt": 1}}
+        first_client = {"client": {"attempt": 1}}
+        second_host = {"host": {"attempt": 2}}
         pixels = {"host": {"changed_pixels": 80}, "client": {"changed_pixels": 90}}
         with mock.patch.object(
             verifier,
             "capture_phase",
-            side_effect=(first, second),
+            side_effect=(first_host, first_client, second_host),
         ) as capture, mock.patch.object(
             verifier,
-            "analyze_vfx_delta",
-            side_effect=(verifier.sync.VerifyFailure("not visible"), pixels),
+            "analyze_vfx_role_delta",
+            side_effect=(
+                verifier.sync.VerifyFailure("not visible"),
+                pixels["client"],
+                pixels["host"],
+            ),
         ), mock.patch.object(verifier.time, "sleep"):
             active, analysis = verifier.wait_for_vfx_capture(
                 Path("evidence"),
@@ -321,9 +326,10 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
                 timeout=1.0,
             )
 
-        self.assertIs(active, second)
-        self.assertIs(analysis, pixels)
-        self.assertEqual(capture.call_count, 2)
+        self.assertIs(active["host"], second_host["host"])
+        self.assertIs(active["client"], first_client["client"])
+        self.assertEqual(analysis, pixels)
+        self.assertEqual(capture.call_count, 3)
 
 
 if __name__ == "__main__":
