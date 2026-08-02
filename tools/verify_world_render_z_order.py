@@ -317,53 +317,39 @@ def wait_for_drop_pair(
     )
 
 
-def set_potion_pickup_delay(
+def set_local_pickup_range(
     pipe: str,
     *,
-    stock_x: float,
-    custom_x: float,
-    y: float,
-    delay_ticks: int,
+    pickup_range: float,
 ) -> dict[str, str]:
     values = parse_values(
         pipe,
         f"""
-local targets = {{
-  stock = {{x = {stock_x:.6f}, y = {y:.6f}}},
-  custom = {{x = {custom_x:.6f}, y = {y:.6f}}},
-}}
-local found = {{}}
-local writes = 0
-for _, actor in ipairs(sd.world.list_actors() or {{}}) do
-  if tonumber(actor.object_type_id) == 0x07DD then
-    for name, target in pairs(targets) do
-      if math.abs((tonumber(actor.x) or 0) - target.x) <= 2 and
-         math.abs((tonumber(actor.y) or 0) - target.y) <= 2 then
-        local address = tonumber(actor.actor_address) or 0
-        if address ~= 0 and sd.debug.write_float(address + 0x14C, {delay_ticks}) then
-          found[name] = address
-          writes = writes + 1
-        end
-      end
-    end
-  end
-end
-print("writes=" .. tostring(writes))
-print("stock_address=" .. tostring(found.stock or 0))
-print("custom_address=" .. tostring(found.custom or 0))
-print("stock_delay=" .. tostring(found.stock and sd.debug.read_float(found.stock + 0x14C) or -1))
-print("custom_delay=" .. tostring(found.custom and sd.debug.read_float(found.custom + 0x14C) or -1))
+local player = sd.player.get_state()
+local progression = tonumber(player and player.progression_address) or 0
+local address = progression ~= 0 and progression + 0xCC or 0
+local previous = address ~= 0 and sd.debug.read_float(address) or nil
+local wrote = address ~= 0 and sd.debug.write_float(address, {pickup_range:.9g}) or false
+local current = wrote and sd.debug.read_float(address) or nil
+print("address=" .. tostring(address))
+print("previous=" .. tostring(previous or -1))
+print("wrote=" .. tostring(wrote))
+print("current=" .. tostring(current or -1))
 """,
     )
     if (
-        values.get("writes") != "2"
-        or int(values.get("stock_address", "0")) == 0
-        or int(values.get("custom_address", "0")) == 0
-        or float(values.get("stock_delay", "-1")) != delay_ticks
-        or float(values.get("custom_delay", "-1")) != delay_ticks
+        values.get("wrote") != "true"
+        or int(values.get("address", "0")) == 0
+        or float(values.get("previous", "-1")) <= 0.0
+        or not math.isclose(
+            float(values.get("current", "-1")),
+            pickup_range,
+            rel_tol=0.0,
+            abs_tol=1e-5,
+        )
     ):
         raise sync.VerifyFailure(
-            f"could not set potion pickup delay on {pipe}: {values}"
+            f"could not set local pickup range on {pipe}: {values}"
         )
     return values
 
@@ -1225,6 +1211,16 @@ def run(
                 y=generic_y,
             )
 
+        # Keep the local peers from consuming drops while their silhouettes
+        # cross. This derived range drives both stock pickup and the
+        # multiplayer-native request boundary; restore it before the real
+        # custom-potion pickup below.
+        pickup_range_hold = {
+            role: set_local_pickup_range(pipe, pickup_range=0.01)
+            for role, pipe in pipes.items()
+        }
+        result["pickup_range_hold"] = pickup_range_hold
+
         spawn = spawn_control_and_custom_drops(
             host_pipe,
             stock_x=stock_x,
@@ -1250,20 +1246,6 @@ def run(
                 for name, row in client_drops.items()
             },
         }
-        # The stock Sack tick decrements +0x14C before proximity pickup. Hold
-        # that retail delay open while actors cross the drops, then release it
-        # for the real custom-potion pickup/VFX phase below.
-        result["pickup_delay_hold"] = {
-            role: set_potion_pickup_delay(
-                pipe,
-                stock_x=stock_x,
-                custom_x=custom_x,
-                y=center_y,
-                delay_ticks=36000,
-            )
-            for role, pipe in pipes.items()
-        }
-
         # Keep the actor and bottle silhouettes crossed while changing only
         # their native Y ordering. A wide separation proves position, not
         # occlusion; four world units remain in distinct stock floor(Y)
@@ -1366,16 +1348,14 @@ def run(
             timeout=timeout,
         )
 
-        result["pickup_delay_release"] = {
-            role: set_potion_pickup_delay(
+        result["pickup_range_restore"] = {
+            role: set_local_pickup_range(
                 pipe,
-                stock_x=stock_x,
-                custom_x=custom_x,
-                y=center_y,
-                delay_ticks=0,
+                pickup_range=float(pickup_range_hold[role]["previous"]),
             )
             for role, pipe in pipes.items()
         }
+        time.sleep(0.5)
         pickup = result["drops"]["client_materialized"]["custom"]
         sync.place_player(
             host_pipe,

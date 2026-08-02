@@ -94,14 +94,13 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertEqual(control["remaining_ratio"], 1.0)
         self.assertEqual(actor_front["remaining_ratio"], 0.0)
 
-    def test_pickup_delay_targets_only_the_two_potion_carriers(self) -> None:
+    def test_pickup_range_hold_writes_the_stock_derived_field(self) -> None:
         output = "".join(
             (
-                "writes=2\n",
-                "stock_address=287310000\n",
-                "custom_address=287320000\n",
-                "stock_delay=36000\n",
-                "custom_delay=36000\n",
+                "address=287310204\n",
+                "previous=2.0\n",
+                "wrote=true\n",
+                "current=0.01\n",
             )
         )
         with mock.patch.object(
@@ -109,20 +108,16 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
             "parse_values",
             return_value=verifier.sync.parse_key_values(output),
         ) as parse:
-            result = verifier.set_potion_pickup_delay(
+            result = verifier.set_local_pickup_range(
                 "test-pipe",
-                stock_x=100.0,
-                custom_x=300.0,
-                y=200.0,
-                delay_ticks=36000,
+                pickup_range=0.01,
             )
 
-        self.assertEqual(result["writes"], "2")
+        self.assertEqual(result["previous"], "2.0")
         code = parse.call_args.args[1]
-        self.assertIn("actor.object_type_id) == 0x07DD", code)
-        self.assertIn("sd.debug.write_float(address + 0x14C, 36000)", code)
-        self.assertIn("sd.debug.read_float(found.stock + 0x14C)", code)
-        self.assertIn("math.abs((tonumber(actor.x) or 0) - target.x) <= 2", code)
+        self.assertIn("player.progression_address", code)
+        self.assertIn("progression + 0xCC", code)
+        self.assertIn("sd.debug.write_float(address, 0.01)", code)
 
 
 if __name__ == "__main__":
