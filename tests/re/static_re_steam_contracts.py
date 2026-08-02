@@ -599,7 +599,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (ui_view_model_text, "maxPlayers is < 2 or > 4"),
         (
             ui_view_model_text,
-            "Player count must be between 2 and the native 4-player ceiling.",
+            "Player count must be 2-4.",
         ),
         (ui_session_status_reader_text, "FileShare.ReadWrite | FileShare.Delete"),
         (ui_session_status_reader_text, "expectedLaunchToken"),

@@ -859,7 +859,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (!LauncherShell.TryOpenUri(
                 $"{DirectoryUrl.TrimEnd('/')}/account"))
         {
-            SetError("Could not open the website account page. See the launcher log.");
+            SetError("Couldn't open the account page.");
             return;
         }
 
@@ -926,7 +926,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         IsSendingLogs = true;
-        DiagnosticsStatusText = "Collecting logs and uploading them to the website…";
+        DiagnosticsStatusText = "Collecting and uploading logs…";
         try
         {
             var receipt = await diagnosticLogUploader_.SubmitAsync(
@@ -1053,7 +1053,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             SetError(ex.Message);
-            StatusText = "The command failed. Read the error message.";
+            StatusText = "Command failed.";
             IsBusy = false;
             HideConnectProgress();
             if (launchesGame)
@@ -1074,7 +1074,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 RaiseCommandStates();
             }
             SetError(invocation.ErrorMessage ?? "The launcher command failed.");
-            StatusText = "The command failed. Read the error message.";
+            StatusText = "Command failed.";
             IsBusy = false;
             HideConnectProgress();
             if (launchesGame)
@@ -1299,11 +1299,10 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             ? "1 minidump"
             : $"{crashReport.Metadata.MinidumpCount} minidumps";
         CrashReportMessage =
-            $"Solomon Dark closed unexpectedly (exit code {crashReport.ExitCodeText}). " +
-            $"The launcher captured {dumpText}, diagnostic logs, runtime configuration, " +
-            "and the enabled-mod list. Submit these diagnostics to the Solomon Dark website? " +
-            "The private report will be tied to your Steam identity.";
-        StatusText = "A game crash was detected.";
+            $"Solomon Dark crashed (exit code {crashReport.ExitCodeText}). " +
+            $"Send a private report ({dumpText}, logs, and your enabled mods)? " +
+            "It's tied to your Steam identity and only the developer can see it.";
+        StatusText = "The game crashed.";
         IsCrashPromptOpen = true;
 
         if (Application.Current.MainWindow is { } window)
@@ -1352,7 +1351,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                                    TaskCanceledException)
         {
             CrashSubmissionError = ex.Message;
-            StatusText = "The crash report was not submitted.";
+            StatusText = "Crash report not sent.";
         }
         finally
         {
@@ -1834,7 +1833,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (maxPlayers is < 2 or > 4)
         {
             SetError(
-                "Player count must be between 2 and the native 4-player ceiling.");
+                "Player count must be 2-4.");
             return;
         }
 
@@ -1894,8 +1893,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             IsLauncherUpdatePromptOpen)
         {
             SetError(
-                $"The launcher is busy and cannot install '{activation.Slug}' right now. Try the link again when the current action finishes.");
-            StatusText = "Mod install link was not started.";
+                $"Busy right now - try the mod link for '{activation.Slug}' again in a moment.");
+            StatusText = "Mod install didn't start.";
             return;
         }
 
@@ -1929,7 +1928,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         var sourceHost = new Uri(activation.DirectoryBaseUrl).Authority;
         ModDownloadItems.Clear();
-        var detail = $"{preview.Name} {preview.Version} — {FormatSize(preview.FileSizeBytes)}";
+        var detail = $"{preview.Name} {preview.Version}";
         if (!string.IsNullOrWhiteSpace(preview.InstalledVersion))
         {
             detail += $" (updates {preview.InstalledVersion})";
@@ -1942,13 +1941,13 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             ? $"Update {preview.Name} to {preview.Version} from {sourceHost}?"
             : $"Install {preview.Name} {preview.Version} from {sourceHost}?";
         ModDownloadPromptNote =
-            "The launcher will download the package from this source, verify its manifest and file hashes, and then place it in the Mods tab.";
+            "Downloads are verified before they're added to your Mods tab.";
         ModDownloadConfirmText = preview.Disposition == "update"
             ? "Update"
             : "Install";
         ModDownloadDeclineText = "Cancel";
         pendingWebsiteModInstall_ = activation;
-        StatusText = "Waiting for your mod install choice.";
+        StatusText = "Waiting for your choice…";
         IsModDownloadPromptOpen = true;
     }
 
@@ -1969,7 +1968,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (preview is null || result is null)
         {
             SetError("The launcher did not return a mod installation result.");
-            StatusText = "The mod install result was incomplete.";
+            StatusText = "Mod install didn't finish.";
             return;
         }
         StatusText = result.Changed
@@ -2034,7 +2033,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             "The launcher update failed."));
         SetError(message);
         IsBusy = false;
-        StatusText = "The launcher update failed. You can keep using this version.";
+        StatusText = "Update failed - this version keeps working.";
         TryStartPendingLobbyJoin();
     }
 
@@ -2086,7 +2085,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         pendingLobbyMods_ = null;
         IsBusy = true;
-        StatusText = "The launcher checks the host's mod list.";
+        StatusText = "Checking the host's mods…";
         CommandPreviewText = client_.BuildCommandPreview(LauncherUiCommandMode.JoinPreview);
         LauncherUiInvocationResult invocation;
         try
@@ -2096,7 +2095,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             SetError(ex.Message);
-            StatusText = "The command failed. Read the error message.";
+            StatusText = "Command failed.";
             IsBusy = false;
             return;
         }
@@ -2122,7 +2121,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 "The host is on a different Solomon Dark Revived version " +
                 $"(host: {preview.HostLoaderVersion ?? "unknown"}, you: {Version}). " +
                 "Both players need the same launcher version to play together.");
-            StatusText = "Join canceled: the game versions do not match.";
+            StatusText = "Join canceled - game versions don't match.";
             return;
         }
 
@@ -2136,7 +2135,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 "They aren't on the mod directory yet, so they can't be downloaded " +
                 "automatically. Ask the host to publish them, or install the same mod " +
                 "files manually before joining.");
-            StatusText = "Join canceled: the host has unpublished mods.";
+            StatusText = "Join canceled - the host has unpublished mods.";
             return;
         }
 
@@ -2150,10 +2149,6 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             foreach (var mod in preview.Mods.Where(mod => mod.State == "needsDownload"))
             {
                 var line = $"{mod.DisplayName} {mod.Version}";
-                if (mod.DownloadSizeBytes is { } size)
-                {
-                    line += $" — {FormatSize(size)}";
-                }
                 if (!string.IsNullOrWhiteSpace(mod.InstalledVersion))
                 {
                     line += mod.InstalledVersion == mod.Version
@@ -2167,12 +2162,12 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             ModDownloadPromptText =
                 "The host's game uses the mods listed below. Download them to join the lobby?";
             ModDownloadPromptNote =
-                "Mods download from the official mod directory and apply to this session only - your own mod setup isn't changed.";
+                "Applies to this session only - your own mods aren't changed.";
             ModDownloadConfirmText = "Download and join";
             ModDownloadDeclineText = "Cancel";
             pendingWebsiteModInstall_ = null;
             consentedJoinStatusText_ = joinStatusText;
-            StatusText = "Waiting for your mod download choice.";
+            StatusText = "Waiting for your choice…";
             IsModDownloadPromptOpen = true;
             return;
         }
@@ -2230,7 +2225,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (!ulong.TryParse(LobbyId, out var lobbyId) || lobbyId == 0)
         {
             SetError("Enter a valid Steam lobby ID.");
-            StatusText = "The lobby was not joined.";
+            StatusText = "Couldn't join the lobby.";
             return;
         }
 
@@ -2252,7 +2247,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             isJoiningLobby_ = false;
             HideConnectProgress();
             SetError(exception.Message);
-            StatusText = "The lobby was not joined.";
+            StatusText = "Couldn't join the lobby.";
             RaiseCommandStates();
             StartSteamInviteListener();
         }
@@ -2415,16 +2410,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         pendingLobbyMods_ = null;
         IsModDownloadPromptOpen = false;
         HideConnectProgress();
-        StatusText = "Join canceled. No mods were downloaded.";
+        StatusText = "Join canceled - nothing was downloaded.";
         TryStartPendingLobbyJoin();
     }
-
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1024 * 1024 => $"{bytes / (1024.0 * 1024.0):0.#} MB",
-        >= 1024 => $"{bytes / 1024.0:0.#} KB",
-        _ => $"{bytes} bytes"
-    };
 
     private void StopSteamInviteListener()
     {
