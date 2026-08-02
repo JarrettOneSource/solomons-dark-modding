@@ -10,13 +10,17 @@ It covers:
 - registered custom potion icons when rendered as inventory glyphs or ground
   drops;
 - a bounded Lua seam for general world-positioned mod sprites; and
-- the Invincibility Potion's active world VFX.
+- the Invincibility Potion's active world VFX;
+- the replicated Dampen world ring;
+- remote-player actor-attached names and health bars; and
+- Lua world-target markers.
 
 It does not move screen UI. `sd.draw` and its exact `sd.hud` alias remain the
-screen-pixel display-list API used by HUD indicators, the Boneyard picker,
-`BOT PLAYING`, developer UI, and loading-screen presentation. Their command
-types, coordinates, render state, batching, and multiplayer-local behavior are
-unchanged.
+screen-pixel display-list API used by the top-left ally rows, the Boneyard
+picker, `BOT PLAYING`, developer UI, and loading-screen presentation. Their
+command types, coordinates, render state, batching, and multiplayer-local
+behavior are unchanged. Actor-attached labels are not HUD rows: they move to a
+separate stock-matched native indicator lane.
 
 ## Goals
 
@@ -27,9 +31,11 @@ unchanged.
 3. Registered PNG atlases enter the game's native texture/glyph batch; no
    world quad is deferred to `EndScene`.
 4. The active potion effect uses only its stock `Anim_SpellGlow` lane.
-5. Existing published consumable and sprite registration APIs keep working
+5. World-anchored indicators match the tutorial arrow's native post-scene
+   ordering and use native text/quad primitives, never `EndScene` replay.
+6. Existing published consumable and sprite registration APIs keep working
    without mod changes. The new world-sprite API is additive.
-6. Every process derives presentation from its own replicated world state; no
+7. Every process derives presentation from its own replicated world state; no
    process address or renderer handle enters the multiplayer protocol.
 
 ## Non-goals
@@ -38,6 +44,7 @@ unchanged.
 - imposing a new exact-float total order inside a stock bucket;
 - transporting generic presentation commands between peers;
 - converting screen-space UI into native actors;
+- Y-sorting actor labels that stock would draw post-scene;
 - publishing or flipping the Invincibility Potion listing; or
 - adding compatibility rendering through the overlay when the native seam is
   unavailable.
@@ -48,10 +55,11 @@ incorrect overlay behavior.
 
 ## Public Lua contract
 
-The existing `sd.world` table gains one function:
+The existing `sd.world` table gains two functions:
 
 ```lua
 sd.world.sprite(atlas, record, x, y[, options])
+sd.world.marker(label, x, y[, options])
 ```
 
 It queues one sprite for the next committed `runtime.tick` display list.
@@ -91,6 +99,14 @@ Invalid metadata, arguments, rotated bundle records, or limit overruns raise a
 Lua error in the calling handler. These limits keep carrier creation and queue
 insertion bounded on the render thread.
 
+`sd.world.marker` queues a native post-scene indicator. It accepts a nonempty
+label, world coordinates, and an optional `color = {r, g, b, a}` table with
+byte channels. The renderer draws a compact native cross centered at the
+target and a centered half-scale ExactText label above it. Marker commands are
+bounded by the same per-mod/global counts and tick ownership as sprites. They
+are stored separately inside each frame snapshot so a marker can never enter
+the Arena Y queue and a scene sprite can never enter the indicator pass.
+
 The capability set gains `world.render.native`. Generic commands are
 presentation-local, like `sd.draw`: mods submit them on every peer and anchor
 them to replicated semantic state. The capability and documentation explicitly
@@ -106,20 +122,23 @@ mod load order
   mod id
     pending LuaWorldSpriteCommand[]
     active LuaWorldSpriteCommand[]
+    pending LuaWorldMarkerCommand[]
+    active LuaWorldMarkerCommand[]
     generation
     accepting_commands
 ```
 
 Separating the structures prevents world ownership from leaking into
 `LuaDrawCommandKind` or `RenderLuaDrawFrame`. The EndScene renderer never sees
-a `LuaWorldSpriteCommand`.
+a world sprite or marker command.
 
 At submit time the runtime verifies the atlas record through the shared sprite
 metadata parser and stores only semantic values: atlas ID, record index, world
-position, dimensions, offset, and sort bias. It stores no game pointer, native
-texture handle, or peer-specific identity. Snapshot refresh preserves stable
-mod-load order and reuses unchanged generations, matching the established
-immediate-mode frame behavior.
+position, dimensions, offset, and sort bias. Marker submission stores only its
+label, world position, and color. Neither stores a game pointer, native texture
+handle, or peer-specific identity. Snapshot refresh preserves stable mod-load
+order and reuses unchanged generations, matching the established immediate-mode
+frame behavior.
 
 Mod unload calls `ClearLuaWorldRenderFrameForMod` before unregistering its
 atlases. Lua-engine reset clears all frames. The native renderer treats an
@@ -247,6 +266,50 @@ with ActorWorld, do not tick, do not serialize, and do not acquire gameplay
 slots. Their backing memory remains stable while referenced by the queue and
 is reused on a later frame only after the original flush returns.
 
+## Native post-scene indicator lane
+
+The renderer also hooks `Arena_Render` at `0x0046EC80`. Its detour invokes the
+complete stock function first, then calls
+`RenderGameplayWorldIndicatorsInNativePass` and renders active Lua marker
+commands before returning to the stock UI tree. This is intentionally separate
+from the queue-flush detour: the stock tutorial loot arrow proves that
+world-anchored labels are native post-scene UI, not Y-sorted Puppets.
+
+Remote participant state is gathered once per Arena render from the existing
+replicated participant bindings. Each valid remote actor contributes its
+world position, authoritative display name, and health ratio. The indicator
+lane draws:
+
+- the half-scale name through the existing native ExactText object; and
+- a four-quad health bar through the stock renderer color setter
+  `0x0041FE50` and untextured-quad submission `0x0041DD70`.
+
+The bar restores the renderer's prior base RGBA after drawing. There is no
+ExactText capture, D3D projection replay, viewport clamp, or EndScene health
+bar. The top-left ally-row hook remains unchanged because those rows are
+screen-space stock HUD.
+
+Lua markers use the same lane. Their cross is made from two native untextured
+quads and their label uses native ExactText. They are projected by the same
+native scene transform active for stock tutorial indicators and always draw
+above the completed scene, independent of the target actor's Arena Y bucket.
+
+## Replicated Dampen presentation
+
+Dampen is scene VFX, so it does not use the indicator lane. A synchronized
+Dampen request now records its authoritative world X/Y directly in the native
+world renderer. For 900 ms the queue-flush detour creates one carrier with an
+expanding ring glyph (18 to 96 world units) and fading alpha. A small
+loader-owned BGRA ring texture is uploaded through the same stock texture-slot
+bridge as mod atlases. Its carrier enters the Arena queue at the cast world Y,
+so actors and props interleave with it and the common dispatcher applies local
+lighting.
+
+The old D3D9 line-strip presentation, including its local-player viewport
+guess and remote-nameplate position dependency, is deleted. Presentation
+identity remains `(owner_participant_id, cast_sequence)` and duplicate requests
+are ignored on each peer.
+
 ## Potion active VFX cutover
 
 `LuaConsumableNativeVfxRequest`, replicated use identity, participant target
@@ -275,6 +338,7 @@ section of `config/binary-layout.ini`:
 | Key | Retail address / value |
 | --- | ---: |
 | `arena_render_queue_offset` | `0x17C` |
+| `arena_render` | `0x0046EC80` |
 | `render_queue_flush` | `0x0068C480` |
 | `render_queue_insert` | `0x0068C3B0` |
 | `puppet_ctor` | `0x006287D0` |
@@ -285,6 +349,8 @@ section of `config/binary-layout.ini`:
 | `native_renderer_global` | `0x00B401A8` |
 | `native_texture_critical_section` | `0x00B3F9DC` |
 | `native_texture_critical_section_initialized` | `0x00B40205` |
+| `native_renderer_set_color` | `0x0041FE50` |
+| `native_untextured_quad` | `0x0041DD70` |
 
 Code resolves addresses through the repository's binary-layout and image-base
 helpers. Missing values, non-executable functions, an unavailable renderer,
@@ -303,11 +369,12 @@ InitializeLuaWorldRenderer
   resolve/validate native seams
   construct no carriers or textures yet
   install queue-flush hook
+  install Arena post-scene hook
 InitializeLuaItemNativeHooks
 StartLuaDrawRenderer
 ```
 
-Shutdown removes the world hook before item hooks, Lua state/atlas teardown,
+Shutdown removes both world hooks before item hooks, Lua state/atlas teardown,
 gameplay seams, or binary-layout teardown. It then releases native atlas
 handles and carrier storage. Partial-startup failure follows the same order.
 
@@ -325,8 +392,8 @@ consume-use event remain unchanged. Every peer resolves the same registered
 atlas from its mod fingerprint and performs native rendering against its own
 Arena, actor list, light grid, and queue.
 
-Generic `sd.world.sprite` follows the existing local-presentation rule: mods
-submit on each peer from semantic replicated state. Network actor IDs,
+Generic `sd.world.sprite` and `sd.world.marker` follow the existing
+local-presentation rule: mods submit on each peer from semantic replicated state. Network actor IDs,
 participant IDs, or content IDs may be used by mod logic; native actor,
 carrier, queue, renderer, and texture addresses may not cross the protocol.
 
@@ -341,6 +408,11 @@ Static contracts must prove:
 - custom potion draws invoke the native glyph trampoline and no camera
   projection/render-quad queue remains;
 - consumable VFX has no EndScene icon lane;
+- replicated Dampen has no D3D9 line-strip lane;
+- floating participant names and health bars are called only from the native
+  Arena post-scene hook and have no ExactText-capture/EndScene replay;
+- in-repository world-target markers use `sd.world.marker`, not
+  `sd.draw.world_to_screen`;
 - intentional screen UI owners still use `BeginLuaDrawFrame` /
   `CommitLuaDrawFrame`; and
 - the D3D9 overlay keeps its screen-space render-state contract.
@@ -351,7 +423,9 @@ with:
 1. an actor at larger screen/world Y drawing over both;
 2. the actor at smaller screen/world Y drawing under both;
 3. both drops responding consistently to local lighting; and
-4. the same observations on both local multiplayer peers.
+4. the same observations on both local multiplayer peers; and
+5. the floating remote actor name/bar and a Lua marker following the stock
+   tutorial indicator's post-scene behavior on both peers.
 
 Acceptance captures include the exact loader SHA, pair instance identities,
 world coordinates/order state, screenshots from both peers, native-render log
@@ -361,11 +435,13 @@ does not land without those rendered-window observations.
 ## Compatibility and publication
 
 `sd.items.register`, its `icon` schema, `consume_vfx`, `sd.sprites.register`,
-`sd.draw`, and `sd.hud` retain their signatures. The canary mod content needs
-no source change: its item drop and active effect move because the loader
-runtime beneath those existing APIs changes. `sd.world.sprite` and
-`world.render.native` are additive.
+`sd.draw`, `sd.draw.world_to_screen`, and `sd.hud` retain their signatures. The
+Invincibility Potion content needs no source change: its item drop and active
+effect move because the loader runtime beneath those existing APIs changes.
+`sd.world.sprite`, `sd.world.marker`, and `world.render.native` are additive.
 
-Therefore this cutover does not require an Invincibility Potion mod republish.
-It requires a loader build containing the seam. No listing or release action
-is part of this campaign.
+The in-repository `lua_hud_showcase` mod must change its world-owned `YOU`
+marker from the screen projection helper to `sd.world.marker`. A published
+copy of that showcase therefore needs republishing after owner/ATC approval;
+the Invincibility Potion does not. No listing, republish, or release action is
+part of this campaign.
