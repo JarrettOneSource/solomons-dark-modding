@@ -753,16 +753,12 @@ def analyze_potion_captures(
                 "stock": color_stats(image_path, projection["stock"], color="red"),
                 "custom": color_stats(image_path, projection["custom"], color="green"),
             }
-        stock_phases = (
-            ("actor_behind", "actor_front")
-            if role == "host"
-            else ("actor_behind_swapped", "actor_front_swapped")
-        )
-        custom_phases = (
-            ("actor_behind_swapped", "actor_front_swapped")
-            if role == "host"
-            else ("actor_behind", "actor_front")
-        )
+        # Compare both sprites under the same water PlayerWizard. The fire
+        # actor shares the stock bottle's red hue and is intentionally not a
+        # valid chroma-mask occluder even though its native ordering is shown
+        # in the companion captures.
+        stock_phases = ("actor_behind_swapped", "actor_front_swapped")
+        custom_phases = ("actor_behind", "actor_front")
         phase_values = dict(phases)
 
         def template_analysis(
