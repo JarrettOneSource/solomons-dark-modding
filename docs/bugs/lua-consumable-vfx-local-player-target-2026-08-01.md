@@ -79,6 +79,11 @@ stock glow underneath. Both layers are observer-local presentation derived
 from the replicated event; they add no mod network message or client-authored
 gameplay state.
 
+The later ZORDER native-only cutover removes that overlay burst. Because the
+four-second replacement window above proved insufficient for sequential
+completed-frame observations on both peers, the native pulse window is widened
+to twelve seconds; the registered gameplay duration remains unchanged.
+
 ## Required proof
 
 - The active VFX is visible for the local player in a live solo run.

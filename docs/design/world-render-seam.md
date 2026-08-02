@@ -318,8 +318,14 @@ are ignored on each peer.
 ## Potion active VFX cutover
 
 `LuaConsumableNativeVfxRequest`, replicated use identity, participant target
-resolution, the 16 ms pulse cadence, four-second lifetime, native
+resolution, the 16 ms pulse cadence, twelve-second lifetime, native
 `Anim_SpellGlow` construction, color, and layer `75.0` all remain.
+
+The native animation is a one-frame primitive. Twelve seconds keeps the stock
+primitive resident often enough for both peers to observe completed frames
+after replicated consumption and player repositioning without restoring an
+overlay surrogate. The gameplay effect duration remains mod-defined and is
+unchanged.
 
 The following overlay-only structures and functions are deleted:
 

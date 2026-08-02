@@ -18,7 +18,7 @@ using RegisterAnimationFn =
 
 constexpr float kSpellGlowAnimationLayer = 75.0f;
 constexpr std::uint64_t kSpellGlowPulseIntervalMs = 16;
-constexpr std::uint64_t kSpellGlowPulseDurationMs = 4000;
+constexpr std::uint64_t kSpellGlowPulseDurationMs = 12000;
 
 struct ConsumableVfxTarget {
     uintptr_t actor_address = 0;
