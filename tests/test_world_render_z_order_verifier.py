@@ -296,6 +296,35 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
             code.index("call_thiscall_u32(\n        use"),
         )
 
+    def test_vfx_capture_waits_for_both_native_spellglow_views(self) -> None:
+        baseline = {"host": {}, "client": {}}
+        first = {"host": {"attempt": 1}, "client": {"attempt": 1}}
+        second = {"host": {"attempt": 2}, "client": {"attempt": 2}}
+        pixels = {"host": {"changed_pixels": 80}, "client": {"changed_pixels": 90}}
+        with mock.patch.object(
+            verifier,
+            "capture_phase",
+            side_effect=(first, second),
+        ) as capture, mock.patch.object(
+            verifier,
+            "analyze_vfx_delta",
+            side_effect=(verifier.sync.VerifyFailure("not visible"), pixels),
+        ), mock.patch.object(verifier.time, "sleep"):
+            active, analysis = verifier.wait_for_vfx_capture(
+                Path("evidence"),
+                baseline,
+                {"host": "host-pipe", "client": "client-pipe"},
+                {
+                    "host": {"effect": (1.0, 2.0)},
+                    "client": {"effect": (1.0, 2.0)},
+                },
+                timeout=1.0,
+            )
+
+        self.assertIs(active, second)
+        self.assertIs(analysis, pixels)
+        self.assertEqual(capture.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

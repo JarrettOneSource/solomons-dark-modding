@@ -1575,6 +1575,33 @@ def analyze_vfx_delta(
     return result
 
 
+def wait_for_vfx_capture(
+    evidence: Path,
+    baseline: dict[str, Any],
+    pipes: dict[str, str],
+    effect_points: dict[str, dict[str, tuple[float, float]]],
+    *,
+    timeout: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    deadline = time.monotonic() + timeout
+    last_error: sync.VerifyFailure | None = None
+    while time.monotonic() < deadline:
+        active = capture_phase(
+            evidence,
+            "vfx-active",
+            pipes,
+            points_by_role=effect_points,
+        )
+        try:
+            return active, analyze_vfx_delta(evidence, baseline, active)
+        except sync.VerifyFailure as error:
+            last_error = error
+            time.sleep(0.25)
+    if last_error is not None:
+        raise last_error
+    raise sync.VerifyFailure("native SpellGlow capture timed out")
+
+
 def run(
     *,
     evidence: Path,
@@ -2051,19 +2078,15 @@ def run(
             client_target=(effect_x + 120.0, effect_y, 180.0),
             timeout=timeout,
         )
-        time.sleep(0.35)
-        active = capture_phase(
-            evidence,
-            "vfx-active",
-            pipes,
-            points_by_role=effect_points,
-        )
-        result["vfx_active"] = active
-        result["vfx_pixel_analysis"] = analyze_vfx_delta(
+        active, vfx_pixel_analysis = wait_for_vfx_capture(
             evidence,
             baseline,
-            active,
+            pipes,
+            effect_points,
+            timeout=min(timeout, 10.0),
         )
+        result["vfx_active"] = active
+        result["vfx_pixel_analysis"] = vfx_pixel_analysis
 
         required_tokens = {
             "host": (
