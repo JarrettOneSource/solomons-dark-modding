@@ -65,10 +65,10 @@ using NativeRenderQueueInsertFn =
 using NativePuppetCtorFn = void*(__thiscall*)(void* puppet);
 using NativeTextureUploadBgraFn =
     int(__cdecl*)(int width, int height, const void* pixels, int mode);
-using NativeTextureReleaseFn =
-    void(__thiscall*)(void* renderer, int texture_handle);
-using NativeRenderPageRegisterFn =
-    void(__thiscall*)(void* renderer, void* page_record);
+using NativeTextureReleaseFn = void(__thiscall*)(
+    void* renderer, int texture_handle);
+using NativeRenderPageRegisterFn = void(__thiscall*)(
+    void* renderer, void* page_record);
 using NativeRendererSetColorFn = void(__thiscall*)(
     void* renderer,
     float red,
@@ -131,8 +131,7 @@ struct LuaWorldRendererState {
     std::uint8_t* native_texture_critical_section_initialized = nullptr;
     X86Hook render_queue_flush_hook;
     X86Hook arena_render_hook;
-    std::unordered_map<std::string, std::unique_ptr<NativeAtlasTexture>>
-        atlas_textures;
+    std::unordered_map<std::string, std::unique_ptr<NativeAtlasTexture>> atlas_textures;
     std::vector<std::unique_ptr<NativeWorldCarrier>> carriers;
     std::vector<LuaWorldRenderFrameSnapshot> frame_snapshots;
     NativeAtlasTexture dampen_texture;
@@ -148,19 +147,14 @@ LuaWorldRendererState g_world_renderer;
 
 template <typename Value>
 void WriteNativeField(void* base, std::size_t offset, const Value& value) {
-    std::memcpy(
-        static_cast<std::uint8_t*>(base) + offset,
-        &value,
-        sizeof(value));
+    std::memcpy(static_cast<std::uint8_t*>(base) + offset, &value, sizeof(value));
 }
 
 template <typename Value>
 Value ReadNativeField(const void* base, std::size_t offset) {
     Value value{};
     std::memcpy(
-        &value,
-        static_cast<const std::uint8_t*>(base) + offset,
-        sizeof(value));
+        &value, static_cast<const std::uint8_t*>(base) + offset, sizeof(value));
     return value;
 }
 
@@ -179,10 +173,7 @@ void LogWorldRenderFailure(const std::string& message) {
 }
 
 bool TryGetLayoutValue(const char* key, uintptr_t* value) {
-    return TryGetBinaryLayoutNumericValue(
-        kWorldRenderLayoutSection,
-        key,
-        value) &&
+    return TryGetBinaryLayoutNumericValue(kWorldRenderLayoutSection, key, value) &&
         value != nullptr && *value != 0;
 }
 

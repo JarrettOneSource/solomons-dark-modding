@@ -191,7 +191,7 @@ class OverlayRendererContractTests(unittest.TestCase):
             "         diagnostic_surface_frame.render_elements)"
         )
         draw_end = frame_renderer.index(
-            "for (const auto& health_bar", draw_start
+            "if (!gameplay_level_up_wait_text.empty())", draw_start
         )
         self.assertIn(
             "DrawObservedOverlayElement(",
