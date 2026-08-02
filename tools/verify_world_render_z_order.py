@@ -1037,12 +1037,12 @@ def capture_native_indicator_phase(
     }
 
 
-def wait_for_custom_inventory_item(
+def wait_for_and_consume_custom_inventory_item(
     pipe: str,
     *,
     native_subtype: int,
     timeout: float,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     last: dict[str, str] = {}
     while time.monotonic() < deadline:
@@ -1053,42 +1053,45 @@ local inventory = sd.player.get_inventory_state()
 print("root=" .. tostring(inventory and inventory.item_list_root_address or 0))
 for _, item in ipairs(inventory and inventory.items or {{}}) do
   if item.type_id == {POTION_TYPE_ID} and item.slot == {native_subtype} then
+    local uid = sd.debug.read_u32(item.item_address + {ITEM_UID_OFFSET}) or 0
+    local find = sd.debug.resolve_game_address({INVENTORY_FIND_ITEM_BY_UID})
+    local use = sd.debug.resolve_game_address({INVENTORY_USE_ITEM})
+    local found = sd.debug.call_thiscall_u32_ret_u32(
+      find, inventory.item_list_root_address, uid)
     print("item_address=" .. tostring(item.item_address))
-    print("uid=" .. tostring(sd.debug.read_u32(item.item_address + {ITEM_UID_OFFSET}) or 0))
+    print("uid=" .. tostring(uid))
     print("stack=" .. tostring(item.stack_count))
+    print("found=" .. tostring(found or 0))
+    if found == item.item_address then
+      print("used=" .. tostring(sd.debug.call_thiscall_u32(
+        use, inventory.item_list_root_address, uid)))
+    else
+      print("used=false")
+    end
     break
   end
 end
 """,
         )
-        if int(last.get("root", "0")) > 0 and int(last.get("item_address", "0")) > 0 and int(last.get("uid", "0")) > 0:
+        if (
+            int(last.get("root", "0")) > 0
+            and int(last.get("item_address", "0")) > 0
+            and int(last.get("uid", "0")) > 0
+            and last.get("found") == last.get("item_address")
+            and last.get("used") == "true"
+        ):
             return {
                 "root": int(last["root"]),
                 "item_address": int(last["item_address"]),
                 "uid": int(last["uid"]),
                 "stack": int(last.get("stack", "0")),
+                "found": int(last["found"]),
+                "used": True,
             }
         time.sleep(0.25)
     raise sync.VerifyFailure(
-        f"custom potion was not added to inventory on {pipe}: {last}"
+        f"custom potion was not added to and consumed from inventory on {pipe}: {last}"
     )
-
-
-def consume_custom_inventory_item(pipe: str, item: dict[str, int]) -> dict[str, str]:
-    values = parse_values(
-        pipe,
-        f"""
-local find = sd.debug.resolve_game_address({INVENTORY_FIND_ITEM_BY_UID})
-local use = sd.debug.resolve_game_address({INVENTORY_USE_ITEM})
-local found = sd.debug.call_thiscall_u32_ret_u32(find, {item['root']}, {item['uid']})
-print("found=" .. tostring(found or 0))
-print("expected=" .. tostring({item['item_address']}))
-print("used=" .. tostring(sd.debug.call_thiscall_u32(use, {item['root']}, {item['uid']})))
-""",
-    )
-    if values.get("found") != values.get("expected") or values.get("used") != "true":
-        raise sync.VerifyFailure(f"native custom-potion use failed: {values}")
-    return values
 
 
 def wait_for_log_tokens(
@@ -1451,35 +1454,15 @@ def run(
             timeout=timeout,
         )
 
-        result["pickup_range_restore"] = {
-            role: set_local_pickup_range(
-                pipe,
-                pickup_range=float(pickup_range_hold[role]["previous"]),
-            )
-            for role, pipe in pipes.items()
-        }
-        time.sleep(0.5)
-        pickup = result["drops"]["client_materialized"]["custom"]
-        sync.place_player(
-            host_pipe,
-            float(pickup["x"]),
-            float(pickup["y"]),
-            0.0,
-        )
-        sync.wait_for_local_transform_settled(host_pipe, timeout=timeout)
-        custom_item = wait_for_custom_inventory_item(
-            host_pipe,
-            native_subtype=definition["native_subtype"],
-            timeout=timeout,
-        )
-        result["custom_inventory_item"] = custom_item
         effect_x = center_x + 150.0
         effect_y = center_y + 120.0
-        sync.place_player(host_pipe, effect_x, effect_y, 0.0)
-        sync.place_player(client_pipe, effect_x + 120.0, effect_y, 180.0)
-        sync.wait_for_local_transform_settled(host_pipe, timeout=timeout)
-        sync.wait_for_local_transform_settled(client_pipe, timeout=timeout)
-        time.sleep(1.0)
+        result["vfx_baseline_placement"] = place_pair(
+            host_pipe,
+            client_pipe,
+            host_target=(effect_x, effect_y, 0.0),
+            client_target=(effect_x + 120.0, effect_y, 180.0),
+            timeout=timeout,
+        )
         host_vfx_view = sync.query(host_pipe)
         client_vfx_view = sync.query(client_pipe)
         client_host_prefix = f"peer.{sync.HOST_ID}."
@@ -1504,9 +1487,36 @@ def run(
             points_by_role=effect_points,
         )
         result["vfx_baseline"] = baseline
-        result["native_inventory_use"] = consume_custom_inventory_item(
+
+        result["pickup_range_restore"] = {
+            role: set_local_pickup_range(
+                pipe,
+                pickup_range=float(pickup_range_hold[role]["previous"]),
+            )
+            for role, pipe in pipes.items()
+        }
+        time.sleep(0.5)
+        pickup = result["drops"]["client_materialized"]["custom"]
+        sync.place_player(
             host_pipe,
-            custom_item,
+            float(pickup["x"]),
+            float(pickup["y"]),
+            0.0,
+        )
+        sync.wait_for_local_transform_settled(host_pipe, timeout=timeout)
+        custom_item = wait_for_and_consume_custom_inventory_item(
+            host_pipe,
+            native_subtype=definition["native_subtype"],
+            timeout=timeout,
+        )
+        result["custom_inventory_item"] = custom_item
+        result["native_inventory_use"] = custom_item
+        result["vfx_active_placement"] = place_pair(
+            host_pipe,
+            client_pipe,
+            host_target=(effect_x, effect_y, 0.0),
+            client_target=(effect_x + 120.0, effect_y, 180.0),
+            timeout=timeout,
         )
         time.sleep(0.35)
         active = capture_phase(

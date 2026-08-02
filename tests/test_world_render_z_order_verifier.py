@@ -138,6 +138,37 @@ class WorldRenderZOrderVerifierTests(unittest.TestCase):
         self.assertIn("progression + 0xCC", code)
         self.assertIn("sd.debug.write_float(address, 0.01)", code)
 
+    def test_custom_potion_is_found_and_consumed_in_one_inventory_probe(self) -> None:
+        output = "".join(
+            (
+                "root=287310204\n",
+                "item_address=287955120\n",
+                "uid=224723052\n",
+                "stack=1\n",
+                "found=287955120\n",
+                "used=true\n",
+            )
+        )
+        with mock.patch.object(
+            verifier,
+            "parse_values",
+            return_value=verifier.sync.parse_key_values(output),
+        ) as parse:
+            result = verifier.wait_for_and_consume_custom_inventory_item(
+                "test-pipe",
+                native_subtype=6,
+                timeout=1.0,
+            )
+
+        self.assertTrue(result["used"])
+        self.assertEqual(result["found"], result["item_address"])
+        code = parse.call_args.args[1]
+        self.assertIn("item.slot == 6", code)
+        self.assertLess(
+            code.index("call_thiscall_u32_ret_u32"),
+            code.index("call_thiscall_u32(\n        use"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
