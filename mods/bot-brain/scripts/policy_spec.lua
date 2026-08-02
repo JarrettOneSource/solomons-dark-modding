@@ -6,7 +6,7 @@ local function append(name)
   observation_names[#observation_names + 1] = name
 end
 
--- V2 Blocks A-I remain byte-for-byte ordered at positions 1-395.
+-- Schema v4 retains every v3 field in order and extends Block G in-place.
 
 -- Block A: self.
 for _, name in ipairs({
@@ -139,6 +139,19 @@ for slot = 1, 4 do
     "type_health_orb",
     "type_mana_orb",
     "type_item_carrier",
+    "type_powerup",
+    "item_identity_known",
+    "item_stock_health",
+    "item_stock_mana",
+    "item_stock_wizard_chug",
+    "item_stock_antidote",
+    "item_stock_mind_chug",
+    "item_stock_rejuvenation",
+    "item_custom",
+    "item_is_equipment",
+    "item_is_wizard_key",
+    "item_stack_count_scaled",
+    "item_amount_scaled",
   }) do
     append(prefix .. suffix)
   end
@@ -217,8 +230,8 @@ for _, name in ipairs({
 end
 
 assert(
-  #observation_names == 395,
-  "ML bot v3 must preserve the exact 395-value v2 prefix")
+  #observation_names == 447,
+  "ML bot schema v4 Blocks A-I/H must contain exactly 447 names")
 
 -- Block J: participant-scoped potion timers.
 for _, name in ipairs({
@@ -405,13 +418,15 @@ for _, name in ipairs({
   "inventory_map_count_scaled",
   "inventory_registered_custom_count_scaled",
   "inventory_unknown_count_scaled",
+  "inventory_wizard_key_count_scaled",
+  "inventory_has_wizard_key",
 }) do
   append(name)
 end
 
 assert(
-  #observation_names == 1279,
-  "ML bot v3 observation contract must contain exactly 1279 names")
+  #observation_names == 1333,
+  "ML bot schema v4 observation contract must contain exactly 1333 names")
 
 local option_descriptor_names = {
   "present",
@@ -474,7 +489,7 @@ local option_descriptor_names = {
 
 assert(
   #option_descriptor_names == 56,
-  "ML bot v3 choice option descriptor must contain 56 names")
+  "ML bot schema v4 choice option descriptor must contain 56 names")
 
 local movement_actions = {
   {name = "idle", x = 0.0, y = 0.0},
@@ -536,11 +551,11 @@ assert(#aim_actions == 9)
 
 return {
   model_format = "solomon-dark-bot-policy",
-  model_version = 3,
-  observation_version = 3,
-  trajectory_version = 3,
-  choice_trajectory_version = 3,
-  architecture = "mlp-tanh-four-head-v3",
+  model_version = 4,
+  observation_version = 4,
+  trajectory_version = 4,
+  choice_trajectory_version = 4,
+  architecture = "mlp-tanh-four-head-v4",
   hidden_sizes = {512, 256},
   choice_hidden_size = 128,
   observation_names = observation_names,
@@ -556,8 +571,8 @@ return {
   equipment_slot_count = 7,
   max_choice_options = 16,
 
-  -- Fixed v3 scales. These are source-evidenced constants rather than batch
-  -- statistics. V2's maxima remain documented in the accepted v2 contract.
+  -- Fixed schema-v4 scales. These are source-evidenced constants rather
+  -- than batch statistics. V2's maxima remain in the accepted v2 contract.
   mana_scale = 2000.0,
   hp_scale = 1000.0,
   velocity_scale = 1000.0,

@@ -249,6 +249,7 @@ native consumable timers:
     map_count = 0,
     registered_custom_count = 0,
     unknown_count = 0,
+    wizard_key_count = 0,
   },
 }
 ```
@@ -258,6 +259,8 @@ policy uses at most the first 12. Stock identity is subtype-based. Custom
 identity uses `content_id` and the registered mod/key when locally resolved;
 peer-local native subtype and live item UID are never exposed. Every
 replicated `inventory_items` row now also carries its stable `content_id`.
+`wizard_key_count` counts non-stacking Item_Misc type-7012/subtype-1 rows;
+it does not trust or sum their stack values.
 
 Each of the seven equipment rows contains `slot`, `present`, `identity_key`,
 `recipe_name`, `catalog_index`, `catalog_resolved`, `rarity_id`, `level`,

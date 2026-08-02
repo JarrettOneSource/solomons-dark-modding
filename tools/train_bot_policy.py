@@ -33,7 +33,7 @@ from ml_bot.model import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"
+DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v4.json"
 DEFAULT_LUA = (
     ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
 )
@@ -105,7 +105,7 @@ def bootstrap(args: argparse.Namespace) -> int:
     policy = BotPolicy.initialize(
         policy_rng,
         metadata={
-            "training_kind": "target_aim_potion_semantic_bootstrap_v3",
+            "training_kind": "drop_identity_semantic_bootstrap_v4",
             "seed": args.seed,
             "expert_samples": args.samples,
             "movement_entropy_coefficient": (
@@ -383,7 +383,7 @@ def prepare_choice_batch(
     gamma: float,
     gae_lambda: float,
 ) -> dict[str, object]:
-    """Build one complete variable-duration choice-event-v3 PPO batch."""
+    """Build one complete variable-duration choice-event-v4 PPO batch."""
 
     if not records:
         raise ValueError("choice PPO requires at least one complete interval")
@@ -481,7 +481,7 @@ def prepare_choice_batch(
 def partition_choice_records(
     records: Sequence[object],
 ) -> tuple[list[object], list[object]]:
-    """Separate strict learned and scripted choice-event-v3 records."""
+    """Separate strict learned and scripted choice-event-v4 records."""
 
     learned: list[object] = []
     scripted: list[object] = []

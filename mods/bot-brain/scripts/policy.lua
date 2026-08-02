@@ -13,7 +13,7 @@ end
 
 local function validate_names(actual, expected, label)
   if type(actual) ~= "table" or #actual ~= #expected then
-    fail(label .. " names do not match the policy-v3 contract")
+    fail(label .. " names do not match the policy-v4 contract")
   end
   for index, expected_name in ipairs(expected) do
     if actual[index] ~= expected_name then
@@ -82,12 +82,12 @@ local function validate_parameter_names(parameters)
   }
   for name in pairs(parameters) do
     if required[name] ~= true then
-      fail("unexpected policy-v3 parameter " .. tostring(name))
+      fail("unexpected policy-v4 parameter " .. tostring(name))
     end
     required[name] = nil
   end
   for name in pairs(required) do
-    fail("missing policy-v3 parameter " .. tostring(name))
+    fail("missing policy-v4 parameter " .. tostring(name))
   end
 end
 
@@ -96,15 +96,19 @@ local function validate_weights(spec, candidate)
     fail("model must be a table")
   end
   if candidate.version == 1 or candidate.version == 2 or
+      candidate.version == 3 or
       candidate.observation_version == 1 or
       candidate.observation_version == 2 or
+      candidate.observation_version == 3 or
       candidate.architecture == "mlp-tanh-two-head-v1" or
       candidate.architecture == "mlp-tanh-three-head-v2" or
+      candidate.architecture == "mlp-tanh-four-head-v3" or
       candidate.observation_size == 87 or
-      candidate.observation_size == 395 then
+      candidate.observation_size == 395 or
+      candidate.observation_size == 1279 then
     fail(
-      "policy v1/v2 artifacts are incompatible with the strict " ..
-      "policy-v3 loader")
+      "policy v1/v2/v3 artifacts are incompatible with the strict " ..
+      "policy-v4 loader")
   end
   if candidate.format ~= spec.model_format then
     fail("format must be " .. tostring(spec.model_format))
@@ -112,7 +116,7 @@ local function validate_weights(spec, candidate)
   if candidate.version ~= spec.model_version then
     fail(
       "version must be " .. tostring(spec.model_version) ..
-      "; policy v1/v2 and other versions are not supported")
+      "; policy v1/v2/v3 and other versions are not supported")
   end
   if candidate.observation_version ~= spec.observation_version then
     fail(
@@ -146,7 +150,7 @@ local function validate_weights(spec, candidate)
       candidate.choice_hidden_size ~= choice_hidden_size or
       candidate.choice_value_size ~= 1 then
     fail(
-      "declared policy-v3 tensor shape must be 1279 -> 512 -> 256 " ..
+      "declared policy-v4 tensor shape must be 1333 -> 512 -> 256 " ..
       "with movement 9, target 9, ability 22, aim 9, value 1, " ..
       "and a 56 -> 128 shared choice scorer")
   end

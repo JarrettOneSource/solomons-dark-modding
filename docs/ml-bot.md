@@ -32,12 +32,15 @@ log probability is the sum of all four selected-head log probabilities.
 Movement uses `sd.nav.test_segment` only for its action mask. Native action
 rails remain the final validators.
 
-The policy receives exactly 1,279 ordered values. Positions 1-395 preserve the
-v2 prefix. Blocks J-Q append participant potion timers; enemy identity,
+The policy receives exactly 1,333 ordered values. Schema v4 extends each of
+the four pickup slots with Powerup and carried-item identity, and appends
+Wizard Key count/possession to inventory. The existing blocks retain their
+relative order: participant potion timers; enemy identity,
 facing, telegraphs, and statuses; persisted-target motion/facing; eight exact
 collision primitives; twelve hostile hazards; twelve ranked potion types;
 seven equipped-item summaries; and bounded inventory taxonomy totals. Unknown
-hostile hazards remain present with `type_known=0`. Inventory counts use
+hostile hazards and carried items remain present without aliasing, using
+`type_known=0` and `item_identity_known=0`. Inventory counts use
 `log1p(min(count, 99)) / log(100)`. The canonical order is duplicated and
 tested between `policy_spec.lua` and `tools/ml_bot/spec.py`.
 
@@ -59,9 +62,9 @@ cooldown/status lifetime 60 seconds, range 1,000, radius 100, hazard contact
 
 ## Runtime and strict versioning
 
-Architecture `mlp-tanh-four-head-v3` is:
+Architecture `mlp-tanh-four-head-v4` is:
 
-1. 1,279 inputs;
+1. 1,333 inputs;
 2. shared tanh layers of 512 and 256 units;
 3. masked 9/9/22/9 main heads and one scalar main value; and
 4. a shared skill-option scorer.
@@ -73,14 +76,14 @@ offered set, so option order and count do not change the parameter shape. A
 separate scalar choice value uses the shared state latent.
 
 Model, observation, main trajectory, and choice trajectory versions are all
-3. Lua and Python validate every ordered name, tensor dimension, parameter
+4. Lua and Python validate every ordered name, tensor dimension, parameter
 name, temperature, and finite value. Historical v1 and v2 JSON artifacts stay
-in source history; both loaders reject either version explicitly. There is no
+in source history; both loaders reject versions 1-3 explicitly. There is no
 adapter, migration shim, or reuse of old weights or data.
 
 The checked-in runtime files are generated from one parameter map:
 
-- `models/bot-brain/policy-v3.json`; and
+- `models/bot-brain/policy-v4.json`; and
 - `mods/bot-brain/scripts/policy_weights.lua`.
 
 The Lua artifact is larger than v2, so hot reload stages 512-KiB chunks under a
@@ -97,15 +100,16 @@ py -3 tools/train_bot_policy.py bootstrap
 py -3 tools/train_bot_policy.py validate
 ```
 
-Bootstrap starts from fresh v3 initialization. Its deterministic semantic
+Bootstrap starts from fresh v4 initialization. Its deterministic semantic
 expert selects an enemy slot first, derives target-conditioned spell legality,
-chooses potion use from vitals and ranked possession, and labels aim from
-target velocity and hazard context. It emits no skill-choice labels: the
+chooses potion use from vitals and ranked possession, labels aim from target
+velocity and hazard context, and populates drop identities and key possession
+independently of its action labels. It emits no skill-choice labels: the
 retired scripted manager is never choice-head ground truth.
 
 The checked-in seed used 6,000 samples and 20 epochs. Held-out accuracies are
-movement 0.8850, target 0.7617, ability 0.7175, aim 0.9158, and four-head joint
-0.4583. These are initialization checks, not a gameplay competence claim.
+movement 0.8692, target 0.7633, ability 0.7125, aim 0.9050, and four-head joint
+0.4292. These are initialization checks, not a gameplay competence claim.
 Main and choice value heads start at zero.
 
 ## Live PPO and choice SMDP training
@@ -156,9 +160,9 @@ setup-time main rows are cleared while any open choice interval and its
 duration rewards are preserved; choice state is never reset. Every
 learned participant sharing the policy emits two streams:
 
-- main trajectory-v3: observations, four masks/actions, composite old log
+- main trajectory-v4: observations, four masks/actions, composite old log
   probability, value, reward, and terminal state; and
-- choice-event-v3: frozen observation, variable option rows/mask, selected
+- choice-event-v4: frozen observation, variable option rows/mask, selected
   option, old log probability/value, next choice value, duration, per-step
   rewards, acceptance, and terminal state.
 
@@ -168,7 +172,7 @@ transport, then are partitioned out before choice PPO batching. This keeps
 mixed-team drain counts exact without turning the scripted manager into a
 training label. The trainer never sends an open interval to choice PPO. Main
 rows drain in 16-record frames and choice intervals one at a time so the
-expanded v3 payload stays below the loader's fixed 1-MiB Lua-exec response
+expanded v4 payload stays below the loader's fixed 1-MiB Lua-exec response
 limit. Live rollouts are bounded to 8,192 steps for the same reason.
 
 The reward stream has no passive survival term. One policy decision receives
@@ -256,7 +260,7 @@ py -3 tools/train_bot_policy.py validate `
 
 Copy-Item `
   runtime/ml-training/<instance>/policy-final.json `
-  models/bot-brain/policy-v3.json
+  models/bot-brain/policy-v4.json
 ```
 
 Keep JSON and Lua exports from the same checkpoint. Contract, numerical PPO,

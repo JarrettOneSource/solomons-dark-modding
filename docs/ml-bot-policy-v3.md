@@ -180,3 +180,87 @@ file/RE evidence; produce `docs/ml-bot-policy-v3-implementation.md` with
 proposed observation/action/head deltas, seam list, and phase plan;
 implement nothing. The orchestrator adjudicates before implementation
 phases are dispatched.
+
+## V3-9 — drop-worth observation revision (schema v4)
+
+Owner direction, 2026-08-02. This is a hard observation/model/trajectory
+cut from schema 3 to schema 4. There is no compatibility shim, dual-version
+runtime, or reused checkpoint. The four-head and choice-head architecture is
+unchanged; the observation width becomes 1,333 and the checked-in seed is a
+fresh drop-aware bootstrap.
+
+### V3-9 adjudications
+
+- Existing replicated loot and inventory identities are sufficient; no new
+  native seam is authorized or required.
+- Unknown item families are visible but never aliased to a known category.
+- Powerup assist follows the measured collection owner and native range
+  constant below.
+- Reward semantics are frozen. No pickup shaping is permitted.
+
+Block G keeps four distance-ranked pickup slots. Each slot adds
+`type_powerup` and, for Item/Potion carriers, these ordered fields after the
+existing eight values:
+
+```text
+type_powerup
+item_identity_known
+item_stock_health
+item_stock_mana
+item_stock_wizard_chug
+item_stock_antidote
+item_stock_mind_chug
+item_stock_rejuvenation
+item_custom
+item_is_equipment
+item_is_wizard_key
+item_stack_count_scaled
+item_amount_scaled
+```
+
+The six stock-potion categories are exactly the Block O vocabulary. Known
+custom-potion subtypes 6 and above set only the aligned `item_custom` family
+flag because ground snapshots do not expose their stable content ID. Known
+stock equipment is identified as equipment, and Item_Misc type 7012 subtype 1
+is identified as a Wizard Key. Unknown/unmapped item families set
+`item_identity_known=0` and every categorical descriptor to zero; their
+available stack/amount remains observable. An absent slot remains all zero.
+Block Q appends `inventory_wizard_key_count_scaled` (log1p, saturation 99)
+and `inventory_has_wizard_key`. Because keys are non-stacking, the count is
+the number of type-7012/subtype-1 inventory rows, not their stack fields.
+
+Powerup collection has two distinct surfaces. An owned live synthetic-bot
+probe placed a Powerup at exact participant contact for two seconds: the drop
+remained active and native/replicated Damage x4 ticks remained zero. The same
+drop then went through `sd.world.request_loot_pickup`; the authority retired
+it and both native and replicated timers became exactly 1,500 ticks. Thus
+synthetic participants require the replicated request path. `Bonus_TickPickup`
+at `0x006039C0` loads the progression pickup-range stat at `0x00603B46` and
+multiplies it by the double `20.0` stored at `0x007DE920` before the squared
+distance test. Powerups therefore enter both observation and assist with that
+exact 20x multiplier.
+
+Wizard Key possession is observable but crate interaction is not a synthetic
+participant action in this revision. The stock Goodie unlock handler at
+`0x00646D00` compares the contact actor with `gameplay+0x1358` (the slot-0
+actor) before it accesses the slot-0 inventory root at `gameplay+0x13B8` and
+calls key removal at `0x005601B0`. A live learned participant acquired a key
+through the authority pickup path (`wizard_key_count 0 -> 1`), but direct
+Goodie contact left its count at 1. The synthetic-participant design also
+explicitly rejects a `local_player_actor`/slot-0 alias
+(`docs/reverse-engineering/synthetic-participant-bots-2026-07-26.md`). A fresh
+slot-0 probe found owner participant 1 and its live actor, while
+`sd.bots.get_inventory_details(1)` returned `available=false`; consequently
+the same observation path cannot witness the stock local-player `1 -> 0`
+transition.
+
+This is the third tracked stock hard-wired-slot-0 assumption, after XP routing
+and enemy targeting. V3-9 ships the key observation and leaves the unreachable
+native action explicit. Participant-scoped, host-authoritative, replicated
+Goodie interaction belongs to the separate v4 crate-semantics item and
+requires an owner decision; it is not authorized here.
+
+No reward term changes. Drop value must be learned through the existing
+vitals, damage, own-damage, and own-kill-XP channels. Existing replicated-loot
+identity fields and inventory content identities are sufficient; V3-9 adds no
+native seam.

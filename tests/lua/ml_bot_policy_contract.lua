@@ -198,23 +198,27 @@ for _, name in ipairs({
 end
 print("tensor_shapes=" .. table.concat(shapes, ","))
 
-for _, version in ipairs({1, 2}) do
+for _, version in ipairs({1, 2, 3}) do
   local ok, error_message = pcall(function()
+    local architectures = {
+      [1] = "mlp-tanh-two-head-v1",
+      [2] = "mlp-tanh-three-head-v2",
+      [3] = "mlp-tanh-four-head-v3",
+    }
+    local observation_sizes = {[1] = 87, [2] = 395, [3] = 1279}
     policy.new(spec, {
       format = "solomon-dark-bot-policy",
       version = version,
       observation_version = version,
-      architecture = version == 1 and
-        "mlp-tanh-two-head-v1" or
-        "mlp-tanh-three-head-v2",
-      observation_size = version == 1 and 87 or 395,
+      architecture = architectures[version],
+      observation_size = observation_sizes[version],
     })
   end)
   assert(ok == false)
   assert(
     string.find(
       tostring(error_message),
-      "policy v1/v2 artifacts are incompatible",
+      "policy v1/v2/v3 artifacts are incompatible",
       1,
       true) ~= nil)
   print("v" .. tostring(version) .. "_rejected=true")
@@ -274,15 +278,15 @@ assert(finished.buffered == 1)
 local drained = controller:drain(1)
 local choice_drained = controller:drain_choices(1, true)
 assert(#drained.records == 1)
-assert(drained.records[1].trajectory_version == 3)
-assert(#drained.records[1].observation == 1279)
+assert(drained.records[1].trajectory_version == 4)
+assert(#drained.records[1].observation == 1333)
 assert(#drained.records[1].ability_mask == 22)
 assert(#drained.records[1].aim_mask == 9)
 assert(drained.records[1].done == true)
 assert(#choice_drained.records == 1)
 local choice_record = choice_drained.records[1]
-assert(choice_record.choice_trajectory_version == 3)
-assert(#choice_record.observation == 1279)
+assert(choice_record.choice_trajectory_version == 4)
+assert(#choice_record.observation == 1333)
 assert(#choice_record.option_descriptors == 3)
 assert(#choice_record.option_descriptors[1] == 56)
 assert(#choice_record.option_mask == 3)

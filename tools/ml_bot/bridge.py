@@ -26,7 +26,7 @@ from .waves import start_stock_wave_episode as route_stock_wave_episode
 
 ROOT = Path(__file__).resolve().parents[2]
 # The native Lua-exec pipe rejects responses above 1 MiB. Sixteen worst-case
-# finite 1279-value main rows stay below half that ceiling after JSON framing.
+# finite 1333-value main rows stay below half that ceiling after JSON framing.
 MAX_ROLLOUTS_PER_RESPONSE = 16
 # A choice interval also carries up to sixteen 56-value option rows and a
 # variable reward sequence. Drain one complete interval per response so team
@@ -295,13 +295,13 @@ def parse_rollout_output(
         except ValueError as error:
             raise BridgeError("rollout frame contains an invalid number") from error
         if record.trajectory_version != spec.TRAJECTORY_VERSION:
-            if record.trajectory_version in (1, 2):
+            if record.trajectory_version in (1, 2, 3):
                 raise BridgeError(
-                    "trajectory-v1/v2 frames are incompatible with the "
-                    "strict trajectory-v3 bridge"
+                    "trajectory-v1/v2/v3 frames are incompatible with the "
+                    "strict trajectory-v4 bridge"
                 )
             raise BridgeError(
-                "rollout trajectory version does not match trajectory-v3"
+                "rollout trajectory version does not match trajectory-v4"
             )
         if not (
             math.isfinite(record.old_log_probability)
@@ -389,12 +389,12 @@ def parse_choice_rollout_output(
                 "choice rollout frame contains an invalid number"
             ) from error
         if record.choice_trajectory_version != spec.CHOICE_TRAJECTORY_VERSION:
-            if record.choice_trajectory_version in (1, 2):
+            if record.choice_trajectory_version in (1, 2, 3):
                 raise BridgeError(
-                    "choice trajectory-v1/v2 is incompatible with the "
-                    "strict choice-event-v3 bridge"
+                    "choice trajectory-v1/v2/v3 is incompatible with the "
+                    "strict choice-event-v4 bridge"
                 )
-            raise BridgeError("choice rollout version does not match v3")
+            raise BridgeError("choice rollout version does not match v4")
         if record.choice_mode not in ("learned", "scripted"):
             raise BridgeError("choice rollout mode is invalid")
         if record.duration_steps < 0 or len(record.rewards) != record.duration_steps:
@@ -2912,7 +2912,7 @@ print('participant_ids=' .. table.concat(text, ','))
         This deliberately uses the loader's debug-only native level-sync seam;
         it is never part of ordinary training.  The learned Lua manager still
         owns option scoring and application, and the resulting interval enters
-        the normal choice-event-v3 transport.
+        the normal choice-event-v4 transport.
         """
         if participant_id <= 0:
             raise ValueError("participant_id must be positive")
@@ -3153,7 +3153,7 @@ local source = table.concat(staging.parts)
 _G.__sdmod_ml_policy_staging = nil
 local loader, load_error = load(
   source,
-  '@ml-bot-policy-v3-hot-reload',
+  '@ml-bot-policy-v4-hot-reload',
   't',
   _ENV)
 assert(loader, load_error)

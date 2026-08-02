@@ -149,6 +149,12 @@ void AccumulateInventorySummary(
         return;
     case 7012:
         summary->misc_count += count;
+        // Item_Misc subtype 1 is the non-stacking Wizard Key. Count rows,
+        // not an untrusted stack value, so malformed/custom Item_Misc state
+        // cannot alias one row into multiple keys.
+        if (item.slot == 1) {
+            summary->wizard_key_count += 1;
+        }
         return;
     default:
         summary->unknown_count += count;

@@ -33,37 +33,39 @@ local observation =
 local training_module =
   load_module("mods/bot-brain/scripts/policy_training.lua")
 
-assert(spec.model_version == 3)
-assert(spec.observation_version == 3)
-assert(spec.trajectory_version == 3)
-assert(spec.choice_trajectory_version == 3)
-assert(spec.architecture == "mlp-tanh-four-head-v3")
+assert(spec.model_version == 4)
+assert(spec.observation_version == 4)
+assert(spec.trajectory_version == 4)
+assert(spec.choice_trajectory_version == 4)
+assert(spec.architecture == "mlp-tanh-four-head-v4")
 assert(spec.hidden_sizes[1] == 512)
 assert(spec.hidden_sizes[2] == 256)
-assert(#spec.observation_names == 1279)
+assert(#spec.observation_names == 1333)
 assert(#spec.option_descriptor_names == 56)
 assert(#spec.movement_actions == 9)
 assert(#spec.target_actions == 9)
 assert(#spec.ability_actions == 22)
 assert(#spec.aim_actions == 9)
-assert(spec.observation_names[395] ==
+assert(spec.observation_names[447] ==
   "secondary_recharge_multiplier_scaled")
-assert(spec.observation_names[396] ==
+assert(spec.observation_names[448] ==
   "self_damage_x4_remaining_scaled")
-assert(spec.observation_names[399] ==
+assert(spec.observation_names[451] ==
   "enemy_1_species_index_scaled")
-assert(spec.observation_names[615] ==
+assert(spec.observation_names[667] ==
   "target_velocity_dx")
-assert(spec.observation_names[619] ==
+assert(spec.observation_names[671] ==
   "obstacle_1_present")
-assert(spec.observation_names[731] ==
+assert(spec.observation_names[783] ==
   "hazard_1_present")
-assert(spec.observation_names[936] ==
+assert(spec.observation_names[988] ==
   "potion_1_present")
-assert(spec.observation_names[1166] ==
+assert(spec.observation_names[1218] ==
   "equipment_hat_present")
-assert(spec.observation_names[1279] ==
-  "inventory_unknown_count_scaled")
+assert(spec.observation_names[1332] ==
+  "inventory_wizard_key_count_scaled")
+assert(spec.observation_names[1333] ==
+  "inventory_has_wizard_key")
 
 local geometry_calls = 0
 local dynamic_revision = 1
@@ -491,6 +493,7 @@ local inventory_details = {
     map_count = 5,
     registered_custom_count = 6,
     unknown_count = 7,
+    wizard_key_count = 2,
   },
 }
 
@@ -550,6 +553,49 @@ for index, name in ipairs(spec.observation_names) do
   indexes[name] = index
 end
 
+local loot_drops = {
+  {
+    active = true,
+    network_drop_id = 1001,
+    kind = "Potion",
+    x = 600.0,
+    y = 500.0,
+    item_type_id = 7001,
+    item_slot = 0,
+    stack_count = 2,
+    amount = 2,
+  },
+  {
+    active = true,
+    network_drop_id = 1002,
+    kind = "Potion",
+    x = 620.0,
+    y = 500.0,
+    item_type_id = 7001,
+    item_slot = 1,
+    stack_count = 3,
+    amount = 3,
+  },
+  {
+    active = true,
+    network_drop_id = 1003,
+    kind = "Item",
+    x = 640.0,
+    y = 500.0,
+    item_type_id = 7002,
+    item_slot = 0,
+    stack_count = 1,
+    amount = 1,
+  },
+  {
+    active = true,
+    network_drop_id = 1004,
+    kind = "Powerup",
+    x = 660.0,
+    y = 500.0,
+  },
+}
+
 local segment_calls = 0
 local builder = observation.new(
   spec,
@@ -566,7 +612,7 @@ local builder = observation.new(
       return {participants = participants}
     end,
     get_loot = function()
-      return {authority_participant_id = 1, drops = {}}
+      return {authority_participant_id = 1, drops = loot_drops}
     end,
     test_segment = function()
       segment_calls = segment_calls + 1
@@ -620,7 +666,7 @@ local first = observation.capture(
   builder,
   context,
   frame(0))
-assert(#first.values == 1279)
+assert(#first.values == 1333)
 for index, value in ipairs(first.values) do
   assert(
     type(value) == "number" and value == value and
@@ -651,6 +697,50 @@ assert(first.values[indexes.equipment_hat_present] == 1.0)
 assert(first.values[indexes.equipment_hat_catalog_known] == 1.0)
 assert(
   first.values[indexes.inventory_item_total_count_scaled] == 1.0)
+assert(
+  first.values[indexes.inventory_wizard_key_count_scaled] > 0.0)
+assert(first.values[indexes.inventory_has_wizard_key] == 1.0)
+assert(#first.pickups == 4)
+assert(first.pickups[1].item_type_id == 7001)
+assert(first.pickups[1].item_slot == 0)
+assert(first.values[indexes.pickup_1_type_item_carrier] == 1.0)
+assert(first.values[indexes.pickup_1_item_identity_known] == 1.0)
+assert(first.values[indexes.pickup_1_item_stock_health] == 1.0)
+assert(first.values[indexes.pickup_1_item_stock_mana] == 0.0)
+assert(first.pickups[2].item_type_id == 7001)
+assert(first.pickups[2].item_slot == 1)
+assert(first.values[indexes.pickup_2_item_stock_mana] == 1.0)
+assert(first.pickups[3].item_type_id == 7002)
+assert(first.values[indexes.pickup_3_item_is_equipment] == 1.0)
+assert(first.values[indexes.pickup_4_type_powerup] == 1.0)
+assert(first.values[indexes.pickup_4_item_identity_known] == 0.0)
+assert(first.values[indexes.pickup_4_item_stack_count_scaled] == 0.0)
+local unknown_item = inventory_resolver:describe_ground_item({
+  kind = "Item",
+  item_type_id = 7999,
+  item_slot = 12,
+  stack_count = 5,
+  amount = 5,
+})
+assert(unknown_item.identity_known == false)
+assert(unknown_item.custom == false)
+assert(unknown_item.is_equipment == false)
+assert(unknown_item.is_wizard_key == false)
+assert(unknown_item.stock_health == false)
+assert(unknown_item.stock_mana == false)
+assert(unknown_item.stack_count_scaled > 0.0)
+
+local custom_potion = inventory_resolver:describe_ground_item({
+  kind = "Potion",
+  item_type_id = 7001,
+  item_slot = 6,
+  stack_count = 1,
+  amount = 1,
+})
+assert(custom_potion.identity_known == true)
+assert(custom_potion.custom == true)
+assert(custom_potion.stock_health == false)
+assert(custom_potion.stock_mana == false)
 assert(segment_calls == 8)
 
 local target = observation.select_target(
@@ -750,6 +840,7 @@ hazard_rows = {}
 inventory_details.potions = {}
 inventory_details.equipped = {}
 inventory_details.summary = {}
+loot_drops = {}
 inventory_details.damage_x4_remaining_seconds = 0.0
 inventory_details.poison_immunity_remaining_seconds = 0.0
 inventory_details.all_concentration_remaining_seconds = 0.0
@@ -764,6 +855,10 @@ assert(third.values[indexes.hazard_1_present] == 0.0)
 assert(third.values[indexes.potion_1_present] == 0.0)
 assert(third.values[indexes.equipment_hat_present] == 0.0)
 assert(third.values[indexes.ally_1_present] == 0.0)
+assert(third.values[indexes.pickup_1_present] == 0.0)
+assert(third.values[indexes.pickup_1_type_powerup] == 0.0)
+assert(third.values[indexes.pickup_1_item_identity_known] == 0.0)
+assert(third.values[indexes.inventory_has_wizard_key] == 0.0)
 
 -- The two-second refresh adopts an unchanged tuple without rebuilding; a
 -- changed dynamic revision produces one deliberate rebuild.
@@ -1053,8 +1148,8 @@ controller:record(
   120)
 local main_records = controller:drain(10).records
 assert(#main_records == 2)
-assert(main_records[1].trajectory_version == 3)
-assert(#main_records[1].observation == 1279)
+assert(main_records[1].trajectory_version == 4)
+assert(#main_records[1].observation == 1333)
 assert(#main_records[1].ability_mask == 22)
 assert(#main_records[1].aim_mask == 9)
 assert(main_records[1].ability_action == 1)
@@ -1062,7 +1157,7 @@ assert(main_records[1].aim_action == 0)
 local choice_records =
   controller:drain_choices(10, false).records
 assert(#choice_records == 1)
-assert(choice_records[1].choice_trajectory_version == 3)
+assert(choice_records[1].choice_trajectory_version == 4)
 assert(choice_records[1].duration_steps == 2)
 assert(#choice_records[1].rewards == 2)
 assert(choice_records[1].choice_mode == "learned")
@@ -1111,7 +1206,7 @@ assert(
 assert(
   scripted_controller:status().scripted_choice_excluded == 1)
 
-print("observation_count=1279")
+print("observation_count=1333")
 print("exact_order=true")
 print("finite=true")
 print("exact_geometry=true")
@@ -1126,6 +1221,8 @@ print("unknown_hazard_retained=true")
 print("hazard_transition=true")
 print("potion_transition=true")
 print("equipment_transition=true")
+print("pickup_identity_transition=true")
+print("wizard_key_transition=true")
 print("permanent_potion_masks=true")
 print("aim_family_masks=true")
 print("target_conditioned_ability_masks=true")
@@ -1134,7 +1231,7 @@ print("choice_permutation_invariant=true")
 print("choice_generation_exactly_once=true")
 print("choice_duration_steps=2")
 print("scripted_choice_excluded=true")
-print("trajectory_v3=true")
+print("trajectory_v4=true")
 print("idle_live_enemy_reward=" .. tostring(idle_reward))
 print("teammate_kill_reward=" .. tostring(
   controller:reward(

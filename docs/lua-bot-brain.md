@@ -123,13 +123,17 @@ lookup, replicated slot-0 cast ingress, and wave-transition movement.
 
 ### Learned
 
-Policy v3 captures exactly 1,279 ordered finite values every 100 ms. Positions
-1-395 preserve v2 exactly. The appended blocks add three participant-scoped
+Policy schema v4 captures exactly 1,333 ordered finite values every 100 ms.
+The v3 fields retain their relative order. Block G now identifies Powerups,
+the six stock potion families, equipment, Wizard Keys, and explicit unknown
+item carriers; Block Q adds log-scaled key count and possession. The other
+blocks provide three participant-scoped
 potion timers; identity, facing, proven telegraphs, and replicated combat
 statuses for eight enemies; persisted-target motion/facing; eight exact
 obstacles; twelve nearest hostile projectile/area/beam hazards; twelve
 count-ranked potion types; seven fixed equipment slots; and nine log-scaled
-inventory taxonomy counts. Unknown hostile hazard classes remain present with
+inventory taxonomy counts. Unknown hostile hazard and item classes remain
+present without aliasing (`type_known=0` or `item_identity_known=0`), and
 `type_known=0`, and counts use `log1p` with saturation at 99.
 
 The main action contract has movement 9, actor-ID-persistent target 9,
@@ -147,18 +151,18 @@ Each pending native skill generation freezes the full observation plus one
 56-value semantic descriptor and mask bit per offered option. Learned mode
 scores the variable option set; scripted mode keeps the deterministic v2
 selector and its weld preference for A/B runs. Scripted events are tagged and
-excluded from choice batches. Training records a main trajectory-v3 stream and
-a separate variable-duration choice-event-v3 SMDP stream. The reward has no
+excluded from choice batches. Training records a main trajectory-v4 stream and
+a separate variable-duration choice-event-v4 SMDP stream. The reward has no
 passive survival tick: self-HP, wave, and death terms are unchanged, while XP
 and enemy-HP-damage terms consume host-authoritative counters attributed to
 that participant's own kills and damage edges. Shared party XP still advances
 every in-run progression and choice cadence, but teammate work pays no learned
 reward.
 
-The strict v3 runtime loads the checked-in 1,279 -> 512 -> 256 artifact and its
+The strict v4 runtime loads the checked-in 1,333 -> 512 -> 256 artifact and its
 9/9/22/9 main heads at mod startup. Pending native skill choices use the same
 state trunk plus a shared 128-unit scorer over each 56-value option descriptor.
-Lua and Python reject historical v1/v2 artifacts without a shim. Inference
+Lua and Python reject historical v1/v2/v3 artifacts without a shim. Inference
 remains local—no Python, GPU, or network service—and all movement, casts,
 pickups, and consumable uses continue through native participant rails. See
 [`ml-bot.md`](ml-bot.md) for bootstrap, dual-stream PPO/SMDP training, entropy,

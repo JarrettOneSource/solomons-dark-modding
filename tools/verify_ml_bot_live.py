@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live policy-v3 contract and learned-behavior acceptance verifier."""
+"""Live policy-v4 contract and learned-behavior acceptance verifier."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import verify_local_multiplayer_sync as local_sync
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"
+DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v4.json"
 MINIMUM_LIVE_DISPLACEMENT = 1.0
 PICKUP_AMOUNT = 7
 NAV_CLEARANCE_RAY_RANGE = 480.0
@@ -235,6 +235,19 @@ for slot, potion in ipairs(potion_rows) do
     tostring((inventory_capture.potion_legal or {})[slot] == true),
   }, ':')
 end
+local pickup_lines = {}
+for slot, observed in ipairs(debug.policy_pickups or {}) do
+  pickup_lines[#pickup_lines + 1] = table.concat({
+    tostring(slot),
+    tostring(tonumber(observed.network_drop_id) or 0),
+    tostring(tonumber(observed.item_type_id) or 0),
+    tostring(tonumber(observed.item_slot) or -1),
+    tostring(observed.item_identity_known == true),
+    tostring(observed.type_powerup == true),
+    tostring(observed.item_is_equipment == true),
+    tostring(observed.item_is_wizard_key == true),
+  }, ':')
+end
 print('observation_version=' ..
   tostring(debug.policy_observation_version or 0))
 print('observation_count=' ..
@@ -292,6 +305,7 @@ print('pickup_range=' ..
 print('pickup_distance=' ..
   string.format('%.17g',
     tonumber(debug.pickup_distance) or 0))
+print('pickup_identity_rows=' .. table.concat(pickup_lines, ','))
 print('loot_authority_participant_id=' ..
   tostring(debug.loot_authority_participant_id or 0))
 print('pickup_request_issued=' ..
@@ -356,6 +370,17 @@ print('obstacle_1_normal_dy=' ..
 print('potion_rows=' .. table.concat(potion_lines, ','))
 print('inventory_revision=' ..
   tostring((inventory_capture.details or {}).inventory_revision or 0))
+print('inventory_wizard_key_count_scaled=' ..
+  string.format(
+    '%.17g',
+    tonumber(
+      (inventory_capture.summary or {}).wizard_key_count) or 0))
+print('inventory_wizard_key_count=' ..
+  tostring(
+    tonumber(
+      ((inventory_capture.details or {}).summary or {}).wizard_key_count) or 0))
+print('inventory_has_wizard_key=' ..
+  tostring(inventory_capture.has_wizard_key == true))
 print('skill_choice_mode=' ..
   tostring(debug.skill_choice_mode or ''))
 print('skill_choice_generation=' ..
@@ -863,7 +888,7 @@ print('level=' .. tostring(level))
     if weld_record is None or weld_record.duration_steps <= 0:
         raise BridgeError(
             "learned weld choice did not produce a complete positive-duration "
-            f"choice-event-v3 interval: {records}"
+            f"choice-event-v4 interval: {records}"
         )
     build_id = _integer(welded, "primary_build_id")
     return {
@@ -1817,7 +1842,7 @@ def _obstacle_reactive_policy(
     obstacle_slot: int = 1,
 ) -> BotPolicy:
     if obstacle_slot < 1 or obstacle_slot > spec.OBSTACLE_SLOT_COUNT:
-        raise ValueError("obstacle_slot is outside the policy-v3 block")
+        raise ValueError("obstacle_slot is outside the policy-v4 block")
     policy = _forced_policy(
         source,
         movement_action=0,

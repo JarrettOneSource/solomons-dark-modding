@@ -1067,21 +1067,30 @@ No equipment mutation seam is proposed.
 
 ### E1. Main observation layout
 
-V3 preserves the exact 395 v2 names in positions 1-395, then appends these
-blocks in order:
+Schema v4 preserves every v3 field in relative order, extends Block G in
+place, and appends two key-count fields to Block Q. Its exact block boundaries
+are:
 
 | Block | Positions | Shape | Count |
 | --- | ---: | ---: | ---: |
-| v2 A-I unchanged | 1-395 | fixed | 395 |
-| J. Self potion timers | 396-398 | 3 | 3 |
-| K. Enemy identity/combat/status | 399-614 | 8 x 27 | 216 |
-| L. Persisted-target motion/facing | 615-618 | 4 | 4 |
-| M. Exact nearest obstacles | 619-730 | 8 x 14 | 112 |
-| N. Hostile hazards | 731-935 | 12 x 17 + count | 205 |
-| O. Potion descriptors | 936-1165 | 12 x 19 + 2 | 230 |
-| P. Equipped items | 1166-1270 | 7 x 15 | 105 |
-| Q. Inventory summary | 1271-1279 | 9 | 9 |
-| **Total** | **1-1279** |  | **1279** |
+| A. Self | 1-15 | fixed | 15 |
+| B. Active primary | 16-26 | fixed | 11 |
+| C. Secondary slots | 27-130 | 8 x 13 | 104 |
+| D. Enemy slots | 131-210 | 8 x 10 | 80 |
+| E. Selected target | 211-220 | fixed | 10 |
+| F. Exact patch/rays | 221-276 | 8 + 48 | 56 |
+| G. Replicated pickups + item identity | 277-361 | 4 x 21 + count | 85 |
+| I. Allies | 362-402 | 4 x 10 + count | 41 |
+| H. Aggregates/history | 403-447 | fixed | 45 |
+| J. Self potion timers | 448-450 | 3 | 3 |
+| K. Enemy identity/combat/status | 451-666 | 8 x 27 | 216 |
+| L. Persisted-target motion/facing | 667-670 | 4 | 4 |
+| M. Exact nearest obstacles | 671-782 | 8 x 14 | 112 |
+| N. Hostile hazards | 783-987 | 12 x 17 + count | 205 |
+| O. Potion descriptors | 988-1217 | 12 x 19 + 2 | 230 |
+| P. Equipped items | 1218-1322 | 7 x 15 | 105 |
+| Q. Inventory summary | 1323-1333 | 11 | 11 |
+| **Total** | **1-1333** |  | **1333** |
 
 Block K suffix order, repeated for enemy slots 1-8:
 
@@ -2151,3 +2160,107 @@ native synchronized level-up choices. The scripted verifier's paired
 host/client logs also matched 14 reliable progression publications to 14
 client applications, ending at the same exact `53.550007` XP snapshot for run
 nonce `546838040`.
+
+## P. V3-9 drop-worth observation revision
+
+V3-9 is a schema-v4 hard cut. Model, observation, main trajectory, and choice
+trajectory versions are all 4; the architecture label is
+`mlp-tanh-four-head-v4`. The 512/256 trunk, 9/9/22/9 main heads, value head,
+128-wide option scorer, 56-value option rows, masks, action meanings, and
+reward remain unchanged. Loaders reject versions 1-3 and widths 87, 395, and
+1,279 without an adapter. The active artifacts are
+`models/bot-brain/policy-v4.json` and `policy_weights.lua`.
+
+### Block G identity extension
+
+Each of the four pickup slots now has 21 values. The original eight values
+remain first; these 13 follow in order:
+
+```text
+type_powerup
+item_identity_known
+item_stock_health
+item_stock_mana
+item_stock_wizard_chug
+item_stock_antidote
+item_stock_mind_chug
+item_stock_rejuvenation
+item_custom
+item_is_equipment
+item_is_wizard_key
+item_stack_count_scaled
+item_amount_scaled
+```
+
+`item_type_id=7001` with subtype/slot 0-5 maps one-to-one to the Block O stock
+potion vocabulary. Type 7001 subtypes 6 and above identify the aligned custom
+potion family but not a specific custom effect, because the replicated ground
+row has no stable content ID. Types 7002, 7003, 7004, 7005, 7006, and 7011 identify stock
+equipment. Type 7012 subtype 1 identifies a Wizard Key. Unknown type/subtype
+pairs retain stack/amount when available but set `identity_known=0` and every
+categorical identity field to zero; they never alias a known family. Absent
+slots are all zero. This consumes the existing replicated-loot
+`item_type_id`, `item_slot`, `stack_count`, and `amount` fields and adds no
+native seam.
+
+Block Q now has 11 values. It appends
+`inventory_wizard_key_count_scaled` and `inventory_has_wizard_key`. The loader
+counts inventory rows whose type is 7012 and subtype/slot is 1, because the
+native key is non-stacking, then Lua applies the same log1p-99 count transform
+used throughout v3 inventory observations. The exact schema-v4 total is
+1,333 values.
+
+### Powerup collection ownership
+
+The collection owner was measured before changing assist behavior. At exact
+contact with a synthetic participant for two seconds, a live Powerup remained
+active and both native and replicated Damage x4 timers stayed at zero. A
+single replicated pickup request then retired that same drop and both applied
+timers became 1,500 ticks. Synthetic participant collection therefore belongs
+to the replicated request surface, not stock contact collection.
+
+The assist multiplier is native-derived. `Bonus_TickPickup` starts at
+`0x006039C0`; the instruction at `0x00603B46` loads the progression pickup
+range, then multiplies it by the `20.0` double at `0x007DE920` before the
+squared-distance comparison. Powerups enter the existing rate-limited assist
+loop with exactly that multiplier. This is the only assist semantic change.
+
+### Wizard Key observation versus Goodie interaction
+
+The count is intentionally observation-only for synthetic participants in
+this revision. Disassembly of the stock Goodie unlock handler at `0x00646D00`
+shows this exact order: `0x00646DC4` compares the contact actor with
+`[gameplay+0x1358]` and branches away at `0x00646DCA` unless it is the slot-0
+actor; only then does `0x00646E9E` form `gameplay+0x13B8` for the recursive key
+check and `0x00646EB9` call key removal `0x005601B0` before the Goodie-open
+call. This is consistent with the synthetic-participant contract's explicit
+rejection of a `local_player_actor`/slot-0 alias in
+`docs/reverse-engineering/synthetic-participant-bots-2026-07-26.md`.
+
+Applied truth matched the disassembly. An authority-owned learned participant
+picked up Item_Misc 7012/subtype 1 and its observation changed from
+`wizard_key_count=0, has_wizard_key=0` to `1,1`. Placing that participant on a
+Goodie left the key count at 1. The amended slot-0 check found owner
+participant 1 with a live player actor, but
+`sd.bots.get_inventory_details(1)` returned a table with `available=false`
+(revision 1); the inventory-derived observation path therefore cannot read the
+local player's stock `1 -> 0` transition. The accepted synthetic acquisition
+and native handler truth close this gate without inventing another reader.
+
+This is the third tracked hard-wired-slot-0 stock path after XP routing and
+enemy targeting. V3-9 keeps the useful key identity/count observation while
+documenting the unreachable action. A participant-scoped, host-authoritative,
+replication-coherent Goodie interaction is deferred to the separate v4
+crate-semantics work item and needs owner approval; no such seam is added here.
+
+### Bootstrap and reward boundary
+
+The fresh v4 semantic bootstrap generates known stock-potion, equipment, key,
+Powerup, and explicit unknown pickup examples, plus key possession. Pickup
+identity is sampled independently of every expert action label: this prevents
+the 54 new input columns from being constant zero without scripting drop
+value. Native skill choices remain unlabelled.
+
+No pickup reward or other reward change is present. Health/mana items act
+through vitals, Powerups through own damage and own-kill XP, and equipment/key
+value must emerge from downstream game outcomes.

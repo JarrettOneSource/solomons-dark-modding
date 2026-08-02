@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Numerical, serialization, Lua-parity, and trajectory-v3 tests."""
+"""Numerical, serialization, Lua-parity, and trajectory-v4 tests."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ from train_bot_policy import (  # noqa: E402
 )
 
 
-MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"
+MODEL = ROOT / "models" / "bot-brain" / "policy-v4.json"
 HISTORICAL_V1_MODEL = ROOT / "models" / "bot-brain" / "policy-v1.json"
 HISTORICAL_V2_MODEL = ROOT / "models" / "bot-brain" / "policy-v2.json"
 LUA_WEIGHTS = ROOT / "mods" / "bot-brain" / "scripts" / "policy_weights.lua"
@@ -145,21 +145,21 @@ def _choice_record(
 
 
 class MlBotPolicyTests(unittest.TestCase):
-    def test_contract_is_exact_policy_v3(self) -> None:
-        self.assertEqual(spec.MODEL_VERSION, 3)
-        self.assertEqual(spec.OBSERVATION_VERSION, 3)
-        self.assertEqual(spec.TRAJECTORY_VERSION, 3)
-        self.assertEqual(spec.CHOICE_TRAJECTORY_VERSION, 3)
-        self.assertEqual(spec.ARCHITECTURE, "mlp-tanh-four-head-v3")
+    def test_contract_is_exact_policy_v4(self) -> None:
+        self.assertEqual(spec.MODEL_VERSION, 4)
+        self.assertEqual(spec.OBSERVATION_VERSION, 4)
+        self.assertEqual(spec.TRAJECTORY_VERSION, 4)
+        self.assertEqual(spec.CHOICE_TRAJECTORY_VERSION, 4)
+        self.assertEqual(spec.ARCHITECTURE, "mlp-tanh-four-head-v4")
         self.assertEqual(spec.HIDDEN_SIZES, (512, 256))
         self.assertEqual(spec.CHOICE_HIDDEN_SIZE, 128)
-        self.assertEqual(len(spec.OBSERVATION_NAMES), 1279)
-        self.assertEqual(len(set(spec.OBSERVATION_NAMES)), 1279)
+        self.assertEqual(len(spec.OBSERVATION_NAMES), 1333)
+        self.assertEqual(len(set(spec.OBSERVATION_NAMES)), 1333)
         self.assertEqual(len(spec.OPTION_DESCRIPTOR_NAMES), 56)
         self.assertEqual(
             spec.model_shape(),
             {
-                "observation_size": 1279,
+                "observation_size": 1333,
                 "hidden_sizes": [512, 256],
                 "movement_action_size": 9,
                 "target_action_size": 9,
@@ -183,10 +183,10 @@ class MlBotPolicyTests(unittest.TestCase):
         maximum_float = "-1.7976931348623157e+308"
         main_frame = "\t".join(
             (
-                "R", "3", "1", "2305843009213704705", "999999999",
+                "R", "4", "1", "2305843009213704705", "999999999",
                 "8", "8", "21", "8", maximum_float, maximum_float,
                 maximum_float, "0",
-                ",".join([maximum_float] * 1279),
+                ",".join([maximum_float] * 1333),
                 "1" * 9, "1" * 9, "1" * 22, "1" * 9,
             )
         )
@@ -207,11 +207,11 @@ class MlBotPolicyTests(unittest.TestCase):
         )
         choice_frame = "\t".join(
             (
-                "C", "3", "1", "2305843009213704705", "999", "999999999",
+                "C", "4", "1", "2305843009213704705", "999", "999999999",
                 "15", maximum_float, maximum_float, maximum_float,
                 str(MAX_LIVE_ROLLOUT_STEPS),
                 "1", "1", "1", "learned",
-                ",".join([maximum_float] * 1279),
+                ",".join([maximum_float] * 1333),
                 "1" * spec.MAX_CHOICE_OPTIONS,
                 descriptors,
                 ",".join(
@@ -229,9 +229,9 @@ class MlBotPolicyTests(unittest.TestCase):
         ).encode()
         self.assertLess(len(choice_response), 1024 * 1024)
 
-    def test_seed_model_is_strict_v3_and_bootstrap_is_finite(self) -> None:
+    def test_seed_model_is_strict_v4_and_bootstrap_is_finite(self) -> None:
         policy = load_model(MODEL)
-        self.assertEqual(policy.input_weight.shape, (512, 1279))
+        self.assertEqual(policy.input_weight.shape, (512, 1333))
         self.assertEqual(policy.hidden_weight.shape, (256, 512))
         self.assertEqual(policy.movement_weight.shape, (9, 256))
         self.assertEqual(policy.target_weight.shape, (9, 256))
@@ -242,7 +242,7 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(policy.choice_value_weight.shape, (256,))
         self.assertEqual(
             policy.metadata["training_kind"],
-            "target_aim_potion_semantic_bootstrap_v3",
+            "drop_identity_semantic_bootstrap_v4",
         )
         for head in ("movement", "target", "ability", "aim", "joint"):
             value = policy.metadata[f"validation_{head}_accuracy"]
@@ -261,13 +261,28 @@ class MlBotPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "choice_option_weight has shape"):
             BotPolicy.from_dict(invalid)
 
-    def test_v1_and_v2_models_are_rejected_clearly(self) -> None:
+    def test_v1_v2_and_v3_models_are_rejected_clearly(self) -> None:
         for path in (HISTORICAL_V1_MODEL, HISTORICAL_V2_MODEL):
             with self.subTest(path=path.name), self.assertRaisesRegex(
                 ValueError,
-                "v1/v2 artifacts are incompatible.*policy-v3",
+                "v1/v2/v3 artifacts are incompatible.*policy-v4",
             ):
                 load_model(path)
+
+        current = load_model(MODEL).to_dict()
+        current["model_version"] = 3
+        current["observation_version"] = 3
+        current["trajectory_version"] = 3
+        current["choice_trajectory_version"] = 3
+        current["architecture"] = "mlp-tanh-four-head-v3"
+        with tempfile.TemporaryDirectory() as directory:
+            historical_v3 = Path(directory) / "policy-v3.json"
+            historical_v3.write_text(json.dumps(current), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError,
+                "v1/v2/v3 artifacts are incompatible.*policy-v4",
+            ):
+                load_model(historical_v3)
 
     def test_json_and_lua_artifacts_are_identical_exports(self) -> None:
         policy = load_model(MODEL)
@@ -313,7 +328,7 @@ class MlBotPolicyTests(unittest.TestCase):
             max(len(code.encode("utf-8")) for code in calls), 1024 * 1024
         )
         self.assertEqual(POLICY_LOAD_CHUNK_BYTES, 512 * 1024)
-        self.assertIn("@ml-bot-policy-v3-hot-reload", calls[-1])
+        self.assertIn("@ml-bot-policy-v4-hot-reload", calls[-1])
         self.assertEqual(
             sum("staging.parts[" in code for code in calls),
             math.ceil(len(render_lua_weights(policy)) / POLICY_LOAD_CHUNK_BYTES),
@@ -342,7 +357,7 @@ class MlBotPolicyTests(unittest.TestCase):
         dataset = generate_expert_dataset(
             256, rng=np.random.default_rng(90210)
         )
-        self.assertEqual(dataset.observations.shape, (256, 1279))
+        self.assertEqual(dataset.observations.shape, (256, 1333))
         self.assertTrue(np.all(np.isfinite(dataset.observations)))
         rows = np.arange(256)
         for masks, actions in (
@@ -354,6 +369,29 @@ class MlBotPolicyTests(unittest.TestCase):
             self.assertTrue(np.all(masks[rows, actions]))
         self.assertTrue(np.any(dataset.ability_actions >= 10))
         self.assertTrue(np.any(dataset.aim_actions > 0))
+        for suffix in (
+            "type_powerup",
+            "item_stock_health",
+            "item_stock_mana",
+            "item_is_equipment",
+            "item_is_wizard_key",
+        ):
+            indices = [
+                spec.OBSERVATION_NAMES.index(f"pickup_{slot}_{suffix}")
+                for slot in range(1, spec.PICKUP_SLOT_COUNT + 1)
+            ]
+            self.assertTrue(np.any(dataset.observations[:, indices] > 0.0))
+        self.assertTrue(
+            np.any(
+                dataset.observations[
+                    :,
+                    spec.OBSERVATION_NAMES.index(
+                        "inventory_has_wizard_key"
+                    ),
+                ]
+                > 0.0
+            )
+        )
         policy = BotPolicy.initialize(np.random.default_rng(90211))
         loss, gradient_norm = behavior_clone_batch(
             policy,
@@ -376,7 +414,7 @@ class MlBotPolicyTests(unittest.TestCase):
     def test_composite_log_probability_sums_all_four_heads(self) -> None:
         rng = np.random.default_rng(1800)
         policy = BotPolicy.initialize(rng)
-        observations = rng.uniform(-1.0, 1.0, size=(8, 1279))
+        observations = rng.uniform(-1.0, 1.0, size=(8, 1333))
         mask9 = np.ones((8, 9), dtype=np.bool_)
         mask22 = np.ones((8, 22), dtype=np.bool_)
         actions = policy.act(
@@ -403,7 +441,7 @@ class MlBotPolicyTests(unittest.TestCase):
         rng = np.random.default_rng(1801)
         policy = BotPolicy.initialize(rng)
         count = 24
-        observations = rng.uniform(-1.0, 1.0, size=(count, 1279))
+        observations = rng.uniform(-1.0, 1.0, size=(count, 1333))
         mask9 = np.ones((count, 9), dtype=np.bool_)
         mask22 = np.ones((count, 22), dtype=np.bool_)
         actions = policy.act(
@@ -474,7 +512,7 @@ class MlBotPolicyTests(unittest.TestCase):
 
         rng = np.random.default_rng(1803)
         policy = BotPolicy.initialize(rng)
-        observations = rng.uniform(-1.0, 1.0, size=(8, 1279))
+        observations = rng.uniform(-1.0, 1.0, size=(8, 1333))
         descriptors = rng.uniform(-1.0, 1.0, size=(8, 4, 56))
         masks = np.ones((8, 4), dtype=np.bool_)
         actions = policy.act_choice(
@@ -519,11 +557,11 @@ class MlBotPolicyTests(unittest.TestCase):
             coverage.to_dict(),
         )
 
-    def test_main_rollout_parser_is_strict_trajectory_v3(self) -> None:
+    def test_main_rollout_parser_is_strict_trajectory_v4(self) -> None:
         fields = [
-            "R", "3", "2", "2305843009213704705", "100",
+            "R", "4", "2", "2305843009213704705", "100",
             "1", "3", "2", "4", "-0.5", "0.1", "0.2", "0",
-            ",".join(["0"] * 1279),
+            ",".join(["0"] * 1333),
             "1" * 9,
             "1" * 9,
             "1" * 22,
@@ -534,7 +572,7 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertEqual(records[0].aim_action, 4)
         invalid = fields.copy()
         invalid[1] = "2"
-        with self.assertRaisesRegex(RuntimeError, "v1/v2.*trajectory-v3"):
+        with self.assertRaisesRegex(RuntimeError, "v1/v2/v3.*trajectory-v4"):
             parse_rollout_output("\t".join(invalid), expected_count=1)
         invalid = fields.copy()
         invalid[16] = "1" + "0" * 21
@@ -544,9 +582,9 @@ class MlBotPolicyTests(unittest.TestCase):
     def test_choice_rollout_parser_is_strict_and_complete(self) -> None:
         descriptor = ",".join(["0"] * 56)
         fields = [
-            "C", "3", "4", "42", "9", "100", "1",
+            "C", "4", "4", "42", "9", "100", "1",
             "-0.693", "0.1", "0", "2", "1", "1", "1", "learned",
-            ",".join(["0"] * 1279),
+            ",".join(["0"] * 1333),
             "11",
             descriptor + ";" + descriptor,
             "0.2,0.3",
@@ -579,7 +617,7 @@ class MlBotPolicyTests(unittest.TestCase):
         batch = prepare_rollout_batch(
             training, bootstrap, gamma=0.9, gae_lambda=0.8
         )
-        self.assertEqual(batch["observations"].shape, (3, 1279))
+        self.assertEqual(batch["observations"].shape, (3, 1333))
         self.assertEqual(batch["ability_masks"].shape, (3, 22))
 
         first = prepare_choice_batch(
@@ -594,7 +632,7 @@ class MlBotPolicyTests(unittest.TestCase):
         self.assertFalse(combined["option_masks"][0, 2])
 
         descriptor = ",".join(["0"] * 56)
-        observation = ",".join(["0"] * 1279)
+        observation = ",".join(["0"] * 1333)
 
         def choice_frame(
             participant_id: int,
@@ -603,7 +641,7 @@ class MlBotPolicyTests(unittest.TestCase):
         ) -> str:
             return "\t".join(
                 (
-                    "C", "3", "4", str(participant_id), "9", "100", "0",
+                    "C", "4", "4", str(participant_id), "9", "100", "0",
                     "0", "0", "0", "0", "1",
                     "1" if trainable else "0", "1", mode,
                     observation, "1", descriptor, "",
@@ -979,7 +1017,7 @@ class MlBotPolicyTests(unittest.TestCase):
 
     def test_lua_python_contract_and_inference_parity(self) -> None:
         values = self._run_lua(LUA_CONTRACT)
-        self.assertEqual(values["observation_count"], "1279")
+        self.assertEqual(values["observation_count"], "1333")
         self.assertEqual(values["option_descriptor_count"], "56")
         self.assertEqual(values["hidden_sizes"], "512,256")
         self.assertEqual(values["choice_hidden_size"], "128")
@@ -1009,20 +1047,25 @@ class MlBotPolicyTests(unittest.TestCase):
         )
         self.assertEqual(values["v1_rejected"], "true")
         self.assertEqual(values["v2_rejected"], "true")
+        self.assertEqual(values["v3_rejected"], "true")
         self.assertEqual(values["main_only_reset_ok"], "true")
         self.assertEqual(values["training_ring_ok"], "true")
         self.assertIn(
-            "policy v1/v2 artifacts are incompatible",
+            "policy v1/v2/v3 artifacts are incompatible",
             values["v1_error"],
         )
         self.assertIn(
-            "policy v1/v2 artifacts are incompatible",
+            "policy v1/v2/v3 artifacts are incompatible",
             values["v2_error"],
+        )
+        self.assertIn(
+            "policy v1/v2/v3 artifacts are incompatible",
+            values["v3_error"],
         )
 
         policy = load_model(MODEL)
         observation = np.asarray(
-            [((index * 37) % 101 - 50) / 50 for index in range(1, 1280)]
+            [((index * 37) % 101 - 50) / 50 for index in range(1, 1334)]
         )[None, :]
         movement_mask = np.asarray(
             [[index % 3 != 0 for index in range(1, 10)]]
@@ -1162,7 +1205,7 @@ class MlBotPolicyTests(unittest.TestCase):
         }
         self.assertEqual(lua_shapes, python_shapes)
 
-        self.assertEqual(values["main_trajectory_version"], "3")
+        self.assertEqual(values["main_trajectory_version"], "4")
         self.assertEqual(
             values["main_trajectory_masks"],
             ",".join(
@@ -1183,8 +1226,8 @@ class MlBotPolicyTests(unittest.TestCase):
             rtol=2e-10,
             atol=2e-12,
         )
-        self.assertEqual(values["choice_trajectory_version"], "3")
-        self.assertEqual(values["choice_trajectory_shape"], "1279,3,56")
+        self.assertEqual(values["choice_trajectory_version"], "4")
+        self.assertEqual(values["choice_trajectory_shape"], "1333,3,56")
         self.assertEqual(values["choice_trajectory_mask"], "101")
         self.assertEqual(values["choice_trajectory_duration"], "2")
         choice_log_values = np.fromstring(
@@ -1200,9 +1243,9 @@ class MlBotPolicyTests(unittest.TestCase):
 
     def test_phase3_contract_fixture_stays_green(self) -> None:
         values = self._run_lua(LUA_PHASE3)
-        self.assertEqual(values["observation_count"], "1279")
+        self.assertEqual(values["observation_count"], "1333")
         self.assertEqual(values["finite"], "true")
-        self.assertEqual(values["trajectory_v3"], "true")
+        self.assertEqual(values["trajectory_v4"], "true")
         self.assertEqual(values["permanent_potion_masks"], "true")
         self.assertEqual(values["idle_live_enemy_reward"], "0.0")
         self.assertEqual(values["teammate_kill_reward"], "0.0")

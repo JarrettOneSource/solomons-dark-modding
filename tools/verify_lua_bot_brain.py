@@ -344,14 +344,14 @@ def _pair_bot_ready(
         and client.get("member.name") == BOT_NAME
         and host.get("member.controller") == "LuaBrain"
         and client.get("member.controller") == "LuaBrain"
-        and _integer(host, "policy.version") == 3
-        and _integer(client, "policy.version") == 3
+        and _integer(host, "policy.version") == 4
+        and _integer(client, "policy.version") == 4
         and host.get("policy.architecture")
-        == "mlp-tanh-four-head-v3"
+        == "mlp-tanh-four-head-v4"
         and client.get("policy.architecture")
-        == "mlp-tanh-four-head-v3"
-        and _integer(host, "policy.observation_size") == 1279
-        and _integer(client, "policy.observation_size") == 1279
+        == "mlp-tanh-four-head-v4"
+        and _integer(host, "policy.observation_size") == 1333
+        and _integer(client, "policy.observation_size") == 1333
         and _integer(host, "policy.hidden_1") == 512
         and _integer(host, "policy.hidden_2") == 256
         and _integer(host, "policy.movement_actions") == 9

@@ -283,9 +283,16 @@ local PICKUP_RANGE_MULTIPLIERS = {
   Item = 30.0,
   Potion = 30.0,
   Orb = 60.0,
+  -- Bonus_TickPickup (0x006039C0) loads the progression pickup stat at
+  -- 0x00603B46 and multiplies it by the stock 20.0 constant at 0x7DE920.
+  Powerup = 20.0,
 }
 
-local function sort_pickups(loot, bot_x, bot_y)
+local function sort_pickups(
+    loot,
+    bot_x,
+    bot_y,
+    inventory)
   local pickups = {}
   for source_index, drop in ipairs(loot.drops or {}) do
     local kind = tostring(drop.kind or "")
@@ -299,6 +306,7 @@ local function sort_pickups(loot, bot_x, bot_y)
       local unit_x, unit_y, distance =
         normalize(dx, dy)
       local resource_kind = number(drop.resource_kind, -1)
+      local item = inventory:describe_ground_item(drop)
       pickups[#pickups + 1] = {
         network_drop_id = number(drop.network_drop_id),
         source_index = source_index,
@@ -315,6 +323,23 @@ local function sort_pickups(loot, bot_x, bot_y)
           kind == "Orb" and resource_kind == 1,
         type_item_carrier =
           kind == "Item" or kind == "Potion",
+        type_powerup = kind == "Powerup",
+        item_identity_known = item.identity_known,
+        item_stock_health = item.stock_health,
+        item_stock_mana = item.stock_mana,
+        item_stock_wizard_chug = item.stock_wizard_chug,
+        item_stock_antidote = item.stock_antidote,
+        item_stock_mind_chug = item.stock_mind_chug,
+        item_stock_rejuvenation = item.stock_rejuvenation,
+        item_custom = item.custom,
+        item_is_equipment = item.is_equipment,
+        item_is_wizard_key = item.is_wizard_key,
+        item_stack_count_scaled = item.stack_count_scaled,
+        item_amount_scaled = item.amount_scaled,
+        item_type_id = number(drop.item_type_id),
+        item_slot = number(drop.item_slot, -1),
+        stack_count = number(drop.stack_count),
+        amount = number(drop.amount),
         pickup_range_multiplier = multiplier,
       }
     end
@@ -506,7 +531,11 @@ function observation.capture(builder, context, frame)
     bot_y)
   local loot = builder.get_loot()
   loot = type(loot) == "table" and loot or {}
-  local pickups = sort_pickups(loot, bot_x, bot_y)
+  local pickups = sort_pickups(
+    loot,
+    bot_x,
+    bot_y,
+    builder.inventory)
   local inventory_capture = builder.inventory:capture(
     context.participant_id,
     snapshot)
@@ -879,6 +908,35 @@ function observation.capture(builder, context, frame)
       spec,
       prefix .. "type_item_carrier",
       pickup ~= nil and pickup.type_item_carrier)
+    for _, name in ipairs({
+      "type_powerup",
+      "item_identity_known",
+      "item_stock_health",
+      "item_stock_mana",
+      "item_stock_wizard_chug",
+      "item_stock_antidote",
+      "item_stock_mind_chug",
+      "item_stock_rejuvenation",
+      "item_custom",
+      "item_is_equipment",
+      "item_is_wizard_key",
+    }) do
+      push_boolean(
+        values,
+        spec,
+        prefix .. name,
+        pickup ~= nil and pickup[name])
+    end
+    push(
+      values,
+      spec,
+      prefix .. "item_stack_count_scaled",
+      pickup and pickup.item_stack_count_scaled or 0.0)
+    push(
+      values,
+      spec,
+      prefix .. "item_amount_scaled",
+      pickup and pickup.item_amount_scaled or 0.0)
   end
   push(
     values,
@@ -1690,6 +1748,7 @@ function observation.capture(builder, context, frame)
     "map_count",
     "registered_custom_count",
     "unknown_count",
+    "wizard_key_count",
   }) do
     push(
       values,
@@ -1697,6 +1756,11 @@ function observation.capture(builder, context, frame)
       "inventory_" .. field .. "_scaled",
       inventory_capture.summary[field])
   end
+  push_boolean(
+    values,
+    spec,
+    "inventory_has_wizard_key",
+    inventory_capture.has_wizard_key)
 
   if #values ~= #spec.observation_names then
     error(

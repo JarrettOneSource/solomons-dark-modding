@@ -1,7 +1,7 @@
-"""Target-, aim-, and potion-aware semantic expert for v3 bootstrap only.
+"""Target-, aim-, potion-, and drop-aware semantic expert for v4 bootstrap.
 
 The expert labels the four main action heads. Native skill choices are never
-labelled here: the option scorer learns exclusively from choice-event-v3 SMDP
+labelled here: the option scorer learns exclusively from choice-event-v4 SMDP
 records, so the retired scripted skill manager cannot become ground truth.
 """
 
@@ -287,6 +287,65 @@ def _set_hazard(
     return dx, dy
 
 
+DROP_TYPES = (
+    "gold",
+    "health_orb",
+    "mana_orb",
+    "stock_health",
+    "stock_mana",
+    "stock_wizard_chug",
+    "stock_antidote",
+    "stock_mind_chug",
+    "stock_rejuvenation",
+    "custom",
+    "equipment",
+    "wizard_key",
+    "powerup",
+    "unknown_item",
+)
+
+
+def _set_pickups(
+    row: Array,
+    rng: np.random.Generator,
+) -> None:
+    count = int(rng.integers(0, spec.PICKUP_SLOT_COUNT + 1))
+    for slot in range(1, count + 1):
+        prefix = f"pickup_{slot}_"
+        angle = rng.uniform(-math.pi, math.pi)
+        dx, dy = math.cos(angle), math.sin(angle)
+        distance = rng.uniform(0.03, 0.75)
+        drop_type = DROP_TYPES[int(rng.integers(0, len(DROP_TYPES)))]
+        _set(row, prefix + "present", 1.0)
+        _set(row, prefix + "dx", dx)
+        _set(row, prefix + "dy", dy)
+        _set(row, prefix + "distance_scaled", distance)
+
+        if drop_type == "gold":
+            _set(row, prefix + "type_gold", 1.0)
+        elif drop_type == "health_orb":
+            _set(row, prefix + "type_health_orb", 1.0)
+        elif drop_type == "mana_orb":
+            _set(row, prefix + "type_mana_orb", 1.0)
+        elif drop_type == "powerup":
+            _set(row, prefix + "type_powerup", 1.0)
+        else:
+            _set(row, prefix + "type_item_carrier", 1.0)
+            _set(row, prefix + "item_stack_count_scaled", rng.uniform(0.15, 0.6))
+            _set(row, prefix + "item_amount_scaled", rng.uniform(0.15, 0.6))
+            if drop_type != "unknown_item":
+                _set(row, prefix + "item_identity_known", 1.0)
+                if drop_type == "custom":
+                    _set(row, prefix + "item_custom", 1.0)
+                elif drop_type == "equipment":
+                    _set(row, prefix + "item_is_equipment", 1.0)
+                elif drop_type == "wizard_key":
+                    _set(row, prefix + "item_is_wizard_key", 1.0)
+                else:
+                    _set(row, prefix + "item_" + drop_type, 1.0)
+    _set(row, "pickup_count_scaled", count / spec.PICKUP_COUNT_SCALE)
+
+
 def generate_expert_dataset(
     count: int,
     *,
@@ -338,6 +397,18 @@ def generate_expert_dataset(
             row, rng, target, mana_ratio
         )
         potion_types, potion_legal = _set_potions(row, rng)
+        # Drop fixtures use an index-scoped stream so widening observations
+        # cannot perturb the established target/ability/aim curriculum RNG.
+        drop_rng = np.random.default_rng(0xD09A0000 + index)
+        _set_pickups(row, drop_rng)
+        wizard_key_count = int(drop_rng.integers(0, 4))
+        if wizard_key_count > 0:
+            _set(
+                row,
+                "inventory_wizard_key_count_scaled",
+                math.log1p(wizard_key_count) / math.log(100.0),
+            )
+            _set(row, "inventory_has_wizard_key", 1.0)
         ability_masks[index, 0] = True
         ability_masks[index, 1] = bool(
             target is not None and mana_ratio >= 0.08 and target["distance"] <= 0.5
@@ -372,10 +443,10 @@ def generate_expert_dataset(
 
         if hp_ratio < 0.30 and enemies:
             move_x, move_y = -enemies[0]["dx"], -enemies[0]["dy"]
-        elif target is not None and target["distance"] > 0.48:
-            move_x, move_y = target["dx"], target["dy"]
         elif hazard_x != 0.0 or hazard_y != 0.0:
             move_x, move_y = -hazard_x, -hazard_y
+        elif target is not None and target["distance"] > 0.48:
+            move_x, move_y = target["dx"], target["dy"]
         elif target is not None:
             move_x, move_y = -target["dy"], target["dx"]
         else:

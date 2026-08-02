@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic contract tests for the policy-v3 live verifier controls."""
+"""Deterministic contract tests for the policy-v4 live verifier controls."""
 
 from __future__ import annotations
 
@@ -134,9 +134,9 @@ class MlBotV3LiveVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "invalid potion row"):
             live._potion_slots({"potion_rows": "1:5:2"})
 
-    def test_contract_validator_requires_exact_v3_shape_and_masks(self) -> None:
+    def test_contract_validator_requires_exact_v4_shape_and_masks(self) -> None:
         values = {
-            "observation_version": "3",
+            "observation_version": "4",
             "observation_count": str(len(spec.OBSERVATION_NAMES)),
             "observation_finite": "true",
             "observation": ",".join(
@@ -153,7 +153,7 @@ class MlBotV3LiveVerifierTests(unittest.TestCase):
             "aim_mask_mismatches": "0",
         }
         observation = live._validate_contract(values)
-        self.assertEqual(len(observation), 1279)
+        self.assertEqual(len(observation), 1333)
         broken = dict(values, ability_mask="1" * 21)
         with self.assertRaisesRegex(Exception, "invalid live ability_mask"):
             live._validate_contract(broken)

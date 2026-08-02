@@ -50,6 +50,7 @@ struct BotInventorySummary {
     std::int32_t map_count = 0;
     std::int32_t registered_custom_count = 0;
     std::int32_t unknown_count = 0;
+    std::int32_t wizard_key_count = 0;
 };
 
 struct BotInventoryDetails {

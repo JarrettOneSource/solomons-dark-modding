@@ -310,6 +310,9 @@ def test_ml_bot_v3_inventory_details_are_revision_cached_and_content_identified(
         "kNativeItemPolicyCatalog",
         "TryResolveNativeItemRecipeIdentityByUid(",
         "OverlayLiveParticipantConsumableState(",
+        "case 7012:",
+        "item.slot == 1",
+        "summary->wizard_key_count += 1",
     ):
         assert token in helpers, f"inventory descriptor producer lacks {token}"
     _require_in_order(
@@ -333,6 +336,7 @@ def test_ml_bot_v3_inventory_details_are_revision_cached_and_content_identified(
         "summary",
         "synthetic_use_supported",
         "identity_key",
+        "wizard_key_count",
     ):
         assert f'"{field}"' in binding, f"inventory Lua shape omits {field}"
     inventory_push = multiplayer_binding.split(

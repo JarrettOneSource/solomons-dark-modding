@@ -1,15 +1,15 @@
-"""Exact policy-v3 model and rollout contracts shared by training tools."""
+"""Exact policy-v4 model and rollout contracts shared by training tools."""
 
 from __future__ import annotations
 
 from typing import Any, Mapping
 
 MODEL_FORMAT = "solomon-dark-bot-policy"
-MODEL_VERSION = 3
-OBSERVATION_VERSION = 3
-TRAJECTORY_VERSION = 3
-CHOICE_TRAJECTORY_VERSION = 3
-ARCHITECTURE = "mlp-tanh-four-head-v3"
+MODEL_VERSION = 4
+OBSERVATION_VERSION = 4
+TRAJECTORY_VERSION = 4
+CHOICE_TRAJECTORY_VERSION = 4
+ARCHITECTURE = "mlp-tanh-four-head-v4"
 HIDDEN_SIZES = (512, 256)
 CHOICE_HIDDEN_SIZE = 128
 
@@ -202,6 +202,19 @@ def _observation_names() -> tuple[str, ...]:
                 "type_health_orb",
                 "type_mana_orb",
                 "type_item_carrier",
+                "type_powerup",
+                "item_identity_known",
+                "item_stock_health",
+                "item_stock_mana",
+                "item_stock_wizard_chug",
+                "item_stock_antidote",
+                "item_stock_mind_chug",
+                "item_stock_rejuvenation",
+                "item_custom",
+                "item_is_equipment",
+                "item_is_wizard_key",
+                "item_stack_count_scaled",
+                "item_amount_scaled",
             )
         )
     names.append("pickup_count_scaled")
@@ -435,12 +448,14 @@ def _observation_names() -> tuple[str, ...]:
             "inventory_map_count_scaled",
             "inventory_registered_custom_count_scaled",
             "inventory_unknown_count_scaled",
+            "inventory_wizard_key_count_scaled",
+            "inventory_has_wizard_key",
         )
     )
 
-    if len(names) != 1279:
+    if len(names) != 1333:
         raise AssertionError(
-            f"policy-v3 observation contract has {len(names)} names, expected 1279"
+            f"policy-v4 observation contract has {len(names)} names, expected 1333"
         )
     return tuple(names)
 
@@ -655,20 +670,24 @@ def contract_metadata() -> dict[str, object]:
 
 def validate_model_contract(model: Mapping[str, Any]) -> None:
     if (
-        model.get("version") in (1, 2)
-        or model.get("observation_version") in (1, 2)
+        model.get("version") in (1, 2, 3)
+        or model.get("observation_version") in (1, 2, 3)
         or model.get("architecture")
-        in ("mlp-tanh-two-head-v1", "mlp-tanh-three-head-v2")
-        or model.get("observation_size") in (87, 395)
+        in (
+            "mlp-tanh-two-head-v1",
+            "mlp-tanh-three-head-v2",
+            "mlp-tanh-four-head-v3",
+        )
+        or model.get("observation_size") in (87, 395, 1279)
     ):
         raise ValueError(
-            "ML bot policy v1/v2 artifacts are incompatible with the strict "
-            "policy-v3 loader; train or load policy-v3.json"
+            "ML bot policy v1/v2/v3 artifacts are incompatible with the "
+            "strict policy-v4 loader; train or load policy-v4.json"
         )
     expected = contract_metadata()
     for key, value in expected.items():
         if model.get(key) != value:
             raise ValueError(
-                f"policy-v3 model contract mismatch for {key}: "
+                f"policy-v4 model contract mismatch for {key}: "
                 f"expected {value!r}, got {model.get(key)!r}"
             )

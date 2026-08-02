@@ -909,6 +909,7 @@ local function think_with_policy(
   context.debug.policy_obstacles = capture.obstacles
   context.debug.policy_hazards = capture.hazards
   context.debug.policy_inventory = capture.inventory
+  context.debug.policy_pickups = capture.pickups
   context.debug.policy_allies = capture.allies
   context.debug.policy_capture_target_id =
     capture.current_target and
@@ -1184,6 +1185,7 @@ function brain.new(row, roster_index, shared, steering)
       policy_obstacles = {},
       policy_hazards = {},
       policy_inventory = {},
+      policy_pickups = {},
       policy_allies = {},
       last_error = "",
     },

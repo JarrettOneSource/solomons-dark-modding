@@ -22,6 +22,16 @@ local SUMMARY_FIELDS = {
   "map_count",
   "registered_custom_count",
   "unknown_count",
+  "wizard_key_count",
+}
+
+local EQUIPMENT_ITEM_TYPES = {
+  [7002] = true,
+  [7003] = true,
+  [7004] = true,
+  [7005] = true,
+  [7006] = true,
+  [7011] = true,
 }
 
 local function finite_number(value)
@@ -204,6 +214,60 @@ local function potion_row(potion, spec)
   }
 end
 
+local function ground_item_descriptor(drop, spec)
+  drop = type(drop) == "table" and drop or {}
+  local descriptor = {
+    identity_known = false,
+    stock_health = false,
+    stock_mana = false,
+    stock_wizard_chug = false,
+    stock_antidote = false,
+    stock_mind_chug = false,
+    stock_rejuvenation = false,
+    custom = false,
+    is_equipment = false,
+    is_wizard_key = false,
+    stack_count_scaled = 0.0,
+    amount_scaled = 0.0,
+  }
+  local kind = tostring(drop.kind or "")
+  if kind ~= "Item" and kind ~= "Potion" then
+    return descriptor
+  end
+
+  descriptor.stack_count_scaled = count_scaled(
+    drop.stack_count,
+    spec.inventory_count_saturation)
+  descriptor.amount_scaled = count_scaled(
+    drop.amount,
+    spec.inventory_count_saturation)
+
+  local type_id = math.floor(number(drop.item_type_id))
+  local item_slot = math.floor(number(drop.item_slot, -1))
+  if type_id == 7001 and item_slot >= 0 and item_slot <= 5 then
+    descriptor.identity_known = true
+    descriptor.stock_health = item_slot == 0
+    descriptor.stock_mana = item_slot == 1
+    descriptor.stock_wizard_chug = item_slot == 2
+    descriptor.stock_antidote = item_slot == 3
+    descriptor.stock_mind_chug = item_slot == 4
+    descriptor.stock_rejuvenation = item_slot == 5
+  elseif type_id == 7001 and item_slot >= 6 then
+    -- Lua consumables reserve native potion subtypes starting at 6. The
+    -- ground snapshot has the family/subtype but not the stable content ID,
+    -- so expose the known custom family without aliasing a stock effect.
+    descriptor.identity_known = true
+    descriptor.custom = true
+  elseif EQUIPMENT_ITEM_TYPES[type_id] == true then
+    descriptor.identity_known = true
+    descriptor.is_equipment = true
+  elseif type_id == 7012 and item_slot == 1 then
+    descriptor.identity_known = true
+    descriptor.is_wizard_key = true
+  end
+  return descriptor
+end
+
 local function equipment_row(source, spec)
   source = type(source) == "table" and source or {}
   local hash_a, hash_b =
@@ -259,6 +323,10 @@ local function equipment_row(source, spec)
       source.special_feature_present == true,
     source = source,
   }
+end
+
+function Resolver:describe_ground_item(drop)
+  return ground_item_descriptor(drop, self.spec)
 end
 
 function Resolver:capture(participant_id, snapshot)
@@ -326,6 +394,8 @@ function Resolver:capture(participant_id, snapshot)
       self.spec.inventory_count_saturation),
     equipment_rows = equipment_rows,
     summary = summary,
+    has_wizard_key =
+      number(source_summary.wizard_key_count) > 0.0,
     damage_x4_remaining_scaled = clamp(
       number(details.damage_x4_remaining_seconds) /
         self.spec.status_duration_scale_seconds,
@@ -373,6 +443,7 @@ end
 
 inventory.count_scaled = count_scaled
 inventory.identity_hashes = identity_hashes
+inventory.ground_item_descriptor = ground_item_descriptor
 inventory.equipment_slots = EQUIPMENT_SLOTS
 inventory.summary_fields = SUMMARY_FIELDS
 

@@ -126,13 +126,13 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
     assert settings["roster"]["max_items"] == 32
 
     for token in (
-        "model_version = 3",
-        "observation_version = 3",
-        "trajectory_version = 3",
-        "choice_trajectory_version = 3",
-        'architecture = "mlp-tanh-four-head-v3"',
+        "model_version = 4",
+        "observation_version = 4",
+        "trajectory_version = 4",
+        "choice_trajectory_version = 4",
+        'architecture = "mlp-tanh-four-head-v4"',
         "hidden_sizes = {512, 256}",
-        "#observation_names == 1279",
+        "#observation_names == 1333",
         "#option_descriptor_names == 56",
         "secondary_slot_count = 8",
         "enemy_slot_count = 8",
@@ -166,6 +166,10 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         '"hazard_count_scaled"',
         '"potion_type_count_scaled"',
         '"inventory_unknown_count_scaled"',
+        '"inventory_wizard_key_count_scaled"',
+        '"inventory_has_wizard_key"',
+        '"type_powerup"',
+        '"item_identity_known"',
     ):
         assert token in spec, f"v3 Phase-3 policy spec lacks {token}"
 
@@ -243,8 +247,22 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         '"hat"',
         '"ring_3"',
         '"amulet"',
+        "function Resolver:describe_ground_item(drop)",
+        "type_id == 7001 and item_slot >= 0 and item_slot <= 5",
+        "type_id == 7012 and item_slot == 1",
+        "wizard_key_count",
     ):
         assert token in inventory, f"inventory policy lacks {token}"
+
+    for token in (
+        "Powerup = 20.0",
+        "Bonus_TickPickup (0x006039C0)",
+        "local item = inventory:describe_ground_item(drop)",
+        "type_powerup = kind == \"Powerup\"",
+        "item_identity_known = item.identity_known",
+        "inventory_capture.has_wizard_key",
+    ):
+        assert token in observation, f"drop-value observation lacks {token}"
 
     for token in (
         "#skill_choices.options > self.spec.max_choice_options",
@@ -395,7 +413,7 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "record.trainable == true",
     ):
         assert token in training, (
-            f"trajectory v3 writer lacks {token}"
+            f"trajectory v4 writer lacks {token}"
         )
     # V3-7 removes passive survival reward; V3-8 source-attributes both combat
     # terms while self-vitals, wave, death, and clamp coefficients stay fixed.
@@ -417,7 +435,7 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
     ]
 
     for token in (
-        "observation_count=1279",
+        "observation_count=1333",
         "exact_order=true",
         "finite=true",
         "exact_geometry=true",
@@ -429,6 +447,8 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "hazard_transition=true",
         "potion_transition=true",
         "equipment_transition=true",
+        "pickup_identity_transition=true",
+        "wizard_key_transition=true",
         "permanent_potion_masks=true",
         "aim_family_masks=true",
         "target_conditioned_ability_masks=true",
@@ -437,14 +457,14 @@ def test_ml_bot_v3_phase3_lua_contract_is_pinned() -> str:
         "choice_generation_exactly_once=true",
         "choice_duration_steps=2",
         "scripted_choice_excluded=true",
-        "trajectory_v3=true",
+        "trajectory_v4=true",
         "idle_live_enemy_reward=",
         "idle_choice_duration_steps=",
         "xp_scale=",
     ):
         assert token in fixture
     return (
-        "V3 Phase 3 pins 1279 ordered observations, exact cached geometry, "
+        "V3 Phase 3 fixture pins 1333 ordered observations, exact cached geometry, "
         "four action masks, inventory and hazard semantics, and separate "
         "main and choice-event trajectories with V3-8 source-attributed "
         "combat progress and zero passive survival reward"
@@ -797,8 +817,8 @@ def _legacy_ml_bot_v2_runtime_contract() -> str:
     )
 
 
-def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
-    model = json.loads(_read("models/bot-brain/policy-v3.json"))
+def test_ml_bot_v4_runtime_and_dual_stream_trainer_are_pinned() -> str:
+    model = json.loads(_read("models/bot-brain/policy-v4.json"))
     historical_v1 = json.loads(_read("models/bot-brain/policy-v1.json"))
     historical_v2 = json.loads(_read("models/bot-brain/policy-v2.json"))
     lua_spec = _read("mods/bot-brain/scripts/policy_spec.lua")
@@ -814,10 +834,10 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
 
     assert historical_v1["version"] == 1
     assert historical_v2["version"] == 2
-    assert model["version"] == 3
-    assert model["observation_version"] == 3
-    assert model["architecture"] == "mlp-tanh-four-head-v3"
-    assert model["observation_size"] == 1279
+    assert model["version"] == 4
+    assert model["observation_version"] == 4
+    assert model["architecture"] == "mlp-tanh-four-head-v4"
+    assert model["observation_size"] == 1333
     assert model["hidden_sizes"] == [512, 256]
     assert model["movement_action_size"] == 9
     assert model["target_action_size"] == 9
@@ -827,7 +847,7 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
     assert model["choice_hidden_size"] == 128
     assert model["choice_value_size"] == 1
     assert model["choice_temperature"] in (1.25, 1.0)
-    assert len(model["observation_names"]) == 1279
+    assert len(model["observation_names"]) == 1333
     assert len(model["option_descriptor_names"]) == 56
     assert set(model["parameters"]) == {
         "input_weight",
@@ -853,25 +873,25 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
     }
 
     for token in (
-        "MODEL_VERSION = 3",
-        "OBSERVATION_VERSION = 3",
-        "TRAJECTORY_VERSION = 3",
-        "CHOICE_TRAJECTORY_VERSION = 3",
-        'ARCHITECTURE = "mlp-tanh-four-head-v3"',
+        "MODEL_VERSION = 4",
+        "OBSERVATION_VERSION = 4",
+        "TRAJECTORY_VERSION = 4",
+        "CHOICE_TRAJECTORY_VERSION = 4",
+        'ARCHITECTURE = "mlp-tanh-four-head-v4"',
         "HIDDEN_SIZES = (512, 256)",
         "CHOICE_HIDDEN_SIZE = 128",
-        "if len(names) != 1279:",
+        "if len(names) != 1333:",
         "ABILITY_ACTION_NAMES = (",
         "AIM_ACTION_NAMES = (",
         "CHOICE_ENTROPY_COEFFICIENT = 0.05",
         "CHOICE_EXPLORATION_TEMPERATURE = 1.25",
         "CHOICE_COVERAGE_THRESHOLD = 20",
-        "v1/v2 artifacts are incompatible",
+        "v1/v2/v3 artifacts are incompatible",
     ):
         assert token in python_spec
     for token in (
-        "model_version = 3",
-        "architecture = \"mlp-tanh-four-head-v3\"",
+        "model_version = 4",
+        "architecture = \"mlp-tanh-four-head-v4\"",
         "hidden_sizes = {512, 256}",
         "choice_hidden_size = 128",
         "choice_entropy_coefficient = 0.05",
@@ -896,7 +916,7 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
     ):
         assert token in python_model
     for token in (
-        "policy v1/v2 artifacts are incompatible",
+        "policy v1/v2/v3 artifacts are incompatible",
         "parameters.ability_weight",
         "parameters.aim_weight",
         "parameters.choice_option_weight",
@@ -935,13 +955,13 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
         "api.drain_choices({int(count)}, true)",
         "MAX_ROLLOUTS_PER_RESPONSE = 16",
         "MAX_CHOICE_ROLLOUTS_PER_RESPONSE = 1",
-        "@ml-bot-policy-v3-hot-reload",
-        "trajectory-v1/v2 frames are incompatible",
-        "choice trajectory-v1/v2 is incompatible",
+        "@ml-bot-policy-v4-hot-reload",
+        "trajectory-v1/v2/v3 frames are incompatible",
+        "choice trajectory-v1/v2/v3 is incompatible",
     ):
         assert token in bridge
     for token in (
-        "Target-, aim-, and potion-aware semantic expert",
+        "Target-, aim-, potion-, and drop-aware semantic expert",
         "ability_masks: Array",
         "aim_masks: Array",
         "PERMANENTLY_MASKED_POTIONS",
@@ -975,13 +995,13 @@ def test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned() -> str:
         "observation_names=",
         "option_descriptor_names=",
         "choice_probabilities",
-        "policy v1/v2 artifacts are incompatible",
+        "policy v1/v2/v3 artifacts are incompatible",
         "main_only_reset_ok=true",
         "training_ring_ok=true",
     ):
         assert token in fixture
     return (
-        "Policy v3 pins the 1279 -> 512 -> 256 four-head runtime, shared "
+        "Policy v4 pins the 1333 -> 512 -> 256 four-head runtime, shared "
         "56-value choice scorer, strict old-artifact rejection, and complete "
         "main plus SMDP choice training streams"
     )
@@ -1106,7 +1126,7 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         assert token in launcher, f"solo layout plumbing lacks {token}"
 
     for token in (
-        'DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v3.json"',
+        'DEFAULT_MODEL = ROOT / "models" / "bot-brain" / "policy-v4.json"',
         "observation_count",
         "observation_finite",
         "movement_mask_mismatches",
@@ -1186,7 +1206,7 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         )
     for token in (
         "policy.version",
-        "mlp-tanh-four-head-v3",
+        "mlp-tanh-four-head-v4",
         "policy.observation_size",
         "policy.target_actions",
         "policy.ability_actions",
@@ -1207,6 +1227,8 @@ def test_ml_bot_phase5_rotation_and_live_acceptance_are_pinned() -> str:
         assert token in scripted, (
             f"scripted-bot regression verifier lacks {token}"
         )
+    assert '_integer(host, "policy.version") == 4' in scripted
+    assert '_integer(client, "policy.version") == 4' in scripted
     scripted_gate_order = (
         'result["waveStart"] = start',
         'result["arenaTransition"] = _prepare_stock_arena(run_views)',

@@ -108,7 +108,7 @@ void PushEquippedItemDetails(
 void PushInventorySummary(
     lua_State* state,
     const multiplayer::BotInventorySummary& summary) {
-    lua_createtable(state, 0, 9);
+    lua_createtable(state, 0, 10);
     lua_pushinteger(state, summary.item_total_count);
     lua_setfield(state, -2, "item_total_count");
     lua_pushinteger(state, summary.potion_count);
@@ -127,6 +127,8 @@ void PushInventorySummary(
     lua_setfield(state, -2, "registered_custom_count");
     lua_pushinteger(state, summary.unknown_count);
     lua_setfield(state, -2, "unknown_count");
+    lua_pushinteger(state, summary.wizard_key_count);
+    lua_setfield(state, -2, "wizard_key_count");
 }
 
 void PushBotInventoryDetails(

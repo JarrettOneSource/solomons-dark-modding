@@ -1,4 +1,4 @@
-"""Auditable NumPy implementation of the strict ML bot policy-v3 model."""
+"""Auditable NumPy implementation of the strict ML bot policy-v4 model."""
 
 from __future__ import annotations
 
@@ -503,7 +503,7 @@ class BotPolicy:
         ):
             raise ValueError(
                 "choice_temperature must be the exploration or final "
-                "policy-v3 schedule value"
+                "policy-v4 schedule value"
             )
 
     def set_choice_temperature(self, temperature: float) -> None:
@@ -726,7 +726,7 @@ class BotPolicy:
         spec.validate_model_contract(model)
         parameters = model.get("parameters")
         if not isinstance(parameters, Mapping):
-            raise ValueError("policy-v3 model parameters must be an object")
+            raise ValueError("policy-v4 model parameters must be an object")
         required = {
             "input_weight",
             "input_bias",
@@ -751,14 +751,14 @@ class BotPolicy:
         }
         if set(parameters) != required:
             raise ValueError(
-                "model parameter names do not match the strict policy-v3 contract"
+                "model parameter names do not match the strict policy-v4 contract"
             )
         metadata = model.get("metadata")
         if metadata is not None and not isinstance(metadata, Mapping):
             raise ValueError("model metadata must be an object")
         temperature = model.get("choice_temperature")
         if not isinstance(temperature, (int, float)):
-            raise ValueError("policy-v3 choice_temperature must be numeric")
+            raise ValueError("policy-v4 choice_temperature must be numeric")
         return cls(
             **{name: _as_float64(parameters[name]) for name in sorted(required)},
             choice_temperature=float(temperature),

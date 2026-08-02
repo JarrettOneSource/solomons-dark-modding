@@ -37,7 +37,7 @@ from static_lua_ml_bot_contracts import (
     test_ml_bot_v38_shared_progression_and_reward_attribution_is_pinned,
     test_ml_bot_v3_phase3_lua_contract_is_pinned,
     test_ml_bot_v2_native_loadout_schema_is_semantic_and_complete,
-    test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned,
+    test_ml_bot_v4_runtime_and_dual_stream_trainer_are_pinned,
 )
 from static_ml_bot_v3_native_seams_contracts import (
     test_ml_bot_v3_collision_geometry_is_exact_semantic_and_address_free,
@@ -608,7 +608,7 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ),
     (
         "ML bot v3 runtime and dual-stream trainer are pinned",
-        test_ml_bot_v3_runtime_and_dual_stream_trainer_are_pinned,
+        test_ml_bot_v4_runtime_and_dual_stream_trainer_are_pinned,
     ),
     (
         "ML bot v2 native loadout schema is semantic and complete",
