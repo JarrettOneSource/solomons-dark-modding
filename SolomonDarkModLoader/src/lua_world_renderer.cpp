@@ -125,6 +125,7 @@ struct LuaWorldRendererState {
     NativeTextureReleaseFn native_texture_release = nullptr;
     NativeRenderPageRegisterFn native_render_page_register = nullptr;
     uintptr_t native_renderer_global = 0;
+    std::size_t native_renderer_draw_state_offset = 0;
     CRITICAL_SECTION* native_texture_critical_section = nullptr;
     std::uint8_t* native_texture_critical_section_initialized = nullptr;
     X86Hook render_queue_flush_hook;
@@ -185,11 +186,17 @@ bool TryGetLayoutValue(const char* key, uintptr_t* value) {
 }
 
 void* TryGetNativeRenderer() {
-    if (g_world_renderer.native_renderer_global == 0) {
+    if (g_world_renderer.native_renderer_global == 0 ||
+        g_world_renderer.native_renderer_draw_state_offset == 0) {
         return nullptr;
     }
-    return *reinterpret_cast<void**>(
+    const auto renderer = *reinterpret_cast<uintptr_t*>(
         g_world_renderer.native_renderer_global);
+    if (renderer == 0) {
+        return nullptr;
+    }
+    return reinterpret_cast<void*>(
+        renderer + g_world_renderer.native_renderer_draw_state_offset);
 }
 
 #include "lua_world_renderer/native_texture_bridge.inl"
@@ -215,6 +222,7 @@ bool ResolveWorldRendererSeams(
     uintptr_t native_texture_release = 0;
     uintptr_t native_render_page_register = 0;
     uintptr_t native_renderer_global = 0;
+    uintptr_t native_renderer_draw_state_offset = 0;
     uintptr_t native_texture_critical_section = 0;
     uintptr_t native_texture_critical_section_initialized = 0;
     uintptr_t configured_render_queue_flush = 0;
@@ -248,6 +256,9 @@ bool ResolveWorldRendererSeams(
         !TryGetLayoutValue(
             "native_renderer_global",
             &native_renderer_global) ||
+        !TryGetLayoutValue(
+            "native_renderer_draw_state_offset",
+            &native_renderer_draw_state_offset) ||
         !TryGetLayoutValue(
             "native_texture_critical_section",
             &native_texture_critical_section) ||
@@ -350,6 +361,8 @@ bool ResolveWorldRendererSeams(
         reinterpret_cast<NativeRenderPageRegisterFn>(
             resolved_page_register);
     g_world_renderer.native_renderer_global = resolved_renderer_global;
+    g_world_renderer.native_renderer_draw_state_offset =
+        static_cast<std::size_t>(native_renderer_draw_state_offset);
     g_world_renderer.native_texture_critical_section =
         reinterpret_cast<CRITICAL_SECTION*>(
             resolved_texture_critical_section);
@@ -381,6 +394,7 @@ void ClearWorldRendererStateUnlocked() {
     g_world_renderer.native_texture_release = nullptr;
     g_world_renderer.native_render_page_register = nullptr;
     g_world_renderer.native_renderer_global = 0;
+    g_world_renderer.native_renderer_draw_state_offset = 0;
     g_world_renderer.native_texture_critical_section = nullptr;
     g_world_renderer.native_texture_critical_section_initialized = nullptr;
     g_world_renderer.failure_logs_remaining = 16;

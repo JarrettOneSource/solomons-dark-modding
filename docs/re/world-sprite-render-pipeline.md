@@ -247,9 +247,14 @@ health-bar loop at `0x005D2520` sets the renderer color through `0x0041FE50`
 and calls native untextured-quad submission `0x0041DD70`
 (`re-scope-addition/stock-healthbar-render-decompile.txt:192-220`). The quad
 function appends four vertices using the renderer's current packed color at
-`+0x21C` (`re-scope-addition/stock-ui-primitives-decompile.txt:53-105`). A
+`+0x21C` (`re-scope-addition/stock-ui-primitives-decompile.txt:53-105`). Its
+`this` is not the object stored directly in `0x00B401A8`: every stock call
+loads that singleton and adds `0x1D0` before setting color or submitting the
+quad (`re-scope-addition/stock-healthbar-draw-state-instructions.txt:996-1059`).
+That embedded draw-state owns the native vertex batch and flush callback. A
 loader health bar can therefore stay wholly inside the native batch without
-capturing ExactText quads or replaying D3D primitives during `EndScene`.
+capturing ExactText quads or replaying D3D primitives during `EndScene`, but
+only when it addresses the same `singleton + 0x1D0` object as stock.
 
 ## Complete loader world-anchor inventory
 

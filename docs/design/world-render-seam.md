@@ -349,15 +349,18 @@ section of `config/binary-layout.ini`:
 | `native_texture_release` | `0x00420760` |
 | `native_render_page_register` | `0x0041FFE0` |
 | `native_renderer_global` | `0x00B401A8` |
+| `native_renderer_draw_state_offset` | `0x1D0` |
 | `native_texture_critical_section` | `0x00B3F9DC` |
 | `native_texture_critical_section_initialized` | `0x00B40205` |
 | `native_renderer_set_color` | `0x0041FE50` |
 | `native_untextured_quad` | `0x0041DD70` |
 
 Code resolves addresses through the repository's binary-layout and image-base
-helpers. Missing values, non-executable functions, an unavailable renderer,
-or a hook-install failure blocks Lua renderer startup. No retail address is
-silently duplicated as a C++ fallback.
+helpers. Native color and quad calls receive the embedded draw-state at
+`*native_renderer_global + native_renderer_draw_state_offset`, matching the
+stock HUD call shape. Missing values, non-executable functions, an unavailable
+renderer, or a hook-install failure blocks Lua renderer startup. No retail
+address is silently duplicated as a C++ fallback.
 
 ## Lifecycle and failure behavior
 

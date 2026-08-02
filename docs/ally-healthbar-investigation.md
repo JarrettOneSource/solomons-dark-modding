@@ -15,6 +15,11 @@ complete `Arena_Render` call at `0x0046EC80` returns, the loader draws:
   (`0x0041FE50`) and untextured-quad primitive (`0x0041DD70`), spanning the
   estimated name width with a 64-pixel minimum.
 
+Both primitives receive the renderer singleton's embedded draw-state at
+`*0x00B401A8 + 0x1D0`, exactly as the stock ally-health loop does. Passing the
+outer singleton object would address unrelated fields and corrupt the native
+batch contract.
+
 The native name draw carries the participant identity and the participant's
 authoritative replicated HP ratio into the native indicator draw. The ratio is
 resolved from the multiplayer runtime snapshot at render time, not from the
