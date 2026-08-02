@@ -169,7 +169,7 @@
                                    FontSize="14"
                                    FontWeight="SemiBold" />
                         <TextBlock Margin="0,5,0,0"
-                                   Text="Select the Solomon Dark 0.72.5 folder that contains SolomonDark.exe. Do not select the newer SB.exe remake."
+                                   Text="Pick the Solomon Dark 0.72.5 folder that contains SolomonDark.exe — not the newer SB.exe remake."
                                    FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    TextWrapping="Wrap" />
@@ -226,7 +226,7 @@
                         <TextBox Width="210"
                                  VerticalContentAlignment="Center"
                                  Text="{Binding LobbyId, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="The launcher adds the Lobby ID when you host. To join by ID, paste the Lobby ID here."
+                                 ToolTip="Paste a Lobby ID to join directly. Filled in automatically when you host."
                                  Style="{StaticResource DarkTextBoxStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -518,7 +518,7 @@
                                FontSize="13"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource TextSecondaryBrush}" />
-                    <TextBlock Text="Put mod folders in the Mods folder. Then, click Refresh."
+                    <TextBlock Text="Drop mod folders into the Mods folder, then click Refresh."
                                Margin="0,5,0,0"
                                HorizontalAlignment="Center"
                                FontSize="12"
@@ -539,7 +539,7 @@
                                    VerticalAlignment="Center"
                                    FontSize="12"
                                    Foreground="{StaticResource TextMutedBrush}"
-                                   ToolTip="Each instance has a different mod set, stage, and save profile." />
+                                   ToolTip="Each instance keeps its own mods, stage, and saves." />
                         <TextBox DockPanel.Dock="Left"
                                  Width="150"
                                  Margin="10,0,8,0"
@@ -560,7 +560,7 @@
                                    VerticalAlignment="Center"
                                    FontSize="12"
                                    Foreground="{StaticResource TextMutedBrush}"
-                                   ToolTip="This server lists the lobbies. Leave the field blank to use the official server." />
+                                   ToolTip="Where lobbies are listed. Leave blank to use the official server." />
                         <TextBox DockPanel.Dock="Left"
                                  Width="260"
                                  Margin="10,0,0,0"
@@ -596,7 +596,7 @@
                                 <TextBlock Margin="0,4,0,0"
                                            FontSize="12"
                                            Foreground="{StaticResource TextMutedBrush}"
-                                           Text="Shows the loader UI limits in the game. It also keeps the Lua UI bridge active."
+                                           Text="Draws the loader's UI limits in-game and keeps the Lua UI bridge active."
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </DockPanel>
@@ -831,7 +831,7 @@
                             <TextBlock Margin="0,3,0,0"
                                        FontSize="12"
                                        Foreground="{StaticResource TextMutedBrush}"
-                                       Text="All Steam players can find this lobby."
+                                       Text="Anyone on Steam can find this lobby."
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </RadioButton>
@@ -852,7 +852,7 @@
                     <TextBlock Margin="0,12,0,0"
                                FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}"
-                               Text="Steam and the website show the lobby as soon as the host game launches."
+                               Text="Your lobby appears on Steam and the website once the game launches."
                                TextWrapping="Wrap" />
 
                     <StackPanel Margin="0,16,0,0"
@@ -907,7 +907,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Click Host Game, then choose Friends Only or Public.&#x0a;2. Your friends can join as soon as the game launches.&#x0a;3. Pick a loadout; each ready player enters without waiting on slower pickers."
+                               Text="1. Click Host Game and choose Friends Only or Public.&#x0a;2. Friends can join as soon as the game launches.&#x0a;3. Pick a loadout — ready players enter without waiting for the others."
                                TextWrapping="Wrap" />
 
                     <TextBlock Margin="0,16,0,0"
@@ -918,7 +918,7 @@
                     <TextBlock Margin="0,5,0,0"
                                FontSize="12"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="1. Select the lobby on the website, join through Steam, or enter a Lobby ID and click Join Game.&#x0a;2. Confirm any host mods, then click Launch Game.&#x0a;3. Pick a loadout; if the host is still picking, the game waits for the host."
+                               Text="1. Join from the website, through Steam, or paste a Lobby ID and click Join Game.&#x0a;2. Confirm the host's mods, then click Launch Game.&#x0a;3. Pick a loadout — if the host is still picking, the game waits for them."
                                TextWrapping="Wrap" />
 
                     <Button Margin="0,18,0,0"
@@ -1017,7 +1017,7 @@
                     <TextBlock Margin="0,12,0,0"
                                FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}"
-                               Text="Nothing is sent unless you choose Submit Logs. Crash reports are stored privately and are not published with mods or profiles."
+                               Text="Nothing is sent unless you choose Submit Logs."
                                TextWrapping="Wrap" />
 
                     <Border Margin="0,14,0,0"
@@ -1137,7 +1137,7 @@
                                            FontSize="13"
                                            FontWeight="SemiBold" />
                                 <TextBlock Margin="0,4,0,0"
-                                           Text="Show the original tutorial whenever a fresh save is launched."
+                                           Text="Play the original tutorial when you start a fresh save."
                                            FontSize="11"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            TextWrapping="Wrap" />
@@ -1161,7 +1161,7 @@
                                            FontSize="13"
                                            FontWeight="SemiBold" />
                                 <TextBlock Margin="0,4,0,0"
-                                           Text="Mute music, effects, ambience, and interface sounds for each launch."
+                                           Text="Launch the game with all sound muted."
                                            FontSize="11"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            TextWrapping="Wrap" />
@@ -1185,7 +1185,7 @@
                                            FontSize="13"
                                            FontWeight="SemiBold" />
                                 <TextBlock Margin="0,4,0,0"
-                                           Text="Hide rendering and audio, then run single-player simulation at maximum fixed-step speed."
+                                           Text="Run single-player with rendering and audio off at maximum simulation speed."
                                            FontSize="11"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            TextWrapping="Wrap" />

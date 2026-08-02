@@ -183,7 +183,7 @@
                         Margin="8,0,0,0" />
                 <TextBox Text="{Binding SelectedName, UpdateSourceTrigger=PropertyChanged}"
                          Style="{StaticResource DarkTextBoxStyle}"
-                         ToolTip="The selected local save name" />
+                         ToolTip="Type a new name, then click Rename." />
             </DockPanel>
             <WrapPanel Margin="0,12,0,0">
                 <Button Content="Use Selected"
@@ -195,7 +195,7 @@
                         Command="{Binding ImportCommand}"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Margin="0,0,8,8" />
-                <Button Content="Restore Cloud"
+                <Button Content="Restore from Cloud"
                         Command="{Binding RestoreCommand}"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Margin="0,0,8,8" />
