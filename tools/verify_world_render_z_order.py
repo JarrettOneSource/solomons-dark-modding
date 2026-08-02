@@ -480,7 +480,7 @@ def color_stats(
     with Image.open(image_path) as opened:
         image = opened.convert("RGB")
         box = _crop_box(image, point)
-        pixels = list(image.crop(box).getdata())
+        pixels = list(image.crop(box).get_flattened_data())
     selected = [pixel for pixel in pixels if _matches_potion_color(pixel, color)]
     brightness = sorted(max(pixel) for pixel in selected)
     percentile_90 = (
@@ -730,6 +730,7 @@ def verify_native_health_bar_pixels(
 
 def analyze_potion_captures(
     evidence: Path,
+    lighting_control: dict[str, Any],
     behind: dict[str, Any],
     front: dict[str, Any],
     behind_swapped: dict[str, Any],
@@ -739,6 +740,7 @@ def analyze_potion_captures(
     for role in ("host", "client"):
         role_result: dict[str, Any] = {}
         phases = (
+            ("potion_lighting", lighting_control),
             ("actor_behind", behind),
             ("actor_front", front),
             ("actor_behind_swapped", behind_swapped),
@@ -812,13 +814,22 @@ def analyze_potion_captures(
             "stock_pixels_hidden": behind_stock - front_stock,
             "custom_pixels_hidden": behind_custom - front_custom,
         }
-        stock_light = role_result[stock_phases[0]]["stock"]["percentile_90_channel"]
-        custom_light = role_result[custom_phases[0]]["custom"]["percentile_90_channel"]
+        lighting_stock = role_result["potion_lighting"]["stock"]
+        lighting_custom = role_result["potion_lighting"]["custom"]
+        stock_light = lighting_stock["percentile_90_channel"]
+        custom_light = lighting_custom["percentile_90_channel"]
         role_result["lighting"] = {
             "stock_percentile_90": stock_light,
             "custom_percentile_90": custom_light,
             "highlight_delta": abs(stock_light - custom_light),
         }
+        if min(
+            lighting_stock["matching_pixels"],
+            lighting_custom["matching_pixels"],
+        ) < 12:
+            raise sync.VerifyFailure(
+                f"potion lighting control was not visible for {role}: {role_result}"
+            )
         for item, template in (
             ("stock", stock_template),
             ("custom", custom_template),
@@ -1045,7 +1056,11 @@ def analyze_vfx_delta(
             after = after_open.convert("RGB")
             box = _crop_box(after, point, half_width=75, half_height=85)
             difference = ImageChops.difference(before.crop(box), after.crop(box))
-            changed = sum(1 for pixel in difference.getdata() if max(pixel) >= 18)
+            changed = sum(
+                1
+                for pixel in difference.get_flattened_data()
+                if max(pixel) >= 18
+            )
         green_before = color_stats(baseline_path, baseline[role]["projection"]["effect"], color="green")
         green_after = color_stats(active_path, point, color="green")
         if changed < 40 or green_after["matching_pixels"] <= green_before["matching_pixels"]:
@@ -1246,11 +1261,25 @@ def run(
                 for name, row in client_drops.items()
             },
         }
-        # Keep the actor and bottle silhouettes crossed while changing only
-        # their native Y ordering. A wide separation proves position, not
-        # occlusion; four world units remain in distinct stock floor(Y)
-        # buckets and create an unambiguous overlap in both directions.
-        behind_y = center_y - 4.0
+        result["potion_lighting_placement"] = place_pair(
+            host_pipe,
+            client_pipe,
+            host_target=(stock_x, center_y - 48.0, 0.0),
+            client_target=(custom_x, center_y - 48.0, 0.0),
+            timeout=timeout,
+        )
+        lighting_control = capture_phase(
+            evidence,
+            "potion_lighting",
+            pipes,
+            {"stock": (stock_x, center_y), "custom": (custom_x, center_y)},
+        )
+        result["potion_lighting"] = lighting_control
+
+        # Sack's stock -25 sort bias makes its effective key Y-25, while a
+        # live PlayerWizard retains the base zero bias. Keep silhouettes
+        # crossed on each side of that exact boundary.
+        behind_y = center_y - 32.0
         front_y = center_y + 4.0
         result["actor_behind_placement"] = place_pair(
             host_pipe,
@@ -1317,6 +1346,7 @@ def run(
         result["actor_front_swapped"] = front_swapped
         result["potion_pixel_analysis"] = analyze_potion_captures(
             evidence,
+            lighting_control,
             behind,
             front,
             behind_swapped,

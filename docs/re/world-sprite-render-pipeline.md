@@ -72,6 +72,7 @@ The recovered native seams are:
 | Queue flush order | `ghidra-native-render-queue.txt:127-157` |
 | Per-object virtual dispatch through vtable slot `+0x0C` | `ghidra-native-render-queue-assembly.txt:121-194` |
 | Common world visibility, lighting, tint, and virtual draw | `ghidra-world-render-core.txt:1281-1439` |
+| Base/PlayerWizard zero sort bias and Sack's `-25.0` override | `re-scope-addition/stock-puppet-player-sort-bias.txt:48-151`, `re-scope-addition/stock-sack-sort-bias.txt:47-76` |
 | Stock potion/item carrier renderers | `ghidra-world-render-core.txt:1522-1563`, `:1611-1644` |
 | Native `Glyph_Draw` | `ghidra-world-render-core.txt:1651-1670` |
 | Native glyph batching and current packed tint | `ghidra-native-texture-batch.txt:196-265` |
@@ -152,15 +153,23 @@ loading its vtable and calling slot `+0x0C`
   visual anchor.
 
 This is direct code proof of Y-derived 2.5D ordering, not a naming inference.
-The acceptance implication is exact: when an actor's feet move to a larger
-world Y than a drop, that actor must draw over the drop; at a smaller world Y,
-the actor must draw under it.
+The comparison is between effective keys, not raw Y alone. The base Puppet
+constructor writes `0.0` to `+0xA0`, which a live `PlayerWizard` retains, while
+the `Sack` constructor overrides `+0xA0` with the stock constant `-25.0`
+(`stock-puppet-player-sort-bias.txt:48-151` and
+`stock-sack-sort-bias.txt:47-76`). A stock potion at `drop_y` therefore sorts
+as `drop_y - 25`; an ordinary live actor is behind it only when the actor's
+effective Y is smaller than that value. Acceptance positions must account for
+this stock class bias rather than assuming equal raw Y means equal depth.
 
 ## Where stock item drops enter
 
 The stock dropped-item carrier uses the same Puppet-derived queue path as the
-other world objects. Its renderer at `0x006105F0` examines the native item at
-carrier `+0x148`, recognizes potion type `0x1B59`, reads the potion subtype at
+other world objects. `Sack` construction at `0x005E1460` calls the base Puppet
+constructor and then writes the `-25.0` stock constant to its `+0xA0` sort-bias
+field (`stock-sack-sort-bias.txt:47-76`). Its renderer at `0x006105F0`
+examines the native item at carrier `+0x148`, recognizes potion type `0x1B59`,
+reads the potion subtype at
 item `+0x1C`, and indexes the world-potion sprite array with a `0xC4`-byte
 stride. It then calls `Glyph_Draw` at `0x004143D0` using the carrier world
 position (`ghidra-world-render-core.txt:1522-1563`). The alternate stock item
