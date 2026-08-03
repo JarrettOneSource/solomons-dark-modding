@@ -40,12 +40,45 @@ The static contract only proves that the hook calls the renderer and that an
 atomic gate exists. It does not prove that the call occurs at a presentation
 boundary or survives the rest of the stock frame.
 
+## Final-D3D9 follow-up
+
+`5cad9b0944a2306490ac51b81d6ccca205d88188` moved the native draws to the
+loader's `EndScene` callback. That proved the original overwrite diagnosis but
+exposed a second boundary violation:
+
+- the loader backbuffer capture contains the complete picker;
+- the simultaneously visible Windows game surface is black with an unpainted
+  white rectangle; and
+- canceling the picker immediately restores the stock map surface.
+
+The paired evidence is
+`wan/beta31/postfix/alpha/run2/picker/alpha2-picker-open-home.png` and
+`alpha2-picker-open-home-screen.png`. The payload SHA, picker state, loader
+logs, and clean peer teardown are retained beside those images.
+
+Stock ExactText and the stock untextured-quad helper are engine renderer
+operations, not self-contained D3D9 overlay primitives. Calling them after
+the stock renderer has finished its HUD pass can alter the captured backbuffer
+but does not preserve the engine's presentation/batch boundary. A D3D9 state
+block cannot make an out-of-lifetime native renderer call valid. Consequently,
+a correct loader backbuffer was not evidence that the swap-chain surface shown
+to the player was valid.
+
+The recovered whole-HUD function at `0x005D2520` is the appropriate native
+boundary. Unlike `0x00512060`, it owns the complete stock HUD render and
+returns only after the subordinate world/HUD dispatches have finished. A
+local-only Release diagnostic detour drew after its trampoline. The actual
+Windows window then showed the full stock-font picker with no white/black
+presentation corruption. That probe and its visible-window capture are under
+`diagnostics/picker-full-hud-hook-probe/`; the probe was removed before this
+document was committed.
+
 ## Required closure
 
-Render the picker at the loader's established final D3D9 presentation
-boundary, after the stock scene/HUD has been assembled, while preserving the
-native ExactText and native untextured-quad primitives. Gate the presentation
-by picker state rather than consuming a game-thread tick in an arbitrary HUD
-sub-dispatch. Add a contract that pins the final-pass call site and bans the
-picker from the gameplay HUD sub-dispatch. Then repeat the staged alpha/beta
-selection over WAN and retain an actual visible-window capture.
+Add `0x005D2520` as a named, layout-validated whole-HUD render seam. Render
+the picker once after that function's trampoline, while preserving the native
+ExactText and native untextured-quad primitives. Remove the picker from
+`EndScene` and from the intermediate `0x00512060` sub-dispatch. Contracts must
+pin the new address, signature, hook lifecycle, and ordering. Then repeat the
+staged alpha/beta selection over WAN and retain both actual-window and loader
+backbuffer captures.
