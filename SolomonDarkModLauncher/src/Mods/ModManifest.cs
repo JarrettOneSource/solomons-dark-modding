@@ -5,6 +5,7 @@ internal sealed class ModManifest
     public string Id { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public string Version { get; init; } = string.Empty;
+    public string? Description { get; init; }
     public string? MinimumLoaderVersion { get; init; }
     public int Priority { get; init; }
     public List<OverlayDefinition> Overlays { get; init; } = [];

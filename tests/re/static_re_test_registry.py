@@ -15,6 +15,7 @@ from static_re_boneyard_contracts import (
     test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
 )
 from static_re_boneyard_picker_contracts import (
+    test_boneyard_picker_presents_mod_description_and_scales_with_viewport,
     test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent,
     test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
     test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
@@ -654,6 +655,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Boneyard picker replication is authoritative, missing-safe, and late-joined",
         test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
+    ),
+    (
+        "Boneyard picker presents the mod description and scales with the viewport",
+        test_boneyard_picker_presents_mod_description_and_scales_with_viewport,
     ),
     (
         "Multiplayer Boneyard scenery shares the host generation boundary",

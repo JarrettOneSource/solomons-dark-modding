@@ -44,6 +44,8 @@ struct BoneyardPickerEntry {
     std::string source_mod_id;
     std::string source_mod_name;
     std::string source_mod_version;
+    std::string source_mod_description;
+    std::string updated_utc;
     std::string filename;
     std::string source_relative_path;
     std::string content_sha256;

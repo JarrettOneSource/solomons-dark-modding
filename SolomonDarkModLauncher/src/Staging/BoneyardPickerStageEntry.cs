@@ -5,6 +5,8 @@ internal sealed record BoneyardPickerStageEntry(
     string SourceModId,
     string SourceModName,
     string SourceModVersion,
+    string SourceModDescription,
+    string UpdatedUtc,
     string Filename,
     string SourceRelativePath,
     string ContentSha256,

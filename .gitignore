@@ -55,3 +55,6 @@ pseudocode/
 # One-off live reverse-engineering probes should stay local until promoted to a
 # reusable tool with a stable name and README entry.
 tools/ghidra-scripts/*_tmp.py
+
+# ATC/agent staging roots (runtime-<campaign>) must never enter the repo
+/runtime-*/

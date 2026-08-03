@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using SolomonDarkModLauncher.Mods;
@@ -126,6 +127,10 @@ internal static class RuntimeMetadataStageMaterializer
                     mod.Manifest.Id,
                     mod.Manifest.Name,
                     mod.Manifest.Version,
+                    mod.Manifest.Description?.Trim() ?? string.Empty,
+                    File.GetLastWriteTimeUtc(sourcePath).ToString(
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture),
                     Path.GetFileName(sourcePath),
                     overlay.Source.Replace('\\', '/'),
                     contentSha256,
@@ -290,6 +295,8 @@ internal static class RuntimeMetadataStageMaterializer
             builder.Append("source_mod_id=").AppendLine(EscapeIniValue(boneyard.SourceModId));
             builder.Append("source_mod_name=").AppendLine(EscapeIniValue(boneyard.SourceModName));
             builder.Append("source_mod_version=").AppendLine(EscapeIniValue(boneyard.SourceModVersion));
+            builder.Append("source_mod_description=").AppendLine(EscapeIniValue(boneyard.SourceModDescription));
+            builder.Append("updated_utc=").AppendLine(EscapeIniValue(boneyard.UpdatedUtc));
             builder.Append("filename=").AppendLine(EscapeIniValue(boneyard.Filename));
             builder.Append("source_relative_path=").AppendLine(EscapeIniValue(boneyard.SourceRelativePath));
             builder.Append("content_sha256=").AppendLine(boneyard.ContentSha256);

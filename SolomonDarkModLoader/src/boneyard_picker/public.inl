@@ -77,6 +77,8 @@ bool InitializeBoneyardPicker(
         entry.source_mod_id = descriptor.source_mod_id;
         entry.source_mod_name = descriptor.source_mod_name;
         entry.source_mod_version = descriptor.source_mod_version;
+        entry.source_mod_description = descriptor.source_mod_description;
+        entry.updated_utc = descriptor.updated_utc;
         entry.filename = descriptor.filename;
         entry.source_relative_path = descriptor.source_relative_path;
         entry.content_sha256 = descriptor.content_sha256;

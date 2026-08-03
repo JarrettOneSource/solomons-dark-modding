@@ -2,6 +2,7 @@
   "id": "acceptance.mpk.boneyard.beta",
   "name": "MAPPICK Beta Arena",
   "version": "1.0.0",
+  "description": "The larger sibling of Alpha Arena with wider lanes and denser decor. Built to exercise bigger boneyard payloads end to end, including chunk-heavy region layouts.",
   "enabled": false,
   "overlays": [
     {

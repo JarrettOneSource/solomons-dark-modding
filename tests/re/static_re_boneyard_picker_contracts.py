@@ -107,7 +107,7 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         internal + frontend + resolution,
         (
             "if (!ShouldHijackHostBoneyardStart()) {\n        original(courtyard);\n        return;\n    }",
-            "kVisibleBoneyardRows = 14",
+            "kVisibleBoneyardRows = 12",
             "CryptHashData(",
             "actual_digest != entry.content_digest",
             "ApplyStockSelectionAndOpenNativePicker(",
@@ -268,4 +268,86 @@ def test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_join
     return (
         "fixed-width authority selection, authenticated acknowledgements, human-peer "
         "barrier, missing/retry error, late join ordering, and per-peer evidence are pinned"
+    )
+
+
+def test_boneyard_picker_presents_mod_description_and_scales_with_viewport() -> str:
+    header = _read("SolomonDarkModLoader/include/boneyard_picker.h")
+    bootstrap_header = _read("SolomonDarkModLoader/include/runtime_bootstrap.h")
+    bootstrap = _read("SolomonDarkModLoader/src/runtime_bootstrap.cpp")
+    public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
+    frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
+    materializer = _read(
+        "SolomonDarkModLauncher/src/Staging/RuntimeMetadataStageMaterializer.cs"
+    )
+    manifest = _read("SolomonDarkModLauncher/src/Mods/ModManifest.cs")
+
+    # Presentation metadata flows launcher manifest -> stage ini -> loader
+    # descriptor -> catalog entry; the keys stay optional so older stages
+    # keep loading.
+    _require(
+        manifest,
+        ("public string? Description { get; init; }",),
+        "manifest description field",
+    )
+    _require(
+        materializer,
+        (
+            "mod.Manifest.Description?.Trim() ?? string.Empty",
+            'Append("source_mod_description=")',
+            'Append("updated_utc=")',
+            "File.GetLastWriteTimeUtc(sourcePath)",
+        ),
+        "staged presentation metadata",
+    )
+    _require(
+        bootstrap_header + bootstrap,
+        (
+            "std::string source_mod_description;",
+            "std::string updated_utc;",
+            'sections, section_name, "source_mod_description"',
+            'sections, section_name, "updated_utc"',
+            "Optional presentation metadata; older stages simply omit the keys.",
+        ),
+        "optional bootstrap presentation keys",
+    )
+    _require(
+        header + public,
+        (
+            "entry.source_mod_description = descriptor.source_mod_description;",
+            "entry.updated_utc = descriptor.updated_utc;",
+        ),
+        "catalog entry presentation fields",
+    )
+
+    # Owner-directed layout: list zone on the top two-thirds, details below
+    # showing name, source mod, update date, and description — never the
+    # old size/layout/sha/file stat dump — with one viewport-derived scale
+    # driving every text metric.
+    _require(
+        frontend,
+        (
+            "kPickerBaseViewportHeight = 720.0f",
+            "vh / kPickerBaseViewportHeight",
+            "kPickerMaxUiScale,",
+            "const float list_panel_height = vh * 0.61f;",
+            "const float detail_panel_height = vh * 0.26f;",
+            "WrapPickerText(",
+            "entry.source_mod_description;",
+            '"Updated " + entry.updated_utc',
+            '"No description provided."',
+        ),
+        "viewport-scaled description frontend",
+    )
+    for banished in ("FormatPickerByteSize", "ShortPickerSha", '"SHA-256"'):
+        if banished in frontend:
+            raise StaticReTestFailure(
+                "picker details regressed to the stat dump: " + banished
+            )
+    return (
+        "manifest description, stage ini keys, optional bootstrap parse, entry "
+        "fields, two-thirds layout, viewport text scaling, and stat-dump removal "
+        "are pinned"
     )

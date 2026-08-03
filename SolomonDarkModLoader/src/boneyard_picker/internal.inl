@@ -1,5 +1,5 @@
 constexpr char kPickerDrawOwner[] = "__loader.boneyard_picker";
-constexpr std::size_t kVisibleBoneyardRows = 14;
+constexpr std::size_t kVisibleBoneyardRows = 12;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
 constexpr std::size_t kMapPickerStartHookMinimumPatchSize = 5;

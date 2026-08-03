@@ -515,6 +515,16 @@ bool LoadRuntimeBootstrap(
             return false;
         }
 
+        // Optional presentation metadata; older stages simply omit the keys.
+        if (const auto* description = FindSectionValue(
+                sections, section_name, "source_mod_description")) {
+            boneyard.source_mod_description = *description;
+        }
+        if (const auto* updated = FindSectionValue(
+                sections, section_name, "updated_utc")) {
+            boneyard.updated_utc = *updated;
+        }
+
         boneyard.stock_relative_path = std::filesystem::path(stock_relative_path);
         boneyard.stage_path = std::filesystem::path(stage_path);
         boneyard.file_length = parsed_file_length;

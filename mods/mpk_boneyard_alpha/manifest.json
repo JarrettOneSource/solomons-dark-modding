@@ -2,6 +2,7 @@
   "id": "acceptance.mpk.boneyard.alpha",
   "name": "MAPPICK Alpha Arena",
   "version": "1.0.0",
+  "description": "A tight practice arena from the MAPPICK acceptance campaign. Small footprint and fast rounds, handy for smoke-testing custom boneyard launches.",
   "enabled": false,
   "overlays": [
     {

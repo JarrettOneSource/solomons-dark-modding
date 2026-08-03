@@ -1,13 +1,19 @@
-// Boneyard picker frontend. Two-pane keyboard-driven selection screen drawn
-// through the loader Lua-draw layer; consumes only the public snapshot plus
-// the picker cursor. Pick/cancel intent stays in ProcessPickerInput — this
-// file draws and never mutates picker state beyond the ambient frame counter.
+// Boneyard picker frontend. Keyboard-driven selection screen drawn through
+// the loader Lua-draw layer; consumes only the public snapshot plus the
+// picker cursor. Pick/cancel intent stays in ProcessPickerInput — this file
+// draws and never mutates picker state beyond the ambient frame counter.
+//
+// Layout contract (owner-directed): the list zone spans the top two-thirds
+// of the screen; the zone below it shows the highlighted entry's name,
+// source mod, update date, and description. Every metric multiplies by a
+// viewport-derived scale so text stays readable at any resolution.
 
-constexpr float kPickerPanelMaxWidth = 980.0f;
-constexpr float kPickerPanelMaxHeight = 560.0f;
-constexpr float kPickerRowHeight = 32.0f;
-constexpr std::size_t kPickerNameTruncation = 38;
-constexpr std::size_t kPickerDetailTruncation = 30;
+constexpr float kPickerBaseViewportHeight = 720.0f;
+constexpr float kPickerMinUiScale = 1.0f;
+constexpr float kPickerMaxUiScale = 3.0f;
+constexpr float kPickerRowHeight = 34.0f;
+constexpr float kPickerGlyphAdvance = 7.6f;
+constexpr std::size_t kPickerDescriptionMaxLines = 4;
 
 const LuaDrawColor kPickerBackdrop{0, 0, 0, 150};
 const LuaDrawColor kPickerPanelFill{10, 12, 18, 244};
@@ -16,8 +22,8 @@ const LuaDrawColor kPickerPanelEdgeInner{60, 52, 34, 255};
 const LuaDrawColor kPickerDivider{212, 178, 90, 90};
 const LuaDrawColor kPickerTitleGold{248, 220, 150, 255};
 const LuaDrawColor kPickerTextBright{232, 232, 228, 255};
-const LuaDrawColor kPickerTextDim{158, 162, 170, 255};
-const LuaDrawColor kPickerTextMeta{128, 132, 142, 255};
+const LuaDrawColor kPickerTextDim{170, 174, 182, 255};
+const LuaDrawColor kPickerTextMeta{140, 144, 154, 255};
 const LuaDrawColor kPickerRowCursorFill{84, 64, 28, 235};
 const LuaDrawColor kPickerRowCursorBar{236, 197, 102, 255};
 const LuaDrawColor kPickerRowSelectedFill{40, 44, 30, 220};
@@ -27,7 +33,7 @@ const LuaDrawColor kPickerScrollThumb{212, 178, 90, 220};
 const LuaDrawColor kPickerErrorFill{64, 16, 16, 240};
 const LuaDrawColor kPickerErrorText{255, 122, 122, 255};
 const LuaDrawColor kPickerWaitGold{236, 205, 130, 255};
-const LuaDrawColor kPickerHintText{170, 182, 198, 255};
+const LuaDrawColor kPickerHintText{176, 188, 202, 255};
 
 std::string TruncatePickerText(const std::string& text, std::size_t limit) {
     if (text.size() <= limit) {
@@ -36,34 +42,51 @@ std::string TruncatePickerText(const std::string& text, std::size_t limit) {
     return text.substr(0, limit > 3 ? limit - 3 : limit) + "...";
 }
 
-std::string FormatPickerByteSize(std::uint64_t bytes) {
-    constexpr std::uint64_t kKib = 1024;
-    constexpr std::uint64_t kMib = kKib * 1024;
-    char buffer[48];
-    if (bytes >= kMib) {
-        std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "%.1f MB",
-            static_cast<double>(bytes) / static_cast<double>(kMib));
-    } else if (bytes >= kKib) {
-        std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "%.1f KB",
-            static_cast<double>(bytes) / static_cast<double>(kKib));
-    } else {
-        std::snprintf(
-            buffer,
-            sizeof(buffer),
-            "%llu B",
-            static_cast<unsigned long long>(bytes));
+std::size_t PickerCharsPerLine(float inner_width, float text_scale) {
+    const float advance = kPickerGlyphAdvance * text_scale;
+    if (advance <= 0.0f || inner_width <= advance) {
+        return 1;
     }
-    return buffer;
+    return static_cast<std::size_t>(inner_width / advance);
 }
 
-std::string ShortPickerSha(const std::string& sha256) {
-    return sha256.size() > 12 ? sha256.substr(0, 12) : sha256;
+// Word-wraps into at most max_lines '\n'-joined lines; the renderer handles
+// '\n' natively. The last line is ellipsized when text overflows.
+std::string WrapPickerText(
+    const std::string& text,
+    std::size_t max_chars,
+    std::size_t max_lines) {
+    if (max_chars < 4 || max_lines == 0) {
+        return std::string();
+    }
+    std::string wrapped;
+    std::size_t line_start = 0;
+    std::size_t lines = 0;
+    while (line_start < text.size() && lines < max_lines) {
+        std::size_t line_end = line_start + max_chars;
+        if (line_end >= text.size()) {
+            line_end = text.size();
+        } else {
+            auto break_at = text.rfind(' ', line_end);
+            if (break_at != std::string::npos && break_at > line_start) {
+                line_end = break_at;
+            }
+        }
+        std::string line = text.substr(line_start, line_end - line_start);
+        ++lines;
+        if (lines == max_lines && line_end < text.size()) {
+            line = TruncatePickerText(line, max_chars > 3 ? max_chars - 3 : 1);
+        }
+        if (!wrapped.empty()) {
+            wrapped += '\n';
+        }
+        wrapped += line;
+        line_start = line_end;
+        while (line_start < text.size() && text[line_start] == ' ') {
+            ++line_start;
+        }
+    }
+    return wrapped;
 }
 
 std::size_t CountPickerSourceMods(const BoneyardPickerCatalog& catalog) {
@@ -72,27 +95,6 @@ std::size_t CountPickerSourceMods(const BoneyardPickerCatalog& catalog) {
         mods.insert(entry.source_mod_id);
     }
     return mods.size();
-}
-
-void SubmitPickerLabelValue(
-    float label_x,
-    float value_x,
-    float y,
-    const char* label,
-    std::string value,
-    LuaDrawColor value_color) {
-    SubmitPickerDrawCommand(MakeText(
-        label_x,
-        y,
-        label,
-        kPickerTextMeta,
-        0.65f));
-    SubmitPickerDrawCommand(MakeText(
-        value_x,
-        y,
-        std::move(value),
-        value_color,
-        0.7f));
 }
 
 void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
@@ -112,17 +114,34 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
         &viewport_width,
         &viewport_height,
         &ignored_error);
+    const auto vw = static_cast<float>(viewport_width);
+    const auto vh = static_cast<float>(viewport_height);
 
-    const float panel_width = (std::min)(
-        kPickerPanelMaxWidth,
-        static_cast<float>(viewport_width) - 64.0f);
-    const float panel_height = (std::min)(
-        kPickerPanelMaxHeight,
-        static_cast<float>(viewport_height) - 64.0f);
-    const float panel_x =
-        (static_cast<float>(viewport_width) - panel_width) * 0.5f;
-    const float panel_y =
-        (static_cast<float>(viewport_height) - panel_height) * 0.5f;
+    // Readability contract: one scale factor drives every metric below, so
+    // the picker renders identically proportioned at 720p and 4K.
+    const float ui_scale = (std::min)(
+        kPickerMaxUiScale,
+        (std::max)(kPickerMinUiScale, vh / kPickerBaseViewportHeight));
+
+    // List zone: top two-thirds of the screen.
+    const float list_panel_x = vw * 0.06f;
+    const float list_panel_width = vw * 0.88f;
+    const float list_panel_y = vh * 0.05f;
+    const float list_panel_height = vh * 0.61f;
+    // Details zone: the strip below, ending above the screen bottom.
+    const float detail_panel_y = list_panel_y + list_panel_height + vh * 0.02f;
+    const float detail_panel_height = vh * 0.26f;
+
+    const float pad = 20.0f * ui_scale;
+    const float title_scale = 1.5f * ui_scale;
+    const float row_text_scale = 1.0f * ui_scale;
+    const float row_meta_scale = 0.8f * ui_scale;
+    const float detail_name_scale = 1.25f * ui_scale;
+    const float detail_meta_scale = 0.85f * ui_scale;
+    const float description_scale = 0.9f * ui_scale;
+    const float hint_scale = 0.85f * ui_scale;
+    const float row_height = kPickerRowHeight * ui_scale;
+    const float line_height = 16.0f * ui_scale;
 
     BeginLuaDrawFrame(kPickerDrawOwner);
 
@@ -130,44 +149,46 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
         LuaDrawCommandKind::FilledRect,
         0.0f,
         0.0f,
-        static_cast<float>(viewport_width),
-        static_cast<float>(viewport_height),
+        vw,
+        vh,
         kPickerBackdrop));
+
     SubmitPickerDrawCommand(MakeRectangle(
         LuaDrawCommandKind::FilledRect,
-        panel_x,
-        panel_y,
-        panel_width,
-        panel_height,
+        list_panel_x,
+        list_panel_y,
+        list_panel_width,
+        list_panel_height,
         kPickerPanelFill));
     SubmitPickerDrawCommand(MakeRectangle(
         LuaDrawCommandKind::OutlinedRect,
-        panel_x,
-        panel_y,
-        panel_width,
-        panel_height,
+        list_panel_x,
+        list_panel_y,
+        list_panel_width,
+        list_panel_height,
         kPickerPanelEdge,
         2.0f));
     SubmitPickerDrawCommand(MakeRectangle(
         LuaDrawCommandKind::OutlinedRect,
-        panel_x + 6.0f,
-        panel_y + 6.0f,
-        panel_width - 12.0f,
-        panel_height - 12.0f,
+        list_panel_x + 5.0f,
+        list_panel_y + 5.0f,
+        list_panel_width - 10.0f,
+        list_panel_height - 10.0f,
         kPickerPanelEdgeInner,
         1.0f));
 
     SubmitPickerDrawCommand(MakeText(
-        panel_x + 24.0f,
-        panel_y + 20.0f,
+        list_panel_x + pad,
+        list_panel_y + pad,
         "CHOOSE A BONEYARD",
         kPickerTitleGold,
-        1.15f));
+        title_scale));
 
     const bool has_entries =
         snapshot.catalog != nullptr && !snapshot.catalog->entries.empty();
     if (has_entries) {
         const auto entry_count = snapshot.catalog->entries.size();
+        const auto mod_count = CountPickerSourceMods(*snapshot.catalog);
         char count_line[96];
         std::snprintf(
             count_line,
@@ -175,31 +196,35 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             "%zu boneyard%s from %zu mod%s",
             entry_count,
             entry_count == 1 ? "" : "s",
-            CountPickerSourceMods(*snapshot.catalog),
-            CountPickerSourceMods(*snapshot.catalog) == 1 ? "" : "s");
+            mod_count,
+            mod_count == 1 ? "" : "s");
+        const float count_width =
+            static_cast<float>(std::strlen(count_line)) *
+            kPickerGlyphAdvance * row_meta_scale;
         SubmitPickerDrawCommand(MakeText(
-            panel_x + 24.0f,
-            panel_y + 44.0f,
+            list_panel_x + list_panel_width - pad - count_width,
+            list_panel_y + pad + 6.0f * ui_scale,
             count_line,
             kPickerTextMeta,
-            0.65f));
+            row_meta_scale));
     }
 
+    const float header_height = pad + 26.0f * ui_scale;
     SubmitPickerDrawCommand(MakeRectangle(
         LuaDrawCommandKind::FilledRect,
-        panel_x + 18.0f,
-        panel_y + 64.0f,
-        panel_width - 36.0f,
+        list_panel_x + pad * 0.8f,
+        list_panel_y + header_height,
+        list_panel_width - pad * 1.6f,
         1.0f,
         kPickerDivider));
 
-    const float footer_height = 46.0f;
-    const float list_top = panel_y + 76.0f;
-    const float list_bottom = panel_y + panel_height - footer_height - 12.0f;
-    const float list_x = panel_x + 20.0f;
-    const float list_width = panel_width * 0.54f;
+    const float list_top = list_panel_y + header_height + 12.0f * ui_scale;
+    const float list_bottom =
+        list_panel_y + list_panel_height - 14.0f * ui_scale;
+    const float list_x = list_panel_x + pad * 0.8f;
+    const float list_width = list_panel_width - pad * 1.6f;
     const auto rows_fit = static_cast<std::size_t>(
-        (std::max)(1.0f, (list_bottom - list_top) / kPickerRowHeight));
+        (std::max)(1.0f, (list_bottom - list_top) / row_height));
     const auto visible_rows = (std::min<std::size_t>)(
         kVisibleBoneyardRows,
         rows_fit);
@@ -218,6 +243,12 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             ? cursor - visible_rows + 1
             : 0;
         const auto last = (std::min)(first + visible_rows, entry_count);
+        const auto name_chars = PickerCharsPerLine(
+            list_width * 0.58f,
+            row_text_scale);
+        const auto meta_chars = PickerCharsPerLine(
+            list_width * 0.36f,
+            row_meta_scale);
 
         float row_y = list_top;
         for (std::size_t index = first; index < last; ++index) {
@@ -231,9 +262,9 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
                 SubmitPickerDrawCommand(MakeRectangle(
                     LuaDrawCommandKind::FilledRect,
                     list_x,
-                    row_y - 3.0f,
+                    row_y - 3.0f * ui_scale,
                     list_width,
-                    kPickerRowHeight - 4.0f,
+                    row_height - 5.0f * ui_scale,
                     at_cursor ? kPickerRowCursorFill
                               : kPickerRowSelectedFill));
             }
@@ -241,44 +272,48 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
                 SubmitPickerDrawCommand(MakeRectangle(
                     LuaDrawCommandKind::FilledRect,
                     list_x,
-                    row_y - 3.0f,
-                    3.0f,
-                    kPickerRowHeight - 4.0f,
+                    row_y - 3.0f * ui_scale,
+                    4.0f * ui_scale,
+                    row_height - 5.0f * ui_scale,
                     kPickerRowCursorBar));
             }
 
             SubmitPickerDrawCommand(MakeText(
-                list_x + 14.0f,
+                list_x + 16.0f * ui_scale,
                 row_y,
-                TruncatePickerText(entry.display_name, kPickerNameTruncation),
+                TruncatePickerText(entry.display_name, name_chars),
                 at_cursor ? kPickerTitleGold : kPickerTextBright,
-                0.85f));
-            std::string meta =
-                entry.source_mod_name + " v" + entry.source_mod_version;
-            if (is_committed_selection) {
-                meta += "  [SELECTED]";
-            }
+                row_text_scale));
+
+            std::string row_meta = is_committed_selection
+                ? std::string("[SELECTED]")
+                : entry.source_mod_name;
+            row_meta = TruncatePickerText(row_meta, meta_chars);
+            const float row_meta_width =
+                static_cast<float>(row_meta.size()) *
+                kPickerGlyphAdvance * row_meta_scale;
             SubmitPickerDrawCommand(MakeText(
-                list_x + 14.0f,
-                row_y + 14.0f,
-                TruncatePickerText(meta, kPickerNameTruncation + 8),
+                list_x + list_width - 14.0f * ui_scale - row_meta_width,
+                row_y + 3.0f * ui_scale,
+                std::move(row_meta),
                 is_committed_selection ? kPickerWaitGold : kPickerTextMeta,
-                0.6f));
-            row_y += kPickerRowHeight;
+                row_meta_scale));
+            row_y += row_height;
         }
 
         if (entry_count > visible_rows) {
-            const float track_x = list_x + list_width + 8.0f;
+            const float track_x =
+                list_panel_x + list_panel_width - 10.0f * ui_scale;
             const float track_height = list_bottom - list_top;
             SubmitPickerDrawCommand(MakeRectangle(
                 LuaDrawCommandKind::FilledRect,
                 track_x,
                 list_top,
-                4.0f,
+                4.0f * ui_scale,
                 track_height,
                 kPickerScrollTrack));
             const float thumb_height = (std::max)(
-                18.0f,
+                18.0f * ui_scale,
                 track_height * static_cast<float>(visible_rows) /
                     static_cast<float>(entry_count));
             const float scroll_range = track_height - thumb_height;
@@ -292,136 +327,123 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
                 LuaDrawCommandKind::FilledRect,
                 track_x,
                 thumb_y,
-                4.0f,
+                4.0f * ui_scale,
                 thumb_height,
                 kPickerScrollThumb));
         }
     } else {
         SubmitPickerDrawCommand(MakeText(
-            list_x + 14.0f,
+            list_x + 16.0f * ui_scale,
             list_top,
             "No boneyards are staged.",
             kPickerTextDim,
-            0.8f));
+            row_text_scale));
     }
 
-    if (has_entries) {
-        const float card_x = list_x + list_width + 24.0f;
-        const float card_width = panel_x + panel_width - card_x - 20.0f;
-        const float card_height = list_bottom - list_top;
-        SubmitPickerDrawCommand(MakeRectangle(
-            LuaDrawCommandKind::FilledRect,
-            card_x,
-            list_top - 3.0f,
-            card_width,
-            card_height,
-            kPickerCardFill));
-        SubmitPickerDrawCommand(MakeRectangle(
-            LuaDrawCommandKind::OutlinedRect,
-            card_x,
-            list_top - 3.0f,
-            card_width,
-            card_height,
-            kPickerPanelEdgeInner,
-            1.0f));
+    // Details zone: name, source mod, update date, and description for the
+    // highlighted entry; the stat dump (size/layout/sha/file) is gone by
+    // owner direction.
+    SubmitPickerDrawCommand(MakeRectangle(
+        LuaDrawCommandKind::FilledRect,
+        list_panel_x,
+        detail_panel_y,
+        list_panel_width,
+        detail_panel_height,
+        kPickerCardFill));
+    SubmitPickerDrawCommand(MakeRectangle(
+        LuaDrawCommandKind::OutlinedRect,
+        list_panel_x,
+        detail_panel_y,
+        list_panel_width,
+        detail_panel_height,
+        kPickerPanelEdgeInner,
+        1.0f));
 
+    const float detail_x = list_panel_x + pad;
+    const float detail_inner_width = list_panel_width - pad * 2.0f;
+    float detail_y = detail_panel_y + pad * 0.7f;
+
+    if (has_entries) {
         const auto& entry = snapshot.catalog->entries[cursor];
-        float detail_y = list_top + 12.0f;
+
+        const auto detail_name_chars = PickerCharsPerLine(
+            detail_inner_width * 0.7f,
+            detail_name_scale);
         SubmitPickerDrawCommand(MakeText(
-            card_x + 14.0f,
+            detail_x,
             detail_y,
-            TruncatePickerText(entry.display_name, kPickerDetailTruncation),
+            TruncatePickerText(entry.display_name, detail_name_chars),
             kPickerTitleGold,
-            0.95f));
-        detail_y += 24.0f;
+            detail_name_scale));
+
+        if (!entry.updated_utc.empty()) {
+            const std::string updated = "Updated " + entry.updated_utc;
+            const float updated_width =
+                static_cast<float>(updated.size()) *
+                kPickerGlyphAdvance * detail_meta_scale;
+            SubmitPickerDrawCommand(MakeText(
+                detail_x + detail_inner_width - updated_width,
+                detail_y + 4.0f * ui_scale,
+                updated,
+                kPickerTextDim,
+                detail_meta_scale));
+        }
+        detail_y += 26.0f * ui_scale;
+
         SubmitPickerDrawCommand(MakeText(
-            card_x + 14.0f,
+            detail_x,
             detail_y,
             TruncatePickerText(
                 "from " + entry.source_mod_name + " v" +
                     entry.source_mod_version,
-                kPickerDetailTruncation + 10),
+                PickerCharsPerLine(detail_inner_width, detail_meta_scale)),
             kPickerTextDim,
-            0.7f));
-        detail_y += 26.0f;
+            detail_meta_scale));
+        detail_y += 24.0f * ui_scale;
 
-        const float label_x = card_x + 14.0f;
-        const float value_x = card_x + 96.0f;
-        SubmitPickerLabelValue(
-            label_x,
-            value_x,
-            detail_y,
-            "Size",
-            FormatPickerByteSize(entry.preview.file_length),
-            kPickerTextBright);
-        detail_y += 20.0f;
-        {
-            char complexity[64];
-            std::snprintf(
-                complexity,
-                sizeof(complexity),
-                "%u chunks / %u buffers",
-                entry.preview.chunk_count,
-                entry.preview.named_buffer_count);
-            SubmitPickerLabelValue(
-                label_x,
-                value_x,
+        const std::string& description = entry.source_mod_description;
+        if (!description.empty()) {
+            SubmitPickerDrawCommand(MakeText(
+                detail_x,
                 detail_y,
-                "Layout",
-                complexity,
-                kPickerTextBright);
+                WrapPickerText(
+                    description,
+                    PickerCharsPerLine(
+                        detail_inner_width,
+                        description_scale),
+                    kPickerDescriptionMaxLines),
+                kPickerTextBright,
+                description_scale));
+        } else {
+            SubmitPickerDrawCommand(MakeText(
+                detail_x,
+                detail_y,
+                "No description provided.",
+                kPickerTextMeta,
+                description_scale));
         }
-        detail_y += 20.0f;
-        SubmitPickerLabelValue(
-            label_x,
-            value_x,
-            detail_y,
-            "Depth",
-            std::to_string(entry.preview.max_depth),
-            kPickerTextBright);
-        detail_y += 20.0f;
-        SubmitPickerLabelValue(
-            label_x,
-            value_x,
-            detail_y,
-            "SHA-256",
-            ShortPickerSha(entry.content_sha256),
-            kPickerTextMeta);
-        detail_y += 20.0f;
-        SubmitPickerLabelValue(
-            label_x,
-            value_x,
-            detail_y,
-            "File",
-            TruncatePickerText(entry.filename, kPickerDetailTruncation),
-            kPickerTextMeta);
     }
 
-    const float footer_y = panel_y + panel_height - footer_height + 6.0f;
-    SubmitPickerDrawCommand(MakeRectangle(
-        LuaDrawCommandKind::FilledRect,
-        panel_x + 18.0f,
-        footer_y - 8.0f,
-        panel_width - 36.0f,
-        1.0f,
-        kPickerDivider));
+    const float footer_y =
+        detail_panel_y + detail_panel_height - pad * 0.7f - line_height;
 
     if (!snapshot.error_message.empty()) {
+        const float error_y = footer_y - 26.0f * ui_scale;
         SubmitPickerDrawCommand(MakeRectangle(
             LuaDrawCommandKind::FilledRect,
-            panel_x + 18.0f,
-            footer_y - 34.0f,
-            panel_width - 36.0f,
-            24.0f,
+            detail_x - 6.0f * ui_scale,
+            error_y - 4.0f * ui_scale,
+            detail_inner_width + 12.0f * ui_scale,
+            22.0f * ui_scale,
             kPickerErrorFill));
         SubmitPickerDrawCommand(MakeText(
-            panel_x + 26.0f,
-            footer_y - 30.0f,
+            detail_x,
+            error_y,
             TruncatePickerText(
                 "ERROR: " + snapshot.error_message,
-                110),
+                PickerCharsPerLine(detail_inner_width, hint_scale)),
             kPickerErrorText,
-            0.7f));
+            hint_scale));
     }
 
     std::string status_line;
@@ -456,11 +478,11 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             "Up/Down select   PgUp/PgDn jump   Enter play   Esc stock maps";
     }
     SubmitPickerDrawCommand(MakeText(
-        panel_x + 24.0f,
+        detail_x,
         footer_y,
         std::move(status_line),
         status_color,
-        0.7f));
+        hint_scale));
 
     CommitLuaDrawFrame(kPickerDrawOwner);
 }
