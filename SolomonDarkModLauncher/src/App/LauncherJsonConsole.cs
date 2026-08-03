@@ -97,11 +97,13 @@ internal static class LauncherJsonConsole
                 : new LauncherJsonLobbyModSync
                 {
                     UsedWebsite = execution.LobbyModSync.UsedWebsite,
+                    UsedHostTransfer = execution.LobbyModSync.UsedHostTransfer,
                     FallbackReason = execution.LobbyModSync.FallbackReason,
                     RequiredModCount = execution.LobbyModSync.RequiredModCount,
                     ReusedManualModCount = execution.LobbyModSync.ReusedManualModCount,
                     ReusedCachedModCount = execution.LobbyModSync.ReusedCachedModCount,
-                    DownloadedModCount = execution.LobbyModSync.DownloadedModCount
+                    DownloadedModCount = execution.LobbyModSync.DownloadedModCount,
+                    HostDownloadedModCount = execution.LobbyModSync.HostDownloadedModCount
                 },
             JoinPreview = execution.JoinPreview is null
                 ? null
@@ -109,6 +111,7 @@ internal static class LauncherJsonConsole
                 {
                     LobbyId = execution.JoinPreview.LobbyId,
                     UsedWebsite = execution.JoinPreview.UsedWebsite,
+                    UsedHostTransfer = execution.JoinPreview.UsedHostTransfer,
                     Error = execution.JoinPreview.Error,
                     HostProtocolVersion = execution.JoinPreview.HostBuild?.ProtocolVersion,
                     HostLoaderVersion = execution.JoinPreview.HostBuild?.LoaderVersion,
@@ -118,6 +121,8 @@ internal static class LauncherJsonConsole
                     InstalledCount = execution.JoinPreview.InstalledCount,
                     CachedCount = execution.JoinPreview.CachedCount,
                     DownloadCount = execution.JoinPreview.DownloadCount,
+                    HostDownloadCount = execution.JoinPreview.HostDownloadCount,
+                    WebsiteDownloadCount = execution.JoinPreview.WebsiteDownloadCount,
                     UnavailableCount = execution.JoinPreview.UnavailableCount,
                     Mods = execution.JoinPreview.Mods.Select(mod => new LauncherJsonJoinPreviewMod
                     {
@@ -133,7 +138,13 @@ internal static class LauncherJsonConsole
                             _ => "unknown"
                         },
                         InstalledVersion = mod.InstalledVersion,
-                        DownloadSizeBytes = mod.DownloadSizeBytes
+                        DownloadSizeBytes = mod.DownloadSizeBytes,
+                        DownloadSource = mod.DownloadSource switch
+                        {
+                            LobbyJoinPreviewDownloadSource.Website => "website",
+                            LobbyJoinPreviewDownloadSource.Host => "host",
+                            _ => "none"
+                        }
                     }).ToArray()
                 },
             ModInstallPreview = execution.ModInstallPreview is null
@@ -345,11 +356,13 @@ internal static class LauncherJsonConsole
     private sealed class LauncherJsonLobbyModSync
     {
         public required bool UsedWebsite { get; init; }
+        public required bool UsedHostTransfer { get; init; }
         public required string? FallbackReason { get; init; }
         public required int RequiredModCount { get; init; }
         public required int ReusedManualModCount { get; init; }
         public required int ReusedCachedModCount { get; init; }
         public required int DownloadedModCount { get; init; }
+        public required int HostDownloadedModCount { get; init; }
     }
 
     private sealed class LauncherJsonModUpdate
@@ -371,6 +384,7 @@ internal static class LauncherJsonConsole
     {
         public required ulong LobbyId { get; init; }
         public required bool UsedWebsite { get; init; }
+        public required bool UsedHostTransfer { get; init; }
         public required string? Error { get; init; }
         public required int? HostProtocolVersion { get; init; }
         public required string? HostLoaderVersion { get; init; }
@@ -380,6 +394,8 @@ internal static class LauncherJsonConsole
         public required int InstalledCount { get; init; }
         public required int CachedCount { get; init; }
         public required int DownloadCount { get; init; }
+        public required int HostDownloadCount { get; init; }
+        public required int WebsiteDownloadCount { get; init; }
         public required int UnavailableCount { get; init; }
         public required IReadOnlyList<LauncherJsonJoinPreviewMod> Mods { get; init; }
     }
@@ -408,6 +424,7 @@ internal static class LauncherJsonConsole
         public required string State { get; init; }
         public required string? InstalledVersion { get; init; }
         public required long? DownloadSizeBytes { get; init; }
+        public required string DownloadSource { get; init; }
     }
 
     private sealed class LauncherJsonConfiguration

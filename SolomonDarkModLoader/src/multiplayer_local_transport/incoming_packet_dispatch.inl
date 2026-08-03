@@ -209,6 +209,10 @@ void DispatchReceivedPacket(
         }
 
         const auto kind = static_cast<PacketKind>(header.kind);
+        if (DispatchHostModTransferPacket(
+                kind, packet_buffer, received, from)) {
+            continue;
+        }
         if (kind == PacketKind::SessionGoodbye &&
             received ==
                 static_cast<int>(sizeof(SessionGoodbyePacket))) {

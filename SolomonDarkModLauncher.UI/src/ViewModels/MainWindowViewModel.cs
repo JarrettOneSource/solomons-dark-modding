@@ -1001,7 +1001,8 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         LauncherUiCommandMode mode,
         string statusText,
         string? targetModId = null,
-        LauncherHostOptions? hostOptions = null)
+        LauncherHostOptions? hostOptions = null,
+        bool allowHostModTransfer = false)
     {
         var launchesGame = LauncherUiCommandRouting.LaunchesGame(mode);
         if (launchesGame)
@@ -1039,7 +1040,11 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                     SessionConnectProgressMapper.StagingGame());
                 break;
         }
-        CommandPreviewText = client_.BuildCommandPreview(mode, targetModId, hostOptions);
+        CommandPreviewText = client_.BuildCommandPreview(
+            mode,
+            targetModId,
+            hostOptions,
+            allowHostModTransfer);
         LauncherUiInvocationResult invocation;
         try
         {
@@ -1048,6 +1053,7 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 mode,
                 targetModId,
                 hostOptions,
+                allowHostModTransfer,
                 progress);
         }
         catch (Exception ex)
@@ -1171,9 +1177,17 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             LauncherUiCommandMode.HostSteam => "Ready",
             LauncherUiCommandMode.PrepareSteamJoin =>
                 invocation.Response.LobbyModSync is { DownloadedModCount: > 0 } sync
-                    ? $"Downloaded {sync.DownloadedModCount} host " +
-                      (sync.DownloadedModCount == 1 ? "mod" : "mods") +
-                      " from the website."
+                    ? sync.HostDownloadedModCount > 0
+                        ? sync.DownloadedModCount == sync.HostDownloadedModCount
+                            ? $"Downloaded {sync.HostDownloadedModCount} " +
+                              (sync.HostDownloadedModCount == 1 ? "mod" : "mods") +
+                              " directly from the host."
+                            : $"Downloaded {sync.DownloadedModCount - sync.HostDownloadedModCount} " +
+                              "from the website and " +
+                              $"{sync.HostDownloadedModCount} directly from the host."
+                        : $"Downloaded {sync.DownloadedModCount} host " +
+                          (sync.DownloadedModCount == 1 ? "mod" : "mods") +
+                          " from the website."
                     : "Lobby prepared",
             LauncherUiCommandMode.LaunchSteamJoin => "Game started",
             LauncherUiCommandMode.EnableMod => "Ready",
@@ -2104,7 +2118,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
         IsBusy = false;
 
         var preview = invocation.Response?.JoinPreview;
-        if (preview is null || !preview.UsedWebsite || !invocation.Succeeded)
+        if (preview is null ||
+            (!preview.UsedWebsite && !preview.UsedHostTransfer) ||
+            !invocation.Succeeded)
         {
             var reason = preview?.Error ?? invocation.ErrorMessage;
             StatusText = string.IsNullOrWhiteSpace(reason)
@@ -2131,11 +2147,9 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 .Where(mod => mod.State == "unavailable")
                 .Select(mod => $"{mod.DisplayName} {mod.Version}");
             SetError(
-                $"The host has unpublished mods: {string.Join(", ", unavailable)}. " +
-                "They aren't on the mod directory yet, so they can't be downloaded " +
-                "automatically. Ask the host to publish them, or install the same mod " +
-                "files manually before joining.");
-            StatusText = "Join canceled - the host has unpublished mods.";
+                $"The host's required mods are unavailable: {string.Join(", ", unavailable)}. " +
+                "They could not be obtained from the mod directory or directly from the host.");
+            StatusText = "Join canceled - required host mods are unavailable.";
             return;
         }
 
@@ -2155,12 +2169,15 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
                         ? " (replaces your local copy)"
                         : $" (you have {mod.InstalledVersion})";
                 }
+                line += mod.DownloadSource == "host"
+                    ? " (directly from host)"
+                    : " (from mod directory)";
                 ModDownloadItems.Add(line);
             }
 
             ModDownloadPromptTitle = "This lobby uses mods";
             ModDownloadPromptText =
-                "The host's game uses the mods listed below. Download them to join the lobby?";
+                "The host's game uses the mods listed below. Download them from the mod directory or directly from the host to join?";
             ModDownloadPromptNote =
                 "Applies to this session only - your own mods aren't changed.";
             ModDownloadConfirmText = "Download and join";
@@ -2197,14 +2214,19 @@ internal sealed class MainWindowViewModel : ViewModelBase, IDisposable
             $"The launcher joins lobby {LobbyId}.";
         consentedJoinStatusText_ = null;
         IsModDownloadPromptOpen = false;
-        _ = PrepareLobbyJoinAsync(joinStatusText);
+        _ = PrepareLobbyJoinAsync(
+            joinStatusText,
+            allowHostModTransfer: true);
     }
 
-    private async Task PrepareLobbyJoinAsync(string joinStatusText)
+    private async Task PrepareLobbyJoinAsync(
+        string joinStatusText,
+        bool allowHostModTransfer = false)
     {
         if (!await ExecuteUiCommandAsync(
                 LauncherUiCommandMode.PrepareSteamJoin,
-                joinStatusText))
+                joinStatusText,
+                allowHostModTransfer: allowHostModTransfer))
         {
             return;
         }

@@ -176,3 +176,23 @@ void SendPacketToEndpoint(
         endpoint,
         steam_send_mode);
 }
+
+void DrainLocalHostModTransferResponses() {
+    auto responses = TakeHostModTransferResponses(
+        HostModTransferBackend::LocalUdp,
+        8,
+        8);
+    for (const auto& response : responses) {
+        TransportPeerEndpoint endpoint;
+        endpoint.backend = GameplayTransportBackend::LocalUdp;
+        endpoint.udp_address.sin_family = AF_INET;
+        endpoint.udp_address.sin_addr.s_addr =
+            htonl(response.route.ipv4_address);
+        endpoint.udp_address.sin_port = htons(response.route.port);
+        SendBufferToEndpoint(
+            response.bytes.data(),
+            response.bytes.size(),
+            endpoint,
+            SteamNetworkSendMode::ReliableNoNagle);
+    }
+}

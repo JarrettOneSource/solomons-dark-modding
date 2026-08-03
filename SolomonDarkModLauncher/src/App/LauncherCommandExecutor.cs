@@ -56,6 +56,7 @@ internal static class LauncherCommandExecutor
                     lobbyId,
                     command.LobbyHost.DirectoryBaseUrl,
                     command.LobbyTicket,
+                    command.AllowHostModTransfer,
                     progress)
                 .GetAwaiter()
                 .GetResult();
@@ -179,7 +180,8 @@ internal static class LauncherCommandExecutor
         var stageResult = StageBuilder.Build(
             configuration,
             catalog,
-            command.FreshInstall);
+            command.FreshInstall,
+            hostModTransfer: command.MultiplayerMode == MultiplayerLaunchMode.Host);
         return new LauncherCommandExecution(
             command,
             configuration,
@@ -199,7 +201,8 @@ internal static class LauncherCommandExecutor
         var stageResult = StageBuilder.Build(
             configuration,
             catalog,
-            command.FreshInstall);
+            command.FreshInstall,
+            hostModTransfer: command.MultiplayerMode == MultiplayerLaunchMode.Host);
         RequireHostCompatibleStage(lobbyModSync, stageResult);
         var multiplayer = MultiplayerLaunchOptions.Create(
             command.MultiplayerMode,
@@ -246,7 +249,8 @@ internal static class LauncherCommandExecutor
         LobbyModSyncResult? lobbyModSync,
         StageBuildResult stageResult)
     {
-        if (lobbyModSync is not { UsedWebsite: true, HostBuild: { ManifestSha256: { } hostFingerprint } hostBuild } ||
+        if (lobbyModSync is not { HostBuild: { ManifestSha256: { } hostFingerprint } hostBuild } ||
+            (!lobbyModSync.UsedWebsite && !lobbyModSync.UsedHostTransfer) ||
             string.Equals(
                 stageResult.MultiplayerCompatibility.FingerprintSha256,
                 hostFingerprint,

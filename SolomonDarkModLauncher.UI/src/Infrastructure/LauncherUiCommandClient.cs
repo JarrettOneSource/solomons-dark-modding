@@ -155,9 +155,14 @@ internal sealed class LauncherUiCommandClient
     public string BuildCommandPreview(
         LauncherUiCommandMode mode,
         string? targetModId = null,
-        LauncherHostOptions? hostOptions = null)
+        LauncherHostOptions? hostOptions = null,
+        bool allowHostModTransfer = false)
     {
-        var arguments = BuildArguments(mode, targetModId, hostOptions);
+        var arguments = BuildArguments(
+            mode,
+            targetModId,
+            hostOptions,
+            allowHostModTransfer);
         return $"SolomonDarkModLauncher.exe {string.Join(" ", arguments.Select(QuoteArgument))}";
     }
 
@@ -165,10 +170,15 @@ internal sealed class LauncherUiCommandClient
         LauncherUiCommandMode mode,
         string? targetModId = null,
         LauncherHostOptions? hostOptions = null,
+        bool allowHostModTransfer = false,
         IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var arguments = BuildArguments(mode, targetModId, hostOptions);
+        var arguments = BuildArguments(
+            mode,
+            targetModId,
+            hostOptions,
+            allowHostModTransfer);
         var executablePath = LauncherExecutableResolver.Resolve();
         var startInfo = new ProcessStartInfo(executablePath)
         {
@@ -232,7 +242,8 @@ internal sealed class LauncherUiCommandClient
     private IReadOnlyList<string> BuildArguments(
         LauncherUiCommandMode mode,
         string? targetModId,
-        LauncherHostOptions? hostOptions = null)
+        LauncherHostOptions? hostOptions = null,
+        bool allowHostModTransfer = false)
     {
         var arguments = new List<string>
         {
@@ -260,6 +271,20 @@ internal sealed class LauncherUiCommandClient
         {
             arguments.Add("--runtime-flag");
             arguments.Add("loader.debug_ui=false");
+        }
+
+        if (string.Equals(
+                Environment.GetEnvironmentVariable(
+                    "SDMOD_MULTIPLAYER_TRANSPORT"),
+                "local_udp",
+                StringComparison.OrdinalIgnoreCase) &&
+            mode is
+                LauncherUiCommandMode.HostSteam or
+                LauncherUiCommandMode.PrepareSteamJoin or
+                LauncherUiCommandMode.LaunchSteamJoin)
+        {
+            arguments.Add("--runtime-flag");
+            arguments.Add("multiplayer.steam_bootstrap=false");
         }
 
         if (showStockTutorial_ &&
@@ -326,6 +351,10 @@ internal sealed class LauncherUiCommandClient
                 {
                     arguments.Add("--lobby-ticket");
                     arguments.Add(lobbyTicket_);
+                }
+                if (allowHostModTransfer)
+                {
+                    arguments.Add("--allow-host-mod-transfer");
                 }
                 break;
             case LauncherUiCommandMode.JoinPreview:

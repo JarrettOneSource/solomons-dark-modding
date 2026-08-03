@@ -8,10 +8,10 @@ namespace SolomonDarkModLauncher.Mods;
 
 internal static class WebsiteModPackageInstaller
 {
-    private const int MaxEntries = 2048;
-    private const long MaxPackageBytes = 100L * 1024 * 1024;
-    private const long MaxExpandedBytes = 256L * 1024 * 1024;
-    private const int MaxRelativePathLength = 240;
+    internal const int MaxEntries = 2048;
+    internal const long MaxPackageBytes = 100L * 1024 * 1024;
+    internal const long MaxExpandedBytes = 256L * 1024 * 1024;
+    internal const int MaxRelativePathLength = 240;
 
     public static async Task<DiscoveredMod> InstallAsync(
         HttpClient client,
@@ -31,7 +31,6 @@ internal static class WebsiteModPackageInstaller
 
         var operationRoot = Path.Combine(cacheRootPath, $".install-{Guid.NewGuid():N}");
         var archivePath = Path.Combine(operationRoot, "package.zip");
-        var extractedPath = Path.Combine(operationRoot, "content");
         Directory.CreateDirectory(operationRoot);
         try
         {
@@ -41,16 +40,84 @@ internal static class WebsiteModPackageInstaller
                 archivePath,
                 cancellationToken,
                 progress);
+            return await InstallArchiveAsync(
+                archivePath,
+                resolved.PackageSha256,
+                required,
+                cacheRootPath,
+                cancellationToken,
+                progress);
+        }
+        finally
+        {
+            if (Directory.Exists(operationRoot))
+            {
+                Directory.Delete(operationRoot, recursive: true);
+            }
+        }
+    }
+
+    public static async Task<DiscoveredMod> InstallArchiveAsync(
+        string archivePath,
+        string expectedPackageSha256,
+        MultiplayerModDescriptor required,
+        string cacheRootPath,
+        CancellationToken cancellationToken,
+        IProgress<UpdateProgress>? progress = null)
+    {
+        if (!IsSha256(expectedPackageSha256))
+        {
+            throw new InvalidDataException(
+                $"The package digest for {required.Id} is invalid.");
+        }
+        var targetPath = GetCachePath(cacheRootPath, required);
+        var existing = TryLoadExact(targetPath, required);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var fileInfo = new FileInfo(archivePath);
+        if (!fileInfo.Exists || fileInfo.Length <= 0 || fileInfo.Length > MaxPackageBytes)
+        {
+            throw new InvalidDataException("Downloaded mod packages must be 1-100 MiB.");
+        }
+        await using (var package = new FileStream(
+            archivePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan))
+        {
+            var actualPackageSha256 = Convert.ToHexString(
+                await SHA256.HashDataAsync(package, cancellationToken))
+                .ToLowerInvariant();
+            if (!string.Equals(
+                    actualPackageSha256,
+                    expectedPackageSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Downloaded mod {required.Id} did not match the declared package hash.");
+            }
+        }
+
+        var operationRoot = Path.Combine(cacheRootPath, $".install-{Guid.NewGuid():N}");
+        var extractedPath = Path.Combine(operationRoot, "content");
+        Directory.CreateDirectory(operationRoot);
+        try
+        {
             await ExtractAsync(
                 archivePath,
                 extractedPath,
-                resolved,
+                required.Id,
+                required.Version,
                 cancellationToken,
                 progress);
-
             progress?.Report(new UpdateProgress(
                 UpdateProgressPhase.Verifying,
-                $"Verifying {resolved.Id} v{resolved.Version} content…",
+                $"Verifying {required.Id} v{required.Version} content…",
                 0,
                 1,
                 UpdateProgressUnit.Items));
@@ -67,14 +134,13 @@ internal static class WebsiteModPackageInstaller
             }
             progress?.Report(new UpdateProgress(
                 UpdateProgressPhase.Verifying,
-                $"Verified {resolved.Id} v{resolved.Version}.",
+                $"Verified {required.Id} v{required.Version}.",
                 1,
                 1,
                 UpdateProgressUnit.Items));
-
             progress?.Report(new UpdateProgress(
                 UpdateProgressPhase.Installing,
-                $"Installing {resolved.Id} v{resolved.Version}…",
+                $"Installing {required.Id} v{required.Version}…",
                 0,
                 1,
                 UpdateProgressUnit.Items));
@@ -86,7 +152,7 @@ internal static class WebsiteModPackageInstaller
             Directory.Move(extractedPath, targetPath);
             progress?.Report(new UpdateProgress(
                 UpdateProgressPhase.Installing,
-                $"Installed {resolved.Id} v{resolved.Version}.",
+                $"Installed {required.Id} v{required.Version}.",
                 1,
                 1,
                 UpdateProgressUnit.Items));
@@ -133,6 +199,79 @@ internal static class WebsiteModPackageInstaller
         {
             return null;
         }
+    }
+
+    internal static IReadOnlyList<(string FullPath, string RelativePath)> ValidatePackageableSource(
+        DiscoveredMod mod)
+    {
+        var root = Path.GetFullPath(mod.RootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var rootInfo = new DirectoryInfo(root);
+        if ((rootInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new InvalidDataException(
+                $"Mod package roots may not be links: {mod.Manifest.Id}");
+        }
+
+        var files = new List<(string FullPath, string RelativePath)>();
+        var directories = new Stack<string>();
+        directories.Push(root);
+        long expandedBytes = 0;
+        while (directories.Count > 0)
+        {
+            var directory = directories.Pop();
+            foreach (var path in Directory.EnumerateFileSystemEntries(
+                         directory,
+                         "*",
+                         SearchOption.TopDirectoryOnly))
+            {
+                var attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new InvalidDataException(
+                        $"Mod packages may not contain links: {path}");
+                }
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    directories.Push(path);
+                    continue;
+                }
+                var relativePath = Path.GetRelativePath(root, path).Replace('\\', '/');
+                if (relativePath.Length == 0 || relativePath.Length > MaxRelativePathLength ||
+                    relativePath.Split('/').Any(segment => !IsPortablePathSegment(segment)))
+                {
+                    throw new InvalidDataException(
+                        $"Mod package path is not portable: {relativePath}");
+                }
+                expandedBytes = checked(expandedBytes + new FileInfo(path).Length);
+                if (expandedBytes > MaxExpandedBytes)
+                {
+                    throw new InvalidDataException(
+                        "The expanded staged mod may not exceed 256 MiB.");
+                }
+                files.Add((path, relativePath));
+                if (files.Count > MaxEntries)
+                {
+                    throw new InvalidDataException(
+                        $"Mod packages may not contain more than {MaxEntries} files.");
+                }
+            }
+        }
+        if (files.Count == 0)
+        {
+            throw new InvalidDataException("Mod packages may not be empty.");
+        }
+        ValidateArchiveTree(files.Select(file => file.RelativePath));
+        var contentSha256 = ModContentHasher.HashDirectory(root);
+        ValidateDownloadedMod(
+            mod,
+            new MultiplayerModDescriptor(
+                mod.Manifest.Id,
+                mod.Manifest.Version,
+                contentSha256));
+        return files
+            .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static async Task DownloadAsync(
@@ -253,7 +392,8 @@ internal static class WebsiteModPackageInstaller
     private static async Task ExtractAsync(
         string archivePath,
         string targetPath,
-        WebsiteResolvedMod resolved,
+        string modId,
+        string version,
         CancellationToken cancellationToken,
         IProgress<UpdateProgress>? progress)
     {
@@ -292,7 +432,7 @@ internal static class WebsiteModPackageInstaller
         ValidateArchiveTree(validatedEntries
             .Where(item => !item.RelativePath.EndsWith("/", StringComparison.Ordinal))
             .Select(item => item.RelativePath));
-        var installStatus = $"Installing {resolved.Id} v{resolved.Version} files…";
+        var installStatus = $"Installing {modId} v{version} files…";
         progress?.Report(new UpdateProgress(
             UpdateProgressPhase.Installing,
             installStatus,

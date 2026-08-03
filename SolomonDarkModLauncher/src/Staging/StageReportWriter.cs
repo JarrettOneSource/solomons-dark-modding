@@ -15,6 +15,7 @@ internal static class StageReportWriter
         HudLabelAssetResult hudLabels,
         RuntimeMetadataStageResult runtimeMetadata,
         MultiplayerCompatibilityStageResult multiplayerCompatibility,
+        HostModTransferStageResult modTransfer,
         SteamStageBootstrapResult steamBootstrap)
     {
         var reportDirectory = Path.Combine(stageRootPath, ".sdmod");
@@ -50,6 +51,15 @@ internal static class StageReportWriter
                 multiplayerCompatibility.ProtocolVersion,
                 multiplayerCompatibility.FingerprintSha256,
                 multiplayerCompatibility.ManifestPath
+            },
+            modTransfer = new
+            {
+                modTransfer.Enabled,
+                modTransfer.IndexPath,
+                modTransfer.ReportPath,
+                modTransfer.IndexSha256,
+                modTransfer.TotalPackageBytes,
+                packageCount = modTransfer.Packages.Count
             },
             hudLabels = new
             {

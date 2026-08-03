@@ -29,4 +29,5 @@ internal sealed record LauncherCommand(
     int MultiplayerMaxParticipants,
     bool OpenSteamInviteDialog,
     string? LobbyTicket,
+    bool AllowHostModTransfer,
     LobbyHostOptions LobbyHost);

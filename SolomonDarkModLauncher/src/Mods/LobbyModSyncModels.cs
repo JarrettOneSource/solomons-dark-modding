@@ -6,14 +6,25 @@ internal sealed record LobbyModSyncResult(
     int ReusedManualModCount,
     int ReusedCachedModCount,
     int DownloadedModCount,
+    int HostDownloadedModCount,
     bool UsedWebsite,
+    bool UsedHostTransfer,
     string? FallbackReason,
     LobbyBuildDescriptor? HostBuild = null)
 {
     public static LobbyModSyncResult Offline(
         ModCatalog localCatalog,
         string reason) =>
-        new(localCatalog, 0, 0, 0, 0, UsedWebsite: false, FallbackReason: reason);
+        new(
+            localCatalog,
+            0,
+            0,
+            0,
+            0,
+            0,
+            UsedWebsite: false,
+            UsedHostTransfer: false,
+            FallbackReason: reason);
 }
 
 internal sealed record LobbyBuildDescriptor(
@@ -29,6 +40,13 @@ internal enum LobbyJoinPreviewModState
     Unavailable
 }
 
+internal enum LobbyJoinPreviewDownloadSource
+{
+    None,
+    Website,
+    Host
+}
+
 internal sealed record LobbyJoinPreviewMod(
     string Id,
     string Version,
@@ -36,7 +54,9 @@ internal sealed record LobbyJoinPreviewMod(
     LobbyJoinPreviewModState State,
     string? Name,
     string? InstalledVersion,
-    long? DownloadSizeBytes)
+    long? DownloadSizeBytes,
+    LobbyJoinPreviewDownloadSource DownloadSource =
+        LobbyJoinPreviewDownloadSource.None)
 {
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Id : Name!;
 }
@@ -44,6 +64,7 @@ internal sealed record LobbyJoinPreviewMod(
 internal sealed record LobbyJoinPreview(
     ulong LobbyId,
     bool UsedWebsite,
+    bool UsedHostTransfer,
     string? Error,
     LobbyBuildDescriptor? HostBuild,
     IReadOnlyList<LobbyJoinPreviewMod> Mods)
@@ -61,7 +82,21 @@ internal sealed record LobbyJoinPreview(
         Mods.Count(mod => mod.State == LobbyJoinPreviewModState.Unavailable);
 
     public static LobbyJoinPreview Unavailable(ulong lobbyId, string error) =>
-        new(lobbyId, UsedWebsite: false, error, HostBuild: null, Mods: []);
+        new(
+            lobbyId,
+            UsedWebsite: false,
+            UsedHostTransfer: false,
+            Error: error,
+            HostBuild: null,
+            Mods: []);
+
+    public int HostDownloadCount => Mods.Count(mod =>
+        mod.State == LobbyJoinPreviewModState.NeedsDownload &&
+        mod.DownloadSource == LobbyJoinPreviewDownloadSource.Host);
+
+    public int WebsiteDownloadCount => Mods.Count(mod =>
+        mod.State == LobbyJoinPreviewModState.NeedsDownload &&
+        mod.DownloadSource == LobbyJoinPreviewDownloadSource.Website);
 }
 
 internal sealed record WebsiteResolvedMod(

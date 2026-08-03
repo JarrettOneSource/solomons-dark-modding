@@ -162,6 +162,27 @@ void PumpNetworkMessages(std::uint64_t now_ms) {
         if (!HasProtocolMagic(header)) {
             continue;
         }
+        if (g_session.is_host &&
+            IsLobbyMember(message.sender_steam_id) &&
+            IsHostModTransferPacket(
+                message.payload.data(),
+                message.payload.size())) {
+            std::uint64_t lobby_id = 0;
+            std::memcpy(
+                &lobby_id,
+                message.payload.data() + sizeof(PacketHeader),
+                sizeof(lobby_id));
+            if (lobby_id == g_session.lobby_id && lobby_id != 0) {
+                HostModTransferRoute route;
+                route.backend = HostModTransferBackend::Steam;
+                route.steam_id = message.sender_steam_id;
+                (void)SubmitHostModTransferPacket(
+                    route,
+                    message.payload.data(),
+                    message.payload.size());
+            }
+            continue;
+        }
         const auto kind = static_cast<PacketKind>(header.kind);
         if (kind == PacketKind::SessionHello) {
             SessionHelloPacket packet{};
@@ -211,6 +232,19 @@ void PumpNetworkMessages(std::uint64_t now_ms) {
             message.payload.size(),
             now_ms,
             message.reliable);
+    }
+    auto transfer_responses = TakeHostModTransferResponses(
+        HostModTransferBackend::Steam,
+        8,
+        8);
+    for (const auto& response : transfer_responses) {
+        if (IsLobbyMember(response.route.steam_id)) {
+            SteamSendNetworkMessage(
+                response.route.steam_id,
+                response.bytes.data(),
+                response.bytes.size(),
+                SteamNetworkSendMode::ReliableNoNagle);
+        }
     }
 }
 

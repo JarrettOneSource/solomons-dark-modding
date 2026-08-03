@@ -33,6 +33,7 @@ internal static class LauncherCommandParser
         var multiplayerMaxParticipants = MultiplayerLaunchOptions.DefaultMaxParticipants;
         var openSteamInviteDialog = true;
         string? lobbyTicket = null;
+        var allowHostModTransfer = false;
         var lobbyPrivacy = MultiplayerLobbyPrivacy.FriendsOnly;
         string? directoryBaseUrl = null;
 
@@ -206,6 +207,12 @@ internal static class LauncherCommandParser
                 continue;
             }
 
+            if (arg == "--allow-host-mod-transfer")
+            {
+                allowHostModTransfer = true;
+                continue;
+            }
+
             if (arg == "--invite-steam-id")
             {
                 inviteSteamId = ParseSteamId(ReadValue(args, ref index, arg));
@@ -265,6 +272,14 @@ internal static class LauncherCommandParser
             throw new InvalidOperationException(
                 "--lobby-ticket requires --multiplayer join and --lobby-id.");
         }
+        if (allowHostModTransfer &&
+            (mode is not (LauncherMode.Stage or LauncherMode.Launch) ||
+             multiplayer.Mode != MultiplayerLaunchMode.Join ||
+             multiplayer.LobbyId is null))
+        {
+            throw new InvalidOperationException(
+                "--allow-host-mod-transfer requires stage or launch with --multiplayer join and --lobby-id.");
+        }
 
         return new LauncherCommand(
             mode,
@@ -293,6 +308,7 @@ internal static class LauncherCommandParser
             multiplayer.MaxParticipants,
             multiplayer.OpenInviteDialog,
             lobbyTicket,
+            allowHostModTransfer,
             multiplayer.Host);
     }
 

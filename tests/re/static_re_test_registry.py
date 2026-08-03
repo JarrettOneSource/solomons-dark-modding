@@ -26,6 +26,13 @@ from static_re_boneyard_lighting_contracts import (
 from static_lua_mod_state_contracts import (
     test_lua_mod_state_and_events_are_authority_replicated,
 )
+from static_mod_transfer_contracts import (
+    test_mod_transfer_consent_reuses_the_existing_join_prompt,
+    test_mod_transfer_file_io_is_worker_owned_and_tick_budgeted,
+    test_mod_transfer_protocol_is_versioned_fixed_width_and_bounded,
+    test_mod_transfer_reuses_package_integrity_and_atomic_staging,
+    test_mod_transfer_uses_one_session_service_for_udp_and_steam,
+)
 from static_re_mod_settings_contracts import (
     test_mod_settings_are_scoped_atomic_privileged_and_replicated,
 )
@@ -464,6 +471,26 @@ from static_qol_backend_contracts import (
 )
 
 TESTS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "Mod transfer protocol is versioned, fixed-width, and bounded",
+        test_mod_transfer_protocol_is_versioned_fixed_width_and_bounded,
+    ),
+    (
+        "Mod transfer file IO is worker-owned and tick-budgeted",
+        test_mod_transfer_file_io_is_worker_owned_and_tick_budgeted,
+    ),
+    (
+        "Mod transfer shares one session service across UDP and Steam",
+        test_mod_transfer_uses_one_session_service_for_udp_and_steam,
+    ),
+    (
+        "Mod transfer reuses the existing join consent prompt",
+        test_mod_transfer_consent_reuses_the_existing_join_prompt,
+    ),
+    (
+        "Mod transfer reuses integrity and atomic package staging",
+        test_mod_transfer_reuses_package_integrity_and_atomic_staging,
+    ),
     (
         "live-session leave ACK precedes canonical teardown",
         test_live_session_leave_acks_before_canonical_teardown,

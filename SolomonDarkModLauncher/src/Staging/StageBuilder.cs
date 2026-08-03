@@ -10,7 +10,8 @@ internal static class StageBuilder
     public static StageBuildResult Build(
         LauncherConfiguration configuration,
         ModCatalog catalog,
-        bool freshInstall = false)
+        bool freshInstall = false,
+        bool hostModTransfer = false)
     {
         StageRootProcessCleaner.TerminateProcessesUsingStage(configuration.Workspace.StageRootPath);
         var stageMirror = FileTreeMirror.Synchronize(
@@ -44,6 +45,11 @@ internal static class StageBuilder
             runtimeMetadata,
             catalog.EnabledMods,
             Path.Combine(AppContext.BaseDirectory, "SolomonDarkModLoader.dll"));
+        var modTransfer = HostModTransferPackageMaterializer.Materialize(
+            configuration.Workspace.StageRootPath,
+            catalog.EnabledMods,
+            multiplayerCompatibility,
+            hostModTransfer);
 
         var reportPath = StageReportWriter.Write(
             configuration.Workspace.StageRootPath,
@@ -54,6 +60,7 @@ internal static class StageBuilder
             hudLabels,
             runtimeMetadata,
             multiplayerCompatibility,
+            modTransfer,
             steamBootstrap);
 
         return new StageBuildResult(
@@ -69,6 +76,7 @@ internal static class StageBuilder
             stageMirror,
             runtimeMetadata,
             multiplayerCompatibility,
+            modTransfer,
             steamBootstrap,
             hudLabels,
             catalog.EnabledMods.Count,

@@ -1,0 +1,16 @@
+{
+  "id": "acceptance.modxfer.host_only",
+  "name": "MODXFER Host-Only Acceptance",
+  "version": "1.0.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "draw.local.immediate",
+      "draw.text",
+      "draw.primitives"
+    ]
+  }
+}

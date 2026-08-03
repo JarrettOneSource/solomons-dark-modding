@@ -967,7 +967,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
     )
     binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
 
-    assert "kProtocolVersion = 90" in protocol_text
+    assert "kProtocolVersion = 91" in protocol_text
     for field in (
         "game_over_command_epoch",
         "game_over_ack_epoch",
@@ -1222,7 +1222,7 @@ def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 90" in protocol_text
+    assert "kProtocolVersion = 91" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -1892,7 +1892,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 90;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 91;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),

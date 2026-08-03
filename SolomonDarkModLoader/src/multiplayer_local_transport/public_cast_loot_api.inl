@@ -170,6 +170,8 @@ void TickLocalTransport(std::uint64_t now_ms) {
     finish_stage("host_scene_control");
     ReceivePackets(now_ms);
     finish_stage("receive_apply");
+    DrainLocalHostModTransferResponses();
+    finish_stage("mod_transfer_send");
     if (g_local_teardown_requested.exchange(
             false,
             std::memory_order_acq_rel)) {

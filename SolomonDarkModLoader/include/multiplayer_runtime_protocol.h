@@ -6,7 +6,7 @@
 
 namespace sdmod::multiplayer {
 
-constexpr std::uint16_t kProtocolVersion = 90;
+constexpr std::uint16_t kProtocolVersion = 91;
 constexpr char kProtocolMagic[4] = {'S', 'D', 'M', 'P'};
 constexpr std::uint32_t kParticipantDisplayNameBytes = 32;
 constexpr std::uint32_t kParticipantVisualLinkColorBlockBytes = 32;
@@ -43,6 +43,16 @@ constexpr std::uint16_t kWaveSummaryMaxCompositionRows = 20;
 constexpr std::uint16_t kLuaUiModIdPacketBytes = 128;
 constexpr std::uint16_t kLuaUiIdentifierPacketBytes = 65;
 constexpr std::uint32_t kBoneyardSelectionDigestBytes = 32;
+constexpr std::uint32_t kModTransferDigestBytes = 32;
+constexpr std::uint32_t kModTransferClientIdBytes = 16;
+constexpr std::uint32_t kModTransferModIdBytes = 128;
+constexpr std::uint32_t kModTransferVersionBytes = 64;
+constexpr std::uint32_t kModTransferChunkPayloadBytes = 1024;
+constexpr std::uint32_t kModTransferMaxPackages = 128;
+constexpr std::uint64_t kModTransferMaxPackageBytes =
+    100ull * 1024ull * 1024ull;
+constexpr std::uint64_t kModTransferMaxTotalBytes =
+    512ull * 1024ull * 1024ull;
 
 enum class PacketKind : std::uint16_t {
     State = 1,
@@ -78,6 +88,14 @@ enum class PacketKind : std::uint16_t {
     ParticipantProgressionBookSnapshot = 31,
     WaveSummary = 32,
     ParticipantHitFeedback = 33,
+    ModTransferManifestRequest = 34,
+    ModTransferManifestResponse = 35,
+    ModTransferDescriptorRequest = 36,
+    ModTransferDescriptorResponse = 37,
+    ModTransferChunkRequest = 38,
+    ModTransferChunkResponse = 39,
+    ModTransferComplete = 40,
+    ModTransferAbort = 41,
 };
 
 enum ParticipantStateFlag : std::uint8_t {
@@ -114,6 +132,30 @@ enum class SessionGoodbyeReason : std::uint8_t {
     LobbyClosed = 2,
     Rejected = 3,
     TransportFailure = 4,
+};
+
+enum class ModTransferStatusCode : std::uint8_t {
+    Ready = 1,
+    Busy = 2,
+    Unavailable = 3,
+    NotHost = 4,
+    FingerprintMismatch = 5,
+    BoundsRejected = 6,
+    StaleIndex = 7,
+    InvalidRequest = 8,
+};
+
+enum class ModTransferAbortReason : std::uint8_t {
+    Completed = 1,
+    Canceled = 2,
+    TransportTimeout = 3,
+    ProtocolMismatch = 4,
+    IdentityMismatch = 5,
+    ChunkDigestMismatch = 6,
+    PackageDigestMismatch = 7,
+    ContentDigestMismatch = 8,
+    BoundsRejected = 9,
+    HostUnavailable = 10,
 };
 
 enum SessionCapabilityFlags : std::uint32_t {
@@ -936,6 +978,115 @@ struct SessionKeepalivePacket {
     std::uint64_t steam_id;
     std::uint64_t target_steam_id;
     std::uint64_t session_nonce;
+};
+
+struct ModTransferManifestRequestPacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t expected_manifest_sha256[kModTransferDigestBytes];
+};
+
+struct ModTransferManifestResponsePacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t status_code;
+    std::uint8_t reserved[3] = {};
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t index_sha256[kModTransferDigestBytes];
+    std::uint32_t package_count;
+    std::uint64_t total_package_bytes;
+};
+
+struct ModTransferDescriptorRequestPacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t index_sha256[kModTransferDigestBytes];
+    std::uint32_t descriptor_index;
+};
+
+struct ModTransferDescriptorResponsePacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t status_code;
+    std::uint8_t reserved[3] = {};
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t index_sha256[kModTransferDigestBytes];
+    std::uint32_t descriptor_index;
+    char mod_id[kModTransferModIdBytes];
+    char version[kModTransferVersionBytes];
+    std::uint8_t content_sha256[kModTransferDigestBytes];
+    std::uint8_t package_sha256[kModTransferDigestBytes];
+    std::uint64_t package_bytes;
+};
+
+struct ModTransferChunkRequestPacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t index_sha256[kModTransferDigestBytes];
+    std::uint32_t descriptor_index;
+    std::uint8_t package_sha256[kModTransferDigestBytes];
+    std::uint64_t package_bytes;
+    std::uint64_t offset;
+    std::uint16_t requested_bytes;
+    std::uint16_t reserved = 0;
+};
+
+struct ModTransferChunkResponsePacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t status_code;
+    std::uint8_t reserved[3] = {};
+    std::uint32_t descriptor_index;
+    std::uint8_t package_sha256[kModTransferDigestBytes];
+    std::uint64_t package_bytes;
+    std::uint64_t offset;
+    std::uint16_t payload_bytes;
+    std::uint16_t payload_reserved = 0;
+    std::uint8_t payload_sha256[kModTransferDigestBytes];
+    std::uint8_t payload[kModTransferChunkPayloadBytes];
+};
+
+constexpr std::size_t kModTransferChunkResponsePacketPrefixBytes =
+    offsetof(ModTransferChunkResponsePacket, payload);
+
+constexpr std::size_t ModTransferChunkResponsePacketWireSize(
+    std::uint16_t payload_bytes) {
+    return kModTransferChunkResponsePacketPrefixBytes + payload_bytes;
+}
+
+constexpr bool IsValidModTransferChunkResponsePacketWireSize(
+    std::size_t received_bytes,
+    const ModTransferChunkResponsePacket& packet) {
+    return packet.payload_bytes <= kModTransferChunkPayloadBytes &&
+        received_bytes ==
+            ModTransferChunkResponsePacketWireSize(packet.payload_bytes);
+}
+
+struct ModTransferCompletePacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t index_sha256[kModTransferDigestBytes];
+    std::uint8_t package_sha256[kModTransferDigestBytes];
+};
+
+struct ModTransferAbortPacket {
+    PacketHeader header;
+    std::uint64_t lobby_id;
+    std::uint8_t client_transfer_id[kModTransferClientIdBytes];
+    std::uint8_t reason_code;
+    std::uint8_t reserved[3] = {};
+    std::uint8_t host_manifest_sha256[kModTransferDigestBytes];
+    std::uint8_t package_sha256[kModTransferDigestBytes];
 };
 
 struct LuaModStreamPacket {
@@ -1805,6 +1956,28 @@ static_assert(sizeof(SessionHelloAckPacket) == 92, "Unexpected session hello ack
 static_assert(sizeof(SessionGoodbyePacket) == 44, "Unexpected session goodbye packet size");
 static_assert(sizeof(SessionKeepalivePacket) == 52,
               "Unexpected session keepalive packet size");
+static_assert(sizeof(ModTransferManifestRequestPacket) == 68,
+              "Unexpected mod transfer manifest request size");
+static_assert(sizeof(ModTransferManifestResponsePacket) == 116,
+              "Unexpected mod transfer manifest response size");
+static_assert(sizeof(ModTransferDescriptorRequestPacket) == 104,
+              "Unexpected mod transfer descriptor request size");
+static_assert(sizeof(ModTransferDescriptorResponsePacket) == 372,
+              "Unexpected mod transfer descriptor response size");
+static_assert(sizeof(ModTransferChunkRequestPacket) == 156,
+              "Unexpected mod transfer chunk request size");
+static_assert(kModTransferChunkResponsePacketPrefixBytes == 128,
+              "Unexpected mod transfer chunk response prefix size");
+static_assert(sizeof(ModTransferChunkResponsePacket) == 1152,
+              "Unexpected mod transfer chunk response size");
+static_assert(
+    ModTransferChunkResponsePacketWireSize(kModTransferChunkPayloadBytes) ==
+        sizeof(ModTransferChunkResponsePacket),
+    "Full mod transfer chunk must consume its packet");
+static_assert(sizeof(ModTransferCompletePacket) == 132,
+              "Unexpected mod transfer complete size");
+static_assert(sizeof(ModTransferAbortPacket) == 104,
+              "Unexpected mod transfer abort size");
 static_assert(kLuaModStreamPacketPrefixBytes == 56,
               "Unexpected Lua mod stream packet prefix size");
 static_assert(sizeof(LuaModStreamPacket) == 1080,

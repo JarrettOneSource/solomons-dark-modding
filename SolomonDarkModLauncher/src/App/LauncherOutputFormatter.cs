@@ -20,7 +20,7 @@ internal static class LauncherOutputFormatter
             "  stage                Mirror Solomon Dark into the stage root and stage enabled overlay or runtime mods without launching. A concrete multiplayer join also synchronizes the website host mod set.",
             "  list-mods            Discover overlay or runtime manifests and print enabled or disabled mods.",
             "  directory-auth       Verify the active Steam user with the lobby directory.",
-            "  join-preview         Compare a lobby's website mod list against local mods without launching. Requires --lobby-id.",
+            "  join-preview         Compare a lobby's website or host-direct mod list against local mods without launching. Requires --lobby-id.",
             "  install-mod-preview <slug> Resolve a website mod and compare it with the installed copy.",
             "  install-mod <slug>   Download, verify, and install or update a website mod.",
             "  enable-mod <mod-id>  Persistently enable a discovered overlay or runtime mod.",
@@ -49,6 +49,7 @@ internal static class LauncherOutputFormatter
             "  --lobby-privacy <mode>  Host a public or friends-only Steam lobby. Default: friends.",
             "  --directory-url <url>   Override the HTTPS mod-directory origin used automatically before lobby joins.",
             "  --lobby-ticket <token>  Signed password-lobby ticket supplied by the website.",
+            "  --allow-host-mod-transfer Explicitly authorize host-direct package bytes after join consent.",
             "  --invite-steam-id <id>  Host development option: send the lobby to one Steam user if the overlay is unavailable.",
             "  --max-players <2-4>     Set the host lobby capacity. Default: 4.",
             "  --no-invite-dialog      Host without automatically opening Steam's friend invite dialog.",
@@ -229,7 +230,7 @@ internal static class LauncherOutputFormatter
             return;
         }
 
-        if (!result.UsedWebsite)
+        if (!result.UsedWebsite && !result.UsedHostTransfer)
         {
             builder.AppendLine(
                 "Website lobby mod metadata was unavailable; using the locally enabled mod set. " +
@@ -240,16 +241,17 @@ internal static class LauncherOutputFormatter
         }
 
         builder.AppendLine(
-            $"Website lobby mods: required={result.RequiredModCount} " +
+            $"Lobby mods: required={result.RequiredModCount} " +
             $"manual={result.ReusedManualModCount} cached={result.ReusedCachedModCount} " +
-            $"downloaded={result.DownloadedModCount}");
+            $"downloaded={result.DownloadedModCount} " +
+            $"hostDownloaded={result.HostDownloadedModCount}");
         builder.AppendLine();
     }
 
     private static void AppendJoinPreview(StringBuilder builder, LobbyJoinPreview preview)
     {
         builder.AppendLine($"Join preview for lobby {preview.LobbyId}:");
-        if (!preview.UsedWebsite)
+        if (!preview.UsedWebsite && !preview.UsedHostTransfer)
         {
             builder.AppendLine($"Website mod list unavailable: {preview.Error}");
             builder.AppendLine();
@@ -262,6 +264,8 @@ internal static class LauncherOutputFormatter
         builder.AppendLine(
             $"Host mods: total={preview.Mods.Count} installed={preview.InstalledCount} " +
             $"cached={preview.CachedCount} needDownload={preview.DownloadCount} " +
+            $"websiteDownload={preview.WebsiteDownloadCount} " +
+            $"hostDownload={preview.HostDownloadCount} " +
             $"unavailable={preview.UnavailableCount}");
         foreach (var mod in preview.Mods)
         {
@@ -272,7 +276,8 @@ internal static class LauncherOutputFormatter
                 ? $" {size} bytes"
                 : string.Empty;
             builder.AppendLine(
-                $"- {mod.Id} {mod.Version} [{mod.State}]{installedHint}{sizeHint}");
+                $"- {mod.Id} {mod.Version} [{mod.State}/{mod.DownloadSource}]" +
+                $"{installedHint}{sizeHint}");
         }
 
         builder.AppendLine();

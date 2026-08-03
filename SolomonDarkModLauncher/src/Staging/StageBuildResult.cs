@@ -15,6 +15,7 @@ internal sealed record StageBuildResult(
     StageMirrorResult StageMirror,
     RuntimeMetadataStageResult RuntimeMetadata,
     MultiplayerCompatibilityStageResult MultiplayerCompatibility,
+    HostModTransferStageResult ModTransfer,
     SteamStageBootstrapResult SteamBootstrap,
     HudLabelAssetResult HudLabels,
     int EnabledModCount,

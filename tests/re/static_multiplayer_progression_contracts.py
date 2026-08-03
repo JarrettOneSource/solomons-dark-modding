@@ -409,7 +409,7 @@ def test_level_up_barrier_waits_for_forced_picker_confirmation() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 90;",
+        "constexpr std::uint16_t kProtocolVersion = 91;",
         "LevelUpBarrier = 19",
         "struct LevelUpBarrierPacket",
         "kLevelUpWaitStatusMaxParticipants = 250",

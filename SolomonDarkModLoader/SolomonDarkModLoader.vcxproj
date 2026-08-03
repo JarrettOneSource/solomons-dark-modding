@@ -174,6 +174,8 @@
     <ClInclude Include="include\native_enemy_types.h" />
     <ClInclude Include="include\native_spell_stats.h" />
     <ClInclude Include="include\multiplayer_service_loop.h" />
+    <ClInclude Include="include\host_mod_transfer_service.h" />
+    <ClInclude Include="src\host_mod_transfer_service\index_loading.inl" />
     <ClInclude Include="include\runtime_bootstrap.h" />
     <ClInclude Include="include\runtime_debug.h" />
     <ClInclude Include="include\runtime_flags.h" />
@@ -517,6 +519,7 @@
     <ClInclude Include="src\multiplayer_local_transport\completed_host_loot_pickups.inl" />
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\host_mod_transfer_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\incoming_packet_dispatch.inl" />
     <ClInclude Include="src\multiplayer_local_transport\receive_packets.inl" />
@@ -735,6 +738,7 @@
     <ClCompile Include="src\multiplayer_foundation.cpp" />
     <ClCompile Include="src\multiplayer_join_flow.cpp" />
     <ClCompile Include="src\multiplayer_local_transport.cpp" />
+    <ClCompile Include="src\host_mod_transfer_service.cpp" />
     <ClCompile Include="src\multiplayer_runtime_labels.cpp" />
     <ClCompile Include="src\multiplayer_runtime_state.cpp" />
     <ClCompile Include="src\multiplayer_service_loop.cpp" />

@@ -52,17 +52,20 @@ internal sealed class LauncherCliUpdatedMod
 internal sealed class LauncherCliLobbyModSync
 {
     public bool UsedWebsite { get; set; }
+    public bool UsedHostTransfer { get; set; }
     public string? FallbackReason { get; set; }
     public int RequiredModCount { get; set; }
     public int ReusedManualModCount { get; set; }
     public int ReusedCachedModCount { get; set; }
     public int DownloadedModCount { get; set; }
+    public int HostDownloadedModCount { get; set; }
 }
 
 internal sealed class LauncherCliJoinPreview
 {
     public ulong LobbyId { get; set; }
     public bool UsedWebsite { get; set; }
+    public bool UsedHostTransfer { get; set; }
     public string? Error { get; set; }
     public int? HostProtocolVersion { get; set; }
     public string? HostLoaderVersion { get; set; }
@@ -72,6 +75,8 @@ internal sealed class LauncherCliJoinPreview
     public int InstalledCount { get; set; }
     public int CachedCount { get; set; }
     public int DownloadCount { get; set; }
+    public int HostDownloadCount { get; set; }
+    public int WebsiteDownloadCount { get; set; }
     public int UnavailableCount { get; set; }
     public List<LauncherCliJoinPreviewMod> Mods { get; set; } = [];
 }
@@ -84,6 +89,7 @@ internal sealed class LauncherCliJoinPreviewMod
     public string State { get; set; } = string.Empty;
     public string? InstalledVersion { get; set; }
     public long? DownloadSizeBytes { get; set; }
+    public string DownloadSource { get; set; } = "none";
 
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Id : Name!;
 }

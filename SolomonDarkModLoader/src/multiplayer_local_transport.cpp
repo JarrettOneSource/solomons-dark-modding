@@ -7,6 +7,7 @@
 #include "multiplayer_local_transport.h"
 
 #include "bot_runtime.h"
+#include "host_mod_transfer_service.h"
 #include "boneyard_picker.h"
 #include "debug_ui_overlay.h"
 #include "gameplay_seams.h"
@@ -1700,6 +1701,7 @@ void StopLocalUdpIngressWorker();
 #include "multiplayer_local_transport/incoming_cast_packet_sync.inl"
 #include "multiplayer_local_transport/synthetic_participant_cast_sync.inl"
 #include "multiplayer_local_transport/incoming_snapshot_packet_sync.inl"
+#include "multiplayer_local_transport/host_mod_transfer_dispatch.inl"
 #include "multiplayer_local_transport/incoming_packet_dispatch.inl"
 #include "multiplayer_local_transport/receive_packets.inl"
 #include "multiplayer_local_transport/native_progression_sync.inl"

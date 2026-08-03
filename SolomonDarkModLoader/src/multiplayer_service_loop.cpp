@@ -1,6 +1,8 @@
 #include "multiplayer_service_loop.h"
 
 #include "logger.h"
+#include "host_mod_transfer_service.h"
+#include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"
 #include "multiplayer_session_teardown.h"
@@ -12,6 +14,7 @@
 #include <Windows.h>
 #include <process.h>
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -144,9 +147,28 @@ bool StartServiceLoop() {
         ShutdownLocalTransport();
         return false;
     }
+    std::array<char, 65> manifest_sha256{};
+    const auto manifest_length = GetEnvironmentVariableA(
+        "SDMOD_MULTIPLAYER_MANIFEST_SHA256",
+        manifest_sha256.data(),
+        static_cast<DWORD>(manifest_sha256.size()));
+    const auto manifest = manifest_length > 0 &&
+            manifest_length <
+                static_cast<DWORD>(manifest_sha256.size())
+        ? std::string_view(manifest_sha256.data(), manifest_length)
+        : std::string_view{};
+    if (!InitializeHostModTransferService(
+            GetStageRuntimeDirectory(),
+            IsLocalTransportHost() || IsSteamSessionHost(),
+            manifest)) {
+        ShutdownSteamSession();
+        ShutdownLocalTransport();
+        return false;
+    }
 
     g_service_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (g_service_stop_event == nullptr) {
+        ShutdownHostModTransferService();
         ShutdownSteamSession();
         ShutdownLocalTransport();
         Log("Multiplayer foundation: failed to create the service loop stop event.");
@@ -169,6 +191,7 @@ bool StartServiceLoop() {
         g_service_running.store(false, std::memory_order_release);
         CloseHandle(g_service_stop_event);
         g_service_stop_event = nullptr;
+        ShutdownHostModTransferService();
         ShutdownSteamSession();
         ShutdownLocalTransport();
         Log("Multiplayer foundation: failed to start the service loop thread.");
@@ -195,6 +218,7 @@ void StopServiceLoop() {
     }
     {
         std::scoped_lock lifecycle_lock(g_session_transport_lifecycle_mutex);
+        ShutdownHostModTransferService();
         ShutdownLocalTransport();
         g_gameplay_transport_owner_thread_id.store(0, std::memory_order_release);
         g_wrong_gameplay_transport_thread_logged.store(false, std::memory_order_release);

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
@@ -23,6 +24,11 @@ using SolomonDarkModding.IO;
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("website package install and cache", TestWebsitePackageInstallAsync),
+    ("host mod transfer wire protocol", TestHostModTransferProtocolAsync),
+    ("host mod transfer package staging", TestHostModTransferPackageStagingAsync),
+    ("host mod transfer download integrity and resume", TestHostModTransferDownloadAsync),
+    ("host mod transfer synchronizer fallback", TestHostModTransferSynchronizerAsync),
+    ("host mod transfer consent command", TestHostModTransferConsentCommandAsync),
     ("automatic mod updates", TestAutomaticModUpdatesAsync),
     ("semantic version ordering", TestSemanticVersionOrderingAsync),
     ("minimum loader compatibility", TestMinimumLoaderCompatibilityAsync),
@@ -47,6 +53,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("website join URI", TestWebsiteJoinUriAsync),
     ("website install-mod URI", TestWebsiteInstallModUriAsync),
     ("website install-mod UI command ordering", TestWebsiteInstallModUiCommandOrderingAsync),
+    ("local UDP UI fingerprint parity", TestLocalUdpUiFingerprintParityAsync),
     ("scoped activation isolation", TestScopedActivationIsolationAsync),
     ("website install-mod pipeline", TestWebsiteInstallModPipelineAsync),
     ("clean install enables zero mods", TestCleanInstallEnablesZeroModsAsync),
@@ -1906,7 +1913,7 @@ static Task TestEarlyLobbyLoadoutStatusAsync()
             LocalSteamId: 76561198000000902,
             PersonaName: "Loadout Host",
             Privacy: "public",
-            ProtocolVersion: 90,
+            ProtocolVersion: 91,
             ManifestSha256: new string('8', 64),
             FriendSteamIds: [],
             MaxParticipants: 4,
@@ -2165,6 +2172,7 @@ static Task TestSteamShortcutChildLaunchIdentityAsync()
             new string('a', 64),
             80,
             []),
+        ModTransfer: HostModTransferStageResult.Disabled("mod-transfer"),
         SteamBootstrap: new SteamStageBootstrapResult(
             Enabled: true,
             AppId: SteamBootstrapConfiguration.DefaultAppId,
@@ -3950,6 +3958,60 @@ static Task TestWebsiteInstallModUiCommandOrderingAsync()
     return Task.CompletedTask;
 }
 
+static Task TestLocalUdpUiFingerprintParityAsync()
+{
+    var root = CreateTemporaryDirectory();
+    var previousDataRoot = Environment.GetEnvironmentVariable(
+        LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable);
+    var previousTransport = Environment.GetEnvironmentVariable(
+        "SDMOD_MULTIPLAYER_TRANSPORT");
+    try
+    {
+        Environment.SetEnvironmentVariable(
+            LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable,
+            root);
+        Environment.SetEnvironmentVariable(
+            "SDMOD_MULTIPLAYER_TRANSPORT",
+            "local_udp");
+        var client = new LauncherUiCommandClient();
+        foreach (var mode in new[]
+                 {
+                     LauncherUiCommandMode.HostSteam,
+                     LauncherUiCommandMode.PrepareSteamJoin,
+                     LauncherUiCommandMode.LaunchSteamJoin
+                 })
+        {
+            Require(
+                client.BuildCommandPreview(mode).Contains(
+                    "--runtime-flag multiplayer.steam_bootstrap=false",
+                    StringComparison.Ordinal),
+                $"local UDP {mode} did not stage the same Steam-disabled fingerprint as the pair harness");
+        }
+
+        Environment.SetEnvironmentVariable(
+            "SDMOD_MULTIPLAYER_TRANSPORT",
+            null);
+        Require(
+            !new LauncherUiCommandClient()
+                .BuildCommandPreview(LauncherUiCommandMode.LaunchSteamJoin)
+                .Contains(
+                    "multiplayer.steam_bootstrap=false",
+                    StringComparison.Ordinal),
+            "Steam UI launch unexpectedly disabled the Steam bootstrap");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(
+            LauncherPathPolicy.TestApplicationDataRootEnvironmentVariable,
+            previousDataRoot);
+        Environment.SetEnvironmentVariable(
+            "SDMOD_MULTIPLAYER_TRANSPORT",
+            previousTransport);
+        Directory.Delete(root, recursive: true);
+    }
+    return Task.CompletedTask;
+}
+
 static Task TestScopedActivationIsolationAsync()
 {
     Require(
@@ -4413,6 +4475,501 @@ static Task TestLauncherUpdateInstallationAsync()
     return Task.CompletedTask;
 }
 
+static Task TestHostModTransferProtocolAsync()
+{
+    var clientId = Enumerable.Range(0, HostModTransferProtocol.ClientIdBytes)
+        .Select(value => checked((byte)value))
+        .ToArray();
+    var fingerprint = Enumerable.Repeat((byte)0x11, HostModTransferProtocol.DigestBytes)
+        .ToArray();
+    var manifestRequest = HostModTransferProtocol.CreateManifestRequest(
+        7,
+        42,
+        clientId,
+        fingerprint);
+    Require(
+        manifestRequest.Length == HostModTransferProtocol.ManifestRequestBytes &&
+        manifestRequest.AsSpan(0, 4).SequenceEqual("SDMP"u8) &&
+        BinaryPrimitives.ReadUInt16LittleEndian(manifestRequest.AsSpan(4, 2)) == 91 &&
+        BinaryPrimitives.ReadUInt16LittleEndian(manifestRequest.AsSpan(6, 2)) ==
+            (ushort)HostModTransferPacketKind.ManifestRequest &&
+        BinaryPrimitives.ReadUInt64LittleEndian(manifestRequest.AsSpan(12, 8)) == 42 &&
+        manifestRequest.AsSpan(20, clientId.Length).SequenceEqual(clientId) &&
+        manifestRequest.AsSpan(36, fingerprint.Length).SequenceEqual(fingerprint),
+        "manifest request did not preserve the protocol identity fields");
+
+    var response = new byte[HostModTransferProtocol.ManifestResponseBytes];
+    WriteHostTransferHeader(
+        response,
+        HostModTransferPacketKind.ManifestResponse,
+        sequence: 9);
+    BinaryPrimitives.WriteUInt64LittleEndian(response.AsSpan(12, 8), 42);
+    clientId.CopyTo(response.AsSpan(20, clientId.Length));
+    response[36] = (byte)HostModTransferStatus.Ready;
+    fingerprint.CopyTo(response.AsSpan(40, fingerprint.Length));
+    Enumerable.Repeat((byte)0x22, HostModTransferProtocol.DigestBytes)
+        .ToArray()
+        .CopyTo(response.AsSpan(72, HostModTransferProtocol.DigestBytes));
+    BinaryPrimitives.WriteUInt32LittleEndian(response.AsSpan(104, 4), 1);
+    BinaryPrimitives.WriteUInt64LittleEndian(response.AsSpan(108, 8), 4096);
+    var parsed = HostModTransferProtocol.ParseManifestResponse(response, clientId);
+    Require(
+        parsed.Status == HostModTransferStatus.Ready &&
+        parsed.LobbyId == 42 &&
+        parsed.PackageCount == 1 &&
+        parsed.TotalPackageBytes == 4096,
+        "manifest response did not round-trip through the strict codec");
+
+    BinaryPrimitives.WriteUInt64LittleEndian(
+        response.AsSpan(108, 8),
+        checked((ulong)HostModTransferProtocol.MaximumTotalBytes + 1));
+    RequireThrows<InvalidDataException>(
+        () => HostModTransferProtocol.ParseManifestResponse(response, clientId),
+        "out-of-bounds host transfer metadata was accepted");
+    response[0] ^= 0xFF;
+    RequireThrows<InvalidDataException>(
+        () => HostModTransferProtocol.ParseManifestResponse(response, clientId),
+        "a corrupt host transfer packet header was accepted");
+    return Task.CompletedTask;
+}
+
+static Task TestHostModTransferPackageStagingAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var modRoot = Path.Combine(root, "mod");
+        Directory.CreateDirectory(Path.Combine(modRoot, "scripts"));
+        File.WriteAllText(
+            Path.Combine(modRoot, "manifest.json"),
+            """
+            {
+              "id": "tests.host-transfer-stage",
+              "name": "Host Transfer Stage",
+              "version": "1.0.0",
+              "runtime": {
+                "apiVersion": "0.2.0",
+                "entryScript": "scripts/main.lua"
+              }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modRoot, "scripts", "main.lua"),
+            "return true\n");
+        var mod = ModDiscovery.DiscoverRoot(modRoot);
+        var contentSha256 = ModContentHasher.HashDirectory(modRoot);
+        var hostFingerprint = new string('a', 64);
+        var compatibility = new MultiplayerCompatibilityStageResult(
+            "manifest.json",
+            hostFingerprint,
+            HostModTransferProtocol.Version,
+            [new MultiplayerModDescriptor(
+                mod.Manifest.Id,
+                mod.Manifest.Version,
+                contentSha256)]);
+        var first = HostModTransferPackageMaterializer.Materialize(
+            Path.Combine(root, "stage-a"),
+            [mod],
+            compatibility,
+            enabled: true);
+        var second = HostModTransferPackageMaterializer.Materialize(
+            Path.Combine(root, "stage-b"),
+            [mod],
+            compatibility,
+            enabled: true);
+        Require(
+            first.Enabled &&
+            first.Packages.Count == 1 &&
+            first.Packages[0].PackageSha256 == second.Packages[0].PackageSha256 &&
+            File.ReadAllBytes(first.Packages[0].PackagePath)
+                .SequenceEqual(File.ReadAllBytes(second.Packages[0].PackagePath)),
+            "host package materialization was not deterministic");
+        var index = File.ReadAllBytes(first.IndexPath!);
+        Require(
+            index.Length ==
+                HostModTransferPackageMaterializer.HeaderBytes +
+                HostModTransferPackageMaterializer.EntryBytes &&
+            index.AsSpan(0, 8).SequenceEqual("SDMXFER\0"u8) &&
+            BinaryPrimitives.ReadUInt16LittleEndian(index.AsSpan(10, 2)) ==
+                HostModTransferProtocol.Version &&
+            index.AsSpan(32, 32).SequenceEqual(Convert.FromHexString(hostFingerprint)) &&
+            index.AsSpan(192 + HostModTransferPackageMaterializer.HeaderBytes, 32)
+                .SequenceEqual(Convert.FromHexString(contentSha256)),
+            "staged host transfer index lost protocol or content identity");
+
+        var disabled = HostModTransferPackageMaterializer.Materialize(
+            Path.Combine(root, "stage-a"),
+            [mod],
+            compatibility,
+            enabled: false);
+        Require(
+            !disabled.Enabled && !Directory.Exists(first.RootPath),
+            "non-host staging retained stale host transfer packages");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+    return Task.CompletedTask;
+}
+
+static async Task TestHostModTransferDownloadAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                """
+                {
+                  "id": "tests.host-transfer-download",
+                  "name": "Host Transfer Download",
+                  "version": "1.0.0",
+                  "runtime": {
+                    "apiVersion": "0.2.0",
+                    "entryScript": "scripts/main.lua"
+                  }
+                }
+                """),
+            ["scripts/main.lua"] = Encoding.UTF8.GetBytes("return true\n"),
+            ["files/visible.bin"] = RandomNumberGenerator.GetBytes(8192)
+        };
+        var package = CreateZip(entries);
+        Require(
+            package.Length > HostModTransferProtocol.ChunkBytes,
+            "host transfer contract package was too small to exercise resume");
+        var required = new MultiplayerModDescriptor(
+            "tests.host-transfer-download",
+            "1.0.0",
+            ComputeContentHash(entries));
+        var transport = new HostModTransferContractTransport(package, required);
+        var expectedFingerprint = Convert.ToHexString(transport.HostFingerprint)
+            .ToLowerInvariant();
+        var cacheRoot = Path.Combine(root, "cache");
+        Directory.CreateDirectory(cacheRoot);
+        await using (var client = await HostModTransferClient.ConnectAsync(
+            transport,
+            Path.Combine(root, "runtime"),
+            expectedFingerprint))
+        {
+            var descriptor = client.Catalog.Descriptors.Single();
+            var operationRoot = Path.Combine(
+                cacheRoot,
+                ".host-transfer",
+                descriptor.PackageSha256);
+            Directory.CreateDirectory(operationRoot);
+            File.WriteAllBytes(
+                Path.Combine(operationRoot, "package.partial"),
+                package[..HostModTransferProtocol.ChunkBytes]);
+            File.WriteAllText(
+                Path.Combine(operationRoot, "receipt.json"),
+                JsonSerializer.Serialize(new HostModTransferReceipt(
+                    expectedFingerprint,
+                    Convert.ToHexString(transport.IndexFingerprint)
+                        .ToLowerInvariant(),
+                    descriptor.PackageSha256,
+                    descriptor.PackageBytes,
+                    HostModTransferProtocol.ChunkBytes)));
+            var installed = await client.DownloadAndInstallAsync(
+                descriptor,
+                cacheRoot,
+                CancellationToken.None);
+            Require(
+                installed.Manifest.Id == required.Id &&
+                transport.FirstChunkOffset == HostModTransferProtocol.ChunkBytes &&
+                transport.Completed &&
+                File.Exists(Path.Combine(installed.RootPath, "files", "visible.bin")) &&
+                !Directory.Exists(operationRoot),
+                "direct host package did not resume, verify, stage, and complete");
+            var secondInstalled = await client.DownloadAndInstallAsync(
+                descriptor,
+                Path.Combine(root, "second-cache"),
+                CancellationToken.None);
+            Require(
+                secondInstalled.Manifest.Id == required.Id &&
+                transport.ManifestRequestCount == 2 &&
+                transport.CompleteCount == 2,
+                "a completed package transfer could not reopen the same metadata session");
+        }
+
+        var chunkDigestTransport = new HostModTransferContractTransport(
+            package,
+            required,
+            corruptChunkDigest: true);
+        await using (var client = await HostModTransferClient.ConnectAsync(
+            chunkDigestTransport,
+            Path.Combine(root, "chunk-digest-runtime"),
+            expectedFingerprint))
+        {
+            await RequireThrowsAsync<HostModTransferIntegrityException>(
+                () => client.DownloadAndInstallAsync(
+                    client.Catalog.Descriptors.Single(),
+                    Path.Combine(root, "chunk-digest-cache"),
+                    CancellationToken.None),
+                "a direct host chunk with a bad digest was accepted");
+            Require(
+                chunkDigestTransport.AbortReason ==
+                    HostModTransferAbortReason.ChunkDigestMismatch,
+                "a bad chunk digest did not use the chunk-integrity abort reason");
+            Console.WriteLine(
+                "EVIDENCE host-transfer corrupted chunk digest: " +
+                "abort=ChunkDigestMismatch cachePromoted=false");
+        }
+
+        var corruptCacheRoot = Path.Combine(root, "corrupt-cache");
+        Directory.CreateDirectory(corruptCacheRoot);
+        var corruptTransport = new HostModTransferContractTransport(
+            package,
+            required,
+            tamperPayloadWithValidChunkDigest: true);
+        await using (var client = await HostModTransferClient.ConnectAsync(
+            corruptTransport,
+            Path.Combine(root, "corrupt-runtime"),
+            expectedFingerprint))
+        {
+            var descriptor = client.Catalog.Descriptors.Single();
+            await RequireThrowsAsync<HostModTransferIntegrityException>(
+                () => client.DownloadAndInstallAsync(
+                    descriptor,
+                    corruptCacheRoot,
+                    CancellationToken.None),
+                "tampered direct host package was staged");
+            Require(
+                corruptTransport.AbortReason ==
+                    HostModTransferAbortReason.PackageDigestMismatch &&
+                !Directory.Exists(WebsiteModPackageInstaller.GetCachePath(
+                    corruptCacheRoot,
+                    required)) &&
+                !Directory.Exists(Path.Combine(
+                    corruptCacheRoot,
+                    ".host-transfer",
+                    descriptor.PackageSha256)),
+                "integrity failure did not abort and remove partial staging");
+            Console.WriteLine(
+                "EVIDENCE host-transfer tampered payload: " +
+                "abort=PackageDigestMismatch partialRemoved=true cachePromoted=false");
+        }
+
+        var wrongContent = required with { ContentSha256 = new string('f', 64) };
+        var contentMismatchTransport = new HostModTransferContractTransport(
+            package,
+            wrongContent);
+        await using (var client = await HostModTransferClient.ConnectAsync(
+            contentMismatchTransport,
+            Path.Combine(root, "content-runtime"),
+            expectedFingerprint))
+        {
+            var descriptor = client.Catalog.Descriptors.Single();
+            await RequireThrowsAsync<HostModTransferIntegrityException>(
+                () => client.DownloadAndInstallAsync(
+                    descriptor,
+                    Path.Combine(root, "content-cache"),
+                    CancellationToken.None),
+                "content fingerprint mismatch was staged");
+            Require(
+                contentMismatchTransport.AbortReason ==
+                    HostModTransferAbortReason.ContentDigestMismatch,
+                "content fingerprint mismatch did not use the integrity abort path");
+        }
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static Task TestHostModTransferConsentCommandAsync()
+{
+    var allowed = LauncherCommandParser.Parse(
+        [
+            "stage",
+            "--multiplayer", "join",
+            "--lobby-id", "42",
+            "--allow-host-mod-transfer"
+        ]);
+    var declined = LauncherCommandParser.Parse(
+        ["stage", "--multiplayer", "join", "--lobby-id", "42"]);
+    Require(
+        allowed.AllowHostModTransfer && !declined.AllowHostModTransfer,
+        "join consent did not control direct host package authorization");
+    RequireThrows<InvalidOperationException>(
+        () => LauncherCommandParser.Parse(
+            [
+                "stage",
+                "--multiplayer", "host",
+                "--allow-host-mod-transfer"
+            ]),
+        "host transfer consent flag was accepted outside a join");
+    RequireThrows<InvalidOperationException>(
+        () => LauncherCommandParser.Parse(
+            [
+                "join-preview",
+                "--lobby-id", "42",
+                "--allow-host-mod-transfer"
+            ]),
+        "preview metadata query was allowed to authorize package bytes");
+    return Task.CompletedTask;
+}
+
+static async Task TestHostModTransferSynchronizerAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["manifest.json"] = Encoding.UTF8.GetBytes(
+                """
+                {
+                  "id": "tests.host-transfer-sync",
+                  "name": "Host Transfer Sync",
+                  "version": "1.0.0",
+                  "runtime": {
+                    "apiVersion": "0.2.0",
+                    "entryScript": "scripts/main.lua"
+                  }
+                }
+                """),
+            ["scripts/main.lua"] = Encoding.UTF8.GetBytes("return true\n")
+        };
+        var package = CreateZip(entries);
+        var required = new MultiplayerModDescriptor(
+            "tests.host-transfer-sync",
+            "1.0.0",
+            ComputeContentHash(entries));
+        var workspace = WorkspacePaths.Create(
+            root,
+            modsRootOverride: Path.Combine(root, "mods"),
+            runtimeRootOverride: Path.Combine(root, "runtime"),
+            stageRootOverride: Path.Combine(root, "stage"),
+            instanceName: "contract");
+        var configuration = new LauncherConfiguration
+        {
+            Game = null!,
+            Workspace = workspace,
+            Runtime = RuntimeStageOptions.Default,
+            Steam = SteamBootstrapConfiguration.CreateDefault(null, null)
+        };
+        var emptyCatalog = ModCatalog.CreateExact([]);
+
+        var websiteTransfer = new HostModTransferContractTransport(package, required);
+        var websiteHandler = new LobbyDirectoryHandler(
+            package,
+            required,
+            Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant(),
+            resolveReportsMissing: true);
+        using (var websiteClient = new HttpClient(websiteHandler)
+               {
+                   BaseAddress = new Uri("https://mods.example.test/community/")
+               })
+        {
+            var result = await LobbyModSynchronizer.SynchronizeAsync(
+                configuration,
+                emptyCatalog,
+                42,
+                "https://mods.example.test/community",
+                ticket: null,
+                allowHostModTransfer: true,
+                clientOverride: websiteClient,
+                hostTransferConnector: (expected, cancellationToken) =>
+                    HostModTransferClient.ConnectAsync(
+                        websiteTransfer,
+                        workspace.RuntimeRootPath,
+                        expected,
+                        cancellationToken));
+            Require(
+                result.UsedWebsite &&
+                result.UsedHostTransfer &&
+                result.HostDownloadedModCount == 1 &&
+                result.DownloadedModCount == 1 &&
+                result.Catalog.FindById(required.Id) is not null &&
+                websiteHandler.DownloadRequests == 0 &&
+                websiteTransfer.Completed,
+                "unpublished website package did not fall back to direct host transfer");
+        }
+
+        Directory.Delete(workspace.ModCacheRootPath, recursive: true);
+        Directory.CreateDirectory(workspace.ModCacheRootPath);
+        var connectorCalled = false;
+        var declineHandler = new LobbyDirectoryHandler(
+            package,
+            required,
+            Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant(),
+            resolveReportsMissing: true);
+        using (var declineClient = new HttpClient(declineHandler)
+               {
+                   BaseAddress = new Uri("https://mods.example.test/community/")
+               })
+        {
+            await RequireThrowsAsync<InvalidOperationException>(
+                () => LobbyModSynchronizer.SynchronizeAsync(
+                    configuration,
+                    emptyCatalog,
+                    42,
+                    "https://mods.example.test/community",
+                    ticket: null,
+                    allowHostModTransfer: false,
+                    clientOverride: declineClient,
+                    hostTransferConnector: (_, _) =>
+                    {
+                        connectorCalled = true;
+                        throw new InvalidOperationException(
+                            "declined transfer connector must not run");
+                    }),
+                "declined direct host transfer did not preserve clean cancellation");
+        }
+        Require(
+            !connectorCalled,
+            "declined join queried or downloaded host package bytes");
+
+        var offlineTransfer = new HostModTransferContractTransport(package, required);
+        using var offlineClient = new HttpClient(new OfflineDirectoryHandler())
+        {
+            BaseAddress = new Uri("https://offline.example.test/")
+        };
+        var offlineResult = await LobbyModSynchronizer.SynchronizeAsync(
+            configuration,
+            emptyCatalog,
+            42,
+            "https://offline.example.test",
+            ticket: null,
+            allowHostModTransfer: true,
+            clientOverride: offlineClient,
+            hostTransferConnector: (expected, cancellationToken) =>
+                HostModTransferClient.ConnectAsync(
+                    offlineTransfer,
+                    Path.Combine(root, "offline-runtime"),
+                    expected,
+                    cancellationToken));
+        Require(
+            !offlineResult.UsedWebsite &&
+            offlineResult.UsedHostTransfer &&
+            offlineResult.HostDownloadedModCount == 1 &&
+            offlineResult.HostBuild?.ManifestSha256 ==
+                Convert.ToHexString(offlineTransfer.HostFingerprint)
+                    .ToLowerInvariant(),
+            "website outage did not recover metadata and package bytes from the host");
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
+static void WriteHostTransferHeader(
+    Span<byte> packet,
+    HostModTransferPacketKind kind,
+    uint sequence)
+{
+    "SDMP"u8.CopyTo(packet);
+    BinaryPrimitives.WriteUInt16LittleEndian(
+        packet.Slice(4, 2),
+        HostModTransferProtocol.Version);
+    BinaryPrimitives.WriteUInt16LittleEndian(packet.Slice(6, 2), (ushort)kind);
+    BinaryPrimitives.WriteUInt32LittleEndian(packet.Slice(8, 4), sequence);
+}
+
 static void WriteDistribution(
     string root,
     IReadOnlyDictionary<string, string> files)
@@ -4522,6 +5079,195 @@ file sealed class RecordingProgress : IProgress<UpdateProgress>
     public void Report(UpdateProgress value)
     {
         Values.Add(value);
+    }
+}
+
+file sealed class HostModTransferContractTransport : IHostModTransferTransport
+{
+    private readonly byte[] package_;
+    private readonly MultiplayerModDescriptor required_;
+    private readonly string packageSha256_;
+    private readonly bool corruptChunkDigest_;
+    private readonly bool tamperPayloadWithValidChunkDigest_;
+    private readonly Queue<byte[]> responses_ = new();
+    private uint sequence_ = 100;
+
+    public HostModTransferContractTransport(
+        byte[] package,
+        MultiplayerModDescriptor required,
+        bool corruptChunkDigest = false,
+        bool tamperPayloadWithValidChunkDigest = false)
+    {
+        package_ = package;
+        required_ = required;
+        corruptChunkDigest_ = corruptChunkDigest;
+        tamperPayloadWithValidChunkDigest_ = tamperPayloadWithValidChunkDigest;
+        packageSha256_ = Convert.ToHexString(SHA256.HashData(package))
+            .ToLowerInvariant();
+    }
+
+    public ulong LobbyId => 0;
+    public byte[] HostFingerprint { get; } =
+        Enumerable.Repeat((byte)0xAA, HostModTransferProtocol.DigestBytes)
+            .ToArray();
+    public byte[] IndexFingerprint { get; } =
+        Enumerable.Repeat((byte)0x42, HostModTransferProtocol.DigestBytes)
+            .ToArray();
+    public long? FirstChunkOffset { get; private set; }
+    public bool Completed { get; private set; }
+    public int ManifestRequestCount { get; private set; }
+    public int CompleteCount { get; private set; }
+    public HostModTransferAbortReason? AbortReason { get; private set; }
+
+    public ValueTask SendAsync(
+        ReadOnlyMemory<byte> packet,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var bytes = packet.Span;
+        var kind = (HostModTransferPacketKind)
+            BinaryPrimitives.ReadUInt16LittleEndian(bytes.Slice(6, 2));
+        switch (kind)
+        {
+            case HostModTransferPacketKind.ManifestRequest:
+                ManifestRequestCount++;
+                responses_.Enqueue(CreateManifestResponse(bytes));
+                break;
+            case HostModTransferPacketKind.DescriptorRequest:
+                responses_.Enqueue(CreateDescriptorResponse(bytes));
+                break;
+            case HostModTransferPacketKind.ChunkRequest:
+                responses_.Enqueue(CreateChunkResponse(bytes));
+                break;
+            case HostModTransferPacketKind.Complete:
+                Completed = true;
+                CompleteCount++;
+                break;
+            case HostModTransferPacketKind.Abort:
+                AbortReason = (HostModTransferAbortReason)bytes[36];
+                break;
+            default:
+                throw new InvalidDataException(
+                    $"Unexpected host transfer contract request: {kind}");
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]> ReceiveAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (responses_.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Host transfer contract transport had no prepared response.");
+        }
+        return ValueTask.FromResult(responses_.Dequeue());
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    private byte[] CreateManifestResponse(ReadOnlySpan<byte> request)
+    {
+        var response = CreateResponse(
+            HostModTransferProtocol.ManifestResponseBytes,
+            HostModTransferPacketKind.ManifestResponse,
+            request);
+        response[36] = (byte)HostModTransferStatus.Ready;
+        HostFingerprint.CopyTo(response.AsSpan(40, 32));
+        IndexFingerprint.CopyTo(response.AsSpan(72, 32));
+        BinaryPrimitives.WriteUInt32LittleEndian(response.AsSpan(104, 4), 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(
+            response.AsSpan(108, 8),
+            checked((ulong)package_.Length));
+        return response;
+    }
+
+    private byte[] CreateDescriptorResponse(ReadOnlySpan<byte> request)
+    {
+        var response = CreateResponse(
+            HostModTransferProtocol.DescriptorResponseBytes,
+            HostModTransferPacketKind.DescriptorResponse,
+            request);
+        response[36] = (byte)HostModTransferStatus.Ready;
+        HostFingerprint.CopyTo(response.AsSpan(40, 32));
+        IndexFingerprint.CopyTo(response.AsSpan(72, 32));
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            response.AsSpan(104, 4),
+            BinaryPrimitives.ReadUInt32LittleEndian(request.Slice(100, 4)));
+        WriteFixedUtf8(response.AsSpan(108, 128), required_.Id);
+        WriteFixedUtf8(response.AsSpan(236, 64), required_.Version);
+        Convert.FromHexString(required_.ContentSha256)
+            .CopyTo(response.AsSpan(300, 32));
+        Convert.FromHexString(packageSha256_)
+            .CopyTo(response.AsSpan(332, 32));
+        BinaryPrimitives.WriteUInt64LittleEndian(
+            response.AsSpan(364, 8),
+            checked((ulong)package_.Length));
+        return response;
+    }
+
+    private byte[] CreateChunkResponse(ReadOnlySpan<byte> request)
+    {
+        var offset = checked((long)BinaryPrimitives.ReadUInt64LittleEndian(
+            request.Slice(144, 8)));
+        FirstChunkOffset ??= offset;
+        var requestedBytes = BinaryPrimitives.ReadUInt16LittleEndian(
+            request.Slice(152, 2));
+        var payload = package_.AsSpan(checked((int)offset), requestedBytes).ToArray();
+        if (tamperPayloadWithValidChunkDigest_ && offset == 0)
+        {
+            payload[0] ^= 0xFF;
+        }
+        var response = CreateResponse(
+            HostModTransferProtocol.ChunkResponsePrefixBytes + payload.Length,
+            HostModTransferPacketKind.ChunkResponse,
+            request);
+        response[36] = (byte)HostModTransferStatus.Ready;
+        request.Slice(100, 4).CopyTo(response.AsSpan(40, 4));
+        request.Slice(104, 32).CopyTo(response.AsSpan(44, 32));
+        request.Slice(136, 8).CopyTo(response.AsSpan(76, 8));
+        request.Slice(144, 8).CopyTo(response.AsSpan(84, 8));
+        BinaryPrimitives.WriteUInt16LittleEndian(
+            response.AsSpan(92, 2),
+            checked((ushort)payload.Length));
+        SHA256.HashData(payload).CopyTo(response.AsSpan(96, 32));
+        if (corruptChunkDigest_)
+        {
+            response[96] ^= 0xFF;
+        }
+        payload.CopyTo(response.AsSpan(HostModTransferProtocol.ChunkResponsePrefixBytes));
+        return response;
+    }
+
+    private byte[] CreateResponse(
+        int length,
+        HostModTransferPacketKind kind,
+        ReadOnlySpan<byte> request)
+    {
+        var response = new byte[length];
+        "SDMP"u8.CopyTo(response);
+        BinaryPrimitives.WriteUInt16LittleEndian(
+            response.AsSpan(4, 2),
+            HostModTransferProtocol.Version);
+        BinaryPrimitives.WriteUInt16LittleEndian(
+            response.AsSpan(6, 2),
+            (ushort)kind);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            response.AsSpan(8, 4),
+            sequence_++);
+        request.Slice(12, 8).CopyTo(response.AsSpan(12, 8));
+        request.Slice(20, 16).CopyTo(response.AsSpan(20, 16));
+        return response;
+    }
+
+    private static void WriteFixedUtf8(Span<byte> target, string value)
+    {
+        var written = Encoding.UTF8.GetBytes(value, target);
+        if (written == 0 || written >= target.Length)
+        {
+            throw new InvalidOperationException(
+                "Host transfer contract text exceeded its fixed field.");
+        }
     }
 }
 

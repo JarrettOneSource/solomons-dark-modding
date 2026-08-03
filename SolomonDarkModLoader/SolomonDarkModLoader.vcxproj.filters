@@ -404,6 +404,12 @@
     <ClInclude Include="include\multiplayer_service_loop.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\host_mod_transfer_service.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
+    <ClInclude Include="src\host_mod_transfer_service\index_loading.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="include\runtime_bootstrap.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
@@ -1415,6 +1421,9 @@
     <ClInclude Include="src\multiplayer_local_transport\enemy_damage_target_position.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\host_mod_transfer_dispatch.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\incoming_cast_packet_sync.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -2066,6 +2075,9 @@
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\multiplayer_local_transport.cpp">
+      <Filter>Source Files\Multiplayer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\host_mod_transfer_service.cpp">
       <Filter>Source Files\Multiplayer</Filter>
     </ClCompile>
     <ClCompile Include="src\network_telemetry.cpp">

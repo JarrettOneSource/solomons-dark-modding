@@ -17,18 +17,250 @@ internal static class LobbyModSynchronizer
         ulong lobbyId,
         string directoryBaseUrl,
         string? ticket,
+        bool allowHostModTransfer,
         IProgress<UpdateProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        HttpClient? clientOverride = null,
+        Func<string?, CancellationToken, Task<HostModTransferClient>>?
+            hostTransferConnector = null)
     {
-        using var client = CreateClient(directoryBaseUrl);
-        return await SynchronizeAsync(
-            localCatalog,
+        using var ownedClient = clientOverride is null
+            ? CreateClient(directoryBaseUrl)
+            : null;
+        var client = clientOverride ?? ownedClient!;
+        var websiteManifest = await TryFetchJoinManifestAsync(
+            client,
             lobbyId,
             ticket,
-            configuration.Workspace.ModCacheRootPath,
-            client,
-            progress,
             cancellationToken);
+        HostModTransferClient? hostTransfer = null;
+        string? hostTransferError = null;
+        async Task<HostModTransferClient?> GetHostTransferAsync()
+        {
+            if (hostTransfer is not null || hostTransferError is not null)
+            {
+                return hostTransfer;
+            }
+            try
+            {
+                hostTransfer = hostTransferConnector is null
+                    ? await HostModTransferClient.ConnectAsync(
+                        configuration,
+                        lobbyId,
+                        websiteManifest.Build?.ManifestSha256,
+                        cancellationToken)
+                    : await hostTransferConnector(
+                        websiteManifest.Build?.ManifestSha256,
+                        cancellationToken);
+                if (!hostTransfer.Catalog.Available)
+                {
+                    hostTransferError = hostTransfer.Catalog.Error;
+                }
+            }
+            catch (Exception exception) when (exception is
+                IOException or
+                InvalidDataException or
+                InvalidOperationException or
+                TimeoutException or
+                TaskCanceledException or
+                DllNotFoundException or
+                BadImageFormatException or
+                EntryPointNotFoundException)
+            {
+                hostTransferError = exception.Message;
+            }
+            return hostTransfer?.Catalog.Available == true
+                ? hostTransfer
+                : null;
+        }
+
+        try
+        {
+            IReadOnlyList<MultiplayerModDescriptor> required;
+            var usedHostIndex = false;
+            LobbyBuildDescriptor? hostBuild = websiteManifest.Build;
+            if (websiteManifest.Mods is not null)
+            {
+                required = websiteManifest.Mods;
+            }
+            else
+            {
+                var direct = await GetHostTransferAsync();
+                if (direct is null)
+                {
+                    progress?.Report(new UpdateProgress(
+                        UpdateProgressPhase.Failed,
+                        $"Host mod sync failed: {websiteManifest.Error}"));
+                    return LobbyModSyncResult.Offline(
+                        localCatalog,
+                        websiteManifest.Error ?? hostTransferError ??
+                            "No host mod metadata was available.");
+                }
+                required = direct.Catalog.Descriptors
+                    .Select(descriptor => new MultiplayerModDescriptor(
+                        descriptor.Id,
+                        descriptor.Version,
+                        descriptor.ContentSha256))
+                    .ToArray();
+                usedHostIndex = true;
+                hostBuild = new LobbyBuildDescriptor(
+                    HostModTransferProtocol.Version,
+                    direct.Catalog.HostManifestSha256,
+                    LoaderVersion: null);
+            }
+
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Checking,
+                required.Count == 1
+                    ? "Checking 1 required host mod…"
+                    : $"Checking {required.Count} required host mods…",
+                0,
+                required.Count,
+                UpdateProgressUnit.Items));
+            var exactMods = new Dictionary<string, DiscoveredMod>(
+                StringComparer.OrdinalIgnoreCase);
+            var reusedManual = 0;
+            var reusedCached = 0;
+            foreach (var requirement in required)
+            {
+                var manual = FindExact(localCatalog.DiscoveredMods, requirement);
+                if (manual is not null)
+                {
+                    exactMods.Add(requirement.Id, manual);
+                    reusedManual++;
+                    continue;
+                }
+                var cachePath = WebsiteModPackageInstaller.GetCachePath(
+                    configuration.Workspace.ModCacheRootPath,
+                    requirement);
+                var cached = WebsiteModPackageInstaller.TryLoadExact(
+                    cachePath,
+                    requirement);
+                if (cached is not null)
+                {
+                    exactMods.Add(requirement.Id, cached);
+                    reusedCached++;
+                }
+            }
+
+            var missing = required
+                .Where(requirement => !exactMods.ContainsKey(requirement.Id))
+                .ToArray();
+            IReadOnlyDictionary<string, WebsiteResolvedMod> websitePackages =
+                new Dictionary<string, WebsiteResolvedMod>(StringComparer.OrdinalIgnoreCase);
+            string? websiteResolveError = websiteManifest.Error;
+            if (missing.Length > 0 && websiteManifest.Mods is not null)
+            {
+                try
+                {
+                    websitePackages = await ResolveAsync(
+                        client,
+                        missing,
+                        cancellationToken);
+                }
+                catch (Exception exception) when (exception is
+                    HttpRequestException or
+                    InvalidOperationException or
+                    TaskCanceledException)
+                {
+                    websiteResolveError = exception.Message;
+                }
+            }
+
+            var websiteDownloaded = 0;
+            var hostDownloaded = 0;
+            for (var index = 0; index < missing.Length; index++)
+            {
+                var requirement = missing[index];
+                DiscoveredMod? installed = null;
+                if (websitePackages.TryGetValue(requirement.Id, out var websitePackage))
+                {
+                    try
+                    {
+                        installed = await WebsiteModPackageInstaller.InstallAsync(
+                            client,
+                            websitePackage,
+                            requirement,
+                            configuration.Workspace.ModCacheRootPath,
+                            cancellationToken,
+                            progress);
+                        websiteDownloaded++;
+                    }
+                    catch (Exception exception) when (exception is
+                        HttpRequestException or
+                        InvalidOperationException or
+                        TaskCanceledException)
+                    {
+                        websiteResolveError = exception.Message;
+                    }
+                }
+                if (installed is null)
+                {
+                    var direct = allowHostModTransfer
+                        ? await GetHostTransferAsync()
+                        : null;
+                    var descriptor = direct?.Catalog.Find(requirement);
+                    if (descriptor is not null)
+                    {
+                        installed = await direct!.DownloadAndInstallAsync(
+                            descriptor,
+                            configuration.Workspace.ModCacheRootPath,
+                            cancellationToken,
+                            progress);
+                        hostDownloaded++;
+                    }
+                }
+                if (installed is null)
+                {
+                    throw new InvalidOperationException(
+                        "Mod list mismatch that cannot be repaired automatically: " +
+                        $"{requirement.Id} {requirement.Version} is not installed locally, " +
+                        "the website could not supply it, and direct host transfer is unavailable. " +
+                        $"Website: {websiteResolveError ?? "no exact package"}. " +
+                        $"Host: {hostTransferError ?? "not authorized"}.");
+                }
+                exactMods.Add(requirement.Id, installed);
+                progress?.Report(new UpdateProgress(
+                    UpdateProgressPhase.Installing,
+                    $"Prepared {requirement.Id} v{requirement.Version} for this session.",
+                    index + 1,
+                    missing.Length,
+                    UpdateProgressUnit.Items));
+            }
+
+            var ordered = required.Select(requirement => exactMods[requirement.Id]).ToArray();
+            var downloaded = websiteDownloaded + hostDownloaded;
+            progress?.Report(new UpdateProgress(
+                UpdateProgressPhase.Completed,
+                downloaded == 0
+                    ? "Host mods are already available."
+                    : hostDownloaded == 0
+                        ? $"Downloaded and verified {downloaded} host mod{(downloaded == 1 ? "" : "s")} from the website."
+                        : websiteDownloaded == 0
+                            ? $"Downloaded and verified {hostDownloaded} mod{(hostDownloaded == 1 ? "" : "s")} directly from the host."
+                            : $"Downloaded and verified {websiteDownloaded} mod{(websiteDownloaded == 1 ? "" : "s")} from the website and {hostDownloaded} directly from the host.",
+                required.Count,
+                required.Count,
+                UpdateProgressUnit.Items));
+            return new LobbyModSyncResult(
+                ModCatalog.CreateExact(ordered),
+                required.Count,
+                reusedManual,
+                reusedCached,
+                downloaded,
+                hostDownloaded,
+                UsedWebsite: websiteManifest.Mods is not null,
+                UsedHostTransfer: usedHostIndex || hostDownloaded > 0,
+                FallbackReason: null,
+                HostBuild: hostBuild);
+        }
+        finally
+        {
+            if (hostTransfer is not null)
+            {
+                await hostTransfer.DisposeAsync();
+            }
+        }
     }
 
     internal static async Task<LobbyModSyncResult> SynchronizeAsync(
@@ -151,7 +383,9 @@ internal static class LobbyModSynchronizer
             reusedManual,
             reusedCached,
             downloaded,
+            HostDownloadedModCount: 0,
             UsedWebsite: true,
+            UsedHostTransfer: false,
             FallbackReason: null,
             HostBuild: manifest.Build);
     }
@@ -165,13 +399,89 @@ internal static class LobbyModSynchronizer
         CancellationToken cancellationToken = default)
     {
         using var client = CreateClient(directoryBaseUrl);
-        return await PreviewAsync(
+        var websitePreview = await PreviewAsync(
             localCatalog,
             lobbyId,
             ticket,
             configuration.Workspace.ModCacheRootPath,
             client,
             cancellationToken);
+        if (websitePreview.UsedWebsite && websitePreview.UnavailableCount == 0)
+        {
+            return websitePreview;
+        }
+
+        try
+        {
+            await using var direct = await HostModTransferClient.ConnectAsync(
+                configuration,
+                lobbyId,
+                websitePreview.HostBuild?.ManifestSha256,
+                cancellationToken);
+            if (!direct.Catalog.Available)
+            {
+                return websitePreview;
+            }
+            if (!websitePreview.UsedWebsite)
+            {
+                var directMods = ClassifyDirectPreview(
+                    localCatalog,
+                    configuration.Workspace.ModCacheRootPath,
+                    direct.Catalog.Descriptors);
+                return new LobbyJoinPreview(
+                    lobbyId,
+                    UsedWebsite: false,
+                    UsedHostTransfer: true,
+                    Error: null,
+                    new LobbyBuildDescriptor(
+                        HostModTransferProtocol.Version,
+                        direct.Catalog.HostManifestSha256,
+                        LoaderVersion: null),
+                    directMods);
+            }
+
+            var repaired = websitePreview.Mods.Select(mod =>
+            {
+                if (mod.State != LobbyJoinPreviewModState.Unavailable)
+                {
+                    return mod;
+                }
+                var required = new MultiplayerModDescriptor(
+                    mod.Id,
+                    mod.Version,
+                    mod.ContentSha256);
+                var descriptor = direct.Catalog.Find(required);
+                return descriptor is null
+                    ? mod
+                    : mod with
+                    {
+                        State = LobbyJoinPreviewModState.NeedsDownload,
+                        DownloadSource = LobbyJoinPreviewDownloadSource.Host,
+                        DownloadSizeBytes = descriptor.PackageBytes
+                    };
+            }).ToArray();
+            return websitePreview with
+            {
+                UsedHostTransfer = repaired.Any(mod =>
+                    mod.DownloadSource == LobbyJoinPreviewDownloadSource.Host),
+                Mods = repaired
+            };
+        }
+        catch (Exception exception) when (exception is
+            IOException or
+            InvalidDataException or
+            InvalidOperationException or
+            TimeoutException or
+            TaskCanceledException or
+            DllNotFoundException or
+            BadImageFormatException or
+            EntryPointNotFoundException)
+        {
+            return websitePreview with
+            {
+                Error = websitePreview.Error ?? exception.Message
+            };
+        }
     }
 
     internal static async Task<LobbyJoinPreview> PreviewAsync(
@@ -269,7 +579,8 @@ internal static class LobbyModSynchronizer
                     ? mod with
                     {
                         Name = string.IsNullOrWhiteSpace(package.Name) ? mod.Name : package.Name,
-                        DownloadSizeBytes = package.FileSizeBytes
+                        DownloadSizeBytes = package.FileSizeBytes,
+                        DownloadSource = LobbyJoinPreviewDownloadSource.Website
                     }
                     : mod with { State = LobbyJoinPreviewModState.Unavailable };
             }
@@ -278,9 +589,69 @@ internal static class LobbyModSynchronizer
         return new LobbyJoinPreview(
             lobbyId,
             UsedWebsite: true,
+            UsedHostTransfer: false,
             Error: null,
             manifest.Build,
             classified);
+    }
+
+    private static IReadOnlyList<LobbyJoinPreviewMod> ClassifyDirectPreview(
+        ModCatalog localCatalog,
+        string cacheRootPath,
+        IReadOnlyList<HostModTransferDescriptor> descriptors)
+    {
+        var classified = new List<LobbyJoinPreviewMod>(descriptors.Count);
+        foreach (var descriptor in descriptors)
+        {
+            var required = new MultiplayerModDescriptor(
+                descriptor.Id,
+                descriptor.Version,
+                descriptor.ContentSha256);
+            var installedDifferently = localCatalog.DiscoveredMods.FirstOrDefault(mod =>
+                string.Equals(
+                    mod.Manifest.Id,
+                    descriptor.Id,
+                    StringComparison.OrdinalIgnoreCase));
+            var manual = FindExact(localCatalog.DiscoveredMods, required);
+            if (manual is not null)
+            {
+                classified.Add(new LobbyJoinPreviewMod(
+                    descriptor.Id,
+                    descriptor.Version,
+                    descriptor.ContentSha256,
+                    LobbyJoinPreviewModState.Installed,
+                    manual.Manifest.Name,
+                    InstalledVersion: null,
+                    DownloadSizeBytes: null));
+                continue;
+            }
+            var cachePath = WebsiteModPackageInstaller.GetCachePath(
+                cacheRootPath,
+                required);
+            var cached = WebsiteModPackageInstaller.TryLoadExact(cachePath, required);
+            if (cached is not null)
+            {
+                classified.Add(new LobbyJoinPreviewMod(
+                    descriptor.Id,
+                    descriptor.Version,
+                    descriptor.ContentSha256,
+                    LobbyJoinPreviewModState.Cached,
+                    cached.Manifest.Name,
+                    InstalledVersion: null,
+                    DownloadSizeBytes: null));
+                continue;
+            }
+            classified.Add(new LobbyJoinPreviewMod(
+                descriptor.Id,
+                descriptor.Version,
+                descriptor.ContentSha256,
+                LobbyJoinPreviewModState.NeedsDownload,
+                installedDifferently?.Manifest.Name,
+                installedDifferently?.Manifest.Version,
+                descriptor.PackageBytes,
+                LobbyJoinPreviewDownloadSource.Host));
+        }
+        return classified;
     }
 
     private static HttpClient CreateClient(string directoryBaseUrl) => new()

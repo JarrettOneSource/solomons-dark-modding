@@ -115,7 +115,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 90;",
+        "constexpr std::uint16_t kProtocolVersion = 91;",
         "WaveSummary = 32",
         "WaveCompositionRowPacketState",
         "struct WaveSummaryPacket",
@@ -154,7 +154,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "authenticated wave summary",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "current protocol version is 90",
+        "current protocol version is 91",
         "verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation",
         "same sorted aggregate and per-type live summary",
         "stops only the two process IDs",
