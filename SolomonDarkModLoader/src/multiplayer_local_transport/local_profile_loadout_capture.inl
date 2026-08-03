@@ -141,6 +141,28 @@ bool TryApplyLiveNativeLoadoutSelectionToProfile(
     return true;
 }
 
+void LogLocalNativeLoadoutSelectionChange(
+    const MultiplayerCharacterProfile& previous,
+    const MultiplayerCharacterProfile& current) {
+    if (current.element_id == previous.element_id &&
+        current.discipline_id == previous.discipline_id &&
+        current.appearance.choice_ids == previous.appearance.choice_ids &&
+        current.loadout.primary_entry_index ==
+            previous.loadout.primary_entry_index) {
+        return;
+    }
+
+    const auto& choices = current.appearance.choice_ids;
+    Log(
+        "Multiplayer local native loadout selection refreshed. element_id=" +
+        std::to_string(current.element_id) + " discipline_id=" +
+        std::to_string(static_cast<std::int32_t>(current.discipline_id)) +
+        " native_rows=" + std::to_string(choices[0]) + "/" +
+        std::to_string(choices[1]) + "/" +
+        std::to_string(choices[2]) + "/" +
+        std::to_string(choices[3]));
+}
+
 bool TryApplyLivePrimarySelectionToProfile(
     const SDModGameplaySelectionDebugState& selection_state,
     MultiplayerCharacterProfile* profile) {
