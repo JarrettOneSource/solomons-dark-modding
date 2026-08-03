@@ -176,6 +176,31 @@ void RefreshLocalParticipantFromGameState() {
         }
         local->character_profile.level = player_state.level;
         local->character_profile.experience = player_state.xp;
+        const auto previous_native_loadout = local->character_profile;
+        if (TryApplyLiveNativeLoadoutSelectionToProfile(
+                player_state.progression_address,
+                &local->character_profile) &&
+            (local->character_profile.element_id !=
+                 previous_native_loadout.element_id ||
+             local->character_profile.discipline_id !=
+                 previous_native_loadout.discipline_id ||
+             local->character_profile.appearance.choice_ids !=
+                 previous_native_loadout.appearance.choice_ids ||
+             local->character_profile.loadout.primary_entry_index !=
+                 previous_native_loadout.loadout.primary_entry_index)) {
+            const auto& choices =
+                local->character_profile.appearance.choice_ids;
+            Log(
+                "Multiplayer local native loadout selection refreshed. element_id=" +
+                std::to_string(local->character_profile.element_id) +
+                " discipline_id=" +
+                std::to_string(static_cast<std::int32_t>(
+                    local->character_profile.discipline_id)) +
+                " native_rows=" + std::to_string(choices[0]) + "/" +
+                std::to_string(choices[1]) + "/" +
+                std::to_string(choices[2]) + "/" +
+                std::to_string(choices[3]));
+        }
         if (have_selection_state) {
             const auto previous_element_id = local->character_profile.element_id;
             const auto previous_primary_entry = local->character_profile.loadout.primary_entry_index;

@@ -55,9 +55,9 @@ CREATE_ELEMENT_IDS = {
     "earth": 4,
 }
 CREATE_DISCIPLINE_IDS = {
-    "mind": 0,
+    "mind": 2,
     "body": 1,
-    "arcane": 2,
+    "arcane": 0,
 }
 
 LOADOUT_STATE_PROBE = r"""

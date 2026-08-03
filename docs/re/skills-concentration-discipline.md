@@ -8,7 +8,7 @@ Result: static RE was sufficient; no game instance was launched
 
 **Concentration is a per-player, per-run selection of one learned passive skill.** The Split Mind Charm raises the capacity to two. The choices are skill-row IDs held in process gameplay lanes, not fields in a durable character profile. A chosen skill keeps its ordinary ranked effect and gains a skill-specific compiled bonus; `mConcentration` is not one universal formula. Some skills use the CFG scalar, while others use hard-coded behavior. The stock choices are cleared by a new Create/loadout finalization and are not serialized. The loader snapshots and replicates them per participant and applies each participant's own skill book and concentration context.
 
-**Discipline is the non-element skill family admitted to future level-up offers.** Arcane unlocks rows 48–55, Body unlocks rows 64–71, and Mind unlocks rows 56–63. It grants no immediate stat, spell, or starting-rank bonus beyond activating the discipline root. Element is independent: it chooses the elemental family and starting primary/secondary. The native discipline root is saved in the run's progression at `+0x830`. The loader has wire and remote-materialization support for discipline, but the local human capture path does not currently update the semantic profile field after a Mind or Body pick, so peers receive the default Arcane value. That is a real static seam defect, not successful end-to-end discipline replication.
+**Discipline is the non-element skill family admitted to future level-up offers.** Arcane unlocks rows 48–55, Body unlocks rows 64–71, and Mind unlocks rows 56–63. It grants no immediate stat, spell, or starting-rank bonus beyond activating the discipline root. Element is independent: it chooses the elemental family and starting primary/secondary. The native discipline root is saved in the run's progression at `+0x830`. The original analysis found that local Mind/Body picks were serialized as the profile default Arcane; the 2026-08-02 follow-up in [`skillfix-discipline-and-concentration-2026-08-02.md`](skillfix-discipline-and-concentration-2026-08-02.md) closes that loader defect by capturing the complete native selection quartet.
 
 ## Evidence and notation
 
@@ -168,7 +168,7 @@ The raw UI selection exists transiently at Create owner `+0x22C` and global `0x0
 
 The loader's match lifecycle intentionally creates a new pick generation at game over in [`phase_state.inl`](../../SolomonDarkModLoader/src/multiplayer_join_flow/phase_state.inl#L11-L24) and resets commit state in [`loadout_picker.inl`](../../SolomonDarkModLoader/src/multiplayer_join_flow/loadout_picker.inl#L57-L76). A fresh Create surface may copy the last raw element/discipline into the UI as a preselection, but this is only convenience state ([`loadout_picker.inl`](../../SolomonDarkModLoader/src/multiplayer_join_flow/loadout_picker.inl#L185-L264)). The hook masks discipline until the generation is allowed to commit, replays the retained element through the stock click path, clears discipline when element changes, and commits only after both selections are complete ([`loadout_picker.inl`](../../SolomonDarkModLoader/src/multiplayer_join_flow/loadout_picker.inl#L329-L560)). The new stock finalizer seeds a fresh base book/progression; old learned ranks are not retained merely because the old raw choices were preselected.
 
-### Replication and current gap
+### Replication and repaired capture path
 
 The protocol is designed to replicate discipline:
 
@@ -177,14 +177,20 @@ The protocol is designed to replicate discipline:
 - receivers rebuild the semantic profile in [`incoming_participant_state_sync.inl`](../../SolomonDarkModLoader/src/multiplayer_local_transport/incoming_participant_state_sync.inl#L180-L205).
 - native remote materialization maps that enum to root 6/5/7 and writes progression `+0x830` in [`standalone_materialization_selection_priming.inl`](../../SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_selection_priming.inl#L206-L220) and [`standalone_materialization_selection_priming.inl`](../../SolomonDarkModLoader/src/mod_loader_gameplay/standalone_materialization_selection_priming.inl#L297-L429).
 
-However, the local human capture path updates only element/primary from the gameplay selection table and secondary belt entries; it never reads progression `+0x830` and never converts raw Create `0/1/2` to semantic Arcane/Body/Mind. See [`local_profile_loadout_capture.inl`](../../SolomonDarkModLoader/src/multiplayer_local_transport/local_profile_loadout_capture.inl#L1-L97) and its caller in [`local_state_packet_sync.inl`](../../SolomonDarkModLoader/src/multiplayer_local_transport/local_state_packet_sync.inl#L179-L214). The profile default is Arcane in [`multiplayer_runtime_state.h`](../../SolomonDarkModLoader/include/multiplayer_runtime_state.h#L54-L61), and an exhaustive assignment search finds no local-human discipline update.
+The 2026-08-02 repair reads all four stock Create selections from local
+progression: element root `+0x82C`, discipline root `+0x830`, starting primary
+`+0x86C`, and starting secondary `+0x870`. It validates their stock pairing,
+converts roots to the semantic protocol fields, and stores the native quartet
+in the profile's legacy four-choice array before packet construction. Remote
+priming consumes the same four positions and rejects a quartet that disagrees
+with the semantic profile. Profiles without explicit native rows, including
+the normal bot path, continue to use semantic element and discipline mapping.
 
-Consequences:
-
-- an Arcane human pick happens to replicate correctly by default;
-- a Mind or Body human pick/re-pick is sent to peers as Arcane;
-- a peer materializes native progression `+0x830 = 7` even when the owner chose root 6 or 5; and
-- separately replicated progression rows and derived fields can reproduce some already-learned current effects, but they do not repair the remote family root or make future native level-up family behavior correct.
+The raw Create actions were repaired at the same boundary: Arcane is stock
+point 0, Body point 1, and Mind point 2. Those raw indices remain deliberately
+separate from the semantic protocol enum Mind 0, Body 1, Arcane 2. See the
+focused investigation and acceptance record in
+[`skillfix-discipline-and-concentration-2026-08-02.md`](skillfix-discipline-and-concentration-2026-08-02.md).
 
 Bots/synthetic participants are different: their profiles explicitly carry a semantic discipline and the materializer maps it correctly. No live claim is needed for the human defect because the complete local assignment graph is statically closed.
 

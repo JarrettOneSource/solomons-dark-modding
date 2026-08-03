@@ -2671,9 +2671,9 @@ def enter_hub_through_stock_ui(
         "earth": 4,
     }
     discipline_ids = {
-        "mind": 0,
+        "mind": 2,
         "body": 1,
-        "arcane": 2,
+        "arcane": 0,
     }
     element_action = f"create.select_element_{peer.element}"
     element_ready = wait_for(

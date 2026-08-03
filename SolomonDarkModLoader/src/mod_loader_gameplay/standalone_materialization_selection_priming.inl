@@ -11,6 +11,40 @@ int NativeSkillRowForDiscipline(
     return -1;
 }
 
+int NativeSkillRowForElement(std::int32_t element_id) {
+    switch (element_id) {
+    case 0:
+        return 1;
+    case 1:
+        return 3;
+    case 2:
+        return 4;
+    case 3:
+        return 2;
+    case 4:
+        return 0;
+    default:
+        return -1;
+    }
+}
+
+int NativeStartingSecondaryRowForElement(std::int32_t element_id) {
+    switch (element_id) {
+    case 0:
+        return 21;
+    case 1:
+        return 35;
+    case 2:
+        return 45;
+    case 3:
+        return 27;
+    case 4:
+        return 11;
+    default:
+        return -1;
+    }
+}
+
 bool ActivateProfilePrimaryRows(
     uintptr_t progression_address,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
@@ -160,28 +194,71 @@ bool PrimeGameplaySlotBotSelectionState(
     }
 
     // Gameplay_CreatePlayerSlot allocates a fresh PlayerProgression, but the
-    // late bot-clone path skips the stock new-character selection block.
-    // Slot bot visuals are seeded from the native source-profile builder; only
-    // mirror explicit profile choices when the profile already owns them, and
-    // never invent synthetic appearance ids here.
-    const bool has_primary_choice_ids =
-        choice_ids[0] >= 0 && choice_ids[1] >= 0 && choice_ids[2] >= 0;
-    if (has_primary_choice_ids) {
+    // late clone path skips the stock new-character selection block. Human
+    // profiles carry the four stock progression choices through the existing
+    // appearance array; bot profiles normally leave all four unspecified and
+    // continue through the semantic element/discipline path below.
+    const bool has_native_loadout_choice_ids =
+        choice_ids[0] >= 0 && choice_ids[1] >= 0 &&
+        choice_ids[2] >= 0 && choice_ids[3] >= 0;
+    const bool has_any_native_loadout_choice_id =
+        choice_ids[0] >= 0 || choice_ids[1] >= 0 ||
+        choice_ids[2] >= 0 || choice_ids[3] >= 0;
+    const auto discipline_skill_row =
+        NativeSkillRowForDiscipline(character_profile.discipline_id);
+    if (discipline_skill_row < 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the participant's native Discipline choice.";
+        }
+        return false;
+    }
+    if (has_any_native_loadout_choice_id !=
+        has_native_loadout_choice_ids) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Explicit native loadout choices must contain all four rows.";
+        }
+        return false;
+    }
+    if (has_native_loadout_choice_ids) {
+        int expected_primary_skill_row = -1;
+        const auto element_skill_row =
+            NativeSkillRowForElement(character_profile.element_id);
+        const auto secondary_skill_row =
+            NativeStartingSecondaryRowForElement(character_profile.element_id);
+        if (choice_ids[1] != discipline_skill_row ||
+            choice_ids[0] != element_skill_row ||
+            !TryResolveNativePrimaryEntryForElement(
+                character_profile.element_id,
+                &expected_primary_skill_row) ||
+            choice_ids[2] != expected_primary_skill_row ||
+            choice_ids[3] != secondary_skill_row) {
+            if (error_message != nullptr) {
+                *error_message =
+                    "Explicit native loadout choices disagree with the semantic profile.";
+            }
+            return false;
+        }
         if (!memory.TryWriteField<std::int32_t>(
                 progression_address,
-                kPlayerProgressionAppearancePrimaryAOffset,
+                kPlayerProgressionElementSkillRowOffset,
                 choice_ids[0]) ||
             !memory.TryWriteField<std::int32_t>(
                 progression_address,
-                kPlayerProgressionAppearancePrimaryBOffset,
+                kPlayerProgressionDisciplineSkillRowOffset,
                 choice_ids[1]) ||
             !memory.TryWriteField<std::int32_t>(
                 progression_address,
-                kPlayerProgressionAppearancePrimaryCOffset,
-                choice_ids[2])) {
+                kPlayerProgressionPrimarySkillRowOffset,
+                choice_ids[2]) ||
+            !memory.TryWriteField<std::int32_t>(
+                progression_address,
+                kPlayerProgressionSecondarySkillRowOffset,
+                choice_ids[3])) {
             if (error_message != nullptr) {
                 *error_message =
-                    "Failed to mirror explicit primary wizard appearance ids into the slot progression object.";
+                    "Failed to mirror explicit native loadout rows into the slot progression object.";
             }
             return false;
         }
@@ -203,15 +280,6 @@ bool PrimeGameplaySlotBotSelectionState(
             std::to_string(choice_ids[3]));
     }
 
-    const auto discipline_skill_row =
-        NativeSkillRowForDiscipline(character_profile.discipline_id);
-    if (discipline_skill_row < 0) {
-        if (error_message != nullptr) {
-            *error_message =
-                "Unable to resolve the bot's native Discipline choice.";
-        }
-        return false;
-    }
     if (!PrimeGameplaySlotBotBaseBookState(
             progression_address,
             discipline_skill_row,

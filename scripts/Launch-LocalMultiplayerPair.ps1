@@ -500,9 +500,9 @@ $createElementIds = @{
 }
 
 $createDisciplineIds = @{
-    mind = 0
+    mind = 2
     body = 1
-    arcane = 2
+    arcane = 0
 }
 
 function Invoke-InstanceLuaExec {
