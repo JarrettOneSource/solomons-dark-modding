@@ -1,5 +1,6 @@
-// The picker draws through the native HUD render pass (stock ExactText font
-// plus stock untextured quads); it no longer owns a Lua-draw overlay frame.
+// The picker draws through the final native D3D9 frame pass (stock ExactText
+// font plus stock untextured quads); it no longer owns a Lua-draw overlay
+// frame.
 constexpr std::size_t kVisibleBoneyardRows = 12;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
@@ -22,9 +23,7 @@ struct BoneyardPickerState {
     bool initialized = false;
     bool picker_open = false;
     bool native_launch_dispatched = false;
-    // Set by the game-thread pump each tick; consumed by the first HUD
-    // render-dispatch case of the frame so the picker draws exactly once.
-    std::atomic<bool> render_frame_pending{false};
+    bool renderer_started = false;
     std::shared_ptr<const BoneyardPickerCatalog> catalog;
     std::unordered_map<std::string, std::size_t> entry_by_digest;
     BoneyardPickerPhase phase = BoneyardPickerPhase::Closed;

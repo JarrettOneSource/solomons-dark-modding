@@ -76,10 +76,12 @@ struct BoneyardPickerSnapshot {
 // Stable frontend provider. Pick and cancel queue events; native work is
 // performed by PumpBoneyardPickerOnGameThread.
 BoneyardPickerSnapshot GetBoneyardPickerSnapshot();
-// Draws the picker through the native HUD render pass (stock font and
-// quads). Called from the gameplay HUD render dispatch hook; draws at most
-// once per game-thread pump tick.
-void RenderBoneyardPickerNativeFrame();
+// Subscribes the native stock-font/quad picker to the final D3D9 frame pass.
+// The provider is initialized separately because the device seam is loaded
+// later during runtime startup.
+bool StartBoneyardPickerRenderer(
+    std::uintptr_t device_pointer_global,
+    std::string* error_message);
 bool PickBoneyard(std::size_t index, std::string* error_message);
 bool CancelBoneyardPicker(std::string* error_message);
 

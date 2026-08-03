@@ -1,5 +1,6 @@
 #include "boneyard_picker.h"
 
+#include "d3d9_end_scene_hook.h"
 #include "gameplay_seams.h"
 #include "logger.h"
 #include "lua_draw_runtime.h"
@@ -13,7 +14,6 @@
 #include <Windows.h>
 
 #include <algorithm>
-#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstring>

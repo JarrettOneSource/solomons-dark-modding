@@ -15,9 +15,6 @@ void __fastcall HookGameplayHudRenderDispatch(
     if (original != nullptr) {
         original(self, render_case, arg1, arg2);
     }
-    // The Boneyard picker rides this native pass for stock-font/quad
-    // presentation; it gates itself to one draw per game-thread pump tick.
-    RenderBoneyardPickerNativeFrame();
 }
 
 bool CallGameplayExactTextObjectRenderSafe(
