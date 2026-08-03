@@ -1,9 +1,10 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.30
+# Solomon Dark Multiplayer Beta v0.1.0-beta.31
 
-- Hosts using custom arenas can now choose the arena from a new in-game picker when a run starts. Everyone loads the host's choice, and canceling returns the host to the standard map picker.
-- Join prompts now explain mod downloads in plain language and clearly say when required mods are unpublished.
-- Downloaded mods now render custom item world sprites from installed packages, and local multiplayer join consent works again.
-- Consumable visual effects now play more reliably.
+- Hosts choosing a custom boneyard now get a picker drawn in the game's gold font that scales cleanly at any window size. The list stays at the top, with each boneyard's name, description, and updated date below; technical SHA and size details are gone, and the picker is rendered as part of the game frame.
+- Ally skill loadouts now replicate completely to other players, so element and discipline choices no longer arrive partial.
+- Fixed brief mid-match freezes online, sometimes lasting up to half a second, that were caused by session-status saves blocking the game. Status writes now happen off the game thread.
+- Item drops, spell glows, ally health bars, and nametags now render inside the scene at true depth instead of as a screen overlay.
+- Assorted launcher wording is cleaner and more concise.
 - The release contains no bundled mods or generated runtime residue.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
