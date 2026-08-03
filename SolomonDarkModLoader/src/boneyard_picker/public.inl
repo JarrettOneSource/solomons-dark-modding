@@ -1,5 +1,17 @@
 BoneyardPickerSnapshot GetBoneyardPickerSnapshot();
-void RenderBoneyardPickerNativeFrame(IDirect3DDevice9* device);
+void RenderBoneyardPickerAfterStockHud();
+
+void __fastcall HookGameplayHudRender(
+    void* gameplay,
+    void* /*unused_edx*/) {
+    const auto original = GetX86HookTrampoline<GameplayHudRenderFn>(
+        g_picker.render_hook);
+    if (original == nullptr) {
+        return;
+    }
+    original(gameplay);
+    RenderBoneyardPickerAfterStockHud();
+}
 
 BoneyardPickerSnapshot GetBoneyardPickerSnapshot() {
     std::scoped_lock lock(g_picker.mutex);
@@ -130,11 +142,20 @@ bool InitializeBoneyardPicker(
     if (!InitializeGameplaySeams(error_message)) {
         return false;
     }
-    const auto target = ProcessMemory::Instance().ResolveGameAddressOrZero(
+    const auto start_target = ProcessMemory::Instance().ResolveGameAddressOrZero(
         kMapPickerStart);
-    if (target == 0) {
+    const auto render_target = ProcessMemory::Instance().ResolveGameAddressOrZero(
+        kGameplayHudRender);
+    if (start_target == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve the stock MapPicker start path.";
+        }
+        return false;
+    }
+    if (render_target == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the complete gameplay HUD render path.";
         }
         return false;
     }
@@ -144,11 +165,20 @@ bool InitializeBoneyardPicker(
         return true;
     }
     if (!InstallSafeX86Hook(
-            reinterpret_cast<void*>(target),
+            reinterpret_cast<void*>(start_target),
             reinterpret_cast<void*>(&HookMapPickerStart),
             kMapPickerStartHookMinimumPatchSize,
             &g_picker.start_hook,
             error_message)) {
+        return false;
+    }
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(render_target),
+            reinterpret_cast<void*>(&HookGameplayHudRender),
+            kGameplayHudRenderHookMinimumPatchSize,
+            &g_picker.render_hook,
+            error_message)) {
+        RemoveX86Hook(&g_picker.start_hook);
         return false;
     }
     g_picker.catalog = std::move(catalog);
@@ -156,20 +186,20 @@ bool InitializeBoneyardPicker(
     g_picker.phase = BoneyardPickerPhase::Closed;
     g_picker.initialized = true;
     Log(
-        "Boneyard picker provider initialized. hook=" +
-        HexString(target) +
+        "Boneyard picker provider initialized. start_hook=" +
+        HexString(start_target) +
+        " render_hook=" + HexString(render_target) +
         " entries=" + std::to_string(g_picker.catalog->entries.size()));
     return true;
 }
 
 void ShutdownBoneyardPicker() {
-    RemoveD3d9FrameCallback(&RenderBoneyardPickerNativeFrame);
+    RemoveX86Hook(&g_picker.render_hook);
     RemoveX86Hook(&g_picker.start_hook);
     std::scoped_lock lock(g_picker.mutex);
     g_picker.initialized = false;
     g_picker.picker_open = false;
     g_picker.native_launch_dispatched = false;
-    g_picker.renderer_started = false;
     g_picker.catalog.reset();
     g_picker.entry_by_digest.clear();
     g_picker.phase = BoneyardPickerPhase::Closed;
@@ -307,44 +337,8 @@ void PumpBoneyardPickerOnGameThread() {
     }
 }
 
-void RenderBoneyardPickerNativeFrame(IDirect3DDevice9* /*device*/) {
+void RenderBoneyardPickerAfterStockHud() {
     RenderBoneyardPickerUi(GetBoneyardPickerSnapshot());
-}
-
-bool StartBoneyardPickerRenderer(
-    std::uintptr_t device_pointer_global,
-    std::string* error_message) {
-    if (error_message != nullptr) {
-        error_message->clear();
-    }
-    {
-        std::scoped_lock lock(g_picker.mutex);
-        if (!g_picker.initialized) {
-            if (error_message != nullptr) {
-                *error_message =
-                    "The Boneyard picker provider is not initialized.";
-            }
-            return false;
-        }
-        if (g_picker.catalog == nullptr || g_picker.catalog->entries.empty() ||
-            g_picker.renderer_started) {
-            return true;
-        }
-    }
-
-    if (!InstallD3d9FrameHook(
-            device_pointer_global,
-            &RenderBoneyardPickerNativeFrame,
-            error_message)) {
-        return false;
-    }
-
-    {
-        std::scoped_lock lock(g_picker.mutex);
-        g_picker.renderer_started = true;
-    }
-    Log("Boneyard picker subscribed to the final D3D9 frame pass.");
-    return true;
 }
 
 bool ShouldHijackHostBoneyardStart() {

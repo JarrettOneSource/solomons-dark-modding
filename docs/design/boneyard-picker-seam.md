@@ -91,6 +91,14 @@ The initial placeholder uses this same public contract. It draws a bounded
 visible window over the immutable list and supports Up/Down, Page Up/Page Down,
 Enter, and Escape. It contains no visual API that ATC must preserve.
 
+The native frontend draws through the complete stock HUD render at
+`0x005D2520`. Its detour calls the stock trampoline first, then submits the
+picker's ExactText and untextured quads while the native renderer still owns
+the HUD presentation boundary. It never draws from the subordinate
+`0x00512060` dispatcher or the D3D9 `EndScene` callback. Those earlier seams
+either let later stock passes overwrite the picker or invoke engine renderer
+primitives after their valid lifetime.
+
 ## Stock start hijack
 
 The config-driven hook target is the recovered Courtyard start-run function at

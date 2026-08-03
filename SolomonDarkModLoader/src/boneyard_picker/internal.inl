@@ -1,12 +1,14 @@
-// The picker draws through the final native D3D9 frame pass (stock ExactText
-// font plus stock untextured quads); it no longer owns a Lua-draw overlay
-// frame.
+// The picker draws after the complete stock HUD render (stock ExactText font
+// plus stock untextured quads); it never enters a subordinate HUD dispatch or
+// the D3D9 EndScene overlay.
 constexpr std::size_t kVisibleBoneyardRows = 12;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
 constexpr std::size_t kMapPickerStartHookMinimumPatchSize = 5;
+constexpr std::size_t kGameplayHudRenderHookMinimumPatchSize = 6;
 
 using MapPickerStartFn = void(__thiscall*)(void* courtyard);
+using GameplayHudRenderFn = void(__thiscall*)(void* gameplay);
 using NativeStringAssignFn = void(__thiscall*)(void* self, char* text);
 
 enum class PendingFrontendEvent {
@@ -23,7 +25,6 @@ struct BoneyardPickerState {
     bool initialized = false;
     bool picker_open = false;
     bool native_launch_dispatched = false;
-    bool renderer_started = false;
     std::shared_ptr<const BoneyardPickerCatalog> catalog;
     std::unordered_map<std::string, std::size_t> entry_by_digest;
     BoneyardPickerPhase phase = BoneyardPickerPhase::Closed;
@@ -44,6 +45,7 @@ struct BoneyardPickerState {
     PendingFrontendEvent pending_event = PendingFrontendEvent::None;
     std::size_t pending_selection_index = kBoneyardPickerNoSelection;
     X86Hook start_hook;
+    X86Hook render_hook;
     std::mutex mutex;
 };
 

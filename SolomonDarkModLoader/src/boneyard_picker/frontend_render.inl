@@ -1,7 +1,7 @@
 // Boneyard picker frontend, native edition. Draws with the game's own
 // primitives — the stock ExactText font renderer and the stock untextured
-// HUD quad — from the final D3D9 frame callback, after the stock frame has
-// been assembled, so the picker carries the retail look (owner mandate:
+// HUD quad — after the complete stock HUD render, while the native renderer
+// still owns its presentation boundary, so the picker carries the retail look (owner mandate:
 // existing in-game art and fonts).
 // Consumes only the public snapshot plus the picker cursor; pick/cancel
 // intent stays in ProcessPickerInput.

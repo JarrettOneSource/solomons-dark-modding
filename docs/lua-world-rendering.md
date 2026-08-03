@@ -7,11 +7,12 @@ whose position is part of the 2.5D scene. The stock queue interleaves each
 sprite with actors and props by world Y plus `sort_bias`; the stock Puppet
 dispatcher also applies scene culling and light tint before the sprite draw.
 
-Screen-space UI remains separate. Top-left HUD rows, the Boneyard picker,
-`BOT PLAYING`, loading screens, and other viewport-fixed presentation belong
-to [`sd.draw` / `sd.hud`](lua-draw.md). Projecting a world point and then using
-`sd.draw.sprite` still produces an overlay and is not a substitute for this
-API.
+Screen-space UI remains separate. Top-left HUD rows, `BOT PLAYING`, loading
+screens, and other viewport-fixed mod presentation belong to
+[`sd.draw` / `sd.hud`](lua-draw.md). The loader-owned Boneyard picker is the
+one native exception: it uses stock ExactText and quads at the whole-HUD tail.
+Projecting a world point and then using `sd.draw.sprite` still produces an
+overlay and is not a substitute for this API.
 
 Actor-attached names, health bars, and target markers are world-anchored but
 are not scene sprites. Stock's tutorial loot arrow establishes their native

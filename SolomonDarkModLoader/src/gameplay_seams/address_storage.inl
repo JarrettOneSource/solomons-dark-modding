@@ -20,6 +20,7 @@ uintptr_t kPlayerActorVtable28 = 0;
 uintptr_t kPlayerActorPurePrimaryGate = 0;
 uintptr_t kPlayerControlBrainUpdate = 0;
 uintptr_t kGameplayHudRenderDispatch = 0;
+uintptr_t kGameplayHudRender = 0;
 uintptr_t kGameplayUiGlyphDraw = 0;
 uintptr_t kGameplayUiCenteredGlyphDraw = 0;
 uintptr_t kGameplayAllyLabelGlyphReturn = 0;

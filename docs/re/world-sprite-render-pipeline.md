@@ -371,7 +371,7 @@ No overlay fallback is allowed for world-anchored VFX.
 | Actor-attached names and health bars | Native post-scene world-indicator pass | Matches the stock tutorial arrow: world projected, above the scene, not tile-lit. |
 | World-target marker labels | Native post-scene world-indicator pass | Same stock indicator semantics as the tutorial arrow. |
 | Top-left ally rows and other screen HUD | Existing `EndScene` overlay or existing stock HUD | Position and ownership are screen-space. |
-| Boneyard picker | Existing `EndScene` overlay | Intentional screen UI. |
+| Boneyard picker | Native whole-HUD tail at `0x005D2520` | Intentional screen UI using the stock ExactText and quad renderer. |
 | `BOT PLAYING` label | Existing `EndScene` overlay | Intentional screen UI. |
 | Loading screens | Existing `EndScene` overlay | Intentional screen UI. |
 

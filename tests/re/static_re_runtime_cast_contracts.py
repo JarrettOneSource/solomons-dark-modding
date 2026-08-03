@@ -1258,6 +1258,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         "gameplay_ui_glyph_draw=0x004143D0",
         "gameplay_ui_centered_glyph_draw=0x004142E0",
         "gameplay_hud_render_dispatch=0x00512060",
+        "gameplay_hud_render=0x005D2520",
         "gameplay_exact_text_object_render=0x0043BCD0",
         "gameplay_exact_text_object=0x008199A0",
         "gameplay_exact_text_object=0xE7D98",

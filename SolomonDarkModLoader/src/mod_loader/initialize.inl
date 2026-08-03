@@ -454,29 +454,6 @@ void Initialize(HMODULE module_handle) {
             }
         }
 
-        {
-            const auto* picker_renderer_config =
-                TryGetDebugUiOverlayConfig();
-            std::string picker_renderer_error;
-            if (picker_renderer_config == nullptr ||
-                picker_renderer_config->device_pointer_global == 0 ||
-                !StartBoneyardPickerRenderer(
-                    picker_renderer_config->device_pointer_global,
-                    &picker_renderer_error)) {
-                const auto message = picker_renderer_error.empty()
-                    ? std::string(
-                        "Boneyard picker could not resolve the final "
-                        "D3D9 frame seam.")
-                    : picker_renderer_error;
-                Log(message);
-                ShutdownPartialRuntime();
-                write_failed_status(
-                    "boneyard-picker-renderer-failed",
-                    message);
-                return;
-            }
-        }
-
         RefreshStartupStatusSnapshot(&startup_status);
         std::ostringstream startup_summary;
         startup_summary << "SolomonDarkModLoader startup complete."

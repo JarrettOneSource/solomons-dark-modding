@@ -61,6 +61,7 @@ def test_stock_map_picker_recovery_pins_selected_value_and_launch_path() -> str:
 
 def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent() -> str:
     design = _read("docs/design/boneyard-picker-seam.md")
+    layout = _read("config/binary-layout.ini")
     header = _read("SolomonDarkModLoader/include/boneyard_picker.h")
     internal = _read("SolomonDarkModLoader/src/boneyard_picker/internal.inl")
     frontend = _read(
@@ -131,6 +132,27 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         ),
         "picker event and stock handoff",
     )
+    _require(
+        layout + internal + public,
+        (
+            "gameplay_hud_render=0x005D2520",
+            "kGameplayHudRenderHookMinimumPatchSize = 6",
+            "using GameplayHudRenderFn = void(__thiscall*)(void* gameplay)",
+            "GetX86HookTrampoline<GameplayHudRenderFn>(",
+            "InstallSafeX86Hook(",
+            "&g_picker.render_hook",
+            "RemoveX86Hook(&g_picker.render_hook)",
+        ),
+        "whole-HUD picker render hook",
+    )
+    if "original(gameplay);\n    RenderBoneyardPickerAfterStockHud();" not in public:
+        raise StaticReTestFailure(
+            "picker draws before the complete stock HUD trampoline"
+        )
+    if "InstallD3d9FrameHook(" in public:
+        raise StaticReTestFailure(
+            "picker native primitives leaked back into EndScene"
+        )
     if public.index("if (catalog->entries.empty()) {") > public.index(
         "InitializeGameplaySeams(error_message)"
     ):
@@ -145,6 +167,8 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
             "catalog is immutable for\nthe process lifetime",
             "`is_open`\nis the presentation gate",
             "The digest is checked again immediately before each native handoff",
+            "complete stock HUD render at\n`0x005D2520`",
+            "never draws from the subordinate\n`0x00512060` dispatcher or the D3D9 `EndScene` callback",
         ),
         "picker seam design",
     )

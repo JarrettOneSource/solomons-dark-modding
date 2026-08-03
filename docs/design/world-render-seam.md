@@ -23,8 +23,9 @@ are unchanged. Actor-attached labels are not HUD rows: they move to a
 separate stock-matched native indicator lane. The Boneyard picker is the one
 loader-owned screen surface that renders natively instead (owner direction:
 existing in-game art and fonts): it draws stock ExactText and stock
-untextured quads from the final D3D9 frame callback, after the stock scene and
-HUD have been assembled, and never owns a Lua-draw overlay frame.
+untextured quads after the complete stock HUD render at `0x005D2520`, while
+the native renderer still owns its presentation boundary, and never enters
+the D3D9 overlay or an intermediate HUD sub-dispatch.
 
 ## Goals
 

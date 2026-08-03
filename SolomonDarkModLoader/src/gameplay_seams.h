@@ -37,6 +37,7 @@ extern uintptr_t kPlayerActorVtable28;
 extern uintptr_t kPlayerActorPurePrimaryGate;
 extern uintptr_t kPlayerControlBrainUpdate;
 extern uintptr_t kGameplayHudRenderDispatch;
+extern uintptr_t kGameplayHudRender;
 extern uintptr_t kGameplayUiGlyphDraw;
 extern uintptr_t kGameplayUiCenteredGlyphDraw;
 extern uintptr_t kGameplayAllyLabelGlyphReturn;

@@ -390,9 +390,10 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         )
 
     # The Boneyard picker is the one loader screen surface that renders
-    # natively (owner direction: in-game art and fonts). It must ride the
-    # final D3D9 frame pass with stock text/quad primitives and must not own
-    # a Lua-draw overlay frame or draw from an intermediate HUD sub-dispatch.
+    # natively (owner direction: in-game art and fonts). It must draw after
+    # the complete stock HUD function with stock text/quad primitives and
+    # must not own a Lua-draw overlay frame, an EndScene callback, or an
+    # intermediate HUD sub-dispatch.
     picker_frontend = _read(
         "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
     )
@@ -400,29 +401,35 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
         "gameplay_hud_hooks.inl"
     )
+    picker_internal = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/internal.inl"
+    )
     picker_public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
-    loader_init = _read("SolomonDarkModLoader/src/mod_loader/initialize.inl")
+    picker_cpp = _read("SolomonDarkModLoader/src/boneyard_picker.cpp")
+    layout = _read("config/binary-layout.ini")
     _require(
         "native-pass Boneyard picker",
-        picker_frontend + picker_public + loader_init,
+        picker_frontend + picker_internal + picker_public + layout,
         (
             "DrawNativeWorldIndicatorExactText(",
             "DrawNativeScreenQuad(",
-            "InstallD3d9FrameHook(",
-            "&RenderBoneyardPickerNativeFrame",
-            "StartBoneyardPickerRenderer(",
-            "RemoveD3d9FrameCallback(&RenderBoneyardPickerNativeFrame)",
+            "gameplay_hud_render=0x005D2520",
+            "using GameplayHudRenderFn = void(__thiscall*)(void* gameplay)",
+            "HookGameplayHudRender(",
+            "GetX86HookTrampoline<GameplayHudRenderFn>(",
+            "&g_picker.render_hook",
+            "original(gameplay);\n    RenderBoneyardPickerAfterStockHud();",
+            "RemoveX86Hook(&g_picker.render_hook)",
         ),
     )
-    if "RenderBoneyardPickerNativeFrame" in hud_hooks:
+    if "RenderBoneyardPickerAfterStockHud" in hud_hooks:
         raise AssertionError(
             "Boneyard picker regressed to an intermediate HUD sub-dispatch"
         )
-    _require_in_order(
-        loader_init,
-        "InitializeLoadingScreen(",
-        "StartBoneyardPickerRenderer(",
-    )
+    if "InstallD3d9FrameHook(" in picker_cpp + picker_public:
+        raise AssertionError(
+            "Boneyard picker regressed to the D3D9 EndScene callback"
+        )
     for banished in ("BeginLuaDrawFrame(", "CommitLuaDrawFrame("):
         if banished in picker_frontend:
             raise AssertionError(
