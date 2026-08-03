@@ -1,7 +1,7 @@
 # Discipline Replication and Stock Concentration Defects
 
-Date: 2026-08-02  
-Baseline: `1497bf5`  
+Date: 2026-08-02
+Baseline: `1497bf5`
 Stock executable SHA-256: `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`
 
 This note freezes the investigation before any implementation change. It covers
@@ -111,3 +111,43 @@ mapping, and the corrected raw UI indices. Live proof must show a Mind host and
 Body client observing each other's true disciplines, plus an explicit bot
 profile retaining its discipline. Deflect and Creativity receive observation
 and documentation only.
+
+## Post-implementation live observations
+
+The final isolated run used instances `skf-host` and `skf-client`, UDP ports
+47790/47791, and `SDMOD_DISABLE_AUDIO=1`. The complete machine-readable record
+is `/mnt/d/codex-evidence/skillfix-20260802/live/skillfix-live.json`.
+
+The host selected Fire/Mind. Its local native quartet was `1/6/16/21`; its
+materialized view of the client carried semantic Water/Body (`1/1`) and the
+native quartet `3/5/32/35`. The client selected Water/Body. Its local native
+quartet was `3/5/32/35`; its materialized view of the host carried semantic
+Fire/Mind (`0/0`) and the native quartet `1/6/16/21`. Both remote actors were
+materialized with valid transforms. The host and client screenshots in
+`live/screenshots/host-both-peers.png` and
+`live/screenshots/client-both-peers.png` show both players from the respective
+views.
+
+An explicit Earth/Body bot retained semantic element/discipline `2/1` and
+native discipline root 5 on both peers. Its four native-human choice IDs
+remained unspecified (`-1/-1/-1/-1`), exercising the existing semantic bot
+mapping rather than the new human quartet path.
+
+For Deflect, the live fixture made row 68 active at effective rank 1, selected
+it in concentration slot A, and called the stock refresh. A trace at
+`0x00661FD0` observed argument 68 exactly once. Deflect chance remained
+`0.0 -> 0.0`, and the poison-resistance lane also remained `0.0 -> 0.0`.
+Together with the static case at `0x006621E8` and absent-property return at
+`0x0065D540`, this confirms that the shipped branch executes but supplies no
+Deflect bonus.
+
+For Creativity, the first live fixture used A = -1, B = 63, timer = 0; the
+second used A = -1, B = -1, Mind Chug timer = 3600. During each native picker
+reveal, a trace at `0x0046B140` observed the fixed index 16 query. Every option
+in both four-option offers had apply count 1. The live observations match the
+static `PUSH 0x10` at `0x0066FB57`: this picker check does not recognize slot B
+or the Mind Chug timer.
+
+No Deflect or Creativity gameplay behavior was changed. Both game PIDs were
+stopped only after their staged executable paths matched, and no `skf` process
+or listener on either assigned port remained.
