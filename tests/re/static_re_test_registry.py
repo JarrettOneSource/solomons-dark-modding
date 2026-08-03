@@ -188,7 +188,9 @@ from static_multiplayer_platform_contracts import (
 from static_multiplayer_progression_contracts import (
     test_boneyard_generator_skips_empty_candidate_interpolation,
     test_cpu_tick_stops_after_virtual_update_marks_object_for_removal,
+    test_create_discipline_actions_use_stock_raw_indices,
     test_frozen_manual_enemy_cell_membership_stays_position_coherent,
+    test_human_profiles_capture_and_prime_the_complete_native_loadout_quartet,
     test_level_up_barrier_waits_for_forced_picker_confirmation,
     test_level_up_choice_result_advances_owned_book_before_resume,
     test_lightning_manual_cluster_stays_inside_flat_arena_spatial_grid,
@@ -1130,6 +1132,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "remote progression preserves local Concentrate context",
         test_remote_progression_preserves_local_concentration_context,
+    ),
+    (
+        "human profiles capture and prime the complete native loadout quartet",
+        test_human_profiles_capture_and_prime_the_complete_native_loadout_quartet,
+    ),
+    (
+        "Create discipline actions use stock raw indices",
+        test_create_discipline_actions_use_stock_raw_indices,
     ),
     (
         "remote progression hydrates authoritative ranks after native no-op",

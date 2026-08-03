@@ -19,6 +19,134 @@ from static_multiplayer_contract_support import (
     read_source_units,
 )
 
+
+def test_human_profiles_capture_and_prime_the_complete_native_loadout_quartet() -> str:
+    layout = _read("config/binary-layout.ini")
+    bindings = _read("SolomonDarkModLoader/src/gameplay_seams/size_bindings.inl")
+    capture = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_profile_loadout_capture.inl"
+    )
+    sampler = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "local_state_packet_sync.inl"
+    )
+    priming = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "standalone_materialization_selection_priming.inl"
+    )
+
+    for token in (
+        "player_progression_element_skill_row=0x82C",
+        "player_progression_discipline_skill_row=0x830",
+        "player_progression_primary_skill_row=0x86C",
+        "player_progression_secondary_skill_row=0x870",
+    ):
+        assert token in layout, f"native loadout layout lacks: {token}"
+    for token in (
+        '"player_progression_element_skill_row", kPlayerProgressionElementSkillRowOffset',
+        '"player_progression_discipline_skill_row", kPlayerProgressionDisciplineSkillRowOffset',
+        '"player_progression_primary_skill_row", kPlayerProgressionPrimarySkillRowOffset',
+        '"player_progression_secondary_skill_row", kPlayerProgressionSecondarySkillRowOffset',
+    ):
+        assert token in bindings, f"native loadout binding lacks: {token}"
+
+    _require_in_order(
+        capture,
+        "bool TryApplyLiveNativeLoadoutSelectionToProfile(",
+        "kPlayerProgressionElementSkillRowOffset",
+        "kPlayerProgressionDisciplineSkillRowOffset",
+        "kPlayerProgressionPrimarySkillRowOffset",
+        "kPlayerProgressionSecondarySkillRowOffset",
+        "TryResolveSemanticElementFromNativeRoot(",
+        "TryResolveSemanticDisciplineFromNativeRoot(",
+        "updated.appearance.choice_ids = {",
+        "element_skill_row,",
+        "discipline_skill_row,",
+        "primary_skill_row,",
+        "secondary_skill_row,",
+        "updated.element_id = element_id;",
+        "updated.discipline_id = discipline_id;",
+    )
+    _require_in_order(
+        sampler,
+        "TryApplyLiveNativeLoadoutSelectionToProfile(",
+        "player_state.progression_address,",
+        "&local->character_profile)",
+        "TryApplyLivePrimarySelectionToProfile(",
+    )
+    _require_in_order(
+        priming,
+        "const bool has_native_loadout_choice_ids =",
+        "choice_ids[0] >= 0 && choice_ids[1] >= 0 &&",
+        "choice_ids[2] >= 0 && choice_ids[3] >= 0;",
+        "NativeSkillRowForDiscipline(character_profile.discipline_id)",
+        "choice_ids[1] != discipline_skill_row",
+        "kPlayerProgressionElementSkillRowOffset,",
+        "choice_ids[0]",
+        "kPlayerProgressionPrimarySkillRowOffset,",
+        "choice_ids[2]",
+        "kPlayerProgressionSecondarySkillRowOffset,",
+        "choice_ids[3]",
+    )
+    _require_in_order(
+        priming,
+        "CharacterDisciplineId::Mind:",
+        "return 6;",
+        "CharacterDisciplineId::Body:",
+        "return 5;",
+        "CharacterDisciplineId::Arcane:",
+        "return 7;",
+    )
+
+    return (
+        "human profiles capture all four stock progression loadout choices, "
+        "replicate semantic discipline, and prime the same quartet for peers "
+        "without changing bot discipline mapping"
+    )
+
+
+def test_create_discipline_actions_use_stock_raw_indices() -> str:
+    layout = _read("config/binary-layout.ini")
+
+    def section(name: str) -> str:
+        marker = f"[action.create.select_discipline_{name}]"
+        start = layout.index(marker)
+        end = layout.find("\n[", start + len(marker))
+        return layout[start : end if end >= 0 else len(layout)]
+
+    expected = {"mind": 2, "body": 1, "arcane": 0}
+    for name, raw_index in expected.items():
+        assert f"point_index=0x{raw_index:08X}" in section(name), (
+            f"Create action {name} does not target stock raw point {raw_index}"
+        )
+
+    python_maps = (
+        "tools/verify_local_multiplayer_sync.py",
+        "tools/verify_loadout_lifecycle.py",
+        "tools/verify_game_over_session_semantics.py",
+        "tools/verify_remote_latency_wave5.py",
+    )
+    for path in python_maps:
+        source = _read(path)
+        for name, raw_index in expected.items():
+            assert f'"{name}": {raw_index}' in source, (
+                f"{path} does not use stock raw discipline point {raw_index} "
+                f"for {name}"
+            )
+
+    launcher = _read("scripts/Launch-LocalMultiplayerPair.ps1")
+    for name, raw_index in expected.items():
+        assert re.search(
+            rf"(?m)^\s*{name}\s*=\s*{raw_index}\s*$", launcher
+        ), f"pair launcher does not use stock raw discipline point {raw_index} for {name}"
+
+    return (
+        "Create automation keeps raw point indices Arcane 0, Body 1, Mind 2 "
+        "separate from the semantic multiplayer enum"
+    )
+
+
 def test_spell_verifiers_quiesce_input_and_prearm_manual_spawning() -> str:
     level_up_verifier = _read("tools/verify_multiplayer_level_up_offer_sync.py")
     _require_in_order(
