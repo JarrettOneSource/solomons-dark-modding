@@ -380,7 +380,6 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         ),
     )
     for screen_owner in (
-        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl",
         "SolomonDarkModLoader/src/lua_developer_console.cpp",
     ):
         source = _read(screen_owner)
@@ -389,6 +388,34 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
             source,
             ("BeginLuaDrawFrame(", "CommitLuaDrawFrame("),
         )
+
+    # The Boneyard picker is the one loader screen surface that renders
+    # natively (owner direction: in-game art and fonts). It must ride the
+    # HUD render dispatch pass with stock text/quad primitives and must not
+    # own a Lua-draw overlay frame.
+    picker_frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
+    hud_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "gameplay_hud_hooks.inl"
+    )
+    picker_public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
+    _require(
+        "native-pass Boneyard picker",
+        picker_frontend + picker_public + hud_hooks,
+        (
+            "DrawNativeWorldIndicatorExactText(",
+            "DrawNativeScreenQuad(",
+            "RenderBoneyardPickerNativeFrame();",
+            "render_frame_pending.exchange(",
+        ),
+    )
+    for banished in ("BeginLuaDrawFrame(", "CommitLuaDrawFrame("):
+        if banished in picker_frontend:
+            raise AssertionError(
+                "Boneyard picker regressed to the overlay path: " + banished
+            )
 
     _require(
         "fail-closed renderer lifecycle",

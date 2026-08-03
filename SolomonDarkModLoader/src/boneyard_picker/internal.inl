@@ -1,4 +1,5 @@
-constexpr char kPickerDrawOwner[] = "__loader.boneyard_picker";
+// The picker draws through the native HUD render pass (stock ExactText font
+// plus stock untextured quads); it no longer owns a Lua-draw overlay frame.
 constexpr std::size_t kVisibleBoneyardRows = 12;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
@@ -21,6 +22,9 @@ struct BoneyardPickerState {
     bool initialized = false;
     bool picker_open = false;
     bool native_launch_dispatched = false;
+    // Set by the game-thread pump each tick; consumed by the first HUD
+    // render-dispatch case of the frame so the picker draws exactly once.
+    std::atomic<bool> render_frame_pending{false};
     std::shared_ptr<const BoneyardPickerCatalog> catalog;
     std::unordered_map<std::string, std::size_t> entry_by_digest;
     BoneyardPickerPhase phase = BoneyardPickerPhase::Closed;
@@ -309,49 +313,6 @@ void __fastcall HookMapPickerStart(
             &ignored_error)) {
         original(courtyard);
     }
-}
-
-LuaDrawCommand MakeRectangle(
-    LuaDrawCommandKind kind,
-    float x,
-    float y,
-    float width,
-    float height,
-    LuaDrawColor color,
-    float thickness = 1.0f) {
-    LuaDrawCommand command;
-    command.kind = kind;
-    command.x = x;
-    command.y = y;
-    command.width = width;
-    command.height = height;
-    command.color = color;
-    command.thickness = thickness;
-    return command;
-}
-
-LuaDrawCommand MakeText(
-    float x,
-    float y,
-    std::string text,
-    LuaDrawColor color,
-    float scale = 0.8f) {
-    LuaDrawCommand command;
-    command.kind = LuaDrawCommandKind::Text;
-    command.x = x;
-    command.y = y;
-    command.text = std::move(text);
-    command.color = color;
-    command.scale = scale;
-    return command;
-}
-
-void SubmitPickerDrawCommand(LuaDrawCommand command) {
-    std::string ignored_error;
-    (void)SubmitLuaDrawCommand(
-        kPickerDrawOwner,
-        std::move(command),
-        &ignored_error);
 }
 
 void MovePickerCursor(int delta) {

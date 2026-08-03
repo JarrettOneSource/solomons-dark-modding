@@ -26,6 +26,14 @@ bool DrawNativeWorldIndicatorHealthBar(
     float top,
     float width,
     float health_ratio);
+// Screen-space tinted quad through the stock untextured-quad primitive.
+// Safe from any native render pass; fails closed before renderer init.
+bool DrawNativeScreenQuad(
+    float left,
+    float top,
+    float width,
+    float height,
+    const NativeWorldIndicatorColor& color);
 void RenderGameplayWorldIndicatorsInNativePass();
 
 void QueueNativeWorldDampenPresentation(

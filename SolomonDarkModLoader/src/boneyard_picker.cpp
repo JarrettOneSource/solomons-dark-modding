@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "lua_draw_runtime.h"
 #include "memory_access.h"
+#include "native_world_render.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
 #include "multiplayer_runtime_state.h"

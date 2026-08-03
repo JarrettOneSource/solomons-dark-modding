@@ -15,12 +15,16 @@ It covers:
 - remote-player actor-attached names and health bars; and
 - Lua world-target markers.
 
-It does not move screen UI. `sd.draw` and its exact `sd.hud` alias remain the
-screen-pixel display-list API used by the top-left ally rows, the Boneyard
-picker, `BOT PLAYING`, developer UI, and loading-screen presentation. Their
-command types, coordinates, render state, batching, and multiplayer-local
-behavior are unchanged. Actor-attached labels are not HUD rows: they move to a
-separate stock-matched native indicator lane.
+It does not move mod-facing screen UI. `sd.draw` and its exact `sd.hud` alias
+remain the screen-pixel display-list API used by the top-left ally rows,
+`BOT PLAYING`, developer UI, and loading-screen presentation. Their command
+types, coordinates, render state, batching, and multiplayer-local behavior
+are unchanged. Actor-attached labels are not HUD rows: they move to a
+separate stock-matched native indicator lane. The Boneyard picker is the one
+loader-owned screen surface that renders natively instead (owner direction:
+existing in-game art and fonts): it draws stock ExactText and stock
+untextured quads from the gameplay HUD render dispatch pass, gated to one
+draw per game-thread pump tick, and never owns a Lua-draw overlay frame.
 
 ## Goals
 

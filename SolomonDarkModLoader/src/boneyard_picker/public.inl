@@ -161,7 +161,6 @@ bool InitializeBoneyardPicker(
 
 void ShutdownBoneyardPicker() {
     RemoveX86Hook(&g_picker.start_hook);
-    ClearLuaDrawFrameForMod(kPickerDrawOwner);
     std::scoped_lock lock(g_picker.mutex);
     g_picker.initialized = false;
     g_picker.picker_open = false;
@@ -302,6 +301,14 @@ void PumpBoneyardPickerOnGameThread() {
         }
     }
 
+    g_picker.render_frame_pending.store(true, std::memory_order_release);
+}
+
+void RenderBoneyardPickerNativeFrame() {
+    if (!g_picker.render_frame_pending.exchange(
+            false, std::memory_order_acq_rel)) {
+        return;
+    }
     RenderBoneyardPickerUi(GetBoneyardPickerSnapshot());
 }
 
