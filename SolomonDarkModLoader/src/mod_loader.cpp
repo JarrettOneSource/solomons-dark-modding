@@ -43,6 +43,17 @@
 #include <sstream>
 #include <string>
 
+#if defined(NDEBUG)
+#define SDMOD_BUILD_FLAVOR "Release"
+#else
+#define SDMOD_BUILD_FLAVOR "Debug"
+#endif
+
+extern "C" __declspec(dllexport) const char* __cdecl
+SolomonDarkModLoaderBuildFlavor() noexcept {
+    return "SDMOD_BUILD_FLAVOR=" SDMOD_BUILD_FLAVOR;
+}
+
 namespace sdmod {
 namespace {
 

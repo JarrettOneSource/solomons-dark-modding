@@ -33,6 +33,12 @@ $bootstrapModId = "sample.lua.dark_cloud_sort_bootstrap"
 $botsModId = "sample.lua.bots"
 $sandboxPresetEnvVar = "SDMOD_UI_SANDBOX_PRESET"
 $botSetEnvVar = "SDMOD_LUA_BOTS_ACTIVE"
+$stagedReleaseLoaderAssertion =
+    Join-Path $PSScriptRoot "Assert-StagedReleaseLoader.ps1"
+if (-not (Test-Path -LiteralPath $stagedReleaseLoaderAssertion -PathType Leaf)) {
+    throw "Staged Release-loader assertion was not found: $stagedReleaseLoaderAssertion"
+}
+. $stagedReleaseLoaderAssertion
 
 function Assert-LastExitCode {
     param([string]$Step)
@@ -678,6 +684,9 @@ if ($ScreenshotPath -and -not (Test-Path -LiteralPath $captureScript)) {
     throw "Capture script not found: $captureScript"
 }
 
+Assert-StagedReleaseLoader `
+    -Path (Join-Path (Split-Path -Parent $launcher) "SolomonDarkModLoader.dll") |
+    Out-Null
 Stop-SolomonDarkProcess
 
 if (Test-Path -LiteralPath $loaderLog) {

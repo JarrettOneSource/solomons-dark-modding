@@ -186,6 +186,9 @@ if (-not (Test-Path $stageDebugUiConfig)) {
 }
 
 if ($LaunchAndVerifyLoader) {
+    Assert-StagedReleaseLoader `
+        -Path (Join-Path $launcherDirectory "SolomonDarkModLoader.dll") |
+        Out-Null
     $gameProcessId = 0
     try {
         $launchArguments = @(

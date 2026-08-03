@@ -57,6 +57,9 @@ if (-not (Test-Path $launcherProcessHelpers)) {
 }
 
 . $launcherProcessHelpers
+Assert-StagedReleaseLoader `
+    -Path (Join-Path $launcherDir "SolomonDarkModLoader.dll") |
+    Out-Null
 
 $runtimeRootOverride = Resolve-MultiplayerRuntimeRootOverride `
     -RootPath $root `

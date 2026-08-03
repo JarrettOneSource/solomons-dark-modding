@@ -211,3 +211,14 @@ does eventually disappear, the wait used the correct snapshot key, and no
 runtime behavior was changed. Future acceptance runs should explicitly restage
 Release after a default workspace verification and treat Debug retirement as a
 longer diagnostic observation rather than a ten-second assertion.
+
+## Addendum: Release-loader acceptance guard
+
+The loader now embeds and logs an explicit `SDMOD_BUILD_FLAVOR=Debug` or
+`SDMOD_BUILD_FLAVOR=Release` stamp. `scripts/Assert-StagedReleaseLoader.ps1`
+reads that stamp from the DLL beside the launcher and fails closed unless it is
+exactly `Release`. All local PowerShell, UI-driven real-flow, and WSL Steam
+acceptance launch paths invoke the same assertion before starting the game.
+They refuse a Debug, unstamped, invalid, or ambiguous loader and direct the
+operator to `Build-All.ps1 -Configuration Release`; they do not silently
+restage artifacts.

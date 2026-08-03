@@ -30,6 +30,9 @@ $procdumpPath = Join-Path $root "tools/procdump/procdump.exe"
 $presetPath = Join-Path $root "mods/lua_ui_sandbox_lab/config/active_preset.txt"
 
 . $launcherProcessHelper
+Assert-StagedReleaseLoader `
+    -Path (Join-Path (Split-Path -Parent $launcher) "SolomonDarkModLoader.dll") |
+    Out-Null
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $artifactRoot = Join-Path $root "runtime/crash-tests/$timestamp"

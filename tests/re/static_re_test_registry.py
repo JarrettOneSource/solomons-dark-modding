@@ -400,6 +400,11 @@ from static_re_audio_disable_contracts import (
     test_launch_audio_disable_is_engine_level_and_player_opt_in,
     test_stock_audio_bootstrap_and_settings_are_layout_backed,
 )
+from static_staged_release_loader_contracts import (
+    test_live_acceptance_launchers_require_release_loader,
+    test_native_loader_build_flavor_stamp_is_explicit_and_logged,
+    test_staged_release_loader_assertion_is_fail_closed,
+)
 from static_re_runtime_platform_contracts import (
     test_client_run_switch_requires_fresh_authenticated_host_intent,
     test_launcher_tutorial_bypass_is_standalone_and_default_on,
@@ -1484,6 +1489,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "automation launch surfaces default to disabled audio",
         test_automation_launch_surfaces_default_to_disabled_audio,
+    ),
+    (
+        "native loader build flavor is explicit and logged",
+        test_native_loader_build_flavor_stamp_is_explicit_and_logged,
+    ),
+    (
+        "staged Release-loader assertion is fail-closed",
+        test_staged_release_loader_assertion_is_fail_closed,
+    ),
+    (
+        "live-acceptance launchers require a Release loader",
+        test_live_acceptance_launchers_require_release_loader,
     ),
     ("binary layout identity is staged", test_binary_layout_matches_staged_layout_identity),
     (

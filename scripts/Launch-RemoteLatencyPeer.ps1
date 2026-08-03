@@ -44,6 +44,9 @@ if (-not (Test-Path -LiteralPath $processHelpers -PathType Leaf)) {
 . $processHelpers
 
 $launcher = (Get-Item -LiteralPath $LauncherPath -ErrorAction Stop).FullName
+Assert-StagedReleaseLoader `
+    -Path (Join-Path (Split-Path -Parent $launcher) "SolomonDarkModLoader.dll") |
+    Out-Null
 $game = (Get-Item -LiteralPath $GameDirectory -ErrorAction Stop).FullName
 $runtime = [System.IO.Path]::GetFullPath($RuntimeRoot)
 $settingsSource = (

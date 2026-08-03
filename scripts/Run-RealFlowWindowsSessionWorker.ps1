@@ -10,6 +10,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+$stagedReleaseLoaderAssertion =
+    Join-Path $PSScriptRoot "Assert-StagedReleaseLoader.ps1"
+if (-not (Test-Path -LiteralPath $stagedReleaseLoaderAssertion -PathType Leaf)) {
+    throw "Staged Release-loader assertion was not found: $stagedReleaseLoaderAssertion"
+}
+. $stagedReleaseLoaderAssertion
 
 function ConvertTo-Array {
     param([AllowNull()][object]$Value)
@@ -321,6 +327,9 @@ function Start-Client {
             Where-Object { -not $_.Offscreen -and $_.Name } |
             ForEach-Object Name
     )
+    Assert-StagedReleaseLoader `
+        -Path (Join-Path $Request.LauncherRoot "launcher\SolomonDarkModLoader.dll") |
+        Out-Null
     Invoke-UiButton -ProcessId $launcher.Id -Name "Launch Game"
 
     $deadline = [DateTime]::UtcNow.AddSeconds([int]$Request.TimeoutSeconds)

@@ -12,6 +12,9 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "LocalMultiplayerLauncher.Process.ps1")
 
 $launcher = Join-Path $root "dist\launcher\SolomonDarkModLauncher.exe"
+Assert-StagedReleaseLoader `
+    -Path (Join-Path (Split-Path -Parent $launcher) "SolomonDarkModLoader.dll") |
+    Out-Null
 $runtimeRoot = Join-Path $EvidenceRoot "launcher\runtime"
 $hostModsRoot = Join-Path $EvidenceRoot "launcher\host-mods"
 $clientModsRoot = Join-Path $EvidenceRoot "launcher\client-mods"

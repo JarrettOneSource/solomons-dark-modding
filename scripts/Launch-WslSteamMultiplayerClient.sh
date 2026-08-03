@@ -40,6 +40,12 @@ pgrep -f "$steam_root/ubuntu12_32/steam" >/dev/null ||
     fail "Release loader not found; run scripts/Build-All.ps1 -Configuration Release first"
 [[ -f "$steam_api" ]] || fail "x86 steam_api.dll not found: $steam_api"
 
+release_assertion_win="$(wslpath -w "$root/scripts/Assert-StagedReleaseLoader.ps1")"
+loader_win="$(wslpath -w "$loader")"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+    -File "$release_assertion_win" \
+    -LoaderPath "$loader_win" >/dev/null
+
 test_environment=()
 if [[ -n "$test_boneyard_override" ]]; then
     [[ -f "$test_boneyard_override" ]] ||

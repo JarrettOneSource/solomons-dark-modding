@@ -1,3 +1,10 @@
+$stagedReleaseLoaderAssertion =
+    Join-Path $PSScriptRoot "Assert-StagedReleaseLoader.ps1"
+if (-not (Test-Path -LiteralPath $stagedReleaseLoaderAssertion -PathType Leaf)) {
+    throw "Staged Release-loader assertion was not found: $stagedReleaseLoaderAssertion"
+}
+. $stagedReleaseLoaderAssertion
+
 function ConvertTo-MultiplayerProcessArgument {
     param([string]$Value)
 
@@ -200,6 +207,13 @@ function Invoke-LauncherWithEnvironment {
         [string[]]$Arguments,
         [int]$TimeoutSeconds = 60
     )
+
+    if ($Arguments -contains "launch") {
+        $loaderPath = Join-Path (
+            Split-Path -Parent ([System.IO.Path]::GetFullPath($LauncherPath))
+        ) "SolomonDarkModLoader.dll"
+        Assert-StagedReleaseLoader -Path $loaderPath | Out-Null
+    }
 
     $previous = @{}
     $stdoutPath = [System.IO.Path]::GetTempFileName()
