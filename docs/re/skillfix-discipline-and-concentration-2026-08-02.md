@@ -151,3 +151,63 @@ or the Mind Chug timer.
 No Deflect or Creativity gameplay behavior was changed. Both game PIDs were
 stopped only after their staged executable paths matched, and no `skf` process
 or listener on either assigned port remained.
+
+## Addendum: bot-retirement timeout disposition
+
+The original post-implementation run reported `botRegression.clientRemoval`
+as unobserved after ten seconds. That result did not mean that the remote bot
+remained registered indefinitely, and it was not caused by polling the wrong
+snapshot field. The wait called `sd.bots.get_participant_state(bot_id)` and
+tested its `available` field. That API returns `nil` when
+`ReadParticipantSnapshot` cannot find the participant; while a participant is
+present, `FillBotSnapshot` sets `available = true`. A received
+`ParticipantStateFlagRetired` packet calls
+`ResetRemoteParticipantSessionEpoch`, which erases the participant from the
+runtime registry. The polled key is therefore the direct public view of the
+registry entry that retirement removes.
+
+A short two-cycle probe repeated the add/remove operation at each relevant
+revision. One cycle sampled the client continuously through the original
+ten-second window and then continued until the transition; the other left the
+client idle for three seconds before sparse sampling. The first observed absent
+times were:
+
+| Source revision | Loader build | Dense cycle | Idle cycle |
+| --- | --- | ---: | ---: |
+| `1497bf5` baseline | Release | 0.373 s | 3.355 s |
+| `15f70cc` immediately before the loadout fix | Release | 0.328 s | 3.335 s |
+| `f64c968` loadout fix | Release | 0.330 s | 3.336 s |
+| `5363bd7` landed result | Release | 0.338 s | 3.344 s |
+| `1497bf5` baseline | Debug | 15.378 s | 10.514 s |
+| `5363bd7` landed result | Debug | 20.075 s | 12.876 s |
+
+The idle-cycle figure includes the initial three-second no-query interval. In
+both Debug runs the dense cycle still showed `participant_available=true`,
+`participant_materialized=true`, `bot_available=true`, and `bot_count=1` at
+ten seconds. Continuing the same probe then showed all three availability
+views false and `bot_count=0`. The client retirement log independently records
+the same transition. Baseline Debug host retirement at `22:53:36.277` reached
+the client at `22:53:51.273`; the second cycle took 10.046 seconds. Landed Debug
+took 18.907 and 13.385 seconds. Release host-to-client retirement log deltas
+were 31--62 milliseconds across baseline, the pre-fix revision, the exact fix
+commit, the refactor, and the landed result.
+
+The build-mode difference explains why the original final run alone exposed
+the timeout. `Verify-Workspace.ps1` defaults to Debug and invokes
+`Build-All.ps1`, which replaces the loader beside the launcher in
+`dist/launcher`. The campaign ran the Release build gate before the default
+workspace verification, so its subsequent live harness injected the restaged
+Debug loader. During the two Debug reproductions the client logged 92 and 120
+app-thread gameplay tick gaps, commonly 400--900 ms, while each Release client
+logged one. The retirement packet is reliable and repeatedly sent, but its
+receipt and registry cleanup share that heavily delayed app-thread transport
+service path. Dense live polling adds further Debug load. Ten seconds is not a
+valid deadline for that diagnostic configuration.
+
+Classification: **pre-existing harness-timeout artifact**. Baseline `1497bf5`
+reproduces it under the identical Debug probe, while the exact `f64c968`
+Release result is indistinguishable from its pre-fix Release parent. The bot
+does eventually disappear, the wait used the correct snapshot key, and no
+runtime behavior was changed. Future acceptance runs should explicitly restage
+Release after a default workspace verification and treat Debug retirement as a
+longer diagnostic observation rather than a ten-second assertion.
