@@ -580,7 +580,7 @@ def test_steam_friend_multiplayer_contract_is_wired() -> str:
         (steam_materializer_text, "reader.PEHeaders.CoffHeader.Machine == Machine.I386"),
         (startup_status_text, 'L"multiplayer-session-status.json"'),
         (startup_status_text, '"  \\"inviteSent\\": "'),
-        (session_text, "WriteMultiplayerSessionStatus("),
+        (session_text, "QueueMultiplayerSessionStatus("),
         (session_text, "g_session.overlay_enabled = SteamIsOverlayEnabled()"),
         (session_monitor_text, "WaitForHostReady("),
         (session_monitor_text, "WaitForConnectedJoin("),

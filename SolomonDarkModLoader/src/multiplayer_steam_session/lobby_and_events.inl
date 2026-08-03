@@ -475,9 +475,9 @@ void PublishSessionRuntime(std::uint64_t now_ms) {
         snapshot.members = members;
         snapshot.status_text = status_text;
         snapshot.error_text = g_session.error_text;
-        WriteMultiplayerSessionStatus(
+        QueueMultiplayerSessionStatus(
             GetStageRuntimeDirectory(),
-            snapshot);
+            std::move(snapshot));
         g_session.last_status_signature = status_signature;
         g_session.last_status_write_ms = now_ms;
     }

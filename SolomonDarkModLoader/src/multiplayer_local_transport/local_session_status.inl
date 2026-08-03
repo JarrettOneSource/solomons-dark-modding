@@ -194,9 +194,9 @@ void PublishLocalSessionStatus(
             g_local_transport.peers.size());
     snapshot.members = std::move(members);
     snapshot.status_text = status_text;
-    WriteMultiplayerSessionStatus(
+    QueueMultiplayerSessionStatus(
         GetStageRuntimeDirectory(),
-        snapshot);
+        std::move(snapshot));
     g_local_transport.last_session_status_signature =
         current_signature;
     g_local_transport.last_session_status_write_ms = now_ms;

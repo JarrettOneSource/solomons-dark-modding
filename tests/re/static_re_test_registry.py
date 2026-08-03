@@ -337,6 +337,7 @@ from static_re_transport_core_contracts import (
     test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
     test_misc_ground_items_replicate_without_recipe_identity,
     test_local_multiplayer_udp_transport_is_wired,
+    test_session_status_io_is_coalesced_off_the_game_thread,
     test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
     test_solo_death_bypasses_spectator_and_dispatches_stock_game_over,
@@ -1381,6 +1382,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_live_gate_is_isolated_and_reads_exact_actor_state,
     ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
+    (
+        "session status IO is coalesced off the game thread",
+        test_session_status_io_is_coalesced_off_the_game_thread,
+    ),
     (
         "world snapshots are complete MTU-sized generations",
         test_world_snapshots_are_complete_mtu_sized_generations,

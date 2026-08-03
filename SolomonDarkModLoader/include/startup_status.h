@@ -77,8 +77,11 @@ std::filesystem::path GetMultiplayerSessionStatusPath(
     const std::filesystem::path& stage_runtime_directory);
 void ResetMultiplayerSessionStatus(
     const std::filesystem::path& stage_runtime_directory);
-void WriteMultiplayerSessionStatus(
+bool QueueMultiplayerSessionStatus(
     const std::filesystem::path& stage_runtime_directory,
-    const MultiplayerSessionStatusSnapshot& snapshot);
+    MultiplayerSessionStatusSnapshot snapshot);
+bool FlushMultiplayerSessionStatusWriter(
+    std::uint32_t timeout_milliseconds);
+void ShutdownMultiplayerSessionStatusWriter();
 
 }  // namespace sdmod

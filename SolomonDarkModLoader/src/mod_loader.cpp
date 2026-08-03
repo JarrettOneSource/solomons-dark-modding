@@ -171,6 +171,7 @@ void ShutdownPartialRuntime() {
     multiplayer::ShutdownBotRuntime();
     multiplayer::ShutdownFoundation();
     ShutdownSteamBootstrap();
+    ShutdownMultiplayerSessionStatusWriter();
     ShutdownLuaEngine();
     ShutdownLuaCameraRuntime();
     ShutdownDebugUiOverlayConfig();
@@ -229,6 +230,9 @@ void Shutdown() {
     RunShutdownStep("bot runtime", &multiplayer::ShutdownBotRuntime);
     RunShutdownStep("multiplayer foundation", &multiplayer::ShutdownFoundation);
     RunShutdownStep("steam bootstrap", &ShutdownSteamBootstrap);
+    RunShutdownStep(
+        "multiplayer session status writer",
+        &ShutdownMultiplayerSessionStatusWriter);
     RunShutdownStep("lua engine", &ShutdownLuaEngine);
     RunShutdownStep("lua camera runtime", &ShutdownLuaCameraRuntime);
     RunShutdownStep("debug ui overlay config", &ShutdownDebugUiOverlayConfig);

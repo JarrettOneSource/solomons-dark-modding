@@ -118,6 +118,94 @@ def test_async_logger_keeps_blocking_output_off_callers() -> str:
     )
 
 
+def test_session_status_io_is_coalesced_off_the_game_thread() -> str:
+    """Status heartbeats queue one latest snapshot for an owned writer."""
+
+    status_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/startup_status.cpp"
+    )
+    status_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/startup_status.h"
+    )
+    local_publisher = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/local_session_status.inl"
+    )
+    steam_publisher = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_steam_session/lobby_and_events.inl"
+    )
+    loader = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader.cpp"
+    )
+
+    queue_start = status_text.index(
+        "bool QueueMultiplayerSessionStatus("
+    )
+    queue_end = status_text.index(
+        "bool FlushMultiplayerSessionStatusWriter(",
+        queue_start,
+    )
+    queue_body = status_text[queue_start:queue_end]
+    writer_start = status_text.index(
+        "unsigned __stdcall MultiplayerSessionStatusWriterMain("
+    )
+    writer_end = status_text.index(
+        "bool StartMultiplayerSessionStatusWriterLocked()",
+        writer_start,
+    )
+    writer_body = status_text[writer_start:writer_end]
+
+    for publisher in (local_publisher, steam_publisher):
+        assert "QueueMultiplayerSessionStatus(" in publisher
+        assert "WriteMultiplayerSessionStatus(" not in publisher
+    for token in (
+        "std::optional<MultiplayerSessionStatusWriteRequest>",
+        "g_pending_multiplayer_status_write = std::move(request);",
+        "++g_multiplayer_status_submitted_sequence",
+        "_beginthreadex(",
+        "WriteMultiplayerSessionStatusFile(",
+        "g_multiplayer_status_writer_drained.notify_all();",
+    ):
+        assert token in status_text, (
+            f"coalesced session-status writer lacks: {token}"
+        )
+    assert "WriteMultiplayerSessionStatusFile(" in writer_body
+    for blocking_token in (
+        "std::ofstream",
+        "std::filesystem::create_directories",
+        "WriteMultiplayerSessionStatusFile(",
+    ):
+        assert blocking_token not in queue_body, (
+            "game-thread status queue still performs blocking work: "
+            + blocking_token
+        )
+    assert "std::deque<MultiplayerSessionStatusWriteRequest>" not in status_text
+    assert "TerminateThread(" not in status_text
+    assert ".detach()" not in status_text
+    for token in (
+        "bool QueueMultiplayerSessionStatus(",
+        "bool FlushMultiplayerSessionStatusWriter(",
+        "void ShutdownMultiplayerSessionStatusWriter();",
+    ):
+        assert token in status_header, (
+            f"session-status writer interface lacks: {token}"
+        )
+    for token in (
+        "std::chrono::milliseconds(timeout_milliseconds)",
+        "FlushMultiplayerSessionStatusWriter(2000)",
+        '"multiplayer session status writer"',
+    ):
+        assert token in status_text + loader, (
+            f"bounded session-status shutdown lacks: {token}"
+        )
+
+    return (
+        "session-status heartbeats coalesce into one latest snapshot, only "
+        "the owned writer touches disk, and shutdown performs a bounded flush"
+    )
+
+
 def test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode() -> str:
     """A connected death stays in-run and becomes spectatable after 5 seconds."""
 

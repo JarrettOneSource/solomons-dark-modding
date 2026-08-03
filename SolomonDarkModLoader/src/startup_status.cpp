@@ -3,9 +3,17 @@
 #include "logger.h"
 
 #include <Windows.h>
+#include <process.h>
 
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <exception>
 #include <fstream>
+#include <mutex>
+#include <optional>
 #include <sstream>
+#include <utility>
 
 namespace sdmod {
 namespace {
@@ -61,6 +69,98 @@ std::string MakeUtcTimestamp() {
            << std::setw(2) << utc_now.wSecond << '.'
            << std::setw(3) << utc_now.wMilliseconds << 'Z';
     return stream.str();
+}
+
+struct MultiplayerSessionStatusWriteRequest {
+    std::filesystem::path stage_runtime_directory;
+    sdmod::MultiplayerSessionStatusSnapshot snapshot;
+    std::uint64_t sequence = 0;
+};
+
+std::mutex g_multiplayer_status_writer_mutex;
+std::condition_variable g_multiplayer_status_writer_changed;
+std::condition_variable g_multiplayer_status_writer_drained;
+std::optional<MultiplayerSessionStatusWriteRequest>
+    g_pending_multiplayer_status_write;
+std::uint64_t g_multiplayer_status_submitted_sequence = 0;
+std::uint64_t g_multiplayer_status_completed_sequence = 0;
+bool g_multiplayer_status_writer_running = false;
+bool g_multiplayer_status_writer_stopping = false;
+HANDLE g_multiplayer_status_writer_thread = nullptr;
+
+void WriteMultiplayerSessionStatusFile(
+    const std::filesystem::path& stage_runtime_directory,
+    const sdmod::MultiplayerSessionStatusSnapshot& snapshot);
+
+unsigned __stdcall MultiplayerSessionStatusWriterMain(void*) {
+    for (;;) {
+        std::optional<MultiplayerSessionStatusWriteRequest> request;
+        {
+            std::unique_lock<std::mutex> lock(
+                g_multiplayer_status_writer_mutex);
+            g_multiplayer_status_writer_changed.wait(
+                lock,
+                []() {
+                    return g_multiplayer_status_writer_stopping ||
+                           g_pending_multiplayer_status_write.has_value();
+                });
+            if (g_pending_multiplayer_status_write.has_value()) {
+                request = std::move(g_pending_multiplayer_status_write);
+                g_pending_multiplayer_status_write.reset();
+            } else if (g_multiplayer_status_writer_stopping) {
+                break;
+            }
+        }
+
+        try {
+            WriteMultiplayerSessionStatusFile(
+                request->stage_runtime_directory,
+                request->snapshot);
+        } catch (const std::exception& ex) {
+            sdmod::Log(
+                "Multiplayer session status writer failed: " +
+                std::string(ex.what()));
+        } catch (...) {
+            sdmod::Log(
+                "Multiplayer session status writer failed: unknown exception.");
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(
+                g_multiplayer_status_writer_mutex);
+            g_multiplayer_status_completed_sequence =
+                (std::max)(
+                    g_multiplayer_status_completed_sequence,
+                    request->sequence);
+        }
+        g_multiplayer_status_writer_drained.notify_all();
+    }
+    return 0;
+}
+
+bool StartMultiplayerSessionStatusWriterLocked() {
+    if (g_multiplayer_status_writer_running) {
+        return true;
+    }
+
+    g_pending_multiplayer_status_write.reset();
+    g_multiplayer_status_submitted_sequence = 0;
+    g_multiplayer_status_completed_sequence = 0;
+    g_multiplayer_status_writer_stopping = false;
+    const auto writer_thread = _beginthreadex(
+        nullptr,
+        0,
+        &MultiplayerSessionStatusWriterMain,
+        nullptr,
+        0,
+        nullptr);
+    if (writer_thread == 0) {
+        return false;
+    }
+    g_multiplayer_status_writer_thread =
+        reinterpret_cast<HANDLE>(writer_thread);
+    g_multiplayer_status_writer_running = true;
+    return true;
 }
 
 }  // namespace
@@ -123,13 +223,101 @@ std::filesystem::path GetMultiplayerSessionStatusPath(
 
 void ResetMultiplayerSessionStatus(
     const std::filesystem::path& stage_runtime_directory) {
+    ShutdownMultiplayerSessionStatusWriter();
     std::error_code error;
     std::filesystem::remove(
         GetMultiplayerSessionStatusPath(stage_runtime_directory),
         error);
+    std::lock_guard<std::mutex> lock(
+        g_multiplayer_status_writer_mutex);
+    if (!StartMultiplayerSessionStatusWriterLocked()) {
+        Log("Failed to start multiplayer session status writer.");
+    }
 }
 
-void WriteMultiplayerSessionStatus(
+bool QueueMultiplayerSessionStatus(
+    const std::filesystem::path& stage_runtime_directory,
+    MultiplayerSessionStatusSnapshot snapshot) {
+    std::lock_guard<std::mutex> lock(
+        g_multiplayer_status_writer_mutex);
+    if (g_multiplayer_status_writer_stopping ||
+        !StartMultiplayerSessionStatusWriterLocked()) {
+        return false;
+    }
+
+    MultiplayerSessionStatusWriteRequest request;
+    request.stage_runtime_directory = stage_runtime_directory;
+    request.snapshot = std::move(snapshot);
+    request.sequence =
+        ++g_multiplayer_status_submitted_sequence;
+    g_pending_multiplayer_status_write = std::move(request);
+    g_multiplayer_status_writer_changed.notify_one();
+    return true;
+}
+
+bool FlushMultiplayerSessionStatusWriter(
+    std::uint32_t timeout_milliseconds) {
+    std::unique_lock<std::mutex> lock(
+        g_multiplayer_status_writer_mutex);
+    if (!g_multiplayer_status_writer_running) {
+        return true;
+    }
+
+    const auto target_sequence =
+        g_multiplayer_status_submitted_sequence;
+    g_multiplayer_status_writer_changed.notify_one();
+    return g_multiplayer_status_writer_drained.wait_for(
+        lock,
+        std::chrono::milliseconds(timeout_milliseconds),
+        [target_sequence]() {
+            return g_multiplayer_status_completed_sequence >=
+                   target_sequence;
+        });
+}
+
+void ShutdownMultiplayerSessionStatusWriter() {
+    HANDLE writer_thread = nullptr;
+    std::uint64_t target_sequence = 0;
+    {
+        std::lock_guard<std::mutex> lock(
+            g_multiplayer_status_writer_mutex);
+        if (!g_multiplayer_status_writer_running) {
+            return;
+        }
+        g_multiplayer_status_writer_stopping = true;
+        target_sequence =
+            g_multiplayer_status_submitted_sequence;
+        writer_thread = g_multiplayer_status_writer_thread;
+    }
+    g_multiplayer_status_writer_changed.notify_one();
+
+    const bool flushed = FlushMultiplayerSessionStatusWriter(2000);
+    if (writer_thread != nullptr) {
+        WaitForSingleObject(writer_thread, INFINITE);
+        CloseHandle(writer_thread);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(
+            g_multiplayer_status_writer_mutex);
+        g_multiplayer_status_writer_thread = nullptr;
+        g_multiplayer_status_writer_running = false;
+        g_multiplayer_status_writer_stopping = false;
+        g_pending_multiplayer_status_write.reset();
+        g_multiplayer_status_completed_sequence =
+            (std::max)(
+                g_multiplayer_status_completed_sequence,
+                target_sequence);
+    }
+    if (!flushed) {
+        Log(
+            "Multiplayer session status writer exceeded its 2000 ms shutdown flush budget.");
+    }
+}
+
+namespace {
+
+void WriteMultiplayerSessionStatusFile(
     const std::filesystem::path& stage_runtime_directory,
     const MultiplayerSessionStatusSnapshot& snapshot) {
     const auto status_path =
@@ -214,5 +402,7 @@ void WriteMultiplayerSessionStatus(
            << EscapeJsonString(snapshot.error_text) << "\"\n";
     stream << "}\n";
 }
+
+}  // namespace
 
 }  // namespace sdmod
