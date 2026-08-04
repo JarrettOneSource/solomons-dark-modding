@@ -1113,3 +1113,16 @@ ahead of the pre-wave address snapshot. The selected attacker is stabilized
 and idled while the other peers finish joining. These are acceptance-harness
 ordering rules only; they do not change the runtime presentation clock or its
 five-second assertion.
+
+## Lua minimap center source
+
+`sd.player.get_state()` continues to describe the local corpse after death, so
+it is the correct minimap center while alive and the safe fallback when no
+spectator target exists, but not the camera center while actively spectating.
+The authoritative Lua target identity is
+`sd.runtime.get_multiplayer_state().death_spectator.target_participant_id` when
+the phase is `Spectating`. Resolve that participant through
+`sd.bots.get_participant_state(id)` for the live `x` and `y` used by the camera.
+`sd.ui.get_snapshot()` can distinguish competing surfaces such as Game Over,
+and `sd.camera.get_state()` can verify focus coordinates, but neither is the
+stable spectator-target identity source for a gameplay consumer.

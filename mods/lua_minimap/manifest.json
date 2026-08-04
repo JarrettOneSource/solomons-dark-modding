@@ -1,7 +1,7 @@
 {
   "id": "generic.lua.minimap",
   "name": "Minimap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "enabled": false,
   "runtime": {
     "apiVersion": "0.2.0",

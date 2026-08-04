@@ -1,4 +1,4 @@
--- Minimap: a local radar centered on the local player.
+-- Minimap: a local radar centered on the local player or spectated view.
 --
 -- Every dot comes from the locally materialized world (sd.world.list_actors),
 -- which replication already keeps identical on all peers, plus the public
@@ -85,13 +85,59 @@ local function dot(x, y, size, color)
   sd.draw.rect(x - size * 0.5, y - size * 0.5, size, size, {color = color})
 end
 
+local function get_spectated_center()
+  if type(sd.runtime) ~= "table" or
+      type(sd.runtime.get_multiplayer_state) ~= "function" or
+      type(sd.bots) ~= "table" or
+      type(sd.bots.get_participant_state) ~= "function" then
+    return nil
+  end
+
+  local runtime_ok, multiplayer = pcall(sd.runtime.get_multiplayer_state)
+  if not runtime_ok or type(multiplayer) ~= "table" then
+    return nil
+  end
+  local spectator = multiplayer.death_spectator
+  if type(spectator) ~= "table" or
+      spectator.active ~= true or
+      spectator.phase ~= "Spectating" then
+    return nil
+  end
+
+  local target_participant_id = spectator.target_participant_id
+  if type(target_participant_id) ~= "number" or target_participant_id <= 0 then
+    return nil
+  end
+  local target_ok, target =
+    pcall(sd.bots.get_participant_state, target_participant_id)
+  if not target_ok or type(target) ~= "table" or
+      target.available ~= true or target.entity_materialized ~= true or
+      type(target.x) ~= "number" or type(target.y) ~= "number" then
+    return nil
+  end
+  return target
+end
+
+local function get_radar_center()
+  local player = sd.player.get_state()
+  local spectated = get_spectated_center()
+  if spectated ~= nil then
+    return spectated
+  end
+  if type(player) ~= "table" or
+      type(player.x) ~= "number" or type(player.y) ~= "number" then
+    return nil
+  end
+  return player
+end
+
 sd.events.on("runtime.tick", function(event)
   local viewport = sd.draw.get_viewport()
   if viewport == nil then
     return
   end
-  local player = sd.player.get_state()
-  if type(player) ~= "table" or type(player.x) ~= "number" then
+  local center = get_radar_center()
+  if center == nil then
     return
   end
   local actors = sd.world.list_actors()
@@ -133,8 +179,8 @@ sd.events.on("runtime.tick", function(event)
     if drawn >= MAX_DOTS then
       break
     end
-    local dx = actor.x - player.x
-    local dy = actor.y - player.y
+    local dx = actor.x - center.x
+    local dy = actor.y - center.y
     local distance = math.sqrt(dx * dx + dy * dy)
     if distance > 0.5 then
       local is_player = actor.object_type_id == PLAYER_OBJECT_TYPE
@@ -191,8 +237,8 @@ sd.events.on("runtime.tick", function(event)
             (category == "gold" and shown.show_gold) or
             (category == "item" and shown.show_items)
           if visible then
-            local dx = (drop.x - player.x) * scale
-            local dy = (drop.y - player.y) * scale
+            local dx = (drop.x - center.x) * scale
+            local dy = (drop.y - center.y) * scale
             if (dx * dx + dy * dy) <= (RADAR_RADIUS_PX - 4) * (RADAR_RADIUS_PX - 4) then
               local color = COLOR_ITEM
               if category == "orb" then
@@ -213,8 +259,8 @@ sd.events.on("runtime.tick", function(event)
   if shown.show_dig then
     local ok, dig = pcall(sd.hub.get_solomon_dig_state)
     if ok and type(dig) == "table" and dig.valid then
-      local dx = (dig.x - player.x) * scale
-      local dy = (dig.y - player.y) * scale
+      local dx = (dig.x - center.x) * scale
+      local dy = (dig.y - center.y) * scale
       local map_distance = math.sqrt(dx * dx + dy * dy)
       if map_distance > RADAR_RADIUS_PX - 6 then
         local pin = (RADAR_RADIUS_PX - 7) / map_distance

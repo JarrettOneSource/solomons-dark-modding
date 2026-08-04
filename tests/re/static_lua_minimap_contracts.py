@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from static_multiplayer_contract_support import _read
+from static_multiplayer_contract_support import _read, _require_in_order
 
 
 def test_lua_minimap_is_local_live_configurable_and_semantic() -> str:
@@ -13,7 +13,6 @@ def test_lua_minimap_is_local_live_configurable_and_semantic() -> str:
 
     assert manifest["id"] == "generic.lua.minimap"
     assert manifest["name"] == "Minimap"
-    assert manifest["version"] == "0.1.0"
     assert manifest["enabled"] is False
 
     runtime = manifest["runtime"]
@@ -97,6 +96,51 @@ def test_lua_minimap_is_local_live_configurable_and_semantic() -> str:
     assert "sd.settings.on_changed(function(key, new_value)" in script
     assert "local scale = RADAR_RADIUS_PX / radar_range" in script
 
+    _require_in_order(
+        script,
+        "local function get_spectated_center()",
+        'type(sd.runtime.get_multiplayer_state) ~= "function"',
+        'type(sd.bots.get_participant_state) ~= "function"',
+        "pcall(sd.runtime.get_multiplayer_state)",
+        "local spectator = multiplayer.death_spectator",
+        "spectator.active ~= true",
+        'spectator.phase ~= "Spectating"',
+        "local target_participant_id = spectator.target_participant_id",
+        "target_participant_id <= 0",
+        "pcall(sd.bots.get_participant_state, target_participant_id)",
+        "target.entity_materialized ~= true",
+        'type(target.x) ~= "number"',
+        'type(target.y) ~= "number"',
+        "return target",
+        "local function get_radar_center()",
+        "local player = sd.player.get_state()",
+        "local spectated = get_spectated_center()",
+        "if spectated ~= nil then",
+        "return spectated",
+        "return player",
+        "local center = get_radar_center()",
+    )
+    for token in (
+        "local dx = actor.x - center.x",
+        "local dy = actor.y - center.y",
+        "local dx = (drop.x - center.x) * scale",
+        "local dy = (drop.y - center.y) * scale",
+        "local dx = (dig.x - center.x) * scale",
+        "local dy = (dig.y - center.y) * scale",
+    ):
+        assert token in script, f"minimap render is not centered on the selected source: {token}"
+    for stale_center in (
+        "actor.x - player.x",
+        "actor.y - player.y",
+        "drop.x - player.x",
+        "drop.y - player.y",
+        "dig.x - player.x",
+        "dig.y - player.y",
+    ):
+        assert stale_center not in script, f"minimap still uses corpse-locked center: {stale_center}"
+
+    assert manifest["version"] == "0.2.0"
+
     assert "vtable_address" not in script
     assert "sd.net" not in script
     assert "sd.world.spawn_reward" not in script
@@ -105,5 +149,6 @@ def test_lua_minimap_is_local_live_configurable_and_semantic() -> str:
     return (
         "The Minimap package is disabled by default, owns seven local live "
         "settings, and renders semantic player, enemy, orb, replicated-loot, "
-        "and Solomon Dig state without transport or static vtable coupling"
+        "and Solomon Dig state from the local or authoritative spectated "
+        "center without transport or static vtable coupling"
     )
