@@ -13,6 +13,30 @@ void __fastcall HookGameplayHudRender(
     RenderBoneyardPickerAfterStockHud();
 }
 
+bool InstallBoneyardAuthorityHooks(
+    uintptr_t start_target,
+    uintptr_t start_affordance_render_target,
+    std::string* error_message) {
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(start_target),
+            reinterpret_cast<void*>(&HookMapPickerStart),
+            kMapPickerStartHookMinimumPatchSize,
+            &g_picker.start_hook,
+            error_message)) {
+        return false;
+    }
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(start_affordance_render_target),
+            reinterpret_cast<void*>(&HookCourtyardStartAffordanceRender),
+            kCourtyardStartAffordanceRenderHookMinimumPatchSize,
+            &g_picker.start_affordance_render_hook,
+            error_message)) {
+        RemoveX86Hook(&g_picker.start_hook);
+        return false;
+    }
+    return true;
+}
+
 BoneyardPickerSnapshot GetBoneyardPickerSnapshot() {
     std::scoped_lock lock(g_picker.mutex);
     BoneyardPickerSnapshot snapshot;
@@ -126,33 +150,33 @@ bool InitializeBoneyardPicker(
         catalog->entries.push_back(std::move(entry));
     }
 
-    if (catalog->entries.empty()) {
-        std::scoped_lock lock(g_picker.mutex);
-        if (g_picker.initialized) {
-            return true;
-        }
-        g_picker.catalog = std::move(catalog);
-        g_picker.entry_by_digest = std::move(entry_by_digest);
-        g_picker.phase = BoneyardPickerPhase::Closed;
-        g_picker.initialized = true;
-        Log("Boneyard picker provider initialized. hook=disabled entries=0");
-        return true;
-    }
-
+    const bool has_custom_entries = !catalog->entries.empty();
     if (!InitializeGameplaySeams(error_message)) {
         return false;
     }
     const auto start_target = ProcessMemory::Instance().ResolveGameAddressOrZero(
         kMapPickerStart);
-    const auto render_target = ProcessMemory::Instance().ResolveGameAddressOrZero(
-        kGameplayHudRender);
+    const auto start_affordance_render_target =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kCourtyardStartAffordanceRender);
+    const auto render_target = has_custom_entries
+        ? ProcessMemory::Instance().ResolveGameAddressOrZero(
+              kGameplayHudRender)
+        : 0;
     if (start_target == 0) {
         if (error_message != nullptr) {
             *error_message = "Unable to resolve the stock MapPicker start path.";
         }
         return false;
     }
-    if (render_target == 0) {
+    if (start_affordance_render_target == 0) {
+        if (error_message != nullptr) {
+            *error_message =
+                "Unable to resolve the Courtyard start-affordance render path.";
+        }
+        return false;
+    }
+    if (has_custom_entries && render_target == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Unable to resolve the complete gameplay HUD render path.";
@@ -164,20 +188,19 @@ bool InitializeBoneyardPicker(
     if (g_picker.initialized) {
         return true;
     }
-    if (!InstallSafeX86Hook(
-            reinterpret_cast<void*>(start_target),
-            reinterpret_cast<void*>(&HookMapPickerStart),
-            kMapPickerStartHookMinimumPatchSize,
-            &g_picker.start_hook,
+    if (!InstallBoneyardAuthorityHooks(
+            start_target,
+            start_affordance_render_target,
             error_message)) {
         return false;
     }
-    if (!InstallSafeX86Hook(
+    if (has_custom_entries && !InstallSafeX86Hook(
             reinterpret_cast<void*>(render_target),
             reinterpret_cast<void*>(&HookGameplayHudRender),
             kGameplayHudRenderHookMinimumPatchSize,
             &g_picker.render_hook,
             error_message)) {
+        RemoveX86Hook(&g_picker.start_affordance_render_hook);
         RemoveX86Hook(&g_picker.start_hook);
         return false;
     }
@@ -185,16 +208,25 @@ bool InitializeBoneyardPicker(
     g_picker.entry_by_digest = std::move(entry_by_digest);
     g_picker.phase = BoneyardPickerPhase::Closed;
     g_picker.initialized = true;
+    if (!has_custom_entries) {
+        Log(
+            "Boneyard picker provider initialized. authority_hooks=enabled "
+            "custom_hook=disabled entries=0");
+        return true;
+    }
     Log(
         "Boneyard picker provider initialized. start_hook=" +
         HexString(start_target) +
-        " render_hook=" + HexString(render_target) +
+        " start_affordance_render_hook=" +
+        HexString(start_affordance_render_target) +
+        " custom_render_hook=" + HexString(render_target) +
         " entries=" + std::to_string(g_picker.catalog->entries.size()));
     return true;
 }
 
 void ShutdownBoneyardPicker() {
     RemoveX86Hook(&g_picker.render_hook);
+    RemoveX86Hook(&g_picker.start_affordance_render_hook);
     RemoveX86Hook(&g_picker.start_hook);
     std::scoped_lock lock(g_picker.mutex);
     g_picker.initialized = false;

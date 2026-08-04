@@ -18,15 +18,7 @@ uintptr_t kPlayerActorDtor = 0;
 uintptr_t kPlayerActorVtable28 = 0;
 uintptr_t kPlayerActorPurePrimaryGate = 0;
 uintptr_t kPlayerControlBrainUpdate = 0;
-uintptr_t kGameplayHudRenderDispatch = 0;
-uintptr_t kGameplayHudRender = 0;
-uintptr_t kGameplayAllyHealthbarAppend = 0;
-uintptr_t kGameplayUiGlyphDraw = 0;
-uintptr_t kGameplayUiCenteredGlyphDraw = 0;
-uintptr_t kGameplayAllyLabelGlyphReturn = 0;
-uintptr_t kGameplayStringAssign = 0;
-uintptr_t kMapPickerStart = 0;
-uintptr_t kGameplayExactTextObjectRender = 0;
+#include "address_storage_ui.inl"
 uintptr_t kPickupNotification = 0;
 uintptr_t kPuppetManagerDeletePuppet = 0;
 uintptr_t kPointerListDeleteBatch = 0;

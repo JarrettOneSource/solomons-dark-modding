@@ -178,6 +178,10 @@ bool QueueGameplayMovementHoldFrames(
         }
         return false;
     }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        return true;
+    }
 
     g_gameplay_keyboard_injection.pending_movement_x.store(
         direction_x,
@@ -209,6 +213,10 @@ bool SetGameplayNativeControlAllowanceFrames(
         }
         return false;
     }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        return true;
+    }
     g_gameplay_keyboard_injection.pending_injected_keyboard_control_frames.store(
         frames,
         std::memory_order_release);
@@ -238,6 +246,10 @@ bool QueueGameplayMouseLeftHoldFrames(std::uint32_t frames, std::string* error_m
             *error_message = "Gameplay scene is not active.";
         }
         return false;
+    }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        return true;
     }
 
     const auto queued_frames =
@@ -295,6 +307,10 @@ bool QueueGameplayMouseRightHoldFrames(
             *error_message = "Gameplay scene is not active.";
         }
         return false;
+    }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        return true;
     }
 
     g_gameplay_keyboard_injection.pending_mouse_right_frames.fetch_add(
@@ -529,6 +545,10 @@ bool QueueGameplayScancodePress(std::uint32_t scancode, std::string* error_messa
             *error_message = "Scancode must be in the range 0..255.";
         }
         return false;
+    }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        return true;
     }
 
     g_gameplay_keyboard_injection.pending_scancodes[scancode].fetch_add(1, std::memory_order_acq_rel);

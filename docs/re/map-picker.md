@@ -37,8 +37,8 @@ sentinel. The picker is destroyed and no region transition is requested.
 
 | Address | Recovered role |
 | ---: | --- |
-| `0x00514A20` | Courtyard control dispatcher; recognizes the start-run control and calls `0x0050E5E0`. |
-| `0x0050DBF0` | Renders the underlying `CLICK HERE / WHEN YOU ARE / READY TO PLAY` control and changes its state while a picker exists. |
+| `0x00514A20` | Courtyard control dispatcher; recognizes the start-run control and calls `0x0050E5E0` at `0x00514AB9`. |
+| `0x0050DBF0` | Dedicated renderer for the underlying `CLICK HERE / WHEN YOU ARE / READY TO PLAY` affordance; the full HUD calls it once at `0x005D3D02`. |
 | `0x0050E5E0` | Opens a `MapPicker`, or closes the existing picker when the start control is invoked again. |
 | `0x0050C730` | `MapPicker` constructor. |
 | `0x00500980` | Creates and populates the unlocked-map entry list. |
@@ -60,7 +60,12 @@ sentinel. The picker is destroyed and no region transition is requested.
 
 The Courtyard action dispatcher at `0x00514A20` compares the activated
 control with the Gameplay control stored at `+0xE00`. The start-run case
-calls `0x0050E5E0`.
+calls `0x0050E5E0` at `0x00514AB9`. No second direct call from the dispatcher
+or control exists. The matching render path is likewise singular:
+`0x005D2520` calls `0x0050DBF0` once at `0x005D3D02` while the Courtyard is
+present. These two dedicated seams let the loader suppress both presentation
+and activation for a connected non-authority client without hiding unrelated
+Courtyard merchants or HUD layers.
 
 When Courtyard `+0x8E94` is null, `0x0050E5E0`:
 

@@ -66,5 +66,6 @@ void NotifyBoneyardGameplayStarted();
 void CompleteLoadingScreen();
 void CancelLoadingScreen();
 LoadingScreenSnapshot GetLoadingScreenSnapshot();
+bool BlockingOverlayOwnsGameplayInput();
 
 }  // namespace sdmod

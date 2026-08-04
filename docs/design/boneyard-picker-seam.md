@@ -20,9 +20,13 @@ disabled mod selectable would create a choice that the existing distribution
 path cannot deliver.
 
 Only the multiplayer authority may open the picker or publish a selection.
-Clients never choose a replacement. Solo and client start controls retain
-their existing behavior. A process with zero catalog entries does not install
-the MapPicker hook, so its start control remains the original stock code.
+Clients never choose a replacement. A connected transport client neither
+renders nor activates the Courtyard start-run control; it follows only an
+authenticated host run intent. Solo is an authority and retains the same
+stock-or-custom behavior as the host. The authority hooks remain installed
+with zero catalog entries so client suppression does not depend on custom
+content; in that case their host and solo branches call the untouched stock
+trampoline.
 
 ## Staged catalog
 
@@ -101,21 +105,27 @@ primitives after their valid lifetime.
 
 ## Stock start hijack
 
-The config-driven hook target is the recovered Courtyard start-run function at
-`0x0050E5E0`.
+The config-driven activation hook target is the recovered Courtyard start-run
+function at `0x0050E5E0`. The matching dedicated affordance renderer is
+`0x0050DBF0`.
 
 ```text
-stock start control
-  no catalog entries                         -> no loader hook installed
-  hook installed for a non-empty catalog
-    not multiplayer authority                -> trampoline immediately
-    authority                                -> Open picker provider
+Courtyard start render at 0x0050DBF0
+  connected transport client                 -> suppress
+  host or solo                               -> stock trampoline
+
+Courtyard start activation at 0x0050E5E0
+  connected transport client                 -> suppress
+  host or solo, no custom catalog entries    -> stock trampoline
+  host or solo, custom catalog present       -> open picker provider
 ```
 
-The zero-entry process never patches `0x0050E5E0`, resolves the native String
-helper, or initializes picker-only gameplay seams. The stock function therefore
-runs byte-for-byte as shipped. The hook's non-authority branch calls its
-trampoline without picker state mutation.
+Both authority hooks are installed regardless of catalog size. The optional
+full-HUD custom-picker renderer at `0x005D2520` is installed only for a nonempty
+catalog. A zero-entry host or solo process therefore runs the start renderer
+and activation byte-for-byte through their trampolines without installing the
+custom-picker HUD renderer. A connected client returns before either trampoline,
+so there is no stock-picker fallback.
 
 A second start-control activation while the loader picker is open is treated
 as `CancelBoneyardPicker()`. Cancel clears any pending custom selection and

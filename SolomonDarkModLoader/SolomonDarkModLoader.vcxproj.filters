@@ -467,6 +467,9 @@
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
+    <ClInclude Include="src\gameplay_seams\address_storage_ui.inl">
+      <Filter>Header Files\Gameplay Seams</Filter>
+    </ClInclude>
     <ClInclude Include="src\gameplay_seams\hit_feedback_storage.inl">
       <Filter>Header Files\Gameplay Seams</Filter>
     </ClInclude>
@@ -984,6 +987,9 @@
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch_restore.inl">
+      <Filter>Header Files\Gameplay\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\core\blocking_overlay_input_ownership.inl">
       <Filter>Header Files\Gameplay\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl">

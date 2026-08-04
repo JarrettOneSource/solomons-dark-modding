@@ -64,6 +64,7 @@ namespace {
 #include "mod_loader_gameplay/core/gameplay_constants.inl"
 #include "mod_loader_gameplay/core/actor_world_target_slot_state.inl"
 #include "mod_loader_gameplay/core/runtime_request_state.inl"
+#include "mod_loader_gameplay/core/blocking_overlay_input_ownership.inl"
 #include "mod_loader_gameplay/core/participant_entity_state.inl"
 #include "mod_loader_gameplay/core/participant_kind_helpers.inl"
 #include "mod_loader_gameplay/core/participant_snapshot_types.inl"

@@ -1,3 +1,61 @@
+class ScopedBlockingOverlayGameplayInput final {
+public:
+    explicit ScopedBlockingOverlayGameplayInput(
+        uintptr_t gameplay_address)
+        : gameplay_address_(gameplay_address),
+          active_(BlockingOverlayOwnsGameplayInput()) {
+        if (!active_ || gameplay_address_ == 0) {
+            return;
+        }
+
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        SuppressNativeGameplayInput();
+    }
+
+    ~ScopedBlockingOverlayGameplayInput() {
+        if (!active_) {
+            return;
+        }
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        SuppressNativeGameplayInput();
+    }
+
+    ScopedBlockingOverlayGameplayInput(
+        const ScopedBlockingOverlayGameplayInput&) = delete;
+    ScopedBlockingOverlayGameplayInput& operator=(
+        const ScopedBlockingOverlayGameplayInput&) = delete;
+
+private:
+    template <typename T>
+    void ClearField(std::size_t offset, T released) {
+        (void)ProcessMemory::Instance().TryWriteField(
+            gameplay_address_,
+            offset,
+            released);
+    }
+
+    void SuppressNativeGameplayInput() {
+        ClearField(kGameplayLocalMovementInputXOffset, 0.0f);
+        ClearField(kGameplayLocalMovementInputYOffset, 0.0f);
+        ClearField(
+            kGameplayCastIntentOffset,
+            static_cast<std::uint8_t>(0));
+        for (int index = 0; index < kGameplayInputBufferCount; ++index) {
+            const auto buffer_offset = static_cast<std::size_t>(
+                index * kGameplayInputBufferStride);
+            ClearField(
+                buffer_offset + kGameplayMouseLeftButtonOffset,
+                static_cast<std::uint8_t>(0));
+            ClearField(
+                buffer_offset + kGameplayMouseRightButtonOffset,
+                static_cast<std::uint8_t>(0));
+        }
+    }
+
+    uintptr_t gameplay_address_ = 0;
+    bool active_ = false;
+};
+
 class ScopedLocalPlayerScriptedMovementInput final {
 public:
     explicit ScopedLocalPlayerScriptedMovementInput(uintptr_t gameplay_address)

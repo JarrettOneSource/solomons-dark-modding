@@ -38,6 +38,7 @@ extern uintptr_t kPlayerActorPurePrimaryGate;
 extern uintptr_t kPlayerControlBrainUpdate;
 extern uintptr_t kGameplayHudRenderDispatch;
 extern uintptr_t kGameplayHudRender;
+extern uintptr_t kCourtyardStartAffordanceRender;
 extern uintptr_t kGameplayAllyHealthbarAppend;
 extern uintptr_t kGameplayUiGlyphDraw;
 extern uintptr_t kGameplayUiCenteredGlyphDraw;

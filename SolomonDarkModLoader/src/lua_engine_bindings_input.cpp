@@ -1,5 +1,6 @@
 #include "lua_engine_bindings_internal.h"
 
+#include "loading_screen.h"
 #include "logger.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
@@ -477,6 +478,10 @@ int LuaInputQueueLocalSpellCast(lua_State* state) {
     SDModPlayerState player_state;
     if (!TryGetPlayerState(&player_state) || !player_state.valid) {
         return luaL_error(state, "sd.input.queue_local_spell_cast requires a live player");
+    }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        lua_pushboolean(state, 1);
+        return 1;
     }
 
     multiplayer::QueueLocalSpellCastEvent(

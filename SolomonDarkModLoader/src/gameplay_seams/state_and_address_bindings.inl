@@ -49,6 +49,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "player_control_brain_update", kPlayerControlBrainUpdate),
         SDMOD_ADDR("gameplay.hooks", "gameplay_hud_render_dispatch", kGameplayHudRenderDispatch),
         SDMOD_ADDR("gameplay.hooks", "gameplay_hud_render", kGameplayHudRender),
+        SDMOD_ADDR("gameplay.hooks", "courtyard_start_affordance_render", kCourtyardStartAffordanceRender),
         SDMOD_ADDR("gameplay.hooks", "gameplay_ally_healthbar_append", kGameplayAllyHealthbarAppend),
         SDMOD_ADDR("gameplay.hooks", "gameplay_ui_glyph_draw", kGameplayUiGlyphDraw),
         SDMOD_ADDR("gameplay.hooks", "gameplay_ui_centered_glyph_draw", kGameplayUiCenteredGlyphDraw),

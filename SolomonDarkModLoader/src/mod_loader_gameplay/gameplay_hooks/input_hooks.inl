@@ -18,7 +18,13 @@ bool BoneyardPickerOwnsScancode(std::uint32_t scancode) {
 }
 
 std::uint8_t __fastcall HookGameplayKeyboardEdge(void* self, void* /*unused_edx*/, std::uint32_t scancode) {
-    if (BoneyardPickerOwnsScancode(scancode)) {
+    const bool blocking_overlay_owns_input =
+        BlockingOverlayOwnsGameplayInput();
+    if (blocking_overlay_owns_input ||
+        BoneyardPickerOwnsScancode(scancode)) {
+        if (blocking_overlay_owns_input) {
+            DiscardQueuedGameplayInputForBlockingOverlay();
+        }
         // Let the stock helper update its internal edge bookkeeping, then
         // report "no edge" so the game never reacts while the picker owns
         // the key. The picker reads these keys through GetAsyncKeyState.

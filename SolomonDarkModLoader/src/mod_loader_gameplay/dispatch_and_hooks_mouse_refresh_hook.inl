@@ -33,6 +33,45 @@ bool ClearRawGameplayMouseRight(uintptr_t input_state_address) {
     return ClearRawGameplayMouseButton(input_state_address, kMouseRightMask);
 }
 
+void SuppressGameplayMouseForBlockingOverlay(
+    uintptr_t input_state_address) {
+    if (input_state_address == 0) {
+        return;
+    }
+    (void)ClearRawGameplayMouseLeft(input_state_address);
+    (void)ClearRawGameplayMouseRight(input_state_address);
+
+    auto& memory = ProcessMemory::Instance();
+    constexpr std::uint8_t kReleased = 0;
+    for (int index = 0; index < kGameplayInputBufferCount; ++index) {
+        const auto buffer_offset = static_cast<std::size_t>(
+            index * kGameplayInputBufferStride);
+        (void)memory.TryWriteField(
+            input_state_address,
+            buffer_offset + kGameplayMouseLeftButtonOffset,
+            kReleased);
+        (void)memory.TryWriteField(
+            input_state_address,
+            buffer_offset + kGameplayMouseRightButtonOffset,
+            kReleased);
+    }
+
+    uintptr_t gameplay_address = 0;
+    if (TryResolveCurrentGameplayScene(&gameplay_address) &&
+        gameplay_address != 0) {
+        (void)memory.TryWriteField(
+            gameplay_address,
+            kGameplayCastIntentOffset,
+            kReleased);
+    }
+    g_gameplay_keyboard_injection.last_observed_mouse_left_down.store(
+        false,
+        std::memory_order_release);
+    g_gameplay_keyboard_injection.last_observed_mouse_right_down.store(
+        false,
+        std::memory_order_release);
+}
+
 bool ConsumeGameplayMouseHoldFrameForCurrentPlayerTick(
     std::atomic<std::uint32_t>& pending_frames,
     std::atomic<std::uint64_t>& last_consumed_generation) {
@@ -100,6 +139,11 @@ void __fastcall HookGameplayMouseRefresh(void* self, void* unused_edx) {
     }
 
     if (self_address == 0) {
+        return;
+    }
+    if (BlockingOverlayOwnsGameplayInput()) {
+        DiscardQueuedGameplayInputForBlockingOverlay();
+        SuppressGameplayMouseForBlockingOverlay(self_address);
         return;
     }
 

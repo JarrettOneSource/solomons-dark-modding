@@ -1056,6 +1056,8 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
 
     if (local_player_actor) {
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, false);
+        ScopedBlockingOverlayGameplayInput blocking_overlay_input(
+            gameplay_address_for_pump);
         ScopedLocalPlayerScriptedMovementInput scripted_movement_input(
             gameplay_address_for_pump);
         ScopedLocalPlayerRushMovementScale rush_movement_scale(actor_address);

@@ -22,6 +22,10 @@ from static_re_boneyard_picker_contracts import (
     test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
     test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
 )
+from static_re_ui_interaction_gate_contracts import (
+    test_blocking_overlay_owns_all_gameplay_input_without_deferral,
+    test_connected_client_courtyard_start_is_render_and_activation_suppressed,
+)
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
 )
@@ -713,12 +717,20 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_boneyard_picker_owns_its_keys_and_centers_row_text,
     ),
     (
+        "Connected client Courtyard start is render and activation suppressed",
+        test_connected_client_courtyard_start_is_render_and_activation_suppressed,
+    ),
+    (
         "Multiplayer Boneyard scenery shares the host generation boundary",
         test_multiplayer_boneyard_scenery_shares_the_host_generation_boundary,
     ),
     (
         "Loading screen uses native stage progress and shared D3D9 lifetime",
         test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
+    ),
+    (
+        "Blocking overlay owns all gameplay input without deferral",
+        test_blocking_overlay_owns_all_gameplay_input_without_deferral,
     ),
     (
         "Boneyard Tree last-writer render path is registered",

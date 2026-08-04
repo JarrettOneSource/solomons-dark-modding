@@ -194,6 +194,7 @@
     <ClInclude Include="src\gameplay_seams\address_storage.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_native_minions.inl" />
     <ClInclude Include="src\gameplay_seams\address_storage_npcs.inl" />
+    <ClInclude Include="src\gameplay_seams\address_storage_ui.inl" />
     <ClInclude Include="src\gameplay_seams\hit_feedback_storage.inl" />
     <ClInclude Include="src\gameplay_seams\loading_helpers.inl" />
     <ClInclude Include="src\gameplay_seams\public_api.inl" />
@@ -372,6 +373,7 @@
     <ClInclude Include="src\mod_loader_gameplay\core\actor_world_target_slot_state.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\boneyard_generator_patch_restore.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\core\blocking_overlay_input_ownership.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\crash_summary_builders.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_constants.inl" />
     <ClInclude Include="src\mod_loader_gameplay\core\gameplay_state_globals.inl" />

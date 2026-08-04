@@ -5,9 +5,12 @@ constexpr std::size_t kVisibleBoneyardRows = 12;
 constexpr std::uint64_t kMissingResolutionRetryMs = 1000;
 constexpr std::uint64_t kPeerResolutionRefreshMs = 250;
 constexpr std::size_t kMapPickerStartHookMinimumPatchSize = 5;
+constexpr std::size_t kCourtyardStartAffordanceRenderHookMinimumPatchSize = 6;
 constexpr std::size_t kGameplayHudRenderHookMinimumPatchSize = 6;
 
 using MapPickerStartFn = void(__thiscall*)(void* courtyard);
+using CourtyardStartAffordanceRenderFn =
+    void(__thiscall*)(void* courtyard, void* control);
 using GameplayHudRenderFn = void(__thiscall*)(void* gameplay);
 using NativeStringAssignFn = void(__thiscall*)(void* self, char* text);
 
@@ -45,6 +48,7 @@ struct BoneyardPickerState {
     PendingFrontendEvent pending_event = PendingFrontendEvent::None;
     std::size_t pending_selection_index = kBoneyardPickerNoSelection;
     X86Hook start_hook;
+    X86Hook start_affordance_render_hook;
     X86Hook render_hook;
     std::mutex mutex;
 };
@@ -309,6 +313,9 @@ void __fastcall HookMapPickerStart(
     if (original == nullptr) {
         return;
     }
+    if (!HasBoneyardAuthority()) {
+        return;
+    }
     if (!ShouldHijackHostBoneyardStart()) {
         original(courtyard);
         return;
@@ -325,6 +332,22 @@ void __fastcall HookMapPickerStart(
             &ignored_error)) {
         original(courtyard);
     }
+}
+
+void __fastcall HookCourtyardStartAffordanceRender(
+    void* courtyard,
+    void* /*unused_edx*/,
+    void* control) {
+    const auto original =
+        GetX86HookTrampoline<CourtyardStartAffordanceRenderFn>(
+            g_picker.start_affordance_render_hook);
+    if (original == nullptr) {
+        return;
+    }
+    if (!HasBoneyardAuthority()) {
+        return;
+    }
+    original(courtyard, control);
 }
 
 void MovePickerCursor(int delta) {

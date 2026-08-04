@@ -575,4 +575,8 @@ LoadingScreenSnapshot GetLoadingScreenSnapshot() {
     return g_loading_screen.snapshot;
 }
 
+bool BlockingOverlayOwnsGameplayInput() {
+    return GetLoadingScreenSnapshot().active;
+}
+
 }  // namespace sdmod

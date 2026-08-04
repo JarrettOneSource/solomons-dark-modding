@@ -93,6 +93,15 @@ Those mappings come from the builder's dialogue and label strings such as:
 - `ENFORCER_INTRO`
 - `TEACHER_INTRO`
 
+### Courtyard start control is not an NPC action
+
+The parchment start-run affordance is a separate Courtyard UI rail. Its
+dedicated renderer is `0x0050DBF0`, called once by the full HUD at
+`0x005D3D02`. The Courtyard control dispatcher at `0x00514A20` recognizes the
+`Gameplay + 0xE00` control and calls the stock MapPicker start/toggle at
+`0x0050E5E0` from `0x00514AB9`. No Student, named-character, or `GameNPC`
+handler participates in that activation path.
+
 ### Static world actors
 
 Two nearby hub-side families are easy to mistake for NPC runtime if only their

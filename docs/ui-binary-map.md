@@ -33,6 +33,7 @@ The staged source of truth for recovered addresses now lives in `config/binary-l
 - `spell_picker`: `0x004FA460` owns `Select a Spell`
 - `book_picker`: `0x004F80B0` owns `Select a Book`
 - `game_over`: `0x004EA650` loads `GameOver`
+- `courtyard_start_run`: `0x0050DBF0` renders `CLICK HERE / WHEN YOU ARE / READY TO PLAY`; the full HUD has one call at `0x005D3D02`, while the `Gameplay + 0xE00` action is dispatched by `0x00514A20` to `0x0050E5E0` at `0x00514AB9`
 - Asset-backed screen builders:
   - `bonedit`: `0x004E41C0`
   - `college`: `0x004E6450`

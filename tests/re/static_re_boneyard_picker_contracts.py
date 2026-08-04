@@ -125,8 +125,9 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
             "CancelBoneyardPicker(",
             "g_picker.pending_event = PendingFrontendEvent::Pick;",
             "ApplyPendingPickLocked(index, now_ms);",
-            "if (catalog->entries.empty()) {",
-            'Log("Boneyard picker provider initialized. hook=disabled entries=0")',
+            "const bool has_custom_entries = !catalog->entries.empty();",
+            "InstallBoneyardAuthorityHooks(",
+            '"custom_hook=disabled entries=0"',
             "ApplyStockSelectionAndOpenNativePicker(",
             "applied_stock_relative_path",
         ),
@@ -153,17 +154,20 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         raise StaticReTestFailure(
             "picker native primitives leaked back into EndScene"
         )
-    if public.index("if (catalog->entries.empty()) {") > public.index(
-        "InitializeGameplaySeams(error_message)"
+    initialize_at = public.index("bool InitializeBoneyardPicker(")
+    initialize_body = public[initialize_at:]
+    if initialize_body.index("InstallBoneyardAuthorityHooks(") > (
+        initialize_body.index("if (!has_custom_entries) {")
     ):
         raise StaticReTestFailure(
-            "zero-entry picker setup touches gameplay seams before opting out"
+            "zero-entry picker setup bypasses the authority hooks"
         )
     _require(
         design,
         (
             "ATC owns the visual frontend",
-            "A process with zero catalog entries does not install\nthe MapPicker hook",
+            "Both authority hooks are installed regardless of catalog size",
+            "A connected client returns before either trampoline",
             "catalog is immutable for\nthe process lifetime",
             "`is_open`\nis the presentation gate",
             "The digest is checked again immediately before each native handoff",
@@ -174,7 +178,7 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
     )
     return (
         "immutable large-list provider, bounded frontend, enabled-mod staging, "
-        "content verification, exact zero-entry branch, and stock String handoff are pinned"
+        "content verification, zero-entry authority gates, and stock String handoff are pinned"
     )
 
 
@@ -450,14 +454,17 @@ def test_boneyard_picker_owns_its_keys_and_centers_row_text() -> str:
             "case 0xD0:  // DIK_DOWN",
             "case 0xD1:  // DIK_NEXT (PgDn)",
             "GetBoneyardPickerSnapshot().is_open",
-            "if (BoneyardPickerOwnsScancode(scancode)) {",
+            "BoneyardPickerOwnsScancode(scancode)) {",
         ),
         "picker keyboard-edge ownership",
     )
     # The suppression must keep the stock helper's edge bookkeeping alive
     # (call the trampoline, then report no-edge) rather than starving it.
-    suppress_at = input_hooks.index("if (BoneyardPickerOwnsScancode(scancode)) {")
-    suppressed_block = input_hooks[suppress_at:suppress_at + 600]
+    suppress_at = input_hooks.index(
+        "if (blocking_overlay_owns_input ||\n"
+        "        BoneyardPickerOwnsScancode(scancode)) {"
+    )
+    suppressed_block = input_hooks[suppress_at:suppress_at + 900]
     for token in ("original_fn(self, scancode)", "return 0;"):
         if token not in suppressed_block:
             raise StaticReTestFailure(
