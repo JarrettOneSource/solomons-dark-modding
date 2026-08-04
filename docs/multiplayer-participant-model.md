@@ -46,7 +46,11 @@ and the gameplay tick performs native-remote playback toward that target. The
 sync queue is not used as a per-packet transform pump, because that queue is
 deliberately throttled for stock-safe spawn/rematerialization work. The local UDP
 state packet carries the participant display name, and the gameplay HUD/nameplate
-path resolves the materialized actor back to that participant name.
+path resolves the materialized actor back to that participant name. The top
+ALLY list is different: protocol v92 derives its name and authoritative HP ratio
+from every connected, runtime-valid, alive remote participant, then appends
+those rows through the stock `Game::HealthBar` routine. A room transition can
+therefore replace or omit an actor without dropping that participant's row.
 
 The runtime reserves:
 
@@ -128,6 +132,11 @@ participant's owned gold, advance that participant's `gold_revision`, consume
 the host drop, and leave the host process-global gold unchanged. Accepted orb
 results apply the host-authored health or mana resource result to the requesting
 participant's runtime vitals and to the client's local HP/MP presentation.
+Host-authored damage corrections use the same rule. Correction delivery is
+acknowledged separately from convergence: the host retains and resends its HP
+fence until an ACK-bearing owner frame reports matching current and maximum HP.
+The client may reapply the same correction sequence, so another native writer
+cannot turn delivery of the correction into acceptance of stale local HP.
 Accepted item/potion carrier results clear the host carrier's held-item pointer
 and credit the requesting participant's replicated inventory ledger by item type,
 slot, stack count, exact recipe identity, and wearable color when applicable.
@@ -195,6 +204,15 @@ belongs to the active run scene.
 Lua may omit scene intent on bot creation. The runtime then derives the default
 from the active scene: hub root becomes `SharedHub`, hub interiors become
 `PrivateRegion`, and `testrun` becomes `Run`.
+
+Broad scene intent does not identify a native world incarnation. Protocol v92
+therefore tags each participant frame with a monotonic presentation scene epoch
+derived from the semantic scene, region, gameplay root, and world root. Transform
+history is discarded when that epoch changes. A materialized binding records the
+epoch of its actor and refuses presentation sampled for another epoch; replacing
+the actor clears every actor-local animation, equipment, staff, shield, death,
+vitals, status, and cast checkpoint before replay begins. Run termination clears
+transform history and publishes no run pose or attachment as hub state.
 
 ## Lua Runtime Handoff
 

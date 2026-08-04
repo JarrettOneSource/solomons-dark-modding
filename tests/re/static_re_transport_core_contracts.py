@@ -967,7 +967,7 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
     )
     binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
 
-    assert "kProtocolVersion = 91" in protocol_text
+    assert "kProtocolVersion = 92" in protocol_text
     for field in (
         "game_over_command_epoch",
         "game_over_ack_epoch",
@@ -976,8 +976,8 @@ def test_all_dead_dispatches_native_game_over_once_per_participant() -> str:
         assert protocol_text.count(field) == 2, (
             f"{field} must exist in state and frame packets"
         )
-    assert "sizeof(StatePacket) == 705" in protocol_text
-    assert "sizeof(ParticipantFramePacket) == 422" in protocol_text
+    assert "sizeof(StatePacket) == 709" in protocol_text
+    assert "sizeof(ParticipantFramePacket) == 426" in protocol_text
 
     for token in (
         "RefreshHostRunGameOverCommand(",
@@ -1222,7 +1222,7 @@ def test_wave_completion_respawns_only_dead_owners_from_host_command() -> str:
         / "SolomonDarkModLoader/src/mod_loader_gameplay/public_api_local_player_respawn.inl"
     )
 
-    assert "kProtocolVersion = 91" in protocol_text
+    assert "kProtocolVersion = 92" in protocol_text
     for field in (
         "wave_respawn_epoch",
         "wave_respawn_wave",
@@ -1892,7 +1892,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
     )
 
     required_pairs = (
-        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 91;"),
+        (protocol_text, "constexpr std::uint16_t kProtocolVersion = 92;"),
         (protocol_text, "kParticipantDisplayNameBytes"),
         (protocol_text, "kParticipantInventorySnapshotMaxItems"),
         (protocol_text, "kParticipantProgressionBookSnapshotMaxEntries"),
@@ -2007,7 +2007,7 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
         (protocol_text, "sizeof(ParticipantProgressionBookSnapshotPacket) == 2604"),
         (protocol_text, "static_assert(sizeof(LevelUpBarrierPacket) == 8052"),
         (protocol_text, "std::uint64_t authority_participant_id;"),
-        (protocol_text, "static_assert(sizeof(StatePacket) == 705"),
+        (protocol_text, "static_assert(sizeof(StatePacket) == 709"),
         (protocol_text, "static_assert(sizeof(StudentBookPaletteEntryPacketState) == 24"),
         (protocol_text, "static_assert(sizeof(NamedHubNpcPresentationPacketState) == 40"),
         (protocol_text, "static_assert(sizeof(WorldActorSnapshotPacketState) == 384"),
@@ -3157,3 +3157,88 @@ def test_local_multiplayer_udp_transport_is_wired() -> str:
             ", ".join(present_networking_regressions))
 
     return "local UDP dev transport is wired through protocol, service loop, interpolated participant/world sync, docs, and launch script"
+
+
+def test_participant_presentation_epoch_owns_every_actor_timeline() -> str:
+    protocol = read_text(MULTIPLAYER_PROTOCOL)
+    runtime_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_runtime_state.h"
+    )
+    runtime = read_text(
+        ROOT / "SolomonDarkModLoader/src/multiplayer_runtime_state.cpp"
+    )
+    transport = read_multiplayer_transport_source()
+    playback = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
+        "native_remote_playback.inl"
+    )
+    epoch_binding = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement/"
+        "native_remote_presentation_epoch.inl"
+    )
+    binding_state = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/"
+        "participant_entity_state.inl"
+    )
+
+    if protocol.count("std::uint32_t presentation_scene_epoch;") != 2:
+        raise StaticReTestFailure(
+            "state and participant-frame packets must share one presentation epoch"
+        )
+    for token in (
+        "std::uint32_t presentation_scene_epoch = 0;",
+        "struct ParticipantTransformSample",
+    ):
+        if token not in runtime_header:
+            raise StaticReTestFailure(
+                "participant runtime lacks presentation epoch: " + token
+            )
+    for token in (
+        "latest.presentation_scene_epoch !=",
+        "sample.presentation_scene_epoch",
+        "before->presentation_scene_epoch !=",
+        "after->presentation_scene_epoch",
+    ):
+        if token not in runtime:
+            raise StaticReTestFailure(
+                "transform playback can cross a presentation epoch: " + token
+            )
+    for token in (
+        "RefreshLocalParticipantPresentationSceneTracking(",
+        "BuildWorldSceneKey(scene_state, scene_kind)",
+        "participant_presentation_scene_epoch",
+        "packet->presentation_scene_epoch =",
+        "packet.presentation_scene_epoch",
+        "AdvanceParticipantPresentationSceneEpoch(",
+    ):
+        if token not in transport:
+            raise StaticReTestFailure(
+                "transport does not propagate the presentation epoch: " + token
+            )
+    for token in (
+        "materialized_presentation_scene_epoch",
+        "replicated_presentation_scene_epoch",
+    ):
+        if token not in binding_state:
+            raise StaticReTestFailure(
+                "actor binding lacks presentation epoch ownership: " + token
+            )
+    if "BindNativeRemoteParticipantPresentationEpoch(" not in playback:
+        raise StaticReTestFailure(
+            "remote playback bypasses presentation epoch binding"
+        )
+    for token in (
+        "transform_sample.presentation_scene_epoch == 0",
+        "binding->materialized_presentation_scene_epoch ==",
+        "transform_sample.presentation_scene_epoch",
+        "ResetParticipantEntityActorPresentationState(binding);",
+    ):
+        if token not in epoch_binding:
+            raise StaticReTestFailure(
+                "replacement actor accepts a foreign presentation epoch: " + token
+            )
+
+    return (
+        "packets, interpolation history, bindings, and replacement actors share "
+        "one monotonic participant-presentation scene epoch"
+    )

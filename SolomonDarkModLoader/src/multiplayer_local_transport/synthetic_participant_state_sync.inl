@@ -248,6 +248,12 @@ void RefreshHostSyntheticParticipantSceneIntent() {
                     host_scene_intent.region_index ||
                 participant.runtime.scene_intent.region_type_id !=
                     host_scene_intent.region_type_id;
+            if (scene_changed ||
+                participant.runtime.presentation_scene_epoch == 0) {
+                participant.runtime.presentation_scene_epoch =
+                    AdvanceParticipantPresentationSceneEpoch(
+                        participant.runtime.presentation_scene_epoch);
+            }
             participant.runtime.scene_intent = host_scene_intent;
             participant.runtime.in_run =
                 host_scene_intent.kind ==

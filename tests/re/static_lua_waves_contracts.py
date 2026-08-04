@@ -115,14 +115,14 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
     assert "DispatchWaveStartedToMod" in events
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "WaveSummary = 32",
         "WaveCompositionRowPacketState",
         "struct WaveSummaryPacket",
         "std::int32_t remaining_to_spawn;",
         "rows[kWaveSummaryMaxCompositionRows]",
         "static_assert(sizeof(WaveSummaryPacket) == 296",
-        "static_assert(sizeof(ParticipantFramePacket) == 422",
+        "static_assert(sizeof(ParticipantFramePacket) == 426",
     ):
         assert token in protocol, f"wave packet contract lacks: {token}"
     assert "PopulateAuthorityWaveSummary(&packet)" not in outgoing
@@ -154,7 +154,7 @@ def test_lua_waves_parse_track_and_replicate_semantic_summaries() -> str:
         "authenticated wave summary",
         "same authority summary on host and clients",
         "waves.schedule.read",
-        "current protocol version is 91",
+        "current protocol version is 92",
         "verify_lua_waves_multiplayer.py --launch-pair --confirm-mutation",
         "same sorted aggregate and per-type live summary",
         "stops only the two process IDs",

@@ -108,6 +108,7 @@ void ApplyParticipantVitalsCorrectionPacket(
             packet.authority_participant_id);
     if (last_it !=
             g_local_transport.last_participant_vitals_correction_sequence_by_authority.end() &&
+        packet.correction_sequence != last_it->second &&
         !IsPacketSequenceNewer(packet.correction_sequence, last_it->second)) {
         return;
     }

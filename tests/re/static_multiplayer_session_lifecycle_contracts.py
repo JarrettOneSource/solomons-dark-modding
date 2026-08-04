@@ -418,7 +418,7 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         "tools/verify_game_over_session_semantics.py"
     )
 
-    assert "kProtocolVersion = 91" in protocol
+    assert "kProtocolVersion = 92" in protocol
     for field in (
         "run_loading_ack_nonce",
         "run_loading_release_nonce",
@@ -433,8 +433,8 @@ def test_run_loading_waits_for_every_peer_visibility_and_is_bounded() -> str:
         assert protocol.count(field) == 2, (
             f"{field} must exist in both reliable state and participant frame"
         )
-    assert "sizeof(StatePacket) == 705" in protocol
-    assert "sizeof(ParticipantFramePacket) == 422" in protocol
+    assert "sizeof(StatePacket) == 709" in protocol
+    assert "sizeof(ParticipantFramePacket) == 426" in protocol
 
     _require_tokens(
         barrier,
@@ -578,15 +578,23 @@ def test_run_termination_resets_every_participant_without_retiring_wan_death_dur
             "run_loading_deadline_remaining_ms != 0;",
             "void RetireParticipantRunTerminationFenceForNewRun(",
             "void ResetParticipantRuntimeForRunTermination(",
+            "runtime.transform_valid = false;",
             "participant.transform_history.clear();",
-            "transition_transform.presentation_flags =",
-            "participant.transform_history.push_back(",
             "participant.runtime.life_current =",
             "participant.runtime.life_max;",
             "ParticipantPresentationFlagDeathPresentation",
         ),
         "transport participant run reset",
     )
+    for forbidden in (
+        "preserve_transition_transform",
+        "transition_transform",
+        "participant.transform_history.push_back(",
+    ):
+        assert forbidden not in transport_reset, (
+            "run presentation leaked into the replacement hub timeline: "
+            + forbidden
+        )
     _require_tokens(
         transport,
         (
@@ -657,8 +665,33 @@ def test_run_termination_resets_every_participant_without_retiring_wan_death_dur
             "void MarkParticipantEntityWorldUnregistered("
         )
     ]
-    assert "native_remote_death_epoch_active" not in materialization_reset
-    assert "native_remote_death_drop_spawned" not in materialization_reset
+    _require_tokens(
+        materialization_reset,
+        (
+            "ResetParticipantEntityActorPresentationState(binding);",
+            "materialized_presentation_scene_epoch = 0;",
+        ),
+        "complete actor-local presentation reset",
+    )
+    actor_presentation_reset = materialization[
+        materialization.index(
+            "void ResetParticipantEntityActorPresentationState("
+        ):
+        materialization.index("void RememberParticipantEntity(")
+    ]
+    for token in (
+        "replicated_transform_valid = false;",
+        "replicated_presentation_valid = false;",
+        "replicated_attachment_visual_link_type_id = 0;",
+        "equipment_reconcile_not_before_ms = 0;",
+        "native_remote_death_epoch_active = false;",
+        "native_remote_death_attachment_actor_address = 0;",
+        "native_remote_death_drop_spawned = false;",
+        "ongoing_cast = ParticipantEntityBinding::OngoingCastState{};",
+    ):
+        assert token in actor_presentation_reset, (
+            "actor-local presentation reset lacks: " + token
+        )
 
     for token in (
         "host_first_hub_before_client_return",
@@ -676,6 +709,6 @@ def test_run_termination_resets_every_participant_without_retiring_wan_death_dur
     return (
         "the common run-termination seam clears all participant combat, "
         "vitality, transform history, and native death-epoch state, retains "
-        "one sanitized transition pose for hub materialization, and leaves "
-        "generic within-run rematerialization durable for WAN corpses"
+        "no outgoing run pose for hub materialization, and leaves durable "
+        "participant identity available while replacement actors materialize"
     )

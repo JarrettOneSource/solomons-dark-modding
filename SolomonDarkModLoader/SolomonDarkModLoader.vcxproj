@@ -147,6 +147,7 @@
     <ClInclude Include="include\multiplayer_session_teardown.h" />
     <ClInclude Include="include\network_telemetry.h" />
     <ClInclude Include="include\participant_hit_feedback_flow_control.h" />
+    <ClInclude Include="include\participant_vitals_correction.h" />
     <ClInclude Include="src\network_telemetry\runtime_events.inl" />
     <ClInclude Include="src\network_telemetry\writer.inl" />
     <ClInclude Include="src\lua_engine\lua_exec_target.inl" />
@@ -353,6 +354,7 @@
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\local_player_animation_probe.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\locomotion_and_animation.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl" />
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_presentation_epoch.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_death_drop.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_vitals_and_playback.inl" />
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\participant_collision_response.inl" />
@@ -567,6 +569,7 @@
     <ClInclude Include="src\multiplayer_local_transport\outgoing_packet_sync.inl" />
     <ClInclude Include="src\multiplayer_local_transport\owned_progression_state.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_progression_snapshot_sync.inl" />
+    <ClInclude Include="src\multiplayer_local_transport\participant_presentation_scene_tracking.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_authority.inl" />
     <ClInclude Include="src\multiplayer_local_transport\participant_vitals_correction.inl" />
     <ClInclude Include="src\multiplayer_local_transport\powerup_loot_authority.inl" />

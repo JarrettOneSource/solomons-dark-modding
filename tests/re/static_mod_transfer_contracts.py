@@ -14,7 +14,7 @@ def test_mod_transfer_protocol_is_versioned_fixed_width_and_bounded() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "ModTransferManifestRequest = 34",
         "ModTransferManifestResponse = 35",
         "ModTransferDescriptorRequest = 36",
@@ -43,7 +43,7 @@ def test_mod_transfer_protocol_is_versioned_fixed_width_and_bounded() -> str:
             f"launcher mod transfer codec lacks: {token}"
         )
     return (
-        "protocol 91 reserves one fixed-width, digest-checked packet family "
+        "protocol 92 reserves one fixed-width, digest-checked packet family "
         "with 1 KiB chunks and explicit package and aggregate bounds"
     )
 

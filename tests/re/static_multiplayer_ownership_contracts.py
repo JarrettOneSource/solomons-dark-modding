@@ -631,7 +631,8 @@ def test_transient_status_correction_ack_waits_for_native_application() -> str:
     normalize_start = incoming.index("NormalizedParticipantFrameState")
     apply_start = incoming.index("void ApplyParticipantFrameToRuntime(")
     normalize_body = incoming[normalize_start:apply_start]
-    assert "if (life_acknowledged)" in normalize_body
+    assert "if (life_converged)" in normalize_body
+    assert "ParticipantVitalsCorrectionHasConverged(" in normalize_body
     assert "status_acknowledged" not in normalize_body
 
     handler_start = authority.index("void ApplyParticipantVitalsCorrectionPacket(")
@@ -1090,7 +1091,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
     ]
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "Powerup = 5",
         "enum class PowerupRewardKind",
         "BonusSkillPoint = 0",
@@ -1101,7 +1102,7 @@ def test_powerup_rewards_are_authoritative_and_native() -> str:
         "std::int32_t powerup_kind;",
         "std::int32_t powerup_skill_entry_index;",
         "std::uint16_t powerup_skill_resulting_active;",
-        "static_assert(sizeof(StatePacket) == 705",
+        "static_assert(sizeof(StatePacket) == 709",
         "static_assert(sizeof(LootDropSnapshotPacketState) == 120",
         "static_assert(sizeof(LootSnapshotPacket) == 7712",
         "static_assert(sizeof(LootPickupResultPacket) == 172",
@@ -1263,7 +1264,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
     verifier = _read("tools/verify_multiplayer_native_item_inventory_sync.py")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "ParticipantPresentationFlagEquipmentState = 1 << 5",
         "std::uint32_t primary_visual_link_recipe_uid;",
         "std::uint32_t secondary_visual_link_recipe_uid;",
@@ -1273,7 +1274,7 @@ def test_exact_native_equipment_identity_and_color_replicate() -> str:
         "std::uint32_t equipment_revision;",
         "ParticipantEquippedItemPacketState equipped_rings[kParticipantRingSlotCount];",
         "ParticipantEquippedItemPacketState equipped_amulet;",
-        "static_assert(sizeof(StatePacket) == 705",
+        "static_assert(sizeof(StatePacket) == 709",
     ):
         assert token in protocol, f"exact equipment packet contract lacks: {token}"
 

@@ -211,6 +211,8 @@ bool ApplyParticipantCastPacket(
         sample.received_ms = now_ms;
         sample.sequence = packet.header.sequence;
         sample.run_nonce = packet.run_nonce;
+        sample.presentation_scene_epoch =
+            live_participant->runtime.presentation_scene_epoch;
         sample.scene_intent = live_participant->runtime.scene_intent;
         sample.position_x = packet.position_x;
         sample.position_y = packet.position_y;

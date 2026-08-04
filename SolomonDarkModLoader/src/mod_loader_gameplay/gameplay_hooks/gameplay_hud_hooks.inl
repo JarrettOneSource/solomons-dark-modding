@@ -101,6 +101,7 @@ struct GameplayAllyHudRow {
     int gameplay_slot = -1;
     std::uint64_t participant_id = 0;
     std::string display_name;
+    float hp_ratio = 0.0f;
 };
 
 constexpr float kGameplayAllyHudReservedLabelWidth = 128.0f;
@@ -127,51 +128,48 @@ struct GameplayAllyHudNameLayout {
 
 std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows() {
     std::vector<GameplayAllyHudRow> rows;
+    std::unordered_map<std::uint64_t, int> gameplay_slots;
     {
         std::lock_guard<std::recursive_mutex> lock(g_participant_entities_mutex);
-        rows.reserve(g_participant_entities.size());
+        gameplay_slots.reserve(g_participant_entities.size());
         for (const auto& binding : g_participant_entities) {
-            if (!IsWizardParticipantKind(binding.kind) ||
-                binding.actor_address == 0 ||
-                binding.gameplay_slot <= 0 ||
-                binding.gameplay_slot >= static_cast<int>(kGameplayPlayerSlotCount)) {
+            if (!IsWizardParticipantKind(binding.kind)) {
                 continue;
             }
-            rows.push_back(GameplayAllyHudRow{
-                binding.gameplay_slot,
-                binding.bot_id,
-                {},
-            });
+            gameplay_slots[binding.bot_id] = binding.gameplay_slot;
         }
     }
 
-    for (auto& row : rows) {
-        bool transport_connected = false;
-        if (!multiplayer::TryGetRemoteParticipantDisplayState(
-                row.participant_id,
-                &row.display_name,
-                nullptr,
-                &transport_connected) ||
-            !transport_connected) {
-            row.participant_id = 0;
+    const auto runtime_state = multiplayer::SnapshotRuntimeState();
+    rows.reserve(runtime_state.participants.size());
+    for (const auto& participant : runtime_state.participants) {
+        if (!multiplayer::IsRemoteParticipant(participant) ||
+            !participant.transport_connected ||
+            !participant.runtime.valid ||
+            participant.name.empty() ||
+            !std::isfinite(participant.runtime.life_current) ||
+            !std::isfinite(participant.runtime.life_max) ||
+            participant.runtime.life_current <= 0.0f ||
+            participant.runtime.life_max <= 0.0f) {
+            continue;
         }
+        const auto slot_it = gameplay_slots.find(participant.participant_id);
+        rows.push_back(GameplayAllyHudRow{
+            slot_it == gameplay_slots.end() ? -1 : slot_it->second,
+            participant.participant_id,
+            participant.name,
+            (std::clamp)(
+                participant.runtime.life_current /
+                    participant.runtime.life_max,
+                0.0f,
+                1.0f),
+        });
     }
-    rows.erase(
-        std::remove_if(
-            rows.begin(),
-            rows.end(),
-            [](const GameplayAllyHudRow& row) {
-                return row.participant_id == 0;
-            }),
-        rows.end());
 
     std::sort(
         rows.begin(),
         rows.end(),
         [](const GameplayAllyHudRow& left, const GameplayAllyHudRow& right) {
-            if (left.gameplay_slot != right.gameplay_slot) {
-                return left.gameplay_slot < right.gameplay_slot;
-            }
             return left.participant_id < right.participant_id;
         });
     rows.erase(
@@ -179,10 +177,81 @@ std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows() {
             rows.begin(),
             rows.end(),
             [](const GameplayAllyHudRow& left, const GameplayAllyHudRow& right) {
-                return left.gameplay_slot == right.gameplay_slot;
+                return left.participant_id == right.participant_id;
             }),
         rows.end());
     return rows;
+}
+
+bool CallGameplayAllyHealthbarAppendSafe(
+    uintptr_t append_address,
+    uintptr_t gameplay_address,
+    uintptr_t label_glyph,
+    float hp_ratio,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (append_address == 0 ||
+        gameplay_address == 0 ||
+        label_glyph == 0) {
+        return false;
+    }
+
+    auto* append =
+        reinterpret_cast<GameplayAllyHealthbarAppendFn>(append_address);
+    __try {
+        append(
+            reinterpret_cast<void*>(gameplay_address),
+            label_glyph,
+            hp_ratio);
+        return true;
+    } __except (CaptureSehCode(
+        GetExceptionInformation(),
+        exception_code)) {
+        return false;
+    }
+}
+
+bool PublishGameplayAllyHudRowsFromParticipantRoster(
+    uintptr_t gameplay_address,
+    DWORD* exception_code) {
+    if (exception_code != nullptr) {
+        *exception_code = 0;
+    }
+    if (!multiplayer::IsLocalTransportEnabled() ||
+        gameplay_address == 0 ||
+        kGameplayUiAllyLabelGlyphOffset == 0) {
+        return false;
+    }
+
+    auto& memory = ProcessMemory::Instance();
+    const auto append_address =
+        memory.ResolveGameAddressOrZero(kGameplayAllyHealthbarAppend);
+    const auto bundle_global =
+        memory.ResolveGameAddressOrZero(kGameplayUiBundleGlobal);
+    uintptr_t bundle_address = 0;
+    if (append_address == 0 ||
+        bundle_global == 0 ||
+        !memory.TryReadValue(bundle_global, &bundle_address) ||
+        bundle_address == 0) {
+        return false;
+    }
+
+    const auto rows = BuildGameplayAllyHudRows();
+    const auto label_glyph =
+        bundle_address + kGameplayUiAllyLabelGlyphOffset;
+    for (const auto& row : rows) {
+        if (!CallGameplayAllyHealthbarAppendSafe(
+                append_address,
+                gameplay_address,
+                label_glyph,
+                row.hp_ratio,
+                exception_code)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool IsGameplayAllyHudLabelGlyphCall(

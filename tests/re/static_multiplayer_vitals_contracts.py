@@ -62,7 +62,7 @@ def test_local_participant_hit_feedback_is_event_owned_and_presentation_only() -
     design = _read("docs/design/hit-feedback-2026-07-28.md")
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "ParticipantHitFeedback = 33",
         "struct ParticipantHitFeedbackPacket",
         "std::uint32_t event_sequence;",
@@ -286,7 +286,7 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
     )
 
     for token in (
-        "constexpr std::uint16_t kProtocolVersion = 91;",
+        "constexpr std::uint16_t kProtocolVersion = 92;",
         "ParticipantVitalsCorrectionFlagMagicShieldState",
         "std::uint8_t correction_flags;",
         "float magic_shield_absorb_remaining;",
@@ -420,4 +420,52 @@ def test_client_owned_magic_shield_consumption_is_host_authoritative() -> str:
         "host-side native hits consume a client owner's Magic Shield, hold "
         "the corrected charge against stale owner frames, and acknowledge "
         "only after the client writes the native shield state"
+    )
+
+
+def test_vitals_delivery_ack_does_not_retire_authority_before_hp_converges() -> str:
+    convergence = _read(
+        "SolomonDarkModLoader/include/participant_vitals_correction.h"
+    )
+    incoming = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "incoming_packet_sync.inl"
+    )
+    correction = _read(
+        "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "participant_vitals_correction.inl"
+    )
+    native_tests = _read("tests/native/multiplayer_runtime_state_tests.cpp")
+
+    for token in (
+        "ParticipantVitalsCorrectionHasConverged(",
+        "std::isfinite(reported_life_current)",
+        "std::fabs(reported_life_current - corrected_life_current)",
+        "std::fabs(reported_life_max - corrected_life_max)",
+    ):
+        assert token in convergence, "vitals convergence helper lacks: " + token
+
+    normalized = incoming[
+        incoming.index("NormalizedParticipantFrameState NormalizeParticipantFramePacket("):
+        incoming.index("void ApplyParticipantFrameToRuntime(")
+    ]
+    _require_in_order(
+        normalized,
+        "const bool life_acknowledged =",
+        "const bool life_converged =",
+        "ParticipantVitalsCorrectionHasConverged(",
+        "if (life_converged)",
+        "RecordNetworkRecoveryAck(",
+        "pending_participant_vitals_corrections_by_participant.erase(",
+    )
+    assert "if (!life_converged && std::isfinite(correction.life_current))" in normalized
+    assert "if (!life_converged && std::isfinite(correction.life_max)" in normalized
+
+    assert "packet.correction_sequence != last_it->second &&" in correction
+    assert "ParticipantVitalsAckRequiresMatchingHp()" in native_tests
+    assert '"delivery ACK accepted stale owner HP"' in native_tests
+
+    return (
+        "an ACK-bearing owner frame retires the host fence only after current "
+        "and maximum HP match, while duplicate correction delivery can reassert HP"
     )

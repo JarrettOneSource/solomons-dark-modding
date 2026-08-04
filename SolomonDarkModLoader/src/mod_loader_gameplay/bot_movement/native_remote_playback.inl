@@ -69,6 +69,14 @@ bool RefreshNativeRemoteParticipantTransformTarget(
         return false;
     }
 
+    if (!BindNativeRemoteParticipantPresentationEpoch(
+            binding,
+            transform_sample)) {
+        binding->replicated_transform_valid = false;
+        binding->replicated_presentation_valid = false;
+        return false;
+    }
+
     binding->replicated_transform_valid = true;
     binding->replicated_target_x = transform_sample.position_x;
     binding->replicated_target_y = transform_sample.position_y;

@@ -253,6 +253,7 @@ from static_multiplayer_behavior_contracts import (
 from static_multiplayer_vitals_contracts import (
     test_client_owned_magic_shield_consumption_is_host_authoritative,
     test_local_participant_hit_feedback_is_event_owned_and_presentation_only,
+    test_vitals_delivery_ack_does_not_retire_authority_before_hp_converges,
 )
 from static_dead_progression_round_respawn_contracts import (
     test_dead_picker_uses_only_the_stock_screen_virtual_gate,
@@ -346,6 +347,7 @@ from static_re_transport_core_contracts import (
     test_client_non_gold_pickups_replay_stock_feedback_once_after_authority_accepts,
     test_misc_ground_items_replicate_without_recipe_identity,
     test_local_multiplayer_udp_transport_is_wired,
+    test_participant_presentation_epoch_owns_every_actor_timeline,
     test_session_status_io_is_coalesced_off_the_game_thread,
     test_multiplayer_death_epoch_owns_presentation_and_staff_drop_once,
     test_multiplayer_death_preserves_stock_audio_then_enters_spectator_mode,
@@ -390,7 +392,7 @@ from static_re_runtime_cast_contracts import (
     test_earth_primary_is_captured_from_its_native_dispatcher,
     test_memory_region_cache_refreshes_newly_committed_native_objects,
     test_multiplayer_nameplates_render_from_native_scene_passes,
-    test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration,
+    test_participant_roster_owns_every_multiplayer_ally_hud_registration,
     test_player_control_brain_requires_published_gameplay_slot,
     test_primary_cast_lane_requires_native_collision_segment,
     test_queued_mouse_holds_use_player_tick_duration,
@@ -954,6 +956,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_local_participant_hit_feedback_is_event_owned_and_presentation_only,
     ),
     (
+        "vitals delivery ACK waits for matching owner HP",
+        test_vitals_delivery_ack_does_not_retire_authority_before_hp_converges,
+    ),
+    (
         "spell verifiers quiesce input and prearm manual spawning",
         test_spell_verifiers_quiesce_input_and_prearm_manual_spawning,
     ),
@@ -1420,6 +1426,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ),
     ("local multiplayer UDP transport is wired", test_local_multiplayer_udp_transport_is_wired),
     (
+        "participant presentation epoch owns every actor timeline",
+        test_participant_presentation_epoch_owns_every_actor_timeline,
+    ),
+    (
         "session status IO is coalesced off the game thread",
         test_session_status_io_is_coalesced_off_the_game_thread,
     ),
@@ -1562,8 +1572,8 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     ("Path builder rejects unrequested alternate goals", test_path_builder_does_not_walk_to_unrequested_alternate_goals),
     ("Path builder expands cells before LOS smoothing", test_path_builder_expands_cells_before_los_smoothing),
     (
-        "local control-brain retires only its invalid ally-HUD registration",
-        test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration,
+        "participant roster owns every multiplayer ally-HUD registration",
+        test_participant_roster_owns_every_multiplayer_ally_hud_registration,
     ),
     (
         "client enemy death presentation requires host authority",

@@ -64,6 +64,7 @@ struct ParticipantEntityBinding {
     uintptr_t materialized_scene_address = 0;
     uintptr_t materialized_world_address = 0;
     int materialized_region_index = -1;
+    std::uint32_t materialized_presentation_scene_epoch = 0;
     int last_applied_animation_state_id = kUnknownAnimationStateId - 1;
     ObservedActorAnimationDriveProfile standalone_idle_animation_drive_profile;
     ObservedActorAnimationDriveProfile standalone_moving_animation_drive_profile;
@@ -79,6 +80,7 @@ struct ParticipantEntityBinding {
     bool gameplay_attach_applied = false;
     bool raw_allocation = false;
     bool replicated_transform_valid = false;
+    std::uint32_t replicated_presentation_scene_epoch = 0;
     float replicated_target_x = 0.0f;
     float replicated_target_y = 0.0f;
     float replicated_target_heading = 0.0f;

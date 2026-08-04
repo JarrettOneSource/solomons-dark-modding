@@ -1132,6 +1132,22 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         original(self);
     }
     if (local_player_actor) {
+        DWORD ally_hud_exception_code = 0;
+        if (multiplayer::IsLocalTransportEnabled() &&
+            !PublishGameplayAllyHudRowsFromParticipantRoster(
+                gameplay_address_for_pump,
+                &ally_hud_exception_code)) {
+            static int s_ally_hud_publish_failure_logs_remaining = 8;
+            if (s_ally_hud_publish_failure_logs_remaining > 0) {
+                --s_ally_hud_publish_failure_logs_remaining;
+                Log(
+                    "[bots] durable participant ally HUD publish failed. gameplay=" +
+                    HexString(gameplay_address_for_pump) +
+                    " exception=" +
+                    HexString(static_cast<uintptr_t>(
+                        ally_hud_exception_code)));
+            }
+        }
         multiplayer::FlushGameplayCastReleaseOnAppThread(
             static_cast<std::uint64_t>(::GetTickCount64()));
         MaybeLogLocalPlayerCastProbe(gameplay_address_for_pump, actor_address, true);

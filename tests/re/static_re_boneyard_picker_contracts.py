@@ -200,12 +200,12 @@ def test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_join
     _require(
         protocol,
         (
-            "kProtocolVersion = 91",
+            "kProtocolVersion = 92",
             "boneyard_selection_revision",
             "boneyard_resolution_status",
             "boneyard_selection_sha256",
-            "sizeof(StatePacket) == 705",
-            "sizeof(ParticipantFramePacket) == 422",
+            "sizeof(StatePacket) == 709",
+            "sizeof(ParticipantFramePacket) == 426",
         ),
         "Boneyard packet protocol",
     )
