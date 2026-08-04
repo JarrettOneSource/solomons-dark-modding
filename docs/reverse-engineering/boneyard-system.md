@@ -3,6 +3,10 @@
 This document records the retail Boneyard file format, the native load/save and
 generation paths, and the staging contract used by downloadable mods.
 
+The Trigger, TimeLine, script interpreter, Bonedit node surface, and recipe
+payloads inside that container are mapped in
+[`boneyard-scripting.md`](boneyard-scripting.md).
+
 The addresses below are image-base virtual addresses for the analyzed
 `SolomonDark.exe`:
 
@@ -30,6 +34,9 @@ The addresses below are image-base virtual addresses for the analyzed
 - An editor “blank” Boneyard is not an empty file or an empty runtime arena. It
   has the complete native envelope and a large default `TimeLine` graph; stock
   startup logic can still materialize scenery, set pieces, and waves.
+- Trigger/TimeLine payloads are typed native object graphs. Their exact
+  `CodeLine` grammar, opcode tables, recipe links, and per-tick evaluators are
+  documented in [`boneyard-scripting.md`](boneyard-scripting.md).
 
 ## Native object model
 
@@ -129,7 +136,7 @@ this exact order.
 | Index | RegionLayout field | Encoding / role |
 | ---: | --- | --- |
 | 0 | `+0x2B4` world objects | Polymorphic object manager; Tree, Monument, Gravestone, Building, Goodie, and other placed objects |
-| 1 | `TriggerControl` | Three-child trigger/controller graph serialized by `0x00686400` |
+| 1 | `TriggerControl` | Three-child trigger/controller graph serialized by `0x00686400`; see [`boneyard-scripting.md`](boneyard-scripting.md) |
 | 2 | `+0x3E4`, `+0x3EC` | Region geometry: vector plus scalar |
 | 3 | `+0x404` MonsterRecipe | Polymorphic type `6001` |
 | 4 | `+0x450` UIDGroup | Polymorphic type `6002` |
@@ -141,7 +148,7 @@ this exact order.
 | 10 | `+0x65C` | One-byte layout flag |
 | 11 | `+0x5CC` static sprite placements | Count plus 25 bytes per record; resolved against the `DeadHawg` atlas and inserted into a spatial grid on read |
 | 12 | `+0x398` Terrain | Polymorphic type `3009` |
-| 13 | `+0x534` TimeLine | Polymorphic type `6006` |
+| 13 | `+0x534` TimeLine | Polymorphic type `6006`; event graph and runtime evaluator are mapped in [`boneyard-scripting.md`](boneyard-scripting.md) |
 
 For an object-manager section, the parent payload is:
 
@@ -315,6 +322,17 @@ structurally invalid files. It is an inspector and admission validator, not a
 Boneyard editor: unknown native payload bytes remain opaque and are never
 rewritten.
 
+`tools/decode_boneyard_scripts.py` builds on that validator and strictly
+decodes RegionLayout triggers, scripts, timelines, spawn records, and recipes:
+
+```bash
+python3 tools/decode_boneyard_scripts.py path/to/level.boneyard
+python3 tools/decode_boneyard_scripts.py path/to/level.boneyard --json
+```
+
+Its recovered scripting ABI and stock editor/runtime mapping are documented in
+[`boneyard-scripting.md`](boneyard-scripting.md).
+
 ## Confidence and remaining boundaries
 
 The container grammar, envelope counts, RegionLayout section order, object
@@ -324,6 +342,7 @@ cross-checked against the repository's native class/factory catalogs.
 
 Some Arena header and reserved compatibility payload fields remain unnamed.
 Their semantics are not required for safe distribution because validation is
-read-only and the retail loader remains the sole materializer. Full authoring
-of those fields or arbitrary Trigger/TimeLine bytecode would require a separate
-editor-format project rather than additional join/download plumbing.
+read-only and the retail loader remains the sole materializer. Trigger,
+TimeLine, `CodeLine`, `Spawner`, and recipe payloads are no longer part of that
+opaque boundary; their exact serialization and compiled authoring surface are
+covered by [`boneyard-scripting.md`](boneyard-scripting.md).

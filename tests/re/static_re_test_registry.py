@@ -9,6 +9,7 @@ from repository_identity_contract import (
 )
 from static_re_boneyard_contracts import (
     test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    test_boneyard_scripting_model_and_runtime_anchors_are_registered,
     test_default_boneyard_load_seed_and_compact_decor_findings_are_registered,
     test_flat_boneyard_fixture_matches_native_syncbuffer_envelope,
     test_loading_screen_uses_native_stage_progress_and_shared_d3d9_lifetime,
@@ -675,6 +676,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Boneyard parser rejects malformed native containers",
         test_boneyard_parser_rejects_empty_truncated_and_trailing_files,
+    ),
+    (
+        "Boneyard scripting object model and runtime anchors are registered",
+        test_boneyard_scripting_model_and_runtime_anchors_are_registered,
     ),
     (
         "Default Boneyard load, seed, and compact-decor findings are registered",
