@@ -66,6 +66,16 @@ immediate run-world publication when the authoritative hostile target changes.
 It must not let clients select targets or bypass normal cadence for unchanged
 motion.
 
+The first combined Bot Brain pair trace,
+`post-fix/botmana-hosted-pair-live3/result.json`, caught an ordering case that
+the earlier isolated handoff trace did not: the local pointer changed on the
+native-ineligible tick, but the authority snapshot changed one tick and 16 ms
+later. Merely setting an atomic request is insufficient when the app-thread
+transport pass has already run for that frame. The request must synchronously
+flush the run-world motion snapshot from the same app thread after the target
+write. The existing atomic remains the retry/coalescing signal if snapshot
+construction fails; unchanged motion keeps its normal cadence.
+
 ## Live mana recovery trace
 
 `pre-fix/mana-recovery-live2/result.json` proves that beta.32 recovery is a
@@ -165,7 +175,19 @@ state is gone.
 The loader must mark the participant's native reserve state, clear stale
 attack/cast facing on reserve entry, and, while a reserved bot is moving, drive
 facing from the pathfinding movement heading. Normal target-facing resumes
-after reserve clears.
+when the brain requests a combat-facing target again.
+
+The first corrected transition probe,
+`post-fix/firewalker-mana-facing-live9/result.json`, exposed the corresponding
+exit-side race before the correction was finalized. Native reserve cleared on
+the 40/50-MP tick, but the Lua brain did not consume that snapshot until its
+next think. During that one-cycle interval the brain still reported
+`mode=mana_flee`, yet a direct reserve boolean no longer forced movement
+facing; one moving sample had a movement-facing dot of `-0.980816` and an
+enemy-facing dot of `1.0`. The binding therefore needs a reserve-movement
+facing latch. Reserve entry sets it, and only the brain's later nonzero combat
+face-target request releases it. Clearing the native reserve bit alone is not
+an acknowledgement that the asynchronous brain has left flee policy.
 
 ## Regression and acceptance contracts
 
@@ -178,8 +200,9 @@ The correction is not complete without contracts that pin all four seams:
    a reachable threshold and cannot wait forever;
 3. native reserve makes Bot Brain stop casting and use a distinct mana-flee
    policy until the native state clears; and
-4. a moving reserved bot clears stale target-facing and applies its movement
-   heading.
+4. a moving reserved bot clears stale target-facing, applies its movement
+   heading, and keeps that drive through the reserve-clear/brain-acknowledge
+   edge.
 
 Live acceptance must repeat a hosted pair plus bot death edge with zero
 post-transition idle/old-authority frames, then show the same bot cross below
