@@ -1,0 +1,19 @@
+{
+  "id": "sample.boneyards",
+  "name": "Sample Boneyards",
+  "version": "1.0.0",
+  "description": "Two ready-to-play custom Boneyards for the in-game picker: Alpha Arena, a tight practice arena with a small footprint and fast rounds, and Beta Arena, a roomier layout for longer fights. Also a working reference for boneyard mod authors - each arena ships as a plain .boneyard overlay declared in manifest.json.",
+  "enabled": false,
+  "overlays": [
+    {
+      "target": "data/levels/sample-alpha.boneyard",
+      "source": "files/Alpha Arena.boneyard",
+      "format": "boneyard"
+    },
+    {
+      "target": "data/levels/sample-beta.boneyard",
+      "source": "files/Beta Arena.boneyard",
+      "format": "boneyard"
+    }
+  ]
+}
