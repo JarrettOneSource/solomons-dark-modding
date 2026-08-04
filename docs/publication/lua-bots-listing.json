@@ -6,6 +6,6 @@
   "version": "1.2.0",
   "manifestId": "bot.brain",
   "minimumLoaderVersion": "0.1.0-beta.29",
-  "changelog": "Added Bot Play For Me with an F9 toggle and clean handback. Bots now choose random offered skills. At low mana they disengage, face their running direction, and resume against a reachable threshold even under sustained drain. Fixed bots getting stuck at exactly 10 percent mana and fixed multiplayer level-up choices targeting the wrong participant. Requires beta.29 for clean primary-skill handback and removal of the extra ally row while takeover is active.",
+  "changelog": "Added Bot Play For Me with an F9 toggle and clean handback. Bots now choose random offered skills. At low mana they disengage, face their running direction, and resume at 80 percent of currently attainable mana even under sustained drain. Fixed bots getting stuck at exactly 10 percent mana and fixed multiplayer level-up choices targeting the wrong participant. Requires beta.29 for clean primary-skill handback and removal of the extra ally row while takeover is active.",
   "screenshots": []
 }

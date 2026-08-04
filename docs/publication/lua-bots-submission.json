@@ -8,7 +8,7 @@
     "fields": {
       "name": "Lua Bots",
       "summary": "Bot teammates, or a bot that can play your own wizard.",
-      "description": "Add configurable bot teammates, or let a bot take over your own wizard with Bot Play For Me. Toggle it in settings or press F9 during a run; press F9 again to hand control back. Choose a name, element, discipline, and Skirmisher, Guardian, Striker, or Learned style for each teammate. Bots fill real player slots, appear in the member list, draw enemy attention, choose a random offered skill at level-up, and move, cast, die, and respawn like players. To conserve mana, they stop casting at 10 percent and resume at 80 percent. In multiplayer the host's roster is shared with everyone, while each player can choose Bot Play For Me for their own wizard. The bundled learned policy runs inside Lua without Python, a GPU, or a network service. Requires v0.1.0-beta.29 or newer.",
+      "description": "Add configurable bot teammates, or let a bot take over your own wizard with Bot Play For Me. Toggle it in settings or press F9 during a run; press F9 again to hand control back. Choose a name, element, discipline, and Skirmisher, Guardian, Striker, or Learned style for each teammate. Bots fill real player slots, appear in the member list, draw enemy attention, choose a random offered skill at level-up, and move, cast, die, and respawn like players. At 10 percent mana they stop casting and run from enemies until 80 percent of their currently attainable mana is restored. In multiplayer the host's roster is shared with everyone, while each player can choose Bot Play For Me for their own wizard. The bundled learned policy runs inside Lua without Python, a GPU, or a network service. Requires v0.1.0-beta.29 or newer.",
       "tags": []
     }
   },
@@ -19,12 +19,12 @@
     "contentType": "multipart/form-data",
     "fields": {
       "version": "1.2.0",
-      "changelog": "Added Bot Play For Me with an F9 toggle and clean handback. Bots now choose random offered skills and conserve mana by pausing spells at 10 percent and resuming at 80 percent. Fixed bots getting stuck at exactly 10 percent mana and fixed multiplayer level-up choices targeting the wrong participant. Requires beta.29 for clean primary-skill handback and removal of the extra ally row while takeover is active."
+      "changelog": "Added Bot Play For Me with an F9 toggle and clean handback. Bots now choose random offered skills. At low mana they disengage, face their running direction, and resume at 80 percent of currently attainable mana even under sustained drain. Fixed bots getting stuck at exactly 10 percent mana and fixed multiplayer level-up choices targeting the wrong participant. Requires beta.29 for clean primary-skill handback and removal of the extra ally row while takeover is active."
     },
     "files": {
-      "file": "/mnt/d/codex-evidence/botlevel-20260804/packages/lua-bots-1.2.0.zip",
-      "packageSha256": "c29f61b4c94bcc1b8b122a7d458f8772bd3804a11e229de479134cf68f355b93",
-      "contentSha256": "503e0869e4c29db9e4d50d9b150cbd2fdbb8b8fd0bcce8b273b2904d553d8bda"
+      "file": "/mnt/d/codex-evidence/botmana-20260804/packages/lua-bots-1.2.0.zip",
+      "packageSha256": "504d4de14336a10e6cae215a5923b659a0dafb106364b94a084b2397993f2637",
+      "contentSha256": "b6bccfe6f2ab680881d5f0715611ec8d0cfb59c13a2bf4215c37c5feca69a428"
     }
   }
 }

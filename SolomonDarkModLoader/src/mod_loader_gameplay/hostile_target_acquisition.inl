@@ -629,11 +629,9 @@ bool ApplyHostileTargetSelection(
         return false;
     }
     if (selection.valid) {
-        // The retail selector sets this byte before scanning and clears it
-        // through the ActorWorld registration tail when it commits a
-        // group-zero target. Extended targets are committed without
-        // relocating the hostile, so complete the same success contract
-        // explicitly after both target fields are valid.
+        // Retail clears this byte via ActorWorld registration for group-zero targets.
+        // Extended targets do not relocate, so complete the same success contract
+        // after both target fields are valid.
         success =
             memory.TryWriteField<std::uint8_t>(
                 hostile_actor_address,
@@ -648,7 +646,6 @@ bool ApplyHostileTargetSelection(
     if (previous_target_actor_address != desired_target_actor_address) {
         multiplayer::RequestImmediateRunWorldSnapshot();
     }
-
     const auto [logged_target_iterator, inserted_logged_target] =
         g_last_logged_hostile_target_by_actor.try_emplace(
             hostile_actor_address,
