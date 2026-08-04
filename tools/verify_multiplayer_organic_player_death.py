@@ -427,7 +427,10 @@ def _materialize_native_wave_schedule(
     retail_wave_path: Path,
     fixture_path: Path,
     output_path: Path,
+    wave_delay_ticks: int = 100,
 ) -> dict[str, Any]:
+    if wave_delay_ticks <= 0:
+        raise VerifyFailure("native wave delay must be positive")
     retail_bytes = retail_wave_path.read_bytes()
     retail_text = retail_bytes.decode("ascii")
     normalized = retail_text.replace("\r\n", "\n").replace("\r", "\n")
@@ -484,7 +487,7 @@ def _materialize_native_wave_schedule(
                     f"\tNEXT:{next_value}",
                     "\tSPAWN:1",
                     "\tSPAWNDELAY:1-1",
-                    "\tWAVEDELAY:100-100",
+                    f"\tWAVEDELAY:{wave_delay_ticks}-{wave_delay_ticks}",
                     "\tMAXENEMIES:1",
                     "\tGROUP",
                     f"\t\t{enemy_token}",
@@ -507,6 +510,7 @@ def _materialize_native_wave_schedule(
         "record_count": len(matches),
         "next_graph": next_graph,
         "enemy_token": enemy_token,
+        "wave_delay_ticks": wave_delay_ticks,
         "retail_sha256": hashlib.sha256(retail_bytes).hexdigest(),
         "fixture_sha256": hashlib.sha256(
             fixture_path.read_bytes()

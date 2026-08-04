@@ -6,6 +6,7 @@ from tools.verify_hostile_targeting_continuity import (
     HostileTargetingContinuityFailure,
     _arrange,
     _enemy_network_ids_from_log,
+    _release_bot_lock,
     analyze_selector_log,
     analyze_target_samples,
     analyze_wave_completion,
@@ -33,6 +34,18 @@ def target_row(*, target: int = BOT_ID, latch: int = 0) -> dict[str, object]:
 
 
 class HostileTargetingContinuityVerifierTests(unittest.TestCase):
+    def test_bot_lock_release_is_explicit(self) -> None:
+        class Pipe:
+            code = ""
+
+            def execute(self, code: str) -> str:
+                self.code = code
+                return "released=true"
+
+        pipe = Pipe()
+        self.assertTrue(_release_bot_lock(pipe)["released"])
+        self.assertIn("lock.bot_actor = 0", pipe.code)
+
     def test_arrange_can_lock_the_bot_during_nearest_sampling(self) -> None:
         class Pipe:
             code = ""
@@ -151,6 +164,36 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
         )
         self.assertTrue(assessment["advanced"])
         self.assertEqual(assessment["ownerSearchInputRequests"], 0)
+
+    def test_completed_phase_counts_as_wave_advancement(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 2850.0,
+            "bot.x": 2350.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+        }
+        final = {
+            **first,
+            "enemy.alive": False,
+            "bot.cast_accepted": 11,
+            "wave.phase": "completed",
+        }
+        assessment = analyze_wave_completion(
+            [first, final],
+            starting_wave=1,
+            bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111],
+            damage_rows=[
+                {
+                    "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
+                    "damage": 25.0,
+                }
+            ],
+        )
+        self.assertTrue(assessment["advanced"])
+        self.assertTrue(assessment["completedPhaseObserved"])
 
     def test_wave_number_alone_cannot_hide_missing_bot_damage(self) -> None:
         first = {

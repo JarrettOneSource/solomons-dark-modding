@@ -462,6 +462,20 @@ def _arrange(
     return values
 
 
+def _release_bot_lock(pipe: LuaPipe) -> dict[str, Any]:
+    values = _parse_key_values(pipe.execute(r"""
+local lock = rawget(_G, "__botlevel_stationary_straggler")
+local released = type(lock) == "table" and lock.bot_actor ~= 0
+if type(lock) == "table" then lock.bot_actor = 0 end
+print("released=" .. tostring(released))
+"""))
+    if values.get("released") is not True:
+        raise HostileTargetingContinuityFailure(
+            f"stationary fixture bot lock was not active: {values}"
+        )
+    return values
+
+
 def _distance(row: dict[str, Any], prefix: str) -> float:
     return math.hypot(
         float(row["enemy.x"]) - float(row[f"{prefix}.x"]),
@@ -587,6 +601,10 @@ def analyze_wave_completion(
         (int(row.get("combat.wave", 0)) for row in samples),
         default=0,
     )
+    completed_phase_observed = any(
+        str(row.get("wave.phase", "")).casefold() == "completed"
+        for row in samples
+    )
     bot_damage = [
         row for row in damage_rows
         if int(row.get("sourceParticipantId", 0)) == bot_id
@@ -636,7 +654,8 @@ def analyze_wave_completion(
     assessment = {
         "startingWave": starting_wave,
         "finalWave": final_wave,
-        "advanced": final_wave > starting_wave,
+        "advanced": final_wave > starting_wave or completed_phase_observed,
+        "completedPhaseObserved": completed_phase_observed,
         "initialBotDistance": initial_distance,
         "stationaryEnemyMaxDisplacement": enemy_displacement,
         "ownerMaxDisplacement": owner_displacement,
@@ -706,6 +725,7 @@ def _prepare_single_skeleton_wave(
         retail_wave_path=game_directory / "data" / "wave.txt",
         fixture_path=WAVE_FIXTURES["melee"],
         output_path=evidence_root / "inputs" / "single-skeleton-wave.txt",
+        wave_delay_ticks=10000,
     )
 
 
@@ -1048,7 +1068,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             preserve_enemy_positions=True,
             relative_layout=True,
             require_clear_paths=True,
-            lock_bot=False,
+            lock_bot=True,
         )
         result["stragglerLayout"] = straggler_layout
         enemy_rows: list[dict[str, Any]] = []
@@ -1061,6 +1081,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             owner_id=args.participant_id,
         )
         first_wave_sample["utcNanoseconds"] = time.time_ns()
+        result["stragglerBotRelease"] = _release_bot_lock(pipe)
         starting_wave = int(first_wave_sample.get("combat.wave", 0))
         wave_samples: list[dict[str, Any]] = [first_wave_sample]
         deadline = time.monotonic() + args.wave_timeout
@@ -1080,7 +1101,14 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                 player_rows,
                 target_mod_id=BOT_MOD_ID,
             )
-            if int(row.get("combat.wave", 0)) > starting_wave:
+            if (
+                (
+                    int(row.get("combat.wave", 0)) > starting_wave
+                    or str(row.get("wave.phase", "")).casefold()
+                    == "completed"
+                )
+                and int(row.get("original.network_live_count", -1)) == 0
+            ):
                 break
             time.sleep(0.2)
         result["stragglerSamples"] = wave_samples

@@ -654,6 +654,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 retail_wave_path=source_path,
                 fixture_path=verifier.WAVE_FIXTURES["poison"],
                 output_path=output_path,
+                wave_delay_ticks=10000,
             )
 
             self.assertEqual(source_path.read_bytes(), retail_schedule)
@@ -673,6 +674,10 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
             self.assertEqual(effective.count(b"\tSPAWN:1\r\n"), 2)
             self.assertEqual(effective.count(b"\tMAXENEMIES:1\r\n"), 2)
             self.assertEqual(
+                effective.count(b"\tWAVEDELAY:10000-10000\r\n"),
+                2,
+            )
+            self.assertEqual(
                 effective.count(
                     b"\t\tSKELETONMAGE:"
                     b"FLAG_CASTPOISON|FLAG_RANGEEASY\r\n"
@@ -680,6 +685,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 2,
             )
             self.assertEqual(manifest["record_count"], 2)
+            self.assertEqual(manifest["wave_delay_ticks"], 10000)
             self.assertEqual(manifest["next_graph"], ["1", "0,1"])
             self.assertEqual(
                 manifest["enemy_token"],
