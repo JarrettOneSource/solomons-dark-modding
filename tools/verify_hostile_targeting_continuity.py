@@ -75,7 +75,9 @@ MINIMUM_STRAGGLER_DISTANCE = 450.0
 MAXIMUM_LOCKED_ENEMY_DISPLACEMENT = 40.0
 MAXIMUM_OWNER_DISPLACEMENT = 16.0
 STABILIZED_ENEMY_HP = 5000.0
-STRAGGLER_ENEMY_HP = 1.0
+# Two native hits ensure a projectile already in flight at the phase boundary
+# cannot kill an original enemy before its bot-damage receipt is observed.
+STRAGGLER_ENEMY_HP = 5.0
 
 
 class HostileTargetingContinuityFailure(RuntimeError):
@@ -639,6 +641,9 @@ def analyze_wave_completion(
         "originalEnemyCount": original_enemy_count,
         "botDamagedOriginalEnemyCount": len(bot_damaged_original_enemies),
         "botDamagedOriginalEnemyIdentities": bot_damaged_original_enemies,
+        "allOriginalEnemiesBotDamaged": (
+            len(bot_damaged_original_enemies) == original_enemy_count
+        ),
     }
     completed = (
         assessment["advanced"]
@@ -647,8 +652,7 @@ def analyze_wave_completion(
         and owner_displacement <= MAXIMUM_OWNER_DISPLACEMENT
         and len(bot_damage) >= 1
         and cast_delta >= 1
-        and len(bot_damaged_original_enemies) >= 1
-        and not assessment["originalEnemyLiveAtEnd"]
+        and assessment["allOriginalEnemiesBotDamaged"]
     )
     stalled_under_active_bot = (
         not assessment["advanced"]
@@ -1061,10 +1065,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                 player_rows,
                 target_mod_id=BOT_MOD_ID,
             )
-            if (
-                int(row.get("combat.wave", 0)) > starting_wave
-                and int(row.get("original.network_live_count", -1)) == 0
-            ):
+            if int(row.get("combat.wave", 0)) > starting_wave:
                 break
             time.sleep(0.2)
         result["stragglerSamples"] = wave_samples

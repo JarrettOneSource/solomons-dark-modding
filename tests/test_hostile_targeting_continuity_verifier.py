@@ -171,7 +171,7 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 damage_rows=[],
             )
 
-    def test_wave_number_cannot_hide_a_live_original_enemy(self) -> None:
+    def test_wave_advance_requires_damage_to_every_original_enemy(self) -> None:
         first = {
             **target_row(),
             "owner.x": 2850.0,
@@ -184,7 +184,6 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             "enemy.alive": False,
             "bot.cast_accepted": 11,
             "combat.wave": 2,
-            "original.live_count": 1,
         }
         with self.assertRaises(HostileTargetingContinuityFailure):
             analyze_wave_completion(
@@ -201,7 +200,7 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 ],
             )
 
-    def test_network_identity_ignores_reused_original_actor_address(self) -> None:
+    def test_network_identity_ignores_stale_authority_snapshot(self) -> None:
         first = {
             **target_row(),
             "owner.x": 2850.0,
@@ -217,7 +216,7 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             "bot.cast_accepted": 11,
             "combat.wave": 2,
             "original.live_count": 1,
-            "original.network_live_count": 0,
+            "original.network_live_count": 1,
         }
         assessment = analyze_wave_completion(
             [first, final],
@@ -234,7 +233,8 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 }
             ],
         )
-        self.assertFalse(assessment["originalEnemyLiveAtEnd"])
+        self.assertTrue(assessment["originalEnemyLiveAtEnd"])
+        self.assertTrue(assessment["allOriginalEnemiesBotDamaged"])
         self.assertEqual(
             assessment["originalEnemyIdentityKind"],
             "network_actor_id",
