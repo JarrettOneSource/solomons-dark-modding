@@ -958,6 +958,9 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
         "tools/verify_bot_wave_respawn.py",
         "tools/verify_multiplayer_local_hit_feedback.py",
     }
+    delegated_hard_disabled_python = {
+        "tools/verify_lua_consumable_presentation.py",
+    }
     reference_only_python = {
         "tools/verify_bot_level_up_continuity.py",
         "tools/verify_hostile_targeting_continuity.py",
@@ -1006,6 +1009,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
     if discovered_python != (
         direct_python |
         hard_disabled_python |
+        delegated_hard_disabled_python |
         reference_only_python
     ):
         raise StaticReTestFailure(
@@ -1060,6 +1064,10 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
             or 'environment["SDMOD_ENABLE_AUDIO"] = "0"' not in text
             or "-EnableAudio" in text
         ):
+            failures.append(relative_path)
+    for relative_path in sorted(delegated_hard_disabled_python):
+        text = read_text(ROOT / relative_path)
+        if "enable_audio=False" not in text or "enable_audio=True" in text:
             failures.append(relative_path)
     if failures:
         raise StaticReTestFailure(
