@@ -244,6 +244,37 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             "network_actor_id",
         )
 
+    def test_phase_boundary_death_is_accounted_before_sampling(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 2850.0,
+            "bot.x": 2350.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+            "original.live_count": 1,
+        }
+        final = {
+            **first,
+            "enemy.alive": False,
+            "bot.cast_accepted": 11,
+            "combat.wave": 2,
+        }
+        assessment = analyze_wave_completion(
+            [first, final],
+            starting_wave=1,
+            bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111, 0x222],
+            damage_rows=[
+                {
+                    "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
+                    "damage": 25.0,
+                }
+            ],
+        )
+        self.assertEqual(assessment["phaseBoundaryOriginalDeathCount"], 1)
+        self.assertTrue(assessment["allOriginalEnemiesAccounted"])
+
     def test_bot_damage_to_a_different_network_enemy_cannot_pass(self) -> None:
         first = {
             **target_row(),
