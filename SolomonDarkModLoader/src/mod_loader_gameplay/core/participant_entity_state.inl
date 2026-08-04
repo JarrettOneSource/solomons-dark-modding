@@ -145,6 +145,8 @@ struct ParticipantEntityBinding {
     bool native_remote_webbed_authority_pending = false;
     std::uint64_t native_remote_webbed_authority_pending_since_ms = 0;
     bool native_remote_webbed_owner_acknowledged = false;
+    bool mana_reserve_active = false;
+    bool mana_reserve_movement_facing_latched = false;
     std::uint64_t mana_recovery_not_before_ms = 0;
     std::uint64_t last_mana_recovery_log_ms = 0;
     std::uint64_t last_mana_reserve_cleanup_log_ms = 0;

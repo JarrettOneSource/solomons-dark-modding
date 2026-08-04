@@ -115,6 +115,13 @@ struct BotManaReserveState {
     std::uint64_t bot_id = 0;
     bool active = false;
     float last_ratio = 1.0f;
+    float nominal_max_mp = 0.0f;
+    float attainable_max_mp = 0.0f;
+    float resume_threshold_mp = 0.0f;
+    float recovery_peak_mp = 0.0f;
+    std::uint64_t last_progress_ms = 0;
+    bool attainable_cap_detected = false;
+    bool native_attainable_cap = false;
 };
 
 struct BotLoadoutRevisionTuple {

@@ -985,17 +985,44 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/gameplay_constants.inl"
     )
     lua_snapshot_text = read_text(LUA_ENGINE_PARSER_SNAPSHOTS)
+    participant_entity_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/core/participant_entity_state.inl"
+    )
+    facing_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/scene_and_animation_drive_profiles.inl"
+    )
+    movement_intent_sync_text = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/mod_loader_gameplay/bot_movement_tick/"
+        "participant_scene_binding_ticks.inl"
+    )
+    binary_layout_text = read_text(ROOT / "config/binary-layout.ini")
+    progression_offsets_text = read_text(
+        ROOT / "SolomonDarkModLoader/src/gameplay_seams/progression_and_actor_offsets.inl"
+    )
 
     required_tokens = (
         "constexpr float kBotManaReserveEnterRatio = 0.10f",
         "constexpr float kBotManaReserveExitRatio = 0.80f",
+        "constexpr std::uint64_t kBotManaReserveAttainablePlateauMs = 2000",
         "bool mana_reserve_active = false",
+        "float mana_attainable_max_mp = 0.0f",
+        "float mana_resume_threshold_mp = 0.0f",
+        "bool mana_attainable_cap_detected = false",
         "struct BotManaReserveState",
+        "float recovery_peak_mp = 0.0f",
+        "std::uint64_t last_progress_ms = 0",
+        "bool attainable_cap_detected = false",
+        "bool native_attainable_cap = false",
         "std::vector<BotManaReserveState> g_bot_mana_reserves",
         "ratio <= kBotManaReserveEnterRatio",
         "ratio >= kBotManaReserveExitRatio",
+        "const float detected_attainable_max_mp = std::clamp(\n                current_mp,",
+        "!state->attainable_cap_detected ||\n         ratio < kBotManaReserveExitRatio",
+        "mana attainable cap detected",
         "UpdateBotManaReserveStateLocked",
         "RefreshBotManaReserveState",
+        "RefreshBotManaReserveStateWithAttainableMaximum",
         "ApplyManaReserveStateToSnapshot(&live_snapshot)",
         "ApplyManaReserveStateToSnapshot(snapshot)",
         "live_snapshot.mana_reserve_active",
@@ -1007,6 +1034,10 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         "StopOngoingBotCastForManaReserve",
         "pre_bot_stock_tick_mana_reserve",
         "ApplyBotNativeManaReserveRecovery",
+        "TryReadNativeBotAttainableMana",
+        "kProgressionHoardedMpOffset",
+        "progression_hoarded_mp=0x740",
+        "const float remaining_mp = recovery_ceiling_mp - current_mp",
         "ClearIdleBotManaReserveNativeCastState",
         "native mana reserve idle cast cleanup",
         "InvokeNativeManaDeltaTrampolineForBotSafe",
@@ -1019,6 +1050,17 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         "g_bot_mana_reserves.clear()",
         "RemoveBotManaReserveState(bot_id)",
         "lua_setfield(state, -2, \"mana_reserve_active\")",
+        "lua_setfield(state, -2, \"mana_attainable_max_mp\")",
+        "lua_setfield(state, -2, \"mana_resume_threshold_mp\")",
+        "lua_setfield(state, -2, \"mana_attainable_cap_detected\")",
+        "FaceBotTarget(binding->bot_id, 0, false, 0.0f)",
+        "bool mana_reserve_movement_facing_latched = false",
+        "binding->mana_reserve_movement_facing_latched = true",
+        "intent.face_target_actor_address != 0",
+        "binding.mana_reserve_active ||",
+        "binding.movement_active &&",
+        "binding.desired_heading_valid",
+        "binding.desired_heading",
     )
     combined_text = "\n".join((
         header_text,
@@ -1036,6 +1078,11 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         player_tick_hook_text,
         constants_text,
         lua_snapshot_text,
+        participant_entity_text,
+        facing_text,
+        movement_intent_sync_text,
+        binary_layout_text,
+        progression_offsets_text,
     ))
     missing = [token for token in required_tokens if token not in combined_text]
     if missing:
@@ -1043,11 +1090,52 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
             "bot mana reserve hysteresis is missing native cast token(s): " +
             ", ".join(missing))
 
-    enter_pos = lookup_text.find("ratio <= kBotManaReserveEnterRatio")
+    enter_pos = lookup_text.find(
+        "nominal_ratio <= kBotManaReserveEnterRatio")
     exit_pos = lookup_text.find("ratio >= kBotManaReserveExitRatio")
-    if not (0 <= enter_pos < exit_pos):
+    attainable_threshold_pos = lookup_text.find(
+        "state->attainable_max_mp * kBotManaReserveExitRatio")
+    plateau_pos = lookup_text.find(
+        "now_ms - state->last_progress_ms >=")
+    plateau_cap_pos = lookup_text.find(
+        "const float detected_attainable_max_mp = std::clamp(\n"
+        "                current_mp,",
+        plateau_pos,
+    )
+    cap_reentry_guard_pos = lookup_text.find(
+        "!state->attainable_cap_detected ||\n"
+        "         ratio < kBotManaReserveExitRatio",
+        enter_pos,
+    )
+    if min(
+        enter_pos,
+        exit_pos,
+        attainable_threshold_pos,
+        plateau_pos,
+        plateau_cap_pos,
+        cap_reentry_guard_pos,
+    ) < 0:
         raise StaticReTestFailure(
-            "bot mana reserve must include the exact low and high thresholds")
+            "bot mana reserve must enter at exact nominal 10%, exit at "
+            "exact attainable 80%, detect the current stalled ceiling, "
+            "and avoid re-entering above a detected attainable threshold")
+
+    native_cap_read_pos = player_mana_hook_text.find(
+        "TryReadNativeBotAttainableMana(")
+    native_cap_refresh_pos = player_mana_hook_text.find(
+        "RefreshBotManaReserveStateWithAttainableMaximum(",
+        native_cap_read_pos,
+    )
+    recovery_ceiling_pos = player_mana_hook_text.find(
+        "const float remaining_mp = recovery_ceiling_mp - current_mp",
+        native_cap_refresh_pos,
+    )
+    if not (
+        0 <= native_cap_read_pos < native_cap_refresh_pos < recovery_ceiling_pos
+    ):
+        raise StaticReTestFailure(
+            "native hoarded mana must set the attainable reserve threshold "
+            "and bound the recovery delta")
 
     refresh_pos = casting_text.find("ApplyManaReserveStateToSnapshot(&live_snapshot)")
     reserve_reject_pos = casting_text.find("cast rejected for mana reserve")

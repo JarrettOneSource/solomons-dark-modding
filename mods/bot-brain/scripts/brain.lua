@@ -134,7 +134,16 @@ local function read_own_mana(context)
         current ~= current or maximum <= 0.0 then
       return nil, nil, nil
     end
-    return current, maximum, snapshot.mana_reserve_active
+    local attainable_maximum =
+      tonumber(snapshot.mana_attainable_max_mp) or maximum
+    local resume_threshold =
+      tonumber(snapshot.mana_resume_threshold_mp) or
+        attainable_maximum * CAST_MANA_RESUME_HIGH_RATIO
+    local attainable_cap_detected =
+      snapshot.mana_attainable_cap_detected == true
+    return current, maximum, snapshot.mana_reserve_active,
+      attainable_maximum, resume_threshold,
+      attainable_cap_detected
   end
 
   local handle_ok, current, maximum = pcall(function()
@@ -144,13 +153,16 @@ local function read_own_mana(context)
   maximum = tonumber(maximum)
   if handle_ok and current ~= nil and maximum ~= nil and
       current == current and maximum > 0.0 then
-    return current, maximum, nil
+    return current, maximum, nil, maximum,
+      maximum * CAST_MANA_RESUME_HIGH_RATIO, false
   end
   return nil, nil, nil
 end
 
 local function update_mana_cast_hold(context)
-  local current, maximum, native_reserve_active =
+  local current, maximum, native_reserve_active,
+    attainable_maximum, resume_threshold,
+    attainable_cap_detected =
     read_own_mana(context)
   if current == nil or maximum == nil then
     context.mana_sample_valid = false
@@ -164,6 +176,10 @@ local function update_mana_cast_hold(context)
   context.debug.mp = current
   context.debug.max_mp = maximum
   context.debug.mp_ratio = ratio
+  context.debug.mana_attainable_max_mp = attainable_maximum
+  context.debug.mana_resume_threshold_mp = resume_threshold
+  context.debug.mana_attainable_cap_detected =
+    attainable_cap_detected
   local next_hold = context.mana_cast_hold
   if native_reserve_active ~= nil then
     next_hold = native_reserve_active
@@ -174,6 +190,8 @@ local function update_mana_cast_hold(context)
       ratio >= CAST_MANA_RESUME_HIGH_RATIO then
     next_hold = false
   end
+  context.mana_fleeing = next_hold
+  context.debug.mana_fleeing = next_hold
 
   if not context.mana_cast_hold and next_hold then
     context.mana_cast_hold = true
@@ -187,6 +205,11 @@ local function update_mana_cast_hold(context)
       " current=" .. tostring(current) ..
       " maximum=" .. tostring(maximum) ..
       " ratio=" .. tostring(ratio) ..
+      " attainable_maximum=" ..
+        tostring(attainable_maximum) ..
+      " resume_threshold=" .. tostring(resume_threshold) ..
+      " attainable_cap_detected=" ..
+        tostring(attainable_cap_detected) ..
       " low=" .. tostring(CAST_MANA_HOLD_LOW_RATIO) ..
       " high=" .. tostring(CAST_MANA_RESUME_HIGH_RATIO))
   elseif context.mana_cast_hold and not next_hold then
@@ -201,10 +224,45 @@ local function update_mana_cast_hold(context)
       " current=" .. tostring(current) ..
       " maximum=" .. tostring(maximum) ..
       " ratio=" .. tostring(ratio) ..
+      " attainable_maximum=" ..
+        tostring(attainable_maximum) ..
+      " resume_threshold=" .. tostring(resume_threshold) ..
+      " attainable_cap_detected=" ..
+        tostring(attainable_cap_detected) ..
       " low=" .. tostring(CAST_MANA_HOLD_LOW_RATIO) ..
       " high=" .. tostring(CAST_MANA_RESUME_HIGH_RATIO))
   end
   return true
+end
+
+local function update_flee_state(context, hp_ratio)
+  if context.hp_fleeing then
+    if hp_ratio >= context.profile.flee_recovery_threshold then
+      context.hp_fleeing = false
+      context.shared.log(
+        context,
+        "mode=normal hp_ratio=" .. tostring(hp_ratio))
+    end
+  elseif hp_ratio < context.profile.flee_threshold then
+    context.hp_fleeing = true
+    context.debug.flee_transition_count =
+      context.debug.flee_transition_count + 1
+    context.shared.log(
+      context,
+      "mode=flee hp_ratio=" .. tostring(hp_ratio))
+  end
+  context.mana_fleeing = context.mana_cast_hold
+  context.fleeing = context.hp_fleeing or context.mana_fleeing
+  context.debug.hp_fleeing = context.hp_fleeing
+  context.debug.mana_fleeing = context.mana_fleeing
+  local mode = context.mana_fleeing and "mana_flee" or
+    (context.hp_fleeing and "flee" or "kite")
+  context.debug.mode = mode
+  return mode
+end
+
+local function should_use_scripted_movement(context)
+  return context.row.behavior ~= "learned" or context.mana_fleeing
 end
 
 local function choose_pending_skill(context, choices)
@@ -846,6 +904,8 @@ function brain.new(row, roster_index, shared, steering)
     last_skill_choice_generation = -1,
     mana_sample_valid = false,
     mana_cast_hold = false,
+    hp_fleeing = false,
+    mana_fleeing = false,
     last_position_x = nil,
     last_position_y = nil,
     arena = nil,
@@ -878,6 +938,11 @@ function brain.new(row, roster_index, shared, steering)
       mp_ratio = 0.0,
       mana_sample_valid = false,
       mana_cast_hold = false,
+      hp_fleeing = false,
+      mana_fleeing = false,
+      mana_attainable_max_mp = 0.0,
+      mana_resume_threshold_mp = 0.0,
+      mana_attainable_cap_detected = false,
       mana_hold_start_count = 0,
       mana_hold_end_count = 0,
       live_enemy_count = 0,
@@ -982,11 +1047,15 @@ function brain.reset_run(context, started)
     context.policy_pending = nil
   end
   context.fleeing = false
+  context.hp_fleeing = false
+  context.mana_fleeing = false
   context.death_latched = false
   context.mana_sample_valid = false
   context.mana_cast_hold = false
   context.debug.mana_sample_valid = false
   context.debug.mana_cast_hold = false
+  context.debug.hp_fleeing = false
+  context.debug.mana_fleeing = false
   context.last_position_x = nil
   context.last_position_y = nil
   context.last_move_attempt_ms =
@@ -1116,22 +1185,7 @@ function brain.think(
     scene_key)
 
   local hp_ratio = hp / max_hp
-  if context.fleeing then
-    if hp_ratio >= context.profile.flee_recovery_threshold then
-      context.fleeing = false
-      context.shared.log(
-        context,
-        "mode=normal hp_ratio=" .. tostring(hp_ratio))
-    end
-  elseif hp_ratio < context.profile.flee_threshold then
-    context.fleeing = true
-    context.debug.flee_transition_count =
-      context.debug.flee_transition_count + 1
-    context.shared.log(
-      context,
-      "mode=flee hp_ratio=" .. tostring(hp_ratio))
-  end
-  context.debug.mode = context.fleeing and "flee" or "kite"
+  update_flee_state(context, hp_ratio)
 
   local snapshot_ok, world_snapshot =
     pcall(sd.world.get_replicated_actors)
@@ -1204,6 +1258,7 @@ function brain.think(
     context.debug.mode = "guard"
   end
   if context.row.behavior == "guardian" and ward ~= nil and
+      not context.fleeing and
       context.debug.guardian_ward_distance >
         context.profile.leash_radius * 0.82 then
     direction_x, direction_y =
@@ -1270,7 +1325,7 @@ function brain.think(
     nearest_threat_distance < math.huge and
       nearest_threat_distance or 0.0
   context.debug.edge_pressure = edge_pressure
-  if context.row.behavior == "learned" then
+  if not should_use_scripted_movement(context) then
     think_with_policy(
       context,
       {
@@ -1318,6 +1373,8 @@ end
 brain.profiles = PROFILES
 brain.choose_pending_skill = choose_pending_skill
 brain.update_mana_cast_hold = update_mana_cast_hold
+brain.update_flee_state = update_flee_state
+brain.should_use_scripted_movement = should_use_scripted_movement
 brain.cast_mana_hold_low_ratio = CAST_MANA_HOLD_LOW_RATIO
 brain.cast_mana_resume_high_ratio = CAST_MANA_RESUME_HIGH_RATIO
 brain.request_nearby_pickup = request_nearby_pickup

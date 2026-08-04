@@ -79,6 +79,9 @@ void ShutdownLocalTransport() {
     g_local_transport_enabled.store(false, std::memory_order_release);
     g_local_transport_is_udp.store(false, std::memory_order_release);
     g_local_transport_host.store(false, std::memory_order_release);
+    g_immediate_run_world_snapshot_requested.store(
+        false,
+        std::memory_order_release);
     g_local_transport_teardown_complete.store(
         true,
         std::memory_order_release);

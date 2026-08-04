@@ -101,12 +101,21 @@ mask. Neither path writes a transform. The loader may apply its
 authority-owned, native-placement-validated stuck recovery only after a full
 30-second no-progress window.
 
-Each bot samples its own actor's mana and applies casting hysteresis. Casting
-enters hold at or below 10% mana and resumes only at or above 80%; movement and
-target selection continue while held. Both transitions log participant ID,
-current and maximum mana, ratio, and both named thresholds. Missing or invalid
-per-actor mana fails closed for casting instead of borrowing another player's
-pool.
+Each bot samples its own actor's mana and mirrors the loader's participant-owned
+reserve state. At or below 10% of nominal mana, the bot stops casting and uses
+scripted flee steering until reserve clears. This override also applies to the
+Learned behavior, so an inference decision cannot keep an exhausted bot in its
+ordinary combat movement. Missing or invalid per-actor mana fails closed for
+casting instead of borrowing another player's pool.
+
+Reserve normally clears at or above 80% of nominal mana. If a persistent drain
+prevents that recovery, the loader uses the progression's native hoarded-mana
+value when available; otherwise it detects a stable recovery ceiling. It exposes
+the resulting attainable maximum plus its 80% resume threshold in the
+participant snapshot. The brain follows that native decision and cannot wait
+forever on an unreachable nominal threshold. Hold transitions log participant
+ID, current, nominal and attainable mana, the effective resume threshold, and
+whether an attainable cap was detected.
 
 Each bot asks `sd.bots.get_primary_attack_window(participant_id)` for its own
 live class primary. A cast uses
@@ -174,6 +183,10 @@ The strict 395 -> 192 -> 96 three-head weights run locally in Lua: inference
 does not start Python, require a GPU, or contact a model service, and all
 movement and casts still use the native participant rails. Historical v1
 weights are rejected explicitly rather than reinterpreted.
+
+Mana reserve is an outer safety policy, not another learned action. While it is
+active, Learned rows skip policy movement and use the same away-from-threat
+steering as scripted rows; inference resumes when the native reserve clears.
 
 The shared skill manager handles level-up pickers outside the simulation-time
 decision cadence, so a shared picker pause cannot prevent either peer from

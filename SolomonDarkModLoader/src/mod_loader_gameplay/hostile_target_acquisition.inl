@@ -645,6 +645,10 @@ bool ApplyHostileTargetSelection(
         return false;
     }
 
+    if (previous_target_actor_address != desired_target_actor_address) {
+        multiplayer::RequestImmediateRunWorldSnapshot();
+    }
+
     const auto [logged_target_iterator, inserted_logged_target] =
         g_last_logged_hostile_target_by_actor.try_emplace(
             hostile_actor_address,

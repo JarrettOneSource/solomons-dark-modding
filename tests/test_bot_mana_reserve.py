@@ -39,6 +39,9 @@ class BotManaReserveTests(unittest.TestCase):
                 "native_reserve_source": "true",
                 "exact_boundaries": "true",
                 "local_player_fallback": "true",
+                "mana_flee": "true",
+                "attainable_threshold": "true",
+                "learned_policy_override": "true",
             },
         )
 

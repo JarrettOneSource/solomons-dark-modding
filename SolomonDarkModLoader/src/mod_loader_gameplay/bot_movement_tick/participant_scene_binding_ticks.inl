@@ -23,7 +23,18 @@ void SyncWizardBotMovementIntent(ParticipantEntityBinding* binding) {
     }
     binding->desired_heading_valid = intent.desired_heading_valid;
     binding->desired_heading = intent.desired_heading;
-    binding->facing_target_actor_address = intent.face_target_actor_address;
+    if (!binding->mana_reserve_active &&
+        binding->mana_reserve_movement_facing_latched &&
+        intent.face_target_actor_address != 0) {
+        binding->mana_reserve_movement_facing_latched = false;
+    }
+    const bool reserve_movement_facing =
+        binding->mana_reserve_active ||
+        binding->mana_reserve_movement_facing_latched;
+    binding->facing_target_actor_address =
+        reserve_movement_facing
+        ? 0
+        : intent.face_target_actor_address;
     if (intent.face_target_actor_address != 0 &&
         binding->ongoing_cast.active &&
         OngoingCastShouldUseLiveFacingTarget(binding->ongoing_cast)) {

@@ -551,6 +551,32 @@ bool RefreshBotManaReserveState(
     return true;
 }
 
+bool RefreshBotManaReserveStateWithAttainableMaximum(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    float attainable_max_mp,
+    bool* reserve_active) {
+    if (reserve_active != nullptr) {
+        *reserve_active = false;
+    }
+
+    std::scoped_lock lock(g_bot_runtime_mutex);
+    if (!g_bot_runtime_initialized || bot_id == 0) {
+        return false;
+    }
+
+    const bool active = UpdateBotManaReserveStateLocked(
+        bot_id,
+        current_mp,
+        max_mp,
+        &attainable_max_mp);
+    if (reserve_active != nullptr) {
+        *reserve_active = active;
+    }
+    return true;
+}
+
 const char* BotManaChargeKindLabel(BotManaChargeKind kind) {
     switch (kind) {
     case BotManaChargeKind::PerCast:

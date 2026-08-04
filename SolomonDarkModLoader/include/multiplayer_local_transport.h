@@ -26,6 +26,7 @@ void FlushActiveLocalCastRelease(std::uint64_t now_ms);
 bool IsLocalTransportEnabled();
 bool IsLocalTransportHost();
 bool IsLocalTransportClient();
+void RequestImmediateRunWorldSnapshot();
 void RequestLocalTransportTeardown(
     SessionGoodbyeReason reason,
     bool notify_peers);

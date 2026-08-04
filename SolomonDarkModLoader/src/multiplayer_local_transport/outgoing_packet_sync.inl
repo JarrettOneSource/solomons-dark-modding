@@ -68,7 +68,14 @@ void SendLocalParticipantFrame(std::uint64_t now_ms) {
 
 #include "multiplayer_local_transport/synthetic_participant_outgoing_sync.inl"
 void SendWorldSnapshot(std::uint64_t now_ms) {
-    if (!g_local_transport.is_host ||
+    if (!g_local_transport.is_host) {
+        return;
+    }
+    const bool immediate_run_world_snapshot_requested =
+        g_immediate_run_world_snapshot_requested.exchange(
+            false,
+            std::memory_order_acq_rel);
+    if (!immediate_run_world_snapshot_requested &&
         now_ms - g_local_transport.last_world_snapshot_send_ms <
             kLocalTransportRunWorldMotionIntervalMs) {
         return;
@@ -78,6 +85,11 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
 
     CompleteWorldSnapshotPacketState complete_snapshot;
     if (!BuildLocalWorldSnapshot(&complete_snapshot)) {
+        if (immediate_run_world_snapshot_requested) {
+            g_immediate_run_world_snapshot_requested.store(
+                true,
+                std::memory_order_release);
+        }
         return;
     }
     if (complete_snapshot.actors.empty() &&
@@ -134,6 +146,11 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
                     complete_snapshot,
                     &g_local_transport.next_sequence,
                     &identity_packets)) {
+                if (immediate_run_world_snapshot_requested) {
+                    g_immediate_run_world_snapshot_requested.store(
+                        true,
+                        std::memory_order_release);
+                }
                 return;
             }
             for (const auto& endpoint : endpoints) {
@@ -171,7 +188,8 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
                 motion_generation_wire_size,
                 kLocalTransportRunWorldMotionIntervalMs,
                 kLocalTransportWorldSnapshotBudgetBytesPerSecond);
-        if (now_ms -
+        if (!immediate_run_world_snapshot_requested &&
+            now_ms -
                 g_local_transport.last_world_snapshot_send_ms <
             motion_interval_ms) {
             return;
@@ -182,6 +200,11 @@ void SendWorldSnapshot(std::uint64_t now_ms) {
                 motion_snapshot,
                 &g_local_transport.next_sequence,
                 &motion_packets)) {
+            if (immediate_run_world_snapshot_requested) {
+                g_immediate_run_world_snapshot_requested.store(
+                    true,
+                    std::memory_order_release);
+            }
             return;
         }
         g_local_transport.last_world_snapshot_send_ms = now_ms;

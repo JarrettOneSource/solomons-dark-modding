@@ -13,6 +13,17 @@ bool IsLocalTransportClient() {
         !g_local_transport.is_host;
 }
 
+void RequestImmediateRunWorldSnapshot() {
+    if (!g_local_transport_host.load(std::memory_order_acquire)) {
+        return;
+    }
+    g_immediate_run_world_snapshot_requested.store(
+        true,
+        std::memory_order_release);
+    SendWorldSnapshot(
+        static_cast<std::uint64_t>(GetTickCount64()));
+}
+
 void RequestLocalTransportTeardown(
     SessionGoodbyeReason reason,
     bool notify_peers) {

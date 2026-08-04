@@ -121,6 +121,29 @@ integer.
 `sd.bots.list()` returns handles for active synthetic participants in
 participant-ID order.
 
+`sd.bots.get_participant_state(participant_id)` includes the native mana
+reserve decision used by bot brains:
+
+```lua
+{
+  mp = 35.0,
+  max_mp = 100.0,
+  mana_reserve_active = true,
+  mana_attainable_max_mp = 45.0,
+  mana_resume_threshold_mp = 36.0,
+  mana_attainable_cap_detected = true,
+}
+```
+
+Reserve enters inclusively at 10% of nominal maximum mana. It normally exits
+inclusively at 80% of nominal maximum mana. Native hoarded mana, such as an
+active Firewalker reservation, immediately lowers `mana_attainable_max_mp` to
+`max_mp - hoarded_mp`. For a sustained drain without a native ceiling, two
+seconds with no recovery progress records the current recovery ceiling instead.
+In either case `mana_resume_threshold_mp` becomes 80% of that attainable
+maximum. Callers should consume `mana_reserve_active` instead of implementing
+a second threshold state machine.
+
 ## Semantic loadout details
 
 `sd.bots.get_loadout_details(participant_id)` returns the active native spell
@@ -253,6 +276,12 @@ and death. Its state and transform are published on the normal participant
 state/frame streams. A client authenticates synthetic participant packets only
 from its configured host and runs the ordinary packet-driven remote-player
 presentation path.
+
+Movement intent may carry either target-facing or a path heading. During mana
+reserve, a moving bot clears stale cast target-facing and the loader drives the
+actor from the path heading, so a fleeing wizard faces its direction of travel.
+Ordinary target-facing becomes eligible again after reserve clears and the
+brain requests a nonzero combat-facing target.
 
 Despawn publishes a reliable retirement tombstone before removing local state.
 Late frames and casts from the retired session epoch are rejected.

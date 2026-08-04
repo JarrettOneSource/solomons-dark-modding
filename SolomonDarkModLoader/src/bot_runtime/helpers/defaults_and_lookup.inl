@@ -272,13 +272,17 @@ bool TryResolveBotManaRatio(float current_mp, float max_mp, float* ratio) {
     return true;
 }
 
-bool UpdateBotManaReserveStateLocked(std::uint64_t bot_id, float current_mp, float max_mp) {
+bool UpdateBotManaReserveStateLocked(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    const float* native_attainable_max_mp = nullptr) {
     if (bot_id == 0) {
         return false;
     }
 
-    float ratio = 0.0f;
-    if (!TryResolveBotManaRatio(current_mp, max_mp, &ratio)) {
+    float nominal_ratio = 0.0f;
+    if (!TryResolveBotManaRatio(current_mp, max_mp, &nominal_ratio)) {
         const auto* existing = FindBotManaReserveState(bot_id);
         return existing != nullptr && existing->active;
     }
@@ -290,11 +294,157 @@ bool UpdateBotManaReserveStateLocked(std::uint64_t bot_id, float current_mp, flo
         state->bot_id = bot_id;
     }
 
+    const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    const float progress_epsilon =
+        (std::max)(0.001f, max_mp * 0.001f);
+    const bool nominal_max_changed =
+        !std::isfinite(state->nominal_max_mp) ||
+        std::fabs(state->nominal_max_mp - max_mp) > progress_epsilon;
+    if (nominal_max_changed) {
+        state->nominal_max_mp = max_mp;
+        if (!state->attainable_cap_detected ||
+            !std::isfinite(state->attainable_max_mp) ||
+            state->attainable_max_mp <= 0.0f) {
+            state->attainable_max_mp = max_mp;
+        } else {
+            state->attainable_max_mp = std::clamp(
+                state->attainable_max_mp,
+                progress_epsilon,
+                max_mp);
+        }
+        if (state->active) {
+            state->recovery_peak_mp = current_mp;
+            state->last_progress_ms = now_ms;
+        }
+    }
+
+    const bool native_attainable_available =
+        native_attainable_max_mp != nullptr &&
+        std::isfinite(*native_attainable_max_mp) &&
+        *native_attainable_max_mp > progress_epsilon &&
+        *native_attainable_max_mp <= max_mp + progress_epsilon;
+    if (native_attainable_available) {
+        const float resolved_native_attainable_max_mp = std::clamp(
+            *native_attainable_max_mp,
+            progress_epsilon,
+            max_mp);
+        const bool native_cap_active =
+            resolved_native_attainable_max_mp <
+            max_mp - progress_epsilon;
+        if (native_cap_active) {
+            const bool native_cap_changed =
+                !state->native_attainable_cap ||
+                std::fabs(
+                    state->attainable_max_mp -
+                    resolved_native_attainable_max_mp) >
+                    progress_epsilon;
+            state->native_attainable_cap = true;
+            state->attainable_cap_detected = true;
+            state->attainable_max_mp =
+                resolved_native_attainable_max_mp;
+            if (native_cap_changed) {
+                state->recovery_peak_mp =
+                    (std::min)(current_mp, state->attainable_max_mp);
+                state->last_progress_ms = now_ms;
+                Log(
+                    "[bots] native mana attainable cap refreshed. bot_id=" +
+                    std::to_string(bot_id) +
+                    " mp=" + std::to_string(current_mp) +
+                    " nominal_max=" + std::to_string(max_mp) +
+                    " attainable_max=" +
+                        std::to_string(state->attainable_max_mp));
+            }
+        } else if (state->native_attainable_cap) {
+            state->native_attainable_cap = false;
+            state->attainable_cap_detected = false;
+            state->attainable_max_mp = max_mp;
+            state->recovery_peak_mp = current_mp;
+            state->last_progress_ms = now_ms;
+            Log(
+                "[bots] native mana attainable cap cleared. bot_id=" +
+                std::to_string(bot_id) +
+                " mp=" + std::to_string(current_mp) +
+                " nominal_max=" + std::to_string(max_mp));
+        }
+    }
+
+    if (!state->attainable_cap_detected) {
+        state->attainable_max_mp = max_mp;
+    } else if (
+        !state->native_attainable_cap &&
+        current_mp > state->attainable_max_mp + progress_epsilon) {
+        state->attainable_max_mp = (std::min)(current_mp, max_mp);
+        if (state->attainable_max_mp >= max_mp - progress_epsilon) {
+            state->attainable_cap_detected = false;
+            state->attainable_max_mp = max_mp;
+        }
+    }
+    state->resume_threshold_mp =
+        state->attainable_max_mp * kBotManaReserveExitRatio;
+
+    float ratio = 0.0f;
+    if (!TryResolveBotManaRatio(
+            current_mp,
+            state->attainable_max_mp,
+            &ratio)) {
+        return state->active;
+    }
+
     const bool was_active = state->active;
-    if (ratio <= kBotManaReserveEnterRatio) {
+    if (state->active) {
+        if (current_mp > state->recovery_peak_mp + progress_epsilon) {
+            state->recovery_peak_mp = current_mp;
+            state->last_progress_ms = now_ms;
+        }
+        if (ratio >= kBotManaReserveExitRatio) {
+            state->active = false;
+        } else if (
+            !state->native_attainable_cap &&
+            now_ms - state->last_progress_ms >=
+            kBotManaReserveAttainablePlateauMs) {
+            const float detected_attainable_max_mp = std::clamp(
+                current_mp,
+                progress_epsilon,
+                max_mp);
+            const bool cap_changed =
+                !state->attainable_cap_detected ||
+                std::fabs(
+                    state->attainable_max_mp -
+                    detected_attainable_max_mp) > progress_epsilon;
+            state->attainable_cap_detected = true;
+            state->native_attainable_cap = false;
+            state->attainable_max_mp = detected_attainable_max_mp;
+            state->resume_threshold_mp =
+                state->attainable_max_mp * kBotManaReserveExitRatio;
+            (void)TryResolveBotManaRatio(
+                current_mp,
+                state->attainable_max_mp,
+                &ratio);
+            if (cap_changed) {
+                Log(
+                    "[bots] mana attainable cap detected. bot_id=" +
+                    std::to_string(bot_id) +
+                    " mp=" + std::to_string(current_mp) +
+                    " nominal_max=" + std::to_string(max_mp) +
+                    " attainable_max=" +
+                        std::to_string(state->attainable_max_mp) +
+                    " resume_threshold=" +
+                        std::to_string(state->resume_threshold_mp) +
+                    " plateau_ms=" +
+                        std::to_string(
+                            kBotManaReserveAttainablePlateauMs));
+            }
+            if (ratio >= kBotManaReserveExitRatio) {
+                state->active = false;
+            }
+        }
+    } else if (
+        nominal_ratio <= kBotManaReserveEnterRatio &&
+        (!state->attainable_cap_detected ||
+         ratio < kBotManaReserveExitRatio)) {
         state->active = true;
-    } else if (ratio >= kBotManaReserveExitRatio) {
-        state->active = false;
+        state->recovery_peak_mp = current_mp;
+        state->last_progress_ms = now_ms;
     }
     state->last_ratio = ratio;
 
@@ -304,7 +454,14 @@ bool UpdateBotManaReserveStateLocked(std::uint64_t bot_id, float current_mp, flo
             (state->active ? "entered" : "exited") +
             ". bot_id=" + std::to_string(bot_id) +
             " mp=" + std::to_string(current_mp) +
-            " max=" + std::to_string(max_mp) +
+            " nominal_max=" + std::to_string(max_mp) +
+            " attainable_max=" +
+                std::to_string(state->attainable_max_mp) +
+            " resume_threshold=" +
+                std::to_string(state->resume_threshold_mp) +
+            " attainable_cap_detected=" +
+                std::to_string(
+                    state->attainable_cap_detected ? 1 : 0) +
             " ratio=" + std::to_string(ratio) +
             " enter_ratio=" + std::to_string(kBotManaReserveEnterRatio) +
             " exit_ratio=" + std::to_string(kBotManaReserveExitRatio));

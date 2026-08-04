@@ -15,6 +15,7 @@ extern std::size_t kProgressionHpOffset;
 extern std::size_t kProgressionMaxHpOffset;
 extern std::size_t kProgressionMpOffset;
 extern std::size_t kProgressionMaxMpOffset;
+extern std::size_t kProgressionHoardedMpOffset;
 extern std::size_t kProgressionMoveSpeedOffset;
 extern std::size_t kProgressionCastSpeedMultiplierOffset;
 extern std::size_t kProgressionManaRecoveryMultiplierOffset;

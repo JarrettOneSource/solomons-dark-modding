@@ -74,6 +74,7 @@ struct BotLoadoutDetails {
 
 constexpr float kBotManaReserveEnterRatio = 0.10f;
 constexpr float kBotManaReserveExitRatio = 0.80f;
+constexpr std::uint64_t kBotManaReserveAttainablePlateauMs = 2000;
 
 struct BotCreateRequest {
     std::string display_name;
@@ -225,6 +226,9 @@ struct BotSnapshot {
     std::int32_t concentration_entry_a = -1;
     std::int32_t concentration_entry_b = -1;
     bool mana_reserve_active = false;
+    float mana_attainable_max_mp = 0.0f;
+    float mana_resume_threshold_mp = 0.0f;
+    bool mana_attainable_cap_detected = false;
     std::uint8_t replicated_persistent_status_flags = 0;
     std::uint8_t native_persistent_status_flags = 0;
     std::uint8_t replicated_transient_status_flags = 0;
@@ -349,6 +353,12 @@ bool RefreshBotManaReserveState(
     std::uint64_t bot_id,
     float current_mp,
     float max_mp,
+    bool* reserve_active = nullptr);
+bool RefreshBotManaReserveStateWithAttainableMaximum(
+    std::uint64_t bot_id,
+    float current_mp,
+    float max_mp,
+    float attainable_max_mp,
     bool* reserve_active = nullptr);
 bool FinishBotAttack(
     std::uint64_t bot_id,

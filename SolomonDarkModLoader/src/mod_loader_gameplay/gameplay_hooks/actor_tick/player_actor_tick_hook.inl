@@ -446,13 +446,6 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
                     actor_address,
                     native_tick_now_ms);
         }
-        if (mana_reserve_active_for_stock_tick) {
-            (void)RepairGameplayPlayerProgressionSlotOwner(
-                "skip_reserved_bot_stock_tick",
-                actor_address);
-            return;
-        }
-
         uintptr_t gameplay_address = 0;
         std::uint8_t saved_cast_intent = 0;
         std::uint8_t saved_mouse_left = 0;
@@ -503,6 +496,7 @@ void __fastcall HookPlayerActorTick(void* self, void* /*unused_edx*/) {
         // local press cannot start and immediately cancel the remote spell on
         // every frame. Active remote casts still receive their authored input.
         if ((drive_stock_cast_input ||
+             mana_reserve_active_for_stock_tick ||
              idle_remote_input_controlled_binding ||
              remote_held_release_observed_before_stock_tick) &&
             TryResolveCurrentGameplayScene(&gameplay_address) &&

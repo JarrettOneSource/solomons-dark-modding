@@ -544,6 +544,7 @@ std::size_t kProgressionHpOffset = 0;
 std::size_t kProgressionMaxHpOffset = 0;
 std::size_t kProgressionMpOffset = 0;
 std::size_t kProgressionMaxMpOffset = 0;
+std::size_t kProgressionHoardedMpOffset = 0;
 std::size_t kProgressionMoveSpeedOffset = 0;
 std::size_t kProgressionCastSpeedMultiplierOffset = 0;
 std::size_t kProgressionManaRecoveryMultiplierOffset = 0;

@@ -374,7 +374,12 @@ void RestoreOngoingCastNativeTargetActor(
 }
 
 bool RefreshWizardBindingTargetFacing(ParticipantEntityBinding* binding) {
-    if (binding == nullptr || binding->actor_address == 0 || binding->facing_target_actor_address == 0) {
+    if (binding == nullptr ||
+        binding->actor_address == 0 ||
+        binding->facing_target_actor_address == 0 ||
+        ((binding->mana_reserve_active ||
+          binding->mana_reserve_movement_facing_latched) &&
+         binding->movement_active)) {
         return false;
     }
 

@@ -37,6 +37,8 @@ void QuiesceDeadWizardBinding(ParticipantEntityBinding* binding) {
     binding->path_waypoints.clear();
     binding->facing_heading_valid = false;
     binding->facing_target_actor_address = 0;
+    binding->mana_reserve_active = false;
+    binding->mana_reserve_movement_facing_latched = false;
     binding->stock_tick_facing_origin_valid = false;
     binding->stock_tick_facing_origin_x = 0.0f;
     binding->stock_tick_facing_origin_y = 0.0f;

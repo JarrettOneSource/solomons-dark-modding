@@ -485,6 +485,8 @@ def test_snapshot_streams_are_compact_and_bandwidth_bounded() -> str:
         "BuildWorldMotionSnapshotForIdentity(",
         "last_sent_world_identity_snapshot",
         "needs_initial_identity",
+        "immediate_run_world_snapshot_requested",
+        "!immediate_run_world_snapshot_requested &&",
         "SteamNetworkSendMode::ReliableNoNagle",
         "SteamNetworkSendMode::UnreliableNoDelay",
     ):

@@ -275,7 +275,7 @@ serialization boundary does not need to re-interpret every CFG property.
 
 Toggle bytes `+0x8DC/+0x8DD/+0x8DE` are Firewalker, Mindstar, and Regenerate.
 Each active skill reserves
-`maxMP * mHoard / 100`; the normalized sum is stored at `+0x740`.
+`maxMP * mHoard / 100`; the summed absolute MP hoard is stored at `+0x740`.
 If the hoard exceeds max MP, `0x006639D0` clears the toggles, reserved and
 current mana, and shows “Overloaded Mana!” for the local player.
 

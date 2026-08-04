@@ -59,9 +59,19 @@ void FillBotSnapshot(const ParticipantInfo& participant, BotSnapshot* snapshot) 
     if (IsNativeRemoteParticipantSnapshot(*snapshot)) {
         RemoveBotManaReserveState(participant.participant_id);
         snapshot->mana_reserve_active = false;
+        snapshot->mana_attainable_max_mp = snapshot->max_mp;
+        snapshot->mana_resume_threshold_mp =
+            snapshot->max_mp * kBotManaReserveExitRatio;
+        snapshot->mana_attainable_cap_detected = false;
     } else if (const auto* mana_reserve = FindBotManaReserveState(participant.participant_id);
                mana_reserve != nullptr) {
         snapshot->mana_reserve_active = mana_reserve->active;
+        snapshot->mana_attainable_max_mp =
+            mana_reserve->attainable_max_mp;
+        snapshot->mana_resume_threshold_mp =
+            mana_reserve->resume_threshold_mp;
+        snapshot->mana_attainable_cap_detected =
+            mana_reserve->attainable_cap_detected;
     }
     if (const auto* pending_choice = FindPendingSkillChoiceConst(participant.participant_id);
         pending_choice != nullptr) {
@@ -203,11 +213,25 @@ void ApplyManaReserveStateToSnapshot(BotSnapshot* snapshot) {
     if (IsNativeRemoteParticipantSnapshot(*snapshot)) {
         RemoveBotManaReserveState(snapshot->bot_id);
         snapshot->mana_reserve_active = false;
+        snapshot->mana_attainable_max_mp = snapshot->max_mp;
+        snapshot->mana_resume_threshold_mp =
+            snapshot->max_mp * kBotManaReserveExitRatio;
+        snapshot->mana_attainable_cap_detected = false;
         return;
     }
 
     snapshot->mana_reserve_active =
         UpdateBotManaReserveStateLocked(snapshot->bot_id, snapshot->mp, snapshot->max_mp);
+    if (const auto* mana_reserve =
+            FindBotManaReserveState(snapshot->bot_id);
+        mana_reserve != nullptr) {
+        snapshot->mana_attainable_max_mp =
+            mana_reserve->attainable_max_mp;
+        snapshot->mana_resume_threshold_mp =
+            mana_reserve->resume_threshold_mp;
+        snapshot->mana_attainable_cap_detected =
+            mana_reserve->attainable_cap_detected;
+    }
 }
 
 void ApplyControllerStateToSnapshot(std::uint64_t bot_id, BotSnapshot* snapshot) {

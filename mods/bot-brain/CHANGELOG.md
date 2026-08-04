@@ -9,6 +9,10 @@
   percent.
 - Fixed bots getting stuck at exactly 10 percent mana while movement kept
   running.
+- Low-mana bots now disengage and face their running direction until reserve
+  clears, including when the Learned style is selected.
+- Sustained mana drains now use a reachable threshold derived from observed
+  recovery instead of waiting forever for nominal 80 percent.
 - Fixed multiplayer level-up choices targeting the wrong participant.
 - Requires beta.29 for clean primary-skill handback and removal of the extra
   ally row while Bot Play For Me is active.

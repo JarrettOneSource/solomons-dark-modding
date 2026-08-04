@@ -382,6 +382,19 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
         / "SolomonDarkModLoader/src/multiplayer_local_transport/"
         "world_snapshot_capture.inl"
     )
+    transport_header = read_text(
+        ROOT / "SolomonDarkModLoader/include/multiplayer_local_transport.h"
+    )
+    outgoing_snapshot_sync = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "outgoing_packet_sync.inl"
+    )
+    transport_public_api = read_text(
+        ROOT
+        / "SolomonDarkModLoader/src/multiplayer_local_transport/"
+        "public_session_teardown_api.inl"
+    )
     _require_tokens(
         "authoritative hostile target acquisition",
         acquisition,
@@ -429,8 +442,34 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
             "target_native_type_id=",
             "g_last_logged_hostile_target_by_actor.try_emplace(",
             "semantic_target_change",
+            "multiplayer::RequestImmediateRunWorldSnapshot();",
         ),
     )
+    _require_tokens(
+        "immediate hostile target authority publication",
+        transport_header + outgoing_snapshot_sync + transport_public_api,
+        (
+            "void RequestImmediateRunWorldSnapshot();",
+            "immediate_run_world_snapshot_requested",
+            "kLocalTransportRunWorldMotionIntervalMs",
+            "BuildWorldMotionSnapshotForIdentity(",
+            "SendWorldSnapshot(",
+        ),
+    )
+    request_start = transport_public_api.find(
+        "void RequestImmediateRunWorldSnapshot()")
+    request_store = transport_public_api.find(
+        "g_immediate_run_world_snapshot_requested.store(",
+        request_start,
+    )
+    synchronous_send = transport_public_api.find(
+        "SendWorldSnapshot(", request_store
+    )
+    if not (0 <= request_start < request_store < synchronous_send):
+        raise StaticReTestFailure(
+            "hostile target publication must arm retry state and flush the "
+            "run-world snapshot in the same app-thread request"
+        )
     _require_tokens(
         "hostile target selector hook",
         monster_hook,

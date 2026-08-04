@@ -297,6 +297,13 @@ void ApplyWizardActorFacingState(uintptr_t actor_address, float heading_degrees)
 
 float ResolveWizardBindingNativeFacingHeading(
     const ParticipantEntityBinding& binding) {
+    if ((binding.mana_reserve_active ||
+         binding.mana_reserve_movement_facing_latched) &&
+        binding.movement_active &&
+        binding.desired_heading_valid) {
+        return NormalizeWizardActorHeadingForWrite(
+            binding.desired_heading);
+    }
     const auto& cast = binding.ongoing_cast;
     if (cast.active &&
         cast.have_aim_heading &&
@@ -315,7 +322,15 @@ float ResolveWizardBindingNativeFacingHeading(
 }
 
 bool ApplyWizardBindingFacingState(const ParticipantEntityBinding* binding, uintptr_t actor_address) {
-    if (binding == nullptr || actor_address == 0 || !binding->facing_heading_valid) {
+    const bool reserve_movement_facing =
+        binding != nullptr &&
+        (binding->mana_reserve_active ||
+         binding->mana_reserve_movement_facing_latched) &&
+        binding->movement_active &&
+        binding->desired_heading_valid;
+    if (binding == nullptr ||
+        actor_address == 0 ||
+        (!binding->facing_heading_valid && !reserve_movement_facing)) {
         return false;
     }
 

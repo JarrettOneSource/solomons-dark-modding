@@ -1190,6 +1190,7 @@ std::atomic<std::uint8_t> g_local_teardown_reason{
     static_cast<std::uint8_t>(SessionGoodbyeReason::Leaving)};
 std::atomic<bool> g_local_transport_teardown_complete{true};
 std::atomic<bool> g_local_transport_host{false};
+std::atomic<bool> g_immediate_run_world_snapshot_requested{false};
 std::atomic<std::uint64_t> g_local_transport_authority_participant_id{0};
 std::atomic<std::uint32_t> g_local_run_exit_latched_nonce{0};
 std::atomic<std::uint32_t> g_local_terminated_run_nonce{0};

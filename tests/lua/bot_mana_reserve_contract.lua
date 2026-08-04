@@ -5,11 +5,17 @@ local snapshots = {
     mp = 10.0,
     max_mp = 100.0,
     mana_reserve_active = false,
+    mana_attainable_max_mp = 100.0,
+    mana_resume_threshold_mp = 80.0,
+    mana_attainable_cap_detected = false,
   },
   [43] = {
     mp = 10.0,
     max_mp = 100.0,
     mana_reserve_active = true,
+    mana_attainable_max_mp = 60.0,
+    mana_resume_threshold_mp = 48.0,
+    mana_attainable_cap_detected = true,
   },
 }
 local choices = {
@@ -53,17 +59,29 @@ local function context(participant_id)
   return {
     participant_id = participant_id,
     bot = {},
-    row = {element = "fire"},
+    row = {element = "fire", behavior = "learned"},
+    profile = {
+      flee_threshold = 0.35,
+      flee_recovery_threshold = 0.45,
+    },
     shared = {log = function() end},
     last_skill_choice_generation = -1,
     mana_sample_valid = false,
     mana_cast_hold = false,
+    hp_fleeing = false,
+    mana_fleeing = false,
+    fleeing = false,
     debug = {
       wave = 0,
       last_error = "",
       skill_choices_accepted = 0,
       mana_sample_valid = false,
       mana_cast_hold = false,
+      hp_fleeing = false,
+      mana_fleeing = false,
+      mana_attainable_max_mp = 0.0,
+      mana_resume_threshold_mp = 0.0,
+      mana_attainable_cap_detected = false,
       mana_hold_start_count = 0,
       mana_hold_end_count = 0,
     },
@@ -77,7 +95,15 @@ assert(brain.update_mana_cast_hold(pending_choice_bot))
 assert(not pending_choice_bot.mana_cast_hold)
 assert(brain.update_mana_cast_hold(reserve_bot))
 assert(reserve_bot.mana_cast_hold)
+assert(reserve_bot.mana_fleeing)
+assert(reserve_bot.debug.mana_attainable_max_mp == 60.0)
+assert(reserve_bot.debug.mana_resume_threshold_mp == 48.0)
+assert(reserve_bot.debug.mana_attainable_cap_detected)
 assert(reserve_bot.debug.mana_hold_start_count == 1)
+assert(brain.update_flee_state(reserve_bot, 1.0) == "mana_flee")
+assert(reserve_bot.fleeing)
+assert(not reserve_bot.hp_fleeing)
+assert(brain.should_use_scripted_movement(reserve_bot))
 
 assert(brain.poll_skill_choice(pending_choice_bot))
 assert(not brain.poll_skill_choice(reserve_bot))
@@ -91,6 +117,9 @@ snapshots[43].mp = 80.0
 snapshots[43].mana_reserve_active = false
 assert(brain.update_mana_cast_hold(reserve_bot))
 assert(not reserve_bot.mana_cast_hold)
+assert(not reserve_bot.mana_fleeing)
+assert(brain.update_flee_state(reserve_bot, 1.0) == "kite")
+assert(not reserve_bot.fleeing)
 assert(reserve_bot.debug.mana_hold_end_count == 1)
 
 snapshots[42].mana_reserve_active = true
@@ -118,3 +147,6 @@ print("participant_scoped_choices=true")
 print("native_reserve_source=true")
 print("exact_boundaries=true")
 print("local_player_fallback=true")
+print("mana_flee=true")
+print("attainable_threshold=true")
+print("learned_policy_override=true")

@@ -321,6 +321,7 @@ const SizeBinding* GetSizeBindings(std::size_t* count) {
         SDMOD_SIZE("gameplay.offsets", "progression_max_hp", kProgressionMaxHpOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_mp", kProgressionMpOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_max_mp", kProgressionMaxMpOffset),
+        SDMOD_SIZE("gameplay.offsets", "progression_hoarded_mp", kProgressionHoardedMpOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_move_speed", kProgressionMoveSpeedOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_cast_speed_multiplier", kProgressionCastSpeedMultiplierOffset),
         SDMOD_SIZE("gameplay.offsets", "progression_mana_recovery_multiplier", kProgressionManaRecoveryMultiplierOffset),

@@ -353,6 +353,21 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         "issue_movement(",
         "issue_primary_cast(context, now_ms, target)",
     )
+    _require_in_order(
+        brain,
+        "context.mana_fleeing = next_hold",
+        "context.fleeing = context.hp_fleeing or context.mana_fleeing",
+        'context.mana_fleeing and "mana_flee"',
+    )
+    for token in (
+        "snapshot.mana_attainable_max_mp",
+        "snapshot.mana_resume_threshold_mp",
+        "snapshot.mana_attainable_cap_detected",
+        "local function should_use_scripted_movement(context)",
+        'context.row.behavior ~= "learned" or context.mana_fleeing',
+        "if not should_use_scripted_movement(context) then",
+    ):
+        assert token in brain, f"bot mana-flee contract lacks: {token}"
     approach_start = brain.find("if not context.fleeing and")
     approach_end = brain.find("context.debug.mode = \"approach\"", approach_start)
     assert approach_start >= 0 and approach_end > approach_start

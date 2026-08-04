@@ -92,6 +92,14 @@ void PushBotSnapshot(lua_State* state, const multiplayer::BotSnapshot& snapshot)
     lua_setfield(state, -2, "max_mp");
     lua_pushboolean(state, snapshot.mana_reserve_active ? 1 : 0);
     lua_setfield(state, -2, "mana_reserve_active");
+    lua_pushnumber(state, snapshot.mana_attainable_max_mp);
+    lua_setfield(state, -2, "mana_attainable_max_mp");
+    lua_pushnumber(state, snapshot.mana_resume_threshold_mp);
+    lua_setfield(state, -2, "mana_resume_threshold_mp");
+    lua_pushboolean(
+        state,
+        snapshot.mana_attainable_cap_detected ? 1 : 0);
+    lua_setfield(state, -2, "mana_attainable_cap_detected");
     lua_pushinteger(
         state,
         static_cast<lua_Integer>(

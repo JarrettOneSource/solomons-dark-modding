@@ -169,17 +169,60 @@ bool ClearIdleBotManaReserveNativeCastState(
     return true;
 }
 
+bool TryReadNativeBotAttainableMana(
+    uintptr_t progression_address,
+    float nominal_max_mp,
+    float* hoarded_mp,
+    float* attainable_max_mp) {
+    if (hoarded_mp != nullptr) {
+        *hoarded_mp = 0.0f;
+    }
+    if (attainable_max_mp != nullptr) {
+        *attainable_max_mp = nominal_max_mp;
+    }
+    if (progression_address == 0 ||
+        kProgressionHoardedMpOffset == 0 ||
+        hoarded_mp == nullptr ||
+        attainable_max_mp == nullptr ||
+        !std::isfinite(nominal_max_mp) ||
+        nominal_max_mp <= 0.0f) {
+        return false;
+    }
+
+    float native_hoarded_mp = 0.0f;
+    if (!ProcessMemory::Instance().TryReadField(
+            progression_address,
+            kProgressionHoardedMpOffset,
+            &native_hoarded_mp) ||
+        !std::isfinite(native_hoarded_mp) ||
+        native_hoarded_mp < 0.0f ||
+        native_hoarded_mp >= nominal_max_mp) {
+        return false;
+    }
+
+    *hoarded_mp = native_hoarded_mp;
+    *attainable_max_mp = nominal_max_mp - native_hoarded_mp;
+    return std::isfinite(*attainable_max_mp) &&
+           *attainable_max_mp > 0.0f;
+}
+
 bool ApplyBotNativeManaReserveRecovery(
     ParticipantEntityBinding* binding,
     uintptr_t actor_address,
     std::uint64_t now_ms) {
-    if (binding == nullptr ||
-        actor_address == 0 ||
+    if (binding == nullptr) {
+        return false;
+    }
+    if (actor_address == 0 ||
         binding->bot_id == 0 ||
         !IsWizardParticipantKind(binding->kind) ||
-        binding->ongoing_cast.active ||
         IsActorRuntimeDead(actor_address)) {
+        binding->mana_reserve_active = false;
+        binding->mana_reserve_movement_facing_latched = false;
         return false;
+    }
+    if (binding->ongoing_cast.active) {
+        return binding->mana_reserve_active;
     }
 
     (void)EnsureActorProgressionRuntimeFieldFromHandle(
@@ -189,26 +232,57 @@ bool ApplyBotNativeManaReserveRecovery(
     uintptr_t progression_address = 0;
     if (!TryResolveActorProgressionRuntime(actor_address, &progression_address) ||
         progression_address == 0) {
-        return false;
+        return binding->mana_reserve_active;
     }
 
     float current_mp = 0.0f;
     float max_mp = 0.0f;
     if (!TryReadProgressionMana(progression_address, &current_mp, &max_mp)) {
-        return false;
+        return binding->mana_reserve_active;
     }
 
-    bool mana_reserve_active = false;
-    if (!multiplayer::RefreshBotManaReserveState(
-            binding->bot_id,
-            current_mp,
+    float native_hoarded_mp = 0.0f;
+    float attainable_max_mp = max_mp;
+    const bool native_attainable_available =
+        TryReadNativeBotAttainableMana(
+            progression_address,
             max_mp,
-            &mana_reserve_active) ||
-        !mana_reserve_active) {
+            &native_hoarded_mp,
+            &attainable_max_mp);
+
+    bool mana_reserve_active = false;
+    const bool reserve_state_refreshed =
+        native_attainable_available
+            ? multiplayer::RefreshBotManaReserveStateWithAttainableMaximum(
+                  binding->bot_id,
+                  current_mp,
+                  max_mp,
+                  attainable_max_mp,
+                  &mana_reserve_active)
+            : multiplayer::RefreshBotManaReserveState(
+                  binding->bot_id,
+                  current_mp,
+                  max_mp,
+                  &mana_reserve_active);
+    const bool reserve_entered =
+        reserve_state_refreshed &&
+        mana_reserve_active &&
+        !binding->mana_reserve_active;
+    binding->mana_reserve_active =
+        reserve_state_refreshed && mana_reserve_active;
+    if (reserve_entered) {
+        (void)multiplayer::FaceBotTarget(binding->bot_id, 0, false, 0.0f);
+        binding->facing_target_actor_address = 0;
+        binding->facing_heading_valid = false;
+        binding->mana_reserve_movement_facing_latched = true;
+    }
+    if (!reserve_state_refreshed || !mana_reserve_active) {
         return false;
     }
     constexpr float kNativeManaRecoveryEpsilon = 0.001f;
-    if (current_mp >= max_mp - kNativeManaRecoveryEpsilon) {
+    const float recovery_ceiling_mp =
+        native_attainable_available ? attainable_max_mp : max_mp;
+    if (current_mp >= recovery_ceiling_mp - kNativeManaRecoveryEpsilon) {
         return false;
     }
 
@@ -231,7 +305,7 @@ bool ApplyBotNativeManaReserveRecovery(
         static_cast<float>(kBotManaReserveRecoveryIntervalMs) / 1000.0f;
     float delta =
         max_mp * kBotManaReserveRecoveryRatioPerSecond * interval_seconds;
-    const float remaining_mp = max_mp - current_mp;
+    const float remaining_mp = recovery_ceiling_mp - current_mp;
     if (delta > remaining_mp) {
         delta = remaining_mp;
     }
@@ -273,11 +347,29 @@ bool ApplyBotNativeManaReserveRecovery(
         TryReadProgressionMana(progression_address, &after_mp, &after_max_mp);
     bool reserve_after = mana_reserve_active;
     if (after_read) {
-        (void)multiplayer::RefreshBotManaReserveState(
-            binding->bot_id,
-            after_mp,
-            after_max_mp,
-            &reserve_after);
+        float after_hoarded_mp = native_hoarded_mp;
+        float after_attainable_max_mp = attainable_max_mp;
+        const bool after_native_attainable_available =
+            TryReadNativeBotAttainableMana(
+                progression_address,
+                after_max_mp,
+                &after_hoarded_mp,
+                &after_attainable_max_mp);
+        if (after_native_attainable_available) {
+            (void)multiplayer::RefreshBotManaReserveStateWithAttainableMaximum(
+                binding->bot_id,
+                after_mp,
+                after_max_mp,
+                after_attainable_max_mp,
+                &reserve_after);
+        } else {
+            (void)multiplayer::RefreshBotManaReserveState(
+                binding->bot_id,
+                after_mp,
+                after_max_mp,
+                &reserve_after);
+        }
+        binding->mana_reserve_active = reserve_after;
     }
 
     const bool should_log =
@@ -295,6 +387,8 @@ bool ApplyBotNativeManaReserveRecovery(
             " before=" + std::to_string(current_mp) +
             " after=" + std::to_string(after_mp) +
             " max=" + std::to_string(after_max_mp) +
+            " native_hoarded=" + std::to_string(native_hoarded_mp) +
+            " attainable_max=" + std::to_string(recovery_ceiling_mp) +
             " delta=" + std::to_string(delta) +
             " result=" + std::to_string(static_cast<int>(result)) +
             " ok=" + (invoked ? std::string("1") : std::string("0")) +
@@ -308,7 +402,7 @@ bool ApplyBotNativeManaReserveRecovery(
     }
 
     (void)invoked;
-    return true;
+    return reserve_after;
 }
 
 std::uint8_t __fastcall HookPlayerActorApplyManaDelta(
