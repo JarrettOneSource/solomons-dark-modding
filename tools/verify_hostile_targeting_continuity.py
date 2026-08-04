@@ -1065,7 +1065,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_spacing=10.0,
             park_other_enemies=False,
             allow_missing_bot=False,
-            preserve_enemy_positions=True,
+            preserve_enemy_positions=False,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=True,
