@@ -333,7 +333,6 @@ void LogRejectedExtendedHostileTargetCandidate(
     if (now_ms - s_last_diagnostic_ms < 250) {
         return;
     }
-
     if (candidate_actor_address == 0) {
         return;
     }
