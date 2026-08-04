@@ -276,6 +276,7 @@ elseif not __ALLOW_MISSING_BOT__ then
   ok = false
 end
 local entries = {}
+local locked_enemy_count = 0
 for index, address in ipairs(enemy_addresses) do
   local x = tonumber(sd.debug.read_float(address + ox)) or 0.0
   local y = tonumber(sd.debug.read_float(address + oy)) or 0.0
@@ -303,7 +304,10 @@ for index, address in ipairs(enemy_addresses) do
   end
   sd.debug.write_ptr(address + target_offset, 0)
   sd.debug.write_i32(address + bucket_offset, 0)
-  entries[address] = {x = x, y = y}
+  if not __LOCK_ONLY_SELECTED_ENEMY__ or index == 1 then
+    entries[address] = {x = x, y = y}
+    locked_enemy_count = locked_enemy_count + 1
+  end
 end
 local first_entry = entries[enemy_address] or {x = selected_x, y = selected_y}
 local arranged_bot_dx = bot_x - first_entry.x
@@ -349,6 +353,7 @@ emit("enemy_hp", __ENEMY_HP__)
 emit("arranged_bot_distance", math.sqrt(
   arranged_bot_dx * arranged_bot_dx + arranged_bot_dy * arranged_bot_dy))
 emit("stationary_lock", true)
+emit("stationary_enemy_count", locked_enemy_count)
 emit("bot_lock", __LOCK_BOT__)
 emit("preserved_native_enemy_positions", __PRESERVE_ENEMY_POSITIONS__)
 """
@@ -420,6 +425,7 @@ def _arrange(
     park_other_enemies: bool,
     allow_missing_bot: bool,
     preserve_enemy_positions: bool,
+    lock_only_selected_enemy: bool,
     relative_layout: bool,
     require_clear_paths: bool,
     lock_bot: bool,
@@ -448,6 +454,9 @@ def _arrange(
         ),
         "__PRESERVE_ENEMY_POSITIONS__": (
             "true" if preserve_enemy_positions else "false"
+        ),
+        "__LOCK_ONLY_SELECTED_ENEMY__": (
+            "true" if lock_only_selected_enemy else "false"
         ),
         "__RELATIVE_LAYOUT__": (
             "true" if relative_layout else "false"
@@ -973,6 +982,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             park_other_enemies=False,
             allow_missing_bot=False,
             preserve_enemy_positions=True,
+            lock_only_selected_enemy=False,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=False,
@@ -1004,6 +1014,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             park_other_enemies=True,
             allow_missing_bot=False,
             preserve_enemy_positions=True,
+            lock_only_selected_enemy=False,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=True,
@@ -1060,9 +1071,9 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             5.0,
         )
         result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
-        result["stragglerIdentityBasis"] = "native_actor_address"
+        result["stragglerIdentityBasis"] = "network_actor_id"
         result["stragglerNetworkIdentityRole"] = (
-            "diagnostic_only_after_sd_world_rebind_actor"
+            "acceptance_identity_for_stock_position_stragglers"
         )
 
         result["damageResetBeforeStraggler"] = _reset_damage_observations(
@@ -1083,7 +1094,8 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_spacing=10.0,
             park_other_enemies=False,
             allow_missing_bot=False,
-            preserve_enemy_positions=False,
+            preserve_enemy_positions=True,
+            lock_only_selected_enemy=True,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=False,
@@ -1124,7 +1136,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                     or str(row.get("wave.phase", "")).casefold()
                     == "completed"
                 )
-                and int(row.get("original.live_count", -1)) == 0
+                and int(row.get("original.network_live_count", -1)) == 0
             ):
                 break
             time.sleep(0.2)
@@ -1136,6 +1148,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             starting_wave=starting_wave,
             bot_id=bot_id,
             original_enemy_actor_addresses=enemy_actor_addresses,
+            original_enemy_network_ids=enemy_network_actor_ids,
             damage_rows=enemy_rows,
             expect_stall=args.expect == "churn",
             arranged_bot_distance=float(

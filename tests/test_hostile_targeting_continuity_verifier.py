@@ -102,6 +102,7 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             park_other_enemies=True,
             allow_missing_bot=False,
             preserve_enemy_positions=True,
+            lock_only_selected_enemy=False,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=True,
@@ -113,6 +114,39 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             pipe.code,
         )
         self.assertNotIn("__LOCK_BOT__", pipe.code)
+
+    def test_arrange_can_hold_only_the_selected_idle_straggler(self) -> None:
+        class Pipe:
+            code = ""
+
+            def execute(self, code: str) -> str:
+                self.code = code
+                return "ok=true"
+
+        pipe = Pipe()
+        _arrange(
+            pipe,
+            enemy_actor_addresses=[0x111, 0x222],
+            bot_id=BOT_ID,
+            owner_x=1000.0,
+            owner_y=0.0,
+            bot_x=500.0,
+            bot_y=0.0,
+            enemy_x=0.0,
+            enemy_y=0.0,
+            enemy_hp=1.0,
+            enemy_spacing=0.0,
+            park_other_enemies=False,
+            allow_missing_bot=False,
+            preserve_enemy_positions=True,
+            lock_only_selected_enemy=True,
+            relative_layout=True,
+            require_clear_paths=True,
+            lock_bot=False,
+        )
+        self.assertIn("if not true or index == 1 then", pipe.code)
+        self.assertIn('emit("stationary_enemy_count", locked_enemy_count)', pipe.code)
+        self.assertNotIn("__LOCK_ONLY_SELECTED_ENEMY__", pipe.code)
 
     def test_log_requires_one_network_identity_per_enemy(self) -> None:
         self.assertEqual(
