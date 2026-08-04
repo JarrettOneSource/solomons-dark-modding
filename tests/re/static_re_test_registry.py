@@ -63,6 +63,9 @@ from static_lua_ml_bot_contracts import (
 from static_lua_draw_contracts import (
     test_lua_draw_is_bounded_local_and_backbuffer_verified,
 )
+from static_lua_minimap_contracts import (
+    test_lua_minimap_is_local_live_configurable_and_semantic,
+)
 from static_lua_sprites_contracts import (
     test_lua_sprites_are_owned_bounded_sandboxed_and_revisioned,
 )
@@ -615,6 +618,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua draw is bounded, local, and backbuffer-verified",
         test_lua_draw_is_bounded_local_and_backbuffer_verified,
+    ),
+    (
+        "Lua Minimap is local, live-configurable, and semantic",
+        test_lua_minimap_is_local_live_configurable_and_semantic,
     ),
     (
         "Lua sprites are owned, bounded, sandboxed, and revisioned",

@@ -1,0 +1,89 @@
+{
+  "id": "generic.lua.minimap",
+  "name": "Minimap",
+  "version": "0.1.0",
+  "enabled": false,
+  "runtime": {
+    "apiVersion": "0.2.0",
+    "entryScript": "scripts/main.lua",
+    "requiredCapabilities": [
+      "events.runtime.tick",
+      "draw.local.immediate",
+      "draw.text",
+      "draw.primitives",
+      "settings.self"
+    ]
+  },
+  "settings": {
+    "version": 1,
+    "entries": [
+      {
+        "key": "radar_range",
+        "type": "number",
+        "label": "Radar range",
+        "description": "World-unit radius the minimap covers. Lower zooms in; higher shows more of the arena. Applies live.",
+        "default": 520,
+        "min": 200,
+        "max": 1600,
+        "step": 20,
+        "integer": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_players",
+        "type": "toggle",
+        "label": "Show players",
+        "description": "Show every player and bot on the minimap. Allies beyond radar range pin to the rim.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_enemies",
+        "type": "toggle",
+        "label": "Show enemies",
+        "description": "Show living enemies within radar range.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_orbs",
+        "type": "toggle",
+        "label": "Show orbs (health / mana)",
+        "description": "Show dropped health and mana orbs within radar range.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_items",
+        "type": "toggle",
+        "label": "Show items",
+        "description": "Show dropped item sacks, bonuses, and modded item drops within radar range.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_gold",
+        "type": "toggle",
+        "label": "Show gold",
+        "description": "Show dropped gold within radar range.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      },
+      {
+        "key": "show_dig",
+        "type": "toggle",
+        "label": "Show Solomon Dig",
+        "description": "Mark the Solomon Dig site whenever the dig actor is live; the mark pulses while a dig is in progress.",
+        "default": true,
+        "scope": "local",
+        "group": "Minimap"
+      }
+    ]
+  }
+}
