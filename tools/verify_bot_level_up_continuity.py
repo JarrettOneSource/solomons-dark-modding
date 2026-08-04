@@ -125,6 +125,10 @@ for _, key in ipairs({
   "mana_cast_hold",
   "mana_hold_start_count",
   "mana_hold_end_count",
+  "hp",
+  "max_hp",
+  "hp_ratio",
+  "flee_transition_count",
   "mp",
   "max_mp",
   "mp_ratio",
@@ -230,6 +234,7 @@ def _probe(pipe: LuaPipe) -> dict[str, Any]:
         "brain.skill_choices_accepted",
         "brain.mana_hold_start_count",
         "brain.mana_hold_end_count",
+        "brain.flee_transition_count",
         "brain.live_enemy_count",
         "brain.target_network_actor_id",
         "owner.participant_id",
@@ -243,6 +248,9 @@ def _probe(pipe: LuaPipe) -> dict[str, Any]:
         "wait.waiting_count",
     }
     number_keys = {
+        "brain.hp",
+        "brain.max_hp",
+        "brain.hp_ratio",
         "brain.mp",
         "brain.max_mp",
         "brain.mp_ratio",
@@ -717,6 +725,10 @@ print("next=" .. tostring(
             label="owner level-up barrier clear",
         )
         result["afterOwnerChoice"] = cleared
+        result["survivalProtectionAfterLevelUp"] = _protect_participants(
+            pipe,
+            bot_id,
+        )
         baseline_casts = int(cleared["brain.cast_accepted"])
         baseline_ticks = int(cleared["simulation_tick_count"])
         post = _sample_combat(
