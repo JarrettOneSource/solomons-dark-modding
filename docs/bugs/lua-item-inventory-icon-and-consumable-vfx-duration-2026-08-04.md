@@ -92,3 +92,28 @@ constant.
 These are loader presentation fixes. The mod's registered icon, declared
 duration, and gameplay behavior are already correct, so this investigation
 does not change the mod package or add mod features to loader release notes.
+
+## Duration-handoff repair probe
+
+Passing `duration_ms` into the existing replacement-glow scheduler repaired
+its clock but did not produce a continuous visual contract. Two committed-SHA
+smoke runs captured opposite results at the same 13.5-second point: the first
+contained no green pixels on either peer, while the second contained 3,077
+host and 2,952 client green pixels. Instrumentation in the second run logged
+the 180,000 ms request on each peer and, at 13 seconds, logged 167,000 ms still
+remaining. Damage was canceled in both runs.
+
+The scheduler therefore did not expire early. The nondeterminism comes from
+the already-recovered native primitive: `Anim_SpellGlow` completes after one
+draw. Recreating it from the gameplay pump can land before or after a completed
+backbuffer even while the request remains active. Extending the scheduler
+deadline alone preserves the same frame race for three minutes and cannot
+satisfy a full-window visual.
+
+The full-duration lane must instead be a persistent actor-attached carrier in
+the existing native world render queue. It must resolve the participant and
+position on every peer, draw on every native scene frame before the registered
+deadline, and retire at that deadline. A stock one-frame `Anim_SpellGlow` may
+remain as the activation flash, but it cannot own effect persistence. This
+keeps occlusion and lighting in the native scene and does not restore a D3D9
+overlay surrogate.
