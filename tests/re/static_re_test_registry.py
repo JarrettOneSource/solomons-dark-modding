@@ -112,6 +112,7 @@ from static_lua_items_contracts import (
 )
 from static_lua_consumables_contracts import (
     test_lua_consumables_are_native_stable_and_owner_executed,
+    test_registered_item_icons_and_consumable_vfx_follow_native_duration,
 )
 from static_lua_enemies_contracts import (
     test_lua_enemies_use_exact_stock_spawn_and_replicated_content_identity,
@@ -544,6 +545,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Lua consumables are native, stable, and owner-executed",
         test_lua_consumables_are_native_stable_and_owner_executed,
+    ),
+    (
+        "Registered item icons and consumable VFX follow native duration",
+        test_registered_item_icons_and_consumable_vfx_follow_native_duration,
     ),
     (
         "Lua enemies use exact stock spawning and replicated content identity",

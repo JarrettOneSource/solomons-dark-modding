@@ -2151,7 +2151,10 @@ def run(
             copied.write_bytes(path.read_bytes())
             result["log_receipts"][role]["evidence_copy"] = str(copied)
             log_text = copied.read_text(encoding="utf-8", errors="replace")
-            if "Lua custom potion world sprite draw failed" in log_text or "lua_world_render: world sprite skipped" in log_text:
+            if (
+                "Lua registered item world sprite draw failed" in log_text
+                or "lua_world_render: world sprite skipped" in log_text
+            ):
                 raise sync.VerifyFailure(
                     f"native world rendering logged a failure on {role}"
                 )

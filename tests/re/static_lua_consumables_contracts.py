@@ -259,8 +259,11 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         native_hooks + world_renderer + native_loot + spawn_reward + layout,
         (
             "HookSpriteDrawAtPosition",
-            "TryMatchCustomPotionSprite",
+            "TryMatchCustomWorldSprite",
             "DrawLuaSpriteWithStockGeometry",
+            "HookSpriteDrawScaled",
+            "TryMatchCustomInventorySprite",
+            "DrawLuaSpriteWithStockGeometryScaled",
             "stock_health_sprite",
             "native_texture_upload_bgra",
             "native_render_page_register",
@@ -269,6 +272,7 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "HookInventoryUseItem",
             "QueueLocalLuaConsumableUse",
             "sprite_draw_at_position=0x004143D0",
+            "sprite_draw_scaled=0x00414EA0",
             "inventory_use_item=0x0056D1B0",
             "inventory_find_item_by_uid=0x005521C0",
             "item_display_name=0x00571980",
@@ -288,9 +292,9 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "TryGetPlayerState(&player)",
             "TryGetParticipantGameplayState(participant_id, &participant)",
             "kSpellGlowAnimationLayer = 75.0f",
-            "kSpellGlowPulseIntervalMs = 16",
-            "kSpellGlowPulseDurationMs = 12000",
-            "active_native_vfx_pulses",
+            "kSpellGlowRefreshIntervalMs = 16",
+            "active_native_vfx_effects",
+            "request.duration_ms",
             "allocate(0x38)",
             "QueueLuaConsumableNativeVfx",
             "PumpLuaConsumableNativeVfx();",
@@ -376,4 +380,101 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         "normal/boss loot, materialize through stock potion inventory paths, "
         "replicate by content ID, execute owner-local resource effects, and ship "
         "a player-facing baked-green three-minute invincibility potion"
+    )
+
+
+def test_registered_item_icons_and_consumable_vfx_follow_native_duration() -> str:
+    runtime_header = _read("SolomonDarkModLoader/include/lua_item_runtime.h")
+    runtime = _read("SolomonDarkModLoader/src/lua_item_runtime.cpp")
+    vfx_runtime = _read(
+        "SolomonDarkModLoader/src/lua_item_runtime/"
+        "consumable_vfx_helpers.inl"
+    )
+    native_hooks = _read("SolomonDarkModLoader/src/lua_item_native_hooks.cpp")
+    world_header = _read("SolomonDarkModLoader/include/lua_world_render_runtime.h")
+    world_renderer = _read("SolomonDarkModLoader/src/lua_world_renderer.cpp")
+    gameplay_header = _read("SolomonDarkModLoader/src/gameplay_seams.h")
+    gameplay_storage = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
+    )
+    gameplay_bindings = _read(
+        "SolomonDarkModLoader/src/gameplay_seams/state_and_address_bindings.inl"
+    )
+    event_public_api = _read(
+        "SolomonDarkModLoader/src/lua_engine_event_public_api.inl"
+    )
+    events = _read("SolomonDarkModLoader/src/lua_engine_events.cpp")
+    layout = _read("config/binary-layout.ini")
+    acceptance = _read("tools/verify_lua_consumable_presentation.py")
+
+    _require(
+        "generic registered-item native inventory icon draw",
+        native_hooks
+        + world_header
+        + world_renderer
+        + gameplay_header
+        + gameplay_storage
+        + gameplay_bindings
+        + layout,
+        (
+            "kSpriteDrawScaled",
+            "sprite_draw_scaled=0x00414EA0",
+            "kScaledSpriteDrawHookPatchSize = 6",
+            "SpriteDrawScaledFn",
+            "g_sprite_draw_scaled_hook",
+            "HookSpriteDrawScaled",
+            "TryMatchCustomInventorySprite",
+            "DrawLuaSpriteWithStockGeometryScaled",
+            "custom inventory glyph reached stock scaled draw",
+        ),
+    )
+    assert "canary.lua.invincibility_potion" not in native_hooks
+
+    _require(
+        "registered consumable duration owns native VFX lifetime",
+        runtime_header + runtime + vfx_runtime + events,
+        (
+            "std::uint32_t duration_ms = 0",
+            "ActiveNativeVfxEffect",
+            "pending_native_vfx_effects",
+            "active_native_vfx_effects",
+            "kSpellGlowRefreshIntervalMs = 16",
+            "started_at_ms + request.duration_ms",
+            "QueueLuaConsumableNativeVfx(",
+            "definition->duration_ms",
+        ),
+    )
+    assert "kSpellGlowPulseDurationMs" not in runtime
+    assert "active_native_vfx_pulses" not in runtime
+    assert "QueueLuaConsumableNativeVfx(" not in event_public_api
+    _require_in_order(
+        events,
+        "QueueLuaConsumableNativeVfx(",
+        "DispatchConsumableUseToMod(",
+    )
+
+    _require(
+        "exact hosted-pair presentation acceptance",
+        acceptance,
+        (
+            'parser.add_argument("--expected-source-sha", required=True)',
+            "verify_exact_source_and_artifacts(",
+            "enable_audio=False",
+            "inventory-open-host.png",
+            "inventory_icon_visible(",
+            "vfx-near-expiry",
+            "near_finished_elapsed >= duration_seconds",
+            "vfx-after-expiry",
+            "invoke_native_magic_hit_trial(",
+            "require_life_loss=False",
+            "require_life_loss=True",
+            "sync.stop_game_processes(process_ids)",
+            "wait_for_campaign_ports_unbound(",
+        ),
+    )
+
+    return (
+        "Registered custom item icons use the stock scaled Inventory draw seam, "
+        "and native consumable VFX shares the immutable registered duration used "
+        "by the replicated item-consumed event"
     )

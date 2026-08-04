@@ -261,7 +261,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         native_hooks + world_renderer,
         (
             "HookSpriteDrawAtPosition",
-            "TryMatchCustomPotionSprite",
+            "TryMatchCustomWorldSprite",
             "DrawLuaSpriteWithStockGeometry",
             "stock_health_sprite",
             "original(self, x, y)",
@@ -354,11 +354,11 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         item_runtime + vfx_helpers,
         (
             "LuaConsumableNativeVfxRequest",
-            "active_native_vfx_pulses",
+            "active_native_vfx_effects",
             "SpawnSpellGlowForParticipant",
             "kSpellGlowAnimationLayer = 75.0f",
-            "kSpellGlowPulseIntervalMs = 16",
-            "kSpellGlowPulseDurationMs = 12000",
+            "kSpellGlowRefreshIntervalMs = 16",
+            "request.duration_ms",
         ),
     )
 
