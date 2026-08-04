@@ -4,6 +4,7 @@ import unittest
 
 from tools.verify_hostile_targeting_continuity import (
     HostileTargetingContinuityFailure,
+    _enemy_network_ids_from_layout,
     analyze_selector_log,
     analyze_target_samples,
     analyze_wave_completion,
@@ -31,6 +32,23 @@ def target_row(*, target: int = BOT_ID, latch: int = 0) -> dict[str, object]:
 
 
 class HostileTargetingContinuityVerifierTests(unittest.TestCase):
+    def test_layout_requires_one_network_identity_per_enemy(self) -> None:
+        self.assertEqual(
+            _enemy_network_ids_from_layout(
+                {
+                    "enemy_network_id.273": 0xBBBB,
+                    "enemy_network_id.546": 0xAAAA,
+                },
+                [273, 546],
+            ),
+            [0xAAAA, 0xBBBB],
+        )
+        with self.assertRaises(HostileTargetingContinuityFailure):
+            _enemy_network_ids_from_layout(
+                {"enemy_network_id.273": 0xAAAA},
+                [273, 546],
+            )
+
     def test_nearest_bot_must_remain_the_selected_target(self) -> None:
         assessment = analyze_target_samples(
             [target_row() for _ in range(20)],

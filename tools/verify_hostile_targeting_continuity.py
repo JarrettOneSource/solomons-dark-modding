@@ -215,12 +215,15 @@ local function move(actor, x, y)
   return ok
 end
 local live_by_address = {}
+local network_id_by_address = {}
 local selected_x = 0.0
 local selected_y = 0.0
 for _, actor in ipairs(sd.world.list_actors() or {}) do
   if actor.tracked_enemy and not actor.dead and
       (tonumber(actor.hp) or 0) > 0 then
-    live_by_address[tonumber(actor.actor_address) or 0] = true
+    local address = tonumber(actor.actor_address) or 0
+    live_by_address[address] = true
+    network_id_by_address[address] = tonumber(actor.network_actor_id) or 0
   end
   if tonumber(actor.actor_address) == enemy_address then
     selected_x = tonumber(sd.debug.read_float(enemy_address + ox)) or 0.0
@@ -331,6 +334,11 @@ emit("enemy_actor", enemy_address)
 emit("enemy_count", #enemy_addresses)
 emit("enemy_hp", __ENEMY_HP__)
 emit("stationary_lock", true)
+for _, address in ipairs(enemy_addresses) do
+  emit(
+    "enemy_network_id." .. tostring(address),
+    string.format("%.0f", network_id_by_address[address] or 0))
+end
 """
 
 
@@ -698,34 +706,23 @@ def _find_live_enemy_addresses(state: dict[str, Any]) -> list[int]:
     return sorted(addresses)
 
 
-def _wait_enemy_network_ids(
-    pipe: LuaPipe,
+def _enemy_network_ids_from_layout(
+    layout: dict[str, Any],
     actor_addresses: list[int],
-    timeout: float,
 ) -> list[int]:
-    expected = set(actor_addresses)
-    deadline = time.monotonic() + timeout
-    last: list[dict[str, Any]] = []
-    while time.monotonic() < deadline:
-        state = pipe.state()
-        last = [
-            row for row in state.get("nativeEnemies", [])
-            if int(row.get("address", 0)) in expected
-            and float(row.get("hp", 0.0)) > 0.0
-            and not row.get("dead", False)
-        ]
-        network_ids = [int(row.get("network_id", 0)) for row in last]
-        if (
-            len(last) == len(expected)
-            and all(network_id > 0 for network_id in network_ids)
-            and len(set(network_ids)) == len(expected)
-        ):
-            return sorted(network_ids)
-        time.sleep(0.05)
-    raise HostileTargetingContinuityFailure(
-        "original skeleton identities did not stabilize: "
-        f"expected_addresses={sorted(expected)} live={last}"
-    )
+    network_ids = [
+        int(layout.get(f"enemy_network_id.{address}", 0))
+        for address in actor_addresses
+    ]
+    if (
+        any(network_id <= 0 for network_id in network_ids)
+        or len(set(network_ids)) != len(actor_addresses)
+    ):
+        raise HostileTargetingContinuityFailure(
+            "layout did not capture one immutable network id per skeleton: "
+            f"addresses={actor_addresses} network_ids={network_ids}"
+        )
+    return sorted(network_ids)
 
 
 def _sample_targets(
@@ -956,7 +953,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             pipe,
             target_mod_id=BOT_MOD_ID,
         )
-        result["stragglerLayout"] = _arrange(
+        straggler_layout = _arrange(
             pipe,
             enemy_actor_addresses=enemy_actor_addresses,
             bot_id=bot_id,
@@ -974,10 +971,10 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             relative_layout=True,
             require_clear_paths=True,
         )
-        enemy_network_actor_ids = _wait_enemy_network_ids(
-            pipe,
+        result["stragglerLayout"] = straggler_layout
+        enemy_network_actor_ids = _enemy_network_ids_from_layout(
+            straggler_layout,
             enemy_actor_addresses,
-            10.0,
         )
         result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
         enemy_rows: list[dict[str, Any]] = []
