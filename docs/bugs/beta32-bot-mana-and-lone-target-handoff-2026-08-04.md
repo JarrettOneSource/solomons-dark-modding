@@ -82,20 +82,33 @@ not be weakened.
 
 ## Firewalker and attainable maximum trace
 
-The canonical native sustained-drain trace is
-`pre-fix/firewalker-mana-facing-live5/result.json`. The fixture resolved the
-bot's profile through the configured stock `ActorGetProfile` function and
-armed the recovered Firewalker byte at profile offset `0x8DC`. The stock actor
-tick owned the resulting drain; the fixture did not decrement MP itself.
-Native persistent flags reported Firewalker for the full sample window.
+`pre-fix/firewalker-mana-facing-live5/result.json` originally appeared to be a
+native sustained-drain trace because the fixture wrote the recovered
+Firewalker toggle at progression `+0x8DC` and persistent flags remained set.
+That interpretation was disproved before the attainable-cap correction. A
+toggle-byte write alone does not run the stock Firewalker dispatcher, create
+`Fire_Goodguy (0x7EE)` trail actors, or rebuild the progression's hoarded-mana
+field. The later 12-MP drops in that trace coincide with primary casts, not a
+Firewalker drain. The artifact remains useful for the pre-fix flee/facing
+defects, but it is not accepted as Firewalker lifecycle evidence.
 
-Reserve again recovered from exactly 10/100 to 80/100 in 2.5-MP steps. On
-nominal exit, active Firewalker resumed draining mana and drove the bot down to
-8/100, causing another reserve cycle. The sample ended in hold at 38/100.
-This demonstrates both genuine recovery and the unstable threshold cycle that
-occurs when a sustained drain constrains usable mana.
+The corrected investigative fixture first primes the learned Firewalker rank,
+then calls the shipped secondary dispatcher `0x0054CC50` for the materialized
+bot actor. `post-fix/firewalker-mana-facing-live7/result.json` proves that this
+path sets progression `+0x8DC`, creates live positive-lifetime
+`Fire_Goodguy (0x7EE)` actors with native damage, and leaves Firewalker active.
+The stock progression refresh exposes `50.0` at progression `+0x740` for the
+100-MP rank-1 fixture: 50 MP is hoarded, so the attainable pool is 50 MP.
 
-### Root cause: reserve stores only nominal ratio
+That same trace exposed a second native/loader seam. The bot reserve recovery
+path calls `PlayerActorApplyManaDelta` directly in 2.5-MP steps. That delta
+helper clamps against nominal max MP, not against the stock progression tick's
+`maxMP - hoardedMP` ceiling. It therefore raised the active Firewalker bot from
+10 to the nominal 80-MP exit even while `+0x740` remained 50 and real trails
+were present. An observed-plateau-only state machine cannot discover a plateau
+that its own recovery helper bypasses.
+
+### Root cause: reserve stores only nominal ratio and recovery ignores hoards
 
 `BotManaReserveState` stores only `bot_id`, `active`, and `last_ratio`.
 `UpdateBotManaReserveStateLocked` compares current MP only with the nominal
@@ -104,9 +117,11 @@ so it cannot distinguish "still recovering toward nominal max" from "held at
 the highest MP this active drain permits." Any effect whose net drain prevents
 the nominal 80% edge can therefore leave reserve active forever.
 
-The native state must retain the exact inclusive 10% entry, prefer the exact
-nominal 80% exit whenever it is reachable, and derive a bounded attainable
-maximum from observed reserve recovery when progress plateaus. The derived
+The native state must retain the exact inclusive 10% entry and exact 80% exit,
+prefer nominal maximum when it is reachable, and derive a bounded attainable
+maximum from observed recovery when no native bound exists. When the recovered
+native hoarded-mana field is present, `maxMP - hoardedMP` is the authoritative
+attainable maximum and must also bound the loader's recovery delta. The derived
 resume threshold must be visible in the bot snapshot so Bot Brain mirrors one
 native decision rather than recreating thresholds.
 
@@ -159,8 +174,8 @@ The correction is not complete without contracts that pin all four seams:
 1. a changed host hostile target requests immediate authoritative run motion
    publication while unchanged motion retains the 67 ms cadence;
 2. exact 10% still enters reserve and exact nominal 80% still exits, while a
-   stable sub-nominal recovery plateau produces a reachable threshold and
-   cannot wait forever;
+   native hoarded-mana ceiling or stable sub-nominal recovery plateau produces
+   a reachable threshold and cannot wait forever;
 3. native reserve makes Bot Brain stop casting and use a distinct mana-flee
    policy until the native state clears; and
 4. a moving reserved bot clears stale target-facing and applies its movement
