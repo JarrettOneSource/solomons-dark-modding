@@ -69,7 +69,6 @@ bool LuaLootRollSucceeds(
     double unit_roll);
 
 bool QueueLuaConsumableNativeVfx(LuaConsumableNativeVfxRequest request);
-void PumpLuaConsumableNativeVfx();
 
 bool InitializeLuaItemNativeHooks(std::string* error_message);
 void ShutdownLuaItemNativeHooks();

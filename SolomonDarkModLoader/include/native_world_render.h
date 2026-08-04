@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string_view>
 
@@ -41,5 +42,15 @@ void QueueNativeWorldDampenPresentation(
     std::uint32_t cast_sequence,
     float x,
     float y);
+bool QueueNativeWorldConsumableVfxPresentation(
+    std::string_view mod_id,
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    std::uint32_t duration_ms,
+    const std::array<float, 4>& color);
+void ClearNativeWorldConsumableVfxPresentationsForMod(
+    std::string_view mod_id);
+void ClearNativeWorldConsumableVfxPresentations();
 
 }  // namespace sdmod

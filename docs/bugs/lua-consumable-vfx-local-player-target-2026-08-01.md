@@ -84,6 +84,12 @@ four-second replacement window above proved insufficient for sequential
 completed-frame observations on both peers, the native pulse window is widened
 to twelve seconds; the registered gameplay duration remains unchanged.
 
+The 2026-08-04 duration repair supersedes that replacement window. A repeated
+one-frame primitive still produced nondeterministic completed backbuffers even
+when its scheduler used the full registered duration. `Anim_SpellGlow` now
+serves only as the activation flash; an actor-attached native world carrier is
+present on every scene frame for the registered effect window.
+
 ## Required proof
 
 - The active VFX is visible for the local player in a live solo run.

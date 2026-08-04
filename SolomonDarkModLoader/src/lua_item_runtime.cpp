@@ -5,8 +5,7 @@
 #include "memory_access.h"
 #include "mod_loader.h"
 #include "multiplayer_local_transport.h"
-
-#include <Windows.h>
+#include "native_world_render.h"
 
 #include <algorithm>
 #include <chrono>
@@ -20,18 +19,10 @@ namespace sdmod {
 namespace {
 
 struct LuaItemRuntimeState {
-    struct ActiveNativeVfxEffect {
-        LuaConsumableNativeVfxRequest request;
-        std::uint64_t next_spawn_ms = 0;
-        std::uint64_t expires_at_ms = 0;
-    };
-
     std::map<std::uint64_t, LuaConsumableDefinition> consumables;
     std::unordered_map<std::int32_t, std::uint64_t> content_by_subtype;
     std::unordered_map<std::uint64_t, std::int32_t> reserved_subtype_by_content;
     std::vector<LuaLootPoolEntry> loot_pool;
-    std::vector<ActiveNativeVfxEffect> pending_native_vfx_effects;
-    std::vector<ActiveNativeVfxEffect> active_native_vfx_effects;
     std::uint64_t loot_rng_state = 0xA0761D6478BD642Full;
     std::int32_t next_native_subtype = kLuaFirstConsumablePotionSubtype;
     std::mutex mutex;
@@ -277,72 +268,49 @@ bool QueueLuaConsumableNativeVfx(
         request.use_id == 0) {
         return false;
     }
-    auto& runtime = ItemRuntime();
-    std::scoped_lock lock(runtime.mutex);
-    if (runtime.pending_native_vfx_effects.size() +
-            runtime.active_native_vfx_effects.size() >=
-        256) {
+    const auto definition =
+        FindLuaConsumableDefinition(request.content_id);
+    if (!definition.has_value() ||
+        definition->duration_ms != request.duration_ms) {
         return false;
     }
-    const auto started_at_ms =
-        static_cast<std::uint64_t>(GetTickCount64());
-    runtime.pending_native_vfx_effects.push_back({
-        request,
-        started_at_ms,
-        started_at_ms + request.duration_ms,
-    });
-    return true;
-}
-
-void PumpLuaConsumableNativeVfx() {
-    std::vector<LuaConsumableNativeVfxRequest> requests_to_spawn;
-    {
-        auto& runtime = ItemRuntime();
-        std::scoped_lock lock(runtime.mutex);
-        const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
-        runtime.active_native_vfx_effects.insert(
-            runtime.active_native_vfx_effects.end(),
-            runtime.pending_native_vfx_effects.begin(),
-            runtime.pending_native_vfx_effects.end());
-        runtime.pending_native_vfx_effects.clear();
-
-        for (auto iterator = runtime.active_native_vfx_effects.begin();
-             iterator != runtime.active_native_vfx_effects.end();) {
-            if (now_ms >= iterator->expires_at_ms) {
-                iterator = runtime.active_native_vfx_effects.erase(iterator);
-                continue;
-            }
-            if (now_ms >= iterator->next_spawn_ms) {
-                requests_to_spawn.push_back(iterator->request);
-                iterator->next_spawn_ms =
-                    now_ms + kSpellGlowRefreshIntervalMs;
-            }
-            ++iterator;
-        }
+    if (definition->consume_vfx_kind == LuaConsumableVfxKind::None) {
+        return true;
     }
-    for (const auto& request : requests_to_spawn) {
-        const auto definition =
-            FindLuaConsumableDefinition(request.content_id);
-        if (!definition.has_value() ||
-            definition->consume_vfx_kind ==
-                LuaConsumableVfxKind::None) {
-            continue;
-        }
-        std::string error_message;
-        if (!SpawnSpellGlowForParticipant(
-                *definition,
-                request.participant_id,
-                request.use_id,
-                &error_message)) {
-            Log(
-                "lua_items: consumable VFX skipped. content_id=" +
-                std::to_string(request.content_id) +
-                " participant_id=" +
-                std::to_string(request.participant_id) +
-                " use_id=" + std::to_string(request.use_id) +
-                " error=" + error_message);
-        }
+
+    const bool carrier_queued = request.duration_ms == 0 ||
+        QueueNativeWorldConsumableVfxPresentation(
+            definition->mod_id,
+            request.content_id,
+            request.participant_id,
+            request.use_id,
+            request.duration_ms,
+            definition->consume_vfx_color);
+    if (!carrier_queued) {
+        Log(
+            "lua_items: consumable VFX native carrier could not be queued. "
+            "content_id=" + std::to_string(request.content_id) +
+            " participant_id=" +
+            std::to_string(request.participant_id) +
+            " use_id=" + std::to_string(request.use_id));
     }
+
+    std::string flash_error;
+    const bool flash_spawned = SpawnSpellGlowForParticipant(
+        *definition,
+        request.participant_id,
+        request.use_id,
+        &flash_error);
+    if (!flash_spawned) {
+        Log(
+            "lua_items: consumable VFX activation flash skipped. content_id=" +
+            std::to_string(request.content_id) +
+            " participant_id=" +
+            std::to_string(request.participant_id) +
+            " use_id=" + std::to_string(request.use_id) +
+            " error=" + flash_error);
+    }
+    return request.duration_ms == 0 ? flash_spawned : carrier_queued;
 }
 
 void ClearLuaItemRuntimeForMod(std::string_view mod_id) {
@@ -368,24 +336,7 @@ void ClearLuaItemRuntimeForMod(std::string_view mod_id) {
                 return entry.mod_id == mod_id;
             }),
         runtime.loot_pool.end());
-    runtime.pending_native_vfx_effects.erase(
-        std::remove_if(
-            runtime.pending_native_vfx_effects.begin(),
-            runtime.pending_native_vfx_effects.end(),
-            [&](const LuaItemRuntimeState::ActiveNativeVfxEffect& effect) {
-                return runtime.consumables.find(effect.request.content_id) ==
-                    runtime.consumables.end();
-            }),
-        runtime.pending_native_vfx_effects.end());
-    runtime.active_native_vfx_effects.erase(
-        std::remove_if(
-            runtime.active_native_vfx_effects.begin(),
-            runtime.active_native_vfx_effects.end(),
-            [&](const LuaItemRuntimeState::ActiveNativeVfxEffect& effect) {
-                return runtime.consumables.find(effect.request.content_id) ==
-                    runtime.consumables.end();
-            }),
-        runtime.active_native_vfx_effects.end());
+    ClearNativeWorldConsumableVfxPresentationsForMod(mod_id);
 }
 
 void ResetLuaItemRuntime() {
@@ -395,8 +346,7 @@ void ResetLuaItemRuntime() {
     runtime.content_by_subtype.clear();
     runtime.reserved_subtype_by_content.clear();
     runtime.loot_pool.clear();
-    runtime.pending_native_vfx_effects.clear();
-    runtime.active_native_vfx_effects.clear();
+    ClearNativeWorldConsumableVfxPresentations();
     runtime.loot_rng_state =
         static_cast<std::uint64_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()) ^

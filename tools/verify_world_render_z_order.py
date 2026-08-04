@@ -2153,6 +2153,8 @@ def run(
             log_text = copied.read_text(encoding="utf-8", errors="replace")
             if (
                 "Lua registered item world sprite draw failed" in log_text
+                or "consumable VFX native carrier could not be queued" in log_text
+                or "consumable VFX presentation skipped" in log_text
                 or "lua_world_render: world sprite skipped" in log_text
             ):
                 raise sync.VerifyFailure(

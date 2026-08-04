@@ -72,12 +72,13 @@ registered by the same mod, and `icon.frame` must resolve inside that atlas.
 `duration_ms` is immutable metadata from 0 through 86,400,000; the mod decides
 what the duration means. `on_consume` is required and runs only on the consuming
 participant's process. `consume_vfx` is optional; the current semantic
-`spell_glow` kind constructs the game's native `SpellGlow` animation around the
-participant on every peer using the supplied finite RGBA color. The loader
-refreshes that native animation for the registered `duration_ms`, so its
+`spell_glow` kind constructs the game's native one-frame `SpellGlow` activation
+flash and an actor-attached native world carrier around the participant on
+every peer using the supplied finite RGBA color. The carrier is submitted on
+every native scene frame until the registered `duration_ms` deadline, so its
 presentation shares the replicated effect window rather than a separate
-loader-owned timeout. The effect is native `SpellGlow` only; no icon particles
-are projected into the screen-space overlay.
+loader-owned timeout. No icon particles are projected into the screen-space
+overlay.
 
 Custom potions use peer-local native subtype reservations only to enter the
 stock inventory. Their descriptors add `consumable`, `description`, `icon`,

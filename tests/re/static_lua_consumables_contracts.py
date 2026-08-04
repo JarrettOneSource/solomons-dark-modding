@@ -75,6 +75,13 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
         "SolomonDarkModLoader/src/lua_world_renderer/"
         "native_carrier_queue.inl"
     )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_texture_bridge.inl"
+    )
+    native_world_header = _read(
+        "SolomonDarkModLoader/include/native_world_render.h"
+    )
     gameplay_pump = _read(
         "SolomonDarkModLoader/src/mod_loader_gameplay/dispatch_and_hooks_pump_loop.inl"
     )
@@ -282,8 +289,8 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     assert "SeedStockPotionGeometry" not in native_hooks
     assert "PrepareLuaConsumableNativePresentation" not in native_hooks
     _require(
-        "stock SpellGlow consume VFX",
-        runtime + vfx_runtime + gameplay_pump + layout,
+        "native full-duration consumable VFX",
+        runtime + vfx_runtime + native_world_header + world_renderer + layout,
         (
             "SpawnSpellGlowForParticipant",
             "TryResolveConsumableVfxTarget",
@@ -292,12 +299,14 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
             "TryGetPlayerState(&player)",
             "TryGetParticipantGameplayState(participant_id, &participant)",
             "kSpellGlowAnimationLayer = 75.0f",
-            "kSpellGlowRefreshIntervalMs = 16",
-            "active_native_vfx_effects",
+            "QueueNativeWorldConsumableVfxPresentation",
+            "NativeWorldConsumableVfxPresentation",
+            "BuildNativeConsumableVfxGlyph",
+            "consumable_vfx_presentations",
+            "expires_at_milliseconds",
             "request.duration_ms",
             "allocate(0x38)",
             "QueueLuaConsumableNativeVfx",
-            "PumpLuaConsumableNativeVfx();",
             "spell_glow_ctor=0x00454AD0",
             "actor_world_register_animation=0x0063E5E0",
         ),
@@ -392,7 +401,18 @@ def test_registered_item_icons_and_consumable_vfx_follow_native_duration() -> st
     )
     native_hooks = _read("SolomonDarkModLoader/src/lua_item_native_hooks.cpp")
     world_header = _read("SolomonDarkModLoader/include/lua_world_render_runtime.h")
+    native_world_header = _read(
+        "SolomonDarkModLoader/include/native_world_render.h"
+    )
     world_renderer = _read("SolomonDarkModLoader/src/lua_world_renderer.cpp")
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_carrier_queue.inl"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_texture_bridge.inl"
+    )
     gameplay_header = _read("SolomonDarkModLoader/src/gameplay_seams.h")
     gameplay_storage = _read(
         "SolomonDarkModLoader/src/gameplay_seams/address_storage.inl"
@@ -432,20 +452,32 @@ def test_registered_item_icons_and_consumable_vfx_follow_native_duration() -> st
 
     _require(
         "registered consumable duration owns native VFX lifetime",
-        runtime_header + runtime + vfx_runtime + events,
+        runtime_header
+        + runtime
+        + vfx_runtime
+        + native_world_header
+        + world_renderer
+        + events,
         (
             "std::uint32_t duration_ms = 0",
-            "ActiveNativeVfxEffect",
-            "pending_native_vfx_effects",
-            "active_native_vfx_effects",
-            "kSpellGlowRefreshIntervalMs = 16",
-            "started_at_ms + request.duration_ms",
+            "NativeWorldConsumableVfxPresentation",
+            "consumable_vfx_presentations",
+            "started_at + duration_ms",
+            "now >= presentation.expires_at_milliseconds",
+            "TryResolveConsumableVfxRenderTarget",
+            "BuildNativeConsumableVfxGlyph",
+            "carrier->color = presentation.color",
             "QueueLuaConsumableNativeVfx(",
+            "definition->duration_ms != request.duration_ms",
+            "QueueNativeWorldConsumableVfxPresentation(",
             "definition->duration_ms",
         ),
     )
     assert "kSpellGlowPulseDurationMs" not in runtime
     assert "active_native_vfx_pulses" not in runtime
+    assert "ActiveNativeVfxEffect" not in runtime
+    assert "PumpLuaConsumableNativeVfx" not in runtime
+    assert "kSpellGlowRefreshIntervalMs" not in runtime + vfx_runtime
     assert "QueueLuaConsumableNativeVfx(" not in event_public_api
     _require_in_order(
         events,

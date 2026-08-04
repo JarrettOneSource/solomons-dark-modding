@@ -16,11 +16,17 @@ void __fastcall DrawWorldCarrierGlyph(
         kPuppetWorldPositionYOffset);
     void* renderer = TryGetNativeRenderer();
     std::array<float, 4> previous_color{};
-    const bool apply_opacity =
+    const bool apply_color =
         renderer != nullptr &&
         g_world_renderer.native_renderer_set_color != nullptr &&
-        carrier->opacity < 0.999f;
-    if (apply_opacity) {
+        (carrier->opacity < 0.999f ||
+         std::any_of(
+             carrier->color.begin(),
+             carrier->color.end(),
+             [](float component) {
+                 return component < 0.999f;
+             }));
+    if (apply_color) {
         previous_color = {
             ReadNativeField<float>(
                 renderer, kNativeRendererBaseRedOffset),
@@ -33,16 +39,21 @@ void __fastcall DrawWorldCarrierGlyph(
         };
         g_world_renderer.native_renderer_set_color(
             renderer,
-            previous_color[0],
-            previous_color[1],
-            previous_color[2],
-            previous_color[3] * std::clamp(carrier->opacity, 0.0f, 1.0f));
+            previous_color[0] *
+                std::clamp(carrier->color[0], 0.0f, 1.0f),
+            previous_color[1] *
+                std::clamp(carrier->color[1], 0.0f, 1.0f),
+            previous_color[2] *
+                std::clamp(carrier->color[2], 0.0f, 1.0f),
+            previous_color[3] *
+                std::clamp(carrier->color[3], 0.0f, 1.0f) *
+                std::clamp(carrier->opacity, 0.0f, 1.0f));
     }
     g_world_renderer.glyph_draw_at_position(
         carrier->glyph.bytes.data(),
         x,
         y);
-    if (apply_opacity) {
+    if (apply_color) {
         g_world_renderer.native_renderer_set_color(
             renderer,
             previous_color[0],
@@ -60,7 +71,8 @@ NativeWorldCarrier* GetOrCreateCarrier(std::size_t index) {
     while (g_world_renderer.carriers.size() <= index) {
         if (g_world_renderer.carriers.size() >=
                 kLuaWorldRenderMaxGlobalSprites +
-                    kDampenPresentationLimit ||
+                    kDampenPresentationLimit +
+                    kConsumableVfxPresentationLimit ||
             g_world_renderer.puppet_ctor == nullptr) {
             return nullptr;
         }
@@ -127,6 +139,7 @@ bool PrepareWorldCarrier(
         carrier->puppet.data(),
         kPuppetBoundsPointerOffset,
         reinterpret_cast<uintptr_t>(carrier->bounds.data()));
+    carrier->color = {1.0f, 1.0f, 1.0f, 1.0f};
     carrier->opacity = 1.0f;
     return true;
 }
@@ -168,7 +181,98 @@ bool PrepareDampenCarrier(
         carrier->puppet.data(),
         kPuppetBoundsPointerOffset,
         reinterpret_cast<uintptr_t>(carrier->bounds.data()));
+    carrier->color = {1.0f, 1.0f, 1.0f, 1.0f};
     carrier->opacity = std::clamp(1.0f - progress, 0.0f, 1.0f);
+    return true;
+}
+
+struct ConsumableVfxRenderTarget {
+    uintptr_t world_address = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+bool TryResolveConsumableVfxRenderTarget(
+    std::uint64_t participant_id,
+    ConsumableVfxRenderTarget* target) {
+    if (participant_id == 0 || target == nullptr) {
+        return false;
+    }
+    *target = ConsumableVfxRenderTarget{};
+    const auto transport_participant_id =
+        multiplayer::GetLocalTransportParticipantId();
+    const auto local_participant_id = transport_participant_id != 0
+        ? transport_participant_id
+        : multiplayer::kLocalParticipantId;
+    if (participant_id == local_participant_id) {
+        SDModPlayerState player;
+        if (!TryGetPlayerState(&player) || !player.valid ||
+            player.world_address == 0 ||
+            !std::isfinite(player.x) || !std::isfinite(player.y)) {
+            return false;
+        }
+        target->world_address = player.world_address;
+        target->x = player.x;
+        target->y = player.y;
+        return true;
+    }
+
+    SDModParticipantGameplayState participant;
+    if (!TryGetParticipantGameplayState(participant_id, &participant) ||
+        !participant.available || !participant.entity_materialized ||
+        participant.world_address == 0 ||
+        !std::isfinite(participant.x) || !std::isfinite(participant.y)) {
+        return false;
+    }
+    target->world_address = participant.world_address;
+    target->x = participant.x;
+    target->y = participant.y;
+    return true;
+}
+
+bool PrepareConsumableVfxCarrier(
+    NativeWorldCarrier* carrier,
+    const NativeWorldConsumableVfxPresentation& presentation,
+    const ConsumableVfxRenderTarget& target,
+    ULONGLONG now,
+    std::string* error_message) {
+    const auto elapsed = static_cast<float>(
+        now - presentation.started_at_milliseconds);
+    const float phase =
+        elapsed / kConsumableVfxPulsePeriodMs * 6.283185307f;
+    const float radius = kConsumableVfxBaseRadius +
+        kConsumableVfxRadiusPulse * std::sin(phase);
+    if (carrier == nullptr || target.world_address == 0 ||
+        !BuildNativeConsumableVfxGlyph(
+            radius,
+            &carrier->glyph,
+            &carrier->bounds,
+            error_message)) {
+        return false;
+    }
+    WriteNativeField(
+        carrier->puppet.data(),
+        kPuppetWorldPositionXOffset,
+        target.x);
+    WriteNativeField(
+        carrier->puppet.data(),
+        kPuppetWorldPositionYOffset,
+        target.y);
+    WriteNativeField(
+        carrier->puppet.data(),
+        kPuppetOwnerWorldOffset,
+        target.world_address);
+    const float sort_bias = 0.0f;
+    WriteNativeField(
+        carrier->puppet.data(),
+        kPuppetSortBiasOffset,
+        sort_bias);
+    WriteNativeField(
+        carrier->puppet.data(),
+        kPuppetBoundsPointerOffset,
+        reinterpret_cast<uintptr_t>(carrier->bounds.data()));
+    carrier->color = presentation.color;
+    carrier->opacity = 0.8f;
     return true;
 }
 
@@ -274,6 +378,59 @@ void InsertWorldSpriteCarriers(void* queue, int pass) {
                 std::to_string(presentation.owner_participant_id) +
                 " cast_sequence=" +
                 std::to_string(presentation.cast_sequence));
+        }
+    }
+
+    auto& consumable_vfx =
+        g_world_renderer.consumable_vfx_presentations;
+    consumable_vfx.erase(
+        std::remove_if(
+            consumable_vfx.begin(),
+            consumable_vfx.end(),
+            [&](const NativeWorldConsumableVfxPresentation& presentation) {
+                return now >= presentation.expires_at_milliseconds;
+            }),
+        consumable_vfx.end());
+    for (auto& presentation : consumable_vfx) {
+        ConsumableVfxRenderTarget target;
+        if (!TryResolveConsumableVfxRenderTarget(
+                presentation.participant_id,
+                &target) ||
+            target.world_address != player.world_address) {
+            continue;
+        }
+        auto* carrier = GetOrCreateCarrier(carrier_index);
+        std::string error_message;
+        if (carrier == nullptr ||
+            !PrepareConsumableVfxCarrier(
+                carrier,
+                presentation,
+                target,
+                now,
+                &error_message)) {
+            LogWorldRenderFailure(
+                "consumable VFX presentation skipped. content_id=" +
+                std::to_string(presentation.content_id) +
+                " participant_id=" +
+                std::to_string(presentation.participant_id) +
+                " use_id=" + std::to_string(presentation.use_id) +
+                " error=" + error_message);
+            continue;
+        }
+        g_world_renderer.render_queue_insert(
+            queue,
+            static_cast<int>(std::floor(target.y)),
+            carrier->puppet.data(),
+            pass);
+        ++carrier_index;
+        if (!presentation.draw_logged) {
+            presentation.draw_logged = true;
+            Log(
+                "lua_items: consumable VFX native carrier drawn. content_id=" +
+                std::to_string(presentation.content_id) +
+                " participant_id=" +
+                std::to_string(presentation.participant_id) +
+                " use_id=" + std::to_string(presentation.use_id));
         }
     }
 }

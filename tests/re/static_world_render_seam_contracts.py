@@ -351,13 +351,16 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
 
     _require(
         "native-only replicated potion VFX",
-        item_runtime + vfx_helpers,
+        item_runtime + vfx_helpers + world_renderer,
         (
             "LuaConsumableNativeVfxRequest",
-            "active_native_vfx_effects",
             "SpawnSpellGlowForParticipant",
             "kSpellGlowAnimationLayer = 75.0f",
-            "kSpellGlowRefreshIntervalMs = 16",
+            "NativeWorldConsumableVfxPresentation",
+            "BuildNativeConsumableVfxGlyph",
+            "TryResolveConsumableVfxRenderTarget",
+            "consumable_vfx_presentations",
+            "expires_at_milliseconds",
             "request.duration_ms",
         ),
     )

@@ -284,7 +284,7 @@ in-repository Lua mods. It is class-complete for the current tree:
 | Current content | Pre-cutover path | Stock-matched destination |
 | --- | --- | --- |
 | Registered custom-potion ground glyph | Stock carrier draw was replaced by a projected `EndScene` quad | Keep the stock drop carrier and replace only its native glyph in place. |
-| Invincibility Potion active orbit/burst | World projection followed by consumable `EndScene` quads, alongside native `Anim_SpellGlow` | Delete the duplicate overlay quads; retain only native `Anim_SpellGlow`. |
+| Invincibility Potion active orbit/burst | World projection followed by consumable `EndScene` quads, alongside native `Anim_SpellGlow` | Delete the duplicate overlay quads; retain the native `Anim_SpellGlow` activation flash and use a duration-bound native world carrier for persistence. |
 | General `sd.world.sprite` content | No native public seam | Loader Puppet carrier in the Arena Y-sorted queue. |
 | Replicated Dampen ring | Projected D3D9 `EndScene` line strip | Native textured world carrier in the Arena Y-sorted queue. |
 | Remote-player floating name and health bar | Name rendered during actor animation advance, captured/reprojected, then name and bar replayed in `EndScene` | Native post-scene world-indicator lane using ExactText and stock untextured quads. |

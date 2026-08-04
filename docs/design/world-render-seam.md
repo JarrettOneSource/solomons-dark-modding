@@ -323,14 +323,17 @@ are ignored on each peer.
 ## Potion active VFX cutover
 
 `LuaConsumableNativeVfxRequest`, replicated use identity, participant target
-resolution, the 16 ms pulse cadence, twelve-second lifetime, native
-`Anim_SpellGlow` construction, color, and layer `75.0` all remain.
+resolution, native `Anim_SpellGlow` construction, color, and layer `75.0`
+remain. `Anim_SpellGlow` is now the one-frame activation flash; it no longer
+owns the active effect lifetime.
 
-The native animation is a one-frame primitive. Twelve seconds keeps the stock
-primitive resident often enough for both peers to observe completed frames
-after replicated consumption and player repositioning without restoring an
-overlay surrogate. The gameplay effect duration remains mod-defined and is
-unchanged.
+The full-window visual is an actor-attached carrier in the same native
+Y-sorted world queue used by `sd.world.sprite` and Dampen. It resolves the
+participant's current actor position on each peer, tints a native texture with
+the registered consumable RGBA color, submits on every scene frame, and retires
+when `GetTickCount64()` reaches the registered `duration_ms` deadline. This
+removes the completed-backbuffer race inherent to recreating a one-frame
+animation without restoring an overlay surrogate.
 
 The following overlay-only structures and functions are deleted:
 
@@ -341,10 +344,10 @@ The following overlay-only structures and functions are deleted:
 - `AppendConsumableActivationBurstQuads`; and
 - `QueueConsumableQuad` plus the consumable drain in `RenderLuaDrawFrame`.
 
-The result is one presentation lane: repeated stock `SpellGlow` actors in the
-native animation/world pipeline. Both peer processes continue to create the
-effect from the authenticated replicated consumable-use event. No wire schema
-or mod definition changes.
+The result remains one native presentation lane: a stock `SpellGlow` activation
+flash plus the duration-bound carrier in the native animation/world pipeline.
+Both peer processes create them from the authenticated replicated
+consumable-use event. No wire schema or mod definition changes.
 
 ## Address contract
 

@@ -7,6 +7,7 @@
 #include "lua_draw_runtime.h"
 #include "memory_access.h"
 #include "mod_loader.h"
+#include "multiplayer_local_transport.h"
 #include "native_world_render.h"
 #include "x86_hook.h"
 
@@ -57,6 +58,11 @@ constexpr float kDampenInitialRadius = 18.0f;
 constexpr float kDampenFinalRadius = 96.0f;
 constexpr std::size_t kDampenPresentationLimit = 8;
 constexpr std::size_t kDampenTextureSize = 128;
+constexpr std::size_t kConsumableVfxPresentationLimit = 256;
+constexpr std::size_t kConsumableVfxTextureSize = 128;
+constexpr float kConsumableVfxBaseRadius = 42.0f;
+constexpr float kConsumableVfxRadiusPulse = 3.0f;
+constexpr float kConsumableVfxPulsePeriodMs = 1200.0f;
 
 using NativeRenderQueueFlushFn = void(__thiscall*)(void* queue, int pass);
 using NativeArenaRenderFn = void(__thiscall*)(void* arena);
@@ -102,6 +108,7 @@ struct NativeWorldCarrier {
     std::array<uintptr_t, kPuppetVtableEntryCount> vtable{};
     NativeWorldGlyph glyph;
     std::array<float, 4> bounds{};
+    std::array<float, 4> color = {1.0f, 1.0f, 1.0f, 1.0f};
     float opacity = 1.0f;
 };
 
@@ -111,6 +118,17 @@ struct NativeWorldDampenPresentation {
     float x = 0.0f;
     float y = 0.0f;
     ULONGLONG started_at_milliseconds = 0;
+    bool draw_logged = false;
+};
+
+struct NativeWorldConsumableVfxPresentation {
+    std::string mod_id;
+    std::uint64_t content_id = 0;
+    std::uint64_t participant_id = 0;
+    std::uint64_t use_id = 0;
+    std::array<float, 4> color = {1.0f, 1.0f, 1.0f, 1.0f};
+    ULONGLONG started_at_milliseconds = 0;
+    ULONGLONG expires_at_milliseconds = 0;
     bool draw_logged = false;
 };
 
@@ -135,7 +153,10 @@ struct LuaWorldRendererState {
     std::vector<std::unique_ptr<NativeWorldCarrier>> carriers;
     std::vector<LuaWorldRenderFrameSnapshot> frame_snapshots;
     NativeAtlasTexture dampen_texture;
+    NativeAtlasTexture consumable_vfx_texture;
     std::vector<NativeWorldDampenPresentation> dampen_presentations;
+    std::vector<NativeWorldConsumableVfxPresentation>
+        consumable_vfx_presentations;
     std::uint32_t failure_logs_remaining = 16;
     bool logged_native_carrier_draw = false;
     bool logged_native_marker_draw = false;
@@ -411,10 +432,13 @@ void ClearWorldRendererStateUnlocked() {
     }
     ReleaseNativeAtlasTexture(&g_world_renderer.dampen_texture);
     g_world_renderer.dampen_texture = {};
+    ReleaseNativeAtlasTexture(&g_world_renderer.consumable_vfx_texture);
+    g_world_renderer.consumable_vfx_texture = {};
     g_world_renderer.atlas_textures.clear();
     g_world_renderer.carriers.clear();
     g_world_renderer.frame_snapshots.clear();
     g_world_renderer.dampen_presentations.clear();
+    g_world_renderer.consumable_vfx_presentations.clear();
     g_world_renderer.initialized = false;
     g_world_renderer.arena_render_queue_offset = 0;
     g_world_renderer.render_queue_insert = nullptr;
@@ -609,6 +633,87 @@ void QueueNativeWorldDampenPresentation(
         std::to_string(owner_participant_id) +
         " cast_sequence=" + std::to_string(cast_sequence) +
         " xy=(" + std::to_string(x) + "," + std::to_string(y) + ")");
+}
+
+bool QueueNativeWorldConsumableVfxPresentation(
+    std::string_view mod_id,
+    std::uint64_t content_id,
+    std::uint64_t participant_id,
+    std::uint64_t use_id,
+    std::uint32_t duration_ms,
+    const std::array<float, 4>& color) {
+    if (mod_id.empty() || content_id == 0 || participant_id == 0 ||
+        use_id == 0 || duration_ms == 0 ||
+        !std::all_of(
+            color.begin(),
+            color.end(),
+            [](float component) {
+                return std::isfinite(component) &&
+                    component >= 0.0f && component <= 1.0f;
+            })) {
+        return false;
+    }
+    const auto started_at = GetTickCount64();
+    {
+        std::scoped_lock lock(g_world_renderer.mutex);
+        if (!g_world_renderer.initialized) {
+            return false;
+        }
+        auto& presentations =
+            g_world_renderer.consumable_vfx_presentations;
+        const auto duplicate = std::find_if(
+            presentations.begin(),
+            presentations.end(),
+            [&](const NativeWorldConsumableVfxPresentation& presentation) {
+                return presentation.participant_id == participant_id &&
+                    presentation.use_id == use_id;
+            });
+        if (duplicate != presentations.end()) {
+            return true;
+        }
+        if (presentations.size() >= kConsumableVfxPresentationLimit) {
+            return false;
+        }
+        presentations.push_back(NativeWorldConsumableVfxPresentation{
+            std::string(mod_id),
+            content_id,
+            participant_id,
+            use_id,
+            color,
+            started_at,
+            started_at + duration_ms,
+            false,
+        });
+    }
+    Log(
+        "lua_items: consumable VFX native carrier queued. content_id=" +
+        std::to_string(content_id) +
+        " participant_id=" + std::to_string(participant_id) +
+        " use_id=" + std::to_string(use_id) +
+        " duration_ms=" + std::to_string(duration_ms));
+    return true;
+}
+
+void ClearNativeWorldConsumableVfxPresentationsForMod(
+    std::string_view mod_id) {
+    if (mod_id.empty()) {
+        return;
+    }
+    std::scoped_lock lock(g_world_renderer.mutex);
+    auto& presentations = g_world_renderer.consumable_vfx_presentations;
+    presentations.erase(
+        std::remove_if(
+            presentations.begin(),
+            presentations.end(),
+            [&](const NativeWorldConsumableVfxPresentation& presentation) {
+                return presentation.mod_id == mod_id;
+            }),
+        presentations.end());
+}
+
+void ClearNativeWorldConsumableVfxPresentations() {
+    std::scoped_lock lock(g_world_renderer.mutex);
+    g_world_renderer.consumable_vfx_presentations.clear();
 }
 
 bool DrawLuaSpriteWithStockGeometry(

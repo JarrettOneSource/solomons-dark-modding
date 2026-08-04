@@ -219,6 +219,144 @@ bool EnsureNativeDampenTexture(std::string* error_message) {
     return true;
 }
 
+bool EnsureNativeConsumableVfxTexture(std::string* error_message) {
+    auto& texture = g_world_renderer.consumable_vfx_texture;
+    if (texture.handle >= 0) {
+        return true;
+    }
+    if (texture.load_attempted) {
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    texture.load_attempted = true;
+    texture.width = static_cast<std::uint32_t>(kConsumableVfxTextureSize);
+    texture.height = static_cast<std::uint32_t>(kConsumableVfxTextureSize);
+
+    std::vector<std::uint8_t> pixels(
+        kConsumableVfxTextureSize * kConsumableVfxTextureSize * 4,
+        0);
+    const float center =
+        (static_cast<float>(kConsumableVfxTextureSize) - 1.0f) * 0.5f;
+    for (std::size_t y = 0; y < kConsumableVfxTextureSize; ++y) {
+        for (std::size_t x = 0; x < kConsumableVfxTextureSize; ++x) {
+            const float dx = static_cast<float>(x) - center;
+            const float dy = static_cast<float>(y) - center;
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            const float outer = std::clamp(
+                1.0f - std::fabs(distance - 47.0f) / 11.0f,
+                0.0f,
+                1.0f);
+            const float inner = std::clamp(
+                1.0f - distance / 54.0f,
+                0.0f,
+                1.0f) * 0.28f;
+            const float alpha = std::clamp(outer + inner, 0.0f, 1.0f);
+            if (alpha <= 0.0f) {
+                continue;
+            }
+            const auto offset =
+                (y * kConsumableVfxTextureSize + x) * 4;
+            pixels[offset + 0] = 255;
+            pixels[offset + 1] = 255;
+            pixels[offset + 2] = 255;
+            pixels[offset + 3] = static_cast<std::uint8_t>(
+                std::round(alpha * 210.0f));
+        }
+    }
+
+    if (g_world_renderer.native_texture_upload_bgra == nullptr ||
+        g_world_renderer.native_texture_critical_section == nullptr ||
+        g_world_renderer.native_texture_critical_section_initialized ==
+            nullptr) {
+        texture.error_message =
+            "native consumable VFX texture seams are unavailable";
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    if (*g_world_renderer.native_texture_critical_section_initialized == 0) {
+        InitializeCriticalSection(
+            g_world_renderer.native_texture_critical_section);
+        *g_world_renderer.native_texture_critical_section_initialized = 1;
+    }
+    EnterCriticalSection(g_world_renderer.native_texture_critical_section);
+    texture.handle = g_world_renderer.native_texture_upload_bgra(
+        static_cast<int>(kConsumableVfxTextureSize),
+        static_cast<int>(kConsumableVfxTextureSize),
+        pixels.data(),
+        0);
+    LeaveCriticalSection(g_world_renderer.native_texture_critical_section);
+    if (texture.handle < 0) {
+        texture.error_message =
+            "stock BGRA uploader returned no consumable VFX texture slot";
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+
+    void* renderer = TryGetNativeRenderer();
+    if (renderer == nullptr ||
+        g_world_renderer.native_render_page_register == nullptr) {
+        texture.error_message =
+            "stock renderer page table is unavailable for consumable VFX";
+        ReleaseNativeAtlasTexture(&texture);
+        SetError(error_message, texture.error_message);
+        return false;
+    }
+    WriteNativeField(
+        texture.page_record.data(),
+        kNativePageHandleOffset,
+        texture.handle);
+    g_world_renderer.native_render_page_register(
+        renderer,
+        texture.page_record.data());
+    return true;
+}
+
+bool BuildNativeConsumableVfxGlyph(
+    float radius,
+    NativeWorldGlyph* glyph,
+    std::array<float, 4>* bounds,
+    std::string* error_message) {
+    if (glyph == nullptr || bounds == nullptr || error_message == nullptr ||
+        !std::isfinite(radius) || radius <= 0.0f ||
+        !EnsureNativeConsumableVfxTexture(error_message)) {
+        return false;
+    }
+    *glyph = {};
+    const std::uint8_t valid = 1;
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteValidOffset,
+        valid);
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteTextureHandleOffset,
+        g_world_renderer.consumable_vfx_texture.handle);
+    const std::array<float, 8> geometry = {
+        -radius, -radius,
+        radius, -radius,
+        -radius, radius,
+        radius, radius,
+    };
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteGeometryOffset,
+        geometry);
+    const float inset = kNativeUvHalfTexel /
+        static_cast<float>(kConsumableVfxTextureSize);
+    const std::array<float, 8> uv = {
+        inset, inset,
+        1.0f - inset, inset,
+        inset, 1.0f - inset,
+        1.0f - inset, 1.0f - inset,
+    };
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteUvOffset,
+        uv);
+    *bounds = {-radius, -radius, radius, radius};
+    return true;
+}
+
 bool BuildNativeDampenRingGlyph(
     float radius,
     NativeWorldGlyph* glyph,

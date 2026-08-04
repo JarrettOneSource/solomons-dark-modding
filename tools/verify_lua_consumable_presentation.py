@@ -479,6 +479,12 @@ print("error=" .. tostring(err or ""))
         )
         result["vfx_initial"] = initial
         result["vfx_initial_analysis"] = initial_analysis
+        for path in log_paths.values():
+            wait_for_log_token(
+                path,
+                "consumable VFX native carrier drawn",
+                timeout,
+            )
 
         duration_seconds = definition["duration_ms"] / 1000.0
         before_damage_target = max(0.0, duration_seconds - 8.0)
@@ -573,6 +579,8 @@ print("error=" .. tostring(err or ""))
             if (
                 "Lua registered item world sprite draw failed" in log_text
                 or "Lua registered item inventory sprite draw failed" in log_text
+                or "consumable VFX native carrier could not be queued" in log_text
+                or "consumable VFX presentation skipped" in log_text
             ):
                 raise sync.VerifyFailure(
                     f"registered item presentation logged a failure on {role}"
