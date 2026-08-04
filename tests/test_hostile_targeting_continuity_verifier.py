@@ -46,6 +46,38 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
         self.assertTrue(_release_bot_lock(pipe)["released"])
         self.assertIn("lock.bot_actor = 0", pipe.code)
 
+    def test_arranged_distance_is_the_straggler_acceptance_baseline(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 1000.0,
+            "bot.x": 100.0,
+            "enemy.x": 0.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+        }
+        final = {
+            **first,
+            "enemy.alive": False,
+            "bot.cast_accepted": 11,
+            "combat.wave": 2,
+        }
+        assessment = analyze_wave_completion(
+            [first, final],
+            starting_wave=1,
+            bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111],
+            damage_rows=[
+                {
+                    "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
+                    "damage": 25.0,
+                }
+            ],
+            arranged_bot_distance=500.0,
+        )
+        self.assertEqual(assessment["initialBotDistance"], 500.0)
+        self.assertEqual(assessment["firstObservedBotDistance"], 100.0)
+
     def test_arrange_can_lock_the_bot_during_nearest_sampling(self) -> None:
         class Pipe:
             code = ""

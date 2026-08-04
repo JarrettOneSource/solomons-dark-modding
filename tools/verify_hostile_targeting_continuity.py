@@ -304,6 +304,9 @@ for index, address in ipairs(enemy_addresses) do
   sd.debug.write_i32(address + bucket_offset, 0)
   entries[address] = {x = x, y = y}
 end
+local first_entry = entries[enemy_address] or {x = selected_x, y = selected_y}
+local arranged_bot_dx = bot_x - first_entry.x
+local arranged_bot_dy = bot_y - first_entry.y
 _G.__botlevel_stationary_straggler = {
   enabled = true,
   entries = entries,
@@ -342,6 +345,8 @@ emit("bot_actor", bot_actor)
 emit("enemy_actor", enemy_address)
 emit("enemy_count", #enemy_addresses)
 emit("enemy_hp", __ENEMY_HP__)
+emit("arranged_bot_distance", math.sqrt(
+  arranged_bot_dx * arranged_bot_dx + arranged_bot_dy * arranged_bot_dy))
 emit("stationary_lock", true)
 emit("bot_lock", __LOCK_BOT__)
 emit("preserved_native_enemy_positions", __PRESERVE_ENEMY_POSITIONS__)
@@ -565,10 +570,16 @@ def analyze_wave_completion(
     original_enemy_network_ids: list[int] | None = None,
     damage_rows: list[dict[str, Any]],
     expect_stall: bool = False,
+    arranged_bot_distance: float | None = None,
 ) -> dict[str, Any]:
     alive = [row for row in samples if row.get("enemy.alive") is True]
     initial = alive[0] if alive else samples[0] if samples else {}
-    initial_distance = _distance(initial, "bot") if initial else 0.0
+    first_observed_bot_distance = _distance(initial, "bot") if initial else 0.0
+    initial_distance = (
+        first_observed_bot_distance
+        if arranged_bot_distance is None
+        else arranged_bot_distance
+    )
     owner_origin = (
         float(initial.get("owner.x", 0.0)),
         float(initial.get("owner.y", 0.0)),
@@ -657,6 +668,7 @@ def analyze_wave_completion(
         "advanced": final_wave > starting_wave or completed_phase_observed,
         "completedPhaseObserved": completed_phase_observed,
         "initialBotDistance": initial_distance,
+        "firstObservedBotDistance": first_observed_bot_distance,
         "stationaryEnemyMaxDisplacement": enemy_displacement,
         "ownerMaxDisplacement": owner_displacement,
         "ownerSearchInputRequests": 0,
@@ -1039,6 +1051,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             "owner": int(first["owner.actor"]),
             "bot": int(first["bot.actor"]),
         }
+        result["nearestBotRelease"] = _release_bot_lock(pipe)
         enemy_network_actor_ids = _wait_enemy_network_ids_from_log(
             runtime_root,
             args.instance,
@@ -1068,7 +1081,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             preserve_enemy_positions=False,
             relative_layout=True,
             require_clear_paths=True,
-            lock_bot=True,
+            lock_bot=False,
         )
         result["stragglerLayout"] = straggler_layout
         enemy_rows: list[dict[str, Any]] = []
@@ -1081,7 +1094,6 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             owner_id=args.participant_id,
         )
         first_wave_sample["utcNanoseconds"] = time.time_ns()
-        result["stragglerBotRelease"] = _release_bot_lock(pipe)
         starting_wave = int(first_wave_sample.get("combat.wave", 0))
         wave_samples: list[dict[str, Any]] = [first_wave_sample]
         deadline = time.monotonic() + args.wave_timeout
@@ -1122,6 +1134,9 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             original_enemy_network_ids=enemy_network_actor_ids,
             damage_rows=enemy_rows,
             expect_stall=args.expect == "churn",
+            arranged_bot_distance=float(
+                straggler_layout["arranged_bot_distance"]
+            ),
         )
         result["finalBot"] = bot_probe(pipe)
         result["ok"] = True
