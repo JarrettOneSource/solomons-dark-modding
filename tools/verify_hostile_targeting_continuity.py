@@ -346,6 +346,7 @@ emit("enemy_count", #enemy_addresses)
 emit("enemy_hp", __ENEMY_HP__)
 emit("stationary_lock", true)
 emit("bot_lock", __LOCK_BOT__)
+emit("preserved_native_enemy_positions", __PRESERVE_ENEMY_POSITIONS__)
 """
 
 
@@ -1030,7 +1031,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_spacing=10.0,
             park_other_enemies=False,
             allow_missing_bot=False,
-            preserve_enemy_positions=False,
+            preserve_enemy_positions=True,
             relative_layout=True,
             require_clear_paths=True,
             lock_bot=False,

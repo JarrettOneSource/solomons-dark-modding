@@ -63,6 +63,10 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
         )
         self.assertTrue(result["ok"])
         self.assertIn("bot_actor = true and bot_actor or 0", pipe.code)
+        self.assertIn(
+            'emit("preserved_native_enemy_positions", true)',
+            pipe.code,
+        )
         self.assertNotIn("__LOCK_BOT__", pipe.code)
 
     def test_log_requires_one_network_identity_per_enemy(self) -> None:
