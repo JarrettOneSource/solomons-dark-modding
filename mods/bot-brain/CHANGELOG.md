@@ -7,6 +7,8 @@
 - Bots now choose a random offered skill when they level up.
 - Bots conserve mana by pausing spells at 10 percent and resuming at 80
   percent.
+- Fixed bots getting stuck at exactly 10 percent mana while movement kept
+  running.
 - Fixed multiplayer level-up choices targeting the wrong participant.
 - Requires beta.29 for clean primary-skill handback and removal of the extra
   ally row while Bot Play For Me is active.

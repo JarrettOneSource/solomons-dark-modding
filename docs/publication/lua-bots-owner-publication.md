@@ -10,9 +10,9 @@ reuse the superseded 1.2.0 staging package from 2026-07-31.
 
 ## Prepared package
 
-- Path: `/mnt/d/codex-evidence/modpipe-20260801/phase-a/packages/lua-bots-1.2.0.zip`
-- Package SHA-256: `5a53a8292d122e0e88d0243d334b26a4459032b5fd9096f34eee606cfa2ef14c`
-- Content SHA-256: `41413291606f5b39396e918b087223d0eb568e8192ca8c44a021dadd04bb3c5b`
+- Path: `/mnt/d/codex-evidence/botlevel-20260804/packages/lua-bots-1.2.0.zip`
+- Package SHA-256: `c29f61b4c94bcc1b8b122a7d458f8772bd3804a11e229de479134cf68f355b93`
+- Content SHA-256: `503e0869e4c29db9e4d50d9b150cbd2fdbb8b8fd0bcce8b273b2904d553d8bda`
 - Manifest ID: `bot.brain`
 - Minimum loader: `0.1.0-beta.29`
 
@@ -27,6 +27,8 @@ PATCH plus Add Version requests.
 - Added Bot Play For Me with the F9 toggle and clean control handback.
 - Bots choose a random offered skill at level-up.
 - Bots stop casting at 10 percent mana and resume at 80 percent.
+- Fixed bots getting stuck at exactly 10 percent mana while movement kept
+  running.
 - Fixed multiplayer skill choices targeting the wrong participant.
 - Requires beta.29 for primary-skill handback and removal of the extra ally row
   during takeover.

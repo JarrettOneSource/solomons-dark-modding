@@ -2,7 +2,8 @@
 
 Date: 2026-08-04
 
-Status: root-caused on current `main`; product fix not yet applied
+Status: fixed and live-verified; product change commit
+`1fee775adf048202e0c3de074f6875dc4bf1e14a`
 
 ## Report and evidence
 
@@ -106,18 +107,54 @@ participant-owned bot choice completed, its owner-only barrier completed, and
 the bot attacked afterward. The actual permanent transition was the later
 10% mana sample.
 
-## Required closure
+## Resolution
 
-Native bot mana reserve must be the single source of truth for cast hold and
-recovery. Its threshold contract must include the exact low and high
-boundaries, and each Lua brain context must mirror only its own participant's
-`mana_reserve_active` snapshot instead of maintaining a second hysteresis
-machine. Regression coverage must pin exact 10% entry and 80% exit, bot-ID
-scoping, and the invariant that one participant's pending level-up offer or
-choice cannot gate another participant's controls.
+`UpdateBotManaReserveStateLocked` now enters reserve at `ratio <= 0.10` and
+exits at `ratio >= 0.80`. For roster bots, Bot Brain no longer owns a parallel
+threshold state machine: it reads `mana_reserve_active` from that bot's own
+participant snapshot and mirrors the native decision. Bot Play For Me keeps
+its local-player threshold path because a local human is not represented by a
+bot participant snapshot.
 
-The live verifier must then pass in continuity mode: bot choice clears while
-the owner picker is active, owner choice clears its barrier, exact-10% reserve
-recovery reaches the high boundary, and the same bot resumes accepted casts
-and native enemy damage. No hostile-targeting change is justified by this
-incident.
+The native reserve map was already keyed by bot participant ID. The executable
+Lua contract in `tests/lua/bot_mana_reserve_contract.lua` now pins that
+isolation directly: a pending choice for participant 42 does not change
+participant 43's reserve or Lua hold, while exact 10% enters and exact 80%
+exits. Static contracts pin the inclusive native operators and the per-bot
+snapshot source. No hostile-targeting behavior was changed.
+
+## Post-fix live proof
+
+The same isolated verifier passed in continuity mode from pre-rebase fix commit
+`cc16cab6873de9055e37e13e7f54bd6dcfed5ca1`; the identical product change
+landed after the unrelated concurrent `main` advance as
+`1fee775adf048202e0c3de074f6875dc4bf1e14a`. The result is
+`/mnt/d/codex-evidence/botlevel-20260804/post-fix-live/result.json`. It used
+unique UDP ports 52743 and 52744 and the full Steam-format transport ID
+`76561198120430463`.
+
+While the owner offer was valid and its wait count was one, the bot had already
+accepted its own skill, reported `choice_pending=false`, and had picker screen
+0. The owner selection then cleared both the offer and barrier. At the forced
+10/100 boundary, native reserve entered inclusively; the same participant's
+Lua hold observed that state. Native recovery reached exactly 80/100, reserve
+and Lua hold both cleared, and the bot resumed from five to seven accepted
+casts. Two subsequent authoritative native damage edges, each for 4 damage,
+were attributed to the bot while eight enemies remained.
+
+The verifier launched only PID 11444 at
+`D:\codex-evidence\botlevel-20260804\post-fix-live\staging\runtime\instances\botlevel-post-host\stage\SolomonDark.exe`.
+It stopped that exact PID/path, deleted its staging tree, and recorded no owned
+process or reserved-port binding afterward.
+
+## Verification
+
+The final isolated checkout passed:
+
+- 676/676 Python tests;
+- 329/329 static reverse-engineering contracts;
+- 55/55 launcher contracts;
+- all 683 source/header fragments;
+- Release rebuild with 0 warnings and 0 errors; and
+- `Verify-Workspace.ps1 -Configuration Release` using the independent game
+  copy and instance `botlevel-workspace`.
