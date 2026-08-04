@@ -27,6 +27,13 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     drop_hook = _read(
         "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/drop_roll_filter.inl"
     )
+    enemy_death_hook = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/run_and_enemy_hooks/"
+        "enemy_death_reward_level_up_hooks.inl"
+    )
+    enemy_tracking = _read(
+        "SolomonDarkModLoader/src/run_lifecycle/enemy_tracking_and_reset.inl"
+    )
     protocol = _read(
         "SolomonDarkModLoader/include/multiplayer_runtime_protocol.h"
     )
@@ -123,27 +130,65 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     )
     _require(
         "central additive loot pool",
-        runtime_header + runtime + loot + drop_hook,
+        runtime_header + runtime + loot + drop_hook + enemy_death_hook,
         (
             "RegisterLuaLootPoolEntry",
             "normal_chance",
             "boss_chance",
             "LuaLootRollSucceeds",
             "unit_roll < chance",
-            "RollLuaLootPool(context.is_boss)",
+            "RollLuaLootPool(IsStockBossEnemyNativeType(native_type_id))",
             "QueueLuaConsumableDrop",
         ),
     )
     _require(
+        "authoritative death owns additive Lua loot",
+        enemy_death_hook,
+        (
+            "multiplayer::IsLuaModSimulationAuthority()",
+            "QueueLuaLootPoolDrops(enemy_type, x, y)",
+        ),
+    )
+    _require_in_order(
+        enemy_death_hook,
+        "const auto result = original(self, unused_edx);",
+        "if (!already_handled && IsCombatArenaActiveForEnemyTracking())",
+        "multiplayer::IsLuaModSimulationAuthority()",
+        "QueueLuaLootPoolDrops(enemy_type, x, y)",
+        "DispatchLuaEnemyDeath(",
+    )
+    drop_selector_hook = drop_hook[drop_hook.index("void __fastcall HookDropSelector") :]
+    assert "SnapshotLuaLootPool" not in drop_selector_hook
+    assert "QueueLuaLootPoolDrops" not in drop_selector_hook
+    enemy_type_reader = enemy_tracking[
+        enemy_tracking.index("bool TryReadEnemyTypeFromActor") :
+        enemy_tracking.index("bool TryReadActorObjectTypeForRunLifecycle")
+    ]
+    _require(
+        "null-config enemy type fallback",
+        enemy_type_reader,
+        (
+            "TryReadEnemyTypeFromConfig",
+            "kGameObjectTypeIdOffset",
+            "*enemy_type = static_cast<int>(object_type_id)",
+        ),
+    )
+    _require_in_order(
+        enemy_type_reader,
+        "TryReadEnemyTypeFromConfig",
+        "kGameObjectTypeIdOffset",
+        "*enemy_type = static_cast<int>(object_type_id)",
+    )
+    _require(
         "semantic stock boss classifier",
-        enemy_types + drop_hook,
+        enemy_types + drop_hook + enemy_death_hook,
         (
             "kDemonSkullNativeTypeId = 0x3F0",
             "kDemonNativeTypeId = 0x3F1",
             "kDireFacultyNativeTypeId = 0x3F2",
             "kHeartmongerNativeTypeId = 0x3F3",
             "IsStockBossEnemyNativeType",
-            "context.is_boss",
+            "IsStockBossEnemyNativeType(native_type_id)",
         ),
     )
 

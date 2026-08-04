@@ -24,8 +24,21 @@ bool TryReadEnemyTypeFromActor(uintptr_t enemy_address, int* enemy_type) {
 
     auto& memory = ProcessMemory::Instance();
     uintptr_t config_address = 0;
-    return memory.TryReadField(enemy_address, kEnemyConfigOffset, &config_address) &&
-           TryReadEnemyTypeFromConfig(config_address, enemy_type);
+    if (memory.TryReadField(enemy_address, kEnemyConfigOffset, &config_address) &&
+        TryReadEnemyTypeFromConfig(config_address, enemy_type)) {
+        return true;
+    }
+
+    std::uint32_t object_type_id = 0;
+    if (!memory.TryReadField(
+            enemy_address,
+            kGameObjectTypeIdOffset,
+            &object_type_id) ||
+        object_type_id > 0x7FFFFFFFu) {
+        return false;
+    }
+    *enemy_type = static_cast<int>(object_type_id);
+    return true;
 }
 
 bool TryReadActorObjectTypeForRunLifecycle(uintptr_t actor_address, std::uint32_t* object_type_id) {

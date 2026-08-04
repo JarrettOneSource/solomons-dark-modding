@@ -75,6 +75,9 @@ int __fastcall HookEnemyDeath(void* self, void* unused_edx) {
         " result=" + std::to_string(result));
     ForgetEnemyType(self_address);
     if (!already_handled && IsCombatArenaActiveForEnemyTracking()) {
+        if (multiplayer::IsLuaModSimulationAuthority()) {
+            QueueLuaLootPoolDrops(enemy_type, x, y);
+        }
         DispatchLuaEnemyDeath(
             enemy_type,
             x,

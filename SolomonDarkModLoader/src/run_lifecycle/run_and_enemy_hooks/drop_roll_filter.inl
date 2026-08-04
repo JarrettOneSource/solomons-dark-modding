@@ -181,8 +181,12 @@ bool LuaDropRollFilterContextChanged(
         filtered.forced_kind != LuaDropForcedKind::Stock;
 }
 
-void QueueLuaLootPoolDrops(const LuaDropRollFilterContext& context) {
-    for (const auto& entry : RollLuaLootPool(context.is_boss)) {
+void QueueLuaLootPoolDrops(
+    std::int32_t native_type_id,
+    float x,
+    float y) {
+    for (const auto& entry :
+         RollLuaLootPool(IsStockBossEnemyNativeType(native_type_id))) {
         const auto definition =
             FindLuaConsumableDefinition(entry.item_content_id);
         if (!definition.has_value()) {
@@ -196,8 +200,8 @@ void QueueLuaLootPoolDrops(const LuaDropRollFilterContext& context) {
         std::string error_message;
         if (!QueueLuaConsumableDrop(
                 definition->native_subtype,
-                context.x,
-                context.y,
+                x,
+                y,
                 &error_message)) {
             LogLuaDropRollFilterHookFailure(
                 &g_lua_loot_pool_spawn_log_count,
@@ -226,10 +230,8 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
             reinterpret_cast<uintptr_t>(self),
             &registered_config) &&
         registered_config.loot_policy != SDModLuaEnemyLootPolicy::Stock;
-    const bool have_registered_loot = !SnapshotLuaLootPool().empty();
     if (!HasLuaDropRollFilterHandlers() &&
-        !have_registered_policy &&
-        !have_registered_loot) {
+        !have_registered_policy) {
         original(self, unused_edx);
         return;
     }
@@ -317,5 +319,4 @@ void __fastcall HookDropSelector(void* self, void* unused_edx) {
             "config=" + HexString(original_filter_context.config_address) +
                 " arena=" + HexString(original_filter_context.arena_address));
     }
-    QueueLuaLootPoolDrops(filtered_context);
 }
