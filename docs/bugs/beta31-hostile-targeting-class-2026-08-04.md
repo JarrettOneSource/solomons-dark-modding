@@ -144,13 +144,13 @@ defect.
 ## Required correction and acceptance
 
 The host must compute one nearest-target decision before invoking stock. If
-the winner is an extended group, the loader must commit that validated
-selection directly and skip the retail selector, so retail cannot relocate the
-hostile or transiently author a different target. If the winner is group zero,
-the retail lifecycle remains authoritative and the loader may normalize the
-already-computed result after it returns. Higher-priority Lua, Turn Undead,
-manual-freeze, and client snapshot policies retain precedence. Expected
-dead/ineligible candidates must be excluded without diagnostic spam.
+the winner cannot be committed by the retail list's group-zero branch, the
+loader must commit that validated selection directly and skip the retail
+selector, so retail cannot relocate the hostile or transiently author a
+different target. For a retail-list group-zero winner, the retail lifecycle
+remains authoritative. Higher-priority Lua, Turn Undead, manual-freeze, and
+client snapshot policies retain precedence. Expected dead/ineligible
+candidates must be excluded without diagnostic spam.
 
 Post-fix live acceptance requires all of the following from isolated runtime
 evidence:

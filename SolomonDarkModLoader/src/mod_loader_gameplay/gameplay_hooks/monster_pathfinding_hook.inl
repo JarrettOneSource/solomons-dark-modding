@@ -268,11 +268,21 @@ void __fastcall HookMonsterPathfindingSelectNearestTarget(
         return;
     }
 
+    HostileTargetSelection selection;
+    if (TrySelectNearestValidHostileTarget(
+            hostile_actor_address,
+            0,
+            &selection) &&
+        selection.valid &&
+        !selection.retail_selector_can_commit) {
+        (void)ApplyHostileTargetSelection(
+            hostile_actor_address,
+            selection,
+            "native_selector");
+        return;
+    }
+
     original(self, nullptr);
-    (void)ApplyNearestValidHostileTarget(
-        hostile_actor_address,
-        0,
-        "native_selector");
 }
 
 void __fastcall HookMonsterPathfindingRefreshTarget(

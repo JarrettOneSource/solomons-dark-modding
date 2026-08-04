@@ -134,8 +134,10 @@ def test_lua_enemy_ai_is_bounded_authority_owned_and_collision_preserving() -> s
         "multiplayer::IsLocalTransportClient()",
         "ApplyLuaEnemyAiTargetOverride(hostile_actor_address)",
         "HookMonsterPathfindingSelectNearestTarget",
+        "TrySelectNearestValidHostileTarget(",
+        "!selection.retail_selector_can_commit",
+        "ApplyHostileTargetSelection(",
         "original(self, nullptr)",
-        "ApplyNearestValidHostileTarget(",
     )
 
     assert actor_ids.count("if (IsLuaModSimulationAuthority())") >= 2

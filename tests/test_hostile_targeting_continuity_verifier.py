@@ -82,9 +82,11 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             [first, final],
             starting_wave=1,
             bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111],
             damage_rows=[
                 {
                     "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
                     "damage": 25.0,
                 }
             ],
@@ -111,7 +113,37 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 [first, final],
                 starting_wave=1,
                 bot_id=BOT_ID,
+                original_enemy_actor_addresses=[0x111],
                 damage_rows=[],
+            )
+
+    def test_wave_advance_requires_bot_damage_to_every_original_enemy(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 2850.0,
+            "bot.x": 2350.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+        }
+        final = {
+            **first,
+            "enemy.alive": False,
+            "bot.cast_accepted": 11,
+            "combat.wave": 2,
+        }
+        with self.assertRaises(HostileTargetingContinuityFailure):
+            analyze_wave_completion(
+                [first, final],
+                starting_wave=1,
+                bot_id=BOT_ID,
+                original_enemy_actor_addresses=[0x111, 0x222],
+                damage_rows=[
+                    {
+                        "sourceParticipantId": BOT_ID,
+                        "targetActorAddress": 0x111,
+                        "damage": 25.0,
+                    }
+                ],
             )
 
     def test_pre_fix_stall_requires_an_active_bot_and_a_live_straggler(self) -> None:
@@ -132,9 +164,11 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
             [first, final],
             starting_wave=1,
             bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111],
             damage_rows=[
                 {
                     "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
                     "damage": 1.0,
                 }
             ],

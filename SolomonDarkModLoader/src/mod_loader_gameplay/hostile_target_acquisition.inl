@@ -9,6 +9,7 @@ constexpr std::uint64_t kHostileTargetLocalDeathFallbackMs = 1500;
 
 struct HostileTargetSelection {
     bool valid = false;
+    bool retail_selector_can_commit = false;
     uintptr_t actor_address = 0;
     std::uint32_t native_type_id = 0;
     std::int32_t actor_group = -1;
@@ -184,6 +185,7 @@ bool TryValidateHostileTargetCandidate(
     float hostile_y,
     uintptr_t candidate_actor_address,
     uintptr_t excluded_actor_address,
+    bool listed_by_retail_selector,
     HostileTargetSelection* selection) {
     if (selection == nullptr ||
         candidate_actor_address == 0 ||
@@ -288,6 +290,10 @@ bool TryValidateHostileTargetCandidate(
     }
 
     selection->valid = true;
+    selection->retail_selector_can_commit =
+        listed_by_retail_selector &&
+        candidate_actor_group == 0 &&
+        mapped_region_index == static_cast<int>(world_region_index);
     selection->actor_address = candidate_actor_address;
     selection->native_type_id = native_type_id;
     selection->actor_group = candidate_actor_group;
@@ -345,13 +351,20 @@ void LogRejectedExtendedHostileTargetCandidate(
          !IsExplicitPlayerOwnedHostileTargetType(native_type_id))) {
         return;
     }
-    s_last_diagnostic_ms = now_ms;
-
     std::uint8_t ineligible_state = 0xFF;
     const bool have_ineligible_state = memory.TryReadField(
         candidate_actor_address,
         kActorHostileTargetIneligibleStateOffset,
         &ineligible_state);
+    const bool runtime_dead = IsActorRuntimeDead(candidate_actor_address);
+    const bool participant_dead =
+        IsDeadWizardParticipantActor(candidate_actor_address);
+    if ((have_ineligible_state && ineligible_state != 0) ||
+        runtime_dead || participant_dead) {
+        return;
+    }
+    s_last_diagnostic_ms = now_ms;
+
     uintptr_t candidate_world_address = 0;
     std::int32_t candidate_actor_group = -1;
     std::int32_t candidate_world_slot = -1;
@@ -409,13 +422,9 @@ void LogRejectedExtendedHostileTargetCandidate(
                  ? std::to_string(ineligible_state)
                  : UnreadableMemoryFieldText()) +
         " runtime_dead=" +
-            std::to_string(
-                IsActorRuntimeDead(candidate_actor_address) ? 1 : 0) +
+            std::to_string(runtime_dead ? 1 : 0) +
         " participant_dead=" +
-            std::to_string(
-                IsDeadWizardParticipantActor(candidate_actor_address)
-                    ? 1
-                    : 0) +
+            std::to_string(participant_dead ? 1 : 0) +
         " bucket=" +
             (have_bucket_actor
                  ? HexString(bucket_actor_address)
@@ -478,6 +487,9 @@ bool TrySelectNearestValidHostileTarget(
             &candidate_actor_addresses)) {
         return false;
     }
+    const std::unordered_set<uintptr_t> retail_candidate_actor_addresses(
+        candidate_actor_addresses.begin(),
+        candidate_actor_addresses.end());
     AppendWizardParticipantTargetCandidates(
         gameplay_address,
         &candidate_actor_addresses);
@@ -505,6 +517,9 @@ bool TrySelectNearestValidHostileTarget(
                 hostile_y,
                 candidate_actor_address,
                 excluded_actor_address,
+                retail_candidate_actor_addresses.find(
+                    candidate_actor_address) !=
+                    retail_candidate_actor_addresses.end(),
                 &candidate);
         if (!valid) {
             LogRejectedExtendedHostileTargetCandidate(
@@ -547,18 +562,10 @@ std::uint64_t ResolveHostileTargetParticipantId(uintptr_t actor_address) {
         : multiplayer::kLocalParticipantId;
 }
 
-bool ApplyNearestValidHostileTarget(
+bool ApplyHostileTargetSelection(
     uintptr_t hostile_actor_address,
-    uintptr_t excluded_actor_address,
+    const HostileTargetSelection& selection,
     std::string_view reason) {
-    HostileTargetSelection selection;
-    if (!TrySelectNearestValidHostileTarget(
-            hostile_actor_address,
-            excluded_actor_address,
-            &selection)) {
-        return false;
-    }
-
     auto& memory = ProcessMemory::Instance();
     uintptr_t hostile_world_address = 0;
     std::int32_t hostile_actor_group = -1;
@@ -674,4 +681,21 @@ bool ApplyNearestValidHostileTarget(
                 std::to_string(desired_bucket_delta));
     }
     return true;
+}
+
+bool ApplyNearestValidHostileTarget(
+    uintptr_t hostile_actor_address,
+    uintptr_t excluded_actor_address,
+    std::string_view reason) {
+    HostileTargetSelection selection;
+    if (!TrySelectNearestValidHostileTarget(
+            hostile_actor_address,
+            excluded_actor_address,
+            &selection)) {
+        return false;
+    }
+    return ApplyHostileTargetSelection(
+        hostile_actor_address,
+        selection,
+        reason);
 }

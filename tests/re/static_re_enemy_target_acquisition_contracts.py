@@ -184,7 +184,7 @@ def test_extended_target_selection_completes_native_chase_latch() -> str:
         / "SolomonDarkModLoader/src/mod_loader_gameplay/"
         "hostile_target_acquisition.inl"
     )
-    start = acquisition.index("bool ApplyNearestValidHostileTarget(")
+    start = acquisition.index("bool ApplyHostileTargetSelection(")
     apply_target = acquisition[start:]
 
     _require_tokens(
@@ -404,6 +404,7 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
             "mapped_region_index != static_cast<int>(world_region_index) &&",
             "IsPreferredHostileTargetCandidate(",
             "ApplyNearestValidHostileTarget(",
+            "ApplyHostileTargetSelection(",
             "IsParticipantRuntimeDeadForHostileTargeting(",
             "RefreshHostileTargetParticipantDeathLatches(",
             "kHostileTargetLocalDeathFallbackMs = 1500",
@@ -456,12 +457,46 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
         monster_hook.index("void __fastcall HookMonsterPathfindingSelectNearestTarget(") :
         monster_hook.index("void __fastcall HookMonsterPathfindingRefreshTarget(")
     ]
-    assert selector.index("ApplyHigherPriorityHostileTargetPolicy(") < (
-        selector.index("original(self, nullptr);")
+    priority_policy = selector.index(
+        "ApplyHigherPriorityHostileTargetPolicy("
     )
-    assert selector.index("original(self, nullptr);") < selector.index(
-        "ApplyNearestValidHostileTarget("
+    preselection = selector.index(
+        "TrySelectNearestValidHostileTarget("
     )
+    retail_guard = selector.index(
+        "!selection.retail_selector_can_commit",
+        preselection,
+    )
+    extended_commit = selector.index(
+        "ApplyHostileTargetSelection(",
+        retail_guard,
+    )
+    skip_retail = selector.index("return;", extended_commit)
+    retail_selector = selector.index("original(self, nullptr);")
+    assert (
+        priority_policy
+        < preselection
+        < retail_guard
+        < extended_commit
+        < skip_retail
+        < retail_selector
+    )
+    assert "ApplyNearestValidHostileTarget(" not in selector
+
+    diagnostic = acquisition[
+        acquisition.index("void LogRejectedExtendedHostileTargetCandidate(") :
+        acquisition.index("bool TrySelectNearestValidHostileTarget(")
+    ]
+    expected_exclusion = diagnostic.index(
+        "if ((have_ineligible_state && ineligible_state != 0) ||"
+    )
+    diagnostic_rate_limit = diagnostic.index(
+        "s_last_diagnostic_ms = now_ms;"
+    )
+    diagnostic_log = diagnostic.index(
+        'Log(\n        std::string("[hostile_ai] rejected extended target candidate")'
+    )
+    assert expected_exclusion < diagnostic_rate_limit < diagnostic_log
 
     _require_tokens(
         "ActorWorld target-removal lifecycle",

@@ -960,6 +960,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
     }
     reference_only_python = {
         "tools/verify_bot_level_up_continuity.py",
+        "tools/verify_hostile_targeting_continuity.py",
         "tools/verify_lua_bot_brain.py",
         "tools/verify_lua_bot_players.py",
         "tools/verify_mod_settings_lifecycle.py",

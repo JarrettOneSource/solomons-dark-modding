@@ -115,13 +115,13 @@ boundary, not the client tick suppression and not an individual skeleton tick:
   clients;
 - retain host authority, native AI, native damage, and ordinary replication.
 
-`ApplyNearestValidHostileTarget` is the shared owner. It now releases
+`ApplyHostileTargetSelection` is the shared commit owner. It releases
 `kActorRegisterTransientOffset` only after the target actor and bucket-delta
-writes succeed. The offset is declared, stored, and loaded through the ordinary
-binary-layout seam. Because this function is used by native selector extension,
-invalid-target recovery, and nearest-target maintenance, the repair applies to
-every authority-owned hostile class without adding a spawn-path or skeleton
-special case.
+writes succeed. `ApplyNearestValidHostileTarget` selects and delegates to that
+commit owner. The offset is declared, stored, and loaded through the ordinary
+binary-layout seam. Native selector extension, invalid-target recovery, and
+nearest-target maintenance therefore retain one completion contract for every
+authority-owned hostile class without a spawn-path or skeleton special case.
 
 The temporary diagnostics used to locate the boundary were removed from the
 shipping source.

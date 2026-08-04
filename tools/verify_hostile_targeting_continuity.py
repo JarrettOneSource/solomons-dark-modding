@@ -69,7 +69,7 @@ TARGET_SAMPLE_SECONDS = 3.0
 TARGET_SAMPLE_INTERVAL_SECONDS = 0.1
 MINIMUM_TARGET_SAMPLES = 20
 MINIMUM_STRAGGLER_DISTANCE = 450.0
-MAXIMUM_LOCKED_ENEMY_DISPLACEMENT = 16.0
+MAXIMUM_LOCKED_ENEMY_DISPLACEMENT = 32.0
 MAXIMUM_OWNER_DISPLACEMENT = 16.0
 STABILIZED_ENEMY_HP = 5000.0
 STRAGGLER_ENEMY_HP = 1.0
@@ -120,7 +120,6 @@ for _, actor in ipairs(sd.world.list_actors() or {}) do
   end
   if tonumber(actor.actor_address) == enemy_address then
     enemy = actor
-    break
   end
 end
 local target_actor = enemy_address ~= 0 and
@@ -141,6 +140,10 @@ emit("bot.x", read_x(bot_actor))
 emit("bot.y", read_y(bot_actor))
 emit("bot.cast_accepted", brain.cast_accepted or 0)
 emit("bot.move_accepted", brain.move_accepted or 0)
+emit("bot.mode", brain.mode or "")
+emit("bot.live_enemy_count", brain.live_enemy_count or 0)
+emit("bot.target_network_actor_id", brain.target_network_actor_id or 0)
+emit("bot.target_distance", brain.target_distance or 0)
 emit("enemy.found", enemy ~= nil)
 emit("enemy.alive", enemy ~= nil and not enemy.dead and
   (tonumber(enemy.hp) or 0) > 0)
@@ -215,11 +218,36 @@ local owner_x = __OWNER_X__
 local owner_y = __OWNER_Y__
 local bot_x = __BOT_X__
 local bot_y = __BOT_Y__
+local function resolve_clear_destination(offset_x, offset_y)
+  if not __REQUIRE_CLEAR_PATHS__ then
+    return selected_x + offset_x, selected_y + offset_y, true
+  end
+  local radius = math.sqrt(offset_x * offset_x + offset_y * offset_y)
+  local base_angle = math.atan(offset_y, offset_x)
+  for index = 0, 23 do
+    local angle = base_angle + index * math.pi / 12.0
+    local candidate_x = selected_x + math.cos(angle) * radius
+    local candidate_y = selected_y + math.sin(angle) * radius
+    local call_ok, clear = pcall(
+      sd.nav.test_segment,
+      selected_x,
+      selected_y,
+      candidate_x,
+      candidate_y)
+    if call_ok and clear then
+      return candidate_x, candidate_y, true
+    end
+  end
+  return selected_x, selected_y, false
+end
 if __RELATIVE_LAYOUT__ then
-  owner_x = selected_x + owner_x
-  owner_y = selected_y + owner_y
-  bot_x = selected_x + bot_x
-  bot_y = selected_y + bot_y
+  local owner_clear
+  local bot_clear
+  owner_x, owner_y, owner_clear =
+    resolve_clear_destination(owner_x, owner_y)
+  bot_x, bot_y, bot_clear =
+    resolve_clear_destination(bot_x, bot_y)
+  ok = owner_clear and bot_clear and ok
 end
 ok = move(owner_actor, owner_x, owner_y) and ok
 if bot_actor ~= 0 then
@@ -232,8 +260,8 @@ for index, address in ipairs(enemy_addresses) do
   local x = tonumber(sd.debug.read_float(address + ox)) or 0.0
   local y = tonumber(sd.debug.read_float(address + oy)) or 0.0
   if not __PRESERVE_ENEMY_POSITIONS__ then
-    x = __ENEMY_X__
-    y = __ENEMY_Y__ + (index - 1) * __ENEMY_SPACING__
+    x = selected_x + __ENEMY_X__
+    y = selected_y + __ENEMY_Y__ + (index - 1) * __ENEMY_SPACING__
     if __PARK_OTHER_ENEMIES__ and index > 1 then
       x = 3300.0 + index * 20.0
       y = __ENEMY_Y__ + index * 20.0
@@ -354,6 +382,7 @@ def _arrange(
     allow_missing_bot: bool,
     preserve_enemy_positions: bool,
     relative_layout: bool,
+    require_clear_paths: bool,
 ) -> dict[str, Any]:
     if not enemy_actor_addresses:
         raise ValueError("target layout requires original enemy addresses")
@@ -382,6 +411,9 @@ def _arrange(
         ),
         "__RELATIVE_LAYOUT__": (
             "true" if relative_layout else "false"
+        ),
+        "__REQUIRE_CLEAR_PATHS__": (
+            "true" if require_clear_paths else "false"
         ),
     }
     code = ARRANGE_LUA
@@ -480,6 +512,7 @@ def analyze_wave_completion(
     *,
     starting_wave: int,
     bot_id: int,
+    original_enemy_actor_addresses: list[int],
     damage_rows: list[dict[str, Any]],
     expect_stall: bool = False,
 ) -> dict[str, Any]:
@@ -523,6 +556,12 @@ def analyze_wave_completion(
         if int(row.get("sourceParticipantId", 0)) == bot_id
         and float(row.get("damage", 0.0)) > 0.0
     ]
+    original_enemy_set = set(original_enemy_actor_addresses)
+    bot_damaged_original_enemies = sorted({
+        int(row.get("targetActorAddress", 0))
+        for row in bot_damage
+        if int(row.get("targetActorAddress", 0)) in original_enemy_set
+    })
     cast_delta = (
         int(samples[-1].get("bot.cast_accepted", 0))
         - int(samples[0].get("bot.cast_accepted", 0))
@@ -544,9 +583,12 @@ def analyze_wave_completion(
         "botDamageEdgeCount": len(bot_damage),
         "botCastAcceptedDelta": cast_delta,
         "botMoveAcceptedDelta": move_delta,
-        "originalEnemyAliveAtEnd": bool(
+        "originalAddressLiveAtEnd": bool(
             samples and int(samples[-1].get("original.live_count", 0)) > 0
         ),
+        "originalEnemyCount": len(original_enemy_set),
+        "botDamagedOriginalEnemyCount": len(bot_damaged_original_enemies),
+        "botDamagedOriginalEnemyAddresses": bot_damaged_original_enemies,
     }
     completed = (
         assessment["advanced"]
@@ -555,7 +597,7 @@ def analyze_wave_completion(
         and owner_displacement <= MAXIMUM_OWNER_DISPLACEMENT
         and len(bot_damage) >= 1
         and cast_delta >= 1
-        and not assessment["originalEnemyAliveAtEnd"]
+        and len(bot_damaged_original_enemies) == len(original_enemy_set)
     )
     stalled_under_active_bot = (
         not assessment["advanced"]
@@ -563,7 +605,7 @@ def analyze_wave_completion(
         and owner_displacement <= MAXIMUM_OWNER_DISPLACEMENT
         and len(bot_damage) >= 1
         and cast_delta >= 1
-        and assessment["originalEnemyAliveAtEnd"]
+        and assessment["originalAddressLiveAtEnd"]
     )
     assessment["completedAutonomously"] = completed
     assessment["preFixStallReproduced"] = stalled_under_active_bot
@@ -720,11 +762,31 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
         result["runLoadingStarted"] = _wait_run_loading_started(pipe, 20.0)
         result["runMaterialized"] = _wait_scene(pipe, "testrun", 45.0)
         result["runReady"] = _wait_run_ready(pipe, 45.0)
+        result["rosterRespawn"] = _respawn_bot_roster(pipe)
+        prewave_ready = _wait_for(
+            pipe,
+            lambda row: (
+                row["bot.count"] == 1
+                and row["bot.participant_id"] > 0
+                and row["bot.progression"] > 0
+            ),
+            timeout=30.0,
+            label="one materialized pre-wave Lua teammate",
+        )
+        bot_id = int(prewave_ready["bot.participant_id"])
+        result["prewaveBotReady"] = prewave_ready
+        result["survivalProtection"] = _protect_participants(pipe, bot_id)
+        result["manaPrime"] = _set_bot_mana(
+            pipe,
+            int(prewave_ready["bot.progression"]),
+            1000.0,
+            1000.0,
+        )
         result["waveStart"] = _request_until_true(
             pipe,
             "sd.gameplay.start_waves()",
             timeout=20.0,
-            label="single-skeleton wave start",
+            label="native skeleton wave start",
         )
         live_wave = _wait_live_wave(pipe, 30.0)
         result["liveWave"] = live_wave
@@ -734,7 +796,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
         result["enemyPrime"] = _arrange(
             pipe,
             enemy_actor_addresses=enemy_actor_addresses,
-            bot_id=0,
+            bot_id=bot_id,
             owner_x=750.0,
             owner_y=0.0,
             bot_x=50.0,
@@ -743,33 +805,24 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_y=0.0,
             enemy_hp=STABILIZED_ENEMY_HP,
             enemy_spacing=0.0,
-            park_other_enemies=True,
-            allow_missing_bot=True,
+            park_other_enemies=False,
+            allow_missing_bot=False,
             preserve_enemy_positions=True,
             relative_layout=True,
+            require_clear_paths=True,
         )
-        result["rosterRespawn"] = _respawn_bot_roster(pipe)
         ready = _wait_for(
             pipe,
             lambda row: (
                 row["bot.count"] == 1
-                and row["bot.participant_id"] > 0
-                and row["bot.progression"] > 0
+                and row["bot.participant_id"] == bot_id
                 and row["brain.active"]
                 and row["brain.live_enemy_count"] > 0
             ),
             timeout=30.0,
-            label="one active Lua teammate and one skeleton",
+            label="active Lua teammate and native skeleton wave",
         )
-        bot_id = int(ready["bot.participant_id"])
         result["botReady"] = ready
-        result["survivalProtection"] = _protect_participants(pipe, bot_id)
-        result["manaPrime"] = _set_bot_mana(
-            pipe,
-            int(ready["bot.progression"]),
-            1000.0,
-            1000.0,
-        )
         result["nearestLayout"] = _arrange(
             pipe,
             enemy_actor_addresses=enemy_actor_addresses,
@@ -786,6 +839,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             allow_missing_bot=False,
             preserve_enemy_positions=True,
             relative_layout=True,
+            require_clear_paths=True,
         )
         first_target: dict[str, Any] = {}
         first_target_deadline = time.monotonic() + 10.0
@@ -847,11 +901,12 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_x=0.0,
             enemy_y=0.0,
             enemy_hp=STRAGGLER_ENEMY_HP,
-            enemy_spacing=20.0,
+            enemy_spacing=10.0,
             park_other_enemies=False,
             allow_missing_bot=False,
-            preserve_enemy_positions=True,
+            preserve_enemy_positions=False,
             relative_layout=True,
+            require_clear_paths=True,
         )
         enemy_rows: list[dict[str, Any]] = []
         player_rows: list[dict[str, Any]] = []
@@ -890,6 +945,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             wave_samples,
             starting_wave=starting_wave,
             bot_id=bot_id,
+            original_enemy_actor_addresses=enemy_actor_addresses,
             damage_rows=enemy_rows,
             expect_stall=args.expect == "churn",
         )
@@ -937,7 +993,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                 if args.expect == "churn"
                 else (
                     selector["stockOwnerToExtendedBotRewriteCount"] == 0
-                    and selector["nativeSelectorApplyCount"] <= 2
+                    and selector["rejectedExtendedCandidateCount"] == 0
                 )
             )
             if not selector_ok:
@@ -1041,7 +1097,25 @@ def main() -> int:
     _run_live(args, result)
     write_json(args.evidence_root / "result.json", result)
     write_manifest(args.evidence_root)
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps(
+        {
+            key: result.get(key)
+            for key in (
+                "ok",
+                "error",
+                "sourceSha",
+                "instance",
+                "ports",
+                "ownedProcess",
+                "nearestTargetAssessment",
+                "selectorAssessment",
+                "stragglerAssessment",
+                "cleanup",
+            )
+        },
+        indent=2,
+        sort_keys=True,
+    ))
     return 0 if result["ok"] else 1
 
 

@@ -144,20 +144,24 @@ chooses the nearest live actor of that type only when the exact native slot is
 not present. This is identity translation, not client-side hostile target
 acquisition.
 
-The runtime behavior change must therefore:
+The runtime behavior must therefore:
 
-1. run the stock selector first;
-2. on the host, deterministically choose the nearest valid candidate across
+1. on the host, deterministically choose the nearest valid candidate across
    the native candidate list plus the explicit player-owned ally types;
-3. exclude dead/spectating players through the native `+0x160` state and
+2. invoke the stock selector only when its own candidate list and group-zero
+   commit branch can author that winner;
+3. otherwise commit the validated extended winner directly and skip stock, so
+   one selection cannot relocate the hostile toward one actor and then target
+   another;
+4. exclude dead/spectating players through the native `+0x160` state and
    multiplayer participant-death state;
-4. reacquire after removal, or on the first safe native-player-tick boundary
+5. reacquire after removal, or on the first safe native-player-tick boundary
    after death;
-5. re-evaluate live run enemies on a bounded host cadence so a newly spawned or
+6. re-evaluate live run enemies on a bounded host cadence so a newly spawned or
    newly nearer valid target does not wait on a class-specific stock lane;
-6. write only the hostile target pointer and bucket delta—never relocate or
+7. write only the hostile target pointer and bucket delta—never relocate or
    promote the target actor; and
-7. leave Lua target overrides, Turn Undead locks, manual freeze behavior, and
+8. leave Lua target overrides, Turn Undead locks, manual freeze behavior, and
    client-applied authoritative targets as higher-priority policies.
 
 ## Loader correction
@@ -167,13 +171,24 @@ recovered stock re-evaluation paths share one correction:
 
 1. manual freeze, Turn Undead, client snapshot authority, and an explicit Lua
    target override retain priority;
-2. on the host's default policy, the retail selector runs first;
-3. the host evaluates the native `gameplay + 0x1388` candidate list, all
+2. on the host's default policy, the loader evaluates the native
+   `gameplay + 0x1388` candidate list, all
    materialized wizard participants, and the explicit GoodImp/Leviathan/Golem
    sidecar types;
-4. every candidate must be alive, have `+0x160 == 0`, share the ActorWorld,
+3. every candidate must be alive, have `+0x160 == 0`, share the ActorWorld,
    and round-trip through its exact ActorWorld bucket;
-5. the nearest candidate wins and only `hostile + 0x168/+0x164` are written.
+4. when that winner came from the retail list, is in group zero, and passes
+   the retail region mapping, the retail selector commits it;
+5. every other valid winner is committed directly and returns before retail,
+   so the hostile is not unregistered/re-registered for a discarded target;
+6. only `hostile + 0x168/+0x164` and the successful completion latch are
+   written by the extended path.
+
+The preselection records `retail_selector_can_commit`; ActorWorld group alone
+is insufficient because a group-zero sidecar can be absent from the retail
+candidate list. Expected dead, participant-dead, and native-ineligible
+extended candidates are ordinary exclusions and do not emit rejection
+diagnostics.
 
 The retail selector also owns a completion latch at `hostile + 0x68`. It sets
 the byte before scanning and relies on the successful group-zero relocation's
