@@ -69,7 +69,9 @@ TARGET_SAMPLE_SECONDS = 3.0
 TARGET_SAMPLE_INTERVAL_SECONDS = 0.1
 MINIMUM_TARGET_SAMPLES = 20
 MINIMUM_STRAGGLER_DISTANCE = 450.0
-MAXIMUM_LOCKED_ENEMY_DISPLACEMENT = 32.0
+# The native movement step can run between the Lua tick lock and the sampler.
+# Keep this above one observed step while remaining far below pursuit distance.
+MAXIMUM_LOCKED_ENEMY_DISPLACEMENT = 40.0
 MAXIMUM_OWNER_DISPLACEMENT = 16.0
 STABILIZED_ENEMY_HP = 5000.0
 STRAGGLER_ENEMY_HP = 1.0

@@ -146,6 +146,39 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 ],
             )
 
+    def test_wave_advance_rejects_enemy_pursuit_beyond_one_native_step(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 2850.0,
+            "bot.x": 2350.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+        }
+        moved = {
+            **first,
+            "enemy.x": first["enemy.x"] + 41.0,
+        }
+        final = {
+            **moved,
+            "enemy.alive": False,
+            "bot.cast_accepted": 11,
+            "combat.wave": 2,
+        }
+        with self.assertRaises(HostileTargetingContinuityFailure):
+            analyze_wave_completion(
+                [first, moved, final],
+                starting_wave=1,
+                bot_id=BOT_ID,
+                original_enemy_actor_addresses=[0x111],
+                damage_rows=[
+                    {
+                        "sourceParticipantId": BOT_ID,
+                        "targetActorAddress": 0x111,
+                        "damage": 25.0,
+                    }
+                ],
+            )
+
     def test_pre_fix_stall_requires_an_active_bot_and_a_live_straggler(self) -> None:
         first = {
             **target_row(),
