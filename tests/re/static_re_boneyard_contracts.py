@@ -10,6 +10,7 @@ from static_re_contract_support import ROOT, StaticReTestFailure
 
 
 sys.path.insert(0, str(ROOT / "tools"))
+import decode_boneyard_scripts  # noqa: E402
 import inspect_boneyard  # noqa: E402
 
 
@@ -81,6 +82,111 @@ def test_boneyard_parser_rejects_empty_truncated_and_trailing_files() -> str:
             "Boneyard parser accepted invalid cases: " + ", ".join(accepted)
         )
     return "Boneyard parser rejects empty, truncated, trailing, and malformed envelopes"
+
+
+def test_boneyard_scripting_model_and_runtime_anchors_are_registered() -> str:
+    findings = _read("docs/reverse-engineering/boneyard-scripting.md")
+    system_doc = _read("docs/reverse-engineering/boneyard-system.md")
+    layout = _read("config/binary-layout.ini")
+    decoder = _read("tools/decode_boneyard_scripts.py")
+
+    required_findings = (
+        "0x00684360",
+        "0x00686400",
+        "0x00683C10",
+        "0x00684610",
+        "0x0068B060",
+        "0x00689750",
+        "0x00646F80",
+        "0x00652040",
+        "0x0046E390",
+        "0x0046C9A0",
+        "0x0046D000",
+        "0x004B4EC0",
+        "0x004B5EF0",
+        "0x004B6750",
+        "94 menu registrations",
+        "92 unique action IDs",
+        "`1014` is runtime-only",
+        "Alpha Arena.boneyard",
+        "d596b4915140f5faa23fd1286e3d622c6189ecb00b9667f5e7b3444a84b8322b",
+        "57310",
+        "Rotten Tom",
+    )
+    missing_findings = [token for token in required_findings if token not in findings]
+    if missing_findings:
+        raise StaticReTestFailure(
+            "Boneyard scripting RE map is incomplete: " + ", ".join(missing_findings)
+        )
+
+    if "boneyard-scripting.md" not in system_doc:
+        raise StaticReTestFailure("Boneyard system doc does not link the scripting RE map")
+
+    required_layout = (
+        "[gameplay.boneyard_scripting_re]",
+        "bonedit_action_build=0x004B6750",
+        "timeline_sync=0x00646F80",
+        "timeline_tick=0x0046E390",
+        "timeline_event_activate=0x0046C9A0",
+        "spawner_tick=0x0046D000",
+        "codeline_sync=0x00683C10",
+        "trigger_sync=0x00684360",
+        "trigger_control_sync=0x00686400",
+        "script_thread_tick=0x0068B060",
+        "script_dispatch=0x00689750",
+        "monster_recipe_sync=0x0063E890",
+        "npc_recipe_sync=0x0063EBD0",
+        "boneyard_uid_relink=0x0064BC40",
+    )
+    missing_layout = [token for token in required_layout if token not in layout]
+    if missing_layout:
+        raise StaticReTestFailure(
+            "Boneyard scripting binary-layout anchors are incomplete: "
+            + ", ".join(missing_layout)
+        )
+
+    required_decoder = (
+        "TRIGGER_TYPES =",
+        "PREDICATES =",
+        "ACTIONS =",
+        "TIMELINE_EVENT_TYPES =",
+        "SPAWN_RECORD_TYPES =",
+        "def decode_boneyard(",
+        "def _decode_code_body(",
+        "def _decode_trigger_control(",
+        "def _decode_timeline(",
+        "def _decode_monster_recipe(",
+        "def _decode_npc_recipe(",
+    )
+    missing_decoder = [token for token in required_decoder if token not in decoder]
+    if missing_decoder:
+        raise StaticReTestFailure(
+            "Boneyard scripting decoder surface is incomplete: "
+            + ", ".join(missing_decoder)
+        )
+    if len(decode_boneyard_scripts.ACTIONS) != 92:
+        raise StaticReTestFailure("Bonedit action map no longer contains 92 unique IDs")
+    missing_action_rows = [
+        f"{action_id}:{name}"
+        for action_id, name in decode_boneyard_scripts.ACTIONS.items()
+        if f"| {action_id} | {name} |" not in findings
+    ]
+    if missing_action_rows:
+        raise StaticReTestFailure(
+            "Boneyard scripting doc omits Bonedit action rows: "
+            + ", ".join(missing_action_rows)
+        )
+    if set(range(1001, 1097)) - set(decode_boneyard_scripts.ACTIONS) != {
+        1014,
+        1021,
+        1022,
+        1050,
+    }:
+        raise StaticReTestFailure("Bonedit action/runtime gap map changed")
+    return (
+        "Trigger, ScriptThread, CodeLine, TimeLine, TimeLineEvent, Spawner, "
+        "recipe, Bonedit, and Alpha decode anchors are registered"
+    )
 
 
 def test_default_boneyard_load_seed_and_compact_decor_findings_are_registered() -> str:
