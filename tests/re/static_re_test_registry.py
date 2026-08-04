@@ -20,6 +20,7 @@ from static_re_boneyard_picker_contracts import (
     test_boneyard_picker_presents_mod_description_and_scales_with_viewport,
     test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent,
     test_boneyard_picker_replication_is_authoritative_missing_safe_and_late_joined,
+    test_default_boneyard_is_pinned_and_bypasses_the_native_picker,
     test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
 )
 from static_re_ui_interaction_gate_contracts import (
@@ -706,6 +707,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Stock map picker recovery pins the selected value and launch path",
         test_stock_map_picker_recovery_pins_selected_value_and_launch_path,
+    ),
+    (
+        "Default Boneyard is pinned and bypasses the native picker",
+        test_default_boneyard_is_pinned_and_bypasses_the_native_picker,
     ),
     (
         "Boneyard picker provider is immutable, stock-routed, and stock-transparent",

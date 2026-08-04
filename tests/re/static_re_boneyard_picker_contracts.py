@@ -59,6 +59,143 @@ def test_stock_map_picker_recovery_pins_selected_value_and_launch_path() -> str:
     )
 
 
+def test_default_boneyard_is_pinned_and_bypasses_the_native_picker() -> str:
+    bug = _read(
+        "docs/bugs/"
+        "beta33-start-run-native-picker-default-fallback-2026-08-04.md"
+    )
+    design = _read("docs/design/boneyard-picker-seam.md")
+    header = _read("SolomonDarkModLoader/include/boneyard_picker.h")
+    internal = _read("SolomonDarkModLoader/src/boneyard_picker/internal.inl")
+    resolution = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/content_resolution.inl"
+    )
+    public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
+    queues = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/"
+        "public_api_gameplay_action_queues.inl"
+    )
+    api = _read("SolomonDarkModLoader/include/mod_loader_public_api.inl")
+    frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
+
+    _require(
+        bug,
+        (
+            "instruction `0x0058E8F6` writes `1` to `DAT_00B3BEDC`",
+            "`data\\levels\\survival.boneyard`",
+            "`play.boneyard` at `0x0046EAF4`",
+            "The stock generated/default run is not `story0.boneyard`",
+        ),
+        "read-only stock Default identity",
+    )
+    _require(
+        header,
+        (
+            "enum class BoneyardPickerEntryKind : std::uint8_t",
+            "Default = 0",
+            "Custom = 1",
+            "BoneyardPickerEntryKind kind = BoneyardPickerEntryKind::Custom;",
+            "std::size_t custom_entry_count = 0;",
+        ),
+        "typed Default catalog entry",
+    )
+
+    initialize_at = public.index("bool InitializeBoneyardPicker(")
+    initialize_body = public[initialize_at:]
+    _require(
+        initialize_body,
+        (
+            "default_entry.kind = BoneyardPickerEntryKind::Default;",
+            'default_entry.display_name = "Default";',
+            "catalog->entries.push_back(std::move(default_entry));",
+            "entry.kind = BoneyardPickerEntryKind::Custom;",
+            "catalog->custom_entry_count = bootstrap.boneyards.size();",
+            "const bool has_custom_entries =\n"
+            "        catalog->custom_entry_count != 0;",
+        ),
+        "Default-first catalog construction",
+    )
+    if initialize_body.index(
+        "catalog->entries.push_back(std::move(default_entry));"
+    ) > initialize_body.index("for (const auto& descriptor"):
+        raise StaticReTestFailure(
+            "Default must be inserted before every staged custom Boneyard"
+        )
+
+    start_at = internal.index("void __fastcall HookMapPickerStart(")
+    start_body = internal[start_at : start_at + 1800]
+    _require(
+        start_body,
+        (
+            "if (!HasBoneyardAuthority()) {",
+            "if (!ShouldHijackHostBoneyardStart()) {",
+            "QueueHubDefaultBoneyardRun(&start_error)",
+            "return;",
+        ),
+        "empty-catalog direct Default activation",
+    )
+    if "original(courtyard)" in start_body:
+        raise StaticReTestFailure(
+            "start activation still opens or toggles the native MapPicker"
+        )
+    _require(
+        api + queues,
+        (
+            "bool QueueHubDefaultBoneyardRun(std::string* error_message);",
+            "bool QueueHubDefaultBoneyardRun(std::string* error_message) {",
+            "return QueueHubRunStartRequest(true, error_message);",
+            "return QueueHubDefaultBoneyardRun(error_message);",
+        ),
+        "shared stock-generated Default queue",
+    )
+
+    _require(
+        resolution + public,
+        (
+            "entry.kind == BoneyardPickerEntryKind::Default",
+            "dispatch_default = ApplyPendingPickLocked(index, now_ms);",
+            "QueueHubDefaultBoneyardRun(&default_error)",
+            "ResolveSelectedEntryLocked(now_ms);",
+            "ApplyStockSelectionAndOpenNativePicker(",
+        ),
+        "Default and custom selection dispatch",
+    )
+    cancel_at = public.index(
+        "g_picker.pending_event == PendingFrontendEvent::Cancel"
+    )
+    cancel_body = public[cancel_at : cancel_at + 900]
+    if "ApplyStockSelectionAndOpenNativePicker" in cancel_body:
+        raise StaticReTestFailure(
+            "cancel still falls through to the native MapPicker"
+        )
+    _require(
+        frontend,
+        (
+            "entry.kind == BoneyardPickerEntryKind::Default",
+            'std::string("STOCK")',
+            '"The stock generated boneyard."',
+            '"Esc cancel"',
+        ),
+        "Default picker presentation",
+    )
+    _require(
+        design,
+        (
+            "Default is always catalog index zero",
+            "zero custom Boneyards -> queue the stock generated Default run",
+            "Cancel closes only the loader picker",
+        ),
+        "superseded picker design",
+    )
+    return (
+        "Default is a typed index-zero stock-generated choice, empty catalogs "
+        "queue it directly, populated catalogs select it without the native "
+        "picker, and custom digest handoff remains intact"
+    )
+
+
 def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparent() -> str:
     design = _read("docs/design/boneyard-picker-seam.md")
     layout = _read("config/binary-layout.ini")
@@ -107,7 +244,8 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
     _require(
         internal + frontend + resolution,
         (
-            "if (!ShouldHijackHostBoneyardStart()) {\n        original(courtyard);\n        return;\n    }",
+            "if (!ShouldHijackHostBoneyardStart()) {",
+            "QueueHubDefaultBoneyardRun(&start_error)",
             "kVisibleBoneyardRows = 12",
             "CryptHashData(",
             "actual_digest != entry.content_digest",
@@ -124,8 +262,8 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
             "PickBoneyard(",
             "CancelBoneyardPicker(",
             "g_picker.pending_event = PendingFrontendEvent::Pick;",
-            "ApplyPendingPickLocked(index, now_ms);",
-            "const bool has_custom_entries = !catalog->entries.empty();",
+            "dispatch_default = ApplyPendingPickLocked(index, now_ms);",
+            "catalog->custom_entry_count != 0;",
             "InstallBoneyardAuthorityHooks(",
             '"custom_hook=disabled entries=0"',
             "ApplyStockSelectionAndOpenNativePicker(",
@@ -167,7 +305,8 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
         (
             "ATC owns the visual frontend",
             "Both authority hooks are installed regardless of catalog size",
-            "A connected client returns before either trampoline",
+            "A connected client returns before either authority branch",
+            "Default is always catalog index zero",
             "catalog is immutable for\nthe process lifetime",
             "`is_open`\nis the presentation gate",
             "The digest is checked again immediately before each native handoff",
@@ -178,7 +317,8 @@ def test_boneyard_picker_provider_is_immutable_stock_routed_and_stock_transparen
     )
     return (
         "immutable large-list provider, bounded frontend, enabled-mod staging, "
-        "content verification, zero-entry authority gates, and stock String handoff are pinned"
+        "content verification, direct Default dispatch, zero-entry authority "
+        "gates, and custom stock String handoff are pinned"
     )
 
 

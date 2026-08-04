@@ -65,10 +65,14 @@ def test_connected_client_courtyard_start_is_render_and_activation_suppressed() 
             "if (!HasBoneyardAuthority()) {",
             "return;",
             "if (!ShouldHijackHostBoneyardStart()) {",
-            "original(courtyard);",
+            "QueueHubDefaultBoneyardRun(&start_error)",
         ),
-        "client activation suppression with host/solo trampoline",
+        "client activation suppression before host/solo Default dispatch",
     )
+    if "original(courtyard)" in start_body:
+        raise StaticReTestFailure(
+            "the host/solo activation path still opens the native MapPicker"
+        )
     if start_body.index("if (!HasBoneyardAuthority()) {") > start_body.index(
         "if (!ShouldHijackHostBoneyardStart()) {"
     ):
@@ -100,7 +104,8 @@ def test_connected_client_courtyard_start_is_render_and_activation_suppressed() 
         )
     return (
         "the recovered Courtyard renderer and sole activation path are both "
-        "suppressed only for connected clients, including zero-entry catalogs"
+        "suppressed for connected clients before zero-entry Default or "
+        "populated custom-catalog dispatch"
     )
 
 
