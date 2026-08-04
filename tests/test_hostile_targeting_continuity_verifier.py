@@ -4,6 +4,7 @@ import unittest
 
 from tools.verify_hostile_targeting_continuity import (
     HostileTargetingContinuityFailure,
+    _arrange,
     _enemy_network_ids_from_log,
     analyze_selector_log,
     analyze_target_samples,
@@ -32,6 +33,38 @@ def target_row(*, target: int = BOT_ID, latch: int = 0) -> dict[str, object]:
 
 
 class HostileTargetingContinuityVerifierTests(unittest.TestCase):
+    def test_arrange_can_lock_the_bot_during_nearest_sampling(self) -> None:
+        class Pipe:
+            code = ""
+
+            def execute(self, code: str) -> str:
+                self.code = code
+                return "ok=true"
+
+        pipe = Pipe()
+        result = _arrange(
+            pipe,
+            enemy_actor_addresses=[0x111],
+            bot_id=BOT_ID,
+            owner_x=750.0,
+            owner_y=0.0,
+            bot_x=50.0,
+            bot_y=0.0,
+            enemy_x=0.0,
+            enemy_y=0.0,
+            enemy_hp=5000.0,
+            enemy_spacing=0.0,
+            park_other_enemies=True,
+            allow_missing_bot=False,
+            preserve_enemy_positions=True,
+            relative_layout=True,
+            require_clear_paths=True,
+            lock_bot=True,
+        )
+        self.assertTrue(result["ok"])
+        self.assertIn("bot_actor = true and bot_actor or 0", pipe.code)
+        self.assertNotIn("__LOCK_BOT__", pipe.code)
+
     def test_log_requires_one_network_identity_per_enemy(self) -> None:
         self.assertEqual(
             _enemy_network_ids_from_log(

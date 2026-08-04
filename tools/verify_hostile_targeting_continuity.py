@@ -307,6 +307,9 @@ end
 _G.__botlevel_stationary_straggler = {
   enabled = true,
   entries = entries,
+  bot_actor = __LOCK_BOT__ and bot_actor or 0,
+  bot_x = bot_x,
+  bot_y = bot_y,
 }
 if not _G.__botlevel_stationary_straggler_registered then
   sd.events.on("runtime.tick", function()
@@ -323,6 +326,10 @@ if not _G.__botlevel_stationary_straggler_registered then
         sd.debug.write_float(address + oy, entry.y)
       end
     end
+    if lock.bot_actor ~= 0 then
+      sd.debug.write_float(lock.bot_actor + ox, lock.bot_x)
+      sd.debug.write_float(lock.bot_actor + oy, lock.bot_y)
+    end
     if live_count == 0 then
       lock.enabled = false
     end
@@ -336,6 +343,7 @@ emit("enemy_actor", enemy_address)
 emit("enemy_count", #enemy_addresses)
 emit("enemy_hp", __ENEMY_HP__)
 emit("stationary_lock", true)
+emit("bot_lock", __LOCK_BOT__)
 """
 
 
@@ -407,6 +415,7 @@ def _arrange(
     preserve_enemy_positions: bool,
     relative_layout: bool,
     require_clear_paths: bool,
+    lock_bot: bool,
 ) -> dict[str, Any]:
     if not enemy_actor_addresses:
         raise ValueError("target layout requires original enemy addresses")
@@ -439,6 +448,7 @@ def _arrange(
         "__REQUIRE_CLEAR_PATHS__": (
             "true" if require_clear_paths else "false"
         ),
+        "__LOCK_BOT__": "true" if lock_bot else "false",
     }
     code = ARRANGE_LUA
     for token, value in replacements.items():
@@ -913,6 +923,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             preserve_enemy_positions=True,
             relative_layout=True,
             require_clear_paths=True,
+            lock_bot=False,
         )
         ready = _wait_for(
             pipe,
@@ -943,6 +954,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             preserve_enemy_positions=True,
             relative_layout=True,
             require_clear_paths=True,
+            lock_bot=True,
         )
         first_target: dict[str, Any] = {}
         first_target_deadline = time.monotonic() + 10.0
@@ -1017,6 +1029,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             preserve_enemy_positions=False,
             relative_layout=True,
             require_clear_paths=True,
+            lock_bot=False,
         )
         result["stragglerLayout"] = straggler_layout
         enemy_rows: list[dict[str, Any]] = []
