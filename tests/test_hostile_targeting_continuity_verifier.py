@@ -4,7 +4,7 @@ import unittest
 
 from tools.verify_hostile_targeting_continuity import (
     HostileTargetingContinuityFailure,
-    _enemy_network_ids_from_layout,
+    _enemy_network_ids_from_log,
     analyze_selector_log,
     analyze_target_samples,
     analyze_wave_completion,
@@ -32,20 +32,23 @@ def target_row(*, target: int = BOT_ID, latch: int = 0) -> dict[str, object]:
 
 
 class HostileTargetingContinuityVerifierTests(unittest.TestCase):
-    def test_layout_requires_one_network_identity_per_enemy(self) -> None:
+    def test_log_requires_one_network_identity_per_enemy(self) -> None:
         self.assertEqual(
-            _enemy_network_ids_from_layout(
-                {
-                    "enemy_network_id.273": 0xBBBB,
-                    "enemy_network_id.546": 0xAAAA,
-                },
+            _enemy_network_ids_from_log(
+                "\n".join((
+                    "assigned host-local run actor network id. "
+                    "actor=0x111 network_actor_id=48059",
+                    "assigned host-local run actor network id. "
+                    "actor=0x222 network_actor_id=43690",
+                )),
                 [273, 546],
             ),
             [0xAAAA, 0xBBBB],
         )
         with self.assertRaises(HostileTargetingContinuityFailure):
-            _enemy_network_ids_from_layout(
-                {"enemy_network_id.273": 0xAAAA},
+            _enemy_network_ids_from_log(
+                "assigned host-local run actor network id. "
+                "actor=0x111 network_actor_id=43690",
                 [273, 546],
             )
 

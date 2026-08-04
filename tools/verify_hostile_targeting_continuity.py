@@ -8,6 +8,7 @@ from dataclasses import asdict
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import sys
 import time
@@ -126,13 +127,16 @@ for _, actor in ipairs(sd.world.list_actors() or {}) do
       (tonumber(actor.hp) or 0) > 0 then
     original_live_count = original_live_count + 1
   end
+  if tonumber(actor.actor_address) == enemy_address then
+    enemy = actor
+  end
+end
+local replicated = sd.world.get_replicated_actors() or {}
+for _, actor in ipairs(replicated.actors or {}) do
   if original_network_set[tonumber(actor.network_actor_id) or 0] and
       actor.tracked_enemy and not actor.dead and
       (tonumber(actor.hp) or 0) > 0 then
     original_network_live_count = original_network_live_count + 1
-  end
-  if tonumber(actor.actor_address) == enemy_address then
-    enemy = actor
   end
 end
 local target_actor = enemy_address ~= 0 and
@@ -215,7 +219,6 @@ local function move(actor, x, y)
   return ok
 end
 local live_by_address = {}
-local network_id_by_address = {}
 local selected_x = 0.0
 local selected_y = 0.0
 for _, actor in ipairs(sd.world.list_actors() or {}) do
@@ -223,7 +226,6 @@ for _, actor in ipairs(sd.world.list_actors() or {}) do
       (tonumber(actor.hp) or 0) > 0 then
     local address = tonumber(actor.actor_address) or 0
     live_by_address[address] = true
-    network_id_by_address[address] = tonumber(actor.network_actor_id) or 0
   end
   if tonumber(actor.actor_address) == enemy_address then
     selected_x = tonumber(sd.debug.read_float(enemy_address + ox)) or 0.0
@@ -334,11 +336,6 @@ emit("enemy_actor", enemy_address)
 emit("enemy_count", #enemy_addresses)
 emit("enemy_hp", __ENEMY_HP__)
 emit("stationary_lock", true)
-for _, address in ipairs(enemy_addresses) do
-  emit(
-    "enemy_network_id." .. tostring(address),
-    string.format("%.0f", network_id_by_address[address] or 0))
-end
 """
 
 
@@ -706,23 +703,51 @@ def _find_live_enemy_addresses(state: dict[str, Any]) -> list[int]:
     return sorted(addresses)
 
 
-def _enemy_network_ids_from_layout(
-    layout: dict[str, Any],
+_NETWORK_ASSIGNMENT = re.compile(
+    r"assigned host-local run actor network id\. actor=0x([0-9a-f]+)"
+    r".*?network_actor_id=(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _enemy_network_ids_from_log(
+    text: str,
     actor_addresses: list[int],
 ) -> list[int]:
-    network_ids = [
-        int(layout.get(f"enemy_network_id.{address}", 0))
-        for address in actor_addresses
-    ]
+    assignments: dict[int, int] = {}
+    for match in _NETWORK_ASSIGNMENT.finditer(text):
+        assignments[int(match.group(1), 16)] = int(match.group(2))
+    network_ids = [assignments.get(address, 0) for address in actor_addresses]
     if (
         any(network_id <= 0 for network_id in network_ids)
         or len(set(network_ids)) != len(actor_addresses)
     ):
         raise HostileTargetingContinuityFailure(
-            "layout did not capture one immutable network id per skeleton: "
+            "log did not capture one immutable network id per skeleton: "
             f"addresses={actor_addresses} network_ids={network_ids}"
         )
     return sorted(network_ids)
+
+
+def _wait_enemy_network_ids_from_log(
+    runtime_root: Path,
+    instance: str,
+    actor_addresses: list[int],
+    timeout: float,
+) -> list[int]:
+    deadline = time.monotonic() + timeout
+    last_error: HostileTargetingContinuityFailure | None = None
+    while time.monotonic() < deadline:
+        try:
+            return _enemy_network_ids_from_log(
+                _runtime_log_text(runtime_root, instance),
+                actor_addresses,
+            )
+        except HostileTargetingContinuityFailure as exc:
+            last_error = exc
+            time.sleep(0.05)
+    assert last_error is not None
+    raise last_error
 
 
 def _sample_targets(
@@ -948,6 +973,13 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             "owner": int(first["owner.actor"]),
             "bot": int(first["bot.actor"]),
         }
+        enemy_network_actor_ids = _wait_enemy_network_ids_from_log(
+            runtime_root,
+            args.instance,
+            enemy_actor_addresses,
+            5.0,
+        )
+        result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
 
         result["damageResetBeforeStraggler"] = _reset_damage_observations(
             pipe,
@@ -972,11 +1004,6 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             require_clear_paths=True,
         )
         result["stragglerLayout"] = straggler_layout
-        enemy_network_actor_ids = _enemy_network_ids_from_layout(
-            straggler_layout,
-            enemy_actor_addresses,
-        )
-        result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
         enemy_rows: list[dict[str, Any]] = []
         player_rows: list[dict[str, Any]] = []
         first_wave_sample = _target_probe(
