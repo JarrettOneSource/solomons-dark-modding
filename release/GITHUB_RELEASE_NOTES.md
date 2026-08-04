@@ -1,10 +1,12 @@
-# Solomon Dark Multiplayer Beta v0.1.0-beta.32
+# Solomon Dark Multiplayer Beta v0.1.0-beta.33
 
-- When you join a lobby whose mods you don't have, the host now sends them to you directly after you accept the download prompt - no manual install needed. Declining simply cancels the join with nothing downloaded.
-- The custom boneyard picker now appears in single player too, not just when hosting. Escape closes it cleanly and falls back to the stock maps instead of also opening the pause menu, boneyard names sit properly centered in the selection bar, and the picker no longer reacts to keys typed into other windows while the game is in the background.
-- Items added by mods now actually drop from enemies. Drop chances were being skipped for every naturally spawned enemy, so even guaranteed boss drops never appeared; each enemy death now rolls modded drops exactly once, on stock maps and custom boneyards alike, for every player in the match.
-- Bot teammates no longer freeze up mid-fight. A bot that hit exactly 10% mana would stop attacking and spin in place forever; mana recovery now engages at the boundary and the bot keeps fighting, including straight through level-up picks.
-- Enemy targeting is now a single decision instead of two fighting authorities. Skeletons pick sensible nearest targets, and distant leftover enemies come to you, so waves advance without hunting the last straggler down.
-- The release contains no bundled mods or generated runtime residue.
+- Connected clients no longer see or activate the start-run affordance or either boneyard picker. Run and boneyard selection stay with the host, while solo play keeps the same controls.
+- Loading Boneyard now seals all gameplay input until the transition finishes, preventing movement, casts, clicks, and menu actions from leaking through the loading screen.
+- Player presentation now follows scene epochs: ALLY bars persist across room changes, hub returns rebuild cleanly without detached effects, and local and remote health displays agree.
+- Registered custom item icons now render through the native scaled-inventory path.
+- Actor-attached visual effects now honor their registered durations instead of collapsing after one frame.
+- Hostile target authority is published immediately when a target changes instead of waiting for the next motion interval.
+- The loader's bot mana reserve now resumes against 80% of the attainable mana ceiling, including native hoarded-mana limits, rather than an unreachable nominal maximum.
+- Multiplayer protocol is now v92.
 
 Download the ZIP. Extract the ZIP. Start `SolomonDarkMultiplayerBeta.exe`.
