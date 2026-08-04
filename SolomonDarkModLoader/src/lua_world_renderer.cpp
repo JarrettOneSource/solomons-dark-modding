@@ -140,6 +140,7 @@ struct LuaWorldRendererState {
     bool logged_native_carrier_draw = false;
     bool logged_native_marker_draw = false;
     bool logged_custom_stock_geometry_draw = false;
+    bool logged_custom_inventory_draw = false;
     std::mutex mutex;
 };
 
@@ -196,6 +197,45 @@ void* TryGetNativeRenderer() {
 #include "lua_world_renderer/native_carrier_queue.inl"
 
 #include "lua_world_renderer/native_indicator_lane.inl"
+
+bool PrepareLuaSpriteWithStockGeometry(
+    std::string_view atlas,
+    std::uint32_t sprite_index,
+    const void* stock_sprite,
+    NativeWorldGlyph* glyph,
+    std::string* canonical_atlas,
+    std::string* error_message) {
+    LuaDrawSpriteInfo sprite;
+    if (!TryGetLuaDrawSpriteInfo(
+            atlas,
+            sprite_index,
+            &sprite,
+            canonical_atlas,
+            error_message) ||
+        sprite.rotated) {
+        return false;
+    }
+    auto* texture = GetNativeAtlasTexture(*canonical_atlas);
+    if (texture == nullptr) {
+        SetError(error_message, "Native item atlas texture is unavailable.");
+        return false;
+    }
+
+    std::memcpy(
+        glyph->bytes.data(),
+        stock_sprite,
+        glyph->bytes.size());
+    const std::uint8_t valid = 1;
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteValidOffset,
+        valid);
+    WriteNativeField(
+        glyph->bytes.data(),
+        kNativeSpriteTextureHandleOffset,
+        texture->handle);
+    return WriteNativeUv(sprite, *texture, glyph, error_message);
+}
 
 bool ResolveWorldRendererSeams(
     uintptr_t* render_queue_flush,
@@ -393,6 +433,7 @@ void ClearWorldRendererStateUnlocked() {
     g_world_renderer.logged_native_carrier_draw = false;
     g_world_renderer.logged_native_marker_draw = false;
     g_world_renderer.logged_custom_stock_geometry_draw = false;
+    g_world_renderer.logged_custom_inventory_draw = false;
 }
 
 }  // namespace
@@ -591,38 +632,15 @@ bool DrawLuaSpriteWithStockGeometry(
         SetError(error_message, "Native world renderer is not initialized.");
         return false;
     }
-    LuaDrawSpriteInfo sprite;
     std::string canonical_atlas;
-    if (!TryGetLuaDrawSpriteInfo(
+    NativeWorldGlyph glyph;
+    if (!PrepareLuaSpriteWithStockGeometry(
             atlas,
             sprite_index,
-            &sprite,
+            stock_sprite,
+            &glyph,
             &canonical_atlas,
-            error_message) ||
-        sprite.rotated) {
-        return false;
-    }
-    auto* texture = GetNativeAtlasTexture(canonical_atlas);
-    if (texture == nullptr) {
-        SetError(error_message, "Native potion atlas texture is unavailable.");
-        return false;
-    }
-
-    NativeWorldGlyph glyph;
-    std::memcpy(
-        glyph.bytes.data(),
-        stock_sprite,
-        glyph.bytes.size());
-    const std::uint8_t valid = 1;
-    WriteNativeField(
-        glyph.bytes.data(),
-        kNativeSpriteValidOffset,
-        valid);
-    WriteNativeField(
-        glyph.bytes.data(),
-        kNativeSpriteTextureHandleOffset,
-        texture->handle);
-    if (!WriteNativeUv(sprite, *texture, &glyph, error_message)) {
+            error_message)) {
         return false;
     }
     draw(glyph.bytes.data(), x, y);
@@ -630,6 +648,51 @@ bool DrawLuaSpriteWithStockGeometry(
         g_world_renderer.logged_custom_stock_geometry_draw = true;
         Log(
             "lua_world_render: custom glyph reached stock carrier draw batch. "
+            "atlas=" + canonical_atlas +
+            " record=" + std::to_string(sprite_index));
+    }
+    return true;
+}
+
+bool DrawLuaSpriteWithStockGeometryScaled(
+    std::string_view atlas,
+    std::uint32_t sprite_index,
+    const void* stock_sprite,
+    float x,
+    float y,
+    float scale,
+    LuaNativeScaledGlyphDrawFn draw,
+    std::string* error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (atlas.empty() || stock_sprite == nullptr || draw == nullptr ||
+        error_message == nullptr || !std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(scale)) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_world_renderer.mutex);
+    if (!g_world_renderer.initialized) {
+        SetError(error_message, "Native world renderer is not initialized.");
+        return false;
+    }
+    std::string canonical_atlas;
+    NativeWorldGlyph glyph;
+    if (!PrepareLuaSpriteWithStockGeometry(
+            atlas,
+            sprite_index,
+            stock_sprite,
+            &glyph,
+            &canonical_atlas,
+            error_message)) {
+        return false;
+    }
+    draw(glyph.bytes.data(), x, y, scale);
+    if (!g_world_renderer.logged_custom_inventory_draw) {
+        g_world_renderer.logged_custom_inventory_draw = true;
+        Log(
+            "lua_world_render: custom inventory glyph reached stock scaled draw. "
             "atlas=" + canonical_atlas +
             " record=" + std::to_string(sprite_index));
     }

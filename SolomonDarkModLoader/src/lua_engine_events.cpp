@@ -649,6 +649,13 @@ void DispatchConsumableUseToLuaMods(
         return;
     }
 
+    (void)QueueLuaConsumableNativeVfx(
+        LuaConsumableNativeVfxRequest{
+            content_id,
+            participant_id,
+            use_id,
+            definition->duration_ms,
+        });
     for (const auto& mod : LoadedLuaModsStorage()) {
         DispatchConsumableUseToMod(
             mod.get(),

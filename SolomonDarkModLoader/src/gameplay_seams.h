@@ -133,6 +133,7 @@ extern uintptr_t kArenaCombatPreludeDispatch;
 extern uintptr_t kSpawnRewardGold;
 extern uintptr_t kEnemyDropSelector;
 extern uintptr_t kSpriteDrawAtPosition;
+extern uintptr_t kSpriteDrawScaled;
 extern uintptr_t kSpriteDrawTransformed;
 extern uintptr_t kInventoryUseItem;
 extern uintptr_t kInventoryFindItemByUid;

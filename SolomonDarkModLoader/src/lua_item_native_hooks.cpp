@@ -23,12 +23,15 @@ constexpr std::size_t kWorldSpriteListOffset = 0x489C;
 constexpr std::size_t kWorldSpriteCountOffset = 0x48A0;
 constexpr std::int32_t kMaximumPlausibleNativeSpriteCount = 4096;
 constexpr std::size_t kSpriteDrawHookPatchSize = 6;
+constexpr std::size_t kScaledSpriteDrawHookPatchSize = 6;
 constexpr std::size_t kInventoryUseHookPatchSize = 7;
 constexpr std::size_t kItemTextHookPatchSize = 7;
 constexpr std::uint32_t kPotionItemTypeId = 0x1B59;
 
 using SpriteDrawAtPositionFn =
     void(__thiscall*)(void* sprite, float x, float y);
+using SpriteDrawScaledFn =
+    void(__thiscall*)(void* sprite, float x, float y, float scale);
 using InventoryUseItemFn =
     uintptr_t(__thiscall*)(void* inventory_root, std::uint32_t item_uid);
 using InventoryFindItemByUidFn =
@@ -38,16 +41,17 @@ using ItemTextFn =
 using NativeStringAssignFn =
     void(__thiscall*)(void* output_string, char* text);
 
-struct NativeCustomPotionSprite {
+struct NativeRegisteredItemSprite {
     LuaConsumableDefinition definition;
     uintptr_t stock_health_sprite = 0;
 };
 
 X86Hook g_sprite_draw_at_position_hook;
+X86Hook g_sprite_draw_scaled_hook;
 X86Hook g_inventory_use_item_hook;
 X86Hook g_item_display_name_hook;
 X86Hook g_potion_help_hook;
-std::uint32_t g_custom_potion_draw_failure_logs_remaining = 8;
+std::uint32_t g_registered_item_draw_failure_logs_remaining = 8;
 
 std::optional<LuaConsumableDefinition>
 TryFindCustomPotionDefinition(uintptr_t item_address) {
@@ -78,7 +82,7 @@ bool TryMatchSpriteList(
     uintptr_t bundle_global,
     std::size_t list_offset,
     std::size_t count_offset,
-    NativeCustomPotionSprite* match) {
+    NativeRegisteredItemSprite* match) {
     if (sprite_address == 0 || bundle_global == 0 || match == nullptr) {
         return false;
     }
@@ -122,21 +126,26 @@ bool TryMatchSpriteList(
     return true;
 }
 
-bool TryMatchCustomPotionSprite(
+bool TryMatchCustomWorldSprite(
     uintptr_t sprite_address,
-    NativeCustomPotionSprite* match) {
+    NativeRegisteredItemSprite* match) {
     return TryMatchSpriteList(
-               sprite_address,
-               kInventorySpriteBundleGlobal,
-               kInventorySpriteListOffset,
-               kInventorySpriteCountOffset,
-               match) ||
-        TryMatchSpriteList(
-               sprite_address,
-               kWorldSpriteBundleGlobal,
-               kWorldSpriteListOffset,
-               kWorldSpriteCountOffset,
-               match);
+        sprite_address,
+        kWorldSpriteBundleGlobal,
+        kWorldSpriteListOffset,
+        kWorldSpriteCountOffset,
+        match);
+}
+
+bool TryMatchCustomInventorySprite(
+    uintptr_t sprite_address,
+    NativeRegisteredItemSprite* match) {
+    return TryMatchSpriteList(
+        sprite_address,
+        kInventorySpriteBundleGlobal,
+        kInventorySpriteListOffset,
+        kInventorySpriteCountOffset,
+        match);
 }
 
 void __fastcall HookSpriteDrawAtPosition(
@@ -151,8 +160,8 @@ void __fastcall HookSpriteDrawAtPosition(
     }
 
     const auto sprite_address = reinterpret_cast<uintptr_t>(self);
-    NativeCustomPotionSprite match;
-    if (!TryMatchCustomPotionSprite(sprite_address, &match)) {
+    NativeRegisteredItemSprite match;
+    if (!TryMatchCustomWorldSprite(sprite_address, &match)) {
         original(self, x, y);
         return;
     }
@@ -166,10 +175,49 @@ void __fastcall HookSpriteDrawAtPosition(
             y,
             original,
             &draw_error) &&
-        g_custom_potion_draw_failure_logs_remaining > 0) {
-        --g_custom_potion_draw_failure_logs_remaining;
+        g_registered_item_draw_failure_logs_remaining > 0) {
+        --g_registered_item_draw_failure_logs_remaining;
         Log(
-            "Lua custom potion world sprite draw failed. content_id=" +
+            "Lua registered item world sprite draw failed. content_id=" +
+            std::to_string(match.definition.content_id) +
+            " error=" + draw_error);
+    }
+}
+
+void __fastcall HookSpriteDrawScaled(
+    void* self,
+    void* /*unused_edx*/,
+    float x,
+    float y,
+    float scale) {
+    const auto original = GetX86HookTrampoline<SpriteDrawScaledFn>(
+        g_sprite_draw_scaled_hook);
+    if (original == nullptr) {
+        return;
+    }
+
+    NativeRegisteredItemSprite match;
+    if (!TryMatchCustomInventorySprite(
+            reinterpret_cast<uintptr_t>(self),
+            &match)) {
+        original(self, x, y, scale);
+        return;
+    }
+
+    std::string draw_error;
+    if (!DrawLuaSpriteWithStockGeometryScaled(
+            match.definition.icon_atlas,
+            match.definition.icon_frame,
+            reinterpret_cast<const void*>(match.stock_health_sprite),
+            x,
+            y,
+            scale,
+            original,
+            &draw_error) &&
+        g_registered_item_draw_failure_logs_remaining > 0) {
+        --g_registered_item_draw_failure_logs_remaining;
+        Log(
+            "Lua registered item inventory sprite draw failed. content_id=" +
             std::to_string(match.definition.content_id) +
             " error=" + draw_error);
     }
@@ -284,6 +332,7 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
         error_message->clear();
     }
     if (g_sprite_draw_at_position_hook.installed &&
+        g_sprite_draw_scaled_hook.installed &&
         g_inventory_use_item_hook.installed &&
         g_item_display_name_hook.installed &&
         g_potion_help_hook.installed) {
@@ -296,13 +345,15 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
     auto& memory = ProcessMemory::Instance();
     const auto draw_at_position =
         memory.ResolveGameAddressOrZero(kSpriteDrawAtPosition);
+    const auto draw_scaled =
+        memory.ResolveGameAddressOrZero(kSpriteDrawScaled);
     const auto inventory_use =
         memory.ResolveGameAddressOrZero(kInventoryUseItem);
     const auto item_display_name =
         memory.ResolveGameAddressOrZero(kItemDisplayName);
     const auto potion_help =
         memory.ResolveGameAddressOrZero(kPotionHelp);
-    if (draw_at_position == 0 ||
+    if (draw_at_position == 0 || draw_scaled == 0 ||
         inventory_use == 0 || item_display_name == 0 ||
         potion_help == 0 || kInventoryFindItemByUid == 0 ||
         kGameplayStringAssign == 0 ||
@@ -326,11 +377,24 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
         return false;
     }
     if (!InstallX86Hook(
+            reinterpret_cast<void*>(draw_scaled),
+            reinterpret_cast<void*>(&HookSpriteDrawScaled),
+            kScaledSpriteDrawHookPatchSize,
+            &g_sprite_draw_scaled_hook,
+            &hook_error)) {
+        RemoveX86Hook(&g_sprite_draw_at_position_hook);
+        *error_message =
+            "Failed to install Lua item scaled-sprite hook: " +
+            hook_error;
+        return false;
+    }
+    if (!InstallX86Hook(
             reinterpret_cast<void*>(item_display_name),
             reinterpret_cast<void*>(&HookItemDisplayName),
             kItemTextHookPatchSize,
             &g_item_display_name_hook,
             &hook_error)) {
+        RemoveX86Hook(&g_sprite_draw_scaled_hook);
         RemoveX86Hook(&g_sprite_draw_at_position_hook);
         *error_message =
             "Failed to install Lua item display-name hook: " +
@@ -344,6 +408,7 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
             &g_potion_help_hook,
             &hook_error)) {
         RemoveX86Hook(&g_item_display_name_hook);
+        RemoveX86Hook(&g_sprite_draw_scaled_hook);
         RemoveX86Hook(&g_sprite_draw_at_position_hook);
         *error_message =
             "Failed to install Lua potion help hook: " +
@@ -358,6 +423,7 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
             &hook_error)) {
         RemoveX86Hook(&g_potion_help_hook);
         RemoveX86Hook(&g_item_display_name_hook);
+        RemoveX86Hook(&g_sprite_draw_scaled_hook);
         RemoveX86Hook(&g_sprite_draw_at_position_hook);
         *error_message =
             "Failed to install Lua inventory-use hook: " +
@@ -368,6 +434,7 @@ bool InitializeLuaItemNativeHooks(std::string* error_message) {
     Log(
         "Lua item native presentation hooks initialized. positioned=" +
         HexString(draw_at_position) +
+        " scaled=" + HexString(draw_scaled) +
         " use=" + HexString(inventory_use) +
         " name=" + HexString(item_display_name) +
         " help=" + HexString(potion_help));
@@ -378,6 +445,7 @@ void ShutdownLuaItemNativeHooks() {
     RemoveX86Hook(&g_inventory_use_item_hook);
     RemoveX86Hook(&g_potion_help_hook);
     RemoveX86Hook(&g_item_display_name_hook);
+    RemoveX86Hook(&g_sprite_draw_scaled_hook);
     RemoveX86Hook(&g_sprite_draw_at_position_hook);
 }
 

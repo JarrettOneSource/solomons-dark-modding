@@ -115,6 +115,7 @@ uintptr_t kArenaCombatPreludeDispatch = 0;
 uintptr_t kSpawnRewardGold = 0;
 uintptr_t kEnemyDropSelector = 0;
 uintptr_t kSpriteDrawAtPosition = 0;
+uintptr_t kSpriteDrawScaled = 0;
 uintptr_t kSpriteDrawTransformed = 0;
 uintptr_t kInventoryUseItem = 0;
 uintptr_t kInventoryFindItemByUid = 0;

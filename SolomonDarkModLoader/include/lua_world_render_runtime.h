@@ -46,6 +46,8 @@ struct LuaWorldRenderFrameSnapshot {
 
 using LuaNativeGlyphDrawFn =
     void(__thiscall*)(void* sprite, float x, float y);
+using LuaNativeScaledGlyphDrawFn =
+    void(__thiscall*)(void* sprite, float x, float y, float scale);
 
 void InitializeLuaWorldRenderRuntime();
 void ResetLuaWorldRenderRuntime();
@@ -76,6 +78,15 @@ bool DrawLuaSpriteWithStockGeometry(
     float x,
     float y,
     LuaNativeGlyphDrawFn draw,
+    std::string* error_message);
+bool DrawLuaSpriteWithStockGeometryScaled(
+    std::string_view atlas,
+    std::uint32_t sprite_index,
+    const void* stock_sprite,
+    float x,
+    float y,
+    float scale,
+    LuaNativeScaledGlyphDrawFn draw,
     std::string* error_message);
 
 }  // namespace sdmod

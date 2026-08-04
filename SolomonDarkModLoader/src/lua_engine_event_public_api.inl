@@ -67,12 +67,6 @@ void DispatchLuaConsumableUse(
     std::uint64_t participant_id,
     std::uint64_t use_id,
     bool local_owner) {
-    (void)QueueLuaConsumableNativeVfx(
-        LuaConsumableNativeVfxRequest{
-            content_id,
-            participant_id,
-            use_id,
-        });
     detail::QueueConsumableUseEvent(
         content_id,
         participant_id,

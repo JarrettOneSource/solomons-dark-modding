@@ -73,9 +73,11 @@ registered by the same mod, and `icon.frame` must resolve inside that atlas.
 what the duration means. `on_consume` is required and runs only on the consuming
 participant's process. `consume_vfx` is optional; the current semantic
 `spell_glow` kind constructs the game's native `SpellGlow` animation around the
-participant on every peer using the supplied finite RGBA color. The effect is
-native `SpellGlow` only; no icon particles are projected into the screen-space
-overlay.
+participant on every peer using the supplied finite RGBA color. The loader
+refreshes that native animation for the registered `duration_ms`, so its
+presentation shares the replicated effect window rather than a separate
+loader-owned timeout. The effect is native `SpellGlow` only; no icon particles
+are projected into the screen-space overlay.
 
 Custom potions use peer-local native subtype reservations only to enter the
 stock inventory. Their descriptors add `consumable`, `description`, `icon`,
@@ -84,7 +86,10 @@ is diagnostic local state. Network inventory, loot, pickup, and use messages
 carry the stable content ID and resolve that peer's subtype at the native edge.
 The ground icon is drawn through the same native positioned-glyph call used by
 stock potion drops, so stock render-list order, actor/prop occlusion, and scene
-lighting apply on each peer. It is not an `sd.draw` overlay.
+lighting apply on each peer. The inventory icon uses the stock scaled-glyph
+call with the same registered atlas and preserves the health-potion geometry,
+inventory translation, and item scale. Both substitutions resolve any
+registered custom subtype; neither is an `sd.draw` overlay.
 
 Every accepted use also queues `item.consumed` on every peer:
 
@@ -230,3 +235,10 @@ The Invincibility Potion mod retains the stable internal ID
 at 50 percent from ordinary enemies and 100 percent from bosses, enters the
 stock inventory, emits native `SpellGlow`, and combines a replicated
 three-minute effect with damage and mana filters.
+
+`tools/verify_lua_consumable_presentation.py` is the mutating hosted-pair
+acceptance for the two native presentation boundaries. It requires an exact
+source SHA, isolated instance prefix and ports, opens the real inventory for a
+pixel capture, and brackets registered duration expiry with peer captures and
+native damage trials. It stops only the two exact game PIDs returned by its
+launch and requires both campaign ports to be unbound afterward.

@@ -134,6 +134,20 @@ This matches the live holder readback:
 
 These are UI surfaces only. They do not prove item ownership by themselves.
 
+### Modded potion icon draw seam
+
+- `0x00579A90` renders a potion row in the native inventory. It reads subtype
+  `item + 0x1C`, grows the Inventory potion-sprite array when necessary, and
+  indexes a `0xC4`-byte sprite record.
+- the final call is the translated, uniformly scaled glyph renderer at
+  `0x00414EA0`, with translations `0, 0` and the item scale from `item + 0x64`;
+  it does not pass through positioned glyph draw `0x004143D0` used by world
+  potion carriers.
+- grown custom-subtype records have no valid native texture record. The loader
+  therefore hooks the scaled draw, resolves any registered custom subtype, and
+  draws its registered atlas using stock health-potion geometry while
+  preserving the original translations and scale.
+
 ## Loader Runtime Exposure Today
 
 Current `sd.player.get_state()` exposes:

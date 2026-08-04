@@ -45,6 +45,7 @@ struct LuaConsumableNativeVfxRequest {
     std::uint64_t content_id = 0;
     std::uint64_t participant_id = 0;
     std::uint64_t use_id = 0;
+    std::uint32_t duration_ms = 0;
 };
 
 bool RegisterLuaConsumableDefinition(

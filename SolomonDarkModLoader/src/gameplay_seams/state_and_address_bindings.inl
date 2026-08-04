@@ -144,6 +144,7 @@ const AddressBinding* GetAddressBindings(std::size_t* count) {
         SDMOD_ADDR("gameplay.hooks", "spawn_reward_gold", kSpawnRewardGold),
         SDMOD_ADDR("gameplay.hooks", "enemy_drop_selector", kEnemyDropSelector),
         SDMOD_ADDR("gameplay.hooks", "sprite_draw_at_position", kSpriteDrawAtPosition),
+        SDMOD_ADDR("gameplay.hooks", "sprite_draw_scaled", kSpriteDrawScaled),
         SDMOD_ADDR("gameplay.hooks", "sprite_draw_transformed", kSpriteDrawTransformed),
         SDMOD_ADDR("gameplay.hooks", "inventory_use_item", kInventoryUseItem),
         SDMOD_ADDR("gameplay.hooks", "inventory_find_item_by_uid", kInventoryFindItemByUid),
