@@ -3,9 +3,11 @@ from __future__ import annotations
 import unittest
 
 from tools.verify_hostile_targeting_continuity import (
+    REDUCE_TO_STRAGGLER_LUA,
     HostileTargetingContinuityFailure,
     _arrange,
     _enemy_network_ids_from_log,
+    _reduce_to_straggler,
     _release_bot_lock,
     analyze_selector_log,
     analyze_target_samples,
@@ -147,6 +149,38 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
         self.assertIn("if not true or index == 1 then", pipe.code)
         self.assertIn('emit("stationary_enemy_count", locked_enemy_count)', pipe.code)
         self.assertNotIn("__LOCK_ONLY_SELECTED_ENEMY__", pipe.code)
+
+    def test_wave_reduction_uses_the_native_enemy_death_seam(self) -> None:
+        self.assertIn(
+            "sd.gameplay.set_run_enemy_health(address, 0.0, 1.0)",
+            REDUCE_TO_STRAGGLER_LUA,
+        )
+        self.assertIn(
+            "sd.world.trigger_enemy_death(address)",
+            REDUCE_TO_STRAGGLER_LUA,
+        )
+
+        class Pipe:
+            code = ""
+
+            def execute(self, code: str) -> str:
+                self.code = code
+                return "\n".join((
+                    "killed=2",
+                    "survivor=273",
+                    "survivor_primed=true",
+                    "survivor_live=true",
+                    "live_remaining=1",
+                ))
+
+        pipe = Pipe()
+        result = _reduce_to_straggler(
+            pipe,
+            enemy_actor_addresses=[0x111, 0x222, 0x333],
+            survivor_actor_address=0x111,
+        )
+        self.assertEqual(result["live_remaining"], 1)
+        self.assertNotIn("__SURVIVOR_ACTOR_ADDRESS__", pipe.code)
 
     def test_log_requires_one_network_identity_per_enemy(self) -> None:
         self.assertEqual(
@@ -313,7 +347,7 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 ],
             )
 
-    def test_network_identity_ignores_stale_authority_snapshot(self) -> None:
+    def test_wave_boundary_retires_recycled_network_identity(self) -> None:
         first = {
             **target_row(),
             "owner.x": 2850.0,
@@ -346,12 +380,47 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
                 }
             ],
         )
-        self.assertTrue(assessment["originalEnemyLiveAtEnd"])
+        self.assertFalse(assessment["originalEnemyLiveAtEnd"])
+        self.assertTrue(assessment["originalIdentityRetiredAtWaveBoundary"])
         self.assertTrue(assessment["allOriginalEnemiesBotDamaged"])
         self.assertEqual(
             assessment["originalEnemyIdentityKind"],
             "network_actor_id",
         )
+
+    def test_wave_boundary_ignores_recycled_actor_position(self) -> None:
+        first = {
+            **target_row(),
+            "owner.x": 2850.0,
+            "bot.x": 2350.0,
+            "bot.cast_accepted": 10,
+            "bot.move_accepted": 20,
+            "original.network_live_count": 1,
+        }
+        recycled = {
+            **first,
+            "enemy.x": first["enemy.x"] + 2000.0,
+            "bot.cast_accepted": 11,
+            "combat.wave": 2,
+            "original.network_live_count": 1,
+        }
+        assessment = analyze_wave_completion(
+            [first, recycled],
+            starting_wave=1,
+            bot_id=BOT_ID,
+            original_enemy_actor_addresses=[0x111],
+            original_enemy_network_ids=[0xAAAA],
+            damage_rows=[
+                {
+                    "sourceParticipantId": BOT_ID,
+                    "targetActorAddress": 0x111,
+                    "targetNetworkActorId": 0xAAAA,
+                    "damage": 25.0,
+                }
+            ],
+        )
+        self.assertEqual(assessment["stationaryEnemyMaxDisplacement"], 0.0)
+        self.assertTrue(assessment["completedAutonomously"])
 
     def test_phase_boundary_death_is_accounted_before_sampling(self) -> None:
         first = {

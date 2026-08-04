@@ -187,6 +187,44 @@ emit("wave.number", wave.wave or 0)
 """
 
 
+REDUCE_TO_STRAGGLER_LUA = r"""
+local addresses = __ENEMY_ACTOR_ADDRESSES__
+local survivor = __SURVIVOR_ACTOR_ADDRESS__
+local survivor_hp = __SURVIVOR_HP__
+local lock = rawget(_G, "__botlevel_stationary_straggler")
+if type(lock) == "table" then
+  lock.enabled = false
+end
+local killed = 0
+local survivor_primed = false
+for _, address in ipairs(addresses) do
+  if address == survivor then
+    survivor_primed = sd.gameplay.set_run_enemy_health(
+      address, survivor_hp, survivor_hp) == true
+  elseif sd.gameplay.set_run_enemy_health(address, 0.0, 1.0) and
+      sd.world.trigger_enemy_death(address) then
+    killed = killed + 1
+  end
+end
+local live_remaining = 0
+local survivor_live = false
+for _, actor in ipairs(sd.world.list_actors() or {}) do
+  if actor.tracked_enemy and not actor.dead and
+      (tonumber(actor.hp) or 0) > 0 then
+    live_remaining = live_remaining + 1
+    if tonumber(actor.actor_address) == survivor then
+      survivor_live = true
+    end
+  end
+end
+print("killed=" .. tostring(killed))
+print("survivor=" .. tostring(survivor))
+print("survivor_primed=" .. tostring(survivor_primed))
+print("survivor_live=" .. tostring(survivor_live))
+print("live_remaining=" .. tostring(live_remaining))
+"""
+
+
 ARRANGE_LUA = r"""
 local function emit(key, value)
   print(key .. "=" .. tostring(value == nil and "" or value))
@@ -491,6 +529,36 @@ print("released=" .. tostring(released))
     return values
 
 
+def _reduce_to_straggler(
+    pipe: LuaPipe,
+    *,
+    enemy_actor_addresses: list[int],
+    survivor_actor_address: int,
+) -> dict[str, Any]:
+    lua_addresses = "{" + ",".join(
+        str(address) for address in enemy_actor_addresses
+    ) + "}"
+    code = (
+        REDUCE_TO_STRAGGLER_LUA
+        .replace("__ENEMY_ACTOR_ADDRESSES__", lua_addresses)
+        .replace("__SURVIVOR_ACTOR_ADDRESS__", str(survivor_actor_address))
+        .replace("__SURVIVOR_HP__", f"{STABILIZED_ENEMY_HP:.6f}")
+    )
+    values = _parse_key_values(pipe.execute(code))
+    expected_kills = len(enemy_actor_addresses) - 1
+    if not (
+        int(values.get("killed", -1)) == expected_kills
+        and int(values.get("survivor", 0)) == survivor_actor_address
+        and values.get("survivor_primed") is True
+        and values.get("survivor_live") is True
+        and int(values.get("live_remaining", -1)) == 1
+    ):
+        raise HostileTargetingContinuityFailure(
+            f"could not reduce native wave to one straggler: {values}"
+        )
+    return values
+
+
 def _distance(row: dict[str, Any], prefix: str) -> float:
     return math.hypot(
         float(row["enemy.x"]) - float(row[f"{prefix}.x"]),
@@ -582,7 +650,12 @@ def analyze_wave_completion(
     expect_stall: bool = False,
     arranged_bot_distance: float | None = None,
 ) -> dict[str, Any]:
-    alive = [row for row in samples if row.get("enemy.alive") is True]
+    alive = [
+        row for row in samples
+        if row.get("enemy.alive") is True
+        and int(row.get("combat.wave", starting_wave)) == starting_wave
+        and str(row.get("wave.phase", "")).casefold() != "completed"
+    ]
     initial = alive[0] if alive else samples[0] if samples else {}
     first_observed_bot_distance = _distance(initial, "bot") if initial else 0.0
     initial_distance = (
@@ -672,10 +745,11 @@ def analyze_wave_completion(
         original_enemy_count,
         len(bot_damaged_original_enemies) + phase_boundary_deaths,
     )
+    advanced = final_wave > starting_wave or completed_phase_observed
     assessment = {
         "startingWave": starting_wave,
         "finalWave": final_wave,
-        "advanced": final_wave > starting_wave or completed_phase_observed,
+        "advanced": advanced,
         "completedPhaseObserved": completed_phase_observed,
         "initialBotDistance": initial_distance,
         "firstObservedBotDistance": first_observed_bot_distance,
@@ -686,8 +760,11 @@ def analyze_wave_completion(
         "botCastAcceptedDelta": cast_delta,
         "botMoveAcceptedDelta": move_delta,
         "originalEnemyIdentityKind": identity_kind,
+        "originalIdentityRetiredAtWaveBoundary": advanced,
         "originalEnemyLiveAtEnd": bool(
-            samples and int(samples[-1].get(original_live_key, 0)) > 0
+            not advanced
+            and samples
+            and int(samples[-1].get(original_live_key, 0)) > 0
         ),
         "originalEnemyCount": original_enemy_count,
         "botDamagedOriginalEnemyCount": len(bot_damaged_original_enemies),
@@ -1064,6 +1141,13 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             "bot": int(first["bot.actor"]),
         }
         result["nearestBotRelease"] = _release_bot_lock(pipe)
+        result["stragglerReduction"] = _reduce_to_straggler(
+            pipe,
+            enemy_actor_addresses=enemy_actor_addresses,
+            survivor_actor_address=enemy_actor_address,
+        )
+        enemy_actor_addresses = [enemy_actor_address]
+        result["stragglerSurvivorActorAddress"] = enemy_actor_address
         enemy_network_actor_ids = _wait_enemy_network_ids_from_log(
             runtime_root,
             args.instance,
@@ -1091,7 +1175,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             enemy_x=0.0,
             enemy_y=0.0,
             enemy_hp=STRAGGLER_ENEMY_HP,
-            enemy_spacing=10.0,
+            enemy_spacing=0.0,
             park_other_enemies=False,
             allow_missing_bot=False,
             preserve_enemy_positions=True,
@@ -1131,12 +1215,8 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                 target_mod_id=BOT_MOD_ID,
             )
             if (
-                (
-                    int(row.get("combat.wave", 0)) > starting_wave
-                    or str(row.get("wave.phase", "")).casefold()
-                    == "completed"
-                )
-                and int(row.get("original.network_live_count", -1)) == 0
+                int(row.get("combat.wave", 0)) > starting_wave
+                or str(row.get("wave.phase", "")).casefold() == "completed"
             ):
                 break
             time.sleep(0.2)
