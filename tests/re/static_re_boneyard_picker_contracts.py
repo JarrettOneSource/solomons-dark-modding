@@ -375,3 +375,61 @@ def test_boneyard_picker_presents_mod_description_and_scales_with_viewport() -> 
         "fields, two-thirds layout, viewport text scaling, and stat-dump removal "
         "are pinned"
     )
+
+
+def test_boneyard_picker_owns_its_keys_and_centers_row_text() -> str:
+    frontend = _read(
+        "SolomonDarkModLoader/src/boneyard_picker/frontend_render.inl"
+    )
+    input_hooks = _read(
+        "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+        "input_hooks.inl"
+    )
+
+    # Stock ExactText anchors near the glyph baseline, so list-row text must
+    # be nudged down from row_y to sit centered inside the cursor quad. The
+    # beta.31 picker drew names floating above the highlight bar.
+    _require(
+        frontend,
+        (
+            "kPickerRowTextBaselineNudge = 12.0f",
+            "kPickerRowMetaBaselineNudge = 11.0f",
+            "row_y + kPickerRowTextBaselineNudge * ui_scale",
+            "row_y + kPickerRowMetaBaselineNudge * ui_scale",
+        ),
+        "picker row text baseline centering",
+    )
+
+    # While the picker modal is open it owns its keys outright: the stock
+    # game must never see their edges. An unconsumed Escape edge opened the
+    # pause menu on top of the picker (owner-reported cascade: pause menu ->
+    # native picker -> unintended match start).
+    _require(
+        input_hooks,
+        (
+            "bool BoneyardPickerOwnsScancode(std::uint32_t scancode)",
+            "case 0x01:  // DIK_ESCAPE",
+            "case 0x1C:  // DIK_RETURN",
+            "case 0xC8:  // DIK_UP",
+            "case 0xC9:  // DIK_PRIOR (PgUp)",
+            "case 0xD0:  // DIK_DOWN",
+            "case 0xD1:  // DIK_NEXT (PgDn)",
+            "GetBoneyardPickerSnapshot().is_open",
+            "if (BoneyardPickerOwnsScancode(scancode)) {",
+        ),
+        "picker keyboard-edge ownership",
+    )
+    # The suppression must keep the stock helper's edge bookkeeping alive
+    # (call the trampoline, then report no-edge) rather than starving it.
+    suppress_at = input_hooks.index("if (BoneyardPickerOwnsScancode(scancode)) {")
+    suppressed_block = input_hooks[suppress_at:suppress_at + 600]
+    for token in ("original_fn(self, scancode)", "return 0;"):
+        if token not in suppressed_block:
+            raise StaticReTestFailure(
+                "picker key suppression must tick the stock edge helper and "
+                "report no-edge: missing " + token
+            )
+    return (
+        "picker row text centers in the cursor quad and the picker owns its "
+        "keyboard edges while open"
+    )

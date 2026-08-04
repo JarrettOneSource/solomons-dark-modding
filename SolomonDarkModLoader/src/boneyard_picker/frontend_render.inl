@@ -21,6 +21,14 @@ constexpr float kPickerMaxUiScale = 3.0f;
 constexpr float kPickerStockGlyphAdvance = 16.0f;
 constexpr float kPickerStockLineHeight = 32.0f;
 constexpr std::size_t kPickerDescriptionMaxLines = 4;
+// Stock ExactText anchors near the glyph baseline: visible glyphs rise
+// ~0.55 line-heights ABOVE the submitted y (measured from the beta.31
+// picker capture: row text at y rendered its cap span at [y-11, y-2] with
+// row_scale 0.65). List-row text must therefore be pushed down from row_y
+// to sit centered inside the cursor/selection quad, which spans
+// [row_y - 3*ui_scale, row_y + row_height - 8*ui_scale].
+constexpr float kPickerRowTextBaselineNudge = 12.0f;
+constexpr float kPickerRowMetaBaselineNudge = 11.0f;
 
 // Text scale factors, multiplied by the viewport ui_scale and emitted as
 // _s(<value>) ExactText commands.
@@ -294,7 +302,7 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             DrawPickerStockText(
                 TruncatePickerText(entry.display_name, name_chars),
                 list_x + 16.0f * ui_scale,
-                row_y,
+                row_y + kPickerRowTextBaselineNudge * ui_scale,
                 row_scale);
 
             std::string row_meta = is_committed_selection
@@ -305,7 +313,7 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
                 row_meta,
                 list_x + list_width - 14.0f * ui_scale -
                     PickerStockTextWidth(row_meta, row_meta_scale),
-                row_y + 4.0f * ui_scale,
+                row_y + kPickerRowMetaBaselineNudge * ui_scale,
                 row_meta_scale);
             row_y += row_height;
         }
