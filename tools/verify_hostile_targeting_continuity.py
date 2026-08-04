@@ -183,6 +183,7 @@ emit("combat.wave", combat.wave_index or 0)
 emit("combat.active", combat.active or false)
 emit("wave.phase", wave.phase or "")
 emit("wave.alive", wave.alive or 0)
+emit("wave.number", wave.wave or 0)
 """
 
 
@@ -1059,6 +1060,10 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             5.0,
         )
         result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
+        result["stragglerIdentityBasis"] = "native_actor_address"
+        result["stragglerNetworkIdentityRole"] = (
+            "diagnostic_only_after_sd_world_rebind_actor"
+        )
 
         result["damageResetBeforeStraggler"] = _reset_damage_observations(
             pipe,
@@ -1119,7 +1124,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                     or str(row.get("wave.phase", "")).casefold()
                     == "completed"
                 )
-                and int(row.get("original.network_live_count", -1)) == 0
+                and int(row.get("original.live_count", -1)) == 0
             ):
                 break
             time.sleep(0.2)
@@ -1131,7 +1136,6 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             starting_wave=starting_wave,
             bot_id=bot_id,
             original_enemy_actor_addresses=enemy_actor_addresses,
-            original_enemy_network_ids=enemy_network_actor_ids,
             damage_rows=enemy_rows,
             expect_stall=args.expect == "churn",
             arranged_bot_distance=float(
