@@ -189,6 +189,20 @@ facing latch. Reserve entry sets it, and only the brain's later nonzero combat
 face-target request releases it. Clearing the native reserve bit alone is not
 an acknowledgement that the asynchronous brain has left flee policy.
 
+The exact-SHA hosted-pair retry then exposed the entry-side counterpart before
+acceptance. Reserve became native-active while Bot Brain still reported its
+previous `approach` decision. When the brain consumed reserve and switched to
+`mana_flee`, the first measurable displacement still completed the old path:
+its movement-facing dot was `-0.040459`; the next 27 samples followed the new
+flee path at approximately `0.99` to `1.00`.
+
+Reserve entry cleared target-facing but left the binding's active path and
+controller movement intent intact. The asynchronous brain could not replace
+that path until its next think, leaving one residual approach step at the
+policy boundary. Native reserve entry must cancel the current path, clear the
+actor movement vector, and publish an idle controller intent before waiting
+for Bot Brain to issue its first flee destination.
+
 ## Regression and acceptance contracts
 
 The correction is not complete without contracts that pin all four seams:
