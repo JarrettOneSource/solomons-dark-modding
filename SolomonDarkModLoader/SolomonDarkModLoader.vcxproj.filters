@@ -212,7 +212,7 @@
     <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
-    <ClInclude Include="src\lua_world_renderer\native_screen_primitives.inl">
+    <ClInclude Include="src\lua_world_renderer\native_public_api.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\lua_world_renderer\native_texture_bridge.inl">

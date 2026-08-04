@@ -30,6 +30,10 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
     )
     world_renderer += _read(
         "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_public_api.inl"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
         "native_indicator_lane.inl"
     )
     world_renderer += _read(
@@ -469,6 +473,7 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
         r"src\lua_world_renderer.cpp",
         r"src\lua_world_renderer\native_carrier_queue.inl",
         r"src\lua_world_renderer\native_indicator_lane.inl",
+        r"src\lua_world_renderer\native_public_api.inl",
         r"src\lua_engine_bindings_world_render.cpp",
     ):
         assert item in project, f"native project omits: {item}"

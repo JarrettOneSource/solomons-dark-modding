@@ -112,7 +112,7 @@
     <ClInclude Include="src\lua_item_runtime\consumable_vfx_helpers.inl" />
     <ClInclude Include="src\lua_world_renderer\native_carrier_queue.inl" />
     <ClInclude Include="src\lua_world_renderer\native_indicator_lane.inl" />
-    <ClInclude Include="src\lua_world_renderer\native_screen_primitives.inl" />
+    <ClInclude Include="src\lua_world_renderer\native_public_api.inl" />
     <ClInclude Include="src\lua_world_renderer\native_texture_bridge.inl" />
     <ClInclude Include="include\lua_net_runtime.h" />
     <ClInclude Include="include\lua_sprite_runtime.h" />

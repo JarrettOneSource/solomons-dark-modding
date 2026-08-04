@@ -77,6 +77,10 @@ def test_lua_consumables_are_native_stable_and_owner_executed() -> str:
     )
     world_renderer += _read(
         "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_public_api.inl"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
         "native_texture_bridge.inl"
     )
     native_world_header = _read(
@@ -408,6 +412,10 @@ def test_registered_item_icons_and_consumable_vfx_follow_native_duration() -> st
     world_renderer += _read(
         "SolomonDarkModLoader/src/lua_world_renderer/"
         "native_carrier_queue.inl"
+    )
+    world_renderer += _read(
+        "SolomonDarkModLoader/src/lua_world_renderer/"
+        "native_public_api.inl"
     )
     world_renderer += _read(
         "SolomonDarkModLoader/src/lua_world_renderer/"
