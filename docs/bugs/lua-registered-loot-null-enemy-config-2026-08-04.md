@@ -2,7 +2,8 @@
 
 ## Status
 
-Confirmed on `v0.1.0-beta.31`; foundational fix pending.
+Confirmed on `v0.1.0-beta.31`; fixed and live-verified on stock and custom
+boneyards.
 
 ## Investigation
 
@@ -76,3 +77,39 @@ activation and rolled from `HookEnemyDeath` only when the local peer is Lua
 simulation authority and the death is newly handled in an active combat arena.
 This preserves stock behavior, prevents client-authored duplicates, and makes
 stock and custom boneyard deaths follow the same additive-loot path.
+
+## Resolution and live acceptance
+
+The additive pool now rolls from the once-only authoritative death block,
+before the Lua enemy-death event is dispatched. `HookDropSelector` no longer
+activates for, or queues, the additive pool.
+
+The first post-fix natural-wave probe exposed a second instance of the same
+invalid assumption: the death hook's native-type reader only read through
+`enemy_config`. Natural wave actors therefore reached the correct hook but
+were still rejected as having no native type. The reader now prefers the
+config-backed type and falls back to the stable game-object type field when
+the config pointer is null. This fallback is bounded to the valid native type
+range and leaves config-backed actors unchanged.
+
+Final hosted acceptance used the exact released Invincibility Potion 0.2.0
+mod on isolated host/client pairs with audio disabled:
+
+- Stock `survival.boneyard`: eight natural null-config enemies, eight accepted
+  deaths, and three active potion drops replicated with matching network IDs
+  and positions. All three client rows were materialized as native subtype 6
+  actors. A separate 100% boss roll added one more replicated, materialized
+  potion.
+- Sample Boneyards `Alpha Arena.boneyard`: twelve natural null-config enemies,
+  twelve accepted deaths, and four active potion drops replicated with
+  matching host/client state. A separate 100% boss roll added a fifth. Both
+  staged `survival.boneyard` files matched the shipped Alpha Arena SHA-256
+  `d596b4915140f5faa23fd1286e3d622c6189ecb00b9667f5e7b3444a84b8322b`.
+
+The final acceptance artifacts are:
+
+- `proof/stock/final/natural-wave.json`
+- `proof/stock/final/boss.json`
+- `proof/custom/final/natural-wave.json`
+- `proof/custom/final/boss.json`
+- `proof/custom/final/runtime-boneyard-sha256.txt`
