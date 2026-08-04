@@ -2,7 +2,7 @@
 
 Date: 2026-08-04
 
-Status: root-caused before selector behavior changed; correction pending
+Status: fixed and live-verified
 
 ## Report and scope
 
@@ -138,22 +138,45 @@ churn, but is not itself a targeting decision or participant-control barrier.
 The level-up-window bot freeze has the separate exact-mana cause already fixed
 on `main`. A participant's choice state did not wedge another participant:
 both choices cleared independently and the bot cast afterward. The expanded
-campaign must retain that proof while correcting the targeting authority
-defect.
+campaign retains that proof alongside the targeting-authority correction.
 
-## Required correction and acceptance
+## Resolution
 
-The host must compute one nearest-target decision before invoking stock. If
-the winner cannot be committed by the retail list's group-zero branch, the
-loader must commit that validated selection directly and skip the retail
-selector, so retail cannot relocate the hostile or transiently author a
-different target. For a retail-list group-zero winner, the retail lifecycle
-remains authoritative. Higher-priority Lua, Turn Undead, manual-freeze, and
-client snapshot policies retain precedence. Expected dead/ineligible
-candidates must be excluded without diagnostic spam.
+The host now computes one nearest-target decision before invoking stock. Each
+validated candidate records whether the retail list's group-zero branch can
+commit it. A retail-compatible winner remains under the stock selector. An
+extended winner is committed directly and skips stock, so retail cannot
+relocate the hostile or transiently author a different target. If that direct
+write fails, the hook falls through to retail instead of returning with an
+uncommitted target. Higher-priority Lua, Turn Undead, manual-freeze, and client
+snapshot policies retain precedence.
 
-Post-fix live acceptance requires all of the following from isolated runtime
-evidence:
+Expected dead or ineligible extended participants remain excluded, but no
+longer emit the anomalous rejection diagnostic. Unexpected validation
+failures retain the rate-limited diagnostic path.
+
+## Post-fix live acceptance
+
+`post-fix-targeting-live-6/result.json` is the canonical isolated correction
+proof. It used instance `botlevel-targeting-post6`, unique UDP ports 52777 and
+52778, `SDMOD_DISABLE_AUDIO=1`, a copied game, and the full Steam-format owner
+participant ID. The verifier observed:
+
+- 25 of 25 live samples selecting the mathematically nearer Lua teammate;
+- 25 of 25 samples with the native selector latch clear;
+- zero stock-owner-to-extended-bot rewrites and zero rejected-candidate spam;
+- all ten original skeleton actors receiving authoritative bot damage;
+- 30 additional accepted bot casts and 67 movement accepts;
+- wave 1 advancing to wave 2 from an initial 510.51-unit bot distance; and
+- zero owner displacement and zero player-search input.
+
+The verifier stopped owned PID 22180 only after matching its executable to
+`D:\codex-evidence\botlevel-20260804\post-fix-targeting-live-6\staging\runtime\instances\botlevel-targeting-post6\stage\SolomonDark.exe`.
+Its after receipt records no owned process and no binding on either reserved
+port.
+
+Together with the separate owner-level-up continuity proof, acceptance covers
+all three reported outcomes:
 
 1. a hosted Lua teammate continues casting and causing native damage through
    an owner level-up choice;
