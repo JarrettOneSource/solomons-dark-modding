@@ -271,6 +271,9 @@ bool ApplyBotNativeManaReserveRecovery(
     binding->mana_reserve_active =
         reserve_state_refreshed && mana_reserve_active;
     if (reserve_entered) {
+        StopBotPathMotion(binding, false);
+        ClearWizardBotMovementVectorInputs(actor_address);
+        (void)multiplayer::StopBot(binding->bot_id);
         (void)multiplayer::FaceBotTarget(binding->bot_id, 0, false, 0.0f);
         binding->facing_target_actor_address = 0;
         binding->facing_heading_valid = false;

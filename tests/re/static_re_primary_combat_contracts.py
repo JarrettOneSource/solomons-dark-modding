@@ -1053,6 +1053,9 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         "lua_setfield(state, -2, \"mana_attainable_max_mp\")",
         "lua_setfield(state, -2, \"mana_resume_threshold_mp\")",
         "lua_setfield(state, -2, \"mana_attainable_cap_detected\")",
+        "StopBotPathMotion(binding, false)",
+        "ClearWizardBotMovementVectorInputs(actor_address)",
+        "multiplayer::StopBot(binding->bot_id)",
         "FaceBotTarget(binding->bot_id, 0, false, 0.0f)",
         "bool mana_reserve_movement_facing_latched = false",
         "binding->mana_reserve_movement_facing_latched = true",
@@ -1136,6 +1139,27 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         raise StaticReTestFailure(
             "native hoarded mana must set the attainable reserve threshold "
             "and bound the recovery delta")
+
+    reserve_entry_pos = player_mana_hook_text.find("if (reserve_entered)")
+    stop_path_pos = player_mana_hook_text.find(
+        "StopBotPathMotion(binding, false)", reserve_entry_pos)
+    clear_vector_pos = player_mana_hook_text.find(
+        "ClearWizardBotMovementVectorInputs(actor_address)", stop_path_pos)
+    stop_intent_pos = player_mana_hook_text.find(
+        "multiplayer::StopBot(binding->bot_id)", clear_vector_pos)
+    clear_facing_pos = player_mana_hook_text.find(
+        "FaceBotTarget(binding->bot_id, 0, false, 0.0f)", stop_intent_pos)
+    facing_latch_pos = player_mana_hook_text.find(
+        "binding->mana_reserve_movement_facing_latched = true",
+        clear_facing_pos,
+    )
+    if not (
+        0 <= reserve_entry_pos < stop_path_pos < clear_vector_pos
+        < stop_intent_pos < clear_facing_pos < facing_latch_pos
+    ):
+        raise StaticReTestFailure(
+            "native mana reserve entry must cancel residual path motion "
+            "before latching movement-facing")
 
     refresh_pos = casting_text.find("ApplyManaReserveStateToSnapshot(&live_snapshot)")
     reserve_reject_pos = casting_text.find("cast rejected for mana reserve")

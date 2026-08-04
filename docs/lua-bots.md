@@ -278,8 +278,9 @@ from its configured host and runs the ordinary packet-driven remote-player
 presentation path.
 
 Movement intent may carry either target-facing or a path heading. During mana
-reserve, a moving bot clears stale cast target-facing and the loader drives the
-actor from the path heading, so a fleeing wizard faces its direction of travel.
+reserve entry, the loader cancels the prior combat path and clears stale cast
+target-facing. Once the brain supplies a flee path, the loader drives the actor
+from that path heading, so a fleeing wizard faces its direction of travel.
 Ordinary target-facing becomes eligible again after reserve clears and the
 brain requests a nonzero combat-facing target.
 
