@@ -159,6 +159,7 @@ def _launch(
     discipline: str,
     max_participants: int,
     participant_id: int = PARTICIPANT_ID,
+    test_wave_override: Path | None = None,
 ) -> dict[str, Any]:
     ledger = evidence_root / "safety" / "process-ledger.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -210,6 +211,10 @@ def _launch(
         "-ProcessIdOutputPath",
         windows_path(ledger),
     ]
+    if test_wave_override is not None:
+        command.extend(
+            ["-TestWaveOverride", windows_path(test_wave_override)]
+        )
     environment = os.environ.copy()
     environment["SDMOD_DISABLE_AUDIO"] = "1"
     environment["SDMOD_ENABLE_AUDIO"] = "0"
