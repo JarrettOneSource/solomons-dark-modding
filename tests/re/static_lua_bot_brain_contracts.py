@@ -439,6 +439,9 @@ def test_lua_bot_brain_is_rostered_native_routed_and_damage_gated() -> str:
         'context.row.behavior == "guardian"',
         "CAST_MANA_HOLD_LOW_RATIO = 0.10",
         "CAST_MANA_RESUME_HIGH_RATIO = 0.80",
+        "context.local_player ~= true",
+        "snapshot.mana_reserve_active",
+        "native_reserve_active ~= nil",
     ):
         assert token in brain, f"bot behavior policy lacks: {token}"
 

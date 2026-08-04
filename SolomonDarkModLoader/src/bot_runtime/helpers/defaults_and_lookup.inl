@@ -291,9 +291,9 @@ bool UpdateBotManaReserveStateLocked(std::uint64_t bot_id, float current_mp, flo
     }
 
     const bool was_active = state->active;
-    if (ratio < kBotManaReserveEnterRatio) {
+    if (ratio <= kBotManaReserveEnterRatio) {
         state->active = true;
-    } else if (ratio > kBotManaReserveExitRatio) {
+    } else if (ratio >= kBotManaReserveExitRatio) {
         state->active = false;
     }
     state->last_ratio = ratio;

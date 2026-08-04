@@ -992,8 +992,8 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
         "bool mana_reserve_active = false",
         "struct BotManaReserveState",
         "std::vector<BotManaReserveState> g_bot_mana_reserves",
-        "ratio < kBotManaReserveEnterRatio",
-        "ratio > kBotManaReserveExitRatio",
+        "ratio <= kBotManaReserveEnterRatio",
+        "ratio >= kBotManaReserveExitRatio",
         "UpdateBotManaReserveStateLocked",
         "RefreshBotManaReserveState",
         "ApplyManaReserveStateToSnapshot(&live_snapshot)",
@@ -1043,11 +1043,11 @@ def test_bot_mana_reserve_uses_hysteresis_for_casting() -> str:
             "bot mana reserve hysteresis is missing native cast token(s): " +
             ", ".join(missing))
 
-    enter_pos = lookup_text.find("ratio < kBotManaReserveEnterRatio")
-    exit_pos = lookup_text.find("ratio > kBotManaReserveExitRatio")
+    enter_pos = lookup_text.find("ratio <= kBotManaReserveEnterRatio")
+    exit_pos = lookup_text.find("ratio >= kBotManaReserveExitRatio")
     if not (0 <= enter_pos < exit_pos):
         raise StaticReTestFailure(
-            "bot mana reserve must enter below the low threshold and exit above the high threshold")
+            "bot mana reserve must include the exact low and high thresholds")
 
     refresh_pos = casting_text.find("ApplyManaReserveStateToSnapshot(&live_snapshot)")
     reserve_reject_pos = casting_text.find("cast rejected for mana reserve")

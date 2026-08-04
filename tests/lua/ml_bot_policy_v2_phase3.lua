@@ -595,6 +595,7 @@ local pickup_request_participant_id = 0
 local chosen_options = {}
 local mana_current = 100.0
 local mana_maximum = 100.0
+local mana_reserve_active = false
 _G.sd = {
   runtime = {
     get_multiplayer_state = function()
@@ -614,6 +615,7 @@ _G.sd = {
       return {
         mp = mana_current,
         max_mp = mana_maximum,
+        mana_reserve_active = mana_reserve_active,
       }
     end,
   },
@@ -684,7 +686,8 @@ assert(string.find(brain_logs[1], "chosen_id=64", 1, true))
 assist_context.bot = {}
 assist_context.mana_sample_valid = false
 assist_context.mana_cast_hold = false
-mana_current = 9.0
+mana_current = 10.0
+mana_reserve_active = true
 assert(brain.update_mana_cast_hold(assist_context))
 assert(assist_context.mana_cast_hold)
 assert(assist_context.debug.mana_hold_start_count == 1)
@@ -693,6 +696,7 @@ assert(brain.update_mana_cast_hold(assist_context))
 assert(assist_context.mana_cast_hold)
 assert(assist_context.debug.mana_hold_end_count == 0)
 mana_current = 80.0
+mana_reserve_active = false
 assert(brain.update_mana_cast_hold(assist_context))
 assert(not assist_context.mana_cast_hold)
 assert(assist_context.debug.mana_hold_end_count == 1)

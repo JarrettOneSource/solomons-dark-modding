@@ -158,6 +158,7 @@ def _launch(
     element: str,
     discipline: str,
     max_participants: int,
+    participant_id: int = PARTICIPANT_ID,
 ) -> dict[str, Any]:
     ledger = evidence_root / "safety" / "process-ledger.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -181,7 +182,7 @@ def _launch(
         "-UnusedRemotePort",
         str(unused_remote_port),
         "-ParticipantId",
-        f"0x{PARTICIPANT_ID:X}",
+        f"0x{participant_id:X}",
         "-PlayerName",
         "Bply Solo",
         "-GameDirectory",

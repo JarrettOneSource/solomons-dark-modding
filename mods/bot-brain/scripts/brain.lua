@@ -120,6 +120,23 @@ local function read_skill_choices(context)
 end
 
 local function read_own_mana(context)
+  if context.local_player ~= true then
+    local snapshot_ok, snapshot = pcall(
+      sd.bots.get_participant_state,
+      context.participant_id)
+    if not snapshot_ok or type(snapshot) ~= "table" or
+        type(snapshot.mana_reserve_active) ~= "boolean" then
+      return nil, nil, nil
+    end
+    local current = tonumber(snapshot.mp)
+    local maximum = tonumber(snapshot.max_mp)
+    if current == nil or maximum == nil or
+        current ~= current or maximum <= 0.0 then
+      return nil, nil, nil
+    end
+    return current, maximum, snapshot.mana_reserve_active
+  end
+
   local handle_ok, current, maximum = pcall(function()
     return context.bot:mp(), context.bot:max_mp()
   end)
@@ -127,26 +144,14 @@ local function read_own_mana(context)
   maximum = tonumber(maximum)
   if handle_ok and current ~= nil and maximum ~= nil and
       current == current and maximum > 0.0 then
-    return current, maximum
+    return current, maximum, nil
   end
-
-  local snapshot_ok, snapshot = pcall(
-    sd.bots.get_participant_state,
-    context.participant_id)
-  if not snapshot_ok or type(snapshot) ~= "table" then
-    return nil, nil
-  end
-  current = tonumber(snapshot.mp)
-  maximum = tonumber(snapshot.max_mp)
-  if current == nil or maximum == nil or
-      current ~= current or maximum <= 0.0 then
-    return nil, nil
-  end
-  return current, maximum
+  return nil, nil, nil
 end
 
 local function update_mana_cast_hold(context)
-  local current, maximum = read_own_mana(context)
+  local current, maximum, native_reserve_active =
+    read_own_mana(context)
   if current == nil or maximum == nil then
     context.mana_sample_valid = false
     context.debug.mana_sample_valid = false
@@ -159,8 +164,18 @@ local function update_mana_cast_hold(context)
   context.debug.mp = current
   context.debug.max_mp = maximum
   context.debug.mp_ratio = ratio
-  if not context.mana_cast_hold and
+  local next_hold = context.mana_cast_hold
+  if native_reserve_active ~= nil then
+    next_hold = native_reserve_active
+  elseif not next_hold and
       ratio <= CAST_MANA_HOLD_LOW_RATIO then
+    next_hold = true
+  elseif next_hold and
+      ratio >= CAST_MANA_RESUME_HIGH_RATIO then
+    next_hold = false
+  end
+
+  if not context.mana_cast_hold and next_hold then
     context.mana_cast_hold = true
     context.debug.mana_cast_hold = true
     context.debug.mana_hold_start_count =
@@ -174,8 +189,7 @@ local function update_mana_cast_hold(context)
       " ratio=" .. tostring(ratio) ..
       " low=" .. tostring(CAST_MANA_HOLD_LOW_RATIO) ..
       " high=" .. tostring(CAST_MANA_RESUME_HIGH_RATIO))
-  elseif context.mana_cast_hold and
-      ratio >= CAST_MANA_RESUME_HIGH_RATIO then
+  elseif context.mana_cast_hold and not next_hold then
     context.mana_cast_hold = false
     context.debug.mana_cast_hold = false
     context.debug.mana_hold_end_count =
