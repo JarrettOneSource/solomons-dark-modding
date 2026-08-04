@@ -363,7 +363,6 @@ void LogRejectedExtendedHostileTargetCandidate(
         return;
     }
     s_last_diagnostic_ms = now_ms;
-
     uintptr_t candidate_world_address = 0;
     std::int32_t candidate_actor_group = -1;
     std::int32_t candidate_world_slot = -1;
