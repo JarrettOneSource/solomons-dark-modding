@@ -404,6 +404,41 @@ def test_boneyard_picker_owns_its_keys_and_centers_row_text() -> str:
     # game must never see their edges. An unconsumed Escape edge opened the
     # pause menu on top of the picker (owner-reported cascade: pause menu ->
     # native picker -> unintended match start).
+    internal = _read("SolomonDarkModLoader/src/boneyard_picker/internal.inl")
+    picker_public = _read("SolomonDarkModLoader/src/boneyard_picker/public.inl")
+    # Boneyard authority = host OR solo (no transport session); only a
+    # connected client defers to the host. Gating on IsLocalTransportHost()
+    # alone silently skipped the picker in stock single-player.
+    _require(
+        internal,
+        (
+            "bool HasBoneyardAuthority() {",
+            "multiplayer::IsLocalTransportHost() ||",
+            "!multiplayer::IsLocalTransportClient()",
+        ),
+        "picker solo/host authority predicate",
+    )
+    if "ShouldHijackHostBoneyardStart() {\n    if (!HasBoneyardAuthority())" not in picker_public:
+        raise StaticReTestFailure(
+            "map-picker start hijack must gate on HasBoneyardAuthority so "
+            "solo players get the picker"
+        )
+    if "if (!multiplayer::IsLocalTransportHost() || participant_id == 0 ||" not in picker_public:
+        raise StaticReTestFailure(
+            "remote resolution packets must remain genuinely host-only"
+        )
+    # GetAsyncKeyState is global; the picker must ignore key edges typed
+    # into other applications while the game is backgrounded.
+    _require(
+        internal,
+        (
+            "bool GameWindowIsForeground() {",
+            "GetWindowThreadProcessId(foreground, &process_id);",
+            "if (!GameWindowIsForeground()) {",
+        ),
+        "picker foreground-input gate",
+    )
+
     _require(
         input_hooks,
         (

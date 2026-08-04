@@ -51,6 +51,17 @@ struct BoneyardPickerState {
 
 BoneyardPickerState g_picker;
 
+// Boneyard authority belongs to whoever gets to choose the map: the
+// multiplayer host, or a solo player with no transport session at all.
+// Only a connected CLIENT defers to the host's selection. Gating on
+// IsLocalTransportHost() alone silently skipped the picker in stock
+// single-player (owner-reported: Play with boneyard mods staged went
+// straight to the stock flow).
+bool HasBoneyardAuthority() {
+    return multiplayer::IsLocalTransportHost() ||
+        !multiplayer::IsLocalTransportClient();
+}
+
 bool IsZeroDigest(const BoneyardPickerDigest& digest) {
     return std::all_of(
         digest.begin(),
@@ -266,7 +277,7 @@ bool OpenPickerLocked(
         }
         return false;
     }
-    if (!multiplayer::IsLocalTransportHost()) {
+    if (!HasBoneyardAuthority()) {
         if (error_message != nullptr) {
             *error_message =
                 "Only the multiplayer host can open the Boneyard picker.";
@@ -336,13 +347,29 @@ void MovePickerCursor(int delta) {
     }
 }
 
+// GetAsyncKeyState reports global key edges, so without this gate the
+// picker reacted to keystrokes typed into other applications while the
+// game was backgrounded (the stock game only reads input when focused).
+bool GameWindowIsForeground() {
+    const auto foreground = GetForegroundWindow();
+    if (foreground == nullptr) {
+        return false;
+    }
+    DWORD process_id = 0;
+    GetWindowThreadProcessId(foreground, &process_id);
+    return process_id == GetCurrentProcessId();
+}
+
 void ProcessPickerInput() {
+    if (!GameWindowIsForeground()) {
+        return;
+    }
     bool accepts_input = false;
     std::size_t cursor = 0;
     {
         std::scoped_lock lock(g_picker.mutex);
         accepts_input =
-            g_picker.picker_open && multiplayer::IsLocalTransportHost();
+            g_picker.picker_open && HasBoneyardAuthority();
         cursor = g_picker.cursor_index;
     }
     if (!accepts_input) {

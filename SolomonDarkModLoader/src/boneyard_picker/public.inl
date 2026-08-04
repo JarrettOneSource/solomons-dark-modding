@@ -40,7 +40,7 @@ bool PickBoneyard(
     }
     std::scoped_lock lock(g_picker.mutex);
     if (!g_picker.initialized || !g_picker.picker_open ||
-        !multiplayer::IsLocalTransportHost()) {
+        !HasBoneyardAuthority()) {
         if (error_message != nullptr) {
             *error_message = "The host Boneyard picker is not open.";
         }
@@ -66,7 +66,7 @@ bool CancelBoneyardPicker(std::string* error_message) {
     }
     std::scoped_lock lock(g_picker.mutex);
     if (!g_picker.initialized || !g_picker.picker_open ||
-        !multiplayer::IsLocalTransportHost()) {
+        !HasBoneyardAuthority()) {
         if (error_message != nullptr) {
             *error_message = "The host Boneyard picker is not open.";
         }
@@ -228,7 +228,7 @@ void PumpBoneyardPickerOnGameThread() {
     {
         std::scoped_lock lock(g_picker.mutex);
         if (g_picker.initialized &&
-            multiplayer::IsLocalTransportHost() &&
+            HasBoneyardAuthority() &&
             !IsZeroDigest(g_picker.selected_digest) &&
             now_ms >= g_picker.next_peer_resolution_refresh_ms) {
             refresh_host_resolutions = true;
@@ -272,7 +272,7 @@ void PumpBoneyardPickerOnGameThread() {
             ClearAuthoritativeSelectionLocked();
             g_picker.phase = BoneyardPickerPhase::Closed;
         } else if (g_picker.picker_open &&
-                   multiplayer::IsLocalTransportHost() &&
+                   HasBoneyardAuthority() &&
                    !IsZeroDigest(g_picker.selected_digest) &&
                    !g_picker.native_launch_dispatched &&
                    host_ready) {
@@ -342,7 +342,7 @@ void RenderBoneyardPickerAfterStockHud() {
 }
 
 bool ShouldHijackHostBoneyardStart() {
-    if (!multiplayer::IsLocalTransportHost()) {
+    if (!HasBoneyardAuthority()) {
         return false;
     }
     std::scoped_lock lock(g_picker.mutex);
