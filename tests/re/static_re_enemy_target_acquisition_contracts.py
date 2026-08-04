@@ -473,6 +473,9 @@ def test_enemy_retarget_is_authoritative_nearest_and_event_driven() -> str:
     )
     skip_retail = selector.index("return;", extended_commit)
     retail_selector = selector.index("original(self, nullptr);")
+    assert '"native_selector")) {' in selector[
+        extended_commit:skip_retail
+    ]
     assert (
         priority_policy
         < preselection

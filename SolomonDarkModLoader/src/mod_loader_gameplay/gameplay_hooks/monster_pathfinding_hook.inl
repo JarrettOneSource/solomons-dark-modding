@@ -274,11 +274,11 @@ void __fastcall HookMonsterPathfindingSelectNearestTarget(
             0,
             &selection) &&
         selection.valid &&
-        !selection.retail_selector_can_commit) {
-        (void)ApplyHostileTargetSelection(
+        !selection.retail_selector_can_commit &&
+        ApplyHostileTargetSelection(
             hostile_actor_address,
             selection,
-            "native_selector");
+            "native_selector")) {
         return;
     }
 
