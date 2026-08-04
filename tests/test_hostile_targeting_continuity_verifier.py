@@ -36,14 +36,14 @@ class HostileTargetingContinuityVerifierTests(unittest.TestCase):
         self.assertEqual(
             _enemy_network_ids_from_log(
                 "\n".join((
-                    "assigned host-local run actor network id. "
-                    "actor=0x111 network_actor_id=48059",
+                    "enemy.spawned hook invoked. enemy=0x111 "
+                    "spawn_serial=11 enemy_type=1001",
                     "assigned host-local run actor network id. "
                     "actor=0x222 network_actor_id=43690",
                 )),
                 [273, 546],
             ),
-            [0xAAAA, 0xBBBB],
+            [0xAAAA, 0x100000000000B],
         )
         with self.assertRaises(HostileTargetingContinuityFailure):
             _enemy_network_ids_from_log(

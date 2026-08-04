@@ -708,6 +708,12 @@ _NETWORK_ASSIGNMENT = re.compile(
     r".*?network_actor_id=(\d+)",
     re.IGNORECASE,
 )
+_SPAWN_ASSIGNMENT = re.compile(
+    r"enemy\.spawned hook invoked\. enemy=0x([0-9a-f]+)"
+    r"\s+spawn_serial=(\d+)",
+    re.IGNORECASE,
+)
+_RUN_WORLD_ACTOR_NETWORK_ID_BASE = 0x1000000000000
 
 
 def _enemy_network_ids_from_log(
@@ -715,8 +721,17 @@ def _enemy_network_ids_from_log(
     actor_addresses: list[int],
 ) -> list[int]:
     assignments: dict[int, int] = {}
-    for match in _NETWORK_ASSIGNMENT.finditer(text):
-        assignments[int(match.group(1), 16)] = int(match.group(2))
+    for line in text.splitlines():
+        spawn = _SPAWN_ASSIGNMENT.search(line)
+        if spawn is not None:
+            assignments[int(spawn.group(1), 16)] = (
+                _RUN_WORLD_ACTOR_NETWORK_ID_BASE | int(spawn.group(2))
+            )
+        host_local = _NETWORK_ASSIGNMENT.search(line)
+        if host_local is not None:
+            assignments[int(host_local.group(1), 16)] = int(
+                host_local.group(2)
+            )
     network_ids = [assignments.get(address, 0) for address in actor_addresses]
     if (
         any(network_id <= 0 for network_id in network_ids)
