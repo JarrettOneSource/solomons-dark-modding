@@ -129,7 +129,7 @@ void ResolveSelectedEntryLocked(std::uint64_t now_ms) {
     }
 }
 
-void ApplyPendingPickLocked(
+bool ApplyPendingPickLocked(
     std::size_t index,
     std::uint64_t now_ms) {
     if (g_picker.catalog == nullptr ||
@@ -137,7 +137,18 @@ void ApplyPendingPickLocked(
         g_picker.phase = BoneyardPickerPhase::Error;
         g_picker.error_message =
             "The queued Boneyard picker entry is no longer available.";
-        return;
+        return false;
+    }
+
+    const auto& entry = g_picker.catalog->entries[index];
+    if (entry.kind == BoneyardPickerEntryKind::Default) {
+        ClearAuthoritativeSelectionLocked();
+        g_picker.selected_index = index;
+        g_picker.cursor_index = index;
+        g_picker.picker_open = false;
+        g_picker.phase = BoneyardPickerPhase::Launching;
+        Log("Boneyard picker Default selection accepted. index=0");
+        return true;
     }
 
     g_picker.selected_index = index;
@@ -155,7 +166,6 @@ void ApplyPendingPickLocked(
     g_picker.native_launch_dispatched = false;
     g_picker.phase = BoneyardPickerPhase::WaitingForPeers;
     ResolveSelectedEntryLocked(now_ms);
-    const auto& entry = g_picker.catalog->entries[index];
     Log(
         "Boneyard picker host selection published. revision=" +
         std::to_string(g_picker.selection_revision) +
@@ -165,4 +175,5 @@ void ApplyPendingPickLocked(
         " file=" + entry.filename +
         " resolution=" +
         BoneyardResolutionStatusLabel(g_picker.local_resolution));
+    return false;
 }

@@ -23,10 +23,10 @@ Only the multiplayer authority may open the picker or publish a selection.
 Clients never choose a replacement. A connected transport client neither
 renders nor activates the Courtyard start-run control; it follows only an
 authenticated host run intent. Solo is an authority and retains the same
-stock-or-custom behavior as the host. The authority hooks remain installed
-with zero catalog entries so client suppression does not depend on custom
-content; in that case their host and solo branches call the untouched stock
-trampoline.
+Default-or-custom behavior as the host. The authority hooks remain installed
+with zero custom entries so client suppression does not depend on custom
+content; in that case their host and solo branches queue the loader-owned
+stock generated run directly.
 
 ## Staged catalog
 
@@ -55,6 +55,12 @@ The runtime bootstrap adds `boneyard_count` and `[boneyard.N]` sections. This
 keeps source attribution after overlays are applied, including Boneyard-only
 mods that do not have a Lua entry script.
 
+The runtime provider prepends one built-in `Default` entry after parsing the
+bootstrap. Default is always catalog index zero. It is a typed control-plane
+entry representing the stock generated run, not a staged file, so it has no
+fabricated mod identity, digest, path, or preview metadata. Every bootstrap
+entry follows it in its existing launcher order.
+
 ## Frontend provider contract
 
 ATC builds against `SolomonDarkModLoader/include/boneyard_picker.h`. The stable
@@ -70,7 +76,10 @@ bool CancelBoneyardPicker(std::string* error_message);
 `std::shared_ptr<const BoneyardPickerCatalog>`. The catalog is immutable for
 the process lifetime, so polling the snapshot is constant-size and does not
 copy a large entry list. `catalog->entries` contains
-`BoneyardPickerEntry` records with exactly the staged fields above.
+one typed Default record followed by typed custom `BoneyardPickerEntry`
+records with the staged fields above. `catalog->custom_entry_count` controls
+whether the picker is presented; the built-in row does not make an otherwise
+empty custom catalog open a picker.
 
 The snapshot reports one of:
 
@@ -116,31 +125,40 @@ Courtyard start render at 0x0050DBF0
 
 Courtyard start activation at 0x0050E5E0
   connected transport client                 -> suppress
-  host or solo, no custom catalog entries    -> stock trampoline
+  host or solo, zero custom Boneyards         -> queue the stock generated Default run
   host or solo, custom catalog present       -> open picker provider
 ```
 
 Both authority hooks are installed regardless of catalog size. The optional
 full-HUD custom-picker renderer at `0x005D2520` is installed only for a nonempty
-catalog. A zero-entry host or solo process therefore runs the start renderer
-and activation byte-for-byte through their trampolines without installing the
-custom-picker HUD renderer. A connected client returns before either trampoline,
-so there is no stock-picker fallback.
+custom catalog. A zero-custom host or solo process therefore runs the start
+renderer through its trampoline but queues the generated run instead of
+calling the MapPicker start trampoline.
+A connected client returns before either authority branch, so it reaches
+neither Default nor custom dispatch. The decision is
+`zero custom Boneyards -> queue the stock generated Default run`; one or more
+opens the loader picker.
 
 A second start-control activation while the loader picker is open is treated
-as `CancelBoneyardPicker()`. Cancel clears any pending custom selection and
-calls the stock trampoline on the live Courtyard. The ordinary stock
-`MapPicker` then opens and owns selection or its own cancel path.
+as `CancelBoneyardPicker()`. Cancel closes only the loader picker, clears any
+pending custom selection, and stays in the Courtyard. It never opens the stock
+`MapPicker`.
 
 `QueueHubStartMatch()` uses the same provider decision so Lua/input-driven
 multiplayer start requests cannot bypass the authority picker. Its zero-entry
-path remains the existing generated-run queue.
+path and the Default row both use `QueueHubDefaultBoneyardRun()`, the existing
+generated-run queue.
 
 ## Selection and stock launch handoff
 
-The selected wire value is the 32-byte content SHA-256. Absolute paths never
-cross the network. Each peer resolves the digest against its immutable local
-catalog.
+For a custom entry, the selected wire value is the 32-byte content SHA-256.
+Absolute paths never cross the network. Each peer resolves the digest against
+its immutable local catalog.
+
+Default publishes no content digest. Selecting it closes the loader picker,
+clears any prior custom selection state, and queues the stock generated run.
+The existing authenticated Run intent and host-authored generation seed drive
+client entry; the native story-map picker is not involved.
 
 Once the authority and all connected human peers resolve the selection, the
 game-thread handoff:

@@ -176,7 +176,7 @@ def test_default_boneyard_is_pinned_and_bypasses_the_native_picker() -> str:
             "entry.kind == BoneyardPickerEntryKind::Default",
             'std::string("STOCK")',
             '"The stock generated boneyard."',
-            '"Esc cancel"',
+            "Esc cancel",
         ),
         "Default picker presentation",
     )

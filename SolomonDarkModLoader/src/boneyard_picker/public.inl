@@ -108,10 +108,16 @@ bool InitializeBoneyardPicker(
         error_message->clear();
     }
     auto catalog = std::make_shared<BoneyardPickerCatalog>();
-    catalog->entries.reserve(bootstrap.boneyards.size());
+    catalog->entries.reserve(bootstrap.boneyards.size() + 1);
+    catalog->custom_entry_count = bootstrap.boneyards.size();
+    BoneyardPickerEntry default_entry;
+    default_entry.kind = BoneyardPickerEntryKind::Default;
+    default_entry.display_name = "Default";
+    catalog->entries.push_back(std::move(default_entry));
     std::unordered_map<std::string, std::size_t> entry_by_digest;
     for (const auto& descriptor : bootstrap.boneyards) {
         BoneyardPickerEntry entry;
+        entry.kind = BoneyardPickerEntryKind::Custom;
         entry.display_name = descriptor.display_name;
         entry.source_mod_id = descriptor.source_mod_id;
         entry.source_mod_name = descriptor.source_mod_name;
@@ -150,7 +156,8 @@ bool InitializeBoneyardPicker(
         catalog->entries.push_back(std::move(entry));
     }
 
-    const bool has_custom_entries = !catalog->entries.empty();
+    const bool has_custom_entries =
+        catalog->custom_entry_count != 0;
     if (!InitializeGameplaySeams(error_message)) {
         return false;
     }
@@ -220,7 +227,8 @@ bool InitializeBoneyardPicker(
         " start_affordance_render_hook=" +
         HexString(start_affordance_render_target) +
         " custom_render_hook=" + HexString(render_target) +
-        " entries=" + std::to_string(g_picker.catalog->entries.size()));
+        " entries=" +
+        std::to_string(g_picker.catalog->custom_entry_count));
     return true;
 }
 
@@ -275,8 +283,8 @@ void PumpBoneyardPickerOnGameThread() {
 
     BoneyardPickerEntry dispatch_entry;
     uintptr_t dispatch_courtyard = 0;
+    bool dispatch_default = false;
     bool dispatch_selection = false;
-    bool dispatch_cancel = false;
     {
         std::scoped_lock lock(g_picker.mutex);
         if (!g_picker.initialized) {
@@ -295,14 +303,13 @@ void PumpBoneyardPickerOnGameThread() {
             g_picker.pending_event = PendingFrontendEvent::None;
             g_picker.pending_selection_index =
                 kBoneyardPickerNoSelection;
-            ApplyPendingPickLocked(index, now_ms);
+            dispatch_default = ApplyPendingPickLocked(index, now_ms);
         } else if (g_picker.pending_event == PendingFrontendEvent::Cancel) {
             g_picker.pending_event = PendingFrontendEvent::None;
-            dispatch_cancel = true;
-            dispatch_courtyard = g_picker.courtyard_address;
             g_picker.picker_open = false;
             ClearAuthoritativeSelectionLocked();
             g_picker.phase = BoneyardPickerPhase::Closed;
+            Log("Boneyard picker canceled.");
         } else if (g_picker.picker_open &&
                    HasBoneyardAuthority() &&
                    !IsZeroDigest(g_picker.selected_digest) &&
@@ -331,18 +338,15 @@ void PumpBoneyardPickerOnGameThread() {
         }
     }
 
-    if (dispatch_cancel) {
-        std::string cancel_error;
-        if (!ApplyStockSelectionAndOpenNativePicker(
-                nullptr,
-                dispatch_courtyard,
-                true,
-                &cancel_error)) {
+    if (dispatch_default) {
+        std::string default_error;
+        if (!QueueHubDefaultBoneyardRun(&default_error)) {
             std::scoped_lock lock(g_picker.mutex);
+            g_picker.picker_open = true;
             g_picker.phase = BoneyardPickerPhase::Error;
-            g_picker.error_message = std::move(cancel_error);
+            g_picker.error_message = std::move(default_error);
         } else {
-            Log("Boneyard picker canceled; stock MapPicker flow resumed.");
+            Log("Boneyard picker Default run queued.");
         }
     } else if (dispatch_selection) {
         std::string launch_error;
@@ -379,7 +383,7 @@ bool ShouldHijackHostBoneyardStart() {
     }
     std::scoped_lock lock(g_picker.mutex);
     return g_picker.initialized && g_picker.catalog != nullptr &&
-        !g_picker.catalog->entries.empty();
+        g_picker.catalog->custom_entry_count != 0;
 }
 
 bool OpenHostBoneyardPicker(std::string* error_message) {

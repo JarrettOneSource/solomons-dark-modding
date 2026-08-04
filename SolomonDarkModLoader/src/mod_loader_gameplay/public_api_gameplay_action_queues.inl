@@ -134,11 +134,15 @@ static bool QueueHubRunStartRequest(
     return true;
 }
 
+bool QueueHubDefaultBoneyardRun(std::string* error_message) {
+    return QueueHubRunStartRequest(true, error_message);
+}
+
 bool QueueHubStartMatch(std::string* error_message) {
     if (ShouldHijackHostBoneyardStart()) {
         return OpenHostBoneyardPicker(error_message);
     }
-    return QueueHubRunStartRequest(true, error_message);
+    return QueueHubDefaultBoneyardRun(error_message);
 }
 
 bool QueueHubStartTestrun(std::string* error_message) {

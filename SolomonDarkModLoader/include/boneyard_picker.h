@@ -39,7 +39,13 @@ struct BoneyardPickerPreviewMetadata {
     std::uint32_t max_depth = 0;
 };
 
+enum class BoneyardPickerEntryKind : std::uint8_t {
+    Default = 0,
+    Custom = 1,
+};
+
 struct BoneyardPickerEntry {
+    BoneyardPickerEntryKind kind = BoneyardPickerEntryKind::Custom;
     std::string display_name;
     std::string source_mod_id;
     std::string source_mod_name;
@@ -57,6 +63,7 @@ struct BoneyardPickerEntry {
 
 struct BoneyardPickerCatalog {
     std::vector<BoneyardPickerEntry> entries;
+    std::size_t custom_entry_count = 0;
 };
 
 struct BoneyardPickerSnapshot {

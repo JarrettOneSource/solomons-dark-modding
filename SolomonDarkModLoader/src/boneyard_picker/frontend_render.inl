@@ -112,6 +112,9 @@ std::vector<std::string> WrapPickerText(
 std::size_t CountPickerSourceMods(const BoneyardPickerCatalog& catalog) {
     std::unordered_set<std::string> mods;
     for (const auto& entry : catalog.entries) {
+        if (entry.kind == BoneyardPickerEntryKind::Default) {
+            continue;
+        }
         mods.insert(entry.source_mod_id);
     }
     return mods.size();
@@ -213,13 +216,13 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
     const bool has_entries =
         snapshot.catalog != nullptr && !snapshot.catalog->entries.empty();
     if (has_entries) {
-        const auto entry_count = snapshot.catalog->entries.size();
+        const auto entry_count = snapshot.catalog->custom_entry_count;
         const auto mod_count = CountPickerSourceMods(*snapshot.catalog);
         char count_line[96];
         std::snprintf(
             count_line,
             sizeof(count_line),
-            "%zu boneyard%s from %zu mod%s",
+            "%zu custom boneyard%s from %zu mod%s",
             entry_count,
             entry_count == 1 ? "" : "s",
             mod_count,
@@ -307,7 +310,9 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
 
             std::string row_meta = is_committed_selection
                 ? std::string("[SELECTED]")
-                : entry.source_mod_name;
+                : entry.kind == BoneyardPickerEntryKind::Default
+                    ? std::string("STOCK")
+                    : entry.source_mod_name;
             row_meta = TruncatePickerText(row_meta, meta_chars);
             DrawPickerStockText(
                 row_meta,
@@ -376,6 +381,8 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
 
     if (has_entries) {
         const auto& entry = snapshot.catalog->entries[cursor];
+        const bool is_default =
+            entry.kind == BoneyardPickerEntryKind::Default;
 
         DrawPickerStockText(
             TruncatePickerText(
@@ -387,7 +394,7 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             detail_y,
             detail_name_scale);
 
-        if (!entry.updated_utc.empty()) {
+        if (!is_default && !entry.updated_utc.empty()) {
             const std::string updated = "Updated " + entry.updated_utc;
             DrawPickerStockText(
                 updated,
@@ -399,10 +406,13 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
         detail_y += kPickerStockLineHeight * detail_name_scale +
             6.0f * ui_scale;
 
+        const std::string source_line = is_default
+            ? "Built into Solomon's Dark"
+            : "from " + entry.source_mod_name + " v" +
+                entry.source_mod_version;
         DrawPickerStockText(
             TruncatePickerText(
-                "from " + entry.source_mod_name + " v" +
-                    entry.source_mod_version,
+                source_line,
                 PickerCharsPerLine(detail_inner_width, detail_meta_scale)),
             detail_x,
             detail_y,
@@ -410,7 +420,11 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
         detail_y += kPickerStockLineHeight * detail_meta_scale +
             6.0f * ui_scale;
 
-        const std::string& description = entry.source_mod_description;
+        const std::string default_description =
+            "The stock generated boneyard.";
+        const std::string& description = is_default
+            ? default_description
+            : entry.source_mod_description;
         if (!description.empty()) {
             const auto lines = WrapPickerText(
                 description,
@@ -480,7 +494,7 @@ void RenderBoneyardPickerUi(const BoneyardPickerSnapshot& snapshot) {
             "Entering " + TruncatePickerText(target, 40) + "...";
     } else {
         status_line =
-            "Up/Down select   PgUp/PgDn jump   Enter play   Esc stock maps";
+            "Up/Down select   PgUp/PgDn jump   Enter play   Esc cancel";
     }
     DrawPickerStockText(status_line, detail_x, footer_y, hint_scale);
 }

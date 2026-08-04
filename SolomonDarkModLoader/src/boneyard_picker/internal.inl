@@ -275,7 +275,7 @@ bool OpenPickerLocked(
         error_message->clear();
     }
     if (!g_picker.initialized || g_picker.catalog == nullptr ||
-        g_picker.catalog->entries.empty()) {
+        g_picker.catalog->custom_entry_count == 0) {
         if (error_message != nullptr) {
             *error_message = "No staged Boneyards are available.";
         }
@@ -308,16 +308,16 @@ bool OpenPickerLocked(
 void __fastcall HookMapPickerStart(
     void* courtyard,
     void* /*unused_edx*/) {
-    const auto original =
-        GetX86HookTrampoline<MapPickerStartFn>(g_picker.start_hook);
-    if (original == nullptr) {
-        return;
-    }
     if (!HasBoneyardAuthority()) {
         return;
     }
     if (!ShouldHijackHostBoneyardStart()) {
-        original(courtyard);
+        std::string start_error;
+        if (!QueueHubDefaultBoneyardRun(&start_error)) {
+            Log(
+                "Default Boneyard start request rejected. error=" +
+                start_error);
+        }
         return;
     }
 
@@ -326,11 +326,11 @@ void __fastcall HookMapPickerStart(
         g_picker.pending_event = PendingFrontendEvent::Cancel;
         return;
     }
-    std::string ignored_error;
+    std::string open_error;
     if (!OpenPickerLocked(
             reinterpret_cast<uintptr_t>(courtyard),
-            &ignored_error)) {
-        original(courtyard);
+            &open_error)) {
+        Log("Boneyard picker start request rejected. error=" + open_error);
     }
 }
 

@@ -67,6 +67,7 @@ bool QueueGameplayStartWaves(std::string* error_message);
 bool QueueGameplayEnableCombatPrelude(
     bool recover_untracked_wave,
     std::string* error_message);
+bool QueueHubDefaultBoneyardRun(std::string* error_message);
 bool QueueHubStartMatch(std::string* error_message);
 bool QueueHubStartTestrun(std::string* error_message);
 bool QueueHubOpenService(
