@@ -654,7 +654,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 retail_wave_path=source_path,
                 fixture_path=verifier.WAVE_FIXTURES["poison"],
                 output_path=output_path,
-                wave_delay_ticks=10000,
+                wave_delay_ticks=4096,
             )
 
             self.assertEqual(source_path.read_bytes(), retail_schedule)
@@ -674,7 +674,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
             self.assertEqual(effective.count(b"\tSPAWN:1\r\n"), 2)
             self.assertEqual(effective.count(b"\tMAXENEMIES:1\r\n"), 2)
             self.assertEqual(
-                effective.count(b"\tWAVEDELAY:10000-10000\r\n"),
+                effective.count(b"\tWAVEDELAY:4096-4096\r\n"),
                 2,
             )
             self.assertEqual(
@@ -685,7 +685,7 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 2,
             )
             self.assertEqual(manifest["record_count"], 2)
-            self.assertEqual(manifest["wave_delay_ticks"], 10000)
+            self.assertEqual(manifest["wave_delay_ticks"], 4096)
             self.assertEqual(manifest["next_graph"], ["1", "0,1"])
             self.assertEqual(
                 manifest["enemy_token"],
@@ -695,6 +695,17 @@ class OrganicPlayerDeathVerifierTests(unittest.TestCase):
                 manifest["retail_sha256"],
                 manifest["effective_sha256"],
             )
+
+            with self.assertRaisesRegex(
+                verifier.VerifyFailure,
+                "between 1 and 4096 ticks",
+            ):
+                verifier._materialize_native_wave_schedule(
+                    retail_wave_path=source_path,
+                    fixture_path=verifier.WAVE_FIXTURES["poison"],
+                    output_path=output_path,
+                    wave_delay_ticks=4097,
+                )
 
     def test_pre_wave_boneyard_enemies_cannot_satisfy_wave_selection(
         self,

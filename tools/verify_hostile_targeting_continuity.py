@@ -725,7 +725,7 @@ def _prepare_single_skeleton_wave(
         retail_wave_path=game_directory / "data" / "wave.txt",
         fixture_path=WAVE_FIXTURES["melee"],
         output_path=evidence_root / "inputs" / "single-skeleton-wave.txt",
-        wave_delay_ticks=10000,
+        wave_delay_ticks=4096,
     )
 
 

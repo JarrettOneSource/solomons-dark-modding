@@ -94,6 +94,7 @@ TARGET_LAYOUT_STABLE_TOLERANCE = 1.0
 TARGET_LAYOUT_MINIMUM_X_SEPARATION = 192.0
 TARGET_LAYOUT_PLACEMENT_ATTEMPTS = 4
 TARGET_LAYOUT_ATTEMPT_TIMEOUT_SECONDS = 2.0
+MAXIMUM_NATIVE_WAVE_DELAY_TICKS = 4096
 
 HOST_NATIVE_TARGET_LAYOUT_LUA = r"""
 local function emit(key, value)
@@ -429,8 +430,11 @@ def _materialize_native_wave_schedule(
     output_path: Path,
     wave_delay_ticks: int = 100,
 ) -> dict[str, Any]:
-    if wave_delay_ticks <= 0:
-        raise VerifyFailure("native wave delay must be positive")
+    if not 0 < wave_delay_ticks <= MAXIMUM_NATIVE_WAVE_DELAY_TICKS:
+        raise VerifyFailure(
+            "native wave delay must be between 1 and "
+            f"{MAXIMUM_NATIVE_WAVE_DELAY_TICKS} ticks"
+        )
     retail_bytes = retail_wave_path.read_bytes()
     retail_text = retail_bytes.decode("ascii")
     normalized = retail_text.replace("\r\n", "\n").replace("\r", "\n")
