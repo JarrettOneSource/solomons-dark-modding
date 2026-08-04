@@ -1,3 +1,97 @@
+void ResetParticipantEntityActorPresentationState(
+    ParticipantEntityBinding* binding) {
+    if (binding == nullptr) {
+        return;
+    }
+
+    binding->last_applied_animation_state_id =
+        kUnknownAnimationStateId - 1;
+    binding->standalone_idle_animation_drive_profile =
+        ObservedActorAnimationDriveProfile{};
+    binding->standalone_moving_animation_drive_profile =
+        ObservedActorAnimationDriveProfile{};
+    binding->standalone_progression_wrapper_address = 0;
+    binding->standalone_progression_inner_address = 0;
+    binding->standalone_equip_wrapper_address = 0;
+    binding->standalone_equip_inner_address = 0;
+    binding->gameplay_attach_applied = false;
+    binding->dynamic_walk_cycle_primary = 0.0f;
+    binding->dynamic_walk_cycle_secondary = 0.0f;
+    binding->dynamic_render_drive_stride = 0.0f;
+    binding->dynamic_render_advance_rate = 0.0f;
+    binding->dynamic_render_advance_phase = 0.0f;
+    binding->native_movement_accumulator_x = 0.0f;
+    binding->native_movement_accumulator_y = 0.0f;
+    binding->replicated_transform_valid = false;
+    binding->replicated_presentation_scene_epoch = 0;
+    binding->replicated_target_x = 0.0f;
+    binding->replicated_target_y = 0.0f;
+    binding->replicated_target_heading = 0.0f;
+    binding->replicated_movement_intent_x = 0.0f;
+    binding->replicated_movement_intent_y = 0.0f;
+    binding->replicated_presentation_valid = false;
+    binding->replicated_anim_drive_state = 0;
+    binding->replicated_presentation_flags = 0;
+    binding->replicated_attachment_staff_visual_state = 0;
+    binding->replicated_render_variant_primary = 0;
+    binding->replicated_render_variant_secondary = 0;
+    binding->replicated_render_weapon_type = 0;
+    binding->replicated_render_selection_byte = 0;
+    binding->replicated_render_variant_tertiary = 0;
+    binding->replicated_primary_visual_link_type_id = 0;
+    binding->replicated_secondary_visual_link_type_id = 0;
+    binding->replicated_primary_visual_link_recipe_uid = 0;
+    binding->replicated_secondary_visual_link_recipe_uid = 0;
+    binding->replicated_attachment_visual_link_type_id = 0;
+    binding->replicated_attachment_visual_link_recipe_uid = 0;
+    binding->replicated_primary_visual_link_color_block = {};
+    binding->replicated_secondary_visual_link_color_block = {};
+    binding->equipment_reconcile_not_before_ms = 0;
+    binding->replicated_anim_drive_state_word = 0;
+    binding->replicated_walk_cycle_primary = 0.0f;
+    binding->replicated_walk_cycle_secondary = 0.0f;
+    binding->replicated_render_drive_stride = 0.0f;
+    binding->replicated_render_advance_rate = 0.0f;
+    binding->replicated_render_advance_phase = 0.0f;
+    binding->replicated_magic_shield_absorb_remaining = 0.0f;
+    binding->replicated_magic_shield_absorb_capacity = 0.0f;
+    binding->replicated_magic_shield_explosion_fraction = 0.0f;
+    binding->replicated_magic_shield_hit_flash = 0.0f;
+    binding->native_remote_magic_shield_authority_pending = false;
+    binding->replicated_transform_packet_ms = 0;
+    binding->replicated_transform_playback_ms = 0;
+    binding->facing_heading_value = 0.0f;
+    binding->facing_heading_valid = false;
+    binding->facing_target_actor_address = 0;
+    binding->stock_tick_facing_origin_valid = false;
+    binding->stock_tick_facing_origin_x = 0.0f;
+    binding->stock_tick_facing_origin_y = 0.0f;
+    binding->suppress_next_stock_tick_after_spell_filter_cancel = false;
+    binding->death_transition_stock_tick_seen = false;
+    binding->local_death_presentation_started_ms = 0;
+    binding->last_applied_wave_respawn_run_nonce = 0;
+    binding->last_applied_wave_respawn_epoch = 0;
+    binding->native_remote_death_epoch_active = false;
+    binding->native_remote_death_attachment_actor_address = 0;
+    binding->native_remote_death_drop_spawned = false;
+    binding->native_remote_vital_baseline_valid = false;
+    binding->native_remote_last_written_hp = 0.0f;
+    binding->native_remote_last_written_max_hp = 0.0f;
+    binding->native_remote_webbed_authority_pending = false;
+    binding->native_remote_webbed_authority_pending_since_ms = 0;
+    binding->native_remote_webbed_owner_acknowledged = false;
+    binding->mana_recovery_not_before_ms = 0;
+    binding->last_mana_recovery_log_ms = 0;
+    binding->last_mana_reserve_cleanup_log_ms = 0;
+    binding->persistent_status_reconcile_desired_flags = 0;
+    binding->persistent_status_reconcile_desired_since_ms = 0;
+    binding->persistent_status_reconcile_not_before_ms = 0;
+    binding->transient_status_reconcile_desired_flags = 0;
+    binding->transient_status_reconcile_desired_since_ms = 0;
+    binding->transient_status_reconcile_not_before_ms = 0;
+    binding->ongoing_cast = ParticipantEntityBinding::OngoingCastState{};
+}
+
 void RememberParticipantEntity(
     std::uint64_t participant_id,
     const multiplayer::MultiplayerCharacterProfile& character_profile,
@@ -13,34 +107,11 @@ void RememberParticipantEntity(
     }
 
     if (binding->actor_address != 0 && binding->actor_address != actor_address) {
+        ResetParticipantEntityActorPresentationState(binding);
         binding->materialized_scene_address = 0;
         binding->materialized_world_address = 0;
         binding->materialized_region_index = -1;
-        binding->gameplay_attach_applied = false;
-        binding->standalone_idle_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-        binding->standalone_moving_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-        binding->standalone_progression_wrapper_address = 0;
-        binding->standalone_progression_inner_address = 0;
-        binding->standalone_equip_wrapper_address = 0;
-        binding->standalone_equip_inner_address = 0;
-        binding->dynamic_walk_cycle_primary = 0.0f;
-        binding->dynamic_walk_cycle_secondary = 0.0f;
-        binding->dynamic_render_drive_stride = 0.0f;
-        binding->dynamic_render_advance_rate = 0.0f;
-        binding->dynamic_render_advance_phase = 0.0f;
-        binding->native_movement_accumulator_x = 0.0f;
-        binding->native_movement_accumulator_y = 0.0f;
-        binding->facing_heading_valid = false;
-        binding->facing_heading_value = 0.0f;
-        binding->facing_target_actor_address = 0;
-        binding->stock_tick_facing_origin_valid = false;
-        binding->stock_tick_facing_origin_x = 0.0f;
-        binding->stock_tick_facing_origin_y = 0.0f;
-        binding->death_transition_stock_tick_seen = false;
-        binding->local_death_presentation_started_ms = 0;
-        binding->last_applied_wave_respawn_run_nonce = 0;
-        binding->last_applied_wave_respawn_epoch = 0;
-        binding->replicated_transform_playback_ms = 0;
+        binding->materialized_presentation_scene_epoch = 0;
     }
 
     const auto runtime_state = multiplayer::SnapshotRuntimeState();
@@ -50,44 +121,21 @@ void RememberParticipantEntity(
     binding->controller_kind =
         participant != nullptr ? participant->controller_kind
                                : multiplayer::ParticipantControllerKind::LuaBrain;
+    binding->materialized_presentation_scene_epoch =
+        actor_address != 0 && participant != nullptr
+            ? participant->runtime.presentation_scene_epoch
+            : 0;
     binding->actor_address = actor_address;
     binding->gameplay_slot = gameplay_slot;
     binding->kind = kind;
     binding->raw_allocation = raw_allocation;
     if (actor_address == 0) {
-        binding->gameplay_attach_applied = false;
-        binding->standalone_idle_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-        binding->standalone_moving_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-        binding->standalone_progression_wrapper_address = 0;
-        binding->standalone_progression_inner_address = 0;
-        binding->standalone_equip_wrapper_address = 0;
-        binding->standalone_equip_inner_address = 0;
+        ResetParticipantEntityActorPresentationState(binding);
+        binding->materialized_scene_address = 0;
+        binding->materialized_world_address = 0;
+        binding->materialized_region_index = -1;
+        binding->materialized_presentation_scene_epoch = 0;
         binding->raw_allocation = false;
-        binding->dynamic_walk_cycle_primary = 0.0f;
-        binding->dynamic_walk_cycle_secondary = 0.0f;
-        binding->dynamic_render_drive_stride = 0.0f;
-        binding->dynamic_render_advance_rate = 0.0f;
-        binding->dynamic_render_advance_phase = 0.0f;
-        binding->native_movement_accumulator_x = 0.0f;
-        binding->native_movement_accumulator_y = 0.0f;
-        binding->facing_heading_valid = false;
-        binding->facing_heading_value = 0.0f;
-        binding->facing_target_actor_address = 0;
-        binding->stock_tick_facing_origin_valid = false;
-        binding->stock_tick_facing_origin_x = 0.0f;
-        binding->stock_tick_facing_origin_y = 0.0f;
-        binding->death_transition_stock_tick_seen = false;
-        binding->local_death_presentation_started_ms = 0;
-        binding->last_applied_wave_respawn_run_nonce = 0;
-        binding->last_applied_wave_respawn_epoch = 0;
-        binding->replicated_transform_valid = false;
-        binding->replicated_target_x = 0.0f;
-        binding->replicated_target_y = 0.0f;
-        binding->replicated_target_heading = 0.0f;
-        binding->replicated_movement_intent_x = 0.0f;
-        binding->replicated_movement_intent_y = 0.0f;
-        binding->replicated_transform_packet_ms = 0;
-        binding->replicated_transform_playback_ms = 0;
     }
 }
 
@@ -116,48 +164,14 @@ void ResetParticipantEntityMaterializationState(ParticipantEntityBinding* bindin
         return;
     }
 
+    ResetParticipantEntityActorPresentationState(binding);
     binding->actor_address = 0;
     binding->next_scene_materialize_retry_ms = 0;
     binding->materialized_scene_address = 0;
     binding->materialized_world_address = 0;
     binding->materialized_region_index = -1;
-    binding->last_applied_animation_state_id = kUnknownAnimationStateId - 1;
-    binding->standalone_idle_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-    binding->standalone_moving_animation_drive_profile = ObservedActorAnimationDriveProfile{};
-    binding->standalone_progression_wrapper_address = 0;
-    binding->standalone_progression_inner_address = 0;
-    binding->standalone_equip_wrapper_address = 0;
-    binding->standalone_equip_inner_address = 0;
-    binding->gameplay_attach_applied = false;
+    binding->materialized_presentation_scene_epoch = 0;
     binding->raw_allocation = false;
-    binding->dynamic_walk_cycle_primary = 0.0f;
-    binding->dynamic_walk_cycle_secondary = 0.0f;
-    binding->dynamic_render_drive_stride = 0.0f;
-    binding->dynamic_render_advance_rate = 0.0f;
-    binding->dynamic_render_advance_phase = 0.0f;
-    binding->native_movement_accumulator_x = 0.0f;
-    binding->native_movement_accumulator_y = 0.0f;
-    binding->facing_heading_valid = false;
-    binding->facing_heading_value = 0.0f;
-    binding->facing_target_actor_address = 0;
-    binding->stock_tick_facing_origin_valid = false;
-    binding->stock_tick_facing_origin_x = 0.0f;
-    binding->stock_tick_facing_origin_y = 0.0f;
-    binding->death_transition_stock_tick_seen = false;
-    binding->local_death_presentation_started_ms = 0;
-    binding->last_applied_wave_respawn_run_nonce = 0;
-    binding->last_applied_wave_respawn_epoch = 0;
-    binding->native_remote_vital_baseline_valid = false;
-    binding->native_remote_last_written_hp = 0.0f;
-    binding->native_remote_last_written_max_hp = 0.0f;
-    binding->replicated_transform_valid = false;
-    binding->replicated_target_x = 0.0f;
-    binding->replicated_target_y = 0.0f;
-    binding->replicated_target_heading = 0.0f;
-    binding->replicated_movement_intent_x = 0.0f;
-    binding->replicated_movement_intent_y = 0.0f;
-    binding->replicated_transform_packet_ms = 0;
-    binding->replicated_transform_playback_ms = 0;
 }
 
 void MarkParticipantEntityWorldUnregistered(uintptr_t actor_address) {

@@ -124,6 +124,8 @@ using GameplayUiGlyphDrawFn = void(__thiscall*)(void* self, float x, float y);
 // GameplayHud_RenderDispatch reads only render_case, but its stock RET 0x0C
 // proves three stack arguments. Preserve all three across the detour.
 using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case, uintptr_t arg1, uintptr_t arg2);
+using GameplayAllyHealthbarAppendFn =
+    void(__thiscall*)(void* gameplay, uintptr_t label_glyph, float hp_ratio);
 
 struct NativeGameString {
     uintptr_t vtable = 0;

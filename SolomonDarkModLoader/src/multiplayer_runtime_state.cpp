@@ -495,6 +495,8 @@ void AppendParticipantTransformSample(ParticipantInfo* participant, const Partic
     if (!history.empty()) {
         const auto& latest = history.back();
         if (latest.run_nonce != sample.run_nonce ||
+            latest.presentation_scene_epoch !=
+                sample.presentation_scene_epoch ||
             !SameParticipantSceneIntent(latest.scene_intent, sample.scene_intent)) {
             history.clear();
         } else if (sample.sequence == latest.sequence) {
@@ -556,6 +558,8 @@ bool TrySampleParticipantTransform(
         return true;
     }
     if (before->run_nonce != after->run_nonce ||
+        before->presentation_scene_epoch !=
+            after->presentation_scene_epoch ||
         !SameParticipantSceneIntent(before->scene_intent, after->scene_intent)) {
         *sample = *after;
         return true;

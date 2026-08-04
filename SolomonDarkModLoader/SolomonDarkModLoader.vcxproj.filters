@@ -329,6 +329,9 @@
     <ClInclude Include="include\participant_hit_feedback_flow_control.h">
       <Filter>Header Files\Public API</Filter>
     </ClInclude>
+    <ClInclude Include="include\participant_vitals_correction.h">
+      <Filter>Header Files\Public API</Filter>
+    </ClInclude>
     <ClInclude Include="src\network_telemetry\runtime_events.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
@@ -924,6 +927,9 @@
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_playback.inl">
+      <Filter>Header Files\Gameplay\Bot Movement</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_presentation_epoch.inl">
       <Filter>Header Files\Gameplay\Bot Movement</Filter>
     </ClInclude>
     <ClInclude Include="src\mod_loader_gameplay\bot_movement\native_remote_death_drop.inl">
@@ -1536,6 +1542,9 @@
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\local_state_packet_sync.inl">
+      <Filter>Header Files\Internal</Filter>
+    </ClInclude>
+    <ClInclude Include="src\multiplayer_local_transport\participant_presentation_scene_tracking.inl">
       <Filter>Header Files\Internal</Filter>
     </ClInclude>
     <ClInclude Include="src\multiplayer_local_transport\local_snapshot_packet_builders.inl">

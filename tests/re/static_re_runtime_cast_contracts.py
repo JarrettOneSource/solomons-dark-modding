@@ -1228,10 +1228,34 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
         hud_text.index("std::vector<GameplayAllyHudRow> BuildGameplayAllyHudRows()") :
         hud_text.index("\nbool IsGameplayAllyHudLabelGlyphCall(")
     ]
-    if "TryGetRemoteParticipantDisplayState(" not in ally_rows:
-        raise StaticReTestFailure(
-            "ally HUD rows no longer resolve display state from transport"
-        )
+    for token in (
+        "multiplayer::SnapshotRuntimeState()",
+        "multiplayer::IsRemoteParticipant(participant)",
+        "participant.transport_connected",
+        "participant.runtime.valid",
+        "participant.runtime.life_current <= 0.0f",
+        "participant.runtime.life_max <= 0.0f",
+        "participant.participant_id",
+        "participant.name",
+        "participant.runtime.life_current /",
+    ):
+        if token not in ally_rows:
+            raise StaticReTestFailure(
+                "ally HUD rows are not owned by the durable alive roster: "
+                + token
+            )
+
+    for token in (
+        "PublishGameplayAllyHudRowsFromParticipantRoster(",
+        "CallGameplayAllyHealthbarAppendSafe(",
+        "kGameplayAllyHealthbarAppend",
+        "row.hp_ratio",
+    ):
+        if token not in hud_text:
+            raise StaticReTestFailure(
+                "durable roster no longer feeds the stock ally renderer: "
+                + token
+            )
 
     required_authoritative_vitals_tokens = (
         "bool TryGetGameplayHudParticipantDisplayNameForActor(",
@@ -1254,11 +1278,21 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
             "participant indicators read tick-delayed actor health"
         )
 
+    append_call = """append(
+            reinterpret_cast<void*>(gameplay_address),
+            label_glyph,
+            hp_ratio);"""
+    if append_call not in hud_text:
+        raise StaticReTestFailure(
+            "stock ally-healthbar append no longer preserves glyph-then-ratio ABI"
+        )
+
     required_layout_tokens = (
         "gameplay_ui_glyph_draw=0x004143D0",
         "gameplay_ui_centered_glyph_draw=0x004142E0",
         "gameplay_hud_render_dispatch=0x00512060",
         "gameplay_hud_render=0x005D2520",
+        "gameplay_ally_healthbar_append=0x005CF480",
         "gameplay_exact_text_object_render=0x0043BCD0",
         "gameplay_exact_text_object=0x008199A0",
         "gameplay_exact_text_object=0xE7D98",
@@ -1278,6 +1312,7 @@ def test_multiplayer_nameplates_render_from_native_scene_passes() -> str:
     for token in (
         "using GameplayUiGlyphDrawFn = void(__thiscall*)(void* self, float x, float y)",
         "using GameplayHudRenderDispatchFn = void(__thiscall*)(void* self, int render_case, uintptr_t arg1, uintptr_t arg2)",
+        "void(__thiscall*)(void* gameplay, uintptr_t label_glyph, float hp_ratio);",
         "struct NativeGameString",
     ):
         if token not in native_types_text:
@@ -1556,13 +1591,14 @@ def test_player_control_brain_requires_published_gameplay_slot() -> str:
     return "player control-brain skips actors until the current gameplay slot table owns them"
 
 
-def test_local_player_control_brain_retires_only_its_invalid_ally_hud_registration() -> str:
+def test_participant_roster_owns_every_multiplayer_ally_hud_registration() -> str:
     config = read_text(ROOT / "config/binary-layout.ini")
     player_control_text = read_text(
         ROOT / "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/player_control_hooks.inl"
     )
 
     assert "gameplay_ally_healthbar_count=0x1C20" in config
+    assert "gameplay_ally_healthbar_append=0x005CF480" in config
     hook_start = player_control_text.index(
         "void __fastcall HookPlayerControlBrainUpdate("
     )
@@ -1571,25 +1607,28 @@ def test_local_player_control_brain_retires_only_its_invalid_ally_hud_registrati
     )
     hook = player_control_text[hook_start:hook_end]
     required_tokens = (
+        "participant_roster_owns_ally_healthbar",
+        "multiplayer::IsLocalTransportEnabled()",
         "publication_actor_slot == 0",
+        "bot_id != 0",
         "kGameplayAllyHealthbarCountOffset",
         "ally_healthbar_count_before",
         "original(self, param2, param3);",
         "ally_healthbar_count_after == ally_healthbar_count_before + 1",
         "ally_healthbar_count_before))",
-        "retired stock local-player ally HUD registration",
+        "retired stock participant ally HUD registration",
     )
     missing = [token for token in required_tokens if token not in hook]
     if missing:
         raise StaticReTestFailure(
-            "local control-brain ally-HUD ownership repair is missing token(s): "
+            "participant-roster ally-HUD ownership repair is missing token(s): "
             + ", ".join(missing)
         )
     if hook.index("ally_healthbar_count_before") > hook.index(
         "original(self, param2, param3);"
     ):
         raise StaticReTestFailure(
-            "the local ally-HUD count must be captured before the stock append"
+            "the participant ally-HUD count must be captured before the stock append"
         )
     if hook.index("ally_healthbar_count_after ==") < hook.index(
         "original(self, param2, param3);"
@@ -1598,4 +1637,4 @@ def test_local_player_control_brain_retires_only_its_invalid_ally_hud_registrati
             "the stock append must be observed before its invalid local registration is retired"
         )
 
-    return "slot zero keeps stock self-HUD ownership while remote control brains keep native ally rows"
+    return "the durable connected-alive roster exclusively owns native multiplayer ally rows"

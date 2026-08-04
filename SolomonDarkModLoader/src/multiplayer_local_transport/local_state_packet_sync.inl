@@ -154,6 +154,9 @@ void RefreshLocalParticipantFromGameState() {
         g_local_run_exit_latched_nonce.store(0, std::memory_order_release);
         g_local_transport.client_host_run_exit_follow = ClientHostRunExitFollow{};
     }
+    RefreshLocalParticipantPresentationSceneTracking(
+        scene_state,
+        scene_intent.kind);
     const auto configured_name = ReadLocalDisplayName();
     SDModWorldState world_state;
     const bool have_world_state = TryGetWorldState(&world_state) && world_state.valid;
@@ -228,6 +231,8 @@ void RefreshLocalParticipantFromGameState() {
         local->runtime.transform_valid = true;
         local->runtime.in_run = scene_intent.kind == ParticipantSceneIntentKind::Run;
         local->runtime.scene_intent = scene_intent;
+        local->runtime.presentation_scene_epoch =
+            g_local_transport.participant_presentation_scene_epoch;
         if (local->runtime.life_max > 0.0f &&
             local->runtime.life_current > 0.0f &&
             player_state.max_hp > 0.0f &&
@@ -433,6 +438,8 @@ void PopulateParticipantFrameFields(
     packet->loadout_pick_generation =
         participant.loadout_pick_generation;
     packet->run_nonce = participant.runtime.run_nonce;
+    packet->presentation_scene_epoch =
+        participant.runtime.presentation_scene_epoch;
     if (include_local_authority_state) {
         const auto boneyard = BuildLocalBoneyardPickerPacketState();
         packet->boneyard_selection_revision = boneyard.revision;

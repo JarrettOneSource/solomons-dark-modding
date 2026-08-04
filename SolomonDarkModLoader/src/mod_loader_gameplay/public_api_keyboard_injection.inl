@@ -74,6 +74,9 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         ProcessMemory::Instance().ResolveGameAddressOrZero(kSpellBuilderFinalize);
     const auto gameplay_hud_render_dispatch =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayHudRenderDispatch);
+    const auto gameplay_ally_healthbar_append =
+        ProcessMemory::Instance().ResolveGameAddressOrZero(
+            kGameplayAllyHealthbarAppend);
     const auto gameplay_ui_glyph_draw =
         ProcessMemory::Instance().ResolveGameAddressOrZero(kGameplayUiGlyphDraw);
     const auto gameplay_ui_centered_glyph_draw =
@@ -141,6 +144,7 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         fire_ember_ctor == 0 ||
         spell_cast_dispatcher == 0 ||
         gameplay_hud_render_dispatch == 0 ||
+        gameplay_ally_healthbar_append == 0 ||
         gameplay_ui_glyph_draw == 0 ||
         gameplay_ui_centered_glyph_draw == 0 ||
         gameplay_ally_label_glyph_return == 0 ||
@@ -1170,6 +1174,8 @@ bool InitializeGameplayKeyboardInjection(std::string* error_message) {
         " spell_builder_reset=" + HexString(spell_builder_reset) +
         " spell_builder_finalize=" + HexString(spell_builder_finalize) +
         " hud_case_dispatch=" + HexString(gameplay_hud_render_dispatch) +
+        " gameplay_ally_healthbar_append=" +
+            HexString(gameplay_ally_healthbar_append) +
         " gameplay_ui_glyph_draw=" + HexString(gameplay_ui_glyph_draw) +
         " gameplay_ui_centered_glyph_draw=" + HexString(gameplay_ui_centered_glyph_draw) +
         " gameplay_ally_label_glyph_return=" + HexString(gameplay_ally_label_glyph_return) +

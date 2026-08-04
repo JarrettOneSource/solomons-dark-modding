@@ -65,12 +65,12 @@ struct ParticipantSceneIntent {
     std::int32_t region_index = -1;
     std::int32_t region_type_id = -1;
 };
-
 struct ParticipantRuntimeInfo {
     bool valid = false;
     bool in_run = false;
     bool transform_valid = false;
     std::uint32_t run_nonce = 0;
+    std::uint32_t presentation_scene_epoch = 0;
     std::int32_t level = 0;
     std::int32_t wave = 0;
     float life_current = 0.0f;
@@ -338,6 +338,7 @@ struct ParticipantTransformSample {
     std::uint64_t received_ms = 0;
     std::uint32_t sequence = 0;
     std::uint32_t run_nonce = 0;
+    std::uint32_t presentation_scene_epoch = 0;
     ParticipantSceneIntent scene_intent;
     float position_x = 0.0f;
     float position_y = 0.0f;
@@ -496,5 +497,4 @@ struct WorldSnapshotRuntimeInfo {
 };
 
 #include "multiplayer_runtime_snapshot_state.inl"
-
 #include "multiplayer_runtime_effect_state.inl"

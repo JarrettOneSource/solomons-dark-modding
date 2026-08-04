@@ -351,6 +351,13 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
          IsPacketSequenceNewer(
              packet.participant_vitals_correction_ack_sequence,
              correction.correction_sequence));
+    const bool life_converged =
+        life_acknowledged &&
+        ParticipantVitalsCorrectionHasConverged(
+            packet.life_current,
+            packet.life_max,
+            correction.life_current,
+            correction.life_max);
     const bool correction_poisoned =
         (correction.transient_status_flags &
          ParticipantTransientStatusFlagPoisoned) != 0;
@@ -360,7 +367,7 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
     const bool correction_magic_shield =
         (correction.correction_flags &
          ParticipantVitalsCorrectionFlagMagicShieldState) != 0;
-    if (life_acknowledged) {
+    if (life_converged) {
         RecordNetworkRecoveryAck(
             "participant_vitals_correction",
             packet.participant_id,
@@ -374,11 +381,11 @@ NormalizedParticipantFrameState NormalizeParticipantFramePacket(
             pending_it);
         return normalized;
     }
-    if (!life_acknowledged && std::isfinite(correction.life_current)) {
+    if (!life_converged && std::isfinite(correction.life_current)) {
         normalized.life_current =
             (std::min)(normalized.life_current, correction.life_current);
     }
-    if (!life_acknowledged && std::isfinite(correction.life_max) &&
+    if (!life_converged && std::isfinite(correction.life_max) &&
         correction.life_max > 0.0f) {
         normalized.life_max = correction.life_max;
     }
@@ -432,6 +439,8 @@ void ApplyParticipantFrameToRuntime(
     }
     participant->last_packet_ms = now_ms;
     participant->runtime.valid = true;
+    participant->runtime.presentation_scene_epoch =
+        packet.presentation_scene_epoch;
     if (IsParticipantPacketFromTerminatedRun(
             packet.run_nonce) &&
         !IsHealthyPostTerminationParticipantFrame(
@@ -608,6 +617,8 @@ void ApplyParticipantFrameToRuntime(
     sample.received_ms = now_ms;
     sample.sequence = packet.header.sequence;
     sample.run_nonce = packet.run_nonce;
+    sample.presentation_scene_epoch =
+        packet.presentation_scene_epoch;
     sample.scene_intent = scene_intent;
     sample.position_x = packet.position_x;
     sample.position_y = packet.position_y;

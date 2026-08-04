@@ -32,6 +32,7 @@
 #include "native_spell_stats.h"
 #include "network_telemetry.h"
 #include "participant_hit_feedback_flow_control.h"
+#include "participant_vitals_correction.h"
 #include "steam_bootstrap.h"
 #include "startup_status.h"
 #include "wave_intelligence.h"
@@ -1024,6 +1025,7 @@ struct LocalTransportState {
     std::uint32_t next_world_snapshot_id = 1;
     std::uint64_t local_session_nonce = 0;
     std::uint32_t world_scene_epoch = 0;
+    std::uint32_t participant_presentation_scene_epoch = 0;
     std::uint64_t packets_sent = 0;
     std::uint64_t packets_received = 0;
     std::uint64_t steam_send_failures = 0;
@@ -1047,6 +1049,7 @@ struct LocalTransportState {
     std::uint64_t next_level_up_offer_id = 1;
     std::uint64_t next_level_up_barrier_id = 1;
     std::string world_scene_key;
+    std::string participant_presentation_scene_key;
     std::unordered_map<uintptr_t, std::uint64_t> hub_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_host_local_world_actor_ids_by_address;
     std::unordered_map<uintptr_t, std::uint64_t> run_loot_drop_ids_by_address;
@@ -1674,6 +1677,7 @@ bool CallLevelUpScreenCloseSafe(uintptr_t screen_address, DWORD* exception_code)
 #include "multiplayer_local_transport/run_game_over_sync.inl"
 #include "multiplayer_local_transport/run_loading_barrier_sync.inl"
 #include "multiplayer_local_transport/participant_run_termination.inl"
+#include "multiplayer_local_transport/participant_presentation_scene_tracking.inl"
 #include "multiplayer_local_transport/local_state_packet_sync.inl"
 #include "multiplayer_local_transport/local_snapshot_packet_builders.inl"
 #include "multiplayer_local_transport/cast_target_resolution.inl"

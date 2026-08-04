@@ -2,7 +2,6 @@ uintptr_t kGameWindowProc = 0;
 uintptr_t kAppMainTick = 0;
 uintptr_t kWindowInputScaleXGlobal = 0;
 uintptr_t kWindowInputScaleYGlobal = 0;
-
 uintptr_t kCpuTickPostUpdate = 0;
 uintptr_t kCpuTickEpilogue = 0;
 uintptr_t kGameplayMouseRefreshHelper = 0;
@@ -21,6 +20,7 @@ uintptr_t kPlayerActorPurePrimaryGate = 0;
 uintptr_t kPlayerControlBrainUpdate = 0;
 uintptr_t kGameplayHudRenderDispatch = 0;
 uintptr_t kGameplayHudRender = 0;
+uintptr_t kGameplayAllyHealthbarAppend = 0;
 uintptr_t kGameplayUiGlyphDraw = 0;
 uintptr_t kGameplayUiCenteredGlyphDraw = 0;
 uintptr_t kGameplayAllyLabelGlyphReturn = 0;

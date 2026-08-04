@@ -98,57 +98,8 @@ void ResetParticipantRuntimeForRunTermination(
 
     auto& participant = *participant_info;
     auto& runtime = participant.runtime;
-    const bool preserve_transition_transform =
-        runtime.transform_valid &&
-        std::isfinite(runtime.position_x) &&
-        std::isfinite(runtime.position_y) &&
-        std::isfinite(runtime.heading);
-    ParticipantTransformSample transition_transform;
-    if (preserve_transition_transform) {
-        transition_transform.valid = true;
-        transition_transform.received_ms =
-            participant.last_packet_ms;
-        transition_transform.sequence =
-            participant.transform_history.empty()
-                ? 0
-                : participant.transform_history.back().sequence;
-        transition_transform.run_nonce = runtime.run_nonce;
-        transition_transform.scene_intent =
-            DefaultParticipantSceneIntent();
-        transition_transform.position_x = runtime.position_x;
-        transition_transform.position_y = runtime.position_y;
-        transition_transform.heading = runtime.heading;
-        transition_transform.attachment_staff_visual_state =
-            runtime.attachment_staff_visual_state;
-        transition_transform.render_variant_primary =
-            runtime.render_variant_primary;
-        transition_transform.render_variant_secondary =
-            runtime.render_variant_secondary;
-        transition_transform.render_weapon_type =
-            runtime.render_weapon_type;
-        transition_transform.render_selection_byte =
-            runtime.render_selection_byte;
-        transition_transform.render_variant_tertiary =
-            runtime.render_variant_tertiary;
-        transition_transform.primary_visual_link_type_id =
-            runtime.primary_visual_link_type_id;
-        transition_transform.secondary_visual_link_type_id =
-            runtime.secondary_visual_link_type_id;
-        transition_transform.primary_visual_link_recipe_uid =
-            runtime.primary_visual_link_recipe_uid;
-        transition_transform.secondary_visual_link_recipe_uid =
-            runtime.secondary_visual_link_recipe_uid;
-        transition_transform.attachment_visual_link_type_id =
-            runtime.attachment_visual_link_type_id;
-        transition_transform.attachment_visual_link_recipe_uid =
-            runtime.attachment_visual_link_recipe_uid;
-        transition_transform.primary_visual_link_color_block =
-            runtime.primary_visual_link_color_block;
-        transition_transform.secondary_visual_link_color_block =
-            runtime.secondary_visual_link_color_block;
-    }
     runtime.in_run = false;
-    runtime.transform_valid = preserve_transition_transform;
+    runtime.transform_valid = false;
     runtime.scene_intent = DefaultParticipantSceneIntent();
     runtime.wave = 0;
     if (std::isfinite(runtime.life_max) &&
@@ -185,12 +136,6 @@ void ResetParticipantRuntimeForRunTermination(
     runtime.render_drive_overlay_alpha = 0.0f;
     runtime.render_drive_move_blend = 0.0f;
     participant.transform_history.clear();
-    if (preserve_transition_transform) {
-        transition_transform.presentation_flags =
-            runtime.presentation_flags;
-        participant.transform_history.push_back(
-            transition_transform);
-    }
 }
 
 void ResetParticipantCombatTransportStateForRunTermination() {

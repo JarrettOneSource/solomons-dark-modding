@@ -4,6 +4,7 @@
 #include "multiplayer_runtime_protocol.h"
 #include "multiplayer_runtime_state.h"
 #include "participant_hit_feedback_flow_control.h"
+#include "participant_vitals_correction.h"
 
 #include <cmath>
 #include <cstdint>
@@ -127,6 +128,69 @@ bool RemotePlayerExtrapolatesAtMostOneArrival() {
            Require(
                NearlyEqual(sample.position_x, 5.0f),
                "remote extrapolation ignored the stopped movement intent");
+}
+
+bool ParticipantPresentationEpochSeparatesTransformHistory() {
+    using namespace sdmod::multiplayer;
+
+    ParticipantInfo participant;
+    ParticipantTransformSample old_scene;
+    old_scene.valid = true;
+    old_scene.received_ms = 1000;
+    old_scene.sequence = 100;
+    old_scene.run_nonce = 11;
+    old_scene.presentation_scene_epoch = 4;
+    old_scene.scene_intent.kind = ParticipantSceneIntentKind::Run;
+    old_scene.position_x = 10.0f;
+
+    auto replacement_scene = old_scene;
+    replacement_scene.received_ms = 1010;
+    replacement_scene.sequence = 1;
+    replacement_scene.presentation_scene_epoch = 5;
+    replacement_scene.position_x = 80.0f;
+
+    AppendParticipantTransformSample(&participant, old_scene);
+    AppendParticipantTransformSample(&participant, replacement_scene);
+
+    ParticipantTransformSample sampled;
+    return Require(
+               participant.transform_history.size() == 1,
+               "participant transform history crossed a presentation scene epoch") &&
+        Require(
+            TrySampleParticipantTransform(
+                participant,
+                1010,
+                0,
+                &sampled) &&
+                sampled.presentation_scene_epoch == 5 &&
+                NearlyEqual(sampled.position_x, 80.0f),
+            "replacement scene did not own the participant presentation sample");
+}
+
+bool ParticipantVitalsAckRequiresMatchingHp() {
+    using namespace sdmod::multiplayer;
+
+    return Require(
+               !ParticipantVitalsCorrectionHasConverged(
+                   50.0f,
+                   50.0f,
+                   43.0f,
+                   50.0f),
+               "delivery ACK accepted stale owner HP") &&
+        Require(
+            ParticipantVitalsCorrectionHasConverged(
+                43.01f,
+                50.0f,
+                43.0f,
+                50.0f),
+            "matching owner HP did not converge the correction") &&
+        Require(
+            !ParticipantVitalsCorrectionHasConverged(
+                43.0f,
+                0.0f,
+                43.0f,
+                50.0f),
+            "invalid owner maximum converged the correction");
 }
 
 bool ParticipantCapacityCountsHumansAndBotsTogether() {
@@ -521,7 +585,7 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
     using namespace sdmod::multiplayer;
 
     return Require(
-               kProtocolVersion == 91,
+               kProtocolVersion == 92,
                "native and launcher protocol version changed unexpectedly") &&
         Require(
             std::string(
@@ -587,10 +651,10 @@ bool PacketSplitsHaveBoundedVariableWireSizes() {
                 ResolveParticipantDeathPresentationRenderTick(298) == 159,
             "death presentation render projection does not reach and hold the corpse frame") &&
         Require(
-            sizeof(StatePacket) == 705,
+            sizeof(StatePacket) == 709,
             "StatePacket regained checkpoint-array payload") &&
         Require(
-            sizeof(ParticipantFramePacket) == 422,
+            sizeof(ParticipantFramePacket) == 426,
             "ParticipantFramePacket regained wave-summary payload") &&
         Require(
             ParticipantInventorySnapshotPacketWireSize(0) ==
@@ -812,6 +876,8 @@ bool HitFeedbackRecoveryUsesABoundedCumulativeAckWindow() {
 int main() {
     if (!FixedWorldDelayDoesNotAmplifyArrivalJitter() ||
         !RemotePlayerExtrapolatesAtMostOneArrival() ||
+        !ParticipantPresentationEpochSeparatesTransformHistory() ||
+        !ParticipantVitalsAckRequiresMatchingHp() ||
         !ParticipantCapacityCountsHumansAndBotsTogether() ||
         !BotSpawnPlacementKeepsClearAnchor() ||
         !BotSpawnPlacementSearchesPastBlockedNaiveAnchor() ||
