@@ -87,6 +87,7 @@ local function emit(key, value)
 end
 local enemy_address = __ENEMY_ACTOR_ADDRESS__
 local original_enemy_addresses = __ENEMY_ACTOR_ADDRESSES__
+local original_enemy_network_ids = __ENEMY_NETWORK_ACTOR_IDS__
 local bot_id = __BOT_PARTICIPANT_ID__
 local player = sd.player.get_state() or {}
 local bot = bot_id ~= 0 and sd.bots.get_participant_state(bot_id) or {}
@@ -110,15 +111,25 @@ local owner_actor = tonumber(player.actor_address) or 0
 local bot_actor = tonumber(bot.actor_address) or 0
 local enemy = nil
 local original_live_count = 0
+local original_network_live_count = 0
 local original_set = {}
+local original_network_set = {}
 for _, address in ipairs(original_enemy_addresses) do
   original_set[address] = true
+end
+for _, network_id in ipairs(original_enemy_network_ids) do
+  original_network_set[network_id] = true
 end
 for _, actor in ipairs(sd.world.list_actors() or {}) do
   if original_set[tonumber(actor.actor_address) or 0] and
       actor.tracked_enemy and not actor.dead and
       (tonumber(actor.hp) or 0) > 0 then
     original_live_count = original_live_count + 1
+  end
+  if original_network_set[tonumber(actor.network_actor_id) or 0] and
+      actor.tracked_enemy and not actor.dead and
+      (tonumber(actor.hp) or 0) > 0 then
+    original_network_live_count = original_network_live_count + 1
   end
   if tonumber(actor.actor_address) == enemy_address then
     enemy = actor
@@ -163,6 +174,7 @@ emit("enemy.actor_group", enemy_address ~= 0 and
 emit("enemy.world_slot", enemy_address ~= 0 and
   sd.debug.read_i16(enemy_address + world_slot_offset) or -1)
 emit("original.live_count", original_live_count)
+emit("original.network_live_count", original_network_live_count)
 emit("combat.wave", combat.wave_index or 0)
 emit("combat.active", combat.active or false)
 emit("wave.phase", wave.phase or "")
@@ -349,6 +361,7 @@ def _target_probe(
     pipe: LuaPipe,
     *,
     enemy_actor_addresses: list[int],
+    enemy_network_actor_ids: list[int] | None = None,
     bot_id: int,
     owner_id: int,
 ) -> dict[str, Any]:
@@ -357,10 +370,14 @@ def _target_probe(
     lua_addresses = "{" + ",".join(
         str(address) for address in enemy_actor_addresses
     ) + "}"
+    lua_network_ids = "{" + ",".join(
+        str(network_id) for network_id in (enemy_network_actor_ids or [])
+    ) + "}"
     code = (
         TARGET_PROBE_LUA
         .replace("__ENEMY_ACTOR_ADDRESS__", str(enemy_actor_addresses[0]))
         .replace("__ENEMY_ACTOR_ADDRESSES__", lua_addresses)
+        .replace("__ENEMY_NETWORK_ACTOR_IDS__", lua_network_ids)
         .replace("__BOT_PARTICIPANT_ID__", str(bot_id))
         .replace("__OWNER_PARTICIPANT_ID__", str(owner_id))
     )
@@ -515,6 +532,7 @@ def analyze_wave_completion(
     starting_wave: int,
     bot_id: int,
     original_enemy_actor_addresses: list[int],
+    original_enemy_network_ids: list[int] | None = None,
     damage_rows: list[dict[str, Any]],
     expect_stall: bool = False,
 ) -> dict[str, Any]:
@@ -559,11 +577,25 @@ def analyze_wave_completion(
         and float(row.get("damage", 0.0)) > 0.0
     ]
     original_enemy_set = set(original_enemy_actor_addresses)
-    bot_damaged_original_enemies = sorted({
-        int(row.get("targetActorAddress", 0))
-        for row in bot_damage
-        if int(row.get("targetActorAddress", 0)) in original_enemy_set
-    })
+    original_network_set = set(original_enemy_network_ids or [])
+    if original_network_set:
+        bot_damaged_original_enemies = sorted({
+            int(row.get("targetNetworkActorId", 0))
+            for row in bot_damage
+            if int(row.get("targetNetworkActorId", 0)) in original_network_set
+        })
+        original_live_key = "original.network_live_count"
+        original_enemy_count = len(original_network_set)
+        identity_kind = "network_actor_id"
+    else:
+        bot_damaged_original_enemies = sorted({
+            int(row.get("targetActorAddress", 0))
+            for row in bot_damage
+            if int(row.get("targetActorAddress", 0)) in original_enemy_set
+        })
+        original_live_key = "original.live_count"
+        original_enemy_count = len(original_enemy_set)
+        identity_kind = "actor_address"
     cast_delta = (
         int(samples[-1].get("bot.cast_accepted", 0))
         - int(samples[0].get("bot.cast_accepted", 0))
@@ -585,12 +617,13 @@ def analyze_wave_completion(
         "botDamageEdgeCount": len(bot_damage),
         "botCastAcceptedDelta": cast_delta,
         "botMoveAcceptedDelta": move_delta,
-        "originalAddressLiveAtEnd": bool(
-            samples and int(samples[-1].get("original.live_count", 0)) > 0
+        "originalEnemyIdentityKind": identity_kind,
+        "originalEnemyLiveAtEnd": bool(
+            samples and int(samples[-1].get(original_live_key, 0)) > 0
         ),
-        "originalEnemyCount": len(original_enemy_set),
+        "originalEnemyCount": original_enemy_count,
         "botDamagedOriginalEnemyCount": len(bot_damaged_original_enemies),
-        "botDamagedOriginalEnemyAddresses": bot_damaged_original_enemies,
+        "botDamagedOriginalEnemyIdentities": bot_damaged_original_enemies,
     }
     completed = (
         assessment["advanced"]
@@ -599,7 +632,8 @@ def analyze_wave_completion(
         and owner_displacement <= MAXIMUM_OWNER_DISPLACEMENT
         and len(bot_damage) >= 1
         and cast_delta >= 1
-        and len(bot_damaged_original_enemies) == len(original_enemy_set)
+        and len(bot_damaged_original_enemies) >= 1
+        and not assessment["originalEnemyLiveAtEnd"]
     )
     stalled_under_active_bot = (
         not assessment["advanced"]
@@ -607,7 +641,7 @@ def analyze_wave_completion(
         and owner_displacement <= MAXIMUM_OWNER_DISPLACEMENT
         and len(bot_damage) >= 1
         and cast_delta >= 1
-        and assessment["originalAddressLiveAtEnd"]
+        and assessment["originalEnemyLiveAtEnd"]
     )
     assessment["completedAutonomously"] = completed
     assessment["preFixStallReproduced"] = stalled_under_active_bot
@@ -662,6 +696,36 @@ def _find_live_enemy_addresses(state: dict[str, Any]) -> list[int]:
             f"native wave skeleton omitted its actor address: {live}"
         )
     return sorted(addresses)
+
+
+def _wait_enemy_network_ids(
+    pipe: LuaPipe,
+    actor_addresses: list[int],
+    timeout: float,
+) -> list[int]:
+    expected = set(actor_addresses)
+    deadline = time.monotonic() + timeout
+    last: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        state = pipe.state()
+        last = [
+            row for row in state.get("nativeEnemies", [])
+            if int(row.get("address", 0)) in expected
+            and float(row.get("hp", 0.0)) > 0.0
+            and not row.get("dead", False)
+        ]
+        network_ids = [int(row.get("network_id", 0)) for row in last]
+        if (
+            len(last) == len(expected)
+            and all(network_id > 0 for network_id in network_ids)
+            and len(set(network_ids)) == len(expected)
+        ):
+            return sorted(network_ids)
+        time.sleep(0.05)
+    raise HostileTargetingContinuityFailure(
+        "original skeleton identities did not stabilize: "
+        f"expected_addresses={sorted(expected)} live={last}"
+    )
 
 
 def _sample_targets(
@@ -910,11 +974,18 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             relative_layout=True,
             require_clear_paths=True,
         )
+        enemy_network_actor_ids = _wait_enemy_network_ids(
+            pipe,
+            enemy_actor_addresses,
+            10.0,
+        )
+        result["stragglerEnemyNetworkActorIds"] = enemy_network_actor_ids
         enemy_rows: list[dict[str, Any]] = []
         player_rows: list[dict[str, Any]] = []
         first_wave_sample = _target_probe(
             pipe,
             enemy_actor_addresses=enemy_actor_addresses,
+            enemy_network_actor_ids=enemy_network_actor_ids,
             bot_id=bot_id,
             owner_id=args.participant_id,
         )
@@ -926,6 +997,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             row = _target_probe(
                 pipe,
                 enemy_actor_addresses=enemy_actor_addresses,
+                enemy_network_actor_ids=enemy_network_actor_ids,
                 bot_id=bot_id,
                 owner_id=args.participant_id,
             )
@@ -937,7 +1009,10 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
                 player_rows,
                 target_mod_id=BOT_MOD_ID,
             )
-            if int(row.get("combat.wave", 0)) > starting_wave:
+            if (
+                int(row.get("combat.wave", 0)) > starting_wave
+                and int(row.get("original.network_live_count", -1)) == 0
+            ):
                 break
             time.sleep(0.2)
         result["stragglerSamples"] = wave_samples
@@ -948,6 +1023,7 @@ def _run_live(args: argparse.Namespace, result: dict[str, Any]) -> None:
             starting_wave=starting_wave,
             bot_id=bot_id,
             original_enemy_actor_addresses=enemy_actor_addresses,
+            original_enemy_network_ids=enemy_network_actor_ids,
             damage_rows=enemy_rows,
             expect_stall=args.expect == "churn",
         )
