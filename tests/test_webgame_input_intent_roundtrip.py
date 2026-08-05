@@ -198,6 +198,42 @@ def _assert_live_goldens_pin_native_mouse_semantics() -> None:
         assert capture["observations"]["surface_route"] == "world_cast"
         assert not any(intent["kind"] == "move" for intent in _flatten_intents(capture))
 
+    assert captures["click_open_ground_native_absence"]["target"][
+        "nav_segment_open"
+    ] is True
+    assert captures["click_wall_native_absence"]["target"][
+        "nav_segment_open"
+    ] is False
+
+    for scenario, capture in captures.items():
+        assert capture["real_input_result"]["button"] == "left"
+        if scenario == "hud_click_swallowed":
+            continue
+
+        target = capture["target"]
+        observations = capture["observations"]
+        initial_aim = observations["initial_aim_world_point"]
+        target_error = math.hypot(
+            target["world_x"] - initial_aim["x"],
+            target["world_y"] - initial_aim["y"],
+        )
+        assert math.isclose(
+            target_error,
+            observations["screen_to_world_target_error"],
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+        assert target_error <= 1.0
+        assert target["nav_segment_open"] is observations["nav_segment_open"]
+
+        aims = [
+            intent
+            for intent in _flatten_intents(capture)
+            if intent["kind"] == "aim"
+        ]
+        assert aims[0]["point"] == initial_aim
+        assert len(aims) == observations["active_actor_tick_count"] + 1
+
     earth_maxima = []
     for scenario in (
         "earth_charge_120ms",

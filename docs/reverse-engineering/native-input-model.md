@@ -226,7 +226,7 @@ dispatcher at `0x00544C60`; Boulder construction is `0x005FA270`, held update is
   release path. A skill transition or charge cap may also end the gather loop.
 
 The three live holds reached distinct maxima: approximately `0.19375` at 120
-ms, `0.25375` at 600 ms, and `0.36875` at 1500 ms. These figures validate input
+ms, `0.25375` at 600 ms, and `0.36625` at 1500 ms. These figures validate input
 cadence only. Damage is deliberately not re-derived here; use
 [`multiplayer-earth-charge-baseline-2026-07-26.md`](multiplayer-earth-charge-baseline-2026-07-26.md)
 and
