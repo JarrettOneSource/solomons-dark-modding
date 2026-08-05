@@ -337,7 +337,8 @@ void MessageClick(
     HWND window,
     double x_fraction,
     double y_fraction,
-    DWORD hold_ms) {
+    DWORD hold_ms,
+    bool right_button) {
     DWORD target_process_id = 0;
     GetWindowThreadProcessId(window, &target_process_id);
     RECT client{};
@@ -383,17 +384,28 @@ void MessageClick(
     };
 
     send(WM_MOUSEMOVE, 0, "WM_MOUSEMOVE");
-    send(WM_LBUTTONDOWN, MK_LBUTTON, "WM_LBUTTONDOWN");
+    const UINT down_message =
+        right_button ? WM_RBUTTONDOWN : WM_LBUTTONDOWN;
+    const UINT up_message =
+        right_button ? WM_RBUTTONUP : WM_LBUTTONUP;
+    const WPARAM down_buttons =
+        right_button ? MK_RBUTTON : MK_LBUTTON;
+    const char* down_name =
+        right_button ? "WM_RBUTTONDOWN" : "WM_LBUTTONDOWN";
+    const char* up_name =
+        right_button ? "WM_RBUTTONUP" : "WM_LBUTTONUP";
+    send(down_message, down_buttons, down_name);
     Sleep(hold_ms);
-    send(WM_LBUTTONUP, 0, "WM_LBUTTONUP");
+    send(up_message, 0, up_name);
     std::printf(
         "{\"delivery\":\"SendMessageTimeoutW\",\"x\":%.8f,"
-        "\"y\":%.8f,\"holdMilliseconds\":%lu,"
+        "\"y\":%.8f,\"button\":\"%s\",\"holdMilliseconds\":%lu,"
         "\"clientX\":%ld,\"clientY\":%ld,"
         "\"screenX\":%ld,\"screenY\":%ld,"
         "\"targetProcessId\":%lu}\n",
         x_fraction,
         y_fraction,
+        right_button ? "right" : "left",
         static_cast<unsigned long>(hold_ms),
         static_cast<long>(client_point.x),
         static_cast<long>(client_point.y),
@@ -454,6 +466,9 @@ int main(int argc, char** argv) {
             "       win32_real_input message-click <process-id> "
             "<expected-executable-path> <x-fraction> <y-fraction> "
             "<hold-milliseconds>\n"
+            "       win32_real_input message-right-click <process-id> "
+            "<expected-executable-path> <x-fraction> <y-fraction> "
+            "<hold-milliseconds>\n"
             "       win32_real_input key <process-id> "
             "<expected-executable-path> <key> <hold-milliseconds>\n");
         return 2;
@@ -463,11 +478,15 @@ int main(int argc, char** argv) {
         std::strcmp(argv[1], "click-path") == 0;
     const bool is_message_click =
         std::strcmp(argv[1], "message-click") == 0;
+    const bool is_message_right_click =
+        std::strcmp(argv[1], "message-right-click") == 0;
     const bool is_key = std::strcmp(argv[1], "key") == 0;
-    if ((!is_click && !is_click_path && !is_message_click && !is_key) ||
+    if ((!is_click && !is_click_path && !is_message_click &&
+         !is_message_right_click && !is_key) ||
         (is_click && argc != 7) ||
         (is_click_path && argc != 6) ||
         (is_message_click && argc != 7) ||
+        (is_message_right_click && argc != 7) ||
         (is_key && argc != 6)) {
         Fail("invalid real-input command line", 2);
     }
@@ -494,12 +513,13 @@ int main(int argc, char** argv) {
             ParseFraction(argv[4], "x-fraction"),
             ParseFraction(argv[5], "y-fraction"),
             ParseHoldMilliseconds(argv[6]));
-    } else if (is_message_click) {
+    } else if (is_message_click || is_message_right_click) {
         MessageClick(
             window,
             ParseFraction(argv[4], "x-fraction"),
             ParseFraction(argv[5], "y-fraction"),
-            ParseHoldMilliseconds(argv[6]));
+            ParseHoldMilliseconds(argv[6]),
+            is_message_right_click);
     } else {
         Key(argv[4], ParseHoldMilliseconds(argv[5]), process_id);
     }

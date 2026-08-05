@@ -83,7 +83,12 @@ def test_native_surface_priority_and_loading_input_seal_are_pinned() -> str:
             "walks children in reverse insertion order",
             "There is no bubbling to a lower world surface",
             "`hud_click_swallowed`",
-            "There is no native world-move click",
+            "there is no native world-move click",
+            "`Game + 0x8C`",
+            "`Game + 0x158`",
+            "`0x00427EB0` returns a control itself",
+            "movement control is `0x14` (not targetable)",
+            "aim control is `0x15` (targetable)",
         ),
         "native surface priority",
     )
@@ -107,6 +112,8 @@ def test_native_surface_priority_and_loading_input_seal_are_pinned() -> str:
 
 def test_native_action_thresholds_absences_and_intent_shape_are_pinned() -> str:
     findings = _read("docs/reverse-engineering/native-input-model.md")
+    capture = _read("tools/capture_native_input_goldens.py")
+    real_input = _read("tools/win32_real_input.cpp")
     schema = json.loads(_read("webgame-contracts/intent-schema.json"))
     fixture = json.loads(
         _read("tests/fixtures/webgame/input-goldens.json")
@@ -122,13 +129,29 @@ def test_native_action_thresholds_absences_and_intent_shape_are_pinned() -> str:
             "`0.36875` at 1500",
             "Frost primary is skill `0x20`",
             "Right is raw held bit `2`",
-            "No native click-to-move",
+            "No active native click-to-move",
             "No complete native gamepad path",
             "No native menu focus order",
             "## Not Yet Reversed",
         ),
         "native action semantics and observed absences",
     )
+    _require(
+        capture + real_input,
+        (
+            '"world_x": origin_x + fraction_x * width',
+            '"world_y": origin_y + fraction_y * height',
+            'cursor_world = event.get("cursor_world")',
+            '"screen_to_world_target_error"',
+            '"message-right-click"',
+            "right_button ? WM_RBUTTONDOWN : WM_LBUTTONDOWN",
+        ),
+        "live native projection and mouse recorder controls",
+    )
+    if "fraction_x * width / scale" in capture:
+        raise StaticReTestFailure(
+            "capture target projection divides the world-space view span twice"
+        )
 
     definitions = schema.get("$defs", {})
     if schema.get("$ref") != "#/$defs/intent":

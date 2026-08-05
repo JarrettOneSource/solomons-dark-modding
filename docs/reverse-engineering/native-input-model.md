@@ -13,11 +13,13 @@ This document distinguishes three things that are easy to conflate:
 3. `PlayerActor::Tick` turns the sampled levels into movement, aim, and spell
    state, subject to gameplay and UI gates.
 
-The native game does **not** implement click-to-move. A left click over the
-world is primary aim/cast input. Native movement is a level-triggered keyboard
-vector. The browser `Intent` contract deliberately supports both a world target
-and a unit movement vector so a future browser producer may offer point movement
-without misdescribing it as native behavior.
+The active retail PC path does **not** implement click-to-move. A left click
+over the world is primary aim/cast input. Native movement is a level-triggered
+keyboard vector. The binary retains a non-hit-testable movement-control object,
+but normal mouse routing cannot target it; that dormant object is not evidence
+of a shipped mouse movement action. The browser `Intent` contract deliberately
+supports both a world target and a unit movement vector so a future browser
+producer may offer point movement without misdescribing it as native behavior.
 
 ## Evidence boundary
 
@@ -45,7 +47,7 @@ for stock behavior.
 | 4. Control target | move router `0x0040DF10`; down `0x0040E050`; up `0x0040E190`; recursive hit test `0x00428620` | Capture wins first. Otherwise the active modal/main root is hit-tested. The first topmost hit receives the edge through its mouse virtual. |
 | 5. Device sample | `Input::Refresh` `0x00429820`; keyboard level query `0x00429930`; keyboard edge query `0x00429950` | The active double buffer toggles at `Input + 0x480`. DirectInput supplies 256 keyboard bytes. The mouse bytes are cleared and repopulated from the app raw-button mask (left bit `1`, right bit `2`, middle bit `4`). |
 | 6. Fixed tick | scheduler `0x0040D3C0`; fixed-step body `0x0040D1B0`; object-manager traversal `0x004022A0` | Input is drained/refreshed before registered game objects tick. The nominal fixed step is 10 ms. Input was registered before `Game`, so the tick graph sees the new sample, not the prior one. |
-| 7. Game controls | `Game::Tick` `0x005D7EF0`; control synthesis `0x005C6D60`; global `Game*` slot `0x0081C264` | Keyboard levels produce movement at `Game + 0x108/+0x10C`; mouse/axis state produces aim at `+0x1D4/+0x1D8`; primary cast is `+0x1E4`. Movement and cast seals are `+0x1ABD` and `+0x1ABE`. |
+| 7. Game controls | `Game::Tick` `0x005D7EF0`; control synthesis `0x005C6D60`; global `Game*` slot `0x0081C264` | The embedded movement control at `Game + 0x8C` exposes its vector at `+0x108/+0x10C`; the aim/cast control at `Game + 0x158` exposes aim at `+0x1D4/+0x1D8`, primary level at `+0x1E4`, and its right-button discriminator at `+0x1E5`. Movement and cast seals are `+0x1ABD` and `+0x1ABE`. |
 | 8. Actor dispatch | `PlayerActor::Tick` `0x00548B00` | The local actor consumes the movement, current aim, and cast level once per stock tick and dispatches the selected primary/secondary skill. |
 
 The WndProc encoding is itself part of the contract:
@@ -75,11 +77,12 @@ For one left click over the arena:
 3. Independently of that control callback, `0x00429820` mirrors the raw left
    bit into the active input buffer. The control router and the held-state path
    therefore observe the same physical click for different purposes.
-4. `0x005C6D60` synthesizes current mouse aim/cast state. If `Game + 0x1ABE`
-   is zero, `PlayerActor::Tick` sees primary cast held and dispatches the
-   selected skill. Checks at `0x005495B0` and `0x0054960D` skip that path when
-   the cast seal is nonzero; `0x005C7390` owns the seal transition and clears
-   stale aim when blocking begins.
+4. `0x005C6D60` refreshes the two embedded control objects. `Game::Tick`
+   reanchors the aim control to the current player screen point before
+   `PlayerActor::Tick` reads its unit direction and primary level. If
+   `Game + 0x1ABE` is zero, checks at `0x005495B0` and `0x0054960D` permit the
+   selected primary skill to dispatch. `0x005C7390` owns the seal transition and
+   clears stale aim when blocking begins.
 5. `WM_LBUTTONUP` takes the same queue/router path, clears the held bit, and
    releases Win32 capture. The next fixed tick sees the cast level fall and
    runs the spell's release/stop transition.
@@ -112,7 +115,7 @@ The down/move/up routers use the same ownership rules:
 | --- | --- | --- |
 | Modal menu/dialog | Active modal root, then reverse-z child hit | Its control callback owns the edge. The lower HUD and world do not receive it. |
 | HUD | Topmost HUD child hit before the arena fallback | The HUD interaction owns the edge. In the live `hud_click_swallowed` trace, the input buffer still sampled left held while `cast_blocked=false` and `gameplay_input_blocked=false`, yet every actor tick kept `cast_active=false`. No world action was emitted. |
-| Arena/world | No captured/modal/HUD child wins, so the arena fallback is hit | Left level drives primary aim/cast; right drives the configured secondary/belt action. There is no native world-move click. |
+| Arena/world | No captured/modal/HUD child wins, so the arena fallback is hit | The full-window aim control owns normal mouse input. Left level drives primary aim/cast; right is the configured secondary/belt input. The movement-control object is not hit-testable in the PC profile, so there is no native world-move click. |
 | Loading overlay (`uigate`) | Loader blocking-overlay predicate supersedes gameplay ingress | Gameplay input is discarded while loader UI keeps its own window/render path. |
 
 Controls may swallow input by returning through their own handler without
@@ -150,8 +153,21 @@ Native movement is a level vector synthesized at `0x005C6D60` and consumed from
 `Game + 0x108/+0x10C` by `0x00548B00`. Keyboard levels are normalized, so
 diagonal movement is a direction rather than two independent full-speed axes.
 
+The reason this is not merely a negative live observation is visible in the
+control graph. `Game` embeds a movement control at `Game + 0x8C` and the
+full-window aim/cast control at `Game + 0x158`. Both use mouse down/move/up
+handlers `0x0042FF80`, `0x004301F0`, and `0x004303D0`, but the generic hit test
+at `0x00427EB0` returns a control itself only when flags bit `0x01` is set. In a
+fresh live PC profile the movement control is `0x14` (not targetable), while the
+aim control is `0x15` (targetable) and spans the native viewport. Mode `0` at
+`0x00B3BCB0` instead feeds the movement object from keyboard bindings through
+`0x0042FD80`. The dormant mouse-capable class therefore does not create an
+active mouse movement route.
+
 A click supplies neither a target point nor a path request and is not a held
-movement repeat. The live open-ground and wall traces both have:
+movement repeat in the active PC route. The live trials classify the actual
+cursor world point with `sd.nav.test_segment` before recording: one segment is
+open and the other blocked by stock navigation/collision. Both traces have:
 
 - zero `move` Intents;
 - zero native actor-position delta; and
@@ -164,17 +180,19 @@ than inventing a native behavior to satisfy the roadmap's earlier wording.
 ### Primary click-to-cast and aim
 
 Mouse down at `0x0042FF80` enables the primary/alternate level and derives the
-primary aim as a normalized vector from the viewport center to the native mouse
-point:
+primary aim as a normalized vector from the current player screen anchor to the
+native mouse point:
 
 ```text
-native_primary_aim = normalize(mouse_screen - viewport_center)
+native_primary_aim = normalize(mouse_screen - player_screen_anchor)
 ```
 
-While the button remains down, mouse move handler `0x004301F0` resamples that
-vector; mouse up `0x004303D0` clears the level. `PlayerActor::Tick` consumes the
-latest vector every fixed tick. Thus aim is level state, updated on every actual
-mouse move while held. If the cursor does not move, the last vector persists.
+Mouse move handler `0x004301F0` updates the stored pointer point and mouse up
+`0x004303D0` clears the level. While held, `Game::Tick` reanchors the control to
+the current player projection through `0x0042FE50` and `PlayerActor::Tick`
+consumes the latest vector every fixed tick. Aim can therefore resample when the
+pointer moves, when the actor moves, or when camera/view state changes. It
+persists only while all three remain unchanged.
 
 The abstract producer emits a world point. The exact camera projection recovered
 at `0x00462110` is:
@@ -185,9 +203,10 @@ world.y = view_origin.y + mouse_screen.y / view_scale
 ```
 
 For primary casts this world point is a canonical representation, not a claim
-that retail stores a point: retail stores the screen-centered unit direction.
-A faithful producer reprojects when pointer or camera state changes during a
-hold. Cursor-placed secondary spells do use the world projection directly.
+that retail stores a point: retail stores the player-anchored unit direction.
+A faithful producer reprojects throughout a hold when pointer, player, or camera
+state changes. Cursor-placed secondary spells do use the world projection
+directly.
 
 ### Earth: hold-to-charge and release
 
@@ -255,7 +274,7 @@ inventory `0x17`, skills `0x14`, belt 1 `0x201`, and belts 2-8 `0x02..0x08`.
 | Inventory | `I` / `0x17` | `I` / `0x17` |
 | Skills | `T` / `0x14` | `T` / `0x14` |
 | Belt 1 | Right mouse / `0x201` | Right mouse / `0x201` |
-| Belts 2-8 | `1` through `7` / `0x02..0x08` | Delete, End, NumPad 1, Page Up, Page Down, Insert, Home / `0xD3,0xCF,0x4F,0xC9,0xD1,0xD2,0xC7` |
+| Belts 2-8 | `1` through `7` / `0x02..0x08` | Delete, End, Backspace, Page Up, Page Down, Insert, Home / `0xD3,0xCF,0x0E,0xC9,0xD1,0xD2,0xC7` |
 
 The binding globals are movement at `0x00B3BCB4..0x00B3BCC0`, inventory
 `0x00B3BCC4`, skills `0x00B3BCC8`, menu `0x00B3BCCC`, and belt slots
@@ -301,7 +320,7 @@ the producer's last target/vector, avoiding an invalid zero "unit" vector.
 | Native observation | Intent output |
 | --- | --- |
 | Keyboard movement level begins/changes/ends | `move` with `unit_vector` and `start/update/stop` |
-| Native cursor/camera projection changes | `aim` with the current world point |
+| Native cursor/player/camera projection changes | `aim` with the current world point |
 | Left down / eligible held tick / left up | primary `cast` press / hold / release |
 | Right/belt-secondary down / held / up | secondary `cast` press / hold / release, plus `aim` when cursor-placed |
 | HUD/menu control hit | `interact`; no world `cast` or `move` from the same edge |
@@ -316,9 +335,10 @@ Gamepad API events.
 
 There are two required meanings of lossless:
 
-1. **Semantic replay:** the world aim point, cast slot, and exact press/hold/
-   release tick stream reproduce native mouse gameplay. Native mouse has no
-   movement information to lose.
+1. **Semantic replay:** the world aim point is retained on every held actor
+   sample, and the cast slot plus exact press/hold/release tick stream reproduce
+   native mouse gameplay. Native mouse has no movement information to lose in
+   the active PC route.
 2. **Bit-exact trace round trip:** `$defs.nativeEncodingRecord` is a golden-only
    envelope with zero or more Intents plus one immutable `native_source.raw`.
    There is exactly one encoding record for every recorded Win32, input-sample,
@@ -361,8 +381,10 @@ raw-to-encoding-to-raw equality.
 
 ## Absent by observation
 
-- **No native click-to-move:** no target-point request, path request, or held
-  mouse movement repeat exists in the retail player path.
+- **No active native click-to-move:** no target-point request or path request
+  exists, and normal PC mouse routing cannot target the embedded movement
+  control. The class is mouse-capable, but its live `0x14` hit-test flags make it
+  dormant while the full-window `0x15` aim control owns world clicks.
 - **No complete native gamepad path:** `0x005C6D60` contains a partial generic
   joystick-axis mode capable of writing movement/aim lanes. The binary census
   found no complete controller button-to-cast/interact mapping, no supported

@@ -131,7 +131,6 @@ conformance never sees it.
 Deck extras that cost us nothing: its trackpads can drive a mouse-shaped producer through Steam
 Input if a player prefers that, and gyro fine-aim is a plausible later addition — both are Steam
 Input configuration on top of the same two producers, not new code paths.
-
 ### 4.1 Steam Deck target (gates, measured — never assumed)
 
 | Concern | Requirement |

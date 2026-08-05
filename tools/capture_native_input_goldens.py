@@ -351,7 +351,10 @@ end
     def classify_nav_candidates(
         self,
         context: dict[str, float | int | bool],
-    ) -> tuple[dict[str, float], dict[str, float]]:
+    ) -> tuple[
+        dict[str, float | bool],
+        dict[str, float | bool],
+    ]:
         candidates = [
             (0.50, 0.18),
             (0.18, 0.56),
@@ -367,20 +370,29 @@ end
         origin_y = float(context["camera_origin_y"])
         width = float(context["camera_width"])
         height = float(context["camera_height"])
-        scale = float(context["camera_scale"])
         player_x = float(context["player_x"])
         player_y = float(context["player_y"])
-        if not math.isfinite(scale) or abs(scale) < 0.0001:
-            raise CaptureFailure(f"invalid live camera scale: {scale}")
+        if (
+            not math.isfinite(width)
+            or not math.isfinite(height)
+            or width <= 0.0
+            or height <= 0.0
+        ):
+            raise CaptureFailure(
+                f"invalid live camera span: width={width} height={height}"
+            )
 
-        records: list[dict[str, float]] = []
+        records: list[dict[str, float | bool]] = []
         for fraction_x, fraction_y in candidates:
             records.append(
                 {
                     "fraction_x": fraction_x,
                     "fraction_y": fraction_y,
-                    "world_x": origin_x + fraction_x * width / scale,
-                    "world_y": origin_y + fraction_y * height / scale,
+                    # camera.width/height are already the native world-space
+                    # view span. Dividing by view_scale again would classify a
+                    # different point from the one GameWindowProc receives.
+                    "world_x": origin_x + fraction_x * width,
+                    "world_y": origin_y + fraction_y * height,
                 }
             )
         lines = [
@@ -403,6 +415,9 @@ end
                 continue
             key, raw = line.split("=", 1)
             classification[int(key.removeprefix("candidate_"))] = raw == "true"
+        for index, record in enumerate(records):
+            if index in classification:
+                record["nav_segment_open"] = classification[index]
         open_point = next(
             (record for index, record in enumerate(records) if classification.get(index)),
             None,
@@ -571,14 +586,17 @@ def encode_click_trace(
         )
 
     selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    initial_aim_point: dict[str, float] | None = None
     if route == "world_cast":
-        aim_point = aim_point_from_trace(
+        initial_aim_point = aim_point_from_trace(
             event
             for event in events
             if int(event["sequence"]) >= int(down["sequence"])
         )
         if move is not None:
-            selected.append((move, {"kind": "aim", "point": aim_point}))
+            selected.append(
+                (move, {"kind": "aim", "point": initial_aim_point})
+            )
         selected.append(
             (
                 down,
@@ -586,6 +604,20 @@ def encode_click_trace(
             )
         )
         for event in active_actor_events:
+            cursor_world = event.get("cursor_world") or {}
+            if cursor_world.get("readable"):
+                selected.append(
+                    (
+                        event,
+                        {
+                            "kind": "aim",
+                            "point": {
+                                "x": float(cursor_world["x"]),
+                                "y": float(cursor_world["y"]),
+                            },
+                        },
+                    )
+                )
             selected.append(
                 (
                     event,
@@ -673,6 +705,7 @@ def encode_click_trace(
             and not event.get("cast_active")
             for event in actor_events
         ),
+        "initial_aim_world_point": initial_aim_point,
     }
     return raw_timeline, intent_encoding, observations
 
@@ -685,7 +718,7 @@ def build_capture(
     executable_sha256: str,
     trace: dict[str, Any],
     helper: dict[str, Any],
-    target: dict[str, float],
+    target: dict[str, float | bool],
     context: dict[str, float | int | bool],
     expected_route: str,
     interact_target: str = "hud",
@@ -695,6 +728,23 @@ def build_capture(
         expected_route=expected_route,
         interact_target=interact_target,
     )
+    if expected_route == "world_cast":
+        recorded_target = observations.get("initial_aim_world_point")
+        if not isinstance(recorded_target, dict):
+            raise CaptureFailure(
+                f"{scenario}: world click omitted its native aim point"
+            )
+        target_error = math.hypot(
+            float(recorded_target["x"]) - float(target["world_x"]),
+            float(recorded_target["y"]) - float(target["world_y"]),
+        )
+        observations["screen_to_world_target_error"] = target_error
+        observations["nav_segment_open"] = target.get("nav_segment_open")
+        if target_error > 1.0:
+            raise CaptureFailure(
+                f"{scenario}: classified world target does not match the "
+                f"recorded cursor projection (error={target_error})"
+            )
     reconstructed = [record["native_source"]["raw"] for record in intent_timeline]
     raw_hash = sha256_bytes(canonical_bytes(raw_timeline))
     reconstructed_hash = sha256_bytes(canonical_bytes(reconstructed))
@@ -768,7 +818,9 @@ def capture_profile(
 
     if profile == "earth":
         open_point, wall_point = session.classify_nav_candidates(context)
-        scenarios: list[tuple[str, dict[str, float], int, str, str]] = [
+        scenarios: list[
+            tuple[str, dict[str, float | bool], int, str, str]
+        ] = [
             (
                 "click_open_ground_native_absence",
                 open_point,
