@@ -413,6 +413,15 @@ from static_re_runtime_cast_contracts import (
     test_write_watch_rearm_is_owned_by_faulting_thread,
     test_write_watches_are_transparent_to_loader_memory_access,
 )
+from static_re_projectile_spell_mechanics_contracts import (
+    test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
+    test_earth_charge_curve_and_release_geometry_are_exact,
+    test_materialized_projectile_trajectories_pin_native_motion,
+    test_projectile_contact_events_cross_check_existing_damage_goldens,
+    test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
+    test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
+    test_projectile_spell_native_dispatch_contract_is_complete,
+)
 from static_wan_corpse_rendering_contracts import (
     test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
 )
@@ -1611,5 +1620,33 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "driven remote players use the skipped stock light branch",
         test_driven_remote_players_use_the_stock_light_branch_skipped_by_their_slot,
+    ),
+    (
+        "projectile/spell native dispatch is complete",
+        test_projectile_spell_native_dispatch_contract_is_complete,
+    ),
+    (
+        "projectile goldens pin live provenance and ranks",
+        test_projectile_goldens_pin_live_capture_provenance_and_rank_coverage,
+    ),
+    (
+        "materialized projectile motion is native-tick exact",
+        test_materialized_projectile_trajectories_pin_native_motion,
+    ),
+    (
+        "Earth charge and release geometry are exact",
+        test_earth_charge_curve_and_release_geometry_are_exact,
+    ),
+    (
+        "Air and Frost remain tick queries with exact stop edges",
+        test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
+    ),
+    (
+        "projectile contacts cross-check existing damage goldens",
+        test_projectile_contact_events_cross_check_existing_damage_goldens,
+    ),
+    (
+        "projectile presentation and Fire_Goodguy semantics are pinned",
+        test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
     ),
 ]

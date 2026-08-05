@@ -194,8 +194,8 @@ implementing agent:
 
 Gap IDs are stable and are never renumbered — dispatched campaigns cite them. The **tiers** below
 are the execution order, set by the owner on 2026-08-04: menus first, then hub, then in-run. G1
-and G2 were dispatched before that reordering and continue in flight; everything else follows
-tier order.
+and G2 were dispatched before that reordering; G1 remains in flight and G2 is now closed.
+Everything else follows tier order.
 
 ### Tier A — shell and menus (first)
 
@@ -224,7 +224,7 @@ contradict the game.
 | Gap | Campaign | Scope | Status |
 | --- | --- | --- | --- |
 | G1 sim core: movement integrator, tick graph, RNG | **physre** | Input→intent→velocity→position pipeline with exact constants (base speeds, diagonal handling, knockback, wall response via `movement_collision_test_circle_placement`); the full tick graph (which systems at which cadence, in what order — reconcile 67 ms motion + 250 ms mana + render frames against `game-timing-scale.md`); native RNG algorithm, state, seeding, per-system streams, gameplay call-site census. Goldens: per-tick position traces for scripted inputs; RNG streams. | IN FLIGHT (dispatched 2026-08-04) |
-| G2 projectile/spell mechanics | **spellre** | Per element (+frost channel): spawn origin/offset, velocity, collision radius, lifetime, contact cadence, pierce/residual semantics, earth charge curve, channel mechanics; damage APPLICATION path cross-referenced to the existing damage docs (do not re-derive numbers); presentation hooks (sprite ids/frame cadence) sufficient for visual parity. Goldens: per-tick projectile trajectories per element/rank incl. ≥3 earth charge levels; contact events. | IN FLIGHT (dispatched 2026-08-04) |
+| G2 projectile/spell mechanics | **spellre** | Per element (+frost channel): spawn origin/offset, velocity, collision radius, lifetime, contact cadence, pierce/residual semantics, earth charge curve, channel mechanics; damage APPLICATION path cross-referenced to the existing damage docs (do not re-derive numbers); presentation hooks (sprite ids/frame cadence) sufficient for visual parity. Goldens: per-tick projectile trajectories per element/rank incl. ≥3 earth charge levels; contact events. | **DONE 2026-08-04** — [mechanics](reverse-engineering/native-projectile-and-spell-mechanics.md), [live goldens](../tests/fixtures/webgame/projectile-goldens.json), and static RE contracts. |
 | G3 enemy behavior interpreter | monre | MonsterRecipe 42-field semantics → behavior state machine (approach, attack cadence, specials, spawners); skeleton family first, then full census via `build_native_enemy_catalog.py`. Goldens: enemy movement/attack traces vs a stationary and a moving target. | QUEUED |
 | G4 animation & presentation state machines | animre | Wizard + enemy sprite state transitions (idle/walk/cast/hit/death), frame timings, attachment points (staff orb type 7004), lighting/shadow model, camera constants (`native-camera-control.md`). Consumes G12's composition spec. Goldens: frame-by-frame animation captures with timestamps. | QUEUED |
 | G9 retail HUD spec | uire | Pixel-accurate HUD layout/behavior census from `ui-binary-map.md`/`ui-engine-system-map.md` (healthbar append ABI already known from allyvis), plus the 16:10 / 1280×800 scaling rules §4.1 requires. | QUEUED |
