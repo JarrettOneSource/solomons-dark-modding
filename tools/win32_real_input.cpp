@@ -333,6 +333,75 @@ void Click(HWND window, double x_fraction, double y_fraction, DWORD hold_ms) {
         static_cast<unsigned long>(target_process_id));
 }
 
+void MessageClick(
+    HWND window,
+    double x_fraction,
+    double y_fraction,
+    DWORD hold_ms) {
+    DWORD target_process_id = 0;
+    GetWindowThreadProcessId(window, &target_process_id);
+    RECT client{};
+    if (!GetClientRect(window, &client)) {
+        Fail("GetClientRect failed for message click", 16);
+    }
+    const POINT client_point{
+        static_cast<LONG>(
+            std::lround(
+                x_fraction * static_cast<double>(client.right - 1))),
+        static_cast<LONG>(
+            std::lround(
+                y_fraction * static_cast<double>(client.bottom - 1))),
+    };
+    POINT screen_point = client_point;
+    if (!ClientToScreen(window, &screen_point) ||
+        !SetCursorPos(screen_point.x, screen_point.y)) {
+        Fail("cursor positioning failed for message click", 17);
+    }
+
+    const LPARAM position = MAKELPARAM(client_point.x, client_point.y);
+    const auto send = [window, position](
+                          UINT message,
+                          WPARAM buttons,
+                          const char* name) {
+        DWORD_PTR ignored = 0;
+        SetLastError(ERROR_SUCCESS);
+        if (!SendMessageTimeoutW(
+                window,
+                message,
+                buttons,
+                position,
+                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                5000,
+                &ignored)) {
+            std::fprintf(
+                stderr,
+                "%s failed with Win32 error %lu\n",
+                name,
+                static_cast<unsigned long>(GetLastError()));
+            std::exit(18);
+        }
+    };
+
+    send(WM_MOUSEMOVE, 0, "WM_MOUSEMOVE");
+    send(WM_LBUTTONDOWN, MK_LBUTTON, "WM_LBUTTONDOWN");
+    Sleep(hold_ms);
+    send(WM_LBUTTONUP, 0, "WM_LBUTTONUP");
+    std::printf(
+        "{\"delivery\":\"SendMessageTimeoutW\",\"x\":%.8f,"
+        "\"y\":%.8f,\"holdMilliseconds\":%lu,"
+        "\"clientX\":%ld,\"clientY\":%ld,"
+        "\"screenX\":%ld,\"screenY\":%ld,"
+        "\"targetProcessId\":%lu}\n",
+        x_fraction,
+        y_fraction,
+        static_cast<unsigned long>(hold_ms),
+        static_cast<long>(client_point.x),
+        static_cast<long>(client_point.y),
+        static_cast<long>(screen_point.x),
+        static_cast<long>(screen_point.y),
+        static_cast<unsigned long>(target_process_id));
+}
+
 WORD VirtualKey(const char* key) {
     if (std::strcmp(key, "enter") == 0) return VK_RETURN;
     if (std::strcmp(key, "escape") == 0) return VK_ESCAPE;
@@ -382,6 +451,9 @@ int main(int argc, char** argv) {
             "       win32_real_input click-path "
             "<expected-executable-path> <x-fraction> <y-fraction> "
             "<hold-milliseconds>\n"
+            "       win32_real_input message-click <process-id> "
+            "<expected-executable-path> <x-fraction> <y-fraction> "
+            "<hold-milliseconds>\n"
             "       win32_real_input key <process-id> "
             "<expected-executable-path> <key> <hold-milliseconds>\n");
         return 2;
@@ -389,10 +461,13 @@ int main(int argc, char** argv) {
     const bool is_click = std::strcmp(argv[1], "click") == 0;
     const bool is_click_path =
         std::strcmp(argv[1], "click-path") == 0;
+    const bool is_message_click =
+        std::strcmp(argv[1], "message-click") == 0;
     const bool is_key = std::strcmp(argv[1], "key") == 0;
-    if ((!is_click && !is_click_path && !is_key) ||
+    if ((!is_click && !is_click_path && !is_message_click && !is_key) ||
         (is_click && argc != 7) ||
         (is_click_path && argc != 6) ||
+        (is_message_click && argc != 7) ||
         (is_key && argc != 6)) {
         Fail("invalid real-input command line", 2);
     }
@@ -415,6 +490,12 @@ int main(int argc, char** argv) {
     FocusWindow(window);
     if (is_click) {
         Click(
+            window,
+            ParseFraction(argv[4], "x-fraction"),
+            ParseFraction(argv[5], "y-fraction"),
+            ParseHoldMilliseconds(argv[6]));
+    } else if (is_message_click) {
+        MessageClick(
             window,
             ParseFraction(argv[4], "x-fraction"),
             ParseFraction(argv[5], "y-fraction"),

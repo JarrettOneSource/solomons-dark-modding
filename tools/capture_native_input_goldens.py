@@ -2,9 +2,9 @@
 """Record native input traces and mechanically encode browser Intent goldens.
 
 This tool is intentionally live-only. It arms the bounded loader recorder,
-drives the exact staged process with Win32 SendInput, retains the recorder's
-raw records verbatim, and proves the native_source round trip before writing a
-fixture. It never synthesizes or edits a trace event.
+drives the exact staged process through its retail Win32 window procedure,
+retains the recorder's raw records verbatim, and proves the native_source round
+trip before writing a fixture. It never synthesizes or edits a trace event.
 """
 
 from __future__ import annotations
@@ -156,24 +156,40 @@ class LiveSession:
             time.sleep(0.25)
         raise CaptureFailure(f"{self.instance}: Lua exec never became ready")
 
-    def enter_testrun(self) -> None:
+    def enter_solo_run(self) -> None:
         # The stock-routed hub seam queues the same native transition as the UI.
-        self.lua(
-            "local ok, value = pcall(sd.hub.start_testrun); "
-            "print('queued=' .. tostring(ok and value))"
-        )
         deadline = time.time() + 45.0
+        queued = False
+        last = ""
         while time.time() < deadline:
+            if not queued:
+                output = self.lua(
+                    "local s=sd.world and sd.world.get_scene "
+                    "and sd.world.get_scene(); "
+                    "local queued=false; "
+                    "if type(s)=='table' and s.kind=='hub' then "
+                    "local ok,value=pcall(sd.hub.start_match); "
+                    "queued=ok and value==true; end; "
+                    "print('kind=' .. tostring(type(s)=='table' and s.kind) "
+                    ".. ';queued=' .. tostring(queued))"
+                )
+                queued = "queued=true" in output
             output = self.lua(
                 "local p=sd.player and sd.player.get_state and sd.player.get_state(); "
                 "local c=sd.camera and sd.camera.get_state and sd.camera.get_state(); "
-                "print('live=' .. tostring(type(p)=='table' and p.valid==true "
-                "and type(c)=='table' and c.scene_available==true))"
+                "local s=sd.world and sd.world.get_scene and sd.world.get_scene(); "
+                "print('live=' .. tostring(type(p)=='table' "
+                "and (tonumber(p.actor_address) or 0) > 0 "
+                "and type(c)=='table' and c.scene_available==true "
+                "and type(s)=='table' and s.kind=='arena'))"
             )
             if "live=true" in output:
                 return
+            last = output
             time.sleep(0.25)
-        raise CaptureFailure(f"{self.instance}: stock testrun did not materialize")
+        raise CaptureFailure(
+            f"{self.instance}: stock solo run did not materialize: {last}"
+        )
 
     def query_context(self) -> dict[str, float | int | bool]:
         code = r"""
@@ -244,6 +260,8 @@ end
         context: dict[str, float | int | bool],
     ) -> tuple[dict[str, float], dict[str, float]]:
         candidates = [
+            (0.02, 0.50),
+            (0.98, 0.50),
             (0.18, 0.18),
             (0.50, 0.18),
             (0.82, 0.18),
@@ -342,7 +360,7 @@ end
         completed = run_command(
             [
                 str(self.real_input_path),
-                "click",
+                "message-click",
                 str(self.process_id),
                 str(self.executable_path),
                 f"{fraction_x:.9g}",
@@ -595,7 +613,8 @@ def build_capture(
             .isoformat()
             .replace("+00:00", "Z"),
             "capture_method": (
-                "exact-path win32_real_input SendInput -> retail GameWindowProc "
+                "exact-PID/path win32_real_input SendMessageTimeoutW WM_MOUSE* "
+                "-> retail GameWindowProc "
                 "observer -> native Input double-buffer sample -> local "
                 "PlayerActor post-stock sample; recorder JSON mechanically "
                 "encoded by tools/capture_native_input_goldens.py"
@@ -639,7 +658,7 @@ def capture_profile(
     evidence_directory: Path,
 ) -> list[dict[str, Any]]:
     session.wait_ready()
-    session.enter_testrun()
+    session.enter_solo_run()
     context = session.query_context()
     executable_sha = sha256_file(session.executable_path)
     captures: list[dict[str, Any]] = []

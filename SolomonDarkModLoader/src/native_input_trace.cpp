@@ -22,7 +22,7 @@
 namespace sdmod {
 namespace {
 
-constexpr std::size_t kNativeInputTraceCapacity = 1536;
+constexpr std::size_t kNativeInputTraceCapacity = 768;
 constexpr std::size_t kGameplayInputBufferStride = 0x203;
 constexpr std::size_t kGameplayInputBufferCount = 2;
 
