@@ -108,6 +108,20 @@ int LuaDebugCallThiscallRetU32(lua_State* state) {
     return 1;
 }
 
+// sd.debug.open_stock_map_picker_for_capture() -> boolean, string
+// This is an evidence-only seam. It calls the already-installed MapPicker
+// trampoline, not the loader's authority hook, and performs no fallback.
+int LuaDebugOpenStockMapPickerForCapture(lua_State* state) {
+    std::string error_message;
+    const bool opened = OpenStockMapPickerForDebugCapture(&error_message);
+    lua_pushboolean(state, opened ? 1 : 0);
+    lua_pushlstring(
+        state,
+        error_message.c_str(),
+        error_message.size());
+    return 2;
+}
+
 // sd.debug.queue_native_poison_behavior_probe(participant_id, duration_ticks,
 //     damage_per_tick, source_slot) -> boolean, string
 // participant_id=0 targets the local player. The native factory/OnApply work

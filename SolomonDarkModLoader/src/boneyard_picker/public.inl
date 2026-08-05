@@ -391,6 +391,14 @@ bool OpenHostBoneyardPicker(std::string* error_message) {
     return OpenPickerLocked(0, error_message);
 }
 
+bool OpenStockMapPickerForDebugCapture(std::string* error_message) {
+    return ApplyStockSelectionAndOpenNativePicker(
+        nullptr,
+        0,
+        true,
+        error_message);
+}
+
 bool TryDispatchAuthoritativeBoneyardRunOnGameThread(
     bool* handled,
     std::string* error_message) {

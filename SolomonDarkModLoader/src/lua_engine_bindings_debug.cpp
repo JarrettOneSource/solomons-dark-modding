@@ -1,5 +1,6 @@
 #include "lua_engine_bindings_internal.h"
 #include "binary_layout.h"
+#include "boneyard_picker.h"
 #include "d3d9_end_scene_hook.h"
 #include "gameplay_seams.h"
 #include "memory_access.h"
@@ -120,6 +121,10 @@ void RegisterLuaDebugBindings(lua_State* state) {
     RegisterFunction(state, &LuaDebugCallThiscallU32, "call_thiscall_u32");
     RegisterFunction(state, &LuaDebugCallThiscallU32RetU32, "call_thiscall_u32_ret_u32");
     RegisterFunction(state, &LuaDebugCallThiscallRetU32, "call_thiscall_ret_u32");
+    RegisterFunction(
+        state,
+        &LuaDebugOpenStockMapPickerForCapture,
+        "open_stock_map_picker_for_capture");
     RegisterFunction(
         state,
         &LuaDebugQueueNativePoisonBehaviorProbe,

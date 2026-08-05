@@ -101,6 +101,9 @@ void PumpBoneyardPickerOnGameThread();
 
 bool ShouldHijackHostBoneyardStart();
 bool OpenHostBoneyardPicker(std::string* error_message);
+// Capture-only debug seam: bypasses the loader's start hook and invokes the
+// stock MapPicker trampoline after clearing the selected Boneyard String.
+bool OpenStockMapPickerForDebugCapture(std::string* error_message);
 bool TryDispatchAuthoritativeBoneyardRunOnGameThread(
     bool* handled,
     std::string* error_message);
