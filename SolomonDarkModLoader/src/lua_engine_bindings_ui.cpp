@@ -259,6 +259,41 @@ int LuaUiGetLayoutSnapshot(lua_State* state) {
     return 1;
 }
 
+int LuaUiCaptureCurrentLayout(lua_State* state) {
+    const auto* screen_id = luaL_checkstring(state, 1);
+    DebugUiLayoutSnapshot snapshot;
+    if (!sdmod::TryCaptureCurrentDebugUiLayoutSnapshot(
+            screen_id,
+            &snapshot)) {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_createtable(state, 0, 7);
+    lua_pushinteger(state, static_cast<lua_Integer>(snapshot.generation));
+    lua_setfield(state, -2, "generation");
+    lua_pushinteger(
+        state,
+        static_cast<lua_Integer>(snapshot.captured_at_milliseconds));
+    lua_setfield(state, -2, "captured_at_milliseconds");
+    lua_pushstring(state, snapshot.screen_id.c_str());
+    lua_setfield(state, -2, "screen_id");
+    lua_pushstring(state, snapshot.screen_title.c_str());
+    lua_setfield(state, -2, "screen_title");
+    lua_pushstring(state, snapshot.capture_method.c_str());
+    lua_setfield(state, -2, "capture_method");
+    lua_createtable(
+        state,
+        static_cast<int>(snapshot.elements.size()),
+        0);
+    for (std::size_t index = 0; index < snapshot.elements.size(); ++index) {
+        PushDebugUiLayoutElement(state, snapshot.elements[index]);
+        lua_rawseti(state, -2, static_cast<lua_Integer>(index + 1));
+    }
+    lua_setfield(state, -2, "elements");
+    return 1;
+}
+
 int LuaUiFindElement(lua_State* state) {
     const auto* label = luaL_checkstring(state, 1);
     const auto* surface_id = lua_gettop(state) >= 2 && !lua_isnil(state, 2) ? luaL_checkstring(state, 2) : nullptr;
@@ -604,6 +639,10 @@ void RegisterLuaUiBindings(lua_State* state) {
         state,
         &LuaUiGetLayoutSnapshot,
         "get_layout_snapshot");
+    RegisterFunction(
+        state,
+        &LuaUiCaptureCurrentLayout,
+        "capture_current_layout");
     RegisterFunction(state, &LuaUiFindElement, "find_element");
     RegisterFunction(state, &LuaUiFindAction, "find_action");
     RegisterFunction(state, &LuaUiGetActionDispatch, "get_action_dispatch");

@@ -99,6 +99,61 @@ bool TryGetDebugUiLayoutSnapshot(
     return true;
 }
 
+bool TryCaptureCurrentDebugUiLayoutSnapshot(
+    std::string_view screen_id,
+    DebugUiLayoutSnapshot* snapshot) {
+    if (screen_id.empty() || screen_id.size() > 48 || snapshot == nullptr ||
+        !std::all_of(
+            screen_id.begin(),
+            screen_id.end(),
+            [](const char character) {
+                const auto byte = static_cast<unsigned char>(character);
+                return std::islower(byte) != 0 || std::isdigit(byte) != 0 ||
+                       character == '_';
+            })) {
+        return false;
+    }
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    if (!g_debug_ui_overlay_state.initialized ||
+        !g_debug_ui_overlay_state.menu_layout_capture_enabled ||
+        g_debug_ui_overlay_state.latest_layout_snapshot.elements.empty()) {
+        return false;
+    }
+
+    auto captured = g_debug_ui_overlay_state.latest_layout_snapshot;
+    const auto classification_agrees = captured.screen_id == screen_id;
+    if (!classification_agrees) {
+        captured.elements.erase(
+            std::remove_if(
+                captured.elements.begin(),
+                captured.elements.end(),
+                [](const DebugUiLayoutElement& element) {
+                    return element.kind != "art";
+                }),
+            captured.elements.end());
+        captured.screen_title.clear();
+        captured.capture_method +=
+            " + exact live-navigation screen tag (stale semantics omitted)";
+    }
+    if (captured.elements.empty()) {
+        return false;
+    }
+
+    captured.screen_id = std::string(screen_id);
+    for (auto& element : captured.elements) {
+        const auto separator = element.id.find('.');
+        element.id = captured.screen_id +
+            (separator == std::string::npos
+                ? std::string(".") + element.id
+                : element.id.substr(separator));
+    }
+    g_debug_ui_overlay_state.layout_snapshots_by_screen[captured.screen_id] =
+        captured;
+    *snapshot = std::move(captured);
+    return true;
+}
+
 bool TryFindDebugUiActionElement(
     std::string_view action_id,
     std::string_view surface_id,

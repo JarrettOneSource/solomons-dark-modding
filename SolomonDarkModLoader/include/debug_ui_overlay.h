@@ -95,6 +95,9 @@ bool TryGetLatestDebugUiLayoutSnapshot(DebugUiLayoutSnapshot* snapshot);
 bool TryGetDebugUiLayoutSnapshot(
     std::string_view screen_id,
     DebugUiLayoutSnapshot* snapshot);
+bool TryCaptureCurrentDebugUiLayoutSnapshot(
+    std::string_view screen_id,
+    DebugUiLayoutSnapshot* snapshot);
 bool TryFindDebugUiActionElement(std::string_view action_id, std::string_view surface_id, DebugUiSnapshotElement* element);
 bool TryGetDebugUiActionDispatchSnapshot(std::uint64_t request_id, DebugUiActionDispatchSnapshot* snapshot);
 bool TryActivateDebugUiAction(

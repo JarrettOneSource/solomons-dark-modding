@@ -107,7 +107,7 @@ end
 local function boolean(value)
   return value and 'true' or 'false'
 end
-local snapshot = sd.ui.get_layout_snapshot($screenLiteral)
+local snapshot = sd.ui.capture_current_layout($screenLiteral)
 if type(snapshot) ~= 'table' then
   return '__MISSING_LAYOUT__'
 end
@@ -146,7 +146,7 @@ return table.concat(output)
 
 $snapshotJson = Invoke-TargetLua -LuaCode $lua
 if ($snapshotJson -eq "__MISSING_LAYOUT__") {
-    throw "The live UI tree has no retained '$ScreenId' layout snapshot."
+    throw "The live UI tree could not capture the current frame as '$ScreenId'."
 }
 $snapshot = $snapshotJson | ConvertFrom-Json
 if ($snapshot.screen_id -ne $ScreenId) {

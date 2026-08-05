@@ -63,6 +63,20 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("kMenuLayoutCaptureTrackedDialogPriorityMs", frame)
         self.assertIn("menu_layout_capture_enabled", frame)
 
+    def test_current_frame_tag_drops_stale_semantics(self) -> None:
+        api = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "public_api_surface_dispatch.inl"
+        )
+        bindings = read("SolomonDarkModLoader/src/lua_engine_bindings_ui.cpp")
+        recorder = read("scripts/Record-NativeMenuLayout.ps1")
+        self.assertIn("TryCaptureCurrentDebugUiLayoutSnapshot", api)
+        self.assertIn('element.kind != "art"', api)
+        self.assertIn("std::remove_if", api)
+        self.assertIn("stale semantics omitted", api)
+        self.assertIn("capture_current_layout", bindings)
+        self.assertIn("sd.ui.capture_current_layout", recorder)
+
     def test_position_draw_capture_survives_the_gameplay_hook_chain(self) -> None:
         header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")
         public_api = read(
@@ -114,7 +128,7 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
 
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
         recorder = read("scripts/Record-NativeMenuLayout.ps1")
-        self.assertIn("sd.ui.get_layout_snapshot", recorder)
+        self.assertIn("sd.ui.capture_current_layout", recorder)
         self.assertIn("sd.debug.capture_backbuffer", recorder)
         self.assertIn("Get-FileHash", recorder)
         self.assertNotIn("GetPixel", recorder)
