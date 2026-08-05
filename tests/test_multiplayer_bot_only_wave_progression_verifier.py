@@ -138,14 +138,14 @@ class BotOnlyWaveProgressionVerifierTests(unittest.TestCase):
             )
         )
 
-    def test_fixture_is_a_four_action_melee_cycle(self) -> None:
+    def test_fixture_is_a_five_action_melee_cycle(self) -> None:
         fixture = verifier.DEFAULT_WAVE_FIXTURE.read_text(encoding="utf-8")
         self.assertEqual(
             sum(line.strip() == "WAVE" for line in fixture.splitlines()),
-            4,
+            5,
         )
         self.assertNotIn("SKELETONARCHER", fixture)
-        self.assertEqual(fixture.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"), 4)
+        self.assertEqual(fixture.count("SKELETON:FLAG_WEAK|FLAG_HPDOWN"), 5)
 
 
 if __name__ == "__main__":
