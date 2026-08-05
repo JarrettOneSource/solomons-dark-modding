@@ -56,6 +56,13 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("luaL_checkstring(state, 1)", bindings)
         self.assertIn('"get_layout_snapshot"', bindings)
 
+        frame = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "label_resolution_surface_registry_and_frame_render.inl"
+        )
+        self.assertIn("kMenuLayoutCaptureTrackedDialogPriorityMs", frame)
+        self.assertIn("menu_layout_capture_enabled", frame)
+
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
         recorder = read("scripts/Record-NativeMenuLayout.ps1")
         self.assertIn("sd.ui.get_layout_snapshot", recorder)

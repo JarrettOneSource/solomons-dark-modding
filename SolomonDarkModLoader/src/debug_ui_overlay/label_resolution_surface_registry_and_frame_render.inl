@@ -33,6 +33,8 @@ static constexpr std::size_t kSemanticSurfaceRegistrySize =
     sizeof(s_semantic_surface_registry) /
     sizeof(s_semantic_surface_registry[0]);
 static constexpr std::uint64_t kFreshTrackedDialogPriorityMs = 250;
+static constexpr std::uint64_t
+    kMenuLayoutCaptureTrackedDialogPriorityMs = 2000;
 
 void ResetSurfaceRegistryFirstFrameFlags() {
     for (auto& entry : s_semantic_surface_registry) {
@@ -195,11 +197,15 @@ void RenderOverlayFrame(IDirect3DDevice9* device) {
     }
 
     const auto now_ms = static_cast<std::uint64_t>(GetTickCount64());
+    const auto tracked_dialog_priority_ms =
+        g_debug_ui_overlay_state.menu_layout_capture_enabled
+        ? kMenuLayoutCaptureTrackedDialogPriorityMs
+        : kFreshTrackedDialogPriorityMs;
     const bool dialog_was_just_captured =
         dialog_snapshot.has_value() &&
         now_ms >= dialog_snapshot->captured_at &&
         now_ms - dialog_snapshot->captured_at <=
-            kFreshTrackedDialogPriorityMs;
+            tracked_dialog_priority_ms;
     if (dialog_snapshot.has_value() &&
         !dialog_was_just_captured &&
         higher_priority_surface_name[0] != '\0' &&
