@@ -613,3 +613,124 @@ def test_native_sim_recorder_seam_is_bounded_isolated_and_registered() -> str:
         ),
     )
     return "recorder is clean-SHA gated, isolated, bounded, registered, and roadmap-closing"
+
+
+# The one seeding idiom in the binary: App[+0x28] * 0xEF3, at exactly these
+# twelve byte-verified call sites.
+SEED_MULTIPLIER = 0xEF3
+SEED_SITES = (
+    0x00465180,
+    0x0046E672,
+    0x00504261,
+    0x00504BC6,
+    0x0050664D,
+    0x0050917B,
+    0x00509425,
+    0x00509BA8,
+    0x00509D32,
+    0x00509F4E,
+    0x0050A3F7,
+    0x0050CECA,
+)
+RECOVERED_RUN_SEED = 5683095
+RECOVERED_APP_TICKS = 1485
+
+
+def test_recorded_run_seed_is_app_tick_derived_not_wall_clock() -> str:
+    """The recorded post-generation state must replay from App-tick seeding.
+
+    This is the load-bearing G1 claim: the observed 55-word stream is not a
+    clock artifact, it is `elapsed_unpaused_app_ticks * 0xEF3` seeded and then
+    advanced by exactly two draws.
+    """
+    if RECOVERED_APP_TICKS * SEED_MULTIPLIER != RECOVERED_RUN_SEED:
+        raise StaticReTestFailure(
+            f"{RECOVERED_RUN_SEED} is not {RECOVERED_APP_TICKS} * {SEED_MULTIPLIER:#x}"
+        )
+
+    rng = _load_json(RNG_FIXTURE)
+    active = rng["observed_run_seed"]["active_state_after_world_generation"]
+    outputs, index_a, index_b, words = _model_native_rng(
+        RECOVERED_RUN_SEED, active["divisor"], 2
+    )
+    del outputs
+    if words != active["state_words"]:
+        first = next(
+            index
+            for index, (a, b) in enumerate(zip(words, active["state_words"]))
+            if a != b
+        )
+        raise StaticReTestFailure(
+            "recorded RNG state does not replay from the App-tick seed; "
+            f"first divergence at word {first}"
+        )
+    if (index_a, index_b) != (active["index_a"], active["index_b"]):
+        raise StaticReTestFailure(
+            "recorded RNG cursor does not match a two-draw advance from the seed"
+        )
+
+    # The seed is uniquely resolved: neighbouring App-tick counts do not fit.
+    for delta in (-1, 1):
+        neighbour = (RECOVERED_APP_TICKS + delta) * SEED_MULTIPLIER
+        if _model_native_rng(neighbour, active["divisor"], 2)[3] == active["state_words"]:
+            raise StaticReTestFailure(
+                f"App-tick count is not uniquely resolved; {neighbour} also fits"
+            )
+
+    return (
+        f"recorded stream replays exactly from {RECOVERED_APP_TICKS} unpaused app "
+        f"ticks * {SEED_MULTIPLIER:#x}, all 55 words and both cursors"
+    )
+
+
+def test_app_tick_seeding_provenance_is_documented_and_byte_verified() -> str:
+    doc = read_text(DOC)
+    _require_tokens(
+        "App-tick seeding document",
+        doc,
+        (
+            "5683095 = 1485 * 0xEF3",
+            "seed = *(int *)(*(App **)0x00b401a8 + 0x28) * 0xEF3",
+            "confirmed at the byte level rather than from decompiler output",
+            "`0x00B401A8` is the Raptisoft `App` singleton",
+            "`0x0040B6B0`",
+            "App::vftable` at `0x007DB97C`",
+            "Slot 8 of `App::vftable` is\n`0x00427800`",
+            "elapsed-tick counter",
+            "The portability consequence is the load-bearing part.",
+            "not of game state",
+        ),
+    )
+    if "94.7" not in doc or "That reading is wrong." not in doc:
+        raise StaticReTestFailure(
+            "document must retain and retract the superseded wall-clock reading"
+        )
+
+    documented = tuple(
+        int(match, 16)
+        for match in re.findall(r"`0x00([0-9A-F]{6})`", doc)
+        if int(match, 16) in SEED_SITES
+    )
+    missing = [f"{site:#010x}" for site in SEED_SITES if site not in documented]
+    if missing:
+        raise StaticReTestFailure(
+            f"document does not list every seeding site: missing {', '.join(missing)}"
+        )
+    if len(set(SEED_SITES)) != 12:
+        raise StaticReTestFailure("seeding site census must be exactly twelve distinct sites")
+
+    _require_tokens(
+        "movement document gap table",
+        doc,
+        ("Seeding lifecycle / run determinism", "**Closed 2026-08-05**"),
+    )
+    _require_tokens(
+        "browser rebuild roadmap G1 row",
+        read_text(ROADMAP),
+        (
+            "The **seeding lifecycle is now closed**",
+            "twelve byte-verified sites",
+            "`App::vftable` slot 8 = the inherited base tick `0x00427800`",
+        ),
+    )
+    return "twelve byte-verified seeding sites, App singleton provenance, and G1 closure are pinned"

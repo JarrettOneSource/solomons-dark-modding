@@ -545,15 +545,62 @@ Three consequences follow:
 - Two draws is not a post-generation state. A stream that world generation had
   consumed cannot sit two steps past a fresh ladder.
 
-`5683095` is `94.7` minutes expressed in milliseconds, which is the shape of the
-`timeGetTime` startup seed described above, so the most economical explanation
-is that the observed global still held its retail clock seed. That is a
-hypothesis, not a finding: the snapshot alone cannot distinguish "`set_seed`
-never reached this object" from "something reseeded it from the clock
-afterwards". Either way the determinism claim in this subsection is
-**unverified by the recorded evidence**, and it is the claim a port most needs,
-since world generation, trader inventories, and drops all inherit it. See
-`## Not Yet Reversed`.
+`5683095` was previously read as `94.7` minutes in milliseconds — the shape of a
+`timeGetTime` startup seed. That reading is wrong. The number factors exactly:
+
+```text
+5683095 = 1485 * 0xEF3        (0xEF3 = 3827; 5683095 % 3827 == 0)
+```
+
+and `0xEF3` is not an arbitrary factor. It is the multiplier in the binary's
+**one and only** seeding idiom, which appears at exactly twelve call sites:
+
+```text
+seed = *(int *)(*(App **)0x00b401a8 + 0x28) * 0xEF3
+```
+
+All twelve were confirmed at the byte level rather than from decompiler output,
+which renders the struct offset ambiguously for a typed global pointer. Each
+site is `mov <reg>,[0x00b401a8]` (`a1 a8 01 b4 00`, `8b 0d …`, or `8b 15 …`)
+immediately followed by `mov <dst>,[<reg>+0x28]` (`8b 40/41/42/51 28`) and then
+`imul <reg>,<reg>,0xef3` (`69 c0/d2 f3 0e 00 00`):
+
+`0x00465180`, `0x0046E672`, `0x00504261`, `0x00504BC6`, `0x0050664D`,
+`0x0050917B`, `0x00509425`, `0x00509BA8`, `0x00509D32`, `0x00509F4E`,
+`0x0050A3F7`, `0x0050CECA`.
+
+`0x00B401A8` is the Raptisoft `App` singleton — written only by the `App`
+constructor `0x0040B6B0` (`*this = App::vftable` at `0x007DB97C`, then
+`String_Set("Unnamed App")` / `String_Set("Raptisoft")`, then
+`DAT_00b401a8 = this`) and by `0x0040BF00`; 666 sites read it.
+
+`App+0x28` is an **elapsed-tick counter**. Slot 8 of `App::vftable` is
+`0x00427800`, the inherited base-class tick, which the `App` does not override:
+
+```c
+if ((char)this->field_0x2C == 0 && this->field_0x68 == 0)   // not paused, not skipping
+    this->field_0x28 += 1;                                   // param_1[10]++
+```
+
+That function appears in ~40 vtables across the binary — it is the shared base
+tick — but its presence at slot 8 of `App::vftable` specifically is what makes
+`App+0x28` count unpaused application ticks.
+
+So the observed snapshot is explained without a clock: something constructed a
+level or screen when the app had run `1485` unpaused ticks. Divisibility by
+`3827` is the discriminating evidence — a coincidence at odds of roughly
+`1/3827` under the clock hypothesis, which predicts nothing about it.
+
+**The portability consequence is the load-bearing part.** Native RNG streams are
+a function of *elapsed unpaused application ticks at the moment of level
+construction*, not of game state. Two players who reach the same room with the
+same save, the same published seed, and the same inputs will seed different
+streams if they spent different amounts of time getting there. A port therefore
+cannot reproduce native world generation, trader inventories, or drops from game
+state alone; it must either carry the tick count as explicit state or accept that
+its streams diverge from retail. This also explains why the snapshot is neither
+the published seed `19088743` nor a post-generation state: `sd.rng.set_seed`
+writes a value that the next level construction simply overwrites.
 
 ### Shared versus private streams
 
@@ -635,12 +682,12 @@ preserves the exact executable code that produced the recordings.
 
 ## Not Yet Reversed
 
-Two RNG elements are documented from the decompile but are not pinned by any
-recorded golden, so an implementer cannot check a port against them.
+One RNG element is documented from the decompile but is not pinned by any
+recorded golden, so an implementer cannot check a port against it.
 
 | Element | State | What is missing |
 | --- | --- | --- |
-| Seeding lifecycle / run determinism | Unverified | No capture shows `sd.rng.set_seed`'s value actually seeding the object that world generation consumes, nor the Boneyard `0x006388B0` private-stream transfer taking effect. The single recorded snapshot inverts exactly to `NativeRng_Seed(5683095)` + 2 draws, which is neither the published seed nor a post-generation state. |
+| Seeding lifecycle / run determinism | **Closed 2026-08-05** | The seeding idiom is `App[+0x28] * 0xEF3` at twelve byte-verified sites, `App+0x28` counts unpaused application ticks, and the recorded snapshot's `5683095` factors exactly as `1485 * 0xEF3`. See *Active stream and seeding lifecycle* above. What remains is not a gap in the mechanism but a consequence of it: run determinism is **not achievable from game state**, so `sd.rng.set_seed` cannot control world generation and no capture will ever show it doing so. The Boneyard `0x006388B0` private-stream transfer is still unobserved. |
 | Float primitive `0x00401310` | Unpinned | Neither fixture records a single float draw. `rng-goldens.json` holds four integer sequences; `movement-goldens.json` contains no RNG samples at all. The inclusive `Integer(100001) / 100000 * magnitude` mapping, the reachability of both `0.0` and the endpoint, and the sign behaviour are all unrecorded, yet contract item 7 demands parity on them. |
 
 Closing the first needs a live capture that seeds a run with a known value and

@@ -432,44 +432,170 @@ goldens, not runtime automation instructions: tests should compare the
 reimplemented mechanics to the stored native tick sequence within the header's
 explicit epsilon and should never silently widen it.
 
+## The cast glyph emitter
+
+The emitter is **asset data plus a fully determined index**. Nothing about it is
+fitted to the goldens: the index arithmetic is read from the instruction stream
+at `0x0053B830`, the element offsets are `double` constants read out of the PE,
+and the point table is a block of the shipped `images/Clothes.bundle`. The
+goldens are then used only to *check* the reconstruction, which they do exactly.
+
+### Facing index
+
+```text
+facing = ((int)actor.heading_degrees + 7) / 15     // truncation happens BEFORE the +7
+if (facing >= 24) facing -= 24                     // one conditional subtract, NOT a modulo
+```
+
+```asm
+0053b838  fld   dword ptr [edi + 0x6c]   ; heading in DEGREES, float32
+0053b83b  call  0x747360                 ; CRT float->int truncation
+0053b840  lea   ecx, [eax + 7]
+0053b843  mov   eax, 0x88888889          ; \ signed divide by 15
+0053b848  imul  ecx                      ; |
+0053b84c  sar   edx, 3                   ; /
+0053b856  cmp   esi, 0x18
+0053b859  jl    0x53b85e
+0053b85b  sub   esi, 0x18
+```
+
+`0x00747360` is the **CRT float-to-int truncation helper**, not an animation
+accessor. Because its operand arrives on the x87 stack, Ghidra renders every
+call to it as an argument-less `FUN_00747360()`; that is why earlier passes
+could see `(x + 7) / 15` and `K * 24` but could not name either input. Read the
+disassembly, not the decompile, for this function.
+
+At the fixture's heading: `(int)287.59668 = 287`, `287 + 7 = 294`,
+`294 / 15 = 19`. Every projectile capture in `projectile-goldens.json` therefore
+sits at facing `19`, which is what made the single-facing limitation below
+invisible in the raw numbers.
+
+### Bank index — three arrays, selected by the sprite set
+
+The helper picks one of three point arrays. The selector is
+`sprite_set = *(void**)(record->+0x30 ... ->+4)`, reached from `actor->+0x1FC`
+or, when that is null, from the per-element record at
+`*(DAT_0081c264) + 0x1410 + 0x64 * actor->element[+0x5C]`.
+
+| Sprite set | Array base / count | Bank `K` | Result |
+| --- | --- | --- | --- |
+| null | `[g+0x5A0]` / `[g+0x5A4]` | none — index is `facing` | `wizard + scale * point` |
+| `->+8 == 0x1B5C` | virtual call `vt+0x24` | `K = (int)actor->+0x238`, **unclamped** | `wizard + point` — **no scale** |
+| otherwise | `[g+0x5D0]` / `[g+0x5D4]` | `K = (int)clamp(actor->+0x238 - 14.0, 0.0, 2.0)` | `wizard + scale * point` |
+
+where `g = DAT_00819980`, `index = facing + 24 * K` (emitted as
+`lea eax,[eax+eax*2]; lea esi,[esi+eax*8]`), and the clamp constants are
+`14.0` at `0x0078C560` and `2.0` at `0x007DE838`.
+
+The goldens resolve to `K = 7`, which the third row cannot produce, so the
+fixture's wizard takes the **`0x1B5C` path**: index `facing + 24*K` with `K`
+unclamped, and the point added to the wizard position with **no `+0x74` scale
+multiply**. A port that applies the scale on this path is wrong at any scale
+other than `1.0`, which is exactly the value the fixture's wizard has — so the
+goldens cannot detect that mistake. Take it from the disassembly:
+
+```asm
+0053b8bc  fld   dword ptr [edi + 0x18]   ; wizard.x
+0053b8bf  fadd  dword ptr [eax]          ; + point.x        (no scale)
+0053b8c8  fld   dword ptr [edi + 0x1c]   ; wizard.y
+0053b8cc  fadd  dword ptr [eax + 4]      ; + point.y
+```
+
+### The record
+
+Common to all three paths: stride `0xC4`; point count at `+0xAC`, asserted
+`> 1`; point-list pointer at `+0xA8`; the helper reads **point index 1**, i.e.
+bytes `+8`/`+0xC` of the list.
+
+### The asset
+
+`images/Clothes.bundle`, parsed with the record grammar already implemented in
+`tools/extract_bundles.py` (45-byte common header, `point_count` as `<I` at
+`+0x29`, then `point_count` × `<2f`), yields 3724 records. Exactly three runs
+carry two or more points, and **each is an exact multiple of 24**:
+
+| Records | Count | Banks | Points/record | Array |
+| --- | --- | --- | --- | --- |
+| `#460..#579` | 120 | 5 × 24 | 2 | — |
+| `#796..#867` | 72 | **3 × 24** | 2 | the `[g+0x5D0]` array, whose `K` is clamped to `{0,1,2}` |
+| `#3244..#3483` | 240 | **10 × 24** | 3 | the `0x1B5C` array, whose `K` is unclamped |
+
+The 3-bank clamp in the instruction stream and a 3 × 24 run in the asset are
+independent facts that agree. The 240-record block is bounded by records that
+carry no usable point list (`#3243` has 0 points, `#3484` has 1), so its base is
+pinned by the asset itself rather than by the fit — without that boundary,
+goldens at a single facing would pin only `base + 24*K`, not `base` and `K`
+separately.
+
+Extraction recipe for a port: take record `#3244 + 24*K + facing` of the common
+stream and read point index 1. The two records the goldens exercise are
+`#3263` (`K=0`) → `(-45.5, -15.5)` and `#3431` (`K=7`) → `(-41.5, -34.5)`. The
+full 10 × 24 table is not reproduced here; extract it from your own copy of the
+asset with the recipe above.
+
+### Element offsets, as PE constants
+
+The spawn is `emitter + element_local`, and the locals are `double` constants,
+not fits:
+
+| Element | Local | Source |
+| --- | --- | --- |
+| Ether, Fire | `(0, +10)` | as documented in the flight model above |
+| Earth | `(0.0, +15.0)` | `0x007DE840` = `0.0`, `0x00784D80` = `15.0` |
+
+Fire additionally pushes `20` units along aim. The Earth path carries its own
+conditional `20.0 * (cos θ, -sin θ)` push (`20.0` at `0x007DE920`, direction
+built by `0x00410500`) gated on the same sprite-set selector being null; the
+fixture never takes that branch, so it is documented but unexercised.
+
+### Verification against the goldens
+
+Replaying `projectile-goldens.json` through the reconstruction — undo the
+elapsed first tick of travel, subtract the element local and Fire's along-aim
+push, and look the residual up in the extracted table — resolves **every**
+capture to a single `(bank, facing)` cell:
+
+| Capture | Resolved | Error |
+| --- | --- | --- |
+| `ether.rank1`, `ether.rank2` | bank 7, facing 19 | `3.60e-05` |
+| `fire.rank1`, `fire.rank2` | bank 7, facing 19 | `3.84e-05` |
+| `earth.rank2` + 3 × `rank1ChargeCaptures` | 1137/1137 held samples exact | `0` |
+
+All well inside the fixture's own `trajectoryWorldUnits` epsilon of `1e-4`. The
+Earth held samples resolve as bank `0` for the first tick and bank `7` for every
+tick after, i.e. the emitter tracks the hand as the cast animation advances —
+the `K` term doing precisely what the index arithmetic says it does.
+
+One trap worth naming, since it cost a full debugging cycle: Fire's
+`velocityX`/`velocityY` columns store the aim **unit vector**, not the per-tick
+step. The step is that vector times `4.5` (consistent with the flight model
+above, where consecutive samples differ by `4.500010`). Integrating the stored
+columns literally yields a fireball 4.5× too slow and an emitter that resolves
+to nothing.
+
+This mattered rather than being cosmetic: the spawn point decides contact, and
+this document attributes the observed Fireball misses in
+[`multiplayer-fireball-contact-2026-07-26.md`](multiplayer-fireball-contact-2026-07-26.md)
+partly to the directional emitter.
+
 ## Not Yet Reversed
 
-**The cast glyph emitter point, for 23 of the 24 facings.** The flight model
-above is portable, but the *origin* it flies from is not yet recoverable from
-this document. Two independent reasons:
+Every projectile-actor capture in `projectile-goldens.json` was recorded at a
+**single** wizard facing, `287.59668` degrees, from the single wizard position
+`(1664.5, 1799.5)`. The other headings in the fixture — `37.91263`, `90.0`,
+`0.0` — occur only in the Water/Frost tables, which materialize no projectile
+actor and so pin no spawn point.
 
-- The glyph-local point is loaded animation asset data reached through the
-  stride-`0xC4` record described under the shared cast pipeline, so there is no
-  constant table in the executable to transcribe. Closing this needs either the
-  animation-asset extraction path (this is `G4 animre` territory — the point
-  list belongs to the directional cast animation) or a live capture sweep.
-- Every projectile-actor capture in `projectile-goldens.json` was recorded at a
-  **single** wizard facing, `287.59668` degrees, from the single wizard position
-  `(1664.5, 1799.5)`. The other headings present in the fixture — `37.91263`,
-  `90.0`, `0.0` — occur only in the Water/Frost tables, which materialize no
-  projectile actor and therefore pin no spawn point. Ether `rank1`/`rank2`,
-  Fire `rank1`/`rank2`, and all four Earth captures share that one facing.
+The emitter section above closes the resulting gap *analytically* — the index
+arithmetic is read from the instruction stream and the table from the asset, so
+all 24 facings are recoverable — but only facing `19` is confirmed against
+recorded native output. A capture sweep across several headings would convert
+the remaining 23 from derived to observed, and is the cheapest way to catch a
+sign or ordering error in the facing formula that a single sample cannot see.
 
-Back-solving the emitter from the fixtures at that one facing, by subtracting
-the element offsets and the already-elapsed first tick of travel, gives:
-
-| Element | Emitter-local offset at heading `287.59668` |
-| --- | --- |
-| Ether | `(-41.50000, -24.50004)` |
-| Fire | `(-41.50004, -24.50003)` |
-| Earth | `(-45.50000, -0.50000)` |
-
-Ether and Fire agreeing to within serialization noise is real confirmation of
-the "common emitter helper" claim. Earth differing at the same facing is the
-banked `K * 24` index showing through. Note that this measurement cannot
-separate the raw glyph point from the element's documented local `(0, +10)`,
-because one facing gives one equation for two unknowns.
-
-This gap is load-bearing rather than cosmetic: the spawn point is what decides
-contact, and this document already attributes the observed Fireball misses in
-[`multiplayer-fireball-contact-2026-07-26.md`](multiplayer-fireball-contact-2026-07-26.md)
-partly to the directional emitter. A port that guesses the emitter will
-reproduce trajectories perfectly and still miss.
+Also unexercised by any golden: the null-sprite-set path (flat `[g+0x5A0]`
+array, no bank term) and the clamped `[g+0x5D0]` path, plus the Earth
+conditional along-aim push described above.
 
 ## Evidence inventory
 

@@ -360,3 +360,139 @@ def test_projectile_presentation_and_fire_goodguy_semantics_are_pinned() -> str:
         "projectile presentation/Fire_Goodguy document",
     )
     return "Atlas hooks, frame cadence, world queue, and damaging 0x7EE trails are pinned"
+
+
+# Emitter points the goldens resolve to, from records #3263 (K=0) and #3431 (K=7)
+# of the images/Clothes.bundle common stream, point index 1.
+_EMITTER_BANK_0 = (-45.5, -15.5)
+_EMITTER_BANK_7 = (-41.5, -34.5)
+_EMITTER_EPSILON = 1e-4  # the fixture's own trajectoryWorldUnits epsilon
+
+
+def _facing_index(heading_degrees: float) -> int:
+    """Native 0x0053B830: truncate, +7, signed /15, one conditional -24."""
+    facing = int(heading_degrees) + 7
+    facing //= 15
+    if facing >= 24:
+        facing -= 24
+    return facing
+
+
+def _emitter_of_projectile(
+    sample: dict[str, Any], local_y: float, along_aim: float, speed: float | None
+) -> tuple[float, float]:
+    """Undo one elapsed tick, the element local, and any along-aim push."""
+    if "velocityX" in sample:
+        # Fire stores the aim UNIT vector; the per-tick step is that times 4.5.
+        aim_x, aim_y = sample["velocityX"], sample["velocityY"]
+        norm = math.hypot(aim_x, aim_y)
+        _require(abs(norm - 1.0) < 1e-6, "Fire velocity columns are not a unit vector")
+        aim_x, aim_y = aim_x / norm, aim_y / norm
+        step = speed
+    else:
+        theta = math.radians(sample["headingDegrees"])
+        aim_x, aim_y = math.sin(theta), -math.cos(theta)
+        step = sample["baseSpeed"] * sample["movementScalar"]
+    spawn_x = sample["x"] - aim_x * step
+    spawn_y = sample["y"] - aim_y * step
+    return (
+        spawn_x - sample["wizardX"] - along_aim * aim_x,
+        spawn_y - sample["wizardY"] - along_aim * aim_y - local_y,
+    )
+
+
+def _matches(point: tuple[float, float], expected: tuple[float, float]) -> bool:
+    return (
+        abs(point[0] - expected[0]) < _EMITTER_EPSILON
+        and abs(point[1] - expected[1]) < _EMITTER_EPSILON
+    )
+
+
+def test_cast_glyph_emitter_index_and_offsets_are_pinned() -> str:
+    doc = _document()
+    _require_tokens(
+        doc,
+        (
+            "0053b838  fld   dword ptr [edi + 0x6c]",
+            "facing = ((int)actor.heading_degrees + 7) / 15",
+            "if (facing >= 24) facing -= 24",
+            "one conditional subtract, NOT a modulo",
+            "`0x00747360` is the **CRT float-to-int truncation helper**",
+            "index = facing + 24 * K",
+            "`K = (int)actor->+0x238`, **unclamped**",
+            "`K = (int)clamp(actor->+0x238 - 14.0, 0.0, 2.0)`",
+            "`14.0` at `0x0078C560` and `2.0` at `0x007DE838`",
+            "**no `+0x74` scale",
+            "stride `0xC4`",
+            "point-list pointer at `+0xA8`",
+            "**point index 1**",
+            "`#3244..#3483`",
+            "`#796..#867`",
+            "`#3263` (`K=0`)",
+            "`#3431` (`K=7`)",
+            "`0x007DE840` = `0.0`, `0x00784D80` = `15.0`",
+            "images/Clothes.bundle",
+        ),
+        "cast glyph emitter document",
+    )
+    _require(
+        _facing_index(287.59668) == 19,
+        "documented facing formula does not yield 19 for the fixture heading",
+    )
+    _require(
+        _facing_index(0.0) == 0 and _facing_index(359.9) == 0,
+        "facing formula must wrap 359.9 back onto 0 with one subtraction",
+    )
+    return "Emitter index arithmetic, record layout, and element offsets are pinned"
+
+
+def test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn() -> str:
+    fixture = _fixture()
+    trajectories = fixture["trajectories"]
+    resolved: list[str] = []
+
+    for rank in ("rank1", "rank2"):
+        sample = _samples(trajectories["ether"][rank]["samples"])[0]
+        _require(sample["ageTicks"] == 1, f"ether {rank} first sample is not age 1")
+        _require(
+            _facing_index(sample["wizardHeadingDegrees"]) == 19,
+            f"ether {rank} facing drifted",
+        )
+        point = _emitter_of_projectile(sample, local_y=10.0, along_aim=0.0, speed=None)
+        _require(_matches(point, _EMITTER_BANK_7), f"ether {rank} emitter drifted: {point}")
+        resolved.append(f"ether.{rank}")
+
+    for rank in ("rank1", "rank2"):
+        sample = _samples(trajectories["fire"][rank]["samples"])[0]
+        _require(sample["ageTicks"] == 1, f"fire {rank} first sample is not age 1")
+        point = _emitter_of_projectile(sample, local_y=10.0, along_aim=20.0, speed=4.5)
+        _require(_matches(point, _EMITTER_BANK_7), f"fire {rank} emitter drifted: {point}")
+        resolved.append(f"fire.{rank}")
+
+    held_total = 0
+    captures = [("earth.rank2", trajectories["earth"]["rank2"]["samples"])]
+    captures += [
+        (f"earth.rank1[{index}]", capture["samples"])
+        for index, capture in enumerate(trajectories["earth"]["rank1ChargeCaptures"])
+    ]
+    for name, table in captures:
+        held = [row for row in _samples(table) if row["held"]]
+        _require(held, f"{name} records no held boulder samples")
+        for index, row in enumerate(held):
+            point = (
+                row["x"] - row["wizardX"],
+                row["y"] - row["wizardY"] - 15.0,
+            )
+            expected = _EMITTER_BANK_0 if index == 0 else _EMITTER_BANK_7
+            _require(
+                _matches(point, expected),
+                f"{name} held sample {index} emitter drifted: {point}",
+            )
+        held_total += len(held)
+
+    _require(held_total == 1137, f"held Earth sample coverage drifted: {held_total}")
+    _require(len(resolved) == 4, "projectile spawn coverage drifted")
+    return (
+        "All 4 projectile spawns and 1137 held Earth samples resolve to the "
+        "extracted emitter points at facing 19"
+    )

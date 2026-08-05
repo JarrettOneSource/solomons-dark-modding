@@ -328,6 +328,7 @@ from static_re_native_actor_contracts import (
     test_synthetic_source_profile_blocker_is_documented,
 )
 from static_re_native_sim_core_contracts import (
+    test_app_tick_seeding_provenance_is_documented_and_byte_verified,
     test_movement_golden_provenance_and_schema_are_live_recorded,
     test_movement_golden_traces_pin_normalization_slide_stop_and_knockback,
     test_native_movement_integrators_and_collision_are_address_pinned,
@@ -335,6 +336,7 @@ from static_re_native_sim_core_contracts import (
     test_native_rng_stream_ownership_and_callsite_census_are_pinned,
     test_native_sim_recorder_seam_is_bounded_isolated_and_registered,
     test_native_tick_graph_reconciles_simulation_and_service_cadences,
+    test_recorded_run_seed_is_app_tick_derived_not_wall_clock,
 )
 from static_re_all_bot_match_contracts import (
     test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
@@ -429,6 +431,8 @@ from static_re_runtime_cast_contracts import (
 )
 from static_re_projectile_spell_mechanics_contracts import (
     test_air_and_frost_channels_remain_tick_queries_with_exact_stop_edges,
+    test_cast_glyph_emitter_index_and_offsets_are_pinned,
+    test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
     test_earth_charge_curve_and_release_geometry_are_exact,
     test_materialized_projectile_trajectories_pin_native_motion,
     test_projectile_contact_events_cross_check_existing_damage_goldens,
@@ -1676,6 +1680,14 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_projectile_presentation_and_fire_goodguy_semantics_are_pinned,
     ),
     (
+        "Cast glyph emitter index arithmetic and element offsets are pinned",
+        test_cast_glyph_emitter_index_and_offsets_are_pinned,
+    ),
+    (
+        "Cast glyph emitter resolves every recorded projectile spawn",
+        test_cast_glyph_emitter_resolves_every_recorded_projectile_spawn,
+    ),
+    (
         "Native movement integrators and collision are address-pinned",
         test_native_movement_integrators_and_collision_are_address_pinned,
     ),
@@ -1702,5 +1714,13 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native sim recorder seam is bounded, isolated, and registered",
         test_native_sim_recorder_seam_is_bounded_isolated_and_registered,
+    ),
+    (
+        "Recorded run seed is App-tick derived, not wall-clock",
+        test_recorded_run_seed_is_app_tick_derived_not_wall_clock,
+    ),
+    (
+        "App-tick seeding provenance is documented and byte-verified",
+        test_app_tick_seeding_provenance_is_documented_and_byte_verified,
     ),
 ]
