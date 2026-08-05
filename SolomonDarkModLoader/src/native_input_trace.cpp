@@ -93,6 +93,7 @@ struct TraceEvent {
     float player_y = 0.0f;
     std::int32_t primary_skill_id = 0;
     std::int32_t previous_skill_id = 0;
+    NativeInputSelectedSkillObservation selected_primary_skill;
     NativeInputActiveSpellObservation active_spell;
 };
 
@@ -494,6 +495,11 @@ std::string SerializeTraceLocked(
             output << "\"primary_skill_id\":" << event.primary_skill_id
                    << ",\"previous_skill_id\":"
                    << event.previous_skill_id << ',';
+            output << "\"selected_primary_skill\":{";
+            output << "\"readable\":";
+            AppendBool(output, event.selected_primary_skill.readable);
+            output << ",\"skill_id\":"
+                   << event.selected_primary_skill.skill_id << "},";
             AppendGameplayState(output, event);
             output << ",\"active_spell\":{";
             output << "\"readable\":";
@@ -644,7 +650,8 @@ void ObserveNativeInputRefresh(
 void ObserveNativeInputActorPostTick(
     std::uintptr_t gameplay_address,
     std::uintptr_t actor_address,
-    const NativeInputActiveSpellObservation& active_spell) {
+    const NativeInputActiveSpellObservation& active_spell,
+    const NativeInputSelectedSkillObservation& selected_primary_skill) {
     auto& trace = g_native_input_trace;
     if (!trace.active.load(std::memory_order_acquire) ||
         gameplay_address == 0 || actor_address == 0) {
@@ -655,6 +662,7 @@ void ObserveNativeInputActorPostTick(
     TraceEvent event;
     event.kind = TraceEventKind::ActorTick;
     event.active_spell = active_spell;
+    event.selected_primary_skill = selected_primary_skill;
     auto& memory = ProcessMemory::Instance();
     event.actor_readable =
         memory.TryReadField(

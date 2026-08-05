@@ -29,8 +29,9 @@ FIXTURE_PATH = ROOT / "tests" / "fixtures" / "webgame" / "input-goldens.json"
 
 FORMAT = "sd-webgame-input-goldens-v1"
 SCHEMA_VERSION = "1.0.0"
-EARTH_SKILL_ID = 24
+EARTH_SKILL_ID = 40
 FROST_SKILL_ID = 32
+CAPTURE_HP = 5000.0
 
 ORDER = {
     "click_open_ground_native_absence": 0,
@@ -184,11 +185,92 @@ class LiveSession:
                 "and type(s)=='table' and s.kind=='arena'))"
             )
             if "live=true" in output:
+                self.ensure_combat_started()
                 return
             last = output
             time.sleep(0.25)
         raise CaptureFailure(
             f"{self.instance}: stock solo run did not materialize: {last}"
+        )
+
+    def stabilize_vitals(self) -> None:
+        output = self.lua(
+            f"""
+local p = assert(sd.player.get_state(), 'player unavailable')
+local progression = tonumber(p.progression_address) or 0
+if progression == 0 then
+  progression = tonumber(sd.debug.read_ptr(
+    p.actor_address + sd.debug.layout_offset('actor_progression_runtime_state'))) or 0
+end
+assert(progression ~= 0, 'player progression unavailable')
+local hp = sd.debug.layout_offset('progression_hp')
+local max_hp = sd.debug.layout_offset('progression_max_hp')
+assert(sd.debug.write_float(progression + max_hp, {CAPTURE_HP}))
+assert(sd.debug.write_float(progression + hp, {CAPTURE_HP}))
+print('vitals_stable=true')
+""".strip()
+        )
+        if "vitals_stable=true" not in output:
+            raise CaptureFailure(
+                f"{self.instance}: could not stabilize vitals: {output}"
+            )
+
+    def combat_state(self) -> dict[str, int | bool]:
+        output = self.lua(
+            """
+local state = sd.gameplay.get_combat_state()
+local slot = sd.debug.resolve_game_address(0x0081C264)
+local gameplay = tonumber(sd.debug.read_u32(slot)) or 0
+local gate = gameplay ~= 0
+  and tonumber(sd.debug.read_u8(gameplay + 0x1ABE)) or -1
+print('combat_active=' .. tostring(state and state.combat_active == true))
+print('music_started=' .. tostring(state and state.music_started == true))
+print('wave_index=' .. tostring(state and state.wave_index or 0))
+print('cast_gate=' .. tostring(gate))
+""".strip()
+        )
+        values: dict[str, int | bool] = {}
+        for line in output.splitlines():
+            if "=" not in line:
+                continue
+            key, raw = line.strip().split("=", 1)
+            if raw in {"true", "false"}:
+                values[key] = raw == "true"
+            else:
+                try:
+                    values[key] = int(float(raw))
+                except ValueError:
+                    continue
+        return values
+
+    def ensure_combat_started(self) -> None:
+        self.stabilize_vitals()
+        before = self.combat_state()
+        if before.get("cast_gate") == 0 and (
+            before.get("combat_active") is True
+            or before.get("music_started") is True
+            or int(before.get("wave_index", 0)) > 0
+        ):
+            return
+        output = self.lua(
+            "print('start_waves=' .. tostring(sd.gameplay.start_waves()))"
+        )
+        if "start_waves=true" not in output:
+            raise CaptureFailure(f"{self.instance}: start_waves failed: {output}")
+        deadline = time.time() + 12.0
+        last = before
+        while time.time() < deadline:
+            self.stabilize_vitals()
+            last = self.combat_state()
+            if last.get("cast_gate") == 0 and (
+                last.get("combat_active") is True
+                or last.get("music_started") is True
+                or int(last.get("wave_index", 0)) > 0
+            ):
+                return
+            time.sleep(0.1)
+        raise CaptureFailure(
+            f"{self.instance}: combat did not open the stock cast gate: {last}"
         )
 
     def query_context(self) -> dict[str, float | int | bool]:
@@ -544,11 +626,18 @@ def encode_click_trace(
             float(positions[-1]["x"]) - float(positions[0]["x"]),
             float(positions[-1]["y"]) - float(positions[0]["y"]),
         )
-    skill_ids = sorted(
+    transient_skill_ids = sorted(
         {
             int(event.get("primary_skill_id", 0))
             for event in active_actor_events
             if int(event.get("primary_skill_id", 0)) != 0
+        }
+    )
+    selected_skill_ids = sorted(
+        {
+            int((event.get("selected_primary_skill") or {}).get("skill_id", 0))
+            for event in active_actor_events
+            if (event.get("selected_primary_skill") or {}).get("readable")
         }
     )
     spell_samples = [
@@ -563,7 +652,8 @@ def encode_click_trace(
         ),
         "native_actor_position_delta": position_delta,
         "active_actor_tick_count": len(active_actor_events),
-        "primary_skill_ids": skill_ids,
+        "primary_skill_ids": transient_skill_ids,
+        "selected_primary_skill_ids": selected_skill_ids,
         "active_spell_samples": spell_samples,
         "release_observed": any(
             int(event["sequence"]) > int(up["sequence"])
@@ -657,6 +747,7 @@ def capture_profile(
 ) -> list[dict[str, Any]]:
     session.wait_ready()
     session.enter_solo_run()
+    session.stabilize_vitals()
     context = session.query_context()
     executable_sha = sha256_file(session.executable_path)
     captures: list[dict[str, Any]] = []
@@ -684,6 +775,7 @@ def capture_profile(
             ("earth_charge_1500ms", open_point, 1500, "world_cast", "world"),
         ]
         for scenario, target, hold_ms, route, interact_target in scenarios:
+            session.stabilize_vitals()
             trace, helper = session.record_click(
                 label=scenario,
                 fraction_x=target["fraction_x"],
@@ -704,7 +796,9 @@ def capture_profile(
                 interact_target=interact_target,
             )
             if scenario.startswith("earth_charge_"):
-                observed_skills = capture["observations"]["primary_skill_ids"]
+                observed_skills = capture["observations"][
+                    "selected_primary_skill_ids"
+                ]
                 spell_samples = capture["observations"]["active_spell_samples"]
                 if EARTH_SKILL_ID not in observed_skills or not spell_samples:
                     raise CaptureFailure(
@@ -722,6 +816,7 @@ def capture_profile(
         ]
         last_error = ""
         for target in hud_candidates:
+            session.stabilize_vitals()
             trace, helper = session.record_click(
                 label="hud_click_swallowed",
                 fraction_x=target["fraction_x"],
@@ -777,7 +872,7 @@ def capture_profile(
             context=context,
             expected_route="world_cast",
         )
-        observed_skills = capture["observations"]["primary_skill_ids"]
+        observed_skills = capture["observations"]["selected_primary_skill_ids"]
         if FROST_SKILL_ID not in observed_skills:
             raise CaptureFailure(
                 f"Frost trace did not observe skill {FROST_SKILL_ID}: "

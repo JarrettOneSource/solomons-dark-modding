@@ -19,6 +19,11 @@ struct NativeInputActiveSpellObservation {
     float max_charge = 0.0f;
 };
 
+struct NativeInputSelectedSkillObservation {
+    bool readable = false;
+    std::int32_t skill_id = 0;
+};
+
 // Read-only, bounded instrumentation for the native-input contract goldens.
 // These observers never write game memory and are inert unless a trace is
 // explicitly armed through sd.debug.
@@ -35,7 +40,8 @@ void ObserveNativeInputRefresh(
 void ObserveNativeInputActorPostTick(
     std::uintptr_t gameplay_address,
     std::uintptr_t actor_address,
-    const NativeInputActiveSpellObservation& active_spell);
+    const NativeInputActiveSpellObservation& active_spell,
+    const NativeInputSelectedSkillObservation& selected_primary_skill);
 
 bool StartNativeInputTrace(
     std::string_view label,
