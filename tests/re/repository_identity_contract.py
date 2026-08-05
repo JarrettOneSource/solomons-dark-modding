@@ -29,7 +29,53 @@ HISTORICAL_IDENTITY_EXCEPTIONS = {
         "Jarrett Johnson",
         "j.johnson@yossplatform.com",
     ),
+    # ATC identity slip, already published on main before it was caught. The
+    # gate that should have caught it was vacuous in CI; see
+    # test_identity_contract_cannot_run_against_a_shallow_clone below.
+    "41fe38a5f57a5e03be70761de6a8a637c51685bb": (
+        "ATC",
+        "j.johnson@yossplatform.com",
+    ),
 }
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_identity_contract_cannot_run_against_a_shallow_clone() -> str:
+    """A shallow checkout makes the identity census vacuously pass.
+
+    `git log --all` on a depth-1 clone sees exactly one commit, so every
+    unapproved identity already in history goes unreported. This contract
+    refuses to render a verdict it cannot actually support.
+    """
+    assert _git("rev-parse", "--is-shallow-repository") == "false", (
+        "identity census cannot run against a shallow clone: "
+        "check out with fetch-depth 0"
+    )
+    reachable = int(_git("rev-list", "--all", "--count"))
+    assert reachable > 1, (
+        f"identity census sees only {reachable} commit(s); history is not present"
+    )
+
+    workflow = (ROOT / ".github/workflows/lua-authoring-contracts.yml").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        "fetch-depth: 0",
+        "python tests/re/repository_identity_contract.py",
+    ):
+        assert token in workflow, (
+            f"CI must keep the identity census enforceable; missing {token!r}"
+        )
+    return f"identity census runs against full history ({reachable} commits) and is wired into CI"
 
 
 def test_repository_history_uses_approved_identities() -> str:
@@ -71,3 +117,10 @@ def test_repository_history_uses_approved_identities() -> str:
     assert not violations, "\n".join(violations)
     return "all reachable commits use approved Solomon Dark project identities"
 
+
+if __name__ == "__main__":
+    for check in (
+        test_identity_contract_cannot_run_against_a_shallow_clone,
+        test_repository_history_uses_approved_identities,
+    ):
+        print(f"PASS: {check.__name__}: {check()}")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Callable
 
 from repository_identity_contract import (
+    test_identity_contract_cannot_run_against_a_shallow_clone,
     test_repository_history_uses_approved_identities,
 )
 from static_re_boneyard_contracts import (
@@ -790,6 +791,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Repository history uses approved project identities",
         test_repository_history_uses_approved_identities,
+    ),
+    (
+        "Identity census refuses to run against a shallow clone",
+        test_identity_contract_cannot_run_against_a_shallow_clone,
     ),
     (
         "App-thread transport verifier tracks the named cadence gap",

@@ -14,11 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository identity census reads all reachable history;
+          # a shallow clone makes it pass vacuously.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install image test dependency
         run: python -m pip install Pillow==11.3.0
+      - name: Test repository identity contract
+        # Push events only: a pull_request build checks out a synthetic
+        # merge commit that GitHub itself authors, which is not a project
+        # identity. Branch commits are censused when they land on main.
+        if: github.event_name == 'push'
+        run: python tests/re/repository_identity_contract.py
       - name: Verify generated Lua editor API
         run: python tools/generate_lua_api_stubs.py --check
       - name: Test Lua editor API generator
