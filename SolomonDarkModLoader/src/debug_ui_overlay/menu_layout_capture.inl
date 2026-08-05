@@ -799,6 +799,21 @@ bool ContainsObservedText(
         });
 }
 
+bool ContainsObservedTextAbove(
+    const std::vector<ObservedUiElement>& elements,
+    std::string_view expected,
+    float maximum_top) {
+    const auto normalized_expected = LowerAsciiCopy(expected);
+    return std::any_of(
+        elements.begin(),
+        elements.end(),
+        [&](const ObservedUiElement& element) {
+            return element.min_y <= maximum_top &&
+                LowerAsciiCopy(element.label).find(normalized_expected) !=
+                    std::string::npos;
+        });
+}
+
 std::string ResolveCapturedLayoutScreenId(
     const std::vector<OverlayRenderElement>& semantic_elements,
     const std::vector<ObservedUiElement>& exact_text_elements,
@@ -822,13 +837,18 @@ std::string ResolveCapturedLayoutScreenId(
         {"dark cloud settings", "dark_cloud_settings"},
         {"customize keyboard", "controls"},
         {"tweak performance", "performance"},
-        {"hall of fame", "hall_of_fame"},
         {"game over", "game_over"},
     };
     for (const auto& candidate : kTextScreens) {
         if (ContainsObservedText(exact_text_elements, candidate.text)) {
             return candidate.screen_id;
         }
+    }
+    if (ContainsObservedTextAbove(
+            exact_text_elements,
+            "hall of fame",
+            100.0f)) {
+        return "hall_of_fame";
     }
     if (semantic_root == "create") {
         const auto has_art = [&](std::string_view art_id) {

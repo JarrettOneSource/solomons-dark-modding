@@ -104,6 +104,9 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn('return "create_discipline"', source)
         self.assertIn('element.action_id.rfind("pause_menu.", 0)', source)
         self.assertIn('return "pause_menu"', source)
+        self.assertIn("ContainsObservedTextAbove", source)
+        self.assertIn('"hall of fame",', source)
+        self.assertIn("100.0f", source)
 
     def test_settings_rows_are_captured_from_live_immediate_mode_draws(self) -> None:
         source = read(
