@@ -1791,6 +1791,19 @@ UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {
 
 FIXTURE_ROOT = ROOT / "tests/fixtures"
 
+# The fixtures whose headers record BOTH a source commit and its tree, so the
+# pair can be checked against itself. Named rather than counted: a count floor
+# says "some fixtures still do this" and needs editing whenever one is added,
+# while naming them says which ones, and fails with the name of whichever
+# stopped. New paired fixtures are welcome and need no entry here -- this set is
+# a floor on the sweep, not a whitelist of what it may examine.
+COMMIT_TREE_PAIRED_FIXTURES = frozenset(
+    {
+        "webgame/movement-goldens.json",
+        "webgame/rng-goldens.json",
+    }
+)
+
 _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -1895,7 +1908,16 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
 
     # Wherever a header records both, the tree must be the one that commit points
     # at -- otherwise the pair is two unrelated facts wearing a matching prefix.
-    pairs = 0
+    #
+    # The two `continue`s below are what make this loop worth guarding. They are
+    # there so a fixture that records neither sha is not treated as a failure,
+    # but they would equally skip a fixture that dropped both, or the whole
+    # sweep if the fixture tree moved -- and the pair count was only ever
+    # reported in the return line, never asserted, so zero agreements read
+    # exactly like agreement. A header that records one sha without the other is
+    # worse still: it was silently skipped while looking like provenance.
+    checked: set[str] = set()
+    half_recorded: list[str] = []
     for path in sorted(FIXTURE_ROOT.rglob("*.json")):
         header = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(header, dict):
@@ -1903,11 +1925,14 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
         header = header.get("header")
         if not isinstance(header, dict):
             continue
+        relative = path.relative_to(FIXTURE_ROOT).as_posix()
         commit = header.get("source_commit_sha")
         tree = header.get("source_tree_sha")
         if not isinstance(commit, str) or not isinstance(tree, str):
+            if isinstance(commit, str) or isinstance(tree, str):
+                half_recorded.append(relative)
             continue
-        pairs += 1
+        checked.add(relative)
         resolved = _git_capture("rev-parse", f"{commit}^{{tree}}")
         if resolved.returncode != 0 or resolved.stdout.strip() != tree:
             raise StaticReTestFailure(
@@ -1915,6 +1940,19 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
                 f"{commit[:12]}, which points at "
                 f"{resolved.stdout.strip()[:12] or 'nothing'}"
             )
+    if half_recorded:
+        raise StaticReTestFailure(
+            "fixture header(s) record a source commit without its tree, or a "
+            "tree without its commit, so the pair cannot be checked against "
+            f"itself: {', '.join(sorted(half_recorded))}"
+        )
+    unswept = COMMIT_TREE_PAIRED_FIXTURES - checked
+    if unswept:
+        raise StaticReTestFailure(
+            "the commit/tree agreement sweep no longer reaches "
+            f"{', '.join(sorted(unswept))}; the fixture moved or dropped its "
+            "recorded provenance, so the check above is passing on silence"
+        )
 
     findings = (
         ROOT / "docs/reverse-engineering/native-menus-and-boot.md"
@@ -1934,7 +1972,8 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
     live = len(RECORDED_CAPTURE_SHAS) - len(UNRECOVERABLE_CAPTURE_COMMITS)
     return (
         f"{live} of {len(RECORDED_CAPTURE_SHAS)} recorded capture object ids "
-        f"resolve and are ancestors of HEAD, {pairs} commit/tree pairs agree, "
+        f"resolve and are ancestors of HEAD, {len(checked)} commit/tree pairs "
+        f"agree (including all {len(COMMIT_TREE_PAIRED_FIXTURES)} named), "
         f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} G11 capture commits are "
         "declared unrecoverable and still absent"
     )

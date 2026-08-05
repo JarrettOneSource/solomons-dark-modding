@@ -321,7 +321,17 @@ def test_world_sprites_use_native_order_while_screen_ui_stays_overlay() -> str:
     )
     assert "sd.draw.world_to_screen" not in showcase
     assert "sd.draw.world_to_screen" not in acceptance
-    for lua_path in sorted((ROOT / "mods").rglob("*.lua")):
+    # A ban is only as good as the sweep behind it: if `mods` were renamed or
+    # moved, rglob would return nothing, every assert below would be skipped,
+    # and this contract would keep passing while guarding no Lua at all. So the
+    # sweep has to prove it reached real content before its silence means
+    # anything.
+    scanned = sorted((ROOT / "mods").rglob("*.lua"))
+    assert (ROOT / "mods/lua_hud_showcase/scripts/main.lua") in scanned, (
+        "the in-repository Lua sweep no longer reaches the showcase mod, so "
+        "its world_to_screen ban is guarding an empty set"
+    )
+    for lua_path in scanned:
         lua_source = lua_path.read_text(encoding="utf-8")
         assert "sd.draw.world_to_screen" not in lua_source, (
             "in-repository Lua content may not project a world-owned draw into "

@@ -1298,13 +1298,27 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
     assert "(current - previous).total_seconds()" in focus
     assert "wait_for_next_accept" not in focus
     assert '"input_kind": "mouse_right" if mouse_backed else "keyboard"' in focus
-    for relative_path in (
-        "tools/verify_multiplayer_focus_behavior_sync.py",
+    # The focus harness defines the cast; the other three import and call it.
+    # Both halves are swept, because a call added to the definer must be bounded
+    # too -- but only the callers carry a floor, and the definition carries its
+    # own assertion. Without those, renaming the call, or dropping the cast from
+    # a harness entirely, would leave this sweep matching nothing and this
+    # contract asserting nothing, silently.
+    assert "def cast_secondary_belt_slot(" in focus, (
+        "the focus harness no longer defines cast_secondary_belt_slot, so the "
+        "bounded-timeout sweep below is hunting a call that cannot exist"
+    )
+    secondary_cast_callers = {
         "tools/verify_multiplayer_persistent_status_sync.py",
         "tools/verify_multiplayer_ring_of_fire_multikill_stability.py",
         "tools/multiplayer_secondary_behavior_harness.py",
+    }
+    swept: set[str] = set()
+    for relative_path in sorted(
+        secondary_cast_callers | {"tools/verify_multiplayer_focus_behavior_sync.py"}
     ):
         tree = ast.parse(_read(relative_path), filename=relative_path)
+        checked = 0
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -1317,6 +1331,7 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
             )
             if function_name != "cast_secondary_belt_slot":
                 continue
+            checked += 1
             has_timeout = len(node.args) >= 3 or any(
                 keyword.arg == "timeout" for keyword in node.keywords
             )
@@ -1324,6 +1339,14 @@ def test_secondary_behavior_matrix_uses_native_two_owner_witnesses() -> str:
                 f"{relative_path} calls cast_secondary_belt_slot without its "
                 "bounded input-consumption timeout"
             )
+        if checked:
+            swept.add(relative_path)
+    missing_callers = secondary_cast_callers - swept
+    assert not missing_callers, (
+        f"{', '.join(sorted(missing_callers))} no longer calls "
+        "cast_secondary_belt_slot, so the bounded input-consumption timeout it "
+        "is named here to prove is unproven"
+    )
     assert "input_witnessed = (" in harness
     assert "if belt_slot == 0" in harness
     assert "click_process(" not in ring
