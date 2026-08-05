@@ -27,6 +27,11 @@ from static_re_ui_interaction_gate_contracts import (
     test_blocking_overlay_owns_all_gameplay_input_without_deferral,
     test_connected_client_courtyard_start_is_render_and_activation_suppressed,
 )
+from static_re_native_input_model_contracts import (
+    test_native_action_thresholds_absences_and_intent_shape_are_pinned,
+    test_native_input_ingress_sampling_and_tick_order_are_pinned,
+    test_native_surface_priority_and_loading_input_seal_are_pinned,
+)
 from static_re_boneyard_lighting_contracts import (
     test_boneyard_tree_last_writer_render_path_is_registered,
 )
@@ -761,6 +766,18 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Blocking overlay owns all gameplay input without deferral",
         test_blocking_overlay_owns_all_gameplay_input_without_deferral,
+    ),
+    (
+        "Native input ingress, sampling, and tick order are pinned",
+        test_native_input_ingress_sampling_and_tick_order_are_pinned,
+    ),
+    (
+        "Native surface priority and loading input seal are pinned",
+        test_native_surface_priority_and_loading_input_seal_are_pinned,
+    ),
+    (
+        "Native action thresholds, absences, and Intent shape are pinned",
+        test_native_action_thresholds_absences_and_intent_shape_are_pinned,
     ),
     (
         "Boneyard Tree last-writer render path is registered",

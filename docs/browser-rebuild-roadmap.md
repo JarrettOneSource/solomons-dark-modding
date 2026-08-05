@@ -82,23 +82,27 @@ consumes only that. Mouse+keyboard and gamepad are two producers of the same str
 is privileged.
 
 This constraint is not stylistic — it falls out of conformance. T3 (§7) replays **native input
-traces** recorded from the retail game, which is mouse-driven: click-to-move, click-to-cast at a
-screen point, hold-to-charge. So the intent contract must be **at least as expressive as native
-mouse input**, or recorded traces cannot be replayed at all:
+traces** recorded from the retail game. G14 corrected an earlier premise: retail movement is a
+keyboard unit vector, not click-to-move; the mouse supplies aim, click-to-cast, and hold/channel
+levels. The contract remains more expressive than retail so browser/controller producers can
+also request a world movement target without changing the sim boundary:
 
 ```
-Intent = {
-  move:    { target: WorldPoint } | { vector: Unit2 } | none
-  aim:     WorldPoint             // where the cast is directed
-  cast:    { slot, phase: press | hold | release }
-  interact | menu-nav | …
-}
+Intent =
+  | move({ target: WorldPoint } | { vector: Unit2 }, start | update | stop)
+  | aim(WorldPoint)
+  | cast(slot, press | hold | release)
+  | interact(target, press | release)
+  | menu-nav(command, press | release)
 ```
 
 A gamepad producer synthesizes `aim` from the right stick (`player_pos + stick_dir × reach`) and
-`move.vector` from the left stick. A mouse producer emits `move.target` and a cursor `aim`
-directly. Both land in the same struct, so native traces stay replayable and the controller is
-not a translation layer bolted on afterwards.
+`move.vector` from the left stick. The native mouse producer emits cursor `aim` and cast phases,
+but no move; a browser point-movement scheme may emit `move.target`. All land in the same union,
+so native traces stay replayable and the controller is not a translation layer bolted on
+afterwards. The normative contract and mapping are in
+`docs/reverse-engineering/native-input-model.md` and
+`webgame-contracts/intent-schema.json`.
 
 **Decided (owner, 2026-08-04): twin-stick.** Not a virtual cursor. The intent contract above
 still expresses both, because it has to — native traces are cursor-shaped and must stay
@@ -201,7 +205,7 @@ Everything else follows tier order.
 
 | Gap | Campaign | Scope | Status |
 | --- | --- | --- | --- |
-| G14 input contract | **inputre** | Census the native input model as a contract: what a click actually means at each surface (world move vs. cast vs. UI), hold/charge semantics and their thresholds, key bindings, modifier behavior, the input seal during loading (uigate), and how input routes between HUD, menus, and world. Deliver the abstract `Intent` schema of §4 plus a proof that it losslessly encodes a recorded native mouse session. Goldens: recorded native input traces and their intent-stream encodings, round-trip exact. | QUEUED — dispatch first |
+| G14 input contract | **inputre** | Census the native input model as a contract: what a click actually means at each surface (world move vs. cast vs. UI), hold/charge semantics and their thresholds, key bindings, modifier behavior, the input seal during loading (uigate), and how input routes between HUD, menus, and world. Deliver the abstract `Intent` schema of §4 plus a proof that it losslessly encodes a recorded native mouse session. Goldens: recorded native input traces and their intent-stream encodings, round-trip exact. | **DONE** - `docs/reverse-engineering/native-input-model.md`, `webgame-contracts/intent-schema.json`, and live `tests/fixtures/webgame/input-goldens.json` |
 | G11 boot, splash, loading & menus | **menure** | The whole pre-gameplay shell: boot sequence and its ordering; splash/attract screens; loading screens (progress source, minimum display time, what is legal to do during them); title/main menu; every submenu reachable from it (options/settings, profile & save select, class/loadout, skill picker, map/boneyard picker, pause, game over); per-screen layout with exact art, fonts, and positions; transitions between screens; and the **focus/navigation model** §4 requires (focus order, default focus, wrap, back semantics) — the native game is mouse-driven, so where no focus order exists natively, define one and mark it designed-not-observed. Goldens: per-screen layout captures plus a navigation-graph fixture. | QUEUED — dispatch second |
 
 **Rule for G11 (splash).** The owner confirmed on 2026-08-04 that the original developers'
