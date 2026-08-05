@@ -68,6 +68,7 @@ void __fastcall HookGlyphDrawHelper(void* self, void* /*unused_edx*/, float arg2
 }
 
 void __fastcall HookTextQuadDrawHelper(void* self, void* /*unused_edx*/, const float* arg2, const float* arg3) {
+    ObserveActiveSettingsRowTextQuad(arg2);
     ObserveActiveExactTextQuad(self, arg2, arg3);
 
     const auto original = GetX86HookTrampoline<TextQuadDrawHelperFn>(g_debug_ui_overlay_state.text_quad_draw_hook);

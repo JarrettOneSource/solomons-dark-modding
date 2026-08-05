@@ -77,6 +77,11 @@ constexpr std::size_t kNativeSpriteLogicalHeightOffset = 0x98;
 constexpr uintptr_t kNativeLoaderRenderAddress = 0x005BCA40;
 constexpr uintptr_t kNativeSpriteCenteredDrawAddress = 0x004142E0;
 constexpr uintptr_t kNativeSpriteTransformDrawAddress = 0x00414540;
+constexpr uintptr_t kSettingsScalarRowAddress = 0x00436160;
+constexpr uintptr_t kSettingsToggleRowAddress = 0x00435DE0;
+constexpr uintptr_t kSettingsSectionRowAddress = 0x00436750;
+constexpr uintptr_t kSettingsSingleStringRowAddress = 0x004A5A70;
+constexpr uintptr_t kSettingsDualStringRowAddress = 0x004A5B60;
 constexpr uintptr_t kNativeLoaderProgressNumerator = 0x0081F6A8;
 constexpr uintptr_t kNativeLoaderProgressDenominator = 0x0081F6AC;
 constexpr uintptr_t kNativeLoaderCompleteFlag = 0x0081F6B0;
@@ -109,6 +114,20 @@ ULONGLONG g_native_boot_capture_started_at = 0;
 int g_native_boot_last_reference_bucket = -1;
 bool g_native_loader_render_active = false;
 std::vector<CapturedMenuArtElement> g_native_loader_frame_art;
+
+struct ActiveSettingsRowCapture {
+    std::string label;
+    std::string font_id;
+    uintptr_t caller_address = 0;
+    float left = (std::numeric_limits<float>::max)();
+    float top = (std::numeric_limits<float>::max)();
+    float right = (std::numeric_limits<float>::lowest)();
+    float bottom = (std::numeric_limits<float>::lowest)();
+    std::uint32_t sample_count = 0;
+};
+
+thread_local std::vector<ActiveSettingsRowCapture>
+    g_active_settings_row_captures;
 
 bool HasDrawableNativeSpriteSignature(
     const NativeSpriteSignature& signature) {
@@ -261,6 +280,176 @@ std::string ResolveNativeFontId(uintptr_t font_object_address) {
     return {};
 }
 
+bool TryReadMenuRenderBase(float* base_x, float* base_y);
+
+std::string ResolveNativeFontIdForGlyphSprite(
+    uintptr_t glyph_sprite_address) {
+    constexpr std::pair<std::size_t, const char*> kFontGroups[] = {
+        {0x00FC, "Fonts.1-92"},
+        {0x4D530, "Fonts.93-184"},
+        {0x9A964, "Fonts.185-215"},
+        {0xE7D98, "Fonts.216-307"},
+        {0x1351CC, "Fonts.308-349"},
+        {0x182600, "Fonts.350-375"},
+        {0x1CFA34, "Fonts.376-442"},
+        {0x21CE68, "Fonts.443-534"},
+        {0x26A29C, "Fonts.535-626"},
+    };
+    constexpr std::size_t kFontGroupSpan = 0x4D434;
+
+    auto& memory = ProcessMemory::Instance();
+    const auto resolved_global =
+        memory.ResolveGameAddressOrZero(0x008199A0);
+    std::uint32_t fonts_object = 0;
+    if (resolved_global == 0 ||
+        !memory.TryReadValue(resolved_global, &fonts_object) ||
+        fonts_object == 0) {
+        return {};
+    }
+
+    for (const auto& group : kFontGroups) {
+        const auto start =
+            static_cast<uintptr_t>(fonts_object) + group.first;
+        if (glyph_sprite_address >= start &&
+            glyph_sprite_address < start + kFontGroupSpan) {
+            return group.second;
+        }
+    }
+    return {};
+}
+
+std::string ReadSettingsRowCaptureLabel(
+    const NativeUiString& native_label) {
+    std::string label;
+    if (!TryReadStringObject(
+            reinterpret_cast<uintptr_t>(&native_label),
+            &label)) {
+        return {};
+    }
+    return TrimAsciiWhitespace(label);
+}
+
+void BeginSettingsRowCapture(
+    const NativeUiString& native_label,
+    uintptr_t caller_address) {
+    if (!g_debug_ui_overlay_state.menu_layout_capture_enabled) {
+        return;
+    }
+    uintptr_t settings_address = 0;
+    if (!TryGetLiveSettingsRender(&settings_address) ||
+        settings_address == 0) {
+        return;
+    }
+    auto label = ReadSettingsRowCaptureLabel(native_label);
+    if (label.empty()) {
+        return;
+    }
+    ActiveSettingsRowCapture capture;
+    capture.label = std::move(label);
+    capture.caller_address = caller_address;
+    g_active_settings_row_captures.push_back(std::move(capture));
+}
+
+void ObserveActiveSettingsRowBounds(
+    float left,
+    float top,
+    float right,
+    float bottom,
+    uintptr_t glyph_sprite_address = 0) {
+    if (g_active_settings_row_captures.empty() ||
+        !std::isfinite(left) || !std::isfinite(top) ||
+        !std::isfinite(right) || !std::isfinite(bottom) ||
+        right <= left || bottom <= top) {
+        return;
+    }
+    auto& capture = g_active_settings_row_captures.back();
+    capture.left = (std::min)(capture.left, left);
+    capture.top = (std::min)(capture.top, top);
+    capture.right = (std::max)(capture.right, right);
+    capture.bottom = (std::max)(capture.bottom, bottom);
+    ++capture.sample_count;
+    if (capture.font_id.empty() && glyph_sprite_address != 0) {
+        capture.font_id = ResolveNativeFontIdForGlyphSprite(
+            glyph_sprite_address);
+    }
+}
+
+void ObserveActiveSettingsRowTextQuad(
+    const float* destination_vertices) {
+    if (destination_vertices == nullptr ||
+        g_active_settings_row_captures.empty()) {
+        return;
+    }
+    float base_x = 0.0f;
+    float base_y = 0.0f;
+    (void)TryReadMenuRenderBase(&base_x, &base_y);
+    float left = (std::numeric_limits<float>::max)();
+    float top = (std::numeric_limits<float>::max)();
+    float right = (std::numeric_limits<float>::lowest)();
+    float bottom = (std::numeric_limits<float>::lowest)();
+    for (std::size_t index = 0; index < 4; ++index) {
+        const auto x = destination_vertices[index * 2] + base_x;
+        const auto y = destination_vertices[index * 2 + 1] + base_y;
+        left = (std::min)(left, x);
+        top = (std::min)(top, y);
+        right = (std::max)(right, x);
+        bottom = (std::max)(bottom, y);
+    }
+    ObserveActiveSettingsRowBounds(left, top, right, bottom);
+}
+
+void EndSettingsRowCapture() {
+    if (g_active_settings_row_captures.empty()) {
+        return;
+    }
+    auto capture = std::move(g_active_settings_row_captures.back());
+    g_active_settings_row_captures.pop_back();
+    if (capture.sample_count == 0 || capture.label.empty() ||
+        capture.right <= capture.left || capture.bottom <= capture.top) {
+        return;
+    }
+
+    ObservedUiElement element;
+    element.surface_id = "settings";
+    element.surface_title = "Game Settings";
+    // The return address is a stable identity for an immediate-mode row: the
+    // native control itself is transient, while every row has a unique call
+    // site in Settings_Render.
+    element.object_ptr = capture.caller_address;
+    element.caller_address = capture.caller_address;
+    element.min_x = capture.left;
+    element.min_y = capture.top;
+    element.max_x = capture.right;
+    element.max_y = capture.bottom;
+    element.sample_count = capture.sample_count;
+    element.label = std::move(capture.label);
+    element.font_id = std::move(capture.font_id);
+
+    std::scoped_lock lock(g_debug_ui_overlay_state.mutex);
+    auto& elements =
+        g_debug_ui_overlay_state.frame_exact_text_elements;
+    const auto existing = std::find_if(
+        elements.begin(),
+        elements.end(),
+        [&](const ObservedUiElement& candidate) {
+            return candidate.surface_id == element.surface_id &&
+                candidate.object_ptr == element.object_ptr &&
+                candidate.label == element.label;
+        });
+    if (existing != elements.end()) {
+        existing->min_x = (std::min)(existing->min_x, element.min_x);
+        existing->min_y = (std::min)(existing->min_y, element.min_y);
+        existing->max_x = (std::max)(existing->max_x, element.max_x);
+        existing->max_y = (std::max)(existing->max_y, element.max_y);
+        existing->sample_count += element.sample_count;
+        if (existing->font_id.empty()) {
+            existing->font_id = std::move(element.font_id);
+        }
+        return;
+    }
+    elements.push_back(std::move(element));
+}
+
 bool TryReadMenuRenderBase(float* base_x, float* base_y) {
     if (base_x == nullptr || base_y == nullptr) {
         return false;
@@ -401,7 +590,7 @@ void ObserveMenuSpritePositionDraw(
     }
     const auto sprite_address = reinterpret_cast<uintptr_t>(self);
     const auto art_id = ResolveNativeMenuArtId(sprite_address);
-    if (art_id.empty()) {
+    if (art_id.empty() && g_active_settings_row_captures.empty()) {
         return;
     }
 
@@ -449,6 +638,15 @@ void ObserveMenuSpritePositionDraw(
     if (element.right <= element.left || element.bottom <= element.top) {
         return;
     }
+    ObserveActiveSettingsRowBounds(
+        element.left,
+        element.top,
+        element.right,
+        element.bottom,
+        sprite_address);
+    if (art_id.empty()) {
+        return;
+    }
     StoreCapturedMenuArt(std::move(element));
 }
 
@@ -459,7 +657,7 @@ void ObserveMenuSpriteTransformDraw(void* self, const float* transform) {
     }
     const auto sprite_address = reinterpret_cast<uintptr_t>(self);
     const auto art_id = ResolveNativeMenuArtId(sprite_address);
-    if (art_id.empty()) {
+    if (art_id.empty() && g_active_settings_row_captures.empty()) {
         return;
     }
 
@@ -501,6 +699,15 @@ void ObserveMenuSpriteTransformDraw(void* self, const float* transform) {
     if (element.right <= element.left || element.bottom <= element.top) {
         return;
     }
+    ObserveActiveSettingsRowBounds(
+        element.left,
+        element.top,
+        element.right,
+        element.bottom,
+        sprite_address);
+    if (art_id.empty()) {
+        return;
+    }
     StoreCapturedMenuArt(std::move(element));
 }
 
@@ -527,6 +734,93 @@ void __fastcall HookMenuSpriteTransformDraw(
     if (original != nullptr) {
         original(self, transform);
     }
+}
+
+void __fastcall HookSettingsScalarRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString label,
+    void* value) {
+    BeginSettingsRowCapture(
+        label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original = GetX86HookTrampoline<SettingsValueRowFn>(
+        g_debug_ui_overlay_state.settings_scalar_row_hook);
+    if (original != nullptr) {
+        original(self, label, value);
+    }
+    EndSettingsRowCapture();
+}
+
+void __fastcall HookSettingsToggleRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString label,
+    void* value) {
+    BeginSettingsRowCapture(
+        label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original = GetX86HookTrampoline<SettingsValueRowFn>(
+        g_debug_ui_overlay_state.settings_toggle_row_hook);
+    if (original != nullptr) {
+        original(self, label, value);
+    }
+    EndSettingsRowCapture();
+}
+
+uintptr_t __fastcall HookSettingsSectionRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString label,
+    uintptr_t arg3,
+    uintptr_t arg4,
+    uintptr_t arg5) {
+    BeginSettingsRowCapture(
+        label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original = GetX86HookTrampoline<SettingsSectionRowFn>(
+        g_debug_ui_overlay_state.settings_section_row_hook);
+    const auto result = original == nullptr
+        ? uintptr_t{0}
+        : original(self, label, arg3, arg4, arg5);
+    EndSettingsRowCapture();
+    return result;
+}
+
+uintptr_t __fastcall HookSettingsSingleStringRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString label) {
+    BeginSettingsRowCapture(
+        label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original =
+        GetX86HookTrampoline<SettingsSingleStringRowFn>(
+            g_debug_ui_overlay_state.settings_single_string_row_hook);
+    const auto result = original == nullptr
+        ? uintptr_t{0}
+        : original(self, label);
+    EndSettingsRowCapture();
+    return result;
+}
+
+uintptr_t __fastcall HookSettingsDualStringRow(
+    void* self,
+    void* /*unused_edx*/,
+    NativeUiString label,
+    NativeUiString detail,
+    void* value) {
+    BeginSettingsRowCapture(
+        label,
+        reinterpret_cast<uintptr_t>(_ReturnAddress()));
+    const auto original =
+        GetX86HookTrampoline<SettingsDualStringRowFn>(
+            g_debug_ui_overlay_state.settings_dual_string_row_hook);
+    const auto result = original == nullptr
+        ? uintptr_t{0}
+        : original(self, label, detail, value);
+    EndSettingsRowCapture();
+    return result;
 }
 
 std::vector<CapturedMenuArtElement> TakeCapturedMenuArtFrame() {
@@ -609,6 +903,14 @@ std::string ResolveCapturedLayoutScreenId(
         if (has_art("Create.16")) {
             return "create_discipline";
         }
+    }
+    if (std::any_of(
+            semantic_elements.begin(),
+            semantic_elements.end(),
+            [](const OverlayRenderElement& element) {
+                return element.action_id.rfind("pause_menu.", 0) == 0;
+            })) {
+        return "pause_menu";
     }
     if (!semantic_root.empty()) {
         return semantic_root;
@@ -693,13 +995,19 @@ void StoreLatestMenuLayoutSnapshotUnlocked(
             continue;
         }
         DebugUiLayoutElement element;
-        element.kind = "text";
+        if (source.surface_id == "settings") {
+            element.action_id = ResolveConfiguredUiActionId(
+                "settings",
+                source.label);
+        }
+        element.kind = element.action_id.empty() ? "text" : "control";
         element.text = source.label;
         element.font_id = source.font_id;
         element.text_style = source.font_id.empty()
             ? "native_atlas_text"
             : "native_atlas_text:" + source.font_id;
         element.source_object_ptr = source.object_ptr;
+        element.interactive = !element.action_id.empty();
         element.left = source.min_x;
         element.top = source.min_y;
         element.right = source.max_x;
@@ -980,7 +1288,20 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
         kNativeSpriteTransformDrawAddress);
     const auto loader = memory.ResolveGameAddressOrZero(
         kNativeLoaderRenderAddress);
-    if (centered == 0 || transformed == 0 || loader == 0) {
+    const auto settings_scalar = memory.ResolveGameAddressOrZero(
+        kSettingsScalarRowAddress);
+    const auto settings_toggle = memory.ResolveGameAddressOrZero(
+        kSettingsToggleRowAddress);
+    const auto settings_section = memory.ResolveGameAddressOrZero(
+        kSettingsSectionRowAddress);
+    const auto settings_single = memory.ResolveGameAddressOrZero(
+        kSettingsSingleStringRowAddress);
+    const auto settings_dual = memory.ResolveGameAddressOrZero(
+        kSettingsDualStringRowAddress);
+    if (centered == 0 || transformed == 0 || loader == 0 ||
+        settings_scalar == 0 || settings_toggle == 0 ||
+        settings_section == 0 || settings_single == 0 ||
+        settings_dual == 0) {
         if (error_message != nullptr) {
             *error_message =
                 "Could not resolve native menu-layout capture targets.";
@@ -1019,11 +1340,71 @@ bool InstallMenuLayoutCaptureHooks(std::string* error_message) {
             &g_debug_ui_overlay_state.menu_sprite_centered_draw_hook);
         return false;
     }
+    const auto remove_capture_hooks = []() {
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_dual_string_row_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_single_string_row_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_section_row_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_toggle_row_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.settings_scalar_row_hook);
+        RemoveX86Hook(&g_debug_ui_overlay_state.native_loader_render_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.menu_sprite_transform_draw_hook);
+        RemoveX86Hook(
+            &g_debug_ui_overlay_state.menu_sprite_centered_draw_hook);
+    };
+    if (!InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_scalar),
+            reinterpret_cast<void*>(&HookSettingsScalarRow),
+            5,
+            &g_debug_ui_overlay_state.settings_scalar_row_hook,
+            error_message) ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_toggle),
+            reinterpret_cast<void*>(&HookSettingsToggleRow),
+            5,
+            &g_debug_ui_overlay_state.settings_toggle_row_hook,
+            error_message) ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_section),
+            reinterpret_cast<void*>(&HookSettingsSectionRow),
+            5,
+            &g_debug_ui_overlay_state.settings_section_row_hook,
+            error_message) ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_single),
+            reinterpret_cast<void*>(&HookSettingsSingleStringRow),
+            5,
+            &g_debug_ui_overlay_state.settings_single_string_row_hook,
+            error_message) ||
+        !InstallSafeX86Hook(
+            reinterpret_cast<void*>(settings_dual),
+            reinterpret_cast<void*>(&HookSettingsDualStringRow),
+            5,
+            &g_debug_ui_overlay_state.settings_dual_string_row_hook,
+            error_message)) {
+        remove_capture_hooks();
+        return false;
+    }
     RebuildNativeMenuArtResolver();
     return true;
 }
 
 void RemoveMenuLayoutCaptureHooks() {
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_dual_string_row_hook);
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_single_string_row_hook);
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_section_row_hook);
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_toggle_row_hook);
+    RemoveX86Hook(
+        &g_debug_ui_overlay_state.settings_scalar_row_hook);
     RemoveX86Hook(&g_debug_ui_overlay_state.native_loader_render_hook);
     RemoveX86Hook(
         &g_debug_ui_overlay_state.menu_sprite_transform_draw_hook);
@@ -1038,6 +1419,11 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     state->menu_sprite_centered_draw_hook = X86Hook{};
     state->menu_sprite_transform_draw_hook = X86Hook{};
     state->native_loader_render_hook = X86Hook{};
+    state->settings_scalar_row_hook = X86Hook{};
+    state->settings_toggle_row_hook = X86Hook{};
+    state->settings_section_row_hook = X86Hook{};
+    state->settings_single_string_row_hook = X86Hook{};
+    state->settings_dual_string_row_hook = X86Hook{};
     state->menu_layout_capture_enabled = false;
     state->frame_menu_art_elements.clear();
     state->latest_layout_snapshot = DebugUiLayoutSnapshot{};
@@ -1052,4 +1438,5 @@ void ResetMenuLayoutCaptureStateUnlocked(DebugUiOverlayState* state) {
     g_native_boot_last_reference_bucket = -1;
     g_native_loader_render_active = false;
     g_native_loader_frame_art.clear();
+    g_active_settings_row_captures.clear();
 }

@@ -88,6 +88,35 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn('return "create_element"', source)
         self.assertIn('has_art("Create.16")', source)
         self.assertIn('return "create_discipline"', source)
+        self.assertIn('element.action_id.rfind("pause_menu.", 0)', source)
+        self.assertIn('return "pause_menu"', source)
+
+    def test_settings_rows_are_captured_from_live_immediate_mode_draws(self) -> None:
+        source = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "menu_layout_capture.inl"
+        )
+        for token in (
+            "kSettingsScalarRowAddress",
+            "kSettingsToggleRowAddress",
+            "kSettingsSectionRowAddress",
+            "kSettingsSingleStringRowAddress",
+            "kSettingsDualStringRowAddress",
+            "BeginSettingsRowCapture",
+            "ObserveActiveSettingsRowBounds",
+            "HookSettingsScalarRow",
+            "HookSettingsToggleRow",
+            "HookSettingsSectionRow",
+            "HookSettingsSingleStringRow",
+            "HookSettingsDualStringRow",
+        ):
+            self.assertIn(token, source)
+
+        text_hooks = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/"
+            "exact_text_capture/render_hooks.inl"
+        )
+        self.assertIn("ObserveActiveSettingsRowTextQuad(arg2)", text_hooks)
 
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
         recorder = read("scripts/Record-NativeMenuLayout.ps1")

@@ -131,6 +131,30 @@ struct NativeUiString {
 };
 static_assert(sizeof(NativeUiString) == 0x1C, "Native UI string layout changed");
 
+// Settings_Render uses an immediate-mode, two-pass builder for controls that
+// never reaches the reusable labeled-control render helpers. These signatures
+// are pinned by the read-only Ghidra call sites in Settings_Render: one native
+// String-by-value plus a value pointer for scalar/toggle rows, one String plus
+// three flags for section headings, and one/two String variants for actions.
+using SettingsValueRowFn = void(__thiscall*)(
+    void* self,
+    NativeUiString label,
+    void* value);
+using SettingsSectionRowFn = uintptr_t(__thiscall*)(
+    void* self,
+    NativeUiString label,
+    uintptr_t arg3,
+    uintptr_t arg4,
+    uintptr_t arg5);
+using SettingsSingleStringRowFn = uintptr_t(__thiscall*)(
+    void* self,
+    NativeUiString label);
+using SettingsDualStringRowFn = uintptr_t(__thiscall*)(
+    void* self,
+    NativeUiString label,
+    NativeUiString detail,
+    void* value);
+
 using UiRenderContextColorFn = void(__thiscall*)(void* self, float red, float green, float blue, float alpha);
 using DarkCloudBrowserTabRenderFn = void(__thiscall*)(void* self, float left, float top, float width);
 using DarkCloudBrowserTextRenderFn = void(__thiscall*)(void* self, NativeUiString text, float x, float y);
@@ -507,6 +531,11 @@ struct DebugUiOverlayState {
     X86Hook menu_sprite_centered_draw_hook;
     X86Hook menu_sprite_transform_draw_hook;
     X86Hook native_loader_render_hook;
+    X86Hook settings_scalar_row_hook;
+    X86Hook settings_toggle_row_hook;
+    X86Hook settings_section_row_hook;
+    X86Hook settings_single_string_row_hook;
+    X86Hook settings_dual_string_row_hook;
     bool menu_layout_capture_enabled = false;
     FontAtlas font_atlas;
     IDirect3DDevice9* font_device = nullptr;
