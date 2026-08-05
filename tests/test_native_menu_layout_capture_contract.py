@@ -63,6 +63,21 @@ class NativeMenuLayoutCaptureContractTests(unittest.TestCase):
         self.assertIn("kMenuLayoutCaptureTrackedDialogPriorityMs", frame)
         self.assertIn("menu_layout_capture_enabled", frame)
 
+    def test_position_draw_capture_survives_the_gameplay_hook_chain(self) -> None:
+        header = read("SolomonDarkModLoader/include/debug_ui_overlay.h")
+        public_api = read(
+            "SolomonDarkModLoader/src/debug_ui_overlay/public_api.inl"
+        )
+        gameplay_hook = read(
+            "SolomonDarkModLoader/src/mod_loader_gameplay/gameplay_hooks/"
+            "gameplay_hud_hooks.inl"
+        )
+        observer = "ObserveDebugUiMenuSpritePositionDraw"
+        self.assertIn(observer, header)
+        self.assertIn(observer, public_api)
+        self.assertIn("ObserveMenuSpritePositionDraw(sprite, x, y, false)", public_api)
+        self.assertIn(f"{observer}(self, x, y)", gameplay_hook)
+
     def test_recorder_never_measures_layout_from_the_reference_image(self) -> None:
         recorder = read("scripts/Record-NativeMenuLayout.ps1")
         self.assertIn("sd.ui.get_layout_snapshot", recorder)

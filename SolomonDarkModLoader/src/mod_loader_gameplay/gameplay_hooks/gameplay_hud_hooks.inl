@@ -568,6 +568,7 @@ void __fastcall HookGameplayUiGlyphDraw(
     void* /*unused_edx*/,
     float x,
     float y) {
+    ObserveDebugUiMenuSpritePositionDraw(self, x, y);
     ObserveDebugUiExactTextGlyph(x, y);
 
     const auto original = GetX86HookTrampoline<GameplayUiGlyphDrawFn>(

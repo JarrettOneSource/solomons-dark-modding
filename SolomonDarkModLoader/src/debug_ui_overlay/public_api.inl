@@ -11,3 +11,10 @@ bool TryPrepareMainMenuNewGameSaveReset(
 void ObserveDebugUiExactTextGlyph(float x, float y) {
     ObserveActiveExactTextGlyph(x, y);
 }
+
+void ObserveDebugUiMenuSpritePositionDraw(
+    void* sprite,
+    float x,
+    float y) {
+    ObserveMenuSpritePositionDraw(sprite, x, y, false);
+}

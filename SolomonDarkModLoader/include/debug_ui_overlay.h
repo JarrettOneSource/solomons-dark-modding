@@ -84,6 +84,7 @@ bool InitializeDebugUiOverlay(bool diagnostic_visuals_enabled);
 void ShutdownDebugUiOverlay();
 bool IsDebugUiOverlayInitialized();
 void ObserveDebugUiExactTextGlyph(float x, float y);
+void ObserveDebugUiMenuSpritePositionDraw(void* sprite, float x, float y);
 void DispatchPendingDebugUiActionOnAppTick();
 bool TryPrepareMainMenuNewGameSaveReset(
     std::uintptr_t main_menu_address,
