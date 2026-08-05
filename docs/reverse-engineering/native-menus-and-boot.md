@@ -211,9 +211,9 @@ interaction flag, action id, and draw order.
 | `dark-cloud-settings` | Gameplay Login Info child | Dark Name, Password, Back. |
 | `controls` | Customize Keyboard | Movement, menu/inventory/skills, belt slots 1-8, Back. |
 | `performance` | Tweak Performance | Lighting/shadow/play-style/effect toggles, optional Light Quality, Back. |
-| `dark-cloud-browser` | Initial Dark Cloud list | Menu, login identity link, tabs, level list, Play, Search, Sort, Options. |
+| `dark-cloud-browser` | Initial Dark Cloud list | Menu, login identity link, tabs, level list, Play, Search, Sort, Options. The browser opens **on the Online Levels tab**, so this capture and `dark-cloud-online-levels` are the same rendered state and their reference captures are byte-identical. Do not go looking for a difference. |
 | `dark-cloud-recent` | Recent tab | Same shell; Recent selected. |
-| `dark-cloud-online-levels` | Online Levels tab | Same shell; Online Levels selected. |
+| `dark-cloud-online-levels` | Online Levels tab | Same shell; Online Levels selected — which is also the browser's entry state, see `dark-cloud-browser`. |
 | `dark-cloud-my-levels` | My Levels tab | Same shell; My Levels selected; center action is Edit for a selected/user row. |
 | `dark-cloud-search` | Search modal | Name text field and Search Now. |
 | `dark-cloud-sort` | Sort modal | Newest, Oldest, Updated Recently, Best Rating. |
@@ -225,6 +225,35 @@ interaction flag, action id, and draw order.
 | `map-picker` | Stock story/Boneyard picker | One control per unlocked story index; clicking resolves `data\\levels\\story<index>.boneyard`; the start control cancels/toggles the picker. |
 | `game-over` | Full story Game Over | Armed input continues the native post-death flow. Boneyard mode intentionally uses the fade-only branch. |
 | `hall-of-fame` | Hall of Fame | Main Menu/continue action closes the score screen and reinstalls the title front end. |
+
+**How the Dark Cloud shell marks its selected tab (observed).** Selection is
+carried by **two signals that move together**, not one:
+
+1. **The label rises 8 px.** Resting tops are `recent` 166, `online levels` 163,
+   `my levels` 166, `multiplayer` 165; selected, the first three read 158, 155,
+   and 158.
+2. **The tab's `UI.13` bracket pair grows.** Resting brackets span y 136–187
+   (51 px tall); the selected tab's pair spans y 128–193 (65 px) — 8 px taller at
+   the top, matching the label's rise, and 6 px lower at the bottom.
+
+The brackets' **x never changes**: the eight sprites hold x 460/596, 630/936,
+970/1106, 1140/1308 in every tab state, one pair per tab. Only instance ids and
+draw orders permute, which is an allocation artifact with no visual consequence.
+So a reimplementation moves the label and reshapes the bracket pair vertically,
+and never slides a bracket sideways.
+
+**Multiplayer is not a tab.** It was never captured "selected" because it cannot
+be: on all four captured browser states it carries **no control element** — the
+other three each have a `control.dark_cloud_browser_*` spanning the band, while
+Multiplayer has only a band-sized `text` element standing in that slot — and its
+brackets are drawn in the **selected (65 px) form in every state** while its
+label never leaves its resting baseline. It reads as a permanently-lit,
+non-interactive entry in this build. Treat its "raised" baseline as undefined
+rather than inferred; there is no observation of it.
+
+Switching between Recent and Online Levels changes no element count. My Levels
+does: it drops the `author` and `rating` column headers and swaps the centre
+`PLAY` control for `EDIT`, 94 elements against 98.
 
 ### Exact art families
 

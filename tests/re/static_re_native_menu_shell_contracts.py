@@ -231,6 +231,59 @@ EDGE_CONTRACT = {
 }
 
 
+TAB_LABELS = frozenset({"recent", "online levels", "my levels", "multiplayer"})
+
+# The Dark Cloud tab strip's hit band, and each tab's horizontal span within it.
+TAB_BAND = (128.0, 197.0)
+TAB_SPAN = {
+    "recent": (460.0, 630.0),
+    "online levels": (630.0, 970.0),
+    "my levels": (970.0, 1140.0),
+    "multiplayer": (1140.0, 1342.0),
+}
+
+# Where each tab label sits when its tab is not selected.  Selected, it sits
+# TAB_RAISE px higher -- see the selection block in the census test.
+TAB_RESTING_TOP = {
+    "recent": 166.0,
+    "online levels": 163.0,
+    "my levels": 166.0,
+    "multiplayer": 165.0,
+}
+TAB_RAISE = 8.0
+
+# The `UI.13` bracket pair framing each tab.  x never changes; the vertical
+# extent is the second half of the selection signal.
+BRACKET_X = frozenset({460.0, 596.0, 630.0, 936.0, 970.0, 1106.0, 1140.0, 1308.0})
+BRACKET_RESTING = (136.0, 187.0)
+BRACKET_SELECTED = (128.0, 193.0)
+
+# Which tab each captured browser state has selected.  The entry browser is the
+# Online Levels tab.  Multiplayer is not in this table because it is not a tab:
+# it carries no control element on any screen and its brackets are drawn in the
+# selected form in every state (see MULTIPLAYER_IS_INERT below).
+TAB_SELECTION = {
+    "dark-cloud-browser": "online levels",
+    "dark-cloud-online-levels": "online levels",
+    "dark-cloud-recent": "recent",
+    "dark-cloud-my-levels": "my levels",
+}
+MULTIPLAYER_IS_INERT = "multiplayer"
+
+
+def _strip_screen_prefix(
+    elements: list[dict[str, object]], layout_id: str
+) -> list[dict[str, object]]:
+    """Elements with their screen-id prefix removed, for cross-screen equality."""
+    prefix = layout_id.replace("-", "_") + "."
+    stripped = []
+    for element in elements:
+        copy = dict(element)
+        copy["id"] = str(copy["id"]).removeprefix(prefix)
+        stripped.append(copy)
+    return stripped
+
+
 def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
@@ -341,6 +394,102 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
         raise StaticReTestFailure(
             "reference captures are committed but claimed by no screen: "
             + ", ".join(orphans)
+        )
+
+    # Dark Cloud tab selection is carried by two signals that move together: the
+    # selected tab's label rises TAB_RAISE px, and its `UI.13` bracket pair grows
+    # from BRACKET_RESTING to BRACKET_SELECTED.  The brackets' x never changes.
+    # Pin both -- an earlier draft of this block claimed the label raise was the
+    # whole mechanism, and a mutation that slid a bracket sideways went
+    # undetected, which is how the second signal was found in the first place.
+    def _tab_label_tops(layout_id: str) -> dict[str, float]:
+        """Each tab label's baseline, refusing to guess when a label is ambiguous.
+
+        `multiplayer` appears twice per screen: once as the band-sized element
+        standing in for the control the other three tabs have, and once as the
+        drawn label.  Keying a dict by label text silently kept whichever came
+        last in element order -- and element order is exactly what permutes
+        between tab states, so that reading was riding on an accident.  Discard
+        the band-sized elements explicitly and refuse anything still ambiguous.
+        """
+        prefix = layout_id.replace("-", "_")
+        tops: dict[str, float] = {}
+        for label in TAB_LABELS:
+            candidates = [
+                element
+                for element in by_id[layout_id]["layout"]["elements"]
+                if str(element.get("text", "")).lower() == label
+                and str(element["id"]).startswith(f"{prefix}.text")
+                and (element["rect"][1], element["rect"][3]) != TAB_BAND
+            ]
+            if len(candidates) != 1:
+                raise StaticReTestFailure(
+                    f"{layout_id}: expected exactly one drawn '{label}' label, "
+                    f"found {len(candidates)}"
+                )
+            tops[label] = candidates[0]["rect"][1]
+        return tops
+
+    for layout_id, active in TAB_SELECTION.items():
+        tops = _tab_label_tops(layout_id)
+        expected = {
+            label: TAB_RESTING_TOP[label] - (TAB_RAISE if label == active else 0.0)
+            for label in TAB_LABELS
+        }
+        if tops != expected:
+            raise StaticReTestFailure(
+                f"{layout_id} tab-selection baselines drifted: {tops} "
+                f"(expected {expected})"
+            )
+
+        brackets = [
+            element
+            for element in by_id[layout_id]["layout"]["elements"]
+            if element.get("art_id") == "UI.13"
+        ]
+        if {element["rect"][0] for element in brackets} != BRACKET_X:
+            raise StaticReTestFailure(
+                f"{layout_id}: the UI.13 tab brackets moved horizontally; they "
+                f"hold the same x in every tab state"
+            )
+        for label, (left, right) in TAB_SPAN.items():
+            extents = {
+                (element["rect"][1], element["rect"][3])
+                for element in brackets
+                if left <= element["rect"][0] < right
+            }
+            # Multiplayer is inert: always drawn in the selected form.
+            lit = label in (active, MULTIPLAYER_IS_INERT)
+            want = BRACKET_SELECTED if lit else BRACKET_RESTING
+            if extents != {want}:
+                raise StaticReTestFailure(
+                    f"{layout_id}: the '{label}' brackets read {sorted(extents)}, "
+                    f"expected {want} ({'selected' if lit else 'resting'} form)"
+                )
+
+        # Multiplayer is not a tab.  The other three each carry a control element
+        # spanning the band; Multiplayer never does, on any screen.  A capture
+        # that gave it one would mean the build changed, not that the tab strip
+        # was recaptured.
+        controls = {
+            str(element["id"]).split(".control.")[1]
+            for element in by_id[layout_id]["layout"]["elements"]
+            if ".control." in str(element["id"])
+        }
+        if any(MULTIPLAYER_IS_INERT in control for control in controls):
+            raise StaticReTestFailure(
+                f"{layout_id}: Multiplayer gained a control element; the census "
+                f"documents it as an inert label, not a selectable tab"
+            )
+
+    browser = by_id["dark-cloud-browser"]["layout"]["elements"]
+    online = by_id["dark-cloud-online-levels"]["layout"]["elements"]
+    if _strip_screen_prefix(browser, "dark-cloud-browser") != _strip_screen_prefix(
+        online, "dark-cloud-online-levels"
+    ):
+        raise StaticReTestFailure(
+            "the entry browser and the Online Levels tab no longer render "
+            "identically; the census documents them as the same state"
         )
 
     loader = by_id["native-loader"]["layout"]["elements"]
