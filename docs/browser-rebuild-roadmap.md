@@ -1,7 +1,7 @@
 # Solomon Dark — Browser Rebuild Roadmap
 
 Status: ACTIVE (owner-approved 2026-08-04). Owner context: the game is abandonware and the
-original developers have approved this project; before public launch (P5) the owner re-confirms
+original developers have approved this project; before public launch the owner re-confirms
 that blessing in writing for a full rebuild that redistributes assets from solomondarker.com.
 
 This document is written to be executed by a single capable agent (or a fleet run phase-by-phase)
@@ -12,10 +12,12 @@ without re-deriving context. Every claim points at the repo artifact that carrie
 
 ## 1. Mission
 
-Rebuild Solomon Dark as a browser game served from solomondarker.com:
+Rebuild Solomon Dark as a game that runs in a browser, as a standalone app you own, and on a
+dedicated server anyone can host:
 
 - Faithful to the retail sim — same movement feel, damage numbers, wave pacing, content.
 - Multiplayer-native from day one — server-authoritative, no retail-binary seam fighting.
+- Playable on a controller and on a Steam Deck, not only mouse and keyboard (§4).
 - Mods are first-class — the existing `sd.*` Lua seam contracts become the mod API of the
   rebuild, so today's mods (minimap, bot-brain, hud showcase) port with minimal change.
 - Original assets and data, not recreations — sprites, boneyards, waves, recipes, scripts all
@@ -36,7 +38,92 @@ performance ceilings, and site integration. Keep as a last-resort fallback only.
 client prediction and server authority replay the same code. Gap G1 pins the native tick graph
 and RNG so our determinism matches the retail sim's observable behavior.
 
-## 3. What we already have (verified paths)
+## 3. Distribution: one game, three shapes
+
+There is exactly one sim and exactly one server implementation. The only thing that differs
+between the three ways to play is **where the authoritative server runs**. This is not a
+convenience — it is the load-bearing decision of the whole project. The moment "offline mode"
+becomes a second code path, the two implementations stop agreeing and the conformance goldens
+(§7) can only ever prove one of them right.
+
+| Shape | Server location | Transport | Ships as |
+| --- | --- | --- | --- |
+| In the browser | a Web Worker in the tab | `postMessage` | solomondarker.com `/game` |
+| Standalone offline | a Web Worker in the app shell | `postMessage` | desktop + Steam Deck app |
+| Dedicated | a host someone runs | WebSocket | Node server package |
+
+Consequences the implementing agent must honor:
+
+- **Single-player is not a mode.** It is a one-participant session whose empty seats are filled
+  with bots, which the framework already models as synthetic remote players
+  (`docs/design/lua-bot-players-2026-07-26.md`, `docs/multiplayer-participant-model.md`).
+  Solo, co-op, and dedicated run identical code paths.
+- **The sim must be pure.** No DOM, no wall clock, no `Math.random`, no direct I/O — only the
+  seeded RNG stream that G1 pins. Determinism requires this anyway; it is what makes the
+  in-process server free.
+- **The website is never a dependency of gameplay.** The standalone build must run with the
+  network cable unplugged and solomondarker.com gone. Accounts/listings degrade; play does not.
+- The seam is already declared on the website: `frontend/src/game/engine.ts` (the `Transport`
+  union, `bootGame`, `ENGINE_STATUS`, `OFFLINE_BUILD_URL`) behind the unlisted `/game` page. The
+  rebuild lands as an implementation of `bootGame` plus flipping `ENGINE_STATUS`; the page needs
+  no other change.
+
+### 3.1 Standalone shell
+
+Chromium-based shell (Electron or a Chromium kiosk wrapper) rather than WebKitGTK, because the
+renderer is WebGL2 and Deck-class performance is a gate, not a nice-to-have. Targets: Windows x64
+and **Linux x86_64** — the Linux target is what makes the Steam Deck a real install rather than a
+browser bookmark. The shell hosts the same bundle the website serves; it does not fork it.
+
+## 4. Input model and platform targets (controller + Steam Deck are requirements)
+
+**The sim never sees a device event.** Devices produce an abstract *intent stream*; the sim
+consumes only that. Mouse+keyboard and gamepad are two producers of the same stream, and neither
+is privileged.
+
+This constraint is not stylistic — it falls out of conformance. T3 (§7) replays **native input
+traces** recorded from the retail game, which is mouse-driven: click-to-move, click-to-cast at a
+screen point, hold-to-charge. So the intent contract must be **at least as expressive as native
+mouse input**, or recorded traces cannot be replayed at all:
+
+```
+Intent = {
+  move:    { target: WorldPoint } | { vector: Unit2 } | none
+  aim:     WorldPoint             // where the cast is directed
+  cast:    { slot, phase: press | hold | release }
+  interact | menu-nav | …
+}
+```
+
+A gamepad producer synthesizes `aim` from the right stick (`player_pos + stick_dir × reach`) and
+`move.vector` from the left stick. A mouse producer emits `move.target` and a cursor `aim`
+directly. Both land in the same struct, so native traces stay replayable and the controller is
+not a translation layer bolted on afterwards.
+
+**Open design call (owner, before P3 — see §11):** twin-stick aim as the primary controller
+scheme vs. a stick-driven virtual cursor. Twin-stick is the recommendation — it is what the genre
+expects and what the Deck's ergonomics want — but it changes feel relative to click-to-move and
+is therefore the owner's call, not the agent's. The intent contract above expresses both, so the
+decision does not block P0–P2.
+
+### 4.1 Steam Deck target (gates, measured — never assumed)
+
+| Concern | Requirement |
+| --- | --- |
+| Build | Linux x86_64 standalone (§3.1), installable as a Steam or non-Steam title |
+| Display | 1280×800, 16:10, 7" — UI scales by *readability*, not naive pixel scaling; minimum text sizes and safe areas declared in G11 and G9 |
+| Controls | The Deck presents as a standard gamepad through Steam Input, and the browser Gamepad API sees it as such. No Deck-specific input code |
+| Text entry | Server address, player name, chat MUST be real focusable `<input>` elements so the Deck on-screen keyboard appears. Canvas-drawn text fields are forbidden |
+| Suspend/resume | Sessions survive suspend: local pauses cleanly, remote reconnects on resume. Not a crash, not a silent desync |
+| Performance | 60 fps at 1280×800 on Deck-class hardware, measured on device. Frame budget is a gate at P0 and re-measured every phase |
+| Haptics | Rumble via the Gamepad API `vibrationActuator` wherever the native game had feedback |
+
+**Every menu is fully operable with a D-pad and face buttons, with no cursor.** That requires an
+explicit focus model — focus order, default focus per screen, wrap behavior, back-button
+semantics — which is why G11 (menus) is documented *before* anything is built. Retrofitting focus
+navigation onto screens designed around a mouse is a rewrite, not a patch.
+
+## 5. What we already have (verified paths)
 
 ### Content & data (complete, tooled)
 | Capability | Artifacts |
@@ -57,21 +144,24 @@ and RNG so our determinism matches the retail sim's observable behavior.
 | Skills/disciplines | `docs/re/skills-concentration-discipline.md`, `docs/re/skillfix-discipline-and-concentration-2026-08-02.md`, `docs/skill-picker-re.md`, `tools/build_native_skill_catalog.py` | MEDIUM-HIGH → G6 for per-skill effects |
 | Enemies & targeting | `docs/reverse-engineering/native-enemies.md`, `native-enemy-target-acquisition.md`, `docs/skeleton-death-effects-re.md`, botmana/botwaves bug docs under `docs/bugs/` | MEDIUM → G3 for behavior interpreter |
 | Items/equipment/loot | `docs/reverse-engineering/native-items-equipment-and-loot.md` (orb/gold/item/powerup families, magnet behavior) | MEDIUM-HIGH → G7 for stock selector rates |
-| Rendering/animation | `docs/wizard-render-animation-deep-dive.md`, `docs/re/world-sprite-render-pipeline.md`, `docs/reverse-engineering/native-camera-control.md`, `docs/main-menu-solomon-visual-re.md`, `docs/ui-binary-map.md`, `docs/ui-engine-system-map.md`, `docs/overlay-visuals-review.md` | MEDIUM-HIGH → G4 for full state machines |
+| Rendering/animation | `docs/wizard-render-animation-deep-dive.md`, `docs/re/world-sprite-render-pipeline.md`, `docs/reverse-engineering/native-camera-control.md`, `docs/main-menu-solomon-visual-re.md`, `docs/ui-binary-map.md`, `docs/ui-engine-system-map.md`, `docs/overlay-visuals-review.md` | MEDIUM-HIGH → G4 for animation state, G12 for scene composition |
 | Audio | `docs/reverse-engineering/native-audio-system.md`, `native-audio-engine-2026-07-26.md`, `tools/build_native_audio_catalog.py` | MEDIUM → G5 for event census |
-| Game flow (run intro, game over, hub) | `docs/solomon-run-intro-investigation.md`, `docs/reverse-engineering/native-game-over-session-semantics.md`, `docs/re/tutorial-mechanics.md`, `docs/re/map-picker.md`, dig: `docs/design/dig-npc-movement-lock-2026-07-28.md` | MEDIUM → G8 |
+| Menus & shell | `docs/main-menu-solomon-visual-re.md`, `docs/skill-picker-re.md`, `docs/re/map-picker.md`, `docs/ui-binary-map.md`, `docs/ui-engine-system-map.md`, the uigate loading-screen input seal | LOW-MEDIUM → G11 (no screen census, no focus model) |
+| Game flow (run intro, game over, hub) | `docs/solomon-run-intro-investigation.md`, `docs/reverse-engineering/native-game-over-session-semantics.md`, `docs/re/tutorial-mechanics.md`, `docs/re/map-picker.md`, dig: `docs/design/dig-npc-movement-lock-2026-07-28.md` | MEDIUM → G8, G13 |
 | Multiplayer semantics (ours, reusable as-is) | `docs/networking/world-sync-authority-plan.md`, `session-lifecycle.md`, `netcode-review.md`, `docs/multiplayer-participant-model.md`, protocol v92 scene-epoch model (`docs/bugs/allyvis-player-visual-epoch-parity.md`) | HIGH (we designed it) |
 | Mod API spec (the seam to preserve) | `docs/lua-*.md` suite at docs root (spells, waves, world-rendering, ui-authoring, settings, rng, scene, state-and-events, storage, time/timer, net, sprites, resource-filters…) + `docs/lua-seam-roadmap.md` | HIGH (it is our own contract) |
 | Bots (port to server-side players) | `mods/bot-brain/`, `docs/design/lua-bot-players-2026-07-26.md`, `docs/design/ml-bot-policy-contract.md`, `docs/ml-bot*.md`, `models/` | HIGH |
+| Input model | none — the loader drives native input, but it has never been censused as a contract | NONE → G14 |
 
 ### Infrastructure
 - Website backend + listings + editors: `api/` (deployed as `solomon-dark-revived` on the NFO box;
   solomondarker.com). Mod publication protocol: `docs/bugs/modpipe-publication-contract-2026-08-01.md`.
+- Website game seam: `frontend/src/game/engine.ts` plus the unlisted `/game` page.
 - Test regime: `tests/re/` (static contracts — the conformance seed corpus), `tests/lua/`,
   `tests/native/`, `tests/launcher-contracts/`, `tests/fixtures/`.
 - Fleet playbook: `~/codex-fleet/20260723/` (dispatch, verification bars, floors).
 
-## 4. Gap register (RE campaigns; each lands docs + goldens + contracts on main)
+## 6. Gap register (RE campaigns; each lands docs + goldens + contracts on main)
 
 Every gap campaign has the same deliverable shape, so its output is directly consumable by the
 implementing agent:
@@ -80,20 +170,48 @@ implementing agent:
    game — never hand-typed).
 3. New static RE contracts pinning the claims (floors only ever go up).
 
+Gap IDs are stable and are never renumbered — dispatched campaigns cite them. The **tiers** below
+are the execution order, set by the owner on 2026-08-04: menus first, then hub, then in-run. G1
+and G2 were dispatched before that reordering and continue in flight; everything else follows
+tier order.
+
+### Tier A — shell and menus (first)
+
 | Gap | Campaign | Scope | Status |
 | --- | --- | --- | --- |
-| G1 sim core: movement integrator, tick graph, RNG | **physre** | Input→intent→velocity→position pipeline with exact constants (base speeds, diagonal handling, knockback, wall response via `movement_collision_test_circle_placement`); the full tick graph (which systems at which cadence, in what order — reconcile 67 ms motion + 250 ms mana + render frames against `game-timing-scale.md`); native RNG algorithm, state, seeding, per-system streams, gameplay call-site census. Goldens: per-tick position traces for scripted inputs; RNG streams. | DISPATCHED 2026-08-04 |
-| G2 projectile/spell mechanics | **spellre** | Per element (+frost channel): spawn origin/offset, velocity, collision radius, lifetime, contact cadence, pierce/residual semantics, earth charge curve, channel mechanics; damage APPLICATION path cross-referenced to the existing damage docs (do not re-derive numbers); presentation hooks (sprite ids/frame cadence) sufficient for visual parity. Goldens: per-tick projectile trajectories per element/rank incl. ≥3 earth charge levels; contact events. | DISPATCHED 2026-08-04 |
-| G3 enemy behavior interpreter | monre | MonsterRecipe 42-field semantics → behavior state machine (approach, attack cadence, specials, spawners); skeleton family first, then full census via `build_native_enemy_catalog.py`. Goldens: enemy movement/attack traces vs a stationary and a moving target. | QUEUED (dispatch when a fleet slot frees) |
-| G4 animation & presentation state machines | animre | Wizard + enemy sprite state transitions (idle/walk/cast/hit/death), frame timings, attachment points (staff orb type 7004), z/sort rules (`world-sprite-render-pipeline.md` + `sort_bias`), lighting/shadow model, camera constants (`native-camera-control.md`). Goldens: frame-by-frame animation captures with timestamps. | QUEUED |
-| G5 audio event census | audiore | Trigger→sound mapping for gameplay events (cast, hit, death, pickup, waves, UI), asset format/loop points, building on `native-audio-system.md` + audio catalog. | QUEUED |
-| G6 progression & per-skill effects | progre | XP/level curves, level-up offer pools, exact effect semantics per skill (incl. Firewalker hoard `+0x740` model from botmana), discipline modifiers. | QUEUED |
-| G7 stock loot/reward selector | lootre | Drop-rate tables, gold amounts, potion selection, magnet physics constants; builds on `native-items-equipment-and-loot.md` + potiondrop findings. | QUEUED |
-| G8 hub interactions & dig minigame | hubre | NPC talk flows, shop (Useful Thyngs), dig mechanics/timers (`sd.hub.get_solomon_dig_state` semantics already exposed), run entry/portal flow. | QUEUED |
-| G9 retail HUD spec | uire | Pixel-accurate HUD layout/behavior census from `ui-binary-map.md`/`ui-engine-system-map.md` (healthbar append ABI already known from allyvis). | QUEUED |
-| G10 saves/accounts | savere | Save format, account linkage (launcher Settings owns saves today). Needed only by P5. | QUEUED |
+| G14 input contract | **inputre** | Census the native input model as a contract: what a click actually means at each surface (world move vs. cast vs. UI), hold/charge semantics and their thresholds, key bindings, modifier behavior, the input seal during loading (uigate), and how input routes between HUD, menus, and world. Deliver the abstract `Intent` schema of §4 plus a proof that it losslessly encodes a recorded native mouse session. Goldens: recorded native input traces and their intent-stream encodings, round-trip exact. | QUEUED — dispatch first |
+| G11 boot, splash, loading & menus | **menure** | The whole pre-gameplay shell: boot sequence and its ordering; splash/attract screens; loading screens (progress source, minimum display time, what is legal to do during them); title/main menu; every submenu reachable from it (options/settings, profile & save select, class/loadout, skill picker, map/boneyard picker, pause, game over); per-screen layout with exact art, fonts, and positions; transitions between screens; and the **focus/navigation model** §4 requires (focus order, default focus, wrap, back semantics) — the native game is mouse-driven, so where no focus order exists natively, define one and mark it designed-not-observed. Goldens: per-screen layout captures plus a navigation-graph fixture. | QUEUED — dispatch second |
 
-## 5. Conformance strategy (how we know the port is faithful)
+**Rule for G11 (trademark, not parity).** Reverse and document the splash screen fully, including
+the Raptisoft logo's placement and timing, and extract the asset. **Do not ship the logo** until
+the owner's written blessing (§11) explicitly covers trademark use — displaying a company's mark
+reads as endorsement and contradicts the "not affiliated with Raptisoft" disclaimer the site
+already carries. Until then the splash shows an attribution card ("Originally created by
+Raptisoft") in the same slot. This is a publication gate, not an RE gate.
+
+### Tier B — hub and world presentation (second)
+
+| Gap | Campaign | Scope | Status |
+| --- | --- | --- | --- |
+| G12 scene composition | **rendre** | How the game builds a scene's visuals out of art: layer order and what occupies each layer, atlas/sprite selection, parallax and backdrop assembly, decor placement and seeding, the fog/lighting/tint model, sort rules (`world-sprite-render-pipeline.md` + `sort_bias`), and the camera's relationship to all of it. This is the spec the renderer is written against — G4 covers *animation state*, this covers *how a frame is assembled*. Goldens: scene composition dumps (ordered draw lists with sprite ids and transforms) for the hub and one boneyard. | QUEUED |
+| G8 hub, traders & dig | **hubre** | Hub world contents and layout; every NPC and its talk flow; the **shop economy** (Useful Thyngs): inventory tables, pricing, what restocks and when, currency sinks, what persists across runs; dig mechanics and timers (`sd.hub.get_solomon_dig_state` semantics already exposed); run entry / portal flow. Goldens: shop inventory and price tables, dig timing traces. | QUEUED |
+| G13 flow & room transitions | **flowre** | The application/room state machine end to end: boot → splash → menu → hub → run entry → room → room transition → run end → hub. Per transition: what tears down, what persists, load ordering, the barrier/handshake (the loading-Boneyard barrier semantics from lobby-lifecycle), fade/wipe presentation and its timing, and the failure/abort paths. Goldens: transition traces with timings and per-phase state assertions. | QUEUED |
+
+### Tier C — in-run (third)
+
+| Gap | Campaign | Scope | Status |
+| --- | --- | --- | --- |
+| G1 sim core: movement integrator, tick graph, RNG | **physre** | Input→intent→velocity→position pipeline with exact constants (base speeds, diagonal handling, knockback, wall response via `movement_collision_test_circle_placement`); the full tick graph (which systems at which cadence, in what order — reconcile 67 ms motion + 250 ms mana + render frames against `game-timing-scale.md`); native RNG algorithm, state, seeding, per-system streams, gameplay call-site census. Goldens: per-tick position traces for scripted inputs; RNG streams. | IN FLIGHT (dispatched 2026-08-04) |
+| G2 projectile/spell mechanics | **spellre** | Per element (+frost channel): spawn origin/offset, velocity, collision radius, lifetime, contact cadence, pierce/residual semantics, earth charge curve, channel mechanics; damage APPLICATION path cross-referenced to the existing damage docs (do not re-derive numbers); presentation hooks (sprite ids/frame cadence) sufficient for visual parity. Goldens: per-tick projectile trajectories per element/rank incl. ≥3 earth charge levels; contact events. | IN FLIGHT (dispatched 2026-08-04) |
+| G3 enemy behavior interpreter | monre | MonsterRecipe 42-field semantics → behavior state machine (approach, attack cadence, specials, spawners); skeleton family first, then full census via `build_native_enemy_catalog.py`. Goldens: enemy movement/attack traces vs a stationary and a moving target. | QUEUED |
+| G4 animation & presentation state machines | animre | Wizard + enemy sprite state transitions (idle/walk/cast/hit/death), frame timings, attachment points (staff orb type 7004), lighting/shadow model, camera constants (`native-camera-control.md`). Consumes G12's composition spec. Goldens: frame-by-frame animation captures with timestamps. | QUEUED |
+| G9 retail HUD spec | uire | Pixel-accurate HUD layout/behavior census from `ui-binary-map.md`/`ui-engine-system-map.md` (healthbar append ABI already known from allyvis), plus the 16:10 / 1280×800 scaling rules §4.1 requires. | QUEUED |
+| G5 audio event census | audiore | Trigger→sound mapping for gameplay events (cast, hit, death, pickup, waves, UI), asset format/loop points, building on `native-audio-system.md` + audio catalog. | QUEUED |
+| G6 progression & per-skill effects | progre | XP/level curves, level-up offer pools, exact effect semantics per skill (incl. the Firewalker hoard `+0x740` model from botmana), discipline modifiers. | QUEUED |
+| G7 stock loot/reward selector | lootre | Drop-rate tables, gold amounts, potion selection, magnet physics constants; builds on `native-items-equipment-and-loot.md` + potiondrop findings. | QUEUED |
+| G10 saves/accounts | savere | Save format, account linkage (launcher Settings owns saves today). Needed only by launch. | QUEUED |
+
+## 7. Conformance strategy (how we know the port is faithful)
 
 Three tiers, all runnable in CI:
 
@@ -103,25 +221,30 @@ Three tiers, all runnable in CI:
 - **T2 — golden fixtures.** Every gap campaign lands JSON goldens in `tests/fixtures/webgame/`.
   The TS sim replays fixture inputs and must match outputs exactly (integers) or within epsilon
   (float trajectories; epsilon declared per fixture, justified in the fixture header).
-- **T3 — native trace replay.** A loader-side **recorder** (P1 work item; rides the existing
+- **T3 — native trace replay.** A loader-side **recorder** (built in P2; rides the existing
   lua-exec/probe seams) captures full input+state timelines from real native runs: per-tick
-  inputs, positions, HP/MP, spawns, RNG-visible outcomes. The browser sim replays the input
-  track and diffs the state track. Gate: divergence budget per subsystem, tightening per phase.
+  inputs, positions, HP/MP, spawns, RNG-visible outcomes. The browser sim replays the input track
+  and diffs the state track. Gate: a divergence budget per subsystem, tightening per phase. The
+  recorder emits the §4 `Intent` stream, not raw device events — G14 is its prerequisite.
 
-Never weaken a conformance gate to make a port pass — that is the same rule as the existing
-battery (`~/codex-fleet` playbook; material weakenings require an explicit owner QUESTION).
+Never weaken a conformance gate to make a port pass — same rule as the existing battery
+(`~/codex-fleet` playbook; material weakenings require an explicit owner QUESTION).
 
-## 6. Architecture
+## 8. Architecture
 
 New top-level `webgame/` (own npm workspace, own battery wired into `.github/` CI):
 
 - `webgame/sim/` — deterministic shared core. Fixed tick per G1; explicit seeded RNG; no DOM, no
-  wall clock. Entities mirror the native actor model (object_type_id families, tracked_enemy,
-  the participant/slot model from `docs/multiplayer-participant-model.md`).
-- `webgame/client/` — WebGL2 renderer (atlas batching per G4 z-rules), input, interpolation,
-  prediction against server authority, HUD per G9.
-- `webgame/server/` — Node authoritative rooms running the same sim core; WebSocket transport;
-  scene-epoch lifecycle per the v92 model; lobby/accounts via existing `api/`.
+  wall clock. Entities mirror the native actor model (object_type_id families, tracked_enemy, the
+  participant/slot model from `docs/multiplayer-participant-model.md`).
+- `webgame/input/` — device producers (mouse+keyboard, gamepad) emitting the §4 `Intent` stream,
+  plus the focus/navigation model for menus. The only module allowed to know a device exists.
+- `webgame/client/` — WebGL2 renderer (atlas batching per G12 composition and G4 z-rules), input
+  binding, interpolation, prediction against server authority, HUD per G9.
+- `webgame/server/` — Node authoritative rooms running the same sim core; a WebSocket transport
+  **and** an in-process worker transport for solo/standalone (§3 — one implementation, two
+  bindings); scene-epoch lifecycle per the v92 model; lobby/accounts via the existing `api/`.
+- `webgame/shell/` — the standalone desktop/Deck app (§3.1). A packaging target, not a fork.
 - `webgame/assets/` — build-time pipeline: `extract_bundles.py` output → atlases + manifest;
   boneyards/waves/recipes decoded via existing tools into JSON packs; served by `api/`.
 - `webgame/modruntime/` — Lua via WASM (wasmoon) on the server (authoritative) with a
@@ -133,52 +256,70 @@ New top-level `webgame/` (own npm workspace, own battery wired into `.github/` C
 Bots: port `mods/bot-brain` server-side as synthetic players (they already speak participant
 seams). ML policy (`models/`, `docs/ml-bot*.md`) follows later — same observation contract.
 
-## 7. Phases (each = one fleet wave; land on main behind its gate)
+## 9. Phases (each = one fleet wave; land on main behind its gate)
 
-- **P0 — renderer + asset spike.** Asset pipeline emits atlases/manifests from real bundles; hub
-  boneyard renders in-browser; camera per `native-camera-control.md`; wizard walks with
-  placeholder physics. GATE: side-by-side capture vs native hub judged pixel-plausible; assets
-  100% from original bundles. (No sim fidelity claims yet.)
-- **P1 — deterministic sim core.** Consume physre+spellre landings: tick graph, integrator, RNG,
-  fire projectile. Build the T3 recorder mod. GATE: T2 movement + fire goldens green; first T3
-  replay (solo, scripted 60 s run) within divergence budget; determinism proof (same seed+inputs
-  → identical state hash, 1000 ticks).
-- **P2 — combat parity.** All elements incl. earth charge + frost channel; skeleton family AI
-  (monre); waves (wave-scaling-re + botwaves landing); loot (G7); potions incl. invincibility
-  semantics (potionvfx/potiondrop docs); death/spectate flow. GATE: T2 all-element damage
-  goldens exact; T3 full-arena replays; a human plays it and the owner signs off on feel.
-- **P3 — multiplayer.** Server rooms, prediction/reconciliation, scene-epoch lifecycle, ally
-  HUD parity (allyvis semantics), bots as server-side players. GATE: 2-human+1-bot browser
-  session passes the same acceptance battery style as the native MP campaigns (cross-peer HP
-  parity, room transitions, hub returns).
-- **P4 — mods + editors.** wasmoon `sd.*` runtime; minimap + bot-brain run; site boneyard/wave
-  editors round-trip into live webgame sessions; mod listings serve webgame packages alongside
-  loader packages.
-- **P5 — launch.** Accounts/saves (G10), perf budget (60 fps mid hardware; measure, don't
-  guess), site integration, written dev blessing confirmed by owner, public beta.
+Ordered as a vertical slice down the player's own path, per the owner's tier order: a navigable,
+controller-driven shell before any sim exists, then a walkable hub, then the run.
 
-## 8. Execution guide for the implementing agent
+- **P0 — shell, assets, menus.** Asset pipeline emits atlases/manifests from real bundles. Boot →
+  splash → title → settings → picker screens, built per G11 and driven by the G14 intent stream.
+  GATE: every menu fully operable with a gamepad and no cursor; side-by-side capture vs native
+  judged pixel-plausible; assets 100% from original bundles; runs at 1280×800 on Deck-class
+  hardware with the frame budget measured on device. No sim fidelity claims yet.
+- **P1 — hub.** Scene composition (G12) renders the hub from real data; NPCs and the shop economy
+  (G8); the room/flow state machine and its transitions (G13); run entry portal. GATE: walk the
+  hub on a controller, talk to every NPC, complete a purchase, enter and leave a run shell, with
+  all transitions matching G13's timing traces.
+- **P2 — deterministic sim core.** Consume the physre + spellre landings: tick graph, integrator,
+  RNG, fire projectile. Build the T3 recorder mod. GATE: T2 movement + fire goldens green; first
+  T3 replay (solo, scripted 60 s run) within the divergence budget; determinism proof (same seed
+  + inputs → identical state hash, 1000 ticks).
+- **P3 — combat parity.** All elements incl. earth charge + frost channel; skeleton family AI
+  (monre); waves (wave-scaling-re + the botwaves landing); loot (G7); progression (G6); potions
+  incl. invincibility semantics (potionvfx/potiondrop docs); HUD (G9); animation (G4); audio
+  (G5); death/spectate flow. GATE: T2 all-element damage goldens exact; T3 full-arena replays; a
+  human plays it on both mouse and controller and the owner signs off on feel.
+- **P4 — multiplayer.** Server rooms, prediction/reconciliation, scene-epoch lifecycle, ally HUD
+  parity (allyvis semantics), bots as server-side players, the dedicated-server package and its
+  hosting docs. GATE: a 2-human + 1-bot browser session passes the same acceptance battery style
+  as the native MP campaigns (cross-peer HP parity, room transitions, hub returns).
+- **P5 — standalone + mods + editors.** The `webgame/shell/` Windows and Linux builds, Deck
+  install path verified on device; the wasmoon `sd.*` runtime; minimap + bot-brain run; site
+  boneyard/wave editors round-trip into live webgame sessions; mod listings serve webgame
+  packages alongside loader packages.
+- **P6 — launch.** Accounts/saves (G10); perf budget re-measured (60 fps mid hardware and Deck —
+  measure, don't guess); site integration, `ENGINE_STATUS` flipped and `/game` linked from the
+  site's navigation; written dev blessing confirmed by owner; public beta.
+
+## 10. Execution guide for the implementing agent
 
 1. Read this file, then the Confidence table's HIGH rows, then the landed gap docs for the phase
    you are executing. Do not start a phase whose gap campaigns have not landed.
 2. Conventions are non-negotiable and identical to the loader project: investigate → document →
    fix; class-closing fixes; no fallback code paths; contracts/goldens never weakened silently;
-   every landing = full battery + exact-SHA CI green + evidence dir with checksums; report
+   every landing = full battery + exact-SHA CI green + an evidence dir with checksums; report
    DONE:/QUESTION: sentinels to ATC.
 3. WSL-load rule: bulk filesystem work happens Windows-side (`powershell.exe`, `Get-FileHash`,
    `rg.exe`); never recursive scans over `/mnt/c` or `/mnt/d` from WSL.
-4. Webgame battery = `webgame` unit tests + T1/T2/T3 conformance + lint/typecheck, wired into
-   the same CI workflow; floors ratchet like the existing suite (`~/codex-fleet/20260723/`
-   playbook has current floors; they only go up).
+4. Webgame battery = `webgame` unit tests + T1/T2/T3 conformance + lint/typecheck, wired into the
+   same CI workflow; floors ratchet like the existing suite (`~/codex-fleet/20260723/` playbook
+   has the current floors; they only go up).
 5. Live native captures (goldens, T3 traces) use the standard harness
    (`scripts/Launch-LocalSoloSession.ps1` / `Launch-LocalMultiplayerPair.ps1`,
    `SDMOD_DISABLE_AUDIO=1`, isolated ports/instances, exact-PID disposal with proofs).
 6. Release-note discipline: webgame ships via the website; loader release notes never mention it.
+7. Controller parity is a per-phase gate, not a P6 task. A screen that cannot be operated without
+   a cursor does not pass its phase, no matter how it looks.
 
-## 9. Open items / to-confirm
+## 11. Open items / to-confirm
 
-- Owner: written re-confirmation of the original developers' blessing before P5.
-- Confirm `api/` deployment mapping (repo → `solomon-dark-revived` on NFO) and where webgame
+- **Owner (blocks launch):** written re-confirmation of the original developers' blessing. It
+  must state explicitly whether it covers **trademark/logo use**, which is a separate question
+  from redistributing game content — see the G11 rule in §6.
+- **Owner (blocks P3):** controller aim scheme — twin-stick (recommended) vs. virtual cursor.
+  §4's intent contract expresses both, so this does not block P0–P2.
+- Confirm the `api/` deployment mapping (repo → `solomon-dark-revived` on NFO) and where webgame
   static hosting slots in (same box; measure asset weight in P0).
-- monre/animre dispatch when fleet slots free (after current bug campaigns land); remaining gap
-  campaigns scheduled per phase entry criteria.
+- Steam Deck: confirm a physical device is available for the on-device gates in P0/P5/P6, or
+  declare the substitute (1280×800 Linux Chromium + a standard gamepad) and its blind spots.
+- Tier C campaigns dispatch as fleet slots free, after Tier A and Tier B have landed.
