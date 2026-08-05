@@ -512,6 +512,49 @@ back to the global object at `0x0063895B`. To an outside observer this is one
 shared stream whose state jumps to the private generator's post-generation
 state; it is not an independent persistent Boneyard stream.
 
+#### The one recorded observation does not show that lifecycle
+
+`rng-goldens.json` carries a single snapshot of the global object labelled
+`active_state_after_world_generation`, with `published_seed`, `selected_in_hub`,
+and `get_seed_in_hub` all equal to `19088743`, and a note claiming world
+generation had already consumed the stream. The recorded words do not support
+that reading, and a port must not treat this snapshot as evidence that
+`sd.rng.set_seed` controls world generation.
+
+Seeding and the primitive draw are both *linear* in the seed over `Z/2^30`, so
+the snapshot can be inverted exactly rather than searched. Carrying each state
+word as `p * seed + q (mod 2^30)` and solving the resulting congruence gives a
+**unique** solution for every draw count up to 200000 that is consistent with
+the recorded ring indices `index_a = 2`, `index_b = 33`:
+
+```text
+observed state == NativeRng_Seed(5683095) followed by exactly 2 primitive draws
+```
+
+The Fibonacci ladder is visible directly in the recorded words — `state[2] =
+5683096`, `state[3] = 5683097`, `state[4] = 11366193`, `state[5] = 17049290` —
+with only `state[0]` and `state[1]` overwritten, which is what two draws do.
+Three consequences follow:
+
+- The seed is **not** `19088743`. Whatever seeded this object, it was not the
+  published/selected/hub-reported value that the loader chose.
+- The seed cannot be the documented `Integer(999999)` result, because
+  `5683095 >= 999999` is outside that generator's range — for *any* draw count.
+  It also never appears as a raw 30-bit word in the first 500000 draws of a
+  global seeded with `19088743`.
+- Two draws is not a post-generation state. A stream that world generation had
+  consumed cannot sit two steps past a fresh ladder.
+
+`5683095` is `94.7` minutes expressed in milliseconds, which is the shape of the
+`timeGetTime` startup seed described above, so the most economical explanation
+is that the observed global still held its retail clock seed. That is a
+hypothesis, not a finding: the snapshot alone cannot distinguish "`set_seed`
+never reached this object" from "something reseeded it from the clock
+afterwards". Either way the determinism claim in this subsection is
+**unverified by the recorded evidence**, and it is the claim a port most needs,
+since world generation, trader inventories, and drops all inherit it. See
+`## Not Yet Reversed`.
+
 ### Shared versus private streams
 
 Most gameplay uses the global pointer, but the binary deliberately constructs
@@ -572,13 +615,42 @@ plane, tangential slide, and Knockback displacement before writing JSON.
 
 `rng-goldens.json` records isolated retail sequences for explicit reachable
 seeds and positive bounds, plus all 55 final state words and indices. It also
-records a read-only snapshot of the active post-generation stream. The
-recorder independently replays the recovered recurrence in Python and refuses
-to write a fixture if any output, index, or state word differs.
+records a read-only snapshot of the active stream. The recorder independently
+replays the recovered recurrence in Python and refuses to write a fixture if any
+output, index, or state word differs.
+
+That self-check covers the four recorded **sequences** only. It does not cover
+the `observed_run_seed` snapshot, which is why the snapshot's `post-generation`
+label survived capture despite being inconsistent with its own numbers — see
+the subsection above. The four sequences are trustworthy and were independently
+re-derived from this document's prose alone: 352 outputs, all 55 final state
+words, and both ring indices reproduce bit-exactly across seeds `1`,
+`19088743`, and the boundary seed `1073741823`, at ranges `16`, `100`, `1001`,
+and `999999` — so the biased power-of-two-then-modulo mapping is pinned at both
+power-of-two and non-power-of-two bounds.
 
 The fixture `source` SHA names the clean recorder commit used for capture. The
 later fixture/contract commit may therefore differ; this is intentional and
 preserves the exact executable code that produced the recordings.
+
+## Not Yet Reversed
+
+Two RNG elements are documented from the decompile but are not pinned by any
+recorded golden, so an implementer cannot check a port against them.
+
+| Element | State | What is missing |
+| --- | --- | --- |
+| Seeding lifecycle / run determinism | Unverified | No capture shows `sd.rng.set_seed`'s value actually seeding the object that world generation consumes, nor the Boneyard `0x006388B0` private-stream transfer taking effect. The single recorded snapshot inverts exactly to `NativeRng_Seed(5683095)` + 2 draws, which is neither the published seed nor a post-generation state. |
+| Float primitive `0x00401310` | Unpinned | Neither fixture records a single float draw. `rng-goldens.json` holds four integer sequences; `movement-goldens.json` contains no RNG samples at all. The inclusive `Integer(100001) / 100000 * magnitude` mapping, the reachability of both `0.0` and the endpoint, and the sign behaviour are all unrecorded, yet contract item 7 demands parity on them. |
+
+Closing the first needs a live capture that seeds a run with a known value and
+then reads the global at `0x00818B10` **before** generation, **after**
+generation, and **after** the `0x0063895B` copy-back, so the three states can be
+chained by replay. Closing the second needs a recorded float sequence at a known
+seed, including a draw that lands on each endpoint. Neither is reachable from
+the fixtures as they stand, and neither should be guessed: a port that assumes
+`set_seed` is authoritative will produce runs that diverge from native on the
+very first generated world.
 
 ## Browser implementation contract
 
