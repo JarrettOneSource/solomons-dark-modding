@@ -15,6 +15,21 @@ APPROVED_AUTHORS = {
 APPROVED_COMMITTERS = APPROVED_AUTHORS | {
     ("GitHub", "noreply@github.com"),
 }
+# Already-published main history is waived by immutable commit, never by identity.
+HISTORICAL_IDENTITY_EXCEPTIONS = {
+    "4fe7a8539b98357fd22d54a888dbbf2102092a85": (
+        "Claude ATC",
+        "j.johnson@yossplatform.com",
+    ),
+    "9adeb266e141a50b850668bba2c6b5cf7ecd529c": (
+        "Claude ATC",
+        "j.johnson@yossplatform.com",
+    ),
+    "266ae9bda8b41ccce6a32ce8f82c99f49e4c0cbe": (
+        "Jarrett Johnson",
+        "j.johnson@yossplatform.com",
+    ),
+}
 
 
 def test_repository_history_uses_approved_identities() -> str:
@@ -36,11 +51,19 @@ def test_repository_history_uses_approved_identities() -> str:
         commit, author_name, author_email, committer_name, committer_email = (
             row.split("\t", 4)
         )
-        if (author_name, author_email) not in APPROVED_AUTHORS:
+        author = (author_name, author_email)
+        if (
+            author not in APPROVED_AUTHORS
+            and HISTORICAL_IDENTITY_EXCEPTIONS.get(commit) != author
+        ):
             violations.append(
                 f"{commit}: unapproved author {author_name} <{author_email}>"
             )
-        if (committer_name, committer_email) not in APPROVED_COMMITTERS:
+        committer = (committer_name, committer_email)
+        if (
+            committer not in APPROVED_COMMITTERS
+            and HISTORICAL_IDENTITY_EXCEPTIONS.get(commit) != committer
+        ):
             violations.append(
                 f"{commit}: unapproved committer {committer_name} <{committer_email}>"
             )

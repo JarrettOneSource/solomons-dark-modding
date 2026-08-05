@@ -960,6 +960,7 @@ def test_automation_launch_surfaces_default_to_disabled_audio() -> str:
     }
     delegated_hard_disabled_python = {
         "tools/verify_lua_consumable_presentation.py",
+        "tools/verify_multiplayer_bot_only_wave_progression.py",
     }
     reference_only_python = {
         "tools/verify_bot_level_up_continuity.py",
