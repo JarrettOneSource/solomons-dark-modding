@@ -27,10 +27,14 @@ The live, machine-recorded conformance corpus is:
 
 - `tests/fixtures/webgame/movement-goldens.json`
 - `tests/fixtures/webgame/rng-goldens.json`
+- `tests/fixtures/webgame/float-rng-goldens.json`
 
-The recorder is `tools/record_native_sim_goldens.py`. It records positions from
-the native player-tick boundary and invokes retail RNG code in an isolated
-recorder-owned state object. It does not replace retail movement or RNG.
+The movement/integer recorder is `tools/record_native_sim_goldens.py`. It
+records positions from the native player-tick boundary and invokes retail RNG
+code in an isolated recorder-owned state object. The float recorder is
+`tools/record_native_float_rng_goldens.py`; its opt-in loader seam invokes both
+retail float primitives on an isolated constructor-initialized `0xE8`-byte
+object. Neither recorder replaces retail movement or RNG.
 
 This work covers the retail `SolomonDark.exe` whose SHA-256 is
 `03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3`.
@@ -720,7 +724,19 @@ records a read-only snapshot of the active stream. The recorder independently
 replays the recovered recurrence in Python and refuses to write a fixture if any
 output, index, or state word differs.
 
-That self-check covers the four recorded **sequences** only. It does not cover
+`float-rng-goldens.json` records 1,284 live calls across both retail float
+primitives. The scaled primitive has 256-draw sequences at magnitudes `1`, `3`,
+and `4.5` (including unsigned and signed requests), while the unit primitive has
+256-draw unsigned and signed sequences; one-draw captures pin zero and positive
+endpoints for both. Every draw records request parameters, exact pre-call and
+post-call 55-word state, the object-local divisor, and the returned float32 bit
+pattern. Independent replay reproduces every bit pattern, observes the expected
+non-power-of-two one-rounding divergences, and proves that signed calls advance
+two stream words while unsigned calls advance one. The fixture header
+cross-links each sequence to its sealed raw recording and uses exact bit
+patterns with no epsilon.
+
+The integer corpus self-check covers the four recorded **sequences** only. It does not cover
 the `observed_run_seed` snapshot, which is why the snapshot's `post-generation`
 label survived capture despite being inconsistent with its own numbers — see
 the subsection above. The four sequences are trustworthy and were independently
@@ -736,22 +752,20 @@ preserves the exact executable code that produced the recordings.
 
 ## Not Yet Reversed
 
-One RNG element is documented from the decompile but is not pinned by any
-recorded golden, so an implementer cannot check a port against it.
+One RNG lifecycle observation remains outside the recorded corpus.
 
 | Element | State | What is missing |
 | --- | --- | --- |
 | Seeding lifecycle / run determinism | **Closed 2026-08-05** | The seeding idiom is `App[+0x28] * 0xEF3` at twelve byte-verified sites, `App+0x28` counts unpaused application ticks, and the recorded snapshot's `5683095` factors exactly as `1485 * 0xEF3`. See *Active stream and seeding lifecycle* above. What remains is not a gap in the mechanism but a consequence of it: run determinism is **not achievable from game state**, so `sd.rng.set_seed` cannot control world generation and no capture will ever show it doing so. The Boneyard `0x006388B0` private-stream transfer is still unobserved. |
-| Float primitive `0x00401310` | **Mechanism closed 2026-08-05, still unwitnessed** | The mapping, the per-object divisor at `this+0xE4`, the three float32 rounding points, the two-word cost of a signed request, and the second primitive at `0x004011F0` are now read out of the binary — see *Active stream and seeding lifecycle* above. What is still missing is evidence, not understanding: neither fixture records a single float draw. `rng-goldens.json` holds four integer sequences; `movement-goldens.json` contains no RNG samples at all. Closing this needs a live capture of float draws, which is a recorder run, not a static pass. Until then contract item 7 demands parity on a path no golden exercises. |
 
-Closing the first needs a live capture that seeds a run with a known value and
+Closing this remaining observation needs a live capture that seeds a run with a known value and
 then reads the global at `0x00818B10` **before** generation, **after**
 generation, and **after** the `0x0063895B` copy-back, so the three states can be
-chained by replay. Closing the second needs a recorded float sequence at a known
-seed, including a draw that lands on each endpoint. Neither is reachable from
-the fixtures as they stand, and neither should be guessed: a port that assumes
-`set_seed` is authoritative will produce runs that diverge from native on the
-very first generated world.
+chained by replay. It is not reachable from the fixtures as they stand and must
+not be guessed: a port that assumes `set_seed` is authoritative will produce
+runs that diverge from native on the very first generated world. The float
+primitive is no longer part of this section; its live corpus and exact replay
+are documented under *Live goldens* above.
 
 ## Browser implementation contract
 

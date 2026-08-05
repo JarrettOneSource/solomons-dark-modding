@@ -859,15 +859,21 @@ def test_native_rng_float_primitive_reaches_both_endpoints() -> str:
     )
     roadmap = read_text(ROADMAP)
     _require_tokens(
-        "float primitive roadmap residual",
+        "float primitive roadmap closure",
         roadmap,
         (
-            "float primitive still has no goldens at all",
+            "Float golden residual closed 2026-08-05",
+            "live float RNG goldens",
+            "1,284 exact float32 draws",
+            "signed two-word stream cost",
             "per-object divisor at `this+0xE4`",
-            "Closing the residual is now a recorder run, not an RE pass",
         ),
     )
+    if "no longer blocks rolled-system ports" not in roadmap:
+        raise StaticReTestFailure(
+            "G1 closure no longer declares the float golden gate unblocked for rolled-system ports"
+        )
     return (
         "both float endpoints are reachable, the unit primitive spans a closed "
-        "[0, 1], and the residual is recorded as evidence-only"
+        "[0, 1], and the live golden residual is closed"
     )

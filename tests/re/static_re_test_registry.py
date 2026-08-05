@@ -374,6 +374,13 @@ from static_re_native_sim_core_contracts import (
     test_native_tick_graph_reconciles_simulation_and_service_cadences,
     test_recorded_run_seed_is_app_tick_derived_not_wall_clock,
 )
+from static_re_native_float_rng_golden_contracts import (
+    test_native_float_rng_capture_seam_is_opt_in_runnable_and_fail_closed,
+    test_native_float_rng_divisor_is_object_local_at_e4,
+    test_native_float_rng_golden_outputs_replay_bit_exact,
+    test_native_float_rng_golden_provenance_and_capture_census_are_pinned,
+    test_native_float_rng_signed_draws_consume_two_stream_words,
+)
 from static_re_all_bot_match_contracts import (
     test_all_bot_match_uses_native_slots_real_trigger_and_hp_edges,
 )
@@ -1855,6 +1862,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native RNG float primitive reaches both range endpoints",
         test_native_rng_float_primitive_reaches_both_endpoints,
+    ),
+    (
+        "Native float RNG goldens have exact provenance and capture census",
+        test_native_float_rng_golden_provenance_and_capture_census_are_pinned,
+    ),
+    (
+        "Native float RNG golden outputs replay bit-exact",
+        test_native_float_rng_golden_outputs_replay_bit_exact,
+    ),
+    (
+        "Native float RNG signed draws consume two stream words",
+        test_native_float_rng_signed_draws_consume_two_stream_words,
+    ),
+    (
+        "Native float RNG divisor is object-local at this+0xE4",
+        test_native_float_rng_divisor_is_object_local_at_e4,
+    ),
+    (
+        "Native float RNG capture seam is opt-in and fail-closed",
+        test_native_float_rng_capture_seam_is_opt_in_runnable_and_fail_closed,
     ),
     (
         "Native RNG goldens replay the exact retail recurrence",

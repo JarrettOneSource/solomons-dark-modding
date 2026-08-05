@@ -1768,6 +1768,10 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # G1 movement and RNG goldens, and the tree that commit points at.
     "51d81ed3705468b2c96cdd5a072eb2e9b0f8db0b": ("commit", 2),
     "55ea6c0c646df739f3243a01d0cd35c4d6f9b786": ("tree", 2),
+    # G1 float RNG goldens: the capture commit/tree pair is preserved in the
+    # externally sealed source bundle declared below, once in each of 9 headers.
+    "04c02dc98086bc0687f1906ba644a19a059e9a45": ("archived-commit", 9),
+    "495cec38cfb16fa0dfe5d4a80d0a58145a074bac": ("archived-tree", 9),
     # G11 menu goldens -- see UNRECOVERABLE_CAPTURE_COMMITS.
     "48a54aaf485e671e605cbf301441380f6538846f": ("absent", 3),
     "911e3ed8345feda13929d36c5994990ef59333d9": ("absent", 3),
@@ -1793,6 +1797,29 @@ UNRECOVERABLE_CAPTURE_COMMITS: dict[str, str] = {
     "933fdd99f0bf85ef06b9ef04c25990bff79966f4": "G11 menu capture, isolated-clone HEAD, never pushed",
     "d28f98a190d69662c8e6e691484b4d4e0dc939b9": "G11 menu capture, isolated-clone HEAD, never pushed",
     "f9cac8783e72e7423a2d952987fa169fa84f3dcb": "G11 menu capture, isolated-clone HEAD, never pushed",
+}
+
+# The float capture ran after float-only code and contemporaneous menu-recorder
+# work had been committed together in the isolated campaign clone. Rebasing
+# that commit onto main would change the SHA recorded by the immutable golden;
+# merging it would land the superseded menu-recorder history. Instead, this
+# thin Git bundle preserves the exact commit and tree outside the repository,
+# with acc4ef5 as its prerequisite. CI cannot see evidence-bundle artifacts, so
+# its file hash is a provenance constant. REPORT-floatland.md records an
+# end-to-end import that first proves the commit absent from an acc4ef5-only
+# repository, then imports the bundle and resolves this exact commit/tree pair.
+FLOAT_CAPTURE_SOURCE_ARCHIVE = {
+    "evidence_path": "float-capture-source.bundle",
+    "sha256": "eb3e6b83ef617d09be583be6b10017df745c8d2c358321cad9b48e6404089737",
+    "bytes": 24013,
+    "prerequisite_commit": "acc4ef5d7a2a03ae4f4b7b3350cb06f13960836d",
+    "capture_commit": "04c02dc98086bc0687f1906ba644a19a059e9a45",
+    "capture_tree": "495cec38cfb16fa0dfe5d4a80d0a58145a074bac",
+    "bundle_ref": "refs/codex-evidence/goldfix-float-source",
+}
+ARCHIVED_CAPTURE_OBJECTS = {
+    FLOAT_CAPTURE_SOURCE_ARCHIVE["capture_commit"]: "commit",
+    FLOAT_CAPTURE_SOURCE_ARCHIVE["capture_tree"]: "tree",
 }
 
 FIXTURE_ROOT = ROOT / "tests/fixtures"
@@ -1854,7 +1881,10 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
 
     Commits are required to be ancestors of HEAD rather than merely present:
     presence depends on which refs a clone happens to have fetched, and a
-    contract must not pass or fail on that.
+    contract must not pass or fail on that. The one archived float-capture
+    commit/tree pair is deliberately not merged because its isolated history
+    also contains the superseded menu recorder; an evidence-bundle declaration
+    and end-to-end import receipt preserve those exact objects instead.
     """
     shallow = _git_capture("rev-parse", "--is-shallow-repository")
     if shallow.returncode != 0:
@@ -1884,7 +1914,36 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
             f"new={added} gone={dropped} recount={moved}"
         )
 
+    expected_archive = {
+        "evidence_path": "float-capture-source.bundle",
+        "sha256": "eb3e6b83ef617d09be583be6b10017df745c8d2c358321cad9b48e6404089737",
+        "bytes": 24013,
+        "prerequisite_commit": "acc4ef5d7a2a03ae4f4b7b3350cb06f13960836d",
+        "capture_commit": "04c02dc98086bc0687f1906ba644a19a059e9a45",
+        "capture_tree": "495cec38cfb16fa0dfe5d4a80d0a58145a074bac",
+        "bundle_ref": "refs/codex-evidence/goldfix-float-source",
+    }
+    if FLOAT_CAPTURE_SOURCE_ARCHIVE != expected_archive:
+        raise StaticReTestFailure(
+            "float capture source archive no longer pins the exact bundle hash, prerequisite, commit, tree, and ref"
+        )
+    expected_archived_objects = {
+        expected_archive["capture_commit"]: "commit",
+        expected_archive["capture_tree"]: "tree",
+    }
+    if ARCHIVED_CAPTURE_OBJECTS != expected_archived_objects:
+        raise StaticReTestFailure(
+            "float capture source archive lookup is incomplete or ambiguous for its commit/tree pair"
+        )
+
     for sha, (kind, _) in sorted(RECORDED_CAPTURE_SHAS.items()):
+        archived_kind = ARCHIVED_CAPTURE_OBJECTS.get(sha)
+        if archived_kind is not None:
+            if kind != f"archived-{archived_kind}":
+                raise StaticReTestFailure(
+                    f"float capture object {sha} is not classified as its archived {archived_kind}"
+                )
+            continue
         declared = sha in UNRECOVERABLE_CAPTURE_COMMITS
         if (kind == "absent") != declared:
             raise StaticReTestFailure(
@@ -1975,10 +2034,15 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
                 f"missing {token!r}"
             )
 
-    live = len(RECORDED_CAPTURE_SHAS) - len(UNRECOVERABLE_CAPTURE_COMMITS)
+    live = (
+        len(RECORDED_CAPTURE_SHAS)
+        - len(UNRECOVERABLE_CAPTURE_COMMITS)
+        - len(ARCHIVED_CAPTURE_OBJECTS)
+    )
     return (
         f"{live} of {len(RECORDED_CAPTURE_SHAS)} recorded capture object ids "
-        f"resolve and are ancestors of HEAD, {len(checked)} commit/tree pairs "
+        f"resolve and are ancestors of HEAD, {len(ARCHIVED_CAPTURE_OBJECTS)} "
+        f"float capture objects are externally archived, {len(checked)} commit/tree pairs "
         f"agree (including all {len(COMMIT_TREE_PAIRED_FIXTURES)} named), "
         f"and the {len(UNRECOVERABLE_CAPTURE_COMMITS)} G11 capture commits are "
         "declared unrecoverable and still absent"

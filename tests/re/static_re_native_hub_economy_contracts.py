@@ -1080,11 +1080,11 @@ def test_native_hub_inventory_generation_and_rng_provenance_are_pinned() -> str:
         rng_doc,
         (
             "seed = *(int *)(*(App **)0x00b401a8 + 0x28) * 0xEF3",
-            "per-object divisor at `this+0xE4`",
-            "three float32 rounding points",
+            "per-object field at `this+0xE4`",
+            "rounds to float32 three separate times",
             "A signed float request costs **two** stream words",
         ),
-        "hub RNG provenance no longer cites G1's app-tick seed and unresolved Float cost",
+        "hub RNG provenance no longer cites G1's app-tick seed and exact float cost",
     )
     return "Fomentius/Hagatha/Shlorio generation and full active-stream provenance are pinned"
 
