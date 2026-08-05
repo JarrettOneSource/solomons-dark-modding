@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Sequence
 
 from static_re_contract_support import TestResult
-from static_re_test_registry import TESTS
+from static_re_test_registry import LOCAL_ARTIFACT_TESTS, TESTS
 
 
 def run_tests(
@@ -33,19 +33,28 @@ def main() -> int:
         help="Emit structured JSON instead of text.",
     )
     parser.add_argument(
-        "--lua-only",
+        "--ci",
         action="store_true",
-        help="Run only contracts defined by the static_lua_* modules.",
+        help=(
+            "Run every contract except the ones that read an artifact absent "
+            "from the repository (the retail binary or a gitignored runtime/ "
+            "output). The exclusions are declared in LOCAL_ARTIFACT_TESTS."
+        ),
     )
     args = parser.parse_args()
 
     selected_tests = TESTS
-    if args.lua_only:
+    if args.ci:
+        registered = {name for name, _ in TESTS}
+        stale = sorted(set(LOCAL_ARTIFACT_TESTS) - registered)
+        if stale:
+            parser.error(
+                "LOCAL_ARTIFACT_TESTS names contracts that are not registered: "
+                + ", ".join(stale)
+            )
         selected_tests = [
-            entry for entry in TESTS if entry[1].__module__.startswith("static_lua_")
+            entry for entry in TESTS if entry[0] not in LOCAL_ARTIFACT_TESTS
         ]
-        if not selected_tests:
-            parser.error("the canonical registry contains no static Lua contracts")
 
     results = run_tests(selected_tests)
     failed = [result for result in results if not result.passed]

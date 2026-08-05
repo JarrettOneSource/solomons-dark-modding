@@ -486,6 +486,7 @@ from static_re_runtime_behavior_contracts import (
 from static_re_binary_tooling_contracts import (
     test_autonomous_probe_uses_bot_scoped_diagnostics_and_native_damage_evidence,
     test_binary_layout_matches_staged_layout_identity,
+    test_ci_runs_every_contract_that_needs_no_local_artifact,
     test_crash_reports_preserve_faulting_x86_frame_chain,
     test_investigation_register_has_static_coverage,
     test_lua_follow_preserves_timeout_teleport,
@@ -1604,6 +1605,10 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_shared_menu_pause_is_host_authoritative_and_time_bounded,
     ),
     ("investigation register has static coverage", test_investigation_register_has_static_coverage),
+    (
+        "CI runs every contract that needs no local artifact",
+        test_ci_runs_every_contract_that_needs_no_local_artifact,
+    ),
     ("staged binary matches analysis binary", test_staged_binary_matches_analysis_binary),
     (
         "stock audio bootstrap and settings are layout-backed",
@@ -1739,3 +1744,26 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
         test_app_tick_seeding_provenance_is_documented_and_byte_verified,
     ),
 ]
+
+# The only contracts CI cannot run, because each one reads an artifact that is
+# not in the repository: the retail binary, which lives outside the checkout and
+# is not ours to redistribute, or a Ghidra/stage output under the gitignored
+# `runtime/` tree. Everything else runs on every push -- see
+# `run_static_re_tests.py --ci` and
+# `test_ci_runs_every_contract_that_needs_no_local_artifact`, which refuses a
+# name that is parked here without actually reading such an artifact.
+LOCAL_ARTIFACT_TESTS: dict[str, str] = {
+    "Raptisoft close URL call is runtime NOPed": "retail binary",
+    "stock audio bootstrap and settings are layout-backed": "retail binary",
+    "native D3D device lifetime outlives stock teardown": "retail binary",
+    "staged binary matches analysis binary": "runtime/stage/SolomonDark.exe",
+    "binary layout identity is staged": "runtime/stage layout identity",
+    "native stat refresh preserves live vitals": "runtime/ghidra_primary_spell_builder_resource_paths.txt",
+    "Synthetic source-profile native blocker is documented": "runtime/ghidra_source_profile_negative_producer_scan.txt",
+    "Default ally HP native constructor evidence is recorded": "runtime/ghidra_ally_hp_progression_paths.txt",
+    "Enemy spawn scaling native wave seam is documented": "runtime/ghidra_enemy_wave_spawn_paths.txt",
+    "Pathfinding movement layout is named and documented": "runtime/ghidra_pathfinding_movement_paths.txt",
+    "Player/GameNpc movement seed layout is named and documented": "runtime/ghidra_player_gamenpc_movement_seed_paths.txt",
+    "Participant collision resolver is documented and live-probed": "runtime/ghidra_standalone_collision_registration_paths.txt",
+    "Cast-state native contracts are documented and layout-backed": "runtime/ghidra_stock_tick_slot_shim_cast_paths.txt",
+}

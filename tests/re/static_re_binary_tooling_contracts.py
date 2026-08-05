@@ -1544,3 +1544,105 @@ def test_path_builder_expands_cells_before_los_smoothing() -> str:
             "path simplifier is missing greedy LOS smoothing token(s): " +
             ", ".join(missing_simplifier_tokens))
     return "A* expands traversable cells first and applies LOS as waypoint smoothing"
+
+
+CI_WORKFLOW = ROOT / ".github/workflows/lua-authoring-contracts.yml"
+STATIC_RE_RUNNER = ROOT / "tests/re/run_static_re_tests.py"
+# 360 registered contracts today, 13 of which read an artifact CI cannot have.
+CI_ELIGIBLE_FLOOR = 347
+
+
+def _referenced_paths(function: object) -> list[Path]:
+    """Every module-level Path a test function names in its own body."""
+    import inspect
+
+    module = sys.modules[function.__module__]
+    tree = ast.parse(inspect.getsource(function))
+    names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+    found: list[Path] = []
+    for name in sorted(names):
+        value = getattr(module, name, None)
+        if isinstance(value, Path):
+            found.append(value)
+    return found
+
+
+def test_ci_runs_every_contract_that_needs_no_local_artifact() -> str:
+    """CI must run the whole corpus minus a declared, justified exclusion list.
+
+    The previous selector kept CI to modules named `static_lua_*` -- 41 of 360
+    contracts. The other 319 passed only when somebody happened to run the suite
+    by hand, so the RE corpus had no enforcement at all. Selecting by module
+    name also meant a new contract's CI coverage depended on where its file
+    happened to live.
+
+    Two ways this could rot, both closed here: a contract could be parked in the
+    exclusion list to dodge CI, so every excluded name must actually reach an
+    artifact that is outside the repository or gitignored; and the workflow step
+    could be narrowed again, so the invocation is pinned.
+    """
+    import subprocess
+
+    from static_re_test_registry import LOCAL_ARTIFACT_TESTS, TESTS
+
+    registered = {name: function for name, function in TESTS}
+    stale = sorted(set(LOCAL_ARTIFACT_TESTS) - set(registered))
+    if stale:
+        raise StaticReTestFailure(
+            "LOCAL_ARTIFACT_TESTS names unregistered contract(s): " + ", ".join(stale)
+        )
+
+    # Each exclusion must be real: the test has to name a Path that CI genuinely
+    # cannot produce -- outside the checkout, or ignored by git.
+    unjustified: list[str] = []
+    for name in sorted(LOCAL_ARTIFACT_TESTS):
+        candidates = _referenced_paths(registered[name])
+        outside = [path for path in candidates if ROOT not in path.parents]
+        inside = [path for path in candidates if ROOT in path.parents]
+        ignored: list[Path] = []
+        if inside:
+            probe = subprocess.run(
+                ["git", "check-ignore", *[str(path) for path in inside]],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            ignored = [Path(line) for line in probe.stdout.splitlines() if line]
+        if not outside and not ignored:
+            unjustified.append(name)
+    if unjustified:
+        raise StaticReTestFailure(
+            "excluded from CI without reading an unavailable artifact: "
+            + ", ".join(unjustified)
+        )
+
+    eligible = [name for name in registered if name not in LOCAL_ARTIFACT_TESTS]
+    if len(eligible) < CI_ELIGIBLE_FLOOR:
+        raise StaticReTestFailure(
+            f"only {len(eligible)} contracts are CI-eligible; floor is "
+            f"{CI_ELIGIBLE_FLOOR}. Contracts were removed or quietly excluded."
+        )
+
+    runner = read_text(STATIC_RE_RUNNER)
+    if "--lua-only" in runner:
+        raise StaticReTestFailure(
+            "the module-name selector is back in the runner; it silently "
+            "excluded 319 of 360 contracts from CI"
+        )
+    if '"--ci"' not in runner:
+        raise StaticReTestFailure("the runner no longer defines --ci")
+
+    workflow = read_text(CI_WORKFLOW)
+    if "python tests/re/run_static_re_tests.py --ci" not in workflow:
+        raise StaticReTestFailure(
+            "the workflow does not run the static RE suite with --ci"
+        )
+    if "--lua-only" in workflow:
+        raise StaticReTestFailure("the workflow still uses the narrow selector")
+
+    return (
+        f"CI runs {len(eligible)} of {len(TESTS)} contracts; the "
+        f"{len(LOCAL_ARTIFACT_TESTS)} exclusions each reach a real "
+        "outside-the-repo or gitignored artifact"
+    )
