@@ -315,7 +315,8 @@
     <ClInclude Include="src\lua_engine_bindings_debug\functions_hits_and_errors.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_memory_inspection.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_calls.inl" />
-    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_collision.inl" />
+      <ClInclude Include="src\lua_engine_bindings_debug\functions_native_collision.inl" />
+      <ClInclude Include="src\lua_engine_bindings_debug\functions_native_rng.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_snapshots_and_chains.inl" />
     <ClInclude Include="src\lua_engine_bindings_debug\functions_tracing_and_watches.inl" />

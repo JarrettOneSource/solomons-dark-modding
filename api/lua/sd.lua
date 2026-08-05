@@ -1178,6 +1178,12 @@ function sd_debug.test_nav_segment(...) end
 ---@return any
 function sd_debug.test_native_movement_collision(...) end
 
+---@param seed integer Native seed in the inclusive range 0..0x3fffffff.
+---@param range integer Positive exclusive upper bound.
+---@param count integer Number of outputs, from 1 through 256.
+---@return table
+function sd_debug.sample_native_rng(seed, range, count) end
+
 ---@param ... any
 ---@return any
 function sd_debug.get_gamenpc_motion(...) end

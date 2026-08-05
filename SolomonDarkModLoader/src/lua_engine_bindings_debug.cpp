@@ -11,6 +11,7 @@
 #include "runtime_debug.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
 #include <iomanip>
@@ -46,7 +47,7 @@ enum class LuaDebugFieldType {
 }  // namespace
 
 void RegisterLuaDebugBindings(lua_State* state) {
-    lua_createtable(state, 0, 79);
+    lua_createtable(state, 0, 80);
     RegisterFunction(state, &LuaDebugTraceFunction, "trace_function");
     RegisterFunction(state, &LuaDebugUntraceFunction, "untrace_function");
     RegisterFunction(state, &LuaDebugListTraces, "list_traces");
@@ -153,6 +154,7 @@ void RegisterLuaDebugBindings(lua_State* state) {
         state,
         &LuaDebugTestNativeMovementCollision,
         "test_native_movement_collision");
+    RegisterFunction(state, &LuaDebugSampleNativeRng, "sample_native_rng");
     RegisterFunction(state, &LuaDebugGetGameNpcMotion, "get_gamenpc_motion");
     RegisterFunction(state, &LuaDebugGetWorldMovementGeometry, "get_world_movement_geometry");
     RegisterFunction(state, &LuaDebugCallCdeclU32RetU32, "call_cdecl_u32_ret_u32");

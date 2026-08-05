@@ -629,6 +629,9 @@
     <ClInclude Include="src\lua_engine_bindings_debug\functions_native_collision.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
+    <ClInclude Include="src\lua_engine_bindings_debug\functions_native_rng.inl">
+      <Filter>Header Files\Lua Debug Bindings</Filter>
+    </ClInclude>
     <ClInclude Include="src\lua_engine_bindings_debug\functions_nav_grid_and_copy.inl">
       <Filter>Header Files\Lua Debug Bindings</Filter>
     </ClInclude>
