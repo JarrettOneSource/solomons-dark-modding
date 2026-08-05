@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
-from static_re_contract_support import ROOT, StaticReTestFailure
+from static_re_contract_support import (
+    ROOT,
+    StaticReTestFailure,
+    assert_recorded_hash_matches_file,
+)
 
 
 LAYOUT_IDS = (
@@ -259,6 +264,7 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
     fixture_root = ROOT / "tests/fixtures/webgame"
     observed_ids: list[str] = []
     by_id: dict[str, dict[str, object]] = {}
+    claimed_captures: set[Path] = set()
     for entry in golden["layouts"]:
         fixture = entry["fixture"]
         layout_id = fixture.removeprefix("menu-layouts/").removesuffix(
@@ -286,10 +292,31 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
             raise StaticReTestFailure(
                 f"{layout_id} lost its reference capture"
             )
-        if not re.fullmatch(r"[0-9a-f]{64}", entry["reference_sha256"]):
+        assert_recorded_hash_matches_file(
+            entry["reference_sha256"],
+            reference,
+            f"{layout_id} reference capture",
+        )
+        claimed_captures.add(reference.resolve())
+
+        # The golden embeds each layout and the standalone fixture is committed
+        # beside it.  Two copies of the same recording are two chances to
+        # disagree, so tie them together rather than trusting whichever one a
+        # reader happens to open.
+        on_disk = _json(f"tests/fixtures/webgame/{fixture}")
+        if on_disk["layout"] != entry["layout"]:
             raise StaticReTestFailure(
-                f"{layout_id} reference hash is incomplete"
+                f"{layout_id}: the embedded golden and {fixture} disagree"
             )
+        standalone_reference = (
+            fixture_root / "menu-layouts" / on_disk["header"]["reference_capture"]
+        ).resolve()
+        if standalone_reference != reference.resolve():
+            raise StaticReTestFailure(
+                f"{layout_id}: {fixture} names a different reference capture "
+                f"than the golden"
+            )
+
         elements = entry["layout"]["elements"]
         if not elements:
             raise StaticReTestFailure(f"{layout_id} has no live elements")
@@ -301,6 +328,19 @@ def test_native_menu_screen_census_and_live_layouts_are_pinned() -> str:
     if observed_ids != list(LAYOUT_IDS):
         raise StaticReTestFailure(
             f"the ordered embedded layout set drifted: {observed_ids}"
+        )
+
+    committed_captures = {
+        path.resolve()
+        for path in (fixture_root / "menu-reference-captures").glob("*.png")
+    }
+    orphans = sorted(
+        path.name for path in committed_captures - claimed_captures
+    )
+    if orphans:
+        raise StaticReTestFailure(
+            "reference captures are committed but claimed by no screen: "
+            + ", ".join(orphans)
         )
 
     loader = by_id["native-loader"]["layout"]["elements"]

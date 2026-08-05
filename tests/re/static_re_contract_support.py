@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import struct
 import sys
 from collections.abc import Mapping
@@ -588,6 +589,43 @@ def assert_module_runs_in_ci(module: str) -> None:
         raise StaticReTestFailure(
             f"tests/{module}.py is excluded from CI as machine-dependent "
             f"({excluded[module]}), but a contract requires it to run"
+        )
+
+
+def assert_recorded_hash_matches_file(
+    recorded: str, path: Path, label: str
+) -> None:
+    """Assert a fixture's recorded content hash matches the file it names.
+
+    Recording a hash is not the same as checking it.  The G11 menu goldens
+    recorded a sha256 for all 28 reference captures and only ever asserted the
+    string was sixty-four hex characters, so replacing a capture with a
+    screenshot of a different screen kept the whole suite green -- and a binary
+    PNG produces no reviewable text diff either, so nothing else would have
+    caught it.
+
+    Any recorded hash that names a committed file goes through here.  Hashes of
+    evidence-bundle artifacts CI never sees (retail EXEs, backbuffer frames,
+    raw recordings) stay provenance and are pinned as constants instead.
+
+    The residual this cannot close: editing the file and its recorded hash
+    together is self-consistent and no static check can distinguish it from a
+    legitimate re-capture.  That is the point of the pairing -- it forces the
+    change into the text diff a reviewer actually reads, instead of hiding in a
+    binary a reviewer cannot.
+    """
+    if not re.fullmatch(r"[0-9a-f]{64}", recorded or ""):
+        raise StaticReTestFailure(f"{label} does not record a full sha256")
+    if not path.is_file():
+        raise StaticReTestFailure(
+            f"{label} names a file that is not committed: "
+            f"{path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}"
+        )
+    actual = sha256(path)
+    if actual != recorded:
+        raise StaticReTestFailure(
+            f"{label} does not match its file: recorded {recorded[:16]}, "
+            f"{path.name} hashes to {actual[:16]}"
         )
 
 
