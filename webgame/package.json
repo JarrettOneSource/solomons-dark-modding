@@ -1,0 +1,26 @@
+{
+  "name": "@solomon-dark/webgame",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "assets:build": "tsx assets/cli.ts",
+    "assets:goldens": "tsx assets/generate-goldens.ts",
+    "lint": "eslint . --max-warnings 0 && node scripts/check-quality-floor.mjs lint",
+    "typecheck": "tsc --noEmit && node scripts/check-quality-floor.mjs typecheck",
+    "test": "node scripts/run-unit-tests.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.1",
+    "ajv": "8.20.0",
+    "eslint": "10.8.0",
+    "tsx": "4.23.8",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0",
+    "vitest": "4.1.10"
+  }
+}

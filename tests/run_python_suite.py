@@ -38,7 +38,7 @@ MACHINE_DEPENDENT_TESTS: dict[str, str] = {
 # A broken glob must not read as "nothing to run"; a deleted suite must not
 # pass silently.  Raise this when modules are added, the same way the static
 # contract floors move.
-DISCOVERY_FLOOR = 84
+DISCOVERY_FLOOR = 85
 
 # Exclusions are a cost, not a knob.  Growing past this is a deliberate edit
 # that has to be argued for in review.

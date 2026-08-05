@@ -21,6 +21,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.17.0"
+          cache: npm
+          cache-dependency-path: webgame/package-lock.json
+      - name: Install webgame workspace
+        run: npm --prefix webgame ci --ignore-scripts
+      - name: Lint webgame workspace
+        run: npm --prefix webgame run lint
+      - name: Typecheck webgame workspace
+        run: npm --prefix webgame run typecheck
+      - name: Test webgame workspace
+        run: npm --prefix webgame test
       - name: Install image test dependency
         # The image verifiers read pixels through Image.get_flattened_data(),
         # which Pillow added in 12.  Pinning below that broke two verifiers

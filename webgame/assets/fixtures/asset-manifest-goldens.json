@@ -1,0 +1,3106 @@
+{
+  "atlases": [
+    {
+      "bytes": 6021399,
+      "file": "atlases/BadGuys.png",
+      "height": 2048,
+      "id": "BadGuys",
+      "sha256": "af5717b37c81306d515eed6d9f8717fa97bd1c63b9530a7079738c457c97443e",
+      "width": 2048
+    },
+    {
+      "bytes": 277420,
+      "file": "atlases/Bonedit.png",
+      "height": 512,
+      "id": "Bonedit",
+      "sha256": "b34b6b130ad199f75d9e1c8f27f6bc713e1a068e1bf400f1d5412f3d4db5a5ec",
+      "width": 1024
+    },
+    {
+      "bytes": 3531213,
+      "file": "atlases/Clothes.png",
+      "height": 1024,
+      "id": "Clothes",
+      "sha256": "eaa1feb70362cf6dbc2068036f9cc9f77001d888e26cbd218c6144ebe63d6ac1",
+      "width": 2048
+    },
+    {
+      "bytes": 5479832,
+      "file": "atlases/College.png",
+      "height": 2048,
+      "id": "College",
+      "sha256": "34c10e60d30590b6211c678152d47cc30033679db5c986dc615d9923a71c43bd",
+      "width": 2048
+    },
+    {
+      "bytes": 37333,
+      "file": "atlases/ControlPanel.png",
+      "height": 128,
+      "id": "ControlPanel",
+      "sha256": "d63bd3ac402fcbc00a60916b6f0aa79f662501acc8f6fbe88ee1676e69b43f86",
+      "width": 512
+    },
+    {
+      "bytes": 151322,
+      "file": "atlases/Controls.png",
+      "height": 1024,
+      "id": "Controls",
+      "sha256": "28a64ada386aedc180392ea6cd754654ae54dd186888438a02aa7f2c5930a97f",
+      "width": 512
+    },
+    {
+      "bytes": 556909,
+      "file": "atlases/Create.png",
+      "height": 1024,
+      "id": "Create",
+      "sha256": "9c629ccd3d859384446363ac50e90c19e55f8d5ef8cd17d25604f5a67f3d08eb",
+      "width": 1024
+    },
+    {
+      "bytes": 5560427,
+      "file": "atlases/DeadHawg.png",
+      "height": 2048,
+      "id": "DeadHawg",
+      "sha256": "3758ce24d516f0ca6349e57b988d8a84e8d6f89fb3827856d7bb521618281af0",
+      "width": 2048
+    },
+    {
+      "bytes": 333215,
+      "file": "atlases/Demon.png",
+      "height": 512,
+      "id": "Demon",
+      "sha256": "0a6feca43b7f1a35f09d43494a1c794c7962d555e52b13703439b72085529ae4",
+      "width": 512
+    },
+    {
+      "bytes": 1153666,
+      "file": "atlases/Faculty.png",
+      "height": 1024,
+      "id": "Faculty",
+      "sha256": "928cbadcb4d131927aa26ca041e5ecf1fbc8692327197cedfbcf5c68f3ded6a5",
+      "width": 1024
+    },
+    {
+      "bytes": 78045,
+      "file": "atlases/Fonts.png",
+      "height": 256,
+      "id": "Fonts",
+      "sha256": "dcdcd9697624996376348a4f6d6a2d730adaab98730a7fcbc6ee88f7433db782",
+      "width": 512
+    },
+    {
+      "bytes": 58052,
+      "file": "atlases/GameOver.png",
+      "height": 256,
+      "id": "GameOver",
+      "sha256": "30c07de43c04b4b843ae85b52443d48087259cbd99992bbfaaa2f704d4884443",
+      "width": 512
+    },
+    {
+      "bytes": 266503,
+      "file": "atlases/Golem.png",
+      "height": 512,
+      "id": "Golem",
+      "sha256": "586bb06b4fc69f0d90c90da99871e1cd97d5f250a1e83edbba82a4b7504294ac",
+      "width": 512
+    },
+    {
+      "bytes": 1518953,
+      "file": "atlases/Heartmonger.png",
+      "height": 1024,
+      "id": "Heartmonger",
+      "sha256": "4dce7164633a67a39a23b44b5ce5895930d5ed5d08c42821fe7173b56aaa9f5a",
+      "width": 1024
+    },
+    {
+      "bytes": 523900,
+      "file": "atlases/Inventory.png",
+      "height": 512,
+      "id": "Inventory",
+      "sha256": "527b52fb30453ae9d2bf5a0e1d3b0ee9f822eb7591452a11084e1cf4e2626265",
+      "width": 1024
+    },
+    {
+      "bytes": 1841029,
+      "file": "atlases/LevelPicker.png",
+      "height": 1024,
+      "id": "LevelPicker",
+      "sha256": "d97a9f17a1eacdb69835e1f1848ab11416ca450e85cc927c98a25dc40deaf39b",
+      "width": 1024
+    },
+    {
+      "bytes": 1264640,
+      "file": "atlases/Library.png",
+      "height": 1024,
+      "id": "Library",
+      "sha256": "66fe50d1a29015446b27e32f096a3887c8c6a9a3d0525f6de6459934260a3457",
+      "width": 1024
+    },
+    {
+      "bytes": 81732,
+      "file": "atlases/Loader.png",
+      "height": 256,
+      "id": "Loader",
+      "sha256": "73707feca39b56d008a2a0b60950c9d06d01cab8374f5ec66b339d4fdd948722",
+      "width": 512
+    },
+    {
+      "bytes": 3579758,
+      "file": "atlases/loading/Wizards_dire_BG.png",
+      "height": 1080,
+      "id": "loading:Wizards_dire_BG",
+      "sha256": "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c",
+      "width": 1920
+    },
+    {
+      "bytes": 42987,
+      "file": "atlases/loose/etherplane.png",
+      "height": 128,
+      "id": "loose:etherplane.png",
+      "sha256": "cd9aee555fecde2d4917e1776f6bff927c8957e813659dcf163798a2c9e398fb",
+      "width": 128
+    },
+    {
+      "bytes": 19237,
+      "file": "atlases/loose/fencegrate.png",
+      "height": 64,
+      "id": "loose:fencegrate.png",
+      "sha256": "033b615531f8b64a4e7b1774395f5a1a223e46f75b95d2b3fc99318e525d2e74",
+      "width": 64
+    },
+    {
+      "bytes": 19237,
+      "file": "atlases/loose/greenplasma.png",
+      "height": 64,
+      "id": "loose:greenplasma.png",
+      "sha256": "463de5a10d3123395f38ddf01cdb2b450c58ffc06b7753b896b81940490bd84f",
+      "width": 64
+    },
+    {
+      "bytes": 19237,
+      "file": "atlases/loose/paintbkg.png",
+      "height": 64,
+      "id": "loose:paintbkg.png",
+      "sha256": "d46f8e75f8bac8280a66fe1d4092504a60816e896521802749c5682fbb619e7b",
+      "width": 64
+    },
+    {
+      "bytes": 52407,
+      "file": "atlases/loose/rise.png",
+      "height": 128,
+      "id": "loose:rise.png",
+      "sha256": "ada28bfdb066c3213eee4b734b98142b9118d586a481f51bbb2f8ef7c9a597f0",
+      "width": 128
+    },
+    {
+      "bytes": 43088,
+      "file": "atlases/loose/river.png",
+      "height": 128,
+      "id": "loose:river.png",
+      "sha256": "25c9663bd3785ce7cc3919620b651e64f280437328bb4e7d7be3f90c1b080271",
+      "width": 128
+    },
+    {
+      "bytes": 39245,
+      "file": "atlases/loose/road.png",
+      "height": 128,
+      "id": "loose:road.png",
+      "sha256": "8bf87b68ad14e4081162796d573409bac704eaed4da61dec4b78fda31d26350d",
+      "width": 128
+    },
+    {
+      "bytes": 35391,
+      "file": "atlases/loose/road2.png",
+      "height": 128,
+      "id": "loose:road2.png",
+      "sha256": "fc09e29949d4e79d58102ac39ee40a4fe49164491c2d70ac45b5260cadbe5530",
+      "width": 128
+    },
+    {
+      "bytes": 182853,
+      "file": "atlases/loose/road3.png",
+      "height": 256,
+      "id": "loose:road3.png",
+      "sha256": "0ddd9547294db143fc8cae57f297feb87292b2bebc9bc2d7aa30897720339f21",
+      "width": 256
+    },
+    {
+      "bytes": 68458,
+      "file": "atlases/loose/road4.png",
+      "height": 128,
+      "id": "loose:road4.png",
+      "sha256": "abdfeff588488dab80d560375042484dd4372365c0f74d0df2f81b0d0dd5e942",
+      "width": 128
+    },
+    {
+      "bytes": 68458,
+      "file": "atlases/loose/road5.png",
+      "height": 128,
+      "id": "loose:road5.png",
+      "sha256": "6a1fbae75ef0ba6266a149465b20f74ee28e172f4ede0e39a707f20de6f9e2d5",
+      "width": 128
+    },
+    {
+      "bytes": 19205,
+      "file": "atlases/loose/WallTop.png",
+      "height": 32,
+      "id": "loose:WallTop.png",
+      "sha256": "1b5431b7d698c257a17a9485793fff63b23138fd46190cf0c080e73276446f10",
+      "width": 128
+    },
+    {
+      "bytes": 1504172,
+      "file": "atlases/Memoratorium.png",
+      "height": 1024,
+      "id": "Memoratorium",
+      "sha256": "dab37854db4f6e99e63fc674c493cd01669a9cf2f9a06c3191e929c6100526cb",
+      "width": 1024
+    },
+    {
+      "bytes": 529831,
+      "file": "atlases/NPCs.png",
+      "height": 1024,
+      "id": "NPCs",
+      "sha256": "f874f8ae4aaeeb39b77703148f05bc37001374e2fc7eb205736867cdd356b387",
+      "width": 1024
+    },
+    {
+      "bytes": 1231453,
+      "file": "atlases/Office.png",
+      "height": 1024,
+      "id": "Office",
+      "sha256": "67a5ebc2041c366d0611105fa4bb83055e2d46544afe70516b10d9527489af6c",
+      "width": 1024
+    },
+    {
+      "bytes": 427304,
+      "file": "atlases/Skills.png",
+      "height": 512,
+      "id": "Skills",
+      "sha256": "ac1678d6aef8ddefa0def73754b6688c58f1aeaf88c461a4ed6f92c139ed2638",
+      "width": 1024
+    },
+    {
+      "bytes": 1165561,
+      "file": "atlases/Solomon.png",
+      "height": 1024,
+      "id": "Solomon",
+      "sha256": "057a3661340a3a099cf88c491d88c4268d82b8bb48ab29d214961ce701140126",
+      "width": 1024
+    },
+    {
+      "bytes": 101266,
+      "file": "atlases/SolomonRiff.png",
+      "height": 256,
+      "id": "SolomonRiff",
+      "sha256": "944808bf6aa04acaa11e89535032754aecd04989962a7b198b512de1af2c36f4",
+      "width": 512
+    },
+    {
+      "bytes": 981559,
+      "file": "atlases/Storage.png",
+      "height": 1024,
+      "id": "Storage",
+      "sha256": "bc96b9b01823a2d07a62b71759314d4dc67e9165b916c4524e13600501f56c5d",
+      "width": 1024
+    },
+    {
+      "bytes": 1478974,
+      "file": "atlases/Title.png",
+      "height": 1024,
+      "id": "Title",
+      "sha256": "86b8bb40b3f7ece277cf0d1038b118bf095b8489bdc344738b2fe8cbe1160ff2",
+      "width": 2048
+    },
+    {
+      "bytes": 1139167,
+      "file": "atlases/UI.png",
+      "height": 1024,
+      "id": "UI",
+      "sha256": "37d5e8fc543af12a9d8019e738dbe1e29b648211144a3782c3a32e71f76cd2eb",
+      "width": 1024
+    },
+    {
+      "bytes": 1259600,
+      "file": "atlases/Unholy.png",
+      "height": 1024,
+      "id": "Unholy",
+      "sha256": "cd5fd533d0d2c20eb1cc55891a9d1d54841ac5ebab7a3497d880d696c116a5c1",
+      "width": 1024
+    }
+  ],
+  "bundleRepresentatives": {
+    "BadGuys": "BadGuys.0",
+    "Bonedit": "Bonedit.0",
+    "Clothes": "Clothes.0",
+    "College": "College.0",
+    "ControlPanel": "ControlPanel.0",
+    "Controls": "Controls.0",
+    "Create": "Create.0",
+    "DeadHawg": "DeadHawg.0",
+    "Demon": "Demon.0",
+    "Faculty": "Faculty.0",
+    "Fonts": "Fonts.0",
+    "GameOver": "GameOver.0",
+    "Golem": "Golem.0",
+    "Heartmonger": "Heartmonger.0",
+    "Inventory": "Inventory.0",
+    "LevelPicker": "LevelPicker.0",
+    "Library": "Library.0",
+    "Loader": "Loader.0",
+    "Memoratorium": "Memoratorium.0",
+    "NPCs": "NPCs.0",
+    "Office": "Office.0",
+    "Skills": "Skills.0",
+    "Solomon": "Solomon.0",
+    "SolomonRiff": "SolomonRiff.0",
+    "Storage": "Storage.0",
+    "Title": "Title.0",
+    "UI": "UI.0",
+    "Unholy": "Unholy.0"
+  },
+  "committedSourceHashes": {
+    "SolomonDarkModLoader/src/native_scene_capture/generated_atlas_spans.inl": "6de4fe6f859e913af55e63ca0dd8ac337a05ad54ce6ab5e08186089fb3c150e8",
+    "assets/loading/Wizards_dire_BG.png": "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c",
+    "docs/reverse-engineering/native-asset-object-map.json": "f3059a8c15e4377e23e5e6054c3b9e0209917da640f671341e7c0ab4c96c0044",
+    "docs/reverse-engineering/native-content-inventory.json": "21499a46b56c690c95abb6fd22a02f91df141f7a5d7da16276a11fdbe496fa88",
+    "tests/fixtures/webgame/menu-goldens.json": "9f142fb6c4be2e3a0db0db28ebdee961a66650bf45e4dc2602481b5f1dbd600f",
+    "tests/fixtures/webgame/scene-composition-goldens.json": "7bf5adec2f4425e07d42465b7dc3cefbab004dd7133b951a06ebccedeb3885c2",
+    "webgame/assets/asset-manifest.schema.json": "95f73048a839cdf811578232e0a87d6fc7ea82cd44d226f6340d5de17cc02de0"
+  },
+  "counts": {
+    "aliasCount": 718,
+    "atlasCount": 41,
+    "bundleAtlasCount": 28,
+    "fontGroupCount": 10,
+    "looseAtlasCount": 13,
+    "spriteCount": 10511
+  },
+  "determinism": {
+    "fileCount": 46,
+    "firstOutputTreeSha256": "3abd761d4047540d32bcf9b6f7a4c87404e0ac84417db2c708dbf346aa6409ea",
+    "outputFiles": {
+      "asset-manifest.json": {
+        "bytes": 7125414,
+        "sha256": "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3"
+      },
+      "atlases/BadGuys.png": {
+        "bytes": 6021399,
+        "sha256": "af5717b37c81306d515eed6d9f8717fa97bd1c63b9530a7079738c457c97443e"
+      },
+      "atlases/Bonedit.png": {
+        "bytes": 277420,
+        "sha256": "b34b6b130ad199f75d9e1c8f27f6bc713e1a068e1bf400f1d5412f3d4db5a5ec"
+      },
+      "atlases/Clothes.png": {
+        "bytes": 3531213,
+        "sha256": "eaa1feb70362cf6dbc2068036f9cc9f77001d888e26cbd218c6144ebe63d6ac1"
+      },
+      "atlases/College.png": {
+        "bytes": 5479832,
+        "sha256": "34c10e60d30590b6211c678152d47cc30033679db5c986dc615d9923a71c43bd"
+      },
+      "atlases/ControlPanel.png": {
+        "bytes": 37333,
+        "sha256": "d63bd3ac402fcbc00a60916b6f0aa79f662501acc8f6fbe88ee1676e69b43f86"
+      },
+      "atlases/Controls.png": {
+        "bytes": 151322,
+        "sha256": "28a64ada386aedc180392ea6cd754654ae54dd186888438a02aa7f2c5930a97f"
+      },
+      "atlases/Create.png": {
+        "bytes": 556909,
+        "sha256": "9c629ccd3d859384446363ac50e90c19e55f8d5ef8cd17d25604f5a67f3d08eb"
+      },
+      "atlases/DeadHawg.png": {
+        "bytes": 5560427,
+        "sha256": "3758ce24d516f0ca6349e57b988d8a84e8d6f89fb3827856d7bb521618281af0"
+      },
+      "atlases/Demon.png": {
+        "bytes": 333215,
+        "sha256": "0a6feca43b7f1a35f09d43494a1c794c7962d555e52b13703439b72085529ae4"
+      },
+      "atlases/Faculty.png": {
+        "bytes": 1153666,
+        "sha256": "928cbadcb4d131927aa26ca041e5ecf1fbc8692327197cedfbcf5c68f3ded6a5"
+      },
+      "atlases/Fonts.png": {
+        "bytes": 78045,
+        "sha256": "dcdcd9697624996376348a4f6d6a2d730adaab98730a7fcbc6ee88f7433db782"
+      },
+      "atlases/GameOver.png": {
+        "bytes": 58052,
+        "sha256": "30c07de43c04b4b843ae85b52443d48087259cbd99992bbfaaa2f704d4884443"
+      },
+      "atlases/Golem.png": {
+        "bytes": 266503,
+        "sha256": "586bb06b4fc69f0d90c90da99871e1cd97d5f250a1e83edbba82a4b7504294ac"
+      },
+      "atlases/Heartmonger.png": {
+        "bytes": 1518953,
+        "sha256": "4dce7164633a67a39a23b44b5ce5895930d5ed5d08c42821fe7173b56aaa9f5a"
+      },
+      "atlases/Inventory.png": {
+        "bytes": 523900,
+        "sha256": "527b52fb30453ae9d2bf5a0e1d3b0ee9f822eb7591452a11084e1cf4e2626265"
+      },
+      "atlases/LevelPicker.png": {
+        "bytes": 1841029,
+        "sha256": "d97a9f17a1eacdb69835e1f1848ab11416ca450e85cc927c98a25dc40deaf39b"
+      },
+      "atlases/Library.png": {
+        "bytes": 1264640,
+        "sha256": "66fe50d1a29015446b27e32f096a3887c8c6a9a3d0525f6de6459934260a3457"
+      },
+      "atlases/Loader.png": {
+        "bytes": 81732,
+        "sha256": "73707feca39b56d008a2a0b60950c9d06d01cab8374f5ec66b339d4fdd948722"
+      },
+      "atlases/Memoratorium.png": {
+        "bytes": 1504172,
+        "sha256": "dab37854db4f6e99e63fc674c493cd01669a9cf2f9a06c3191e929c6100526cb"
+      },
+      "atlases/NPCs.png": {
+        "bytes": 529831,
+        "sha256": "f874f8ae4aaeeb39b77703148f05bc37001374e2fc7eb205736867cdd356b387"
+      },
+      "atlases/Office.png": {
+        "bytes": 1231453,
+        "sha256": "67a5ebc2041c366d0611105fa4bb83055e2d46544afe70516b10d9527489af6c"
+      },
+      "atlases/Skills.png": {
+        "bytes": 427304,
+        "sha256": "ac1678d6aef8ddefa0def73754b6688c58f1aeaf88c461a4ed6f92c139ed2638"
+      },
+      "atlases/Solomon.png": {
+        "bytes": 1165561,
+        "sha256": "057a3661340a3a099cf88c491d88c4268d82b8bb48ab29d214961ce701140126"
+      },
+      "atlases/SolomonRiff.png": {
+        "bytes": 101266,
+        "sha256": "944808bf6aa04acaa11e89535032754aecd04989962a7b198b512de1af2c36f4"
+      },
+      "atlases/Storage.png": {
+        "bytes": 981559,
+        "sha256": "bc96b9b01823a2d07a62b71759314d4dc67e9165b916c4524e13600501f56c5d"
+      },
+      "atlases/Title.png": {
+        "bytes": 1478974,
+        "sha256": "86b8bb40b3f7ece277cf0d1038b118bf095b8489bdc344738b2fe8cbe1160ff2"
+      },
+      "atlases/UI.png": {
+        "bytes": 1139167,
+        "sha256": "37d5e8fc543af12a9d8019e738dbe1e29b648211144a3782c3a32e71f76cd2eb"
+      },
+      "atlases/Unholy.png": {
+        "bytes": 1259600,
+        "sha256": "cd5fd533d0d2c20eb1cc55891a9d1d54841ac5ebab7a3497d880d696c116a5c1"
+      },
+      "atlases/loading/Wizards_dire_BG.png": {
+        "bytes": 3579758,
+        "sha256": "251365e025129972707b436d441d52ae2c5f8199bc3f80a1c4e03b2a28a1180c"
+      },
+      "atlases/loose/WallTop.png": {
+        "bytes": 19205,
+        "sha256": "1b5431b7d698c257a17a9485793fff63b23138fd46190cf0c080e73276446f10"
+      },
+      "atlases/loose/etherplane.png": {
+        "bytes": 42987,
+        "sha256": "cd9aee555fecde2d4917e1776f6bff927c8957e813659dcf163798a2c9e398fb"
+      },
+      "atlases/loose/fencegrate.png": {
+        "bytes": 19237,
+        "sha256": "033b615531f8b64a4e7b1774395f5a1a223e46f75b95d2b3fc99318e525d2e74"
+      },
+      "atlases/loose/greenplasma.png": {
+        "bytes": 19237,
+        "sha256": "463de5a10d3123395f38ddf01cdb2b450c58ffc06b7753b896b81940490bd84f"
+      },
+      "atlases/loose/paintbkg.png": {
+        "bytes": 19237,
+        "sha256": "d46f8e75f8bac8280a66fe1d4092504a60816e896521802749c5682fbb619e7b"
+      },
+      "atlases/loose/rise.png": {
+        "bytes": 52407,
+        "sha256": "ada28bfdb066c3213eee4b734b98142b9118d586a481f51bbb2f8ef7c9a597f0"
+      },
+      "atlases/loose/river.png": {
+        "bytes": 43088,
+        "sha256": "25c9663bd3785ce7cc3919620b651e64f280437328bb4e7d7be3f90c1b080271"
+      },
+      "atlases/loose/road.png": {
+        "bytes": 39245,
+        "sha256": "8bf87b68ad14e4081162796d573409bac704eaed4da61dec4b78fda31d26350d"
+      },
+      "atlases/loose/road2.png": {
+        "bytes": 35391,
+        "sha256": "fc09e29949d4e79d58102ac39ee40a4fe49164491c2d70ac45b5260cadbe5530"
+      },
+      "atlases/loose/road3.png": {
+        "bytes": 182853,
+        "sha256": "0ddd9547294db143fc8cae57f297feb87292b2bebc9bc2d7aa30897720339f21"
+      },
+      "atlases/loose/road4.png": {
+        "bytes": 68458,
+        "sha256": "abdfeff588488dab80d560375042484dd4372365c0f74d0df2f81b0d0dd5e942"
+      },
+      "atlases/loose/road5.png": {
+        "bytes": 68458,
+        "sha256": "6a1fbae75ef0ba6266a149465b20f74ee28e172f4ede0e39a707f20de6f9e2d5"
+      },
+      "build-report.json": {
+        "bytes": 325,
+        "sha256": "9888c3d1baf5d429631a44ee7e7c0b7270ec0ea2eba35ed55171a03a4f9e2b30"
+      },
+      "packs/boneyards.json": {
+        "bytes": 5783538,
+        "sha256": "ef3480941917d1337d943d5e016f448f1989575f6265327b524041c91722edda"
+      },
+      "packs/recipes.json": {
+        "bytes": 52423,
+        "sha256": "87757abfa262a20baa2f29ca17675e2cfc593f249efe6858d58d4c60f7a01b58"
+      },
+      "packs/waves.json": {
+        "bytes": 428544,
+        "sha256": "fba1a0c2f68894d38914b1daf17fd5593b018fefe19309443b58c9aebfd118bb"
+      }
+    },
+    "secondOutputTreeSha256": "3abd761d4047540d32bcf9b6f7a4c87404e0ac84417db2c708dbf346aa6409ea"
+  },
+  "emittedBytes": {
+    "atlases": 42744038,
+    "boneyards": 5783538,
+    "recipes": 52423,
+    "total": 49008543,
+    "waves": 428544
+  },
+  "generatedBy": "webgame/assets/generate-goldens.ts",
+  "ignoredNativeFlagTokens": [
+    "FLAG_IGNITE",
+    "FLAG_IMMORTALIZE"
+  ],
+  "manifestSchema": "solomon-dark-web-asset-manifest-v1",
+  "manifestSha256": "11e3d2041abb5117228064e73fcd02b9beb3b40dfeed735eafb7133ffd0c5fa3",
+  "packDescriptors": {
+    "boneyards": {
+      "bytes": 5783538,
+      "entryCount": 4,
+      "file": "packs/boneyards.json",
+      "sha256": "ef3480941917d1337d943d5e016f448f1989575f6265327b524041c91722edda"
+    },
+    "recipes": {
+      "bytes": 52423,
+      "entryCount": 31,
+      "file": "packs/recipes.json",
+      "sha256": "87757abfa262a20baa2f29ca17675e2cfc593f249efe6858d58d4c60f7a01b58"
+    },
+    "waves": {
+      "bytes": 428544,
+      "entryCount": 42,
+      "file": "packs/waves.json",
+      "sha256": "fba1a0c2f68894d38914b1daf17fd5593b018fefe19309443b58c9aebfd118bb"
+    }
+  },
+  "references": {
+    "menuArtIds": [
+      "ControlPanel.0",
+      "ControlPanel.18",
+      "ControlPanel.8",
+      "ControlPanel.9",
+      "Controls.0",
+      "Controls.1",
+      "Controls.2",
+      "Create.0",
+      "Create.1",
+      "Create.10",
+      "Create.11",
+      "Create.12",
+      "Create.13",
+      "Create.14",
+      "Create.15",
+      "Create.16",
+      "Create.17",
+      "Create.18",
+      "Create.19",
+      "Create.2",
+      "Create.20",
+      "Create.21",
+      "Create.22",
+      "Create.23",
+      "Create.3",
+      "Create.5",
+      "Create.6",
+      "Create.7",
+      "Create.9",
+      "GameOver.0",
+      "GameOver.1",
+      "LevelPicker.0",
+      "LevelPicker.1",
+      "LevelPicker.2",
+      "LevelPicker.3",
+      "LevelPicker.4",
+      "LevelPicker.5",
+      "LevelPicker.6",
+      "Loader.0",
+      "Loader.1",
+      "Loader.2",
+      "Loader.3",
+      "Skills.13",
+      "Skills.164",
+      "Skills.43",
+      "Skills.48",
+      "Skills.5",
+      "Skills.83",
+      "Skills.84",
+      "Title.0",
+      "Title.1",
+      "Title.11",
+      "Title.12",
+      "Title.13",
+      "Title.14",
+      "Title.15",
+      "Title.16",
+      "Title.17",
+      "Title.18",
+      "Title.19",
+      "Title.2",
+      "Title.20",
+      "Title.21",
+      "Title.22",
+      "Title.23",
+      "Title.24",
+      "Title.3",
+      "Title.4",
+      "Title.5",
+      "Title.6",
+      "Title.8",
+      "Title.9",
+      "UI.100",
+      "UI.101",
+      "UI.103",
+      "UI.107",
+      "UI.108",
+      "UI.109",
+      "UI.110",
+      "UI.13",
+      "UI.17",
+      "UI.18",
+      "UI.20",
+      "UI.24",
+      "UI.28",
+      "UI.29",
+      "UI.3",
+      "UI.31",
+      "UI.32",
+      "UI.37",
+      "UI.42",
+      "UI.47",
+      "UI.48",
+      "UI.51",
+      "UI.53",
+      "UI.54",
+      "UI.58",
+      "UI.59",
+      "UI.62",
+      "UI.66",
+      "UI.8",
+      "UI.80",
+      "UI.82",
+      "Wizards_dire_BG"
+    ],
+    "menuFontIds": [
+      "Fonts.216-307",
+      "Fonts.308-349",
+      "Fonts.93-184",
+      "Segoe UI"
+    ],
+    "resolutions": {
+      "BadGuys.110": {
+        "kind": "entry"
+      },
+      "BadGuys.255": {
+        "kind": "entry"
+      },
+      "BadGuys.256": {
+        "kind": "entry"
+      },
+      "BadGuys.259": {
+        "kind": "entry"
+      },
+      "BadGuys.34": {
+        "kind": "entry"
+      },
+      "BadGuys.67": {
+        "kind": "entry"
+      },
+      "Clothes.1233": {
+        "kind": "entry"
+      },
+      "Clothes.1240": {
+        "kind": "entry"
+      },
+      "Clothes.1241": {
+        "kind": "entry"
+      },
+      "Clothes.1242": {
+        "kind": "entry"
+      },
+      "Clothes.1246": {
+        "kind": "entry"
+      },
+      "Clothes.1260": {
+        "kind": "entry"
+      },
+      "Clothes.1268": {
+        "kind": "entry"
+      },
+      "Clothes.1271": {
+        "kind": "entry"
+      },
+      "Clothes.1273": {
+        "kind": "entry"
+      },
+      "Clothes.1283": {
+        "kind": "entry"
+      },
+      "Clothes.1288": {
+        "kind": "entry"
+      },
+      "Clothes.1289": {
+        "kind": "entry"
+      },
+      "Clothes.1291": {
+        "kind": "entry"
+      },
+      "Clothes.1293": {
+        "kind": "entry"
+      },
+      "Clothes.1295": {
+        "kind": "entry"
+      },
+      "Clothes.1301": {
+        "kind": "entry"
+      },
+      "Clothes.1306": {
+        "kind": "entry"
+      },
+      "Clothes.1313": {
+        "kind": "entry"
+      },
+      "Clothes.1314": {
+        "kind": "entry"
+      },
+      "Clothes.1316": {
+        "kind": "entry"
+      },
+      "Clothes.1328": {
+        "kind": "entry"
+      },
+      "Clothes.1624": {
+        "kind": "entry"
+      },
+      "Clothes.2032": {
+        "kind": "entry"
+      },
+      "Clothes.2440": {
+        "kind": "entry"
+      },
+      "Clothes.2848": {
+        "kind": "entry"
+      },
+      "Clothes.317": {
+        "kind": "entry"
+      },
+      "Clothes.320": {
+        "kind": "entry"
+      },
+      "Clothes.321": {
+        "kind": "entry"
+      },
+      "Clothes.322": {
+        "kind": "entry"
+      },
+      "Clothes.323": {
+        "kind": "entry"
+      },
+      "Clothes.324": {
+        "kind": "entry"
+      },
+      "Clothes.3256": {
+        "kind": "entry"
+      },
+      "Clothes.328": {
+        "kind": "entry"
+      },
+      "Clothes.329": {
+        "kind": "entry"
+      },
+      "Clothes.330": {
+        "kind": "entry"
+      },
+      "Clothes.331": {
+        "kind": "entry"
+      },
+      "Clothes.332": {
+        "kind": "entry"
+      },
+      "Clothes.333": {
+        "kind": "entry"
+      },
+      "Clothes.334": {
+        "kind": "entry"
+      },
+      "Clothes.335": {
+        "kind": "entry"
+      },
+      "Clothes.337": {
+        "kind": "entry"
+      },
+      "Clothes.3496": {
+        "kind": "entry"
+      },
+      "Clothes.413": {
+        "kind": "entry"
+      },
+      "Clothes.416": {
+        "kind": "entry"
+      },
+      "Clothes.417": {
+        "kind": "entry"
+      },
+      "Clothes.418": {
+        "kind": "entry"
+      },
+      "Clothes.419": {
+        "kind": "entry"
+      },
+      "Clothes.420": {
+        "kind": "entry"
+      },
+      "Clothes.424": {
+        "kind": "entry"
+      },
+      "Clothes.425": {
+        "kind": "entry"
+      },
+      "Clothes.426": {
+        "kind": "entry"
+      },
+      "Clothes.427": {
+        "kind": "entry"
+      },
+      "Clothes.428": {
+        "kind": "entry"
+      },
+      "Clothes.429": {
+        "kind": "entry"
+      },
+      "Clothes.430": {
+        "kind": "entry"
+      },
+      "Clothes.431": {
+        "kind": "entry"
+      },
+      "Clothes.433": {
+        "kind": "entry"
+      },
+      "Clothes.873": {
+        "kind": "entry"
+      },
+      "Clothes.880": {
+        "kind": "entry"
+      },
+      "Clothes.881": {
+        "kind": "entry"
+      },
+      "Clothes.882": {
+        "kind": "entry"
+      },
+      "Clothes.886": {
+        "kind": "entry"
+      },
+      "Clothes.900": {
+        "kind": "entry"
+      },
+      "Clothes.908": {
+        "kind": "entry"
+      },
+      "Clothes.911": {
+        "kind": "entry"
+      },
+      "Clothes.913": {
+        "kind": "entry"
+      },
+      "Clothes.923": {
+        "kind": "entry"
+      },
+      "Clothes.928": {
+        "kind": "entry"
+      },
+      "Clothes.929": {
+        "kind": "entry"
+      },
+      "Clothes.931": {
+        "kind": "entry"
+      },
+      "Clothes.933": {
+        "kind": "entry"
+      },
+      "Clothes.935": {
+        "kind": "entry"
+      },
+      "Clothes.941": {
+        "kind": "entry"
+      },
+      "Clothes.946": {
+        "kind": "entry"
+      },
+      "Clothes.953": {
+        "kind": "entry"
+      },
+      "Clothes.954": {
+        "kind": "entry"
+      },
+      "Clothes.956": {
+        "kind": "entry"
+      },
+      "Clothes.968": {
+        "kind": "entry"
+      },
+      "College.0": {
+        "kind": "entry"
+      },
+      "College.10": {
+        "kind": "entry"
+      },
+      "College.100": {
+        "kind": "entry"
+      },
+      "College.101": {
+        "kind": "entry"
+      },
+      "College.102": {
+        "kind": "entry"
+      },
+      "College.103": {
+        "kind": "entry"
+      },
+      "College.104": {
+        "kind": "entry"
+      },
+      "College.105": {
+        "kind": "entry"
+      },
+      "College.106": {
+        "kind": "entry"
+      },
+      "College.107": {
+        "kind": "entry"
+      },
+      "College.108": {
+        "kind": "entry"
+      },
+      "College.109": {
+        "kind": "entry"
+      },
+      "College.11": {
+        "kind": "entry"
+      },
+      "College.110": {
+        "kind": "entry"
+      },
+      "College.111": {
+        "kind": "entry"
+      },
+      "College.112": {
+        "kind": "entry"
+      },
+      "College.113": {
+        "kind": "entry"
+      },
+      "College.114": {
+        "kind": "entry"
+      },
+      "College.115": {
+        "kind": "entry"
+      },
+      "College.116": {
+        "kind": "entry"
+      },
+      "College.117": {
+        "kind": "entry"
+      },
+      "College.118": {
+        "kind": "entry"
+      },
+      "College.12": {
+        "kind": "entry"
+      },
+      "College.126": {
+        "kind": "entry"
+      },
+      "College.13": {
+        "kind": "entry"
+      },
+      "College.130": {
+        "kind": "entry"
+      },
+      "College.131": {
+        "kind": "entry"
+      },
+      "College.134": {
+        "kind": "entry"
+      },
+      "College.136": {
+        "kind": "entry"
+      },
+      "College.137": {
+        "kind": "entry"
+      },
+      "College.148": {
+        "kind": "entry"
+      },
+      "College.149": {
+        "kind": "entry"
+      },
+      "College.150": {
+        "kind": "entry"
+      },
+      "College.151": {
+        "kind": "entry"
+      },
+      "College.152": {
+        "kind": "entry"
+      },
+      "College.153": {
+        "kind": "entry"
+      },
+      "College.154": {
+        "kind": "entry"
+      },
+      "College.155": {
+        "kind": "entry"
+      },
+      "College.156": {
+        "kind": "entry"
+      },
+      "College.157": {
+        "kind": "entry"
+      },
+      "College.158": {
+        "kind": "entry"
+      },
+      "College.159": {
+        "kind": "entry"
+      },
+      "College.160": {
+        "kind": "entry"
+      },
+      "College.162": {
+        "kind": "entry"
+      },
+      "College.166": {
+        "kind": "entry"
+      },
+      "College.169": {
+        "kind": "entry"
+      },
+      "College.171": {
+        "kind": "entry"
+      },
+      "College.177": {
+        "kind": "entry"
+      },
+      "College.178": {
+        "kind": "entry"
+      },
+      "College.179": {
+        "kind": "entry"
+      },
+      "College.180": {
+        "kind": "entry"
+      },
+      "College.181": {
+        "kind": "entry"
+      },
+      "College.182": {
+        "kind": "entry"
+      },
+      "College.183": {
+        "kind": "entry"
+      },
+      "College.184": {
+        "kind": "entry"
+      },
+      "College.186": {
+        "kind": "entry"
+      },
+      "College.19": {
+        "kind": "entry"
+      },
+      "College.194": {
+        "kind": "entry"
+      },
+      "College.196": {
+        "kind": "entry"
+      },
+      "College.197": {
+        "kind": "entry"
+      },
+      "College.2": {
+        "kind": "entry"
+      },
+      "College.20": {
+        "kind": "entry"
+      },
+      "College.203": {
+        "kind": "entry"
+      },
+      "College.208": {
+        "kind": "entry"
+      },
+      "College.21": {
+        "kind": "entry"
+      },
+      "College.214": {
+        "kind": "entry"
+      },
+      "College.217": {
+        "kind": "entry"
+      },
+      "College.219": {
+        "kind": "entry"
+      },
+      "College.22": {
+        "kind": "entry"
+      },
+      "College.225": {
+        "kind": "entry"
+      },
+      "College.226": {
+        "kind": "entry"
+      },
+      "College.227": {
+        "kind": "entry"
+      },
+      "College.228": {
+        "kind": "entry"
+      },
+      "College.229": {
+        "kind": "entry"
+      },
+      "College.23": {
+        "kind": "entry"
+      },
+      "College.230": {
+        "kind": "entry"
+      },
+      "College.231": {
+        "kind": "entry"
+      },
+      "College.232": {
+        "kind": "entry"
+      },
+      "College.234": {
+        "kind": "entry"
+      },
+      "College.24": {
+        "kind": "entry"
+      },
+      "College.242": {
+        "kind": "entry"
+      },
+      "College.244": {
+        "kind": "entry"
+      },
+      "College.245": {
+        "kind": "entry"
+      },
+      "College.25": {
+        "kind": "entry"
+      },
+      "College.251": {
+        "kind": "entry"
+      },
+      "College.256": {
+        "kind": "entry"
+      },
+      "College.26": {
+        "kind": "entry"
+      },
+      "College.262": {
+        "kind": "entry"
+      },
+      "College.265": {
+        "kind": "entry"
+      },
+      "College.267": {
+        "kind": "entry"
+      },
+      "College.27": {
+        "kind": "entry"
+      },
+      "College.273": {
+        "kind": "entry"
+      },
+      "College.274": {
+        "kind": "entry"
+      },
+      "College.275": {
+        "kind": "entry"
+      },
+      "College.276": {
+        "kind": "entry"
+      },
+      "College.277": {
+        "kind": "entry"
+      },
+      "College.278": {
+        "kind": "entry"
+      },
+      "College.279": {
+        "kind": "entry"
+      },
+      "College.28": {
+        "kind": "entry"
+      },
+      "College.280": {
+        "kind": "entry"
+      },
+      "College.282": {
+        "kind": "entry"
+      },
+      "College.29": {
+        "kind": "entry"
+      },
+      "College.290": {
+        "kind": "entry"
+      },
+      "College.292": {
+        "kind": "entry"
+      },
+      "College.293": {
+        "kind": "entry"
+      },
+      "College.299": {
+        "kind": "entry"
+      },
+      "College.3": {
+        "kind": "entry"
+      },
+      "College.30": {
+        "kind": "entry"
+      },
+      "College.304": {
+        "kind": "entry"
+      },
+      "College.31": {
+        "kind": "entry"
+      },
+      "College.310": {
+        "kind": "entry"
+      },
+      "College.313": {
+        "kind": "entry"
+      },
+      "College.315": {
+        "kind": "entry"
+      },
+      "College.32": {
+        "kind": "entry"
+      },
+      "College.321": {
+        "kind": "entry"
+      },
+      "College.322": {
+        "kind": "entry"
+      },
+      "College.323": {
+        "kind": "entry"
+      },
+      "College.324": {
+        "kind": "entry"
+      },
+      "College.325": {
+        "kind": "entry"
+      },
+      "College.326": {
+        "kind": "entry"
+      },
+      "College.327": {
+        "kind": "entry"
+      },
+      "College.328": {
+        "kind": "entry"
+      },
+      "College.33": {
+        "kind": "entry"
+      },
+      "College.330": {
+        "kind": "entry"
+      },
+      "College.338": {
+        "kind": "entry"
+      },
+      "College.34": {
+        "kind": "entry"
+      },
+      "College.340": {
+        "kind": "entry"
+      },
+      "College.341": {
+        "kind": "entry"
+      },
+      "College.347": {
+        "kind": "entry"
+      },
+      "College.352": {
+        "kind": "entry"
+      },
+      "College.358": {
+        "kind": "entry"
+      },
+      "College.361": {
+        "kind": "entry"
+      },
+      "College.363": {
+        "kind": "entry"
+      },
+      "College.369": {
+        "kind": "entry"
+      },
+      "College.370": {
+        "kind": "entry"
+      },
+      "College.371": {
+        "kind": "entry"
+      },
+      "College.372": {
+        "kind": "entry"
+      },
+      "College.373": {
+        "kind": "entry"
+      },
+      "College.374": {
+        "kind": "entry"
+      },
+      "College.375": {
+        "kind": "entry"
+      },
+      "College.376": {
+        "kind": "entry"
+      },
+      "College.378": {
+        "kind": "entry"
+      },
+      "College.38": {
+        "kind": "entry"
+      },
+      "College.386": {
+        "kind": "entry"
+      },
+      "College.388": {
+        "kind": "entry"
+      },
+      "College.389": {
+        "kind": "entry"
+      },
+      "College.39": {
+        "kind": "entry"
+      },
+      "College.395": {
+        "kind": "entry"
+      },
+      "College.4": {
+        "kind": "entry"
+      },
+      "College.40": {
+        "kind": "entry"
+      },
+      "College.400": {
+        "kind": "entry"
+      },
+      "College.406": {
+        "kind": "entry"
+      },
+      "College.409": {
+        "kind": "entry"
+      },
+      "College.41": {
+        "kind": "entry"
+      },
+      "College.411": {
+        "kind": "entry"
+      },
+      "College.417": {
+        "kind": "entry"
+      },
+      "College.418": {
+        "kind": "entry"
+      },
+      "College.419": {
+        "kind": "entry"
+      },
+      "College.420": {
+        "kind": "entry"
+      },
+      "College.421": {
+        "kind": "entry"
+      },
+      "College.422": {
+        "kind": "entry"
+      },
+      "College.423": {
+        "kind": "entry"
+      },
+      "College.424": {
+        "kind": "entry"
+      },
+      "College.426": {
+        "kind": "entry"
+      },
+      "College.43": {
+        "kind": "entry"
+      },
+      "College.434": {
+        "kind": "entry"
+      },
+      "College.436": {
+        "kind": "entry"
+      },
+      "College.437": {
+        "kind": "entry"
+      },
+      "College.44": {
+        "kind": "entry"
+      },
+      "College.443": {
+        "kind": "entry"
+      },
+      "College.448": {
+        "kind": "entry"
+      },
+      "College.454": {
+        "kind": "entry"
+      },
+      "College.457": {
+        "kind": "entry"
+      },
+      "College.459": {
+        "kind": "entry"
+      },
+      "College.465": {
+        "kind": "entry"
+      },
+      "College.466": {
+        "kind": "entry"
+      },
+      "College.467": {
+        "kind": "entry"
+      },
+      "College.468": {
+        "kind": "entry"
+      },
+      "College.469": {
+        "kind": "entry"
+      },
+      "College.470": {
+        "kind": "entry"
+      },
+      "College.471": {
+        "kind": "entry"
+      },
+      "College.472": {
+        "kind": "entry"
+      },
+      "College.474": {
+        "kind": "entry"
+      },
+      "College.482": {
+        "kind": "entry"
+      },
+      "College.484": {
+        "kind": "entry"
+      },
+      "College.485": {
+        "kind": "entry"
+      },
+      "College.49": {
+        "kind": "entry"
+      },
+      "College.491": {
+        "kind": "entry"
+      },
+      "College.496": {
+        "kind": "entry"
+      },
+      "College.50": {
+        "kind": "entry"
+      },
+      "College.505": {
+        "kind": "entry"
+      },
+      "College.529": {
+        "kind": "entry"
+      },
+      "College.531": {
+        "kind": "entry"
+      },
+      "College.532": {
+        "kind": "entry"
+      },
+      "College.534": {
+        "kind": "entry"
+      },
+      "College.535": {
+        "kind": "entry"
+      },
+      "College.537": {
+        "kind": "entry"
+      },
+      "College.58": {
+        "kind": "entry"
+      },
+      "College.63": {
+        "kind": "entry"
+      },
+      "College.64": {
+        "kind": "entry"
+      },
+      "College.65": {
+        "kind": "entry"
+      },
+      "College.66": {
+        "kind": "entry"
+      },
+      "College.67": {
+        "kind": "entry"
+      },
+      "College.68": {
+        "kind": "entry"
+      },
+      "College.69": {
+        "kind": "entry"
+      },
+      "College.7": {
+        "kind": "entry"
+      },
+      "College.70": {
+        "kind": "entry"
+      },
+      "College.71": {
+        "kind": "entry"
+      },
+      "College.72": {
+        "kind": "entry"
+      },
+      "College.73": {
+        "kind": "entry"
+      },
+      "College.74": {
+        "kind": "entry"
+      },
+      "College.75": {
+        "kind": "entry"
+      },
+      "College.76": {
+        "kind": "entry"
+      },
+      "College.77": {
+        "kind": "entry"
+      },
+      "College.78": {
+        "kind": "entry"
+      },
+      "College.79": {
+        "kind": "entry"
+      },
+      "College.80": {
+        "kind": "entry"
+      },
+      "College.81": {
+        "kind": "entry"
+      },
+      "College.82": {
+        "kind": "entry"
+      },
+      "College.83": {
+        "kind": "entry"
+      },
+      "College.84": {
+        "kind": "entry"
+      },
+      "College.85": {
+        "kind": "entry"
+      },
+      "College.86": {
+        "kind": "entry"
+      },
+      "College.87": {
+        "kind": "entry"
+      },
+      "College.88": {
+        "kind": "entry"
+      },
+      "College.93": {
+        "kind": "entry"
+      },
+      "College.94": {
+        "kind": "entry"
+      },
+      "College.95": {
+        "kind": "entry"
+      },
+      "College.96": {
+        "kind": "entry"
+      },
+      "College.97": {
+        "kind": "entry"
+      },
+      "College.98": {
+        "kind": "entry"
+      },
+      "College.99": {
+        "kind": "entry"
+      },
+      "ControlPanel.0": {
+        "kind": "entry"
+      },
+      "ControlPanel.18": {
+        "kind": "entry"
+      },
+      "ControlPanel.8": {
+        "kind": "entry"
+      },
+      "ControlPanel.9": {
+        "kind": "entry"
+      },
+      "Controls.0": {
+        "kind": "entry"
+      },
+      "Controls.1": {
+        "kind": "entry"
+      },
+      "Controls.2": {
+        "kind": "entry"
+      },
+      "Create.0": {
+        "kind": "entry"
+      },
+      "Create.1": {
+        "kind": "entry"
+      },
+      "Create.10": {
+        "kind": "entry"
+      },
+      "Create.11": {
+        "kind": "entry"
+      },
+      "Create.12": {
+        "kind": "entry"
+      },
+      "Create.13": {
+        "kind": "entry"
+      },
+      "Create.14": {
+        "kind": "entry"
+      },
+      "Create.15": {
+        "kind": "entry"
+      },
+      "Create.16": {
+        "kind": "entry"
+      },
+      "Create.17": {
+        "kind": "entry"
+      },
+      "Create.18": {
+        "kind": "entry"
+      },
+      "Create.19": {
+        "kind": "entry"
+      },
+      "Create.2": {
+        "kind": "entry"
+      },
+      "Create.20": {
+        "kind": "entry"
+      },
+      "Create.21": {
+        "kind": "entry"
+      },
+      "Create.22": {
+        "kind": "entry"
+      },
+      "Create.23": {
+        "kind": "entry"
+      },
+      "Create.3": {
+        "kind": "entry"
+      },
+      "Create.5": {
+        "kind": "entry"
+      },
+      "Create.6": {
+        "kind": "entry"
+      },
+      "Create.7": {
+        "kind": "entry"
+      },
+      "Create.9": {
+        "kind": "entry"
+      },
+      "DeadHawg.100": {
+        "kind": "entry"
+      },
+      "DeadHawg.102": {
+        "kind": "entry"
+      },
+      "DeadHawg.103": {
+        "kind": "entry"
+      },
+      "DeadHawg.104": {
+        "kind": "entry"
+      },
+      "DeadHawg.106": {
+        "kind": "entry"
+      },
+      "DeadHawg.107": {
+        "kind": "entry"
+      },
+      "DeadHawg.108": {
+        "kind": "entry"
+      },
+      "DeadHawg.109": {
+        "kind": "entry"
+      },
+      "DeadHawg.110": {
+        "kind": "entry"
+      },
+      "DeadHawg.112": {
+        "kind": "entry"
+      },
+      "DeadHawg.114": {
+        "kind": "entry"
+      },
+      "DeadHawg.115": {
+        "kind": "entry"
+      },
+      "DeadHawg.118": {
+        "kind": "entry"
+      },
+      "DeadHawg.119": {
+        "kind": "entry"
+      },
+      "DeadHawg.12": {
+        "kind": "entry"
+      },
+      "DeadHawg.121": {
+        "kind": "entry"
+      },
+      "DeadHawg.122": {
+        "kind": "entry"
+      },
+      "DeadHawg.13": {
+        "kind": "entry"
+      },
+      "DeadHawg.135": {
+        "kind": "entry"
+      },
+      "DeadHawg.136": {
+        "kind": "entry"
+      },
+      "DeadHawg.137": {
+        "kind": "entry"
+      },
+      "DeadHawg.138": {
+        "kind": "entry"
+      },
+      "DeadHawg.145": {
+        "kind": "entry"
+      },
+      "DeadHawg.18": {
+        "kind": "entry"
+      },
+      "DeadHawg.228": {
+        "kind": "entry"
+      },
+      "DeadHawg.229": {
+        "kind": "entry"
+      },
+      "DeadHawg.230": {
+        "kind": "entry"
+      },
+      "DeadHawg.233": {
+        "kind": "entry"
+      },
+      "DeadHawg.235": {
+        "kind": "entry"
+      },
+      "DeadHawg.243": {
+        "kind": "entry"
+      },
+      "DeadHawg.264": {
+        "kind": "entry"
+      },
+      "DeadHawg.88": {
+        "kind": "entry"
+      },
+      "DeadHawg.89": {
+        "kind": "entry"
+      },
+      "DeadHawg.90": {
+        "kind": "entry"
+      },
+      "DeadHawg.91": {
+        "kind": "entry"
+      },
+      "DeadHawg.92": {
+        "kind": "entry"
+      },
+      "DeadHawg.93": {
+        "kind": "entry"
+      },
+      "DeadHawg.94": {
+        "kind": "entry"
+      },
+      "DeadHawg.96": {
+        "kind": "entry"
+      },
+      "DeadHawg.97": {
+        "kind": "entry"
+      },
+      "DeadHawg.98": {
+        "kind": "entry"
+      },
+      "DeadHawg.99": {
+        "kind": "entry"
+      },
+      "Fonts.216-307": {
+        "kind": "font-group"
+      },
+      "Fonts.308-349": {
+        "kind": "font-group"
+      },
+      "Fonts.93-184": {
+        "kind": "font-group"
+      },
+      "Fonts.93-184@0x35E4": {
+        "kind": "alias",
+        "target": "Fonts.125"
+      },
+      "Fonts.93-184@0x3860": {
+        "kind": "alias",
+        "target": "Fonts.128"
+      },
+      "Fonts.93-184@0x3934": {
+        "kind": "alias",
+        "target": "Fonts.129"
+      },
+      "Fonts.93-184@0x3BB0": {
+        "kind": "alias",
+        "target": "Fonts.132"
+      },
+      "Fonts.93-184@0x3C84": {
+        "kind": "alias",
+        "target": "Fonts.133"
+      },
+      "Fonts.93-184@0x3E2C": {
+        "kind": "alias",
+        "target": "Fonts.135"
+      },
+      "Fonts.93-184@0x3F00": {
+        "kind": "alias",
+        "target": "Fonts.136"
+      },
+      "Fonts.93-184@0x3FD4": {
+        "kind": "alias",
+        "target": "Fonts.137"
+      },
+      "Fonts.93-184@0x40A8": {
+        "kind": "alias",
+        "target": "Fonts.138"
+      },
+      "Fonts.93-184@0x417C": {
+        "kind": "alias",
+        "target": "Fonts.139"
+      },
+      "Fonts.93-184@0x43F8": {
+        "kind": "alias",
+        "target": "Fonts.142"
+      },
+      "Fonts.93-184@0x44CC": {
+        "kind": "alias",
+        "target": "Fonts.143"
+      },
+      "Fonts.93-184@0x45A0": {
+        "kind": "alias",
+        "target": "Fonts.144"
+      },
+      "Fonts.93-184@0x481C": {
+        "kind": "alias",
+        "target": "Fonts.147"
+      },
+      "Fonts.93-184@0x4A98": {
+        "kind": "alias",
+        "target": "Fonts.150"
+      },
+      "GameOver.0": {
+        "kind": "entry"
+      },
+      "GameOver.1": {
+        "kind": "entry"
+      },
+      "LevelPicker.0": {
+        "kind": "entry"
+      },
+      "LevelPicker.1": {
+        "kind": "entry"
+      },
+      "LevelPicker.2": {
+        "kind": "entry"
+      },
+      "LevelPicker.3": {
+        "kind": "entry"
+      },
+      "LevelPicker.4": {
+        "kind": "entry"
+      },
+      "LevelPicker.5": {
+        "kind": "entry"
+      },
+      "LevelPicker.6": {
+        "kind": "entry"
+      },
+      "Loader.0": {
+        "kind": "entry"
+      },
+      "Loader.1": {
+        "kind": "entry"
+      },
+      "Loader.2": {
+        "kind": "entry"
+      },
+      "Loader.3": {
+        "kind": "entry"
+      },
+      "Segoe UI": {
+        "kind": "special-draw"
+      },
+      "Skills.13": {
+        "kind": "entry"
+      },
+      "Skills.164": {
+        "kind": "entry"
+      },
+      "Skills.43": {
+        "kind": "entry"
+      },
+      "Skills.48": {
+        "kind": "entry"
+      },
+      "Skills.5": {
+        "kind": "entry"
+      },
+      "Skills.83": {
+        "kind": "entry"
+      },
+      "Skills.84": {
+        "kind": "entry"
+      },
+      "Solomon.13": {
+        "kind": "entry"
+      },
+      "Title.0": {
+        "kind": "entry"
+      },
+      "Title.1": {
+        "kind": "entry"
+      },
+      "Title.11": {
+        "kind": "entry"
+      },
+      "Title.12": {
+        "kind": "entry"
+      },
+      "Title.13": {
+        "kind": "entry"
+      },
+      "Title.14": {
+        "kind": "entry"
+      },
+      "Title.15": {
+        "kind": "entry"
+      },
+      "Title.16": {
+        "kind": "entry"
+      },
+      "Title.17": {
+        "kind": "entry"
+      },
+      "Title.18": {
+        "kind": "entry"
+      },
+      "Title.19": {
+        "kind": "entry"
+      },
+      "Title.2": {
+        "kind": "entry"
+      },
+      "Title.20": {
+        "kind": "entry"
+      },
+      "Title.21": {
+        "kind": "entry"
+      },
+      "Title.22": {
+        "kind": "entry"
+      },
+      "Title.23": {
+        "kind": "entry"
+      },
+      "Title.24": {
+        "kind": "entry"
+      },
+      "Title.3": {
+        "kind": "entry"
+      },
+      "Title.4": {
+        "kind": "entry"
+      },
+      "Title.5": {
+        "kind": "entry"
+      },
+      "Title.6": {
+        "kind": "entry"
+      },
+      "Title.8": {
+        "kind": "entry"
+      },
+      "Title.9": {
+        "kind": "entry"
+      },
+      "UI.100": {
+        "kind": "entry"
+      },
+      "UI.101": {
+        "kind": "entry"
+      },
+      "UI.103": {
+        "kind": "entry"
+      },
+      "UI.107": {
+        "kind": "entry"
+      },
+      "UI.108": {
+        "kind": "entry"
+      },
+      "UI.109": {
+        "kind": "entry"
+      },
+      "UI.110": {
+        "kind": "entry"
+      },
+      "UI.13": {
+        "kind": "entry"
+      },
+      "UI.17": {
+        "kind": "entry"
+      },
+      "UI.18": {
+        "kind": "entry"
+      },
+      "UI.20": {
+        "kind": "entry"
+      },
+      "UI.24": {
+        "kind": "entry"
+      },
+      "UI.28": {
+        "kind": "entry"
+      },
+      "UI.29": {
+        "kind": "entry"
+      },
+      "UI.3": {
+        "kind": "entry"
+      },
+      "UI.31": {
+        "kind": "entry"
+      },
+      "UI.32": {
+        "kind": "entry"
+      },
+      "UI.37": {
+        "kind": "entry"
+      },
+      "UI.42": {
+        "kind": "entry"
+      },
+      "UI.47": {
+        "kind": "entry"
+      },
+      "UI.48": {
+        "kind": "entry"
+      },
+      "UI.51": {
+        "kind": "entry"
+      },
+      "UI.53": {
+        "kind": "entry"
+      },
+      "UI.54": {
+        "kind": "entry"
+      },
+      "UI.58": {
+        "kind": "entry"
+      },
+      "UI.59": {
+        "kind": "entry"
+      },
+      "UI.62": {
+        "kind": "entry"
+      },
+      "UI.66": {
+        "kind": "entry"
+      },
+      "UI.8": {
+        "kind": "entry"
+      },
+      "UI.80": {
+        "kind": "entry"
+      },
+      "UI.82": {
+        "kind": "entry"
+      },
+      "Wizards_dire_BG": {
+        "kind": "entry"
+      },
+      "native.framebuffer-clear": {
+        "kind": "special-draw"
+      },
+      "native.textured-quad@0x41474C": {
+        "kind": "special-draw"
+      },
+      "road.png": {
+        "kind": "entry"
+      }
+    },
+    "sceneSpriteIds": [
+      "BadGuys.110",
+      "BadGuys.255",
+      "BadGuys.256",
+      "BadGuys.259",
+      "BadGuys.34",
+      "BadGuys.67",
+      "Clothes.1233",
+      "Clothes.1240",
+      "Clothes.1241",
+      "Clothes.1242",
+      "Clothes.1246",
+      "Clothes.1260",
+      "Clothes.1268",
+      "Clothes.1271",
+      "Clothes.1273",
+      "Clothes.1283",
+      "Clothes.1288",
+      "Clothes.1289",
+      "Clothes.1291",
+      "Clothes.1293",
+      "Clothes.1295",
+      "Clothes.1301",
+      "Clothes.1306",
+      "Clothes.1313",
+      "Clothes.1314",
+      "Clothes.1316",
+      "Clothes.1328",
+      "Clothes.1624",
+      "Clothes.2032",
+      "Clothes.2440",
+      "Clothes.2848",
+      "Clothes.317",
+      "Clothes.320",
+      "Clothes.321",
+      "Clothes.322",
+      "Clothes.323",
+      "Clothes.324",
+      "Clothes.3256",
+      "Clothes.328",
+      "Clothes.329",
+      "Clothes.330",
+      "Clothes.331",
+      "Clothes.332",
+      "Clothes.333",
+      "Clothes.334",
+      "Clothes.335",
+      "Clothes.337",
+      "Clothes.3496",
+      "Clothes.413",
+      "Clothes.416",
+      "Clothes.417",
+      "Clothes.418",
+      "Clothes.419",
+      "Clothes.420",
+      "Clothes.424",
+      "Clothes.425",
+      "Clothes.426",
+      "Clothes.427",
+      "Clothes.428",
+      "Clothes.429",
+      "Clothes.430",
+      "Clothes.431",
+      "Clothes.433",
+      "Clothes.873",
+      "Clothes.880",
+      "Clothes.881",
+      "Clothes.882",
+      "Clothes.886",
+      "Clothes.900",
+      "Clothes.908",
+      "Clothes.911",
+      "Clothes.913",
+      "Clothes.923",
+      "Clothes.928",
+      "Clothes.929",
+      "Clothes.931",
+      "Clothes.933",
+      "Clothes.935",
+      "Clothes.941",
+      "Clothes.946",
+      "Clothes.953",
+      "Clothes.954",
+      "Clothes.956",
+      "Clothes.968",
+      "College.0",
+      "College.10",
+      "College.100",
+      "College.101",
+      "College.102",
+      "College.103",
+      "College.104",
+      "College.105",
+      "College.106",
+      "College.107",
+      "College.108",
+      "College.109",
+      "College.11",
+      "College.110",
+      "College.111",
+      "College.112",
+      "College.113",
+      "College.114",
+      "College.115",
+      "College.116",
+      "College.117",
+      "College.118",
+      "College.12",
+      "College.126",
+      "College.13",
+      "College.130",
+      "College.131",
+      "College.134",
+      "College.136",
+      "College.137",
+      "College.148",
+      "College.149",
+      "College.150",
+      "College.151",
+      "College.152",
+      "College.153",
+      "College.154",
+      "College.155",
+      "College.156",
+      "College.157",
+      "College.158",
+      "College.159",
+      "College.160",
+      "College.162",
+      "College.166",
+      "College.169",
+      "College.171",
+      "College.177",
+      "College.178",
+      "College.179",
+      "College.180",
+      "College.181",
+      "College.182",
+      "College.183",
+      "College.184",
+      "College.186",
+      "College.19",
+      "College.194",
+      "College.196",
+      "College.197",
+      "College.2",
+      "College.20",
+      "College.203",
+      "College.208",
+      "College.21",
+      "College.214",
+      "College.217",
+      "College.219",
+      "College.22",
+      "College.225",
+      "College.226",
+      "College.227",
+      "College.228",
+      "College.229",
+      "College.23",
+      "College.230",
+      "College.231",
+      "College.232",
+      "College.234",
+      "College.24",
+      "College.242",
+      "College.244",
+      "College.245",
+      "College.25",
+      "College.251",
+      "College.256",
+      "College.26",
+      "College.262",
+      "College.265",
+      "College.267",
+      "College.27",
+      "College.273",
+      "College.274",
+      "College.275",
+      "College.276",
+      "College.277",
+      "College.278",
+      "College.279",
+      "College.28",
+      "College.280",
+      "College.282",
+      "College.29",
+      "College.290",
+      "College.292",
+      "College.293",
+      "College.299",
+      "College.3",
+      "College.30",
+      "College.304",
+      "College.31",
+      "College.310",
+      "College.313",
+      "College.315",
+      "College.32",
+      "College.321",
+      "College.322",
+      "College.323",
+      "College.324",
+      "College.325",
+      "College.326",
+      "College.327",
+      "College.328",
+      "College.33",
+      "College.330",
+      "College.338",
+      "College.34",
+      "College.340",
+      "College.341",
+      "College.347",
+      "College.352",
+      "College.358",
+      "College.361",
+      "College.363",
+      "College.369",
+      "College.370",
+      "College.371",
+      "College.372",
+      "College.373",
+      "College.374",
+      "College.375",
+      "College.376",
+      "College.378",
+      "College.38",
+      "College.386",
+      "College.388",
+      "College.389",
+      "College.39",
+      "College.395",
+      "College.4",
+      "College.40",
+      "College.400",
+      "College.406",
+      "College.409",
+      "College.41",
+      "College.411",
+      "College.417",
+      "College.418",
+      "College.419",
+      "College.420",
+      "College.421",
+      "College.422",
+      "College.423",
+      "College.424",
+      "College.426",
+      "College.43",
+      "College.434",
+      "College.436",
+      "College.437",
+      "College.44",
+      "College.443",
+      "College.448",
+      "College.454",
+      "College.457",
+      "College.459",
+      "College.465",
+      "College.466",
+      "College.467",
+      "College.468",
+      "College.469",
+      "College.470",
+      "College.471",
+      "College.472",
+      "College.474",
+      "College.482",
+      "College.484",
+      "College.485",
+      "College.49",
+      "College.491",
+      "College.496",
+      "College.50",
+      "College.505",
+      "College.529",
+      "College.531",
+      "College.532",
+      "College.534",
+      "College.535",
+      "College.537",
+      "College.58",
+      "College.63",
+      "College.64",
+      "College.65",
+      "College.66",
+      "College.67",
+      "College.68",
+      "College.69",
+      "College.7",
+      "College.70",
+      "College.71",
+      "College.72",
+      "College.73",
+      "College.74",
+      "College.75",
+      "College.76",
+      "College.77",
+      "College.78",
+      "College.79",
+      "College.80",
+      "College.81",
+      "College.82",
+      "College.83",
+      "College.84",
+      "College.85",
+      "College.86",
+      "College.87",
+      "College.88",
+      "College.93",
+      "College.94",
+      "College.95",
+      "College.96",
+      "College.97",
+      "College.98",
+      "College.99",
+      "DeadHawg.100",
+      "DeadHawg.102",
+      "DeadHawg.103",
+      "DeadHawg.104",
+      "DeadHawg.106",
+      "DeadHawg.107",
+      "DeadHawg.108",
+      "DeadHawg.109",
+      "DeadHawg.110",
+      "DeadHawg.112",
+      "DeadHawg.114",
+      "DeadHawg.115",
+      "DeadHawg.118",
+      "DeadHawg.119",
+      "DeadHawg.12",
+      "DeadHawg.121",
+      "DeadHawg.122",
+      "DeadHawg.13",
+      "DeadHawg.135",
+      "DeadHawg.136",
+      "DeadHawg.137",
+      "DeadHawg.138",
+      "DeadHawg.145",
+      "DeadHawg.18",
+      "DeadHawg.228",
+      "DeadHawg.229",
+      "DeadHawg.230",
+      "DeadHawg.233",
+      "DeadHawg.235",
+      "DeadHawg.243",
+      "DeadHawg.264",
+      "DeadHawg.88",
+      "DeadHawg.89",
+      "DeadHawg.90",
+      "DeadHawg.91",
+      "DeadHawg.92",
+      "DeadHawg.93",
+      "DeadHawg.94",
+      "DeadHawg.96",
+      "DeadHawg.97",
+      "DeadHawg.98",
+      "DeadHawg.99",
+      "Fonts.93-184@0x35E4",
+      "Fonts.93-184@0x3860",
+      "Fonts.93-184@0x3934",
+      "Fonts.93-184@0x3BB0",
+      "Fonts.93-184@0x3C84",
+      "Fonts.93-184@0x3E2C",
+      "Fonts.93-184@0x3F00",
+      "Fonts.93-184@0x3FD4",
+      "Fonts.93-184@0x40A8",
+      "Fonts.93-184@0x417C",
+      "Fonts.93-184@0x43F8",
+      "Fonts.93-184@0x44CC",
+      "Fonts.93-184@0x45A0",
+      "Fonts.93-184@0x481C",
+      "Fonts.93-184@0x4A98",
+      "Solomon.13",
+      "UI.28",
+      "native.framebuffer-clear",
+      "native.textured-quad@0x41474C",
+      "road.png"
+    ],
+    "unresolved": []
+  },
+  "schema": "solomon-dark-web-asset-manifest-goldens-v1",
+  "selected": {
+    "aliasMappings": {
+      "Fonts.93-184@0x35E4": "Fonts.125",
+      "Fonts.93-184@0x3860": "Fonts.128",
+      "Fonts.93-184@0x3934": "Fonts.129",
+      "Fonts.93-184@0x3BB0": "Fonts.132",
+      "Fonts.93-184@0x3C84": "Fonts.133",
+      "Fonts.93-184@0x3E2C": "Fonts.135",
+      "Fonts.93-184@0x3F00": "Fonts.136",
+      "Fonts.93-184@0x3FD4": "Fonts.137",
+      "Fonts.93-184@0x40A8": "Fonts.138",
+      "Fonts.93-184@0x417C": "Fonts.139",
+      "Fonts.93-184@0x43F8": "Fonts.142",
+      "Fonts.93-184@0x44CC": "Fonts.143",
+      "Fonts.93-184@0x45A0": "Fonts.144",
+      "Fonts.93-184@0x481C": "Fonts.147",
+      "Fonts.93-184@0x4A98": "Fonts.150"
+    },
+    "entryHashes": {
+      "BadGuys.0": "e66e8cded5c595e3459b86433a3061de9cc97bbab89596cce4f0579da19067b1",
+      "BadGuys.110": "e6901f13accddf86b19a9b1230aa704b7a343b3a8b27f8e42ea0a0e292baea64",
+      "BadGuys.255": "55293a998d19784c1bef0d6c6a76aa7c5497bf0807f57d4368a1e54148429554",
+      "BadGuys.256": "d915d2688a4f0bb7740845e42b91c24d077a5eb3662fc556aa3513a74a37e5cc",
+      "BadGuys.259": "47019c1f144524865c77c15bc6c1afcf997d584d33825d453e77b61a06ca7712",
+      "BadGuys.34": "f3176c23ac16da0ab5dd77e9d30cb8f272b1ea70c4e1235e0e18429e80f6c7f0",
+      "BadGuys.67": "a88aa6ab6dc6781b84af17f6d262b185219dfd7707e9266ba27b13f259e44a4e",
+      "Bonedit.0": "4efdab6590dd28de0377eb165cd81c901776ac37c596fc4dc2063e6243bd76f6",
+      "Clothes.0": "1a718f31c396641ca7b6ffcdae7efcfe41f65d44a3d9133bccf9b6c56d51a7bd",
+      "Clothes.1233": "27cbe7b6c5f694db74aa9346c3a53123193d898ee10dfda784aafbf6b7120e37",
+      "Clothes.1240": "be4618c7f3361e24e2a86fa17d3418197da8175de86a89fe249828a2969889a2",
+      "Clothes.1241": "8e9db1054f029f3d36e0a4864f41f803363e02f7e6a25ea53b4d7cda77982f2a",
+      "Clothes.1242": "0c6213defdc1bd465951f70ba42740afa238e8ae7da8ea34ec158db16dc68d95",
+      "Clothes.1246": "4ad54cf9c0bf7f5f17995b4b5fc18949307af1871934db42687a5140fd3f850c",
+      "Clothes.1260": "f013cba0af56ce66cb925ceec77fcfee6c33693a357a1c4483bf12b0dcaaadb3",
+      "Clothes.1268": "8bab9f72ea0deae6929f96fab2a8bd17f210c8b2598df8f4d47ea70b79f24586",
+      "Clothes.1271": "3bfbfaa542869ec5099df6c14ad101b21e99dca2dfd5d08ffd392d4ed8170718",
+      "Clothes.1273": "7691700fffee91ae63f99dee65fd247069923f8866ff6e694a9f785cfd1148c5",
+      "Clothes.1283": "1c8cde091bd6c122218b2ec84f63753647f227ac1d9447e1f5428229330e97bb",
+      "Clothes.1288": "42d278f9f33032035a9e2e0ebeae2ab055ac557d27b5519c25a563bcebd764fe",
+      "Clothes.1289": "1c329b1c6d9eac0735dad298104a5046d4b1f126a79379125a0b0fed12492f2c",
+      "Clothes.1291": "51760c3a478b0cef3989c23919ceb29cdfae58d87e9cbe3b90a3b5993a9421cb",
+      "Clothes.1293": "ff714e95bdba342982d563b90ac209406221435fd0348e565c9b40b0b2c10e5c",
+      "Clothes.1295": "61776c692d56f5097043468df46f07c8e113d57ee1b9dbef365c12fd4c528cb4",
+      "Clothes.1301": "506c8b62bdc16f020bcf030ae7e141ca3d455dffa4ffd8724d5c0591736bbf18",
+      "Clothes.1306": "5a1adf0989700d298aff72d5e2892fd1e15972ebf7eb1ea67124dcce44a61430",
+      "Clothes.1313": "1849daba7a0fe6facbf6206c280daf5da32c2b98f844efe369f0f2bba2185da8",
+      "Clothes.1314": "aa7f1a1c4bba8e28d0aabc3f4643c2028919d8b81bbb0e55a870527226c26e29",
+      "Clothes.1316": "34ecd867cbb7b3082c6a48532a5259aa7f9aea5a8c0c481643e171d628e11c0d",
+      "Clothes.1328": "466a66d41f549570a6483a429a5f1f3b0ddd1e9e9c26a88a0a62e66201b19fa8",
+      "Clothes.1624": "f4d590640834b294eeb6d071d68259b1c276e6c3b4bbc9ab7a6ef93bfce624ef",
+      "Clothes.2032": "56733799a302bb0ec4fbeb98ad3f40d14b6fe02fda1b8eb186d72a0bc564a539",
+      "Clothes.2440": "26269c84d3c68ad2159657b195b7e520fd4ba03bc595fad9e7e1a369e04b2dc4",
+      "Clothes.2848": "bae7450cd0dbf0002cc228ae93f66c7c76cf47e74931022c0aa9c9c01e7adf84",
+      "Clothes.317": "6410f92345ec32043cf8d72c139280ec65cdfc1bb30d13dccd84ddc915a2f337",
+      "Clothes.320": "85cab6eb36a71f1c6498ae619968e011a1f012e61a45053211588dabb847b4ed",
+      "Clothes.321": "d60eb0e17525accb8ea9e68b5a0106925e20d1b311d0c7ebdf91212c7c0ffe81",
+      "Clothes.322": "bb7a6706718c3c4d2f3924e1f7274104ba91d937859ab752d36ccd91d6e4e439",
+      "Clothes.323": "446f87f3384b29187be2d11e7a6484dfc5ad527bdc83b34b654bd6f7bc78cb88",
+      "Clothes.324": "df0b0f49a6027a7d2ded19be6f47bd1559aefdf414c0310b85285f0d8982ea57",
+      "Clothes.3256": "88ccc3c445389595ea025fffa272f1c51667041ca49ae358f1be2b75c2d7410e",
+      "Clothes.328": "ea6979ecd4aa29b44829da752bfad68f39bb0192754371b2246ffdf4f757f3a0",
+      "Clothes.329": "3de1fea1c750fa03127047b3fe55c67049b2964ac451e4facda337ddafee5257",
+      "Clothes.330": "792f63760446bb4c05fdd31474355962e41effe9024fba7384bb3c2e6c2aa97b",
+      "Clothes.331": "0c8333807346e2a22040d025a6e87fda69f59e8d19af793ea87df3eabc583578",
+      "Clothes.332": "324c72f1dc98f32944facd736d826906ee44bd0ef169319609ea8ee41342ae7b",
+      "Clothes.333": "1c98d1e64987f6e5f81a5bf781ec9ff44480f4c755f7072e3d4010597b60e320",
+      "Clothes.334": "9b5d8b3d6763c7750bdc37758b553699acc23ea0c253857c146d2f7b980cfb70",
+      "Clothes.335": "918422bfd413df8376fdbc8b1553947ee4ea0909f5e1a44c5051fb08e08c1e5b",
+      "Clothes.337": "cf8d25109649c81c4d60be7528f3953603a6affc339a061d715f2eb61e2e4e67",
+      "Clothes.3496": "474602b5660bbf8f56c1ef91414757f27926d4c64f2e1ca8e583a3242185244d",
+      "Clothes.413": "68690c97f0f3fb14376e8ba8881b60858cd9c5e1dd0c86b7ef82b318896fd8ee",
+      "Clothes.416": "a031a8a317f5e9a7324abd187dec4c48f2e46f97ea384c61c6fae93f091cf8ad",
+      "Clothes.417": "5a1ce6363e2c946f0c09bc0d5e139f7e5d769546fd659e0b4c3209d5af032546",
+      "Clothes.418": "569bffc287146ac690542041e52eabde6804801d9bc408e03cccde19a2955c66",
+      "Clothes.419": "4af03184c45b46920875612d388c8dd668374035bc6e9d1ed1b036f73f39460d",
+      "Clothes.420": "5faf53cdcbd02cb545ca0a99e17737211bac6490de3d14c365f4a44abbe4f4a6",
+      "Clothes.424": "23107e1ba2bcb2e342c40f05611787f0ac3ed4821cf1f3ef0c3fcc831fde102d",
+      "Clothes.425": "2bbf004c153e6ef48b83dd9cecb51bdf85b408816a5814b83c0a597e3fb934e1",
+      "Clothes.426": "a73c6674719f5f8e5bcb66ec7c7b33fb7d678905f89c5eab01e4381a09e9e00e",
+      "Clothes.427": "c834098e1ae280f972edef01ede581b6106baf5ff91fc3bf241cf1873c25cfa3",
+      "Clothes.428": "868090834f72892ce54856a2169e31746c3c152bff26910a8015025e7f244e6a",
+      "Clothes.429": "76f35fa4e720034a7335ea8bc73dcad361ba9daab89e682e90b9aa289564f13c",
+      "Clothes.430": "33994b71fee06fd08855054675e180f9cc55209acd98fd71b7208e7945e84828",
+      "Clothes.431": "fc76430c866eb92fc98d29c37b290eb34edc8fa7ef188b388691eab5947c4085",
+      "Clothes.433": "7472de662efa50d9aaceffd8899ea55e869b9c2f51134ee51e893a5f90d003ad",
+      "Clothes.873": "07b9e0d5eede41aa7cadd712ed46112fcb80c0e23c590518aa7a82ec4697eae5",
+      "Clothes.880": "612f63b38524e4324e74275695da0892631526dd4a3b37709c70ad2bef24f57b",
+      "Clothes.881": "ae87baccca973226810e209dfd9066dab48e547a6ae840947cef61b6c4889efc",
+      "Clothes.882": "001be6dc08341505d09efb0e4b9f794762a4c0b34ce72707a5b7c3aa124148cc",
+      "Clothes.886": "ca369912fb9a23c3c10552e3dc47e955845645d3aba8197e23e8a9b529bd2fcc",
+      "Clothes.900": "ea23b1e685740eba8b71eb229f9d39ceadbabe3d1c389d27a90016ada86c2a02",
+      "Clothes.908": "6400f38e0cb4a3e8818f0b6d1b095fb943f6010a27ea33b1a3ab263986386cc0",
+      "Clothes.911": "bc2e6b9f1b88aa54ff30a45f03b2fdbf22d41d96be6a6e58ed69aaa9776ef447",
+      "Clothes.913": "a31ecf73434120814646a8f890d55998b322b92695b75daff68af53d8bbe071f",
+      "Clothes.923": "b3a95cd05359f0cc584f29b55fcea77c64bf547753a5bcd3701cc12dbff7b4c4",
+      "Clothes.928": "4bc996f443bb2491bc722e7a1d632026bc1de8956b32941d3c9516fadbd60cc5",
+      "Clothes.929": "8c097d10df18285a3136fbd9a0fb949d57410efd27489e00afcb382d1aff51c1",
+      "Clothes.931": "48843133b7787c17a8096bc908babf12b2d3362a63a4d86656e550e15f66bdaf",
+      "Clothes.933": "8fc74a6ca329f34030a1d92071fd3298514f4417b778a9ed1fb45e58917018bf",
+      "Clothes.935": "5888c465eed5fd714a2fed5f8aebcf5f2c7624e0ee35a50605f1aaf36601234a",
+      "Clothes.941": "8f36ad14986303b80d4131378b9aeb8ddea4636ea0d482b27352783c3c0fbed5",
+      "Clothes.946": "78e6a6cd30d6dfd9b505ec6d272bac86f064014c14f0d478969577bb576c9aa7",
+      "Clothes.953": "9698655287d0b4f2b163d2725476eaf5f31ab23b65bcd7791961efb8154f4e4d",
+      "Clothes.954": "e95782b1b89e7b0978e49ebcbd93bb0b7bec76c080b1ec28c05d6d9287968ef9",
+      "Clothes.956": "660788dcffb9888daef123f462c007ff1227360dacfd87aadf210800a09cea18",
+      "Clothes.968": "c12fab9825901c12bc691856ef0c18ee8fcfd387fb6992565314302ecf12e745",
+      "College.0": "398ff66000ed93470663b8c90182da6d6a5f72923fb2fb048b352827d1a78d67",
+      "College.10": "46aeb5d71bc795ee5b82082d9f58189d12d9523af38c03805f50ca7a858ebaf7",
+      "College.100": "68601596617781d266368a6adc7575af4451d446e6a9edf5ff5b1e42de92109c",
+      "College.101": "addcdfb958d15a54f027de9be61656e8d3e1c6e0e15d0662265e37c1bb367dab",
+      "College.102": "639c10c961d82df7138d3a24a03eae918668c198af28d46947076d1439ba788c",
+      "College.103": "6117a17975077f1e21f5688dc8b90ebde6b6099d7411cf4d087dbb983dc30515",
+      "College.104": "0c6020960d5418563952b678b355dab5a490dd04a56227a4757a5993e117ec90",
+      "College.105": "e3c1e9194fafdc250fbbee992d03a5066341f800b47731538f8f5ed1ced52bfa",
+      "College.106": "aee4ea383ca94c270b0b5fdd2b132d8008dcefb166a141ad47bf86fc7e49cf4c",
+      "College.107": "ce7b9c9008080fd732607229dfbb0f0bbd39753bbe17ceaaf67653a5d02f0fd3",
+      "College.108": "dbfd7696a9419bc576800cfea9bc4874581fdc5a083cc129c5b9575f63770fac",
+      "College.109": "f15a32ae76ed1e3c5a8cdc7e7d0af7bc7b5b2989b81c81d3be4bc051b3502297",
+      "College.11": "1eb20223ceb3316e46479ead09c4ec1ae6020c85299494de2214702ba85922e0",
+      "College.110": "e9bcb9d18afd5a3d8231ee0fc5ac898fa136fad603701e8f755ae43d7672d943",
+      "College.111": "a62339785701395148286953439b6aed611a07f3c18ba2b18d37e51dd10c147d",
+      "College.112": "c6d9f8edfcc3f9ed9a4e116bad7b8154bd9fc5a566532829d6a35101ebc8984e",
+      "College.113": "39d987a9712b3106a8811ce58bd786e05ad5336a49de0d67bc6b5533365cdf3e",
+      "College.114": "6badfc65458f53bb8b3c2f43dd5034ae0159cdfc0ec85bb713d77797088c7458",
+      "College.115": "d0a2d8881995e97a07cca5629af8479a3965705d91dd15103ddb26c6578608ae",
+      "College.116": "3d42f09bb55c94682ea3bf681d4f812e21a3902ae88ed7525239eae483693886",
+      "College.117": "5d0cec57b794d046a8e04325fe2d14e5dcb48b8cde0604e1211dbe40bcdcb44b",
+      "College.118": "2cd304b6775c6e6d899b3ee6e03729c5bf939d0532477bcd6be6959c8fe62d19",
+      "College.12": "a765beae4cbdfcf4cea553ccfd028fdfe2bc3c3837d9741f0c29cb6e73bb66e0",
+      "College.126": "9a2bc3ba3722b47db25a8481d1ceeedfce5f7c6a5ed7694ad6abd9c76239077d",
+      "College.13": "78d32e8e92ecca79ad32411824c9e8b4487f868f4a7c58ddd63dfb8de27b7bb0",
+      "College.130": "98917e1d4e9795100d2c88560f2dd890e582464ce300c4ec98f0d5e96a81c17e",
+      "College.131": "573d6623e9119e0b9e1cbd9a9c4050c8fa670eac5afaa5156ce71d501a762091",
+      "College.134": "219362be41f3c2f83c608e5db35ea44ff824bb671bb7793f41fe859502176b62",
+      "College.136": "075546aa2dfd519dcb56bd24176e2cfd33b46ea4966700f69ce6430c204b9c23",
+      "College.137": "38c53930de876626dead8b5d9839df2564bc0fa514cee8a53ff7fc07c71ec526",
+      "College.148": "f85f469e63c0aef2b8e402fcb074fdd7099f4f39a5fef98f28521247ea25d29a",
+      "College.149": "c67be325328a0909455a0a090068a86cc29a4201af6e9e267b096657be98ed25",
+      "College.150": "1eafa911bc8b4483c46b694b55c57a14a95b74fbf2706513cc94b70d3dd2974f",
+      "College.151": "a962ea417a4ccd75d405b40f1c23881765c9bb0aeb64353eff606e9d56a8f3b9",
+      "College.152": "0fbd1a7dba4371094fef2fe014c62e6ae7abfd5165dbcab86c5ce4ec2fd74c1b",
+      "College.153": "7310c187d737ae265400573fccd339909f03c5a4e2a8763136bfba9115b008a3",
+      "College.154": "c87d80dc2254d4283cfc3729683ffbd52d049df794b8c71e128fe15fc79ec109",
+      "College.155": "40363ebd6094202d2f8edf040e10ac2eaabbfc5d694f877731846e0623fe2a97",
+      "College.156": "5f7997125bc062f99856ea26f929beb3b816ab4ad695e290386f4a9909a63992",
+      "College.157": "9642d6ed69344f8c16fd01b51f5d293fd07c6c8c656f6c0f78e3763f4a6c3d6e",
+      "College.158": "ff1dc660d89672abff7f693fc6f381dd3b2c2e048dd46f022362c1f92e2c1dcb",
+      "College.159": "0f1a42c469b47f3db3a05f4d63cd0efdc6fd3e3d412e7dc52ea6b985da5d7813",
+      "College.160": "51adb2ea4ac2e33ca94917cb7229ddff14c3a56ad2194d516e3f17d4f802f9ad",
+      "College.162": "d61f85dc3eece47a0e5bf42fc4d48ec31a9c439a99774c1a3d85b7ae52679518",
+      "College.166": "a921553f9dc34c7a606c78813c8807e90f496653ddebe5b8b136e4dbfa298bcf",
+      "College.169": "d6152c8b11209c058ebd5f57cafa8815393c81d6f13b6102f4d5289d7f44a755",
+      "College.171": "acce6e4998752d5258b321eebfb2f78fb1881b4482d4d92520d4c0e76f50c273",
+      "College.177": "47d6c02bd6778aedc5ee8656c00707c0ff033a84ffc60ee41c436ec96fd51996",
+      "College.178": "92d16d22f956ca4ea651af70e70b869a48403aa23a705d5fa16574bede6d73c0",
+      "College.179": "137a7063934709aff0c8c2cbd2729d873f9e277a2fb5cbfbfd94d8856d6c15e2",
+      "College.180": "9b4c67611cf4f50850c8a8f098c2054bd15875b36d1bb6e02c7f85b4c06b07ee",
+      "College.181": "0b1842be8ba075210fa34f0c6fedaab8ef7dd692c9cc491ec463d538f43d7779",
+      "College.182": "09c092355c17918c588b7165f5345267ed98e3d7c00ec16729496e40d1a5eb78",
+      "College.183": "94fd06e0ca66cc18f2c9f2c1574f95c369468dca2fad34856fe60816107cea36",
+      "College.184": "3cf9da66c95914d8062b330c8fd9b7bb9209541247ed2256470de0dfc1efa2d1",
+      "College.186": "385406f67a39e8f221413a9d22cc17663ec84296ba77ef70cc9f9866350ecd79",
+      "College.19": "a46748d630cb5698438f880bc870cfc107e237c52085438a20428230c6e2f2db",
+      "College.194": "2b7521650a3ee4e2f882a46de73d5db7cf78e2f83ca87c0ce0a4ecfb5fb539dc",
+      "College.196": "f356bdea0bad4e0b2734083177ede87beac4a088c0062dfa40c371838d4cc672",
+      "College.197": "d4e58ea616be34c82aafcebda0dd567f9547352715b5a71412300af95b99a3b4",
+      "College.2": "ece99d76cfe3a8464fe4639b2c8210028794c8d425fe02a66266106125e61c3a",
+      "College.20": "547191129bc030952f247bcb8d72298132134b92e312152a03eb2170a1792cb0",
+      "College.203": "a2882918b73d15b7052281f4cb2bcac65f04236746df6b68cde54894f23d96dc",
+      "College.208": "3cdf1f90dd8153fa955b9a7d0c8adb5cff4f2a767b7e0382ab39a20dab23f604",
+      "College.21": "138ed0434fa78965d05d0ec1978c55f328a13cd94b5e44168b7dce4bd0468ed0",
+      "College.214": "ea63b9a587e7f411dcd32ce0a835c4c2c574b8bd2ce7a168fb21ced2b19531aa",
+      "College.217": "f4a9665ffb853dd93fab5f6b9c4565fed0e0c1d5c05a39b70ce3781ff8cc560f",
+      "College.219": "73d93f0e13f3068bb96c52ce7a5f0bc0dcfd1ec4ab8ee05c64399f1914833f86",
+      "College.22": "7bc536b274d9bd1ff352caa962afa1a9fd0b440941c36e3981518b3c127bbf2a",
+      "College.225": "32fe68ec1b55be706bd6eaeade97d696a445a6d82fcd0940b7be2504362193ef",
+      "College.226": "329ad8664be026e471567480e0517603d4384652efb16b14ea648fc0e728dcbd",
+      "College.227": "34a8d9dec7282a5f1cd510ac09404c2cfda8f0f46c7d483dd576e21062661672",
+      "College.228": "3993cd2022d3555f79d6282755dc84840e8d93bfd104a1bc84535dad2825a1d5",
+      "College.229": "58b7b8a70255430d6738d75c2d73542992062787a5cff2ea07aed75bd3c6f22c",
+      "College.23": "a836c5e9b34eacd5e2c35e829ac0ed478a3e0e8cd62992fa652917c5540835e2",
+      "College.230": "b33bef651d9f33ee7379bf82d2e4542c6c98e6913526d1c58806decc9929513f",
+      "College.231": "c98b2313e24582c2fbb1310820856cb0c864c6866f51b27b9117f2159103832b",
+      "College.232": "de25584ad0246027d37f3194a94bb151d0dc212f2f3ec1942cbc2ca608650cb6",
+      "College.234": "8335ebeee3fb7b65a81b53336c7c553de5a2abcc9160e8b04ce8c9370472b36a",
+      "College.24": "e0c388910dda68ab9c03879a2217ef0ca8f581eff751a440cfc8f629d50d1bcb",
+      "College.242": "e6dff282ffd71aa4bb7c08a5d45dd276c87dfe56bbae39a7616b36175c625d55",
+      "College.244": "0d23c8e1337222b56759fa604915e0e7fcc317d32647898c08fbb0d74927ae59",
+      "College.245": "eea727605b6d9d0c41ca0f1226e1b7d7366b5db1a1bcef6d7a5f82aa2862a08f",
+      "College.25": "c893c78ad408ec17da9041b920a0477623c884435e104b8e9fef05620bd2b24a",
+      "College.251": "277471ab51d479558cfa3e16d3d65b26500c52b65f2d54b537dee736dc906267",
+      "College.256": "759525d6cee49726511a3d7e67641ac87faa527cf07b64a5f7a3a855a45885b7",
+      "College.26": "177dfe821c03f6bb2e73eb39bd22cbdd16c496c0d4cbeed3d19a8116d90f5543",
+      "College.262": "9756a499683bc28bfa957dc0189bf6b3008898984c76dc0b5cc78c1d58c483dc",
+      "College.265": "f817f9494b98965510068683723332635f2d2219ad4463fc0400a15100220367",
+      "College.267": "22caaca9f4b330f5e01168b81da1d7af480af0e95258ae454d586ff11b08e3cf",
+      "College.27": "a50d59453b3843a99d62a246d7489c6baafe85bdf88942b7eeb54a65176735ed",
+      "College.273": "6b77259b13e1043068f3ae4c26c6e94b6505ab1143acbf6758e54627b18c1b79",
+      "College.274": "0ddd045979bb8efddb591a20bb3228ce13cdba3350ba2ed0ca2789b5a997b6de",
+      "College.275": "d5020d8c8e2b4a0dce955482339167065d9979110c9958ff895542787de0542c",
+      "College.276": "89eb659cb65e4561596b141be2aa62e6250b0c6887a7bc524ad1b86ab2edea2a",
+      "College.277": "ce09476bfec71b6096361e0adfb55024c07dc0399e2f8a45322bee7b6784634e",
+      "College.278": "60d26f9ee0dcff9f8f234f4fbc0033dc21b697cca844deb3534b1eed199292a1",
+      "College.279": "902acfa7e706f5ea1117c1c92aeec3df5929674c92c5365cc62fc5d93ee9b3fd",
+      "College.28": "eaa7b893fba46ab301925721e931768e4730fa1b30c9f4c4b161c48692027792",
+      "College.280": "2aa751c85470d4835647d238fbdb3a8928b2b3185ef3a50cc49f86633bf11e55",
+      "College.282": "f9f18291a841716619d89783bbfdcba557a77353b2434382f38e6bf688459a43",
+      "College.29": "d5d4459f90b6fefb150eec68b7254addd8954f7695caeea75a75d9143f3bba4b",
+      "College.290": "6f4beac62f3a907457fa1faadfe4624afc8c2d20045abdda42b4cc7ada155bde",
+      "College.292": "044a86f149da168e546ac67416a2d9897ed2b406d0cb200f4220d57f7c7a8408",
+      "College.293": "6db908c8e9052d9fc8d372ec2b360467cea1044f3185430e7a727bef548e691d",
+      "College.299": "6e5ab2b38f9e4a7fd70b6c4c53c2432926eebe9daaaeab29077c2e4ebce44b6f",
+      "College.3": "ffd6c42f81784d68f452f4e92b8ab0f8d356536abb1c39411757b62a5854d685",
+      "College.30": "fcfaad1730862b13080c43f275e0928c9b9f4a48b532dbadeaea4c5b616b8044",
+      "College.304": "7e29a4e5062ccb8692866d783d5d1da68e7af05a666d3cb8f990dcb6470ecd8f",
+      "College.31": "cc3afbb3d15f9485efe2b6268e38affdcb3bbdbd56751c49ff1b386b726a775e",
+      "College.310": "cc8d5e33e026695657285c435a2ecbcda00f5652c6c3140eab64fb174d6893f6",
+      "College.313": "c4f9ce7e7768659d88db1e39f7304a7c2426659c493d5cea10458fd1d074039a",
+      "College.315": "515182ed29e729cdb4918cfb5ec9beb239f1037aa4bb6c9f7ea2563b430fc1b0",
+      "College.32": "33379301fbbe454ffda4188081d0f0fcc806dd745429935932165cb8ab9ae1c9",
+      "College.321": "bbbb0b67546b01adacbe4874a722b52cbe8853894178d2a62720b2ef4a0f083d",
+      "College.322": "c2c7f8af1faf9f07a54c2bcf5d51ce17e45d14d199582378ce87eb65976707a2",
+      "College.323": "7a67df3d64d8ca22a8a747efea575275c3a7fc054d50bb9e7acc82431695e62f",
+      "College.324": "490e0ec5ceee75230337ef4d25a5f2f5dfa2043c152b85d5fa4429ee12f9b622",
+      "College.325": "8c9d4a01d8bdcf5b64adbd8959a717760a894e5c597ff55485dcc019b702268b",
+      "College.326": "605dee9327ad990e32bd1b10d156c50f47bbb228dba10a00da97737fec7ee270",
+      "College.327": "b9367afdf2af86cc7800ed8622d9862614b60fa374005124ebd7cdde182580e7",
+      "College.328": "54037d3bceb43c60abff75173475133d8bec55f7a58e7aa18031aa82c3b3220a",
+      "College.33": "c69ce6f20cf7b7f3787886b2c04101240795cd78941dd84a5c6bcf9da2393009",
+      "College.330": "9ddf28ccb469abafaec2a99cfc3fe61b008aa55cda6c8f39fd0b296f871067e7",
+      "College.338": "da1e4b72e49c90ffcbc666ec2844b17aceb02e710a974be94ef4496fc65392e7",
+      "College.34": "ff75cfabcd02e852d196df00819d07fa7f031701b759d5e7ff7a5e34eead38d1",
+      "College.340": "ea283f66abb1ac2f1879499fc544ec37a67658ec0f810346b833d9b3ea8555c4",
+      "College.341": "6ae3aeca9881e8806cf1930aa5cb74aaa6ee5d76ba4428d3cd68197af25d33c4",
+      "College.347": "4e8265affe598cbfee37e55ecde76ada40a9d1f2c678adea70df95183a07510b",
+      "College.352": "b4e7c96da00d15b33605766ef778b07e9f75564923db2969b48eac6dc85a7dce",
+      "College.358": "ad0a87e6cdea2cd5d93b4b44c6aa8b73ff802fb7f54b229b1a432b1ffab9942d",
+      "College.361": "f264f50bbf3bab373610ff138a563a4cd8fe0815a3cd948b250a90d39186fe1a",
+      "College.363": "df53a1910432a972917000b588b167c08cbf770e62dead402a3334da8610acfe",
+      "College.369": "c8b206ce745bdf1faa4500beb41ebcd04967d84cbbc335619176205b496f3e17",
+      "College.370": "9ce589f2b01be5b12c043af0ff4f55b567eb1268ed26d641bea3c5309f64e00c",
+      "College.371": "ad81926ce000134fec314200a44f663de97baa3415027407fc7a77da4dbdb590",
+      "College.372": "02273b754cd2626bc2727eac0dc09ef0b0563cc288a3d0473add16215ab515e0",
+      "College.373": "4857f1b3ae973f677cb6f8a41b76e770c2dc603e8df9b6ef891b604f9477611a",
+      "College.374": "d84a1ab3c1259430032b0e653c808e01c07ad81983e45eadc10256f20c114170",
+      "College.375": "2f63123deae1887fb3b423b1961a6b4aa09fc3360c1441b1b4e18d9e3b52cdb5",
+      "College.376": "516146c2a0ae5d0c959e32431a62758c6ad0b2b8049e98da8f8e5158cf0da80a",
+      "College.378": "97cf022c44e2f67172fa1a664ed09ed4d5c2f85add1326c612fbacdafeb15121",
+      "College.38": "3c117ca5c334018fb8a6d48026580b046de3cce6c818642e8e35244d1585e48d",
+      "College.386": "8cc7904c23eceba4ded71fcca084423e6aa35a1e9f6747c0d61bbe289d59b178",
+      "College.388": "3e45e15b5eca68d9c3b872932ebcefe3764f3b365ae9158fab0a9938c348ac75",
+      "College.389": "97f91c5f336ce283535e2136ce5ad502dfa0a3587727b7691fb9bd5b253c13c5",
+      "College.39": "029b8b79ee8da262c5fa4ce897ce77be3940f2dc0df834219d404f359364140d",
+      "College.395": "ae13b43f0392c8f8ce4726b95e2c9d06360c5337b51f07ad07bfbbc0fda3ef57",
+      "College.4": "3a18da3ec70814c04761ea4aaabbb5168c2c09e115019fdd71fcb7ceb140b3db",
+      "College.40": "7e3f9d8167b9a2d364b49f4787db69c2b0c647d771ed38ea7e81c21c19c2d025",
+      "College.400": "9a5deb50de8e4984ec9b0845d9f8b01ecc1bb42e4df14b73410bbd74abce9359",
+      "College.406": "c1133c23fafbd68e728b22d6ca15dc13299371d8c33ad5ddbacea2393989f469",
+      "College.409": "cbaf612fd9db4d9fd21a2449d92eb68f5cf4f1f2e072e4b9c86893db373e29ca",
+      "College.41": "ae8a9213217b88c4ae18d1b1c65b3a704257a2148e71029f70ec3401c2b601ef",
+      "College.411": "4ab3e35f64e64f99ffea74a994a89c244c7a27c0d8822d3cdf7af55ef6c5843b",
+      "College.417": "6d87a0b65b093eaaf18a7461201836b53a91f3f6f56e3cc1a3ff2dce728c1e71",
+      "College.418": "5c73a0a498d8e49d8cfec5d24fa2ffdd370693bb084cdda52c58acf0eef99106",
+      "College.419": "25679da8f5da22ea1ce060c09dc25ec9165751460131428272a26241edb0a4f6",
+      "College.420": "0f64d07b7bb8a7f5ced6be694c4e5ad700d4daaa38a6a5b90731f75cd21a5bf1",
+      "College.421": "6857cdbb110990893ed3fa095a9abd442a913db0effc0641530e1dd419224316",
+      "College.422": "073f19fe604001a44c43bece82c3993881b9b31841e0670df51409f0ad85408b",
+      "College.423": "2971de258725ccce5eeb40ebf901d8b27b89f50cd54adda8ce46993fa65ebf9e",
+      "College.424": "05caf0631e77b14770ac405987c463455a7f73a4b01ff19b1a04b3f9f2e70bd4",
+      "College.426": "f980086a06510591c423b9d784da4d3e26500d2c8495ae12637a6bbb38663f41",
+      "College.43": "a6121d145c670c362d171eed856637761b02168c79f9d13d1ff869366bdff8a6",
+      "College.434": "0efa83b52fe0961f8635f68d4da5130214601941feedd076a3ba3b6682de2e11",
+      "College.436": "84939657383b09cd9d95440927954f93ff9f993a4345f029bef025df6287dba1",
+      "College.437": "41cc9b06348a9582530e69b81ef9c8ecd43fb4951cd49b0976c1e8d3703724d6",
+      "College.44": "d5436fd293a297d846b346f824c7e90c71e3bdb53b21746c04339ec4be1105b0",
+      "College.443": "b08ab69b4fc2ddaebc1c709a519e122e1d7f0f3f09ce0a2e0ef491a8e41ca0b6",
+      "College.448": "921fed7ca936803c4f46d7732fd0d73eb881f02828091299be72642641d656aa",
+      "College.454": "d6f529813d56e96ea31073d342a4556d924e9aa9290251e7f69a7d8bddfd64a1",
+      "College.457": "81c30966aa5107d86e59128d6a7050efbb2d9a3b3f3d288a5fa18c41452c945d",
+      "College.459": "79b709047242fa002e39e40c3aef06ce8969f0ecc69c77730614e96e8f16aa1a",
+      "College.465": "7e8d5ea7c3f8682295357ce2669bb66a3d9a3e5cb81f3d49dc9e7b9082c929b2",
+      "College.466": "d918d70d1c14abb25a421e374990bb9322cc6758cb9a11316d9a3d4ca7b79006",
+      "College.467": "e4db9c11b80a64e7c367dc44fe5ae0a3fa3657b2012c6ee234bb96bf0bddc51f",
+      "College.468": "8f34ca1d6bb340cc1829d7f9942f64368759d305192a71e28f8e29915f705e2f",
+      "College.469": "2b2fbabd01d036b555389a8043378851a65389ffd87e4ede47d4bf5219f8022d",
+      "College.470": "75eea896d8b33b42b95225d9914ff4809fd0de3d82eb424a11f9598fb5c9fcd9",
+      "College.471": "593318136026de8e4bf886efd317bf88f51fa7fcc1d42cddadf5ceaf1c243753",
+      "College.472": "49698917302d118fa91d91e48d1dcf11dd2844073489523c1cca963be690cb78",
+      "College.474": "6a0a78ec1d53bc1deb559f259ec9b8f0b5eebc224adc9af3bd1ba3c943a87688",
+      "College.482": "46483a55c822da7d9f3c2e4de6acd878fb8a7843e2b9a0f60bcfdd6b40d7dff8",
+      "College.484": "18d242f33fafbf75dcb9a6af3fe81b7bddc1a77c9bb1896a63639e43aa5f6c56",
+      "College.485": "994601185148cd93660b7141f6a0ad9f037fe4d496a607d1d7d7d21379888f0a",
+      "College.49": "88b76b5f4cc0f2c22ad328b24beaf6b867f4621e5548a9d0cf3a800e9730c580",
+      "College.491": "4b5b4fb1cd1f495aecfea193226edf6809f21f9feff6fafb535c15dfb6c0d1f5",
+      "College.496": "de4c4d65c743269fa9d1589da9388ee1d4f6c3240caae19e667246dfd3301f69",
+      "College.50": "fbd31038f2b2bab417cdc9e233ee94c4f7332af51bb8596d4ec37bbc4c9cf030",
+      "College.505": "065f9930691cda4d2ca7620e1590f30de5242366c87341b5911fb1b44305021c",
+      "College.529": "4c66eab9818d7f667b2ec1418275868d0ec75ec01e669fe0dc2a6d43475cf126",
+      "College.531": "c36e503e6be3f63b1981a59574621edea9ffd257f049b8ec9c31659026549921",
+      "College.532": "675c2ca8c11fd36cceebd255da27b66afc5e0d5949aa11b97c03463d2901e288",
+      "College.534": "eb9f5c943a008172e7916127941cc4b90f64dfd1f3bd1ea0d4cd8d97e1f65a6c",
+      "College.535": "46693341d5e4fbc54e746f80846493aa6e9cb77bea175761360aa543f98bb5db",
+      "College.537": "db0ca1fdc16acd80eee851d273fb07ee5588cc5a52dd862b3924ab0e3dd5dadd",
+      "College.58": "b656f4b4bba80ec78a939817ce2cf331945407440a6abd99bcd203e6ec921621",
+      "College.63": "30a7d5b9ff9cf44fe96d2f2bc6ea9041346c27a3110850dddc5b04de4d37c945",
+      "College.64": "4dc0d2ff7f1b514fc1a1e8e4d1e87000ce90d1e0d1523b1a104b31ec7a5e02d2",
+      "College.65": "2a70e353f09b5877a20ed9eeceaa9e4ae7ed8daded77a989025b86a34767f774",
+      "College.66": "2d0ce9e8d9f0aacf6c11c6fc67a67cf9e043761538e47f5af800edb17aa76a72",
+      "College.67": "7c82417fd9247e93fc86326d39c73e61803b13533071a087ee0f0d30034c0be0",
+      "College.68": "c48d47c35be32bb9e3b3122ed510777c673f532e6bdfcb1363de4177b438b467",
+      "College.69": "62de2bff37401c28d853ad35c8e40c7d338504c37a96088ea261a515b86e59df",
+      "College.7": "0d6cfb0e5fb4369a946280479350b7b56a09c6f7c692da88633d1cd84d4a375e",
+      "College.70": "a032c978935f84ae06b3ca79f506059bc44bbf28dc6f7cb1857e5bfb8e4fff23",
+      "College.71": "05f86043170a680c208f8083c1bde6d20d0ada07bfee4dd30b9f63f4cd3ba3e4",
+      "College.72": "51bc802010654bf653635dc1fec2d8f90899dcfe03ecb3ac802c1f3a623f9bbd",
+      "College.73": "7a1268fe0c0fc87743fd2dee58c330524b2670fb699c44d4b754f01eae26ce5d",
+      "College.74": "aea23e28460b493c42d4bf26db69961527e289892b726fa668f6e47098cb784f",
+      "College.75": "0f83f6b390e231f982061a56992514cfeeabf9e951acf7aee9d2549d8bfa2e14",
+      "College.76": "d0829ab7fba77413566a19ab82d94ac6b914b1a17e5d587859082fee0b1ad1c7",
+      "College.77": "fb4b3b9bf1f521341bffe83e985637c105998cb92b7f54c8a009968043b16078",
+      "College.78": "3b0ca507893a9c3c2f43f1711c1cdd0e06495e193067fcbc83b1b6ef1f0009e0",
+      "College.79": "da07b3a5fe7266a79eea1d205a1afe61ce73fb2a6eb44f9be2a49d567342ba01",
+      "College.80": "f28a4bb788307af609d432562e7ae8a1784602ee6dcc710716fff36ca2ce2612",
+      "College.81": "57868f793b9896f92859d74a4dc304844355a4d1c0f010cae9b4850a2921b059",
+      "College.82": "aefee1044acc5c14ea5364f5cf299c630ea63c1e8cce263f13135962f67c9214",
+      "College.83": "bfaa519476fed9500799906893d82e3558329fab8f492eb6943e1d16576346d0",
+      "College.84": "484b539a176ca85be30e4ebcb7f535c932925b38830a44ce68bfe7d5ee05eb3b",
+      "College.85": "8e45af3200c6202f141977422a5a9508d570cc23ab82bf01bf0d0d94748d2426",
+      "College.86": "8374cd1fdad0c6a6eeab5b65008aac993d1e26c615b847f9b78db5f6fbcb93c6",
+      "College.87": "57e8f9e09a68a51f54d34d84d0fe0b8b2df87a164cc19cf543faf4443f150820",
+      "College.88": "d7736fb12d9232128ad13133de9c2d7ff57ad4e17b9d4935da84856825ae87b6",
+      "College.93": "317c8f5ceb424da27e60df957da4426578f9a4861a91e87b8f7b3e3384d0721d",
+      "College.94": "b76f5d816d19210c53ca4dcc30a211137431cd4de5e4e60ba4889f3520930950",
+      "College.95": "702495fe4b38c5321e4cb680bc956276321e191f65a08d3bd49da46183fcbb70",
+      "College.96": "377486a0bb946f80dcb7a8d94e0dacf85add6a0453e67d5e567e21546c67e021",
+      "College.97": "d29fe491bfc6a33448c247e35d0ebd5cbb4fa6b277f906bed06a890d58e11fca",
+      "College.98": "b6b372f3028a2bc2d15eb2e1898d311f160974e7477ef6e97480ac93bdb64903",
+      "College.99": "c0ccb6835bbc163c098f0a7d2f99fcb9c9109700273d14ae43bde28323a07567",
+      "ControlPanel.0": "8935d9b014b4252a2938a46c6a8e72ec0eb217cc607b6b93e68cbfdbd11b9f5a",
+      "ControlPanel.18": "e47b47e2c643053fa8cc7a194befe4b672b767e86133f93641c43eb292c38357",
+      "ControlPanel.8": "23736b88d7a4dffaf71e1008889b4142d7f057a4c578e57ddaa521ce6ffd1ead",
+      "ControlPanel.9": "67c9f9a01bc4910668e432f3b24895f1084c6a5b520e2d1fd1f4230a90b64e6a",
+      "Controls.0": "1557dd86e0f4070a14ae95102fef532e300940c4f805cf170cf088330533d8ce",
+      "Controls.1": "1f68db019c4212b97f88fd44601eb49b2fadea8af382b2f84d51be2b9c35ed4d",
+      "Controls.2": "4e4233d9085ad1ac4bca6bb0865b70432c317a128c77a1179a23598b42166905",
+      "Create.0": "6c9e6905dbb567a87b753f22063bd566ece330498066b2fdf22271fdc19eece8",
+      "Create.1": "a4151ed8942863a193bc4a17226a2ac005c3cd4c17603bb4f9bc20e7f09bba4c",
+      "Create.10": "0ae9404a80fcfb99b685e37a2b1051cf0544f3267d44e8394b71e6ffad23d6b2",
+      "Create.11": "60b599380fccca76ea4163ce329f927e08f826dccd0072f2a303dc2ab4edc273",
+      "Create.12": "787d9d516b9706f864176088415f829f389de30a88b44bc7b20f6eba8e64ca00",
+      "Create.13": "51605698006ee988baa375da436fae9c211efbd2533f0816f0d85a2f1c52fdc0",
+      "Create.14": "a80542009573725df2ea7987683cb28880c47d15d2cecb136af931e9bf2f0a44",
+      "Create.15": "f07ff95c81ea29e96953e6912eb3620fbfd8c5863240cb2977f81a9edcba6f9c",
+      "Create.16": "9d94a94b755e819c3478e44b691b5274ad8c10f6208580e5702dc117f627411a",
+      "Create.17": "7ecb3857c772e63fbb4afad0e80d5ebdedad13a9b21bf267668f54e2d240f463",
+      "Create.18": "5c475053b86bc3cf31107b86022e042b2484d0987375abb21ce8ab55d80c45c3",
+      "Create.19": "e49c73eaee103bce30421c9867ea3ce9224692f278640592284175fcd833e560",
+      "Create.2": "3b8c397eb6df03ae0edd2aace665b8a3366f04014dbb22a0bb4ca8969187b49a",
+      "Create.20": "eb58732df6374809c0ac91ed3c4d44339340f96cb5b05a8721c827de8524da65",
+      "Create.21": "a42d8bd0d6eb624815f6acadfc216de5b519549cffe563af227c381aac5441a0",
+      "Create.22": "90d205ad5de0697dc74eb837c0ec84de915390cf502f1384637b7f3982ab379f",
+      "Create.23": "c2f7d69bdc1c957667ae7c2435b93614dfd8b17ffefcbdace054112c9d5f50a6",
+      "Create.3": "36075d9f05d0b24d8a0cc4b16860568818322aed70c2a22b9179f89121735d33",
+      "Create.5": "10783db2f5d99c853f3c153b93f659344d49ddd84ccb874db5689d893d5382c6",
+      "Create.6": "ad59ad73621d074e9dfffa23675ba02d6e827d50eb7162317416af962fb02e52",
+      "Create.7": "c4a203cd5fde8cfcda00a12fc46a70753c43d73448e290fdb76ecdfac4c663c3",
+      "Create.9": "4264cdf7dd1988a948701cf30e6d4a30c2f008400c04d78bbf0904307cc1ba4e",
+      "DeadHawg.0": "9412c797084f891c4d4f27529f6b08ef60da03a67ac6d1ebac1a7f17aa1d7847",
+      "DeadHawg.100": "c09a554063c7f1150cbbf4b26b0054674a9d29c71c102d67a8ad53b161d38c8c",
+      "DeadHawg.102": "2469eeb89c60b861d61f2ff98094947847a085500fe6e4de32e14d162f8aa5f5",
+      "DeadHawg.103": "257b281aabfe403b82988aeb3a95423b7d22dfa656ebc98341c28728ee26bdfb",
+      "DeadHawg.104": "85c9802ab2d8850b2aedab4e6b6f91c89011d21e359c5935cf83eef2cf7e51e1",
+      "DeadHawg.106": "f62c1d8672f447714c077dc01ca5f66bb7bdf3f324516d6232cc5f53ca9729c1",
+      "DeadHawg.107": "7514f3d1ff2c560d8043c6afa82089a94cfcfa28150262f52263ec398a70e726",
+      "DeadHawg.108": "53536b2cbea11adf6f888893ba70e4fd02cb2fd4397cf5b14e3c295c4e69c2e9",
+      "DeadHawg.109": "1b89edffacd0f7b2c9b3bf73ec9bb944a8caaf669902676b292404940458272c",
+      "DeadHawg.110": "0f0a4e9e06a0a7ad010ab88e8d7b25accb75f32552d00d868848d008a83df458",
+      "DeadHawg.112": "2ee6be00111ab221f79e3e13f12fdf17503a3a3451516ace8b1e23598e49591e",
+      "DeadHawg.114": "633ab3d5354420dd01ed68ab93fff888b9339107ff206aa32e928ff9413f10a7",
+      "DeadHawg.115": "8f283016605cdaf182f4b7115447a24ce9360453abc919ecf34ac77fac0ba9cf",
+      "DeadHawg.118": "236ed5c0d20cb50aaa9893b3b2748869e35285fe9971d3da16ea113d2a63398a",
+      "DeadHawg.119": "b02311b6d35f2195c89373f1232957bcd5573af301598b36f5c8c4b16b65e914",
+      "DeadHawg.12": "84688dc1413a9b1e9004620dccaf5cbde0261ce52c3785f2a2779ed5c2b3e459",
+      "DeadHawg.121": "d73310a57828dabc6e5bbf3bf754542b54231f3f8cfe9d93c994129f2dd8de5a",
+      "DeadHawg.122": "53df5740c0663772db20a7857568be56f1b5ccbcb5e256ac9e2b8100f16e3437",
+      "DeadHawg.13": "db963e6bdebe02e298f73d1c05aa0ad3cff7c8207660bd5263704d0cd33da56a",
+      "DeadHawg.135": "1beb87e28398bcf8efbeaa8acc0970e48f73d891315c0b89e277002622426391",
+      "DeadHawg.136": "5cc1345352d2b7730df6952e8e0223385e6f87ef4548ed4787679c01c6263f74",
+      "DeadHawg.137": "a88e1a64d3a3495ff188d6a101d98c915ef5081c30bceef92764826d1be2ba8a",
+      "DeadHawg.138": "3b6eb68423eadaddf6157ab33a9c26b18c2eab0c854f0517344d2d8cf8982cdb",
+      "DeadHawg.145": "5703948fcc4fe51b66ac184c9e89141d3a9bcb6a2a932b2d180c703144138bf4",
+      "DeadHawg.18": "ca8063daa6500727eeca78f2624e3b545c611a74c2789f672ddd33ffe70bd2c5",
+      "DeadHawg.228": "708c7e7125485827ee3b28d8fbbf45d7ef7e1efb9583c12707d205c0333e8c47",
+      "DeadHawg.229": "1f175b25add6425c48eee160a7a14544d3eb0604b7bd2fef0cefdcb6e459d469",
+      "DeadHawg.230": "26249c05875cf370a06e984201a20dd5401b5bca2a2bf9f65c9506cfe3d9a268",
+      "DeadHawg.233": "7b65514ae4080269f944d5e3107f3bd1a5b0933c18f842c61f996df5704bed6d",
+      "DeadHawg.235": "5b9d4acf9da69940cfea4c6abb6eaeb1c98c4f57bf499710c4432e80f29b3685",
+      "DeadHawg.243": "d1898287afff852f0353d7e7457dee9a94867eea4db87c6053bb2c17a9751870",
+      "DeadHawg.264": "d0aec98bf6d2057cb95fd601a2eebf2cbc72cfaef87325cea11dad80d9defe34",
+      "DeadHawg.88": "a095139244ad3606ee63acafb2c8d8125b47c325e4027a7a80b685df9ea6edb5",
+      "DeadHawg.89": "ceba17ebc61a849ea6763faf5214339285b52ba714c34fc0f85600460d31c5cf",
+      "DeadHawg.90": "614777d4748fddcd172badbae3cdd2eadc7cc28198ef13278ffeb65499d1296b",
+      "DeadHawg.91": "aa6f62aeb9777e374f5fe212c67ec18bd96db46a101f5d765aaee2ba053d6b7d",
+      "DeadHawg.92": "766e71b4ad7c5f43a76845eb41a830d8ebc4e8e19eb198ce484dab5dff6d33d0",
+      "DeadHawg.93": "5f510934550853e7b9780b86494556ca52adb230379e7a54207db893ea582dfd",
+      "DeadHawg.94": "388c3ae5ab15f51e95d597243fcd587dbd32d118ce152515f77e58951b7f7481",
+      "DeadHawg.96": "430b65128d44a6cf7d221d7638a891ab72c767601901358cfc4fa4725d63d5c2",
+      "DeadHawg.97": "8a0358e05c0a3a998dd369444e896d2580dc7fe572a3aa4385426306446951dc",
+      "DeadHawg.98": "eeb9c251322de0cabf0f0b4e884a3d0d78ff20eaeb1da0326e88ace0c1fc5bdf",
+      "DeadHawg.99": "539ea76235aed9c99509268d09802bf992211ecf3dc06fc311d114e99cac8eb1",
+      "Demon.0": "a5ae3a16f125d431257559ede670386eb11652aa61fb592621e1743ad0098e33",
+      "Faculty.0": "41fad007f91b67dce87a7c8d28fa23fb415191a3aaa6280d47f65ffe13697088",
+      "Fonts.0": "21d7e5dcd5569f7b69acdcdacd0c428940347a41e22c88685ccffa9f43329ef7",
+      "Fonts.125": "9814feaab44058994ff501618281f6290136eeb74a28df2ffa5c60d3aaa312e2",
+      "Fonts.128": "707ced410724ef903802b4bbfdf9cb3cf2f612c487cd7bbcd3abfe1fb9afd69c",
+      "Fonts.129": "c041ae8e3da008860096a1764c047bc3ec20a80d93c62945b3ba997c78fa1444",
+      "Fonts.132": "02e680654105a295123b716084fdfa2785a83e9fe4c4b7dbb274b738acd7b2b3",
+      "Fonts.133": "7642cc75fbf3e254145bc0b42a18df985682a145d6791011006b65548a0a0a75",
+      "Fonts.135": "37fcb8fe484b6fb3bfafa7aa3558838cedecb2fb75566ff5924e436cc7d20182",
+      "Fonts.136": "6f6f61cfac72530fbc6c0fff098e82bca460f25db95187211153942f0c00098f",
+      "Fonts.137": "339a6c490297cac70010639e6553f124e0ffbaea4520ff28fc6c7f8b231d4c34",
+      "Fonts.138": "0613e1c4904c5c1715a06fff679d0807c8bf6258d1e4873c9bea39e31b742f3a",
+      "Fonts.139": "feb14b597d3a13b9e3e23461c07db153a540ea452d33a92b5bc04059ec48b2d4",
+      "Fonts.142": "e4b356e2e2021584c8ca758dd2f67c13c96229078b614a04f6f60c45872d601b",
+      "Fonts.143": "b3e751bf738c8d1508b3c473ca8082ba0f8728d3952a39804d6a9228d6fcc98c",
+      "Fonts.144": "3bed85dcde950bbd0aa49f77c029ac70ee0475891b6e3a1bf7433bd9f16380f2",
+      "Fonts.147": "9d4bec52c4926357a876bbc9aa1f2f975e06b87dc979b8d1e46fd81048e5fd2b",
+      "Fonts.150": "9af35139cc59b899aa4d5d37003ac4fd830908d37db232522d2b611df903ec3e",
+      "GameOver.0": "b421e11317e81b17c224af13d8620e27dc734b277f3adf9ce786624c582d3f8e",
+      "GameOver.1": "1ae7c408b86cc21f8fdb113a1f7ed6395020fada2af0210dd6f24f0886af6bee",
+      "Golem.0": "9174b87ce40120ec00015c31f6b63ab22529e699b3466163eaae341ec1dcdf7a",
+      "Heartmonger.0": "e2777c5fb2d8082b438b8ee58a1b3cde03fcd948aff54b3f5e6d284dd49d412c",
+      "Inventory.0": "6455d6d813f44ad6825de454b635f09095a2af4224053c028b66053b662ce6d8",
+      "LevelPicker.0": "9ae5a18485a5d042afc806af5a50107d85a65ddc88ab3fd680be719fb6f5f338",
+      "LevelPicker.1": "a40a6be77bc3d29ab4a636911ea31aee6419faeeff910b28194ef3752dd7b502",
+      "LevelPicker.2": "a738d97aa213a6d85caa039a38b94ab4331643ce2a1b707da6808ebc422b4a88",
+      "LevelPicker.3": "e28dd2d3a6fa13e9154fe8b6320a0046a97b4f7571ad1ef124ca12074a089435",
+      "LevelPicker.4": "7943cbf458f015af4478cc2e16931d79d9bd17a28d866af7b8ba1023454b9c5a",
+      "LevelPicker.5": "5bf65c78bee4ca6436f433e58445a62a726c9029c3b194d6886c448ae983924e",
+      "LevelPicker.6": "b04c49b0072c0cb47529aa7610f0f2b871878b542ac1649ffa88c266a96006b4",
+      "Library.0": "5e94846bc2ac237cca51cf9f08176c230b05dcca6df5e060d7016ba15862f0d0",
+      "Loader.0": "6fe6f93f3a33cb4f3058d3c4bca72c3d4ae948b4ddfb09b6fa51057fa19e01b1",
+      "Loader.1": "8b013a81a241e74e372fba9f7245be0ba8364316b52c84f77515fbe758aa7656",
+      "Loader.2": "57f1e96faa94f09e6f457a563dd893e1de1c598e9c6ecb270db79f9590b89af3",
+      "Loader.3": "aec980fedf1ab931865a4fca6d8da51cd07e70798764cebfdabcc83f3bd1ed9e",
+      "Memoratorium.0": "d84d3d72dcc8c6984a2116272c194b56ab7be4312cb28f4b903e3fdaac24e0dc",
+      "NPCs.0": "4b000cf8dd7e67886ee77faf56138a58faac0b3af1f3a0beec03d9c01ae99b1b",
+      "Office.0": "b67c4e582fb97fa5a5509cbcca609bce6eb4168688a0c03e26b1bcb4b9fb32a6",
+      "Skills.0": "d644c257fd26f72d215307e5d132ecb6facf8c026037333fd394e94db72c043c",
+      "Skills.13": "740bc105c7b19ae47c653a7e13762bd8b7310df13cc46faf7064180109f08d34",
+      "Skills.164": "a1a832843e2a76d483a2d84087fbe83469e058270213f8b8d5788a68ec64ccfd",
+      "Skills.43": "1550201b0b8a58656d46cd50b28737dfb1168b4ebb27a305912b70a8200daa28",
+      "Skills.48": "e42fb6bd83ac8bbadc07b65876002cc61202d5ac978dbc3b66d0fd6b19b3b3de",
+      "Skills.5": "eb88b29d7300fa7d3f1cec8f6ed1c1949ba35680bb702de5e9105f22171e2cff",
+      "Skills.83": "cee813584c38f5c1995ed2fc75416db5f3c43ecbb7c0d931e9bff4bb4af3ba39",
+      "Skills.84": "e0e390491bc17127475f04bc0bcf81d017abebcd32070561e202800ffc794258",
+      "Solomon.0": "bc93627d236569dffad3badfdddfb08983b53fb38e685461892018e626c72fab",
+      "Solomon.13": "c11289d4fd3fe919a7965d70c1f838707bd85f0cf627bcbe3a0cd2ebb30fa033",
+      "SolomonRiff.0": "d5f44334c1c8c851945e43a3c97f0cfc5f4cd95d9d0eeffc1b4fbd350da6f1c2",
+      "Storage.0": "9c270117e58f387d05081996fcb7b8dc58ca7b7c92951cb0403d2a884b2f77d5",
+      "Title.0": "a8b794fec19508638a76eee641a4d593e2625e1f65a5a2b6cd475e08002b6a2d",
+      "Title.1": "dddc682af9820efdb4b052d2b8b9fd4cbd8fe9da6fba653411b042d402ff30b8",
+      "Title.11": "cfe4244c56cef751e50880251631d9b0d419358375aff1c20c00bc2c5c30b908",
+      "Title.12": "1738a09dd3956d6fa5ee8ea60848ba68726c086a2baf5cc90d70f552e78a5e16",
+      "Title.13": "9e0bb05e6f50fec61a761379fd7594025d35ecf4b115ecc890fa7a0eca357e14",
+      "Title.14": "9e268851557112b8822877d0e320220543284ffb1f7c3c0ca1d9f1efa74e149b",
+      "Title.15": "0ed805352fb81db72edcc817854bd0805b8bbec859e962838ba279287ce55e9c",
+      "Title.16": "2c8742e1009ade28344ea16853b84862525c57e61d81bf61bfa2ec17770e0334",
+      "Title.17": "52010f99ac3a0e2e8aae815f66ad4f6b79ff517b3f6fc5012a3c1c745b83f5b6",
+      "Title.18": "10bbd0a7f095a5b6bebdb353817d7125f06b6a0715271259a5010742093fd962",
+      "Title.19": "d0ce60218cc96e747f9a30c233b3faa57b8c46a32229a4c182640d9591cc0fc5",
+      "Title.2": "c9ee380b2594ffe3622bb8892b99abb7530d02a4e510da159808b986c0f4be91",
+      "Title.20": "156525191b052392c2f0d89dc21a7c364270bc5a496549e48ee92b279e673ba9",
+      "Title.21": "78d9d06fe7568f398a906cfdfb5c8677b5458747420bbb43aa1ecaca799c10c8",
+      "Title.22": "6ae36b6ce9359f5c0516c18f3720c678c607d95d027db8b617027ff7b35b9cd8",
+      "Title.23": "75f1bd3ed2e122d70d1d28c912af897d4cfe6ae6bf1a338d0b7cd4f7a36cfb91",
+      "Title.24": "f5cdbe83a06c5c2ffc8bd6f6c8a723add579e23b6176c0e052436351a6bbc2e1",
+      "Title.3": "729cd6cadcab439a78c87de9dfb4e4a9458a56a8ded09aef04efd5c81d9f2090",
+      "Title.4": "a8f508a36c2dc0e1613ab2461f5f57ca46c9d7d4122365358b273889aaa65825",
+      "Title.5": "a949ea05dd8ae7bf827b63300975eda6d90c98c7c0bccc168047824524566c47",
+      "Title.6": "41a9e5b07582544a50de091eca70c84bf28dc7a3a1a8cddeef7c54ee86f2f998",
+      "Title.8": "b50744be4ef147dee8b62a2371c5e0c9816c05002ce7565c68bdda76ef38f6c3",
+      "Title.9": "e38b23afdbf2b6932eebaf424265a91ed51d319c266c648c66a406338d76fcc6",
+      "UI.0": "9b979a3db7b8e07baf2c27652f189f939d0f6724cbb0281bbce293a18319c900",
+      "UI.100": "d4ce8b381fedf3396e153edd309acc899d1da077b21f9bad64e692bc5c9a8dbc",
+      "UI.101": "da7d3f1e247a88e6223eb0e69840dc9c8beb4266fb10a98851dd295475e245b0",
+      "UI.103": "59aac037bf63b1f707c91bb4a51b22ee83f4be7d0f9b4dc67649e7657fce3fb9",
+      "UI.107": "04efbfee49c296885cb404fdb19b01147d16b2c6910ca33afe6ba265a298424a",
+      "UI.108": "1a61b5c9f13d6b11c93b14f15e412358c4a8115342d7a79dcc791886a73fbf1b",
+      "UI.109": "0c5a44945f27d977b69e3acd17075870fc52839d0982bc5b1433127f0d9a9879",
+      "UI.110": "8e263ff8129cfc7bceac071d8d43920f8e910ad79b55c0adfb0176de84556fa2",
+      "UI.13": "9faadf227ae73643a0f49d9cbb5b8f9101d91fc17692ddb59badd648a17f8aeb",
+      "UI.17": "69f13da016ccf772b0d350fb227a88df9b319eb118bad442751ea804b7bfa734",
+      "UI.18": "a81ef2a376dd3cd0f73b73d5bde6571f27e5e22acf818599f34a2d953bc3280c",
+      "UI.20": "cd8c17e8533e2fee2459815c0ecf93fca1ee695c630dca3894b789a397401806",
+      "UI.24": "bf980148eaa4cfea444a9def0e8963adc590e916e03d1b2f652ef4db9b07fb61",
+      "UI.28": "1c817de5fc27689fc1f076f4b4fe3c4d927e2b62391eb0afc663cf57957c1c77",
+      "UI.29": "5c0c7cd4bed35566c238cac5a3896c87b87306100c5ce7a07da4ffa0f55c03e8",
+      "UI.3": "e3ae24c423216041b1b685df911e4600dd143645a78738c556e1a51ab9c2d21d",
+      "UI.31": "f841542e5ae7aabd47fb4bdc39a57f5bf6d60eb416c8d8699a06ea796abfa738",
+      "UI.32": "3649b93c1ade992aafe7b6a254220686364f9a23bcee02aaec2cf419cc2aa3df",
+      "UI.37": "a95dc2c1e8c7eda8ad7788bee7102f21440f1b023b322a293163432e94e432f4",
+      "UI.42": "891c4a3441944b32dda7b766d0b7bc672b6733cd6a2fa390b1ef8c0407bafdc3",
+      "UI.47": "817aff6ecc9440ff74408d136f4c10619aaac4f492b2a397f422b900e2759faa",
+      "UI.48": "8facf41f97e4bdcbd301a32640a37a344557b50387a7853381441f9a77dac52a",
+      "UI.51": "c9867427ff3fc96dd5d64cef996abf21ca23afdb02c1cb8131719aad738b58c4",
+      "UI.53": "a9cb3d5fb38703e935221feecad3c11f1701637e8f011d65f92a3fd034e21472",
+      "UI.54": "ce40e1f79eca80edbecb27911b61b80080cc0838842b9015264d701fb29f162b",
+      "UI.58": "4772b12802735dc1e83d8ab3736469f6d3b5a2b41cdb9856762999e1374f3c85",
+      "UI.59": "2cdc83e75701e2f54fe45d39788ebd949fe0ab66f5eef2a9aeb6d909dfa136be",
+      "UI.62": "58c34cc567ddd1eb3dd3270f19ba58c12e32cd80bae601988e846507ab05476f",
+      "UI.66": "2fad19d52aa3899019b1f262b07f87e4a70330fdf1544119db8276e20a90b689",
+      "UI.8": "a7e73d65620c16547ba6a5dc463732d9b13fe67e04479b9f0ddb3abd1667bb1b",
+      "UI.80": "066d0a05950170609183f4629c85bc4301b7f6337f6634d38163c1c95d2ba6e3",
+      "UI.82": "d5c2ac46e11d9ccfa4e5e9fc60e20b47ea8d35a1e8933736fa197d41adfd63f7",
+      "Unholy.0": "8009e58e02b6ff7f4722c275f773da04d84bc589423da0e3a034121a281f8182",
+      "Wizards_dire_BG": "77a26e998e715ed56bae1ad509ba7c76e4f9323799f0b0cff092ab76b0b04826",
+      "road.png": "e459435181d36f5385959e1e4944e000e5cd5cc57feb94d228a9c0a5481dd228"
+    },
+    "fontGroupHashes": {
+      "Fonts.216-307": "3288b5c4da6160c2e75924d5f42a2737dc83f08b23d7d09143234ff44a1f7858",
+      "Fonts.308-349": "5879b0e45327f4cb9dc7d3a7c869858b9dabd195fdbc835fa611132cc366078c",
+      "Fonts.93-184": "bc4245f0a411217cce8a58ba87c9727c6f3eff899df7ffddf6718c9ee6a3c6bd"
+    },
+    "specialDrawHashes": {
+      "Segoe UI": "9a9c41ad933964fbcd7ef35de1cff8fcab4265697dd393f8704c61e491fbbabd",
+      "native.framebuffer-clear": "869bb1f6747121d111bc4e4b682acb3ebd1ce95a9a08b69aafb8b0b9d57c6376",
+      "native.textured-quad@0x41474C": "1308d1d95172ee7a5dbf2c2057fe966b57aafb87e595a3de61d29a8300ecaf87"
+    }
+  },
+  "sourceGoldenPaths": [
+    "tests/fixtures/webgame/scene-composition-goldens.json",
+    "tests/fixtures/webgame/menu-goldens.json"
+  ]
+}

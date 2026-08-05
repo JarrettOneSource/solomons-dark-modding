@@ -1550,7 +1550,7 @@ def test_path_builder_expands_cells_before_los_smoothing() -> str:
 CI_WORKFLOW = ROOT / ".github/workflows/lua-authoring-contracts.yml"
 STATIC_RE_RUNNER = ROOT / "tests/re/run_static_re_tests.py"
 # 360 registered contracts today, 13 of which read an artifact CI cannot have.
-CI_ELIGIBLE_FLOOR = 347
+CI_ELIGIBLE_FLOOR = 375
 
 
 def _referenced_paths(function: object) -> list[Path]:
@@ -1984,7 +1984,7 @@ def test_recorded_capture_provenance_resolves_or_is_declared() -> str:
 PYTHON_SUITE_RUNNER = ROOT / "tests/run_python_suite.py"
 
 # CI ran 30 of the 84 test modules before the runner discovered them.
-PYTHON_MODULE_FLOOR = 76
+PYTHON_MODULE_FLOOR = 77
 
 # Image.get_flattened_data() landed in Pillow 12. Two verifiers call it
 # unguarded, so a pin below 12 is a broken CI, not a conservative one.

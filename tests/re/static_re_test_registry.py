@@ -39,6 +39,12 @@ from static_re_native_scene_composition_contracts import (
     test_native_scene_physical_layer_list_is_pinned,
     test_native_scene_world_sort_key_and_ties_are_pinned,
 )
+from static_re_webgame_asset_contracts import (
+    test_webgame_asset_double_build_and_weight_report_are_pinned,
+    test_webgame_asset_fixture_covers_native_families_and_golden_references,
+    test_webgame_asset_manifest_schema_and_provenance_are_pinned,
+    test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
+)
 from static_re_native_menu_shell_contracts import (
     test_designed_menu_focus_model_consumes_g14_intents,
     test_native_menu_live_transition_graph_is_pinned,
@@ -825,6 +831,22 @@ TESTS: list[tuple[str, Callable[[], str]]] = [
     (
         "Native scene decor determinism path is pinned",
         test_native_scene_decor_determinism_path_is_pinned,
+    ),
+    (
+        "Webgame asset manifest schema and provenance are pinned",
+        test_webgame_asset_manifest_schema_and_provenance_are_pinned,
+    ),
+    (
+        "Webgame asset double-build and weight report are pinned",
+        test_webgame_asset_double_build_and_weight_report_are_pinned,
+    ),
+    (
+        "Webgame asset fixture covers native families and golden references",
+        test_webgame_asset_fixture_covers_native_families_and_golden_references,
+    ),
+    (
+        "Webgame workspace battery is strict, ratcheted, and CI-wired",
+        test_webgame_workspace_battery_is_strict_ratcheted_and_ci_wired,
     ),
     (
         "Native menu screen census and live layouts are pinned",

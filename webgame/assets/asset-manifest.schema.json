@@ -1,0 +1,257 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://solomondark.local/schemas/web-asset-manifest-v1.json",
+  "title": "Solomon Dark web asset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "nativeIdFormat",
+    "sources",
+    "summary",
+    "atlases",
+    "entries",
+    "aliases",
+    "fontGroups",
+    "specialDraws",
+    "packs"
+  ],
+  "properties": {
+    "schema": { "const": "solomon-dark-web-asset-manifest-v1" },
+    "nativeIdFormat": { "const": "<Atlas>.<record-index>" },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundleDecoder",
+        "boneyardDecoder",
+        "nativeAssetObjectMap",
+        "nativeSceneAtlasSpans",
+        "nativeContentInventory"
+      ],
+      "properties": {
+        "bundleDecoder": { "const": "tools/extract_bundles.py" },
+        "boneyardDecoder": { "const": "tools/decode_boneyard_scripts.py" },
+        "nativeAssetObjectMap": { "type": "string", "minLength": 1 },
+        "nativeSceneAtlasSpans": { "type": "string", "minLength": 1 },
+        "nativeContentInventory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "atlasCount",
+        "bundleAtlasCount",
+        "looseAtlasCount",
+        "spriteCount",
+        "aliasCount",
+        "fontGroupCount"
+      ],
+      "properties": {
+        "atlasCount": { "$ref": "#/definitions/nonNegativeInteger" },
+        "bundleAtlasCount": { "$ref": "#/definitions/nonNegativeInteger" },
+        "looseAtlasCount": { "$ref": "#/definitions/nonNegativeInteger" },
+        "spriteCount": { "$ref": "#/definitions/nonNegativeInteger" },
+        "aliasCount": { "$ref": "#/definitions/nonNegativeInteger" },
+        "fontGroupCount": { "$ref": "#/definitions/nonNegativeInteger" }
+      }
+    },
+    "atlases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/atlas" }
+    },
+    "entries": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/definitions/entry" }
+    },
+    "aliases": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "fontGroups": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/fontGroup" }
+    },
+    "specialDraws": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/specialDraw" }
+    },
+    "packs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boneyards", "recipes", "waves"],
+      "properties": {
+        "boneyards": { "$ref": "#/definitions/pack" },
+        "recipes": { "$ref": "#/definitions/pack" },
+        "waves": { "$ref": "#/definitions/pack" }
+      }
+    }
+  },
+  "definitions": {
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceBundleFilename", "recordIndex", "sourceBytesSha256"],
+      "properties": {
+        "sourceBundleFilename": { "type": "string", "minLength": 1 },
+        "recordIndex": { "$ref": "#/definitions/nonNegativeInteger" },
+        "sourceBytesSha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "recordProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceBundleFilename",
+        "recordIndex",
+        "sourceBytesSha256",
+        "sourceOffset",
+        "sourceLength"
+      ],
+      "properties": {
+        "sourceBundleFilename": { "type": "string", "minLength": 1 },
+        "recordIndex": { "$ref": "#/definitions/nonNegativeInteger" },
+        "sourceBytesSha256": { "$ref": "#/definitions/sha256" },
+        "sourceOffset": { "$ref": "#/definitions/nonNegativeInteger" },
+        "sourceLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "atlas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "file", "width", "height", "bytes", "sha256", "provenance"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "file": { "type": "string", "pattern": "^atlases/.+\\.png$" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "atlas",
+        "rect",
+        "pivot",
+        "logicalSize",
+        "rotated",
+        "points",
+        "provenance"
+      ],
+      "properties": {
+        "kind": { "enum": ["sprite", "loose-image"] },
+        "atlas": { "type": "string", "minLength": 1 },
+        "rect": { "$ref": "#/definitions/rect" },
+        "pivot": { "$ref": "#/definitions/point" },
+        "logicalSize": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "rotated": { "type": "boolean" },
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/point" }
+        },
+        "provenance": { "$ref": "#/definitions/recordProvenance" }
+      }
+    },
+    "fontGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "atlas",
+        "firstRecord",
+        "lastRecord",
+        "metrics",
+        "kerning",
+        "glyphs",
+        "provenance"
+      ],
+      "properties": {
+        "atlas": { "type": "string", "minLength": 1 },
+        "firstRecord": { "$ref": "#/definitions/nonNegativeInteger" },
+        "lastRecord": { "$ref": "#/definitions/nonNegativeInteger" },
+        "metrics": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        },
+        "kerning": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["leftGlyphId", "rightGlyphId", "adjustment"],
+            "properties": {
+              "leftGlyphId": { "$ref": "#/definitions/nonNegativeInteger" },
+              "rightGlyphId": { "$ref": "#/definitions/nonNegativeInteger" },
+              "adjustment": { "type": "number" }
+            }
+          }
+        },
+        "glyphs": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "provenance": { "$ref": "#/definitions/recordProvenance" }
+      }
+    },
+    "specialDraw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sourceGoldenFilename"],
+      "properties": {
+        "kind": { "enum": ["framebuffer-clear", "textured-quad", "system-font"] },
+        "sourceGoldenFilename": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "bytes", "sha256", "entryCount"],
+      "properties": {
+        "file": { "type": "string", "pattern": "^packs/.+\\.json$" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "entryCount": { "$ref": "#/definitions/nonNegativeInteger" }
+      }
+    }
+  }
+}
