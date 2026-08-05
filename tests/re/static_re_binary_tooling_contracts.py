@@ -1764,7 +1764,7 @@ RECORDED_CAPTURE_SHAS: dict[str, tuple[str, int]] = {
     # G14 input goldens: one campaign SHA repeated across nine captures.
     "2bc3ab13f3d05e26238954e5264c3a86967bd1d4": ("commit", 9),
     # G13 session-flow golden: one clean recorder SHA in both section headers.
-    "1b7624f80758ee0f29da37464f349295395b42b0": ("commit", 2),
+    "3c49c4eef6d4b91fe40b58cad99678e119007d84": ("commit", 2),
     # G1 movement and RNG goldens, and the tree that commit points at.
     "51d81ed3705468b2c96cdd5a072eb2e9b0f8db0b": ("commit", 2),
     "55ea6c0c646df739f3243a01d0cd35c4d6f9b786": ("tree", 2),

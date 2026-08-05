@@ -9,21 +9,21 @@
       "enter_library": "true",
       "game_over_presentation": {
         "capture": {
-          "bytes": 289105,
+          "bytes": 277329,
           "capture_method": "d3d9_backbuffer",
           "game_path_kind": "windows",
           "path": "/mnt/d/codex-evidence/flowre-20260805/live-session-flow-final/game-over.png",
           "pipe": "SolomonDarkModLoader_LuaExec_flw-g13-final",
           "quality": {
-            "dominant_fraction": 0.8556027777777778,
+            "dominant_fraction": 0.8609125,
             "height": 900,
-            "unique_colors": 1920,
+            "unique_colors": 1881,
             "width": 1600
           },
           "raw_bmp_bytes": 4320054
         },
         "classification": {
-          "dark_fraction": 0.9347166666666666,
+          "dark_fraction": 0.9371965277777777,
           "gold_fractions": {
             "continue": 0.0,
             "game": 0.0,
@@ -40,7 +40,7 @@
           "game_over_close_alpha": "0.0",
           "game_over_closed": "0",
           "game_over_found": "true",
-          "game_over_tick_count": "603",
+          "game_over_tick_count": "640",
           "game_over_title_alpha": "1.0"
         },
         "presentation": "boneyard-fade"
@@ -72,13 +72,13 @@
         "target_participant_id": 0
       },
       "owned_processes_after": {
-        "68764": "C:\\sd-flowre-20260805\\runtime\\instances\\flw-g13-final\\stage\\SolomonDark.exe"
+        "33708": "C:\\sd-flowre-20260805\\runtime\\instances\\flw-g13-final\\stage\\SolomonDark.exe"
       },
       "owned_processes_before": {
-        "68764": "C:\\sd-flowre-20260805\\runtime\\instances\\flw-g13-final\\stage\\SolomonDark.exe"
+        "33708": "C:\\sd-flowre-20260805\\runtime\\instances\\flw-g13-final\\stage\\SolomonDark.exe"
       },
       "primed_vitals": {
-        "actor": "297191296",
+        "actor": "292185744",
         "after.anim_drive_state": "0",
         "after.hp": "1.0",
         "after.max_hp": "25.0",
@@ -86,7 +86,7 @@
         "after.mp": "25.0",
         "before.hp": "50.0",
         "before.max_hp": "50.0",
-        "progression": "297192224",
+        "progression": "292075496",
         "write.hp": "true",
         "write.max_hp": "true",
         "write.max_mp": "true",
@@ -99,7 +99,7 @@
             "action": {
               "error": "",
               "ok": "true",
-              "request": "9",
+              "request": "7",
               "status": "dispatched"
             },
             "hub": {
@@ -110,7 +110,7 @@
               "create_discipline_selected": "2",
               "create_element_enabled": "1",
               "create_element_selected": "1",
-              "create_owner": "298765120",
+              "create_owner": "293309080",
               "game_over_accepted_epoch": "0",
               "game_over_authority_participant_id": "0",
               "game_over_command_epoch": "0",
@@ -139,7 +139,7 @@
               "participant_count": "1",
               "remote_peer_count": "0",
               "run_end_pending_lobby_return": "false",
-              "run_nonce": "916045767",
+              "run_nonce": "714535813",
               "scene": "hub",
               "session_state": "in-hub",
               "spectator_active": "false",
@@ -155,7 +155,7 @@
               "create_discipline_selected": "2",
               "create_element_enabled": "1",
               "create_element_selected": "1",
-              "create_owner": "298765120",
+              "create_owner": "293309080",
               "game_over_accepted_epoch": "0",
               "game_over_authority_participant_id": "0",
               "game_over_command_epoch": "0",
@@ -184,7 +184,7 @@
               "participant_count": "1",
               "remote_peer_count": "0",
               "run_end_pending_lobby_return": "true",
-              "run_nonce": "916045767",
+              "run_nonce": "714535813",
               "scene": "transition",
               "session_state": "not-in-game",
               "spectator_active": "false",
@@ -202,9 +202,12 @@
               "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
               "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
               "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
+              "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
+              "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
+              "left-clicked SolomonDark at client=(800,450) screen=(960,551)",
               "left-clicked SolomonDark at client=(800,450) screen=(960,551)"
             ],
-            "process_id": 68764,
+            "process_id": 33708,
             "state": {
               "alive_run_count": "0",
               "connected_run_count": "0",
@@ -213,7 +216,7 @@
               "create_discipline_selected": "2",
               "create_element_enabled": "1",
               "create_element_selected": "1",
-              "create_owner": "298765120",
+              "create_owner": "293309080",
               "game_over_accepted_epoch": "0",
               "game_over_authority_participant_id": "0",
               "game_over_command_epoch": "0",
@@ -242,7 +245,7 @@
               "participant_count": "1",
               "remote_peer_count": "0",
               "run_end_pending_lobby_return": "true",
-              "run_nonce": "916045767",
+              "run_nonce": "714535813",
               "scene": "transition",
               "session_state": "not-in-game",
               "spectator_active": "false",
@@ -253,7 +256,7 @@
           }
         },
         "owned_process_ids": {
-          "SolomonDarkModLoader_LuaExec_flw-g13-final": 68764
+          "SolomonDarkModLoader_LuaExec_flw-g13-final": 33708
         },
         "progression": "exact-pid-window-input-then-stock-create-confirmation"
       }
@@ -261,18 +264,18 @@
     "header": {
       "audio_disabled": true,
       "capture_method": "live solo Windows instance; injected read-only recorder plus existing lua-exec and exact-PID stock input",
-      "captured_at_utc": "2026-08-05T22:37:22.407298Z",
+      "captured_at_utc": "2026-08-05T23:07:31.234969Z",
       "executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
       "instance": "flw-g13-final",
-      "loader_sha256": "cc8b334c4425598231e7b8c4ec898574a07e81283119f4ebb1f674aba5dd00b6",
-      "process_id": 68764,
-      "raw_events_sha256": "44798420d534c5e4f8eb2f3097ccb1c5356c8769246ea62e32e8458a0ee4d051",
+      "loader_sha256": "23c12dc955ae7cbf31906107e4b5a9f4596100578d5bf9095ed68205cb05a08c",
+      "process_id": 33708,
+      "raw_events_sha256": "e0314b2b982b342f9d0b55b98e88a01728c49b03b10f5a4b5c90fa25b7fbec6a",
       "raw_evidence_directory": "D:\\codex-evidence\\flowre-20260805\\live-session-flow-final",
-      "raw_graph_sha256": "75e1b4c04551e607945e1e2990857975768e6b91c8296db8af916e22f390af5d",
+      "raw_graph_sha256": "e4b50653cd68f7240d1a53c0b84fb63403032ed8590fda3f638bb27a693ab360",
       "raw_status_sha256": "741a60dba138cf3d21db94d60415198ed4d676deb7bff72c5e7a01fb3a230126",
       "source_branch": "flowre/flowre-20260805",
       "source_dirty": false,
-      "source_sha": "1b7624f80758ee0f29da37464f349295395b42b0",
+      "source_sha": "3c49c4eef6d4b91fe40b58cad99678e119007d84",
       "udp_ports": [
         52321,
         52322
@@ -297,9 +300,9 @@
           "scene_kind": "arena",
           "session_state": "in-boneyard",
           "surface": "",
-          "tick": 4387,
+          "tick": 4405,
           "transitioning": false,
-          "wave_counter": 999999999,
+          "wave_counter": 6,
           "wave_index": 1
         },
         "ordered_lifecycle_steps": [
@@ -307,23 +310,23 @@
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 156,
             "step": "run.wave.start.begin",
             "target_region": -1,
-            "tick": 4375
+            "tick": 4398
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 157,
             "step": "run.wave.start.end",
             "target_region": -1,
-            "tick": 4375
+            "tick": 4398
           }
         ],
         "source": "gameplay.arena",
@@ -335,7 +338,7 @@
         "after": {
           "barrier_released": false,
           "barrier_timed_out": false,
-          "entity_count": 25,
+          "entity_count": 24,
           "input_sealed": false,
           "label": "hub_initial",
           "loading_stage": "gameplay_ready",
@@ -345,7 +348,7 @@
           "scene_kind": "hub",
           "session_state": "in-hub",
           "surface": "",
-          "tick": 3344,
+          "tick": 3349,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -372,7 +375,7 @@
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 2,
             "step": "switch.enter",
@@ -383,7 +386,7 @@
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 3,
             "step": "participant_churn.begin",
@@ -394,7 +397,7 @@
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 4,
             "step": "participant_churn.end",
@@ -405,7 +408,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 5,
             "step": "region.wake.begin",
@@ -416,7 +419,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 6,
             "step": "region.wake.end",
@@ -427,7 +430,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 7,
             "step": "gameplay.attach.begin",
@@ -438,7 +441,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 8,
             "step": "gameplay.attach.end",
@@ -449,7 +452,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 4,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 9,
             "step": "switch.exit",
@@ -464,7 +467,7 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 10,
             "step": "presentation.fade_in.begin",
@@ -479,27 +482,12 @@
             "fade_rate_before": -0.0500000007,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 11,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 5
-          },
-          {
-            "current_region": 4,
-            "fade_alpha_after": 0,
-            "fade_alpha_before": 0.0499998443,
-            "fade_rate_after": 0,
-            "fade_rate_before": -0.0500000007,
-            "input_sealed": false,
-            "native_argument": -1,
-            "object": "0x11B868F0",
-            "pending_region": -1,
-            "sequence": 12,
-            "step": "presentation.fade_in.endpoint",
-            "target_region": -1,
-            "tick": 34
+            "tick": 8
           },
           {
             "current_region": 4,
@@ -509,9 +497,9 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
-            "sequence": 13,
+            "sequence": 12,
             "step": "presentation.fade_in.endpoint",
             "target_region": -1,
             "tick": 42
@@ -524,12 +512,27 @@
             "fade_rate_before": 0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
-            "sequence": 14,
+            "sequence": 13,
             "step": "presentation.fade_out.begin",
             "target_region": -1,
             "tick": 42
+          },
+          {
+            "current_region": 4,
+            "fade_alpha_after": 0,
+            "fade_alpha_before": 0.0499998443,
+            "fade_rate_after": 0,
+            "fade_rate_before": -0.0500000007,
+            "input_sealed": false,
+            "native_argument": -1,
+            "object": "0x116940D0",
+            "pending_region": -1,
+            "sequence": 14,
+            "step": "presentation.fade_in.endpoint",
+            "target_region": -1,
+            "tick": 107
           },
           {
             "current_region": 4,
@@ -539,7 +542,7 @@
             "fade_rate_before": 0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 15,
             "step": "presentation.fade_out.endpoint",
@@ -550,7 +553,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 16,
             "step": "switch.enter",
@@ -561,7 +564,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 17,
             "step": "participant_churn.begin",
@@ -572,7 +575,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 18,
             "step": "participant_churn.end",
@@ -583,7 +586,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 19,
             "step": "region.player_slot.detach.begin",
@@ -594,7 +597,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 20,
             "step": "region.player_slot.detach.end",
@@ -605,7 +608,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 21,
             "step": "region.cache.sleep.begin",
@@ -616,7 +619,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 22,
             "step": "region.player_slot.detach.begin",
@@ -627,7 +630,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 23,
             "step": "region.player_slot.detach.end",
@@ -638,7 +641,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 24,
             "step": "region.player_slot.detach.begin",
@@ -649,7 +652,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 25,
             "step": "region.player_slot.detach.end",
@@ -660,7 +663,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 26,
             "step": "region.player_slot.detach.begin",
@@ -671,7 +674,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 27,
             "step": "region.player_slot.detach.end",
@@ -682,7 +685,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 28,
             "step": "region.player_slot.detach.begin",
@@ -693,7 +696,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 29,
             "step": "region.player_slot.detach.end",
@@ -704,7 +707,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 30,
             "step": "region.cache.sleep.end",
@@ -715,7 +718,7 @@
             "current_region": 4,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": 0,
             "sequence": 31,
             "step": "region.lifecycle.unregister",
@@ -726,7 +729,7 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": 0,
             "sequence": 32,
             "step": "region.wake.begin",
@@ -737,7 +740,7 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": 0,
             "sequence": 33,
             "step": "region.wake.end",
@@ -748,7 +751,7 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 34,
             "step": "gameplay.attach.begin",
@@ -759,7 +762,7 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 35,
             "step": "gameplay.attach.end",
@@ -770,7 +773,7 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": 0,
             "sequence": 36,
             "step": "switch.exit",
@@ -785,7 +788,7 @@
             "fade_rate_before": -0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 37,
             "step": "presentation.fade_in.begin",
@@ -800,7 +803,7 @@
             "fade_rate_before": -0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 38,
             "step": "presentation.fade_in.endpoint",
@@ -815,7 +818,7 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 39,
             "step": "presentation.fade_in.begin",
@@ -830,7 +833,7 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 40,
             "step": "presentation.fade_in.endpoint",
@@ -846,7 +849,7 @@
             "sequence": 41,
             "step": "input.unseal",
             "target_region": -1,
-            "tick": 3234
+            "tick": 3237
           }
         ],
         "source": "frontend.shell",
@@ -866,7 +869,7 @@
           "scene_kind": "shop",
           "session_state": "not-in-game",
           "surface": "",
-          "tick": 3456,
+          "tick": 3467,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -874,7 +877,7 @@
         "before": {
           "barrier_released": false,
           "barrier_timed_out": false,
-          "entity_count": 25,
+          "entity_count": 24,
           "input_sealed": false,
           "label": "hub_before_library",
           "loading_stage": "gameplay_ready",
@@ -884,7 +887,7 @@
           "scene_kind": "hub",
           "session_state": "in-hub",
           "surface": "",
-          "tick": 3347,
+          "tick": 3362,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -896,232 +899,232 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 42,
             "step": "switch.enter",
             "target_region": 2,
-            "tick": 3348
+            "tick": 3368
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 43,
             "step": "participant_churn.begin",
             "target_region": 2,
-            "tick": 3348
+            "tick": 3368
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 44,
             "step": "participant_churn.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 45,
             "step": "region.player_slot.detach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 46,
             "step": "region.player_slot.detach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 47,
             "step": "region.cache.sleep.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 48,
             "step": "region.player_slot.detach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 49,
             "step": "region.player_slot.detach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 50,
             "step": "region.player_slot.detach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 51,
             "step": "region.player_slot.detach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 52,
             "step": "region.player_slot.detach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 53,
             "step": "region.player_slot.detach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 54,
             "step": "region.player_slot.detach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 55,
             "step": "region.player_slot.detach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 56,
             "step": "region.cache.sleep.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 57,
             "step": "region.lifecycle.unregister",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 58,
             "step": "region.wake.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 59,
             "step": "region.wake.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 60,
             "step": "gameplay.attach.begin",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 61,
             "step": "gameplay.attach.end",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 62,
             "step": "switch.exit",
             "target_region": 2,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
@@ -1131,12 +1134,12 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 63,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 3349
+            "tick": 3369
           },
           {
             "current_region": 2,
@@ -1146,12 +1149,12 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 64,
             "step": "presentation.fade_in.endpoint",
             "target_region": -1,
-            "tick": 3390
+            "tick": 3410
           }
         ],
         "source": "gameplay.courtyard",
@@ -1161,7 +1164,7 @@
         "after": {
           "barrier_released": false,
           "barrier_timed_out": false,
-          "entity_count": 22,
+          "entity_count": 24,
           "input_sealed": false,
           "label": "hub_after_library",
           "loading_stage": "gameplay_ready",
@@ -1171,7 +1174,7 @@
           "scene_kind": "hub",
           "session_state": "in-hub",
           "surface": "",
-          "tick": 3568,
+          "tick": 3580,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -1189,7 +1192,7 @@
           "scene_kind": "shop",
           "session_state": "not-in-game",
           "surface": "",
-          "tick": 3456,
+          "tick": 3467,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -1201,232 +1204,232 @@
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 65,
             "step": "switch.enter",
             "target_region": 0,
-            "tick": 3458
+            "tick": 3473
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 66,
             "step": "participant_churn.begin",
             "target_region": 0,
-            "tick": 3458
+            "tick": 3473
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 67,
             "step": "participant_churn.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 68,
             "step": "region.player_slot.detach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 69,
             "step": "region.player_slot.detach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 70,
             "step": "region.cache.sleep.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 71,
             "step": "region.player_slot.detach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 72,
             "step": "region.player_slot.detach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 73,
             "step": "region.player_slot.detach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 74,
             "step": "region.player_slot.detach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 75,
             "step": "region.player_slot.detach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 76,
             "step": "region.player_slot.detach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 77,
             "step": "region.player_slot.detach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 78,
             "step": "region.player_slot.detach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 79,
             "step": "region.cache.sleep.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 2,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 80,
             "step": "region.lifecycle.unregister",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 81,
             "step": "region.wake.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 82,
             "step": "region.wake.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 83,
             "step": "gameplay.attach.begin",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 84,
             "step": "gameplay.attach.end",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 85,
             "step": "switch.exit",
             "target_region": 0,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
@@ -1436,12 +1439,12 @@
             "fade_rate_before": -0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 86,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 3459
+            "tick": 3474
           },
           {
             "current_region": 0,
@@ -1451,12 +1454,12 @@
             "fade_rate_before": -0.00999999978,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 87,
             "step": "presentation.fade_in.endpoint",
             "target_region": -1,
-            "tick": 3460
+            "tick": 3475
           }
         ],
         "source": "gameplay.library",
@@ -1476,15 +1479,15 @@
           "scene_kind": "arena",
           "session_state": "in-boneyard",
           "surface": "",
-          "tick": 4385,
+          "tick": 4400,
           "transitioning": false,
-          "wave_counter": 9,
+          "wave_counter": 1,
           "wave_index": 1
         },
         "before": {
           "barrier_released": false,
           "barrier_timed_out": false,
-          "entity_count": 22,
+          "entity_count": 23,
           "input_sealed": false,
           "label": "hub_before_run",
           "loading_stage": "gameplay_ready",
@@ -1494,7 +1497,7 @@
           "scene_kind": "hub",
           "session_state": "in-hub",
           "surface": "",
-          "tick": 3569,
+          "tick": 3585,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -1510,12 +1513,12 @@
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 88,
             "step": "switch.enter",
             "target_region": 5,
-            "tick": 4350
+            "tick": 4373
           },
           {
             "current_region": 0,
@@ -1526,172 +1529,172 @@
             "sequence": 89,
             "step": "input.seal",
             "target_region": 5,
-            "tick": 4350
+            "tick": 4373
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 90,
             "step": "participant_churn.begin",
             "target_region": 5,
-            "tick": 4350
+            "tick": 4373
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 91,
             "step": "participant_churn.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 92,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 93,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 94,
             "step": "region.cache.sleep.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 95,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 96,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 97,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 98,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 99,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 100,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 101,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 102,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 103,
             "step": "region.cache.sleep.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 0,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 104,
             "step": "region.lifecycle.unregister",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
@@ -1702,51 +1705,51 @@
             "sequence": 105,
             "step": "input.seal",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 106,
             "step": "region.wake.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 107,
             "step": "run.create.begin",
             "target_region": -1,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 108,
             "step": "run.create.end",
             "target_region": -1,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 109,
             "step": "region.wake.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
@@ -1757,40 +1760,40 @@
             "sequence": 110,
             "step": "loading.gameplay_started",
             "target_region": -1,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 111,
             "step": "gameplay.attach.begin",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 112,
             "step": "gameplay.attach.end",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 5,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 113,
             "step": "switch.exit",
             "target_region": 5,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
@@ -1800,452 +1803,452 @@
             "fade_rate_before": -0.0500000007,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 114,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 4351
+            "tick": 4374
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 115,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 116,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 117,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 118,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 119,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 120,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 121,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11B868F0",
+            "object": "0x116940D0",
             "pending_region": -1,
             "sequence": 122,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 123,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 124,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 125,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 126,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 127,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 128,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 129,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C3B308",
+            "object": "0x1169D688",
             "pending_region": -1,
             "sequence": 130,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 131,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 132,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 133,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 134,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 135,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 136,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 137,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C44310",
+            "object": "0x117532F0",
             "pending_region": -1,
             "sequence": 138,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 139,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 140,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 141,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 142,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 143,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 144,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 145,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C4D1C0",
+            "object": "0x1175C1A0",
             "pending_region": -1,
             "sequence": 146,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 147,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 0,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 148,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 149,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 1,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 150,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 151,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 2,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 152,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 153,
             "step": "region.player_slot.detach.begin",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": 3,
-            "object": "0x11C560A8",
+            "object": "0x11765088",
             "pending_region": -1,
             "sequence": 154,
             "step": "region.player_slot.detach.end",
             "target_region": 5,
-            "tick": 4353
+            "tick": 4376
           },
           {
             "current_region": 5,
@@ -2255,34 +2258,34 @@
             "fade_rate_before": -0.0500000007,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 155,
             "step": "presentation.fade_in.endpoint",
             "target_region": -1,
-            "tick": 4371
+            "tick": 4394
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 156,
             "step": "run.wave.start.begin",
             "target_region": -1,
-            "tick": 4375
+            "tick": 4398
           },
           {
             "current_region": 5,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 157,
             "step": "run.wave.start.end",
             "target_region": -1,
-            "tick": 4375
+            "tick": 4398
           },
           {
             "current_region": 5,
@@ -2293,7 +2296,7 @@
             "sequence": 158,
             "step": "input.unseal",
             "target_region": 5,
-            "tick": 4376
+            "tick": 4399
           }
         ],
         "source": "gameplay.courtyard",
@@ -2313,7 +2316,7 @@
           "scene_kind": "arena",
           "session_state": "not-in-game",
           "surface": "",
-          "tick": 5040,
+          "tick": 5109,
           "transitioning": false,
           "wave_counter": 999999999,
           "wave_index": 1
@@ -2331,9 +2334,9 @@
           "scene_kind": "arena",
           "session_state": "in-boneyard",
           "surface": "",
-          "tick": 4388,
+          "tick": 4407,
           "transitioning": false,
-          "wave_counter": 999999999,
+          "wave_counter": 8,
           "wave_index": 1
         },
         "destination": "overlay.game_over",
@@ -2348,7 +2351,7 @@
             "sequence": 159,
             "step": "run.death.terminal_callback",
             "target_region": -1,
-            "tick": 4391
+            "tick": 4413
           },
           {
             "current_region": 5,
@@ -2359,7 +2362,7 @@
             "sequence": 160,
             "step": "overlay.game_over.installed",
             "target_region": -1,
-            "tick": 4391
+            "tick": 4413
           }
         ],
         "source": "gameplay.arena",
@@ -2379,7 +2382,7 @@
           "scene_kind": "hub",
           "session_state": "in-hub",
           "surface": "",
-          "tick": 5556,
+          "tick": 5626,
           "transitioning": false,
           "wave_counter": 0,
           "wave_index": 0
@@ -2397,7 +2400,7 @@
           "scene_kind": "arena",
           "session_state": "not-in-game",
           "surface": "",
-          "tick": 5040,
+          "tick": 5109,
           "transitioning": false,
           "wave_counter": 999999999,
           "wave_index": 1
@@ -2415,232 +2418,232 @@
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 161,
             "step": "switch.enter",
             "target_region": 1,
-            "tick": 5086
+            "tick": 5165
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 162,
             "step": "participant_churn.begin",
             "target_region": 1,
-            "tick": 5086
+            "tick": 5165
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 163,
             "step": "participant_churn.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 164,
             "step": "region.player_slot.detach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 165,
             "step": "region.player_slot.detach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 166,
             "step": "region.cache.sleep.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 167,
             "step": "region.player_slot.detach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 168,
             "step": "region.player_slot.detach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 169,
             "step": "region.player_slot.detach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 170,
             "step": "region.player_slot.detach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 171,
             "step": "region.player_slot.detach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 2,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 172,
             "step": "region.player_slot.detach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 173,
             "step": "region.player_slot.detach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": 3,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 174,
             "step": "region.player_slot.detach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 175,
             "step": "region.cache.sleep.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 5,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C5EF50",
+            "object": "0x1176DF30",
             "pending_region": -1,
             "sequence": 176,
             "step": "region.lifecycle.unregister",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C3B308",
+            "object": "0x118150B8",
             "pending_region": -1,
             "sequence": 177,
             "step": "region.wake.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11C3B308",
+            "object": "0x118150B8",
             "pending_region": -1,
             "sequence": 178,
             "step": "region.wake.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 179,
             "step": "gameplay.attach.begin",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 180,
             "step": "gameplay.attach.end",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
             "input_sealed": false,
             "native_argument": 1,
-            "object": "0x11B66530",
+            "object": "0x1167A9F0",
             "pending_region": -1,
             "sequence": 181,
             "step": "switch.exit",
             "target_region": 1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
@@ -2650,12 +2653,12 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C3B308",
+            "object": "0x118150B8",
             "pending_region": -1,
             "sequence": 182,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 5087
+            "tick": 5166
           },
           {
             "current_region": 1,
@@ -2665,100 +2668,100 @@
             "fade_rate_before": 0.100000001,
             "input_sealed": false,
             "native_argument": -1,
-            "object": "0x11C3B308",
+            "object": "0x118150B8",
             "pending_region": -1,
             "sequence": 183,
             "step": "presentation.fade_out.endpoint",
             "target_region": -1,
-            "tick": 5348
+            "tick": 5427
           },
           {
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 184,
             "step": "switch.enter",
             "target_region": 0,
-            "tick": 5348
+            "tick": 5427
           },
           {
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 185,
             "step": "participant_churn.begin",
             "target_region": 0,
-            "tick": 5348
+            "tick": 5427
           },
           {
             "current_region": -1,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 186,
             "step": "participant_churn.end",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11CFA040",
+            "object": "0x1180EE48",
             "pending_region": -1,
             "sequence": 187,
             "step": "region.wake.begin",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x11CFA040",
+            "object": "0x1180EE48",
             "pending_region": -1,
             "sequence": 188,
             "step": "region.wake.end",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 189,
             "step": "gameplay.attach.begin",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 190,
             "step": "gameplay.attach.end",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
             "input_sealed": false,
             "native_argument": 0,
-            "object": "0x14474718",
+            "object": "0x116A40D8",
             "pending_region": -1,
             "sequence": 191,
             "step": "switch.exit",
             "target_region": 0,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
@@ -2768,12 +2771,12 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11CFA040",
+            "object": "0x1180EE48",
             "pending_region": -1,
             "sequence": 192,
             "step": "presentation.fade_in.begin",
             "target_region": -1,
-            "tick": 5349
+            "tick": 5428
           },
           {
             "current_region": 0,
@@ -2783,12 +2786,12 @@
             "fade_rate_before": -0.0250000004,
             "input_sealed": true,
             "native_argument": -1,
-            "object": "0x11CFA040",
+            "object": "0x1180EE48",
             "pending_region": -1,
             "sequence": 193,
             "step": "presentation.fade_in.endpoint",
             "target_region": -1,
-            "tick": 5390
+            "tick": 5469
           },
           {
             "current_region": 0,
@@ -2799,7 +2802,7 @@
             "sequence": 194,
             "step": "input.unseal",
             "target_region": -1,
-            "tick": 5436
+            "tick": 5513
           }
         ],
         "source": "overlay.game_over",
@@ -2951,18 +2954,18 @@
     "header": {
       "audio_disabled": true,
       "capture_method": "live injected native graph emitter; no edge was hand-entered into the fixture",
-      "captured_at_utc": "2026-08-05T22:37:22.407298Z",
+      "captured_at_utc": "2026-08-05T23:07:31.234969Z",
       "executable_sha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
       "instance": "flw-g13-final",
-      "loader_sha256": "cc8b334c4425598231e7b8c4ec898574a07e81283119f4ebb1f674aba5dd00b6",
-      "process_id": 68764,
-      "raw_events_sha256": "44798420d534c5e4f8eb2f3097ccb1c5356c8769246ea62e32e8458a0ee4d051",
+      "loader_sha256": "23c12dc955ae7cbf31906107e4b5a9f4596100578d5bf9095ed68205cb05a08c",
+      "process_id": 33708,
+      "raw_events_sha256": "e0314b2b982b342f9d0b55b98e88a01728c49b03b10f5a4b5c90fa25b7fbec6a",
       "raw_evidence_directory": "D:\\codex-evidence\\flowre-20260805\\live-session-flow-final",
-      "raw_graph_sha256": "75e1b4c04551e607945e1e2990857975768e6b91c8296db8af916e22f390af5d",
+      "raw_graph_sha256": "e4b50653cd68f7240d1a53c0b84fb63403032ed8590fda3f638bb27a693ab360",
       "raw_status_sha256": "741a60dba138cf3d21db94d60415198ed4d676deb7bff72c5e7a01fb3a230126",
       "source_branch": "flowre/flowre-20260805",
       "source_dirty": false,
-      "source_sha": "1b7624f80758ee0f29da37464f349295395b42b0",
+      "source_sha": "3c49c4eef6d4b91fe40b58cad99678e119007d84",
       "udp_ports": [
         52321,
         52322
@@ -2983,7 +2986,7 @@
         "native_identifier": "MyLoader",
         "native_region_id": -1,
         "preferred_address": "0x005BAB60",
-        "runtime_address": "0x00EDAB60",
+        "runtime_address": "0x0087AB60",
         "state": "boot.loader",
         "vtable_address": "0x00799BDC"
       },
@@ -2991,7 +2994,7 @@
         "native_identifier": "MainMenu/front-end installer",
         "native_region_id": -1,
         "preferred_address": "0x005A7F60",
-        "runtime_address": "0x00EC7F60",
+        "runtime_address": "0x00867F60",
         "state": "frontend.shell",
         "vtable_address": "0x007980CC"
       },
@@ -2999,7 +3002,7 @@
         "native_identifier": "Courtyard",
         "native_region_id": 0,
         "preferred_address": "0x00506490",
-        "runtime_address": "0x00E26490",
+        "runtime_address": "0x007C6490",
         "state": "gameplay.courtyard",
         "vtable_address": "0x00792644"
       },
@@ -3007,7 +3010,7 @@
         "native_identifier": "Mortuary/Memoratorium",
         "native_region_id": 1,
         "preferred_address": "0x005090A0",
-        "runtime_address": "0x00E290A0",
+        "runtime_address": "0x007C90A0",
         "state": "gameplay.mortuary",
         "vtable_address": "0x007927DC"
       },
@@ -3015,7 +3018,7 @@
         "native_identifier": "Library",
         "native_region_id": 2,
         "preferred_address": "0x0050A360",
-        "runtime_address": "0x00E2A360",
+        "runtime_address": "0x007CA360",
         "state": "gameplay.library",
         "vtable_address": "0x00792C04"
       },
@@ -3023,7 +3026,7 @@
         "native_identifier": "StoreRoom",
         "native_region_id": 3,
         "preferred_address": "0x00509B10",
-        "runtime_address": "0x00E29B10",
+        "runtime_address": "0x007C9B10",
         "state": "gameplay.storeroom",
         "vtable_address": "0x0079294C"
       },
@@ -3031,7 +3034,7 @@
         "native_identifier": "Office",
         "native_region_id": 4,
         "preferred_address": "0x00509C70",
-        "runtime_address": "0x00E29C70",
+        "runtime_address": "0x007C9C70",
         "state": "gameplay.office",
         "vtable_address": "0x00792AB4"
       },
@@ -3039,7 +3042,7 @@
         "native_identifier": "Arena",
         "native_region_id": 5,
         "preferred_address": "0x00464EE0",
-        "runtime_address": "0x00D84EE0",
+        "runtime_address": "0x00724EE0",
         "state": "gameplay.arena",
         "vtable_address": "0x00785934"
       },
@@ -3047,7 +3050,7 @@
         "native_identifier": "GameOver",
         "native_region_id": -1,
         "preferred_address": "0x005CF4F0",
-        "runtime_address": "0x00EEF4F0",
+        "runtime_address": "0x0088F4F0",
         "state": "overlay.game_over",
         "vtable_address": "0x0079B0CC"
       },
@@ -3055,7 +3058,7 @@
         "native_identifier": "Mortuary plus stock front end",
         "native_region_id": 1,
         "preferred_address": "0x005A7F60",
-        "runtime_address": "0x00EC7F60",
+        "runtime_address": "0x00867F60",
         "state": "post_run.mortuary_frontend",
         "vtable_address": "0x007980CC"
       },
@@ -3063,7 +3066,7 @@
         "native_identifier": "HallOfFame",
         "native_region_id": -1,
         "preferred_address": "0x00589CD0",
-        "runtime_address": "0x00EA9CD0",
+        "runtime_address": "0x00849CD0",
         "state": "frontend.hall_of_fame",
         "vtable_address": "0x00799334"
       },

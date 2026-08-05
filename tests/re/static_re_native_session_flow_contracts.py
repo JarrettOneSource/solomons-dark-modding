@@ -221,14 +221,14 @@ EXPECTED_TIMELINE = (
         "gameplay.courtyard",
         "launcher QuickStart accepted the landed Create flow and native onboarding completed",
         0,
-        25,
+        24,
     ),
     (
         "enter_library",
         "gameplay.courtyard",
         "gameplay.library",
         "accepted authority sd.scene.switch_region(2) probe",
-        25,
+        24,
         5,
     ),
     (
@@ -237,14 +237,14 @@ EXPECTED_TIMELINE = (
         "gameplay.courtyard",
         "accepted authority sd.scene.switch_region(0) probe",
         5,
-        22,
+        24,
     ),
     (
         "start_run_pipeline",
         "gameplay.courtyard",
         "gameplay.arena",
         "accepted host start_testrun action",
-        22,
+        23,
         1,
     ),
     (
@@ -270,13 +270,13 @@ EXPECTED_EXTERNAL_HASHES = {
         "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3"
     ),
     "loader_sha256": (
-        "cc8b334c4425598231e7b8c4ec898574a07e81283119f4ebb1f674aba5dd00b6"
+        "23c12dc955ae7cbf31906107e4b5a9f4596100578d5bf9095ed68205cb05a08c"
     ),
     "raw_events_sha256": (
-        "44798420d534c5e4f8eb2f3097ccb1c5356c8769246ea62e32e8458a0ee4d051"
+        "e0314b2b982b342f9d0b55b98e88a01728c49b03b10f5a4b5c90fa25b7fbec6a"
     ),
     "raw_graph_sha256": (
-        "75e1b4c04551e607945e1e2990857975768e6b91c8296db8af916e22f390af5d"
+        "e4b50653cd68f7240d1a53c0b84fb63403032ed8590fda3f638bb27a693ab360"
     ),
     "raw_status_sha256": (
         "741a60dba138cf3d21db94d60415198ed4d676deb7bff72c5e7a01fb3a230126"

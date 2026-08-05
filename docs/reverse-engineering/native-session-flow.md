@@ -29,9 +29,9 @@ The live fixture is
 [`session-flow-goldens.json`](../../tests/fixtures/webgame/session-flow-goldens.json).
 It was recorded by `tools/record_native_session_flow_goldens.py` from isolated
 instance `flw-g13-final`, recorder source
-`1b7624f80758ee0f29da37464f349295395b42b0`, PID `68764`, UDP ports
+`3c49c4eef6d4b91fe40b58cad99678e119007d84`, PID `33708`, UDP ports
 `52321/52322`, and the capture-only loader DLL SHA-256
-`cc8b334c4425598231e7b8c4ec898574a07e81283119f4ebb1f674aba5dd00b6`.
+`23c12dc955ae7cbf31906107e4b5a9f4596100578d5bf9095ed68205cb05a08c`.
 The tool drove stock presentation input through that exact PID, used existing
 Lua-exec read probes, and recorded native lifecycle detours. The recorder is
 opt-in through `SDMOD_NATIVE_SESSION_FLOW_CAPTURE_DIRECTORY`; with the variable
@@ -256,7 +256,7 @@ The retail Boneyard does **not** change native room at a wave boundary. The
 whole run is `gameplay.arena`, native region `5`. `Arena_StartWaves` at
 `0x00465C00` changes Arena-owned wave state and spawns/reconciles actors in the
 same region object. The live golden records `run.wave.start.begin/end` at tick
-`4375`, both with `current_region=5`, followed by a stable region-5 snapshot.
+`4398`, both with `current_region=5`, followed by a stable region-5 snapshot.
 
 Therefore there is no `Arena room N -> Arena room N+1` edge to implement. The
 next wave is determined by Arena/wave data (owned by the wave contracts), not
@@ -291,8 +291,8 @@ Durable participant state survives and is applied to a newly materialized
 actor when local and remote scene intents match.
 
 The golden's entity counts are observations, not constants: the full session
-records `0 -> 25` for frontend/onboarding to hub, `25 -> 5` for hub to Library,
-`5 -> 22` for Library to hub, `22 -> 1` for hub to Arena, `1 -> 1` for death
+records `0 -> 24` for frontend/onboarding to hub, `24 -> 5` for hub to Library,
+`5 -> 24` for Library to hub, `23 -> 1` for hub to Arena, `1 -> 1` for death
 overlay installation, and `1 -> 21` for the stock post-run return. Their role
 is to prove that each boundary sampled both sides, not to fix population sizes
 owned by G8 or wave generation.
@@ -339,7 +339,7 @@ The final blow does not switch room immediately:
    call exactly once on its own application thread.
 4. `Game_OnGameOver` allocates/constructs the `GameOver` object and installs it
    over the still-resident Arena. The recorded terminal callback and overlay
-   installation share tick `4391`; region 5 and its one local entity remain
+   installation share tick `4413`; region 5 and its one local entity remain
    present on both sides.
 5. Boneyard mode is intentionally fade-only. Game Over ticks independently and
    does not accept continuation merely because it reaches tick `1000`; input
